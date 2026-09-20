@@ -27,6 +27,7 @@ import {
   Plus,
   ShoppingBag,
   Sparkles,
+  Store,
   Ticket,
   Trash2,
   Truck,
@@ -63,8 +64,10 @@ export interface CartItem {
   notes: string;
 }
 
+export type CardapioFulfillment = "delivery" | "pickup" | "dine_in";
+
 export interface CardapioCheckoutRequest {
-  deliveryMethod: "delivery" | "pickup";
+  deliveryMethod: CardapioFulfillment;
   address: string;
   addressSnapshot?: DeliveryAddressSnapshot;
   deliveryFee: number;
@@ -120,7 +123,7 @@ export default function CardapioCartDrawer({
   orderingEnabled = true,
   orderingMessage = "Pedidos temporariamente pausados.",
 }: CardapioCartDrawerProps) {
-  const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("pickup");
+  const [deliveryMethod, setDeliveryMethod] = useState<CardapioFulfillment>("pickup");
   const [address, setAddress] = useState(user?.address || "");
   const [deliveryAddressDraft, setDeliveryAddressDraft] = useState<DeliveryAddressDraft>(() => (
     parseDeliveryAddressLegacy(user?.address) || emptyAddress()
@@ -575,7 +578,11 @@ export default function CardapioCartDrawer({
     onPlaceOrder({
       deliveryFee,
       deliveryMethod,
-      address: deliveryMethod === "delivery" ? canonicalAddress : "Retirada no Balcão",
+      address: deliveryMethod === "delivery"
+        ? canonicalAddress
+        : deliveryMethod === "dine_in"
+          ? "Consumo no local"
+          : "Retirada no Balcão",
       addressSnapshot: addressSnapshot || undefined,
       customerName: customerName.trim(),
       customerPhone: normalizeBrazilianPhone(customerPhone),
@@ -824,18 +831,34 @@ export default function CardapioCartDrawer({
               {/* Section 2: Delivery Method & Address */}
               <section className="border-t border-koma-border pt-5" id="cart-receive-methods" tabIndex={-1} aria-describedby={invalidField === "cart-receive-methods" ? "cart-checkout-error" : undefined}>
                 <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">2. Como quer receber?</h3>
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-3 grid grid-cols-3 gap-2">
                   <button type="button" aria-pressed={deliveryMethod === "pickup"} onClick={() => { setDeliveryMethod("pickup"); clearValidation("cart-receive-methods"); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${deliveryMethod === "pickup" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
                     <span className="flex items-center justify-between gap-2"><ShoppingBag className={deliveryMethod === "pickup" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "pickup" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>
                     <strong className="mt-2 block text-sm text-koma-foreground">Retirada</strong>
-                    <span className="mt-1 block text-xs leading-relaxed text-koma-muted">Buscar no restaurante</span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-koma-muted">Buscar no restaurante</span>
+                  </button>
+                  <button type="button" aria-pressed={deliveryMethod === "dine_in"} onClick={() => { setDeliveryMethod("dine_in"); clearValidation("cart-receive-methods"); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${deliveryMethod === "dine_in" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
+                    <span className="flex items-center justify-between gap-2"><Store className={deliveryMethod === "dine_in" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "dine_in" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>
+                    <strong className="mt-2 block text-sm text-koma-foreground">Consumo local</strong>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-koma-muted">Comer no restaurante</span>
                   </button>
                   <button type="button" disabled={!deliveryEnabled} aria-pressed={deliveryMethod === "delivery"} onClick={() => { if (deliveryEnabled) setDeliveryMethod("delivery"); clearValidation("cart-receive-methods"); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-55 ${deliveryMethod === "delivery" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
                     <span className="flex items-center justify-between gap-2"><Truck className={deliveryMethod === "delivery" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "delivery" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>
                     <strong className="mt-2 block text-sm text-koma-foreground">Entrega</strong>
-                    <span className="mt-1 block text-xs leading-relaxed text-koma-muted">{deliveryEnabled ? deliveryLabel : "Indisponível no momento"}</span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-koma-muted">{deliveryEnabled ? deliveryLabel : "Indisponível no momento"}</span>
                   </button>
                 </div>
+
+                {deliveryMethod === "dine_in" && (
+                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3">
+                    <Store className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                    <div className="min-w-0 text-xs leading-relaxed">
+                      <strong className="text-koma-foreground">Para consumir no local</strong>
+                      <p className="mt-1 text-koma-muted">Você pode pedir antes de chegar. O restaurante pode associar seu pedido a uma mesa depois.</p>
+                      {restaurantAddress && <p className="mt-1 break-words text-koma-subtle">{restaurantAddress}</p>}
+                    </div>
+                  </div>
+                )}
 
                 {deliveryMethod === "pickup" && restaurantAddress && (
                   <div className="mt-3 flex items-start gap-2 rounded-xl border border-koma-border p-3">
