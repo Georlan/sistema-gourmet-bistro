@@ -8,6 +8,9 @@ type OnboardingProgressPayload = {
     completed?: number;
     total?: number;
   };
+  trial?: {
+    status?: string;
+  };
 };
 
 export function useOnboardingAccessGate({
@@ -48,7 +51,11 @@ export function useOnboardingAccessGate({
         if (cancelled) return;
         const completed = Number(payload.progress?.completed || 0);
         const total = Number(payload.progress?.total || 0);
-        setRequiredComplete(total > 0 && completed >= total);
+        const configurationComplete = total > 0 && completed >= total;
+        const trialPending = String(payload.trial?.status || '').toLowerCase() === 'setup';
+        // Configuração pode ser concluída sem consumir trial, mas a operação normal
+        // só é liberada depois da decisão explícita de iniciar o período grátis.
+        setRequiredComplete(configurationComplete && !trialPending);
         setState('ready');
       })
       .catch((error) => {
