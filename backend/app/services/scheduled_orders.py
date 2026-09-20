@@ -12,6 +12,7 @@ from ..models import Comanda, Lancamento
 from ..scheduled_models import ScheduledOrder
 from .capabilities import has_capability
 from .outbox import enqueue_outbox_event_in_session
+from .online_order_auto_accept import auto_accept_order_if_enabled
 
 
 SCHEDULED_ORDERS_CAPABILITY = "scheduled_orders"
@@ -162,8 +163,14 @@ def release_due_scheduled_orders_in_session(
             continue
 
         comanda.online_payment_status = None
-        _publish_created_event(db, comanda)
         record.released_at = now
+        _publish_created_event(db, comanda)
+        auto_accept_order_if_enabled(
+            db,
+            restaurante_id=restaurante_id,
+            comanda_id=comanda.id,
+            commit=False,
+        )
         released += 1
 
     if released:
