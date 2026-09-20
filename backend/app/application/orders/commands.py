@@ -220,6 +220,7 @@ class CreateOrderCommand:
     idempotency_fingerprint_version: Optional[int] = None
     external_reference: Optional[ExternalOrderReference] = None
     operator_user_id: Optional[str | int] = None
+    onboarding_test: bool = False
     # Pedidos com pagamento online existem antes da autorização, mas ainda não
     # podem ser publicados para cozinha/caixa. O webhook publica após aprovar.
     defer_operational_publish: bool = False
