@@ -512,7 +512,10 @@ class OrderApplicationService:
                 initial_lancamento_status = "producao"
             else:
                 tipo_comanda = "Consumo no Local"
-                auto_delivery_status = None
+                # Consumo local sem mesa precisa de uma fila operacional própria
+                # no Caixa. Quando já nasce vinculado a mesa, continua sendo
+                # salão tradicional e não recebe ciclo digital legado.
+                auto_delivery_status = "producao" if not cmd.table_id else None
                 initial_lancamento_status = "producao"
         elif cmd.fulfillment == FulfillmentType.PICKUP:
             tipo_comanda = "Retirada"
