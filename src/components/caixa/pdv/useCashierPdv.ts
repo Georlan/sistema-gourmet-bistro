@@ -199,7 +199,7 @@ export function useCashierPdv({
         e.preventDefault();
         setPdvOrderType('dine_in');
         setTimeout(() => {
-          const mesaSelect = document.getElementById('pdv-mesa-select');
+          const mesaSelect = document.getElementById('pdv-target-table');
           if (mesaSelect) mesaSelect.focus();
         }, 50);
       } else if (e.key === 'F8') {
