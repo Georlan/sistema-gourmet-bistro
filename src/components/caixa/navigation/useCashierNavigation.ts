@@ -14,7 +14,7 @@ type BoundaryProps = {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 };
 
-const SETUP_DIRECT_TABS = new Set<CashierTab>(['cardapio', 'cardapio_digital']);
+const SETUP_DIRECT_TABS = new Set<CashierTab>(['cardapio', 'cardapio_digital', 'permissoes_cargos']);
 
 /**
  * A implantação reutiliza as telas canônicas do Caixa, mas só libera os
@@ -24,7 +24,7 @@ const SETUP_DIRECT_TABS = new Set<CashierTab>(['cardapio', 'cardapio_digital']);
  */
 function setupAllowsState(tab: CashierTab, subTab: string): boolean {
   return SETUP_DIRECT_TABS.has(tab)
-    || (tab === 'impressao_salao' && subTab === 'integracoes');
+    || (tab === 'impressao_salao' && ['integracoes', 'mesas', 'taxa'].includes(subTab));
 }
 
 function readSetupMode(): boolean {
@@ -98,7 +98,7 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     const target = getCashierNavigationTarget(navigationId);
     if (target) {
       if (!setupAllowsTarget(target.tab, target.subTab)) {
-        showToast('Finalize a implantação inicial antes de acessar a operação.', 'info');
+        showToast('Inicie a operação quando a configuração estiver concluída.', 'info');
         return false;
       }
       setActiveTab(target.tab);
@@ -166,7 +166,7 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
 
     if (getCashierNavigationAction(navigationId) === 'open-counter') {
       if (setupMode) {
-        showToast('O Caixa será liberado quando os 3 passos essenciais estiverem concluídos.', 'info');
+        showToast('O Caixa será liberado depois que você iniciar explicitamente a operação.', 'info');
         return;
       }
       window.dispatchEvent(new Event('koma-navigation-open-counter'));
