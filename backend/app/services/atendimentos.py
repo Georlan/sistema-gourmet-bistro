@@ -418,6 +418,7 @@ def _new_account(
     *,
     actor_id: Optional[str],
     principal: Optional[AtendimentoMesa],
+    opening_details: Optional[dict] = None,
 ) -> AtendimentoMesa:
     period_ref = _operational_period(comanda.criado_em)
     legacy_number = int(comanda.numero_pedido or 0)
@@ -457,6 +458,7 @@ def _new_account(
             "abertura",
             actor_id=actor_id or comanda.garcom_id,
             destination=comanda.mesa_id,
+            details=opening_details,
         )
     else:
         inferred_origin = comanda.mesa_origem_id or comanda.mesa_transferida_de
@@ -471,6 +473,7 @@ def _new_account(
                 "principal": principal.id,
                 "materializado_de_legado": True,
                 "origem_inferida": inferred_origin is not None,
+                **(opening_details or {}),
             },
         )
     return account
@@ -481,6 +484,7 @@ def ensure_atendimento_for_comanda(
     comanda: Comanda,
     *,
     actor_id: Optional[str] = None,
+    opening_details: Optional[dict] = None,
 ) -> AtendimentoMesa:
     if comanda.tipo != "Consumo no Local" or comanda.mesa_id is None:
         raise AtendimentoError("Somente consumo no local possui família de mesa", status_code=400)
@@ -542,6 +546,7 @@ def ensure_atendimento_for_comanda(
             comanda,
             actor_id=actor_id,
             principal=principal,
+            opening_details=opening_details,
         )
 
     db.add(
@@ -863,10 +868,12 @@ def associate_order_to_table(
     *,
     actor_id: Optional[str] = None,
 ) -> Comanda:
-    """Associa uma comanda aberta a uma mesa sem confundir associação com transferência.
+    """Associa uma comanda aberta a uma mesa pelo contexto operacional atual.
 
-    Consumo no local passa a participar da família operacional da mesa. Retirada
-    mantém a mesa apenas como contexto do pedido e não cria AtendimentoMesa.
+    Consumo no local passa a participar da família operacional da mesa. Quando
+    uma Retirada é associada porque o cliente decidiu permanecer no restaurante,
+    o fulfillment atual muda para Consumo no Local e a família de mesa é
+    materializada. A origem do pedido continua preservada no Lancamento.
     Delivery nunca pode receber mesa.
     """
     command = (
@@ -900,10 +907,10 @@ def associate_order_to_table(
         )
 
     current_table = int(command.mesa_id) if command.mesa_id is not None else None
-    if current_table == mesa_id:
-        return command
 
     if fulfillment == FulfillmentType.DINE_IN:
+        if current_table == mesa_id:
+            return command
         if current_table is not None:
             return transfer_group_by_comanda(
                 db,
@@ -919,11 +926,25 @@ def associate_order_to_table(
         db.flush()
         return command
 
-    # PICKUP: mesa é apenas contexto operacional do pedido. Não materializamos
-    # AtendimentoMesa nem transformamos retirada em consumo no local.
-    if current_table is not None:
+    # PICKUP -> DINE_IN é uma mudança real de atendimento: o cliente veio buscar
+    # e decidiu consumir no estabelecimento. A origem (Cardápio/Caixa/Garçom)
+    # permanece no Lancamento; somente o fulfillment atual muda.
+    previous_type = command.tipo
+    if current_table is not None and current_table != mesa_id:
         command.mesa_transferida_de = current_table
+    command.tipo = "Consumo no Local"
     command.mesa_id = mesa_id
+    db.flush()
+    ensure_atendimento_for_comanda(
+        db,
+        command,
+        actor_id=actor_id,
+        opening_details={
+            "fulfillment_anterior": previous_type,
+            "fulfillment_atual": "Consumo no Local",
+            "motivo": "cliente_permaneceu_no_estabelecimento",
+        },
+    )
     db.flush()
     return command
 
