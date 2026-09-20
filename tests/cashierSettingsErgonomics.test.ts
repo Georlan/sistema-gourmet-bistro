@@ -142,3 +142,15 @@ test('waiter settings separate actionable permissions from future capabilities a
   assert.match(waiterPermissions, /title: 'Transferir mesa ou comanda'/);
   assert.doesNotMatch(waiterPermissions, /title: 'Permitir que/);
 });
+
+
+test('printing queue explains FIFO order and job origin', () => {
+  const monitor = readFileSync('src/components/printing/PrintMonitorPanel.tsx', 'utf8');
+
+  assert.match(monitor, /mais antiga primeiro/);
+  assert.match(monitor, /friendlyQueueOrigin/);
+  assert.match(monitor, /Reimpressão manual/);
+  assert.match(monitor, /queue_origins/);
+  assert.match(monitor, /automática\(s\)/);
+  assert.match(monitor, /reimpressão\(ões\)/);
+});
