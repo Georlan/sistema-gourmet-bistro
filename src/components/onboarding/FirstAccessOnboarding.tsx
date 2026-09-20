@@ -94,6 +94,8 @@ type OnboardingStatus = {
 
 type LoadState = 'loading' | 'ready' | 'error';
 
+const ONBOARDING_LOAD_TIMEOUT_MS = 10_000;
+
 const EMPTY_CAPABILITIES: Capabilities = {
   order_modes: [],
   online_menu: false,
@@ -157,7 +159,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     setState('loading');
     setErrorMessage('');
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
+    const timeoutId = window.setTimeout(() => controller.abort(), ONBOARDING_LOAD_TIMEOUT_MS);
     try {
       const response = await fetch(`${API_BASE_URL}/api/onboarding/status`, {
         method: 'GET',
