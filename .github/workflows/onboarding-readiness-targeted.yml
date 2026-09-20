@@ -60,7 +60,11 @@ jobs:
 
       - name: Compile onboarding modules
         run: |
+          python -m py_compile backend/app/models.py
+          python -m py_compile backend/app/schemas.py
           python -m py_compile backend/app/routes/onboarding.py
+          python -m py_compile backend/app/routes/caixa.py
+          python -m py_compile backend/app/routes/cardapio_digital.py
           python -m py_compile backend/app/services/onboarding_readiness.py
           python -m py_compile backend/app/services/operational_modes.py
           python -m py_compile backend/app/services/online_order_policy.py
