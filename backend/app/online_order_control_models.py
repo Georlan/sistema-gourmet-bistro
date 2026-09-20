@@ -50,6 +50,7 @@ class OnlineOrderControl(Base):
     pause_until = Column(DateTime(timezone=True), nullable=True)
     max_active_orders = Column(Integer, nullable=True)
     auto_pause = Column(Boolean, nullable=False, default=False)
+    auto_accept = Column(Boolean, nullable=False, default=False)
     paused_by_user_id = Column(
         String,
         ForeignKey("usuarios.id", ondelete="SET NULL"),
