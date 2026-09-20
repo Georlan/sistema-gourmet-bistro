@@ -404,7 +404,12 @@ export function useCashierOrders({
 
     const rawAddress = String(c.delivery_endereco || '').trim();
     const rawType = String(c.tipo || '').toLowerCase();
-    const modalidade = rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress) ? 'retirada' : 'delivery';
+    const modalidade: DeliveryOrderView['modalidade'] =
+      rawType === 'consumo no local'
+        ? 'consumo_local'
+        : rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress)
+          ? 'retirada'
+          : 'delivery';
     const isQuickSale =
       modalidade === 'retirada' &&
       (origemOperacional === 'smartpos' ||
