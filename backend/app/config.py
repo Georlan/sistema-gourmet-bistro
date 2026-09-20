@@ -277,7 +277,7 @@ class Settings:
     )
     ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES: int = max(
         5,
-        min(int(os.getenv("ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES", "30")), 1440),
+        min(int(os.getenv("ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES", "5")), 1440),
     )
     ONLINE_PAYMENT_REQUEST_TIMEOUT_SECONDS: float = max(
         2.0,
