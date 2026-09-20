@@ -3,7 +3,7 @@ import type { BrandConfig } from './CardapioTypes';
 export function getDeliveryMinimumRemaining(
   config: Pick<BrandConfig, 'pedidoMinimo'> | undefined,
   subtotal: number,
-  fulfillment: 'delivery' | 'pickup',
+  fulfillment: 'delivery' | 'pickup' | 'dine_in',
 ): number {
   if (fulfillment !== 'delivery') return 0;
   return Math.max(0, Number(config?.pedidoMinimo || 0) - subtotal);
