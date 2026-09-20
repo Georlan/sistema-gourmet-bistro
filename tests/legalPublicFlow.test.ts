@@ -6,7 +6,8 @@ const main = readFileSync('src/main.tsx', 'utf8');
 const legacyLegalContent = readFileSync('src/legal/legalContentLegacy.ts', 'utf8');
 const legalV2 = readFileSync('src/legal/legalContentV2.ts', 'utf8');
 const legalV25 = readFileSync('src/legal/legalContentRecurring.ts', 'utf8');
-const legalContent = readFileSync('src/legal/legalContentV26.ts', 'utf8');
+const legalV26 = readFileSync('src/legal/legalContentV26.ts', 'utf8');
+const legalContent = readFileSync('src/legal/legalContentV27.ts', 'utf8');
 const legalEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const legalPage = readFileSync('src/legal/LegalPage.tsx', 'utf8');
 const planContract = readFileSync('src/legal/PlanContractPageV2.tsx', 'utf8');
@@ -23,7 +24,7 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal preserva snapshots 2.0 e 2.5 e publica fachada vigente 2.6', () => {
+test('central legal preserva snapshots anteriores e publica fachada vigente 2.7', () => {
   for (const slug of ['termos','planos','privacidade','dpa','suboperadores','cookies','cardapio-termos','cardapio-privacidade']) {
     assert.match(legalV2, new RegExp(`slug: '${slug}'`));
   }
@@ -34,20 +35,21 @@ test('central legal preserva snapshots 2.0 e 2.5 e publica fachada vigente 2.6',
   assert.match(legalContent, /18\/09\/2026/);
   assert.match(legalContent, /from '\.\/legalContentRecurring'/);
   assert.match(legacyLegalContent, /LEGAL_VERSION = '1\.2'/);
-  assert.match(legalPage, /legalContentV26/);
+  assert.match(legalPage, /legalContentV27/);
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
 });
 
-test('Legal 2.6 documenta cobrança fixa, Pocket gratuito e pagamentos separados', () => {
+test('Legal 2.7 documenta cobrança fixa, Pocket gratuito e início explícito do trial', () => {
   assert.match(legalContent, /mensalidade fixa é R\$ 0/);
   assert.match(legalContent, /sem criar recorrência de valor zero no provedor/);
   assert.match(legalContent, /cartão de crédito, Pix por QR Code e Pix Copia e Cola interoperável e Saldo Mercado Pago/);
   assert.match(legalContent, /conta Mercado Pago conectada pelo próprio estabelecimento/);
-  assert.match(legalContent, /três passos essenciais indicados pelo KÔMA/);
+  assert.match(legalContent, /inicia expressamente a operação/);
+  assert.match(legalContent, /primeiro pedido de validação/);
   assert.match(legalV2, /O WhatsApp não é requisito/);
 });
 
-test('Legal 2.6 herda a política 18+ da Legal 2.5', () => {
+test('Legal 2.7 preserva a política 18+ herdada', () => {
   assert.match(legalV25, /cardápio e o checkout online não são canais destinados à oferta de bebidas alcoólicas/);
   assert.match(legalV25, /tag 18\+ ou classificação equivalente/);
   assert.match(legalV25, /gate de publicação e sincronização/);
@@ -89,8 +91,8 @@ test('checkout reconhece cartão Pix universal e Saldo Mercado Pago', () => {
   assert.match(planContract, /payment-methods-v2/);
 });
 
-test('proveniência jurídica fixa commit e blob da Legal 2.6 sem documento fiscal pessoal', () => {
-  assert.match(legalEvidence, /legalContentV26/);
+test('proveniência jurídica fixa commit e blob da Legal 2.7 sem documento fiscal pessoal', () => {
+  assert.match(legalEvidence, /legalContentV27/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /requireDocument\('termos'\)/);
@@ -122,7 +124,7 @@ test('landing não privilegia Pocket e envia cada plano para sua própria contra
   assert.match(finalCta, /href="\/legal\/privacidade"/);
 });
 
-test('condições comerciais 2.6 publicam novo catálogo sem apagar o snapshot 2.5', () => {
+test('condições comerciais 2.7 preservam o catálogo 2.6 e mudam apenas o gatilho do trial', () => {
   assert.match(legalContent, /Pocket: R\$ 0 por mês \+ 1,79%/);
   assert.match(legalContent, /Pro: R\$ 129 por mês \+ 0,50%/);
   assert.match(legalContent, /Premium: R\$ 249 por mês \+ 0,20%/);
