@@ -42,6 +42,7 @@ import { CashierPickups } from './caixa/orders/CashierPickups';
 import type { CashierTableCard } from './caixa/orders/cashierWorkspaceTypes';
 import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
 import { useCashierOrders } from './caixa/orders/useCashierOrders';
+import { useOnlineAutoAcceptPolicy } from './caixa/orders/useOnlineAutoAcceptPolicy';
 import { useCashierPdv } from './caixa/pdv/useCashierPdv';
 import { useCashierAlerts } from './caixa/realtime/useCashierAlerts';
 import { useCashierClock } from './caixa/realtime/useCashierClock';
@@ -381,62 +382,12 @@ export function CaixaPanel({
     return true;
   };
 
-  const [autoAccept, setAutoAccept] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    const loadAutoAccept = async () => {
-      try {
-        const response = await fetch(`${apiBaseUrl}/api/online-orders/control`, {
-          headers: authHeaders,
-          cache: 'no-store',
-        });
-        if (!response.ok) return;
-        const payload = await response.json() as { auto_accept?: boolean };
-        if (active) setAutoAccept(Boolean(payload.auto_accept));
-      } catch {
-        // A fila continua sendo autoritativa no backend; falha de leitura não
-        // deve alterar pedidos nem simular que a automação foi salva.
-      }
-    };
-    void loadAutoAccept();
-    return () => {
-      active = false;
-    };
-  }, [apiBaseUrl, authHeaders]);
-
-  const handleAutoAcceptChange = async (enabled: boolean) => {
-    const previous = autoAccept;
-    setAutoAccept(enabled);
-    try {
-      const response = await fetch(`${apiBaseUrl}/api/online-orders/auto-accept`, {
-        method: 'PUT',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-      });
-      const payload = await response.json().catch(() => ({})) as {
-        auto_accept?: boolean;
-        detail?: string;
-      };
-      if (!response.ok) {
-        throw new Error(payload.detail || 'Não foi possível atualizar o autoaceite.');
-      }
-      setAutoAccept(Boolean(payload.auto_accept));
-      showToast(
-        payload.auto_accept
-          ? 'Autoaceite online ativado no restaurante.'
-          : 'Autoaceite online desativado.',
-        'success',
-      );
-      if (onRefreshOrders) onRefreshOrders();
-    } catch (error) {
-      setAutoAccept(previous);
-      showToast(
-        error instanceof Error ? error.message : 'Não foi possível atualizar o autoaceite.',
-        'error',
-      );
-    }
-  };
+  const { autoAccept, updateAutoAccept: handleAutoAcceptChange } = useOnlineAutoAcceptPolicy({
+    apiBaseUrl,
+    authHeaders,
+    onRefreshOrders,
+    showToast,
+  });
 
   useEffect(() => {
     const handleOpenSangria = () => {
