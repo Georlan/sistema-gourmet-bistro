@@ -50,7 +50,7 @@ export function useOnboardingAccessGate({
       })
       .catch((error) => {
         if (cancelled || (error instanceof DOMException && error.name === 'AbortError')) return;
-        setRequiredComplete(false);
+        setOperationStarted(false);
         setState('error');
       });
 
