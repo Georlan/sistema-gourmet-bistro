@@ -509,6 +509,7 @@ export function useCashierOrders({
     const primaryComandaId = String(order?.comandaId || order?.id || '');
     const normalizedType = String(order?.modalidade || order?.tipo || '').trim().toLowerCase();
     const isDelivery = ['delivery', 'entrega'].includes(normalizedType);
+    const isPickup = ['retirada', 'pickup'].includes(normalizedType);
     if (!targetMesaId || !primaryComandaId || isTransferringTable) return false;
     if (isDelivery) {
       showToast('Pedidos de delivery não podem ser associados a uma mesa.', 'error');
@@ -530,14 +531,23 @@ export function useCashierOrders({
       setDeliveryOrders((current) =>
         current.map((candidate) =>
           String(candidate.id) === primaryComandaId
-            ? { ...candidate, mesaId: targetMesaId }
+            ? {
+                ...candidate,
+                mesaId: targetMesaId,
+                ...(isPickup ? { modalidade: 'dine_in' as const } : {}),
+              }
             : candidate,
         ),
       );
       setSelectedKanbanOrder(null);
       setTableTransferTargetId('');
       await Promise.allSettled([onRefreshOrders(), fetchDeliveryOrders()]);
-      showToast(`Pedido associado à Mesa ${targetMesaId}.`, 'success');
+      showToast(
+        isPickup
+          ? `Pedido convertido para consumo no local e associado à Mesa ${targetMesaId}.`
+          : `Pedido associado à Mesa ${targetMesaId}.`,
+        'success',
+      );
       return true;
     } catch (error: any) {
       showToast(error?.message || 'Não foi possível associar o pedido à mesa.', 'error');
