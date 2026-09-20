@@ -1,11 +1,12 @@
 import datetime
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.database import Base, SessionLocal, current_restaurante_id, engine, tenant_session_scope
 from app.main import app
-from app.models import Comanda, Restaurante, Usuario
+from app.models import CaixaTurno, Comanda, Lancamento, Restaurante, Usuario
 from app.online_order_control_models import (
     OnlineOrderControl,
     OnlineOrderCustomerBlock,
@@ -16,6 +17,7 @@ from app.scheduled_models import ScheduledOrder
 from app.services.online_order_control import (
     block_from_order,
     capacity_gate_before_order,
+    auto_accept_online_order_if_enabled,
     customer_is_blocked,
     operational_counts,
 )
@@ -309,3 +311,157 @@ def test_operational_control_rejects_unauthenticated_callers():
         json={"reason": "Não autorizado", "duration_minutes": 15},
     )
     assert response.status_code in (401, 403)
+
+
+def test_auto_accept_policy_is_persisted_and_audited():
+    enabled = client.put(
+        "/api/online-orders/auto-accept",
+        headers=_admin_headers(),
+        json={"enabled": True},
+    )
+    assert enabled.status_code == 200, enabled.text
+    assert enabled.json()["auto_accept"] is True
+
+    persisted = client.get("/api/online-orders/control", headers=_admin_headers())
+    assert persisted.status_code == 200
+    assert persisted.json()["auto_accept"] is True
+
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, RID):
+            control = db.query(OnlineOrderControl).filter(
+                OnlineOrderControl.restaurante_id == RID
+            ).one()
+            assert control.auto_accept is True
+            assert db.query(OnlineOrderOperationalAudit).filter(
+                OnlineOrderOperationalAudit.restaurante_id == RID,
+                OnlineOrderOperationalAudit.action == "online_orders_auto_accept_updated",
+            ).count() == 1
+    finally:
+        db.close()
+
+    disabled = client.put(
+        "/api/online-orders/auto-accept",
+        headers=_admin_headers(),
+        json={"enabled": False},
+    )
+    assert disabled.status_code == 200
+    assert disabled.json()["auto_accept"] is False
+
+
+@pytest.mark.parametrize("order_type", ["Retirada", "Delivery", "Consumo no Local"])
+def test_backend_auto_accept_applies_to_every_online_fulfillment(monkeypatch, order_type):
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, RID):
+            db.add(OnlineOrderControl(restaurante_id=RID, auto_accept=True))
+            db.add(
+                CaixaTurno(
+                    restaurante_id=RID,
+                    aberto_por_id=ADMIN_ID,
+                    saldo_inicial=0,
+                    status="aberto",
+                )
+            )
+            order = _add_order(
+                db,
+                order_id=f"auto-all-{order_type.lower().replace(' ', '-')}",
+            )
+            order.tipo = order_type
+            launch = Lancamento(
+                id=f"launch-{order.id}",
+                restaurante_id=RID,
+                comanda_id=order.id,
+                garcom_id=ADMIN_ID,
+                origem="cardapio",
+                status="pendente",
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
+            )
+            db.add(launch)
+            db.commit()
+
+            calls = []
+
+            def fake_transition(_db, **kwargs):
+                calls.append(kwargs)
+                return SimpleNamespace(
+                    changed=True,
+                    first_accept=False,
+                    comanda=order,
+                )
+
+            monkeypatch.setattr(
+                "app.services.online_order_control.OrderLifecycleCoordinator.transition_check_status",
+                fake_transition,
+            )
+            assert auto_accept_online_order_if_enabled(
+                db,
+                restaurante_id=RID,
+                comanda_id=order.id,
+            ) is True
+            assert len(calls) == 1
+            assert calls[0]["target_status"].value == "preparing"
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_backend_auto_accept_waits_for_pix_and_scheduled_release(monkeypatch):
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, RID):
+            db.add(OnlineOrderControl(restaurante_id=RID, auto_accept=True))
+            db.add(
+                CaixaTurno(
+                    restaurante_id=RID,
+                    aberto_por_id=ADMIN_ID,
+                    saldo_inicial=0,
+                    status="aberto",
+                )
+            )
+            order = _add_order(db, order_id="auto-barrier-1")
+            order.online_payment_status = "pending"
+            db.add(
+                Lancamento(
+                    id="launch-auto-barrier-1",
+                    restaurante_id=RID,
+                    comanda_id=order.id,
+                    garcom_id=ADMIN_ID,
+                    origem="cardapio",
+                    status="pendente",
+                    timestamp=datetime.datetime.now(datetime.timezone.utc),
+                )
+            )
+            db.commit()
+
+            monkeypatch.setattr(
+                "app.services.online_order_control.OrderLifecycleCoordinator.transition_check_status",
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    AssertionError("barrier must prevent transition")
+                ),
+            )
+            assert auto_accept_online_order_if_enabled(
+                db,
+                restaurante_id=RID,
+                comanda_id=order.id,
+            ) is False
+
+            order.online_payment_status = None
+            db.add(
+                ScheduledOrder(
+                    restaurante_id=RID,
+                    comanda_id=order.id,
+                    scheduled_for=datetime.datetime.now(datetime.timezone.utc)
+                    + datetime.timedelta(hours=2),
+                    released_at=None,
+                )
+            )
+            db.commit()
+            assert auto_accept_online_order_if_enabled(
+                db,
+                restaurante_id=RID,
+                comanda_id=order.id,
+            ) is False
+    finally:
+        db.rollback()
+        db.close()
