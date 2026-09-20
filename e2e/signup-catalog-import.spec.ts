@@ -6,11 +6,30 @@ test('primeiro acesso aceita PDF para implantação assistida sem exigir JSON do
   await page.route('**/api/subscription', route => route.fulfill({ json: { subscription: null } }));
   await page.route('**/api/onboarding/status', route => route.fulfill({ json: {
     restaurant: { id: '1', name: 'Bistrô Novo', slug: 'bistro', plan: 'pro' },
-    trial: { status: 'active', startsAt: null, endsAt: null, daysRemaining: 7 }, payments: { mercadoPagoConnected: false },
-    counts: { products: 0, orders: 0 },
+    trial: { status: 'setup', startsAt: null, endsAt: null, daysRemaining: 7 },
+    trialCanStart: false,
+    payments: { mercadoPagoConnected: false },
+    counts: { products: 0, activeProducts: 0, orders: 0, completedPaidOrders: 0, tables: 0 },
+    operations: {
+      configured: false,
+      ready: false,
+      orderTypes: [],
+      tableMapEnabled: true,
+      serviceChargeEnabled: true,
+      serviceChargePercent: 10,
+      capabilities: {
+        dineIn: { enabled: false, ready: true },
+        pickup: { enabled: false, ready: true },
+        delivery: { enabled: false, ready: true },
+        serviceCharge: { enabled: true, ready: true },
+        onlinePayment: { enabled: false, ready: true },
+      },
+      blockers: ['order_types'],
+    },
     catalogAssistance: assistance ? { ...assistance, contentType: 'application/pdf', fileSize: 30, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : null,
-    steps: { profile: false, hours: false, catalog: false, mercadoPago: false, firstOrder: false },
-    progress: { completed: 0, total: 3, percent: 0 },
+    steps: { profile: false, hours: false, catalog: false, operations: false, mercadoPago: false, firstOrder: false },
+    progress: { completed: 0, total: 4, percent: 0 },
+    readiness: { configurationComplete: false, readyToOperate: false, state: 'configuration', blockers: ['profile', 'hours', 'catalog', 'operations'] },
   } }));
   await page.route('**/api/onboarding/catalog-assistance', async route => {
     assistance = { id: 'assist-1', filename: 'cardapio.pdf', status: 'pending' };
