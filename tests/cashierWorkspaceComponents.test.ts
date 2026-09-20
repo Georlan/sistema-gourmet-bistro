@@ -332,7 +332,7 @@ test('digital detail shows the payment method and requested cash change', () => 
   };
 
   const markup = renderToStaticMarkup(createElement(KanbanOrderDetails, props));
-  assert.match(markup, /Pagamento na entrega ou retirada/);
+  assert.match(markup, /Pagamento no atendimento/);
   assert.match(markup, /dinheiro/i);
   assert.match(markup, /Troco para R\$\s*100,00/);
 });
