@@ -23,6 +23,14 @@ def upgrade() -> None:
         "configuracoes_restaurante",
         sa.Column("operation_started_at", sa.DateTime(timezone=True), nullable=True),
     )
+    # Compatibilidade: restaurantes que já existiam antes desta feature não
+    # podem voltar para o gate de onboarding. Novos tenants continuam nascendo
+    # com NULL porque a coluna não possui server_default.
+    op.execute(
+        "UPDATE configuracoes_restaurante "
+        "SET operation_started_at = CURRENT_TIMESTAMP "
+        "WHERE operation_started_at IS NULL"
+    )
 
 
 def downgrade() -> None:
