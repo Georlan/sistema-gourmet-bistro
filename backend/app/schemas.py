@@ -196,6 +196,13 @@ class ItemResponse(BaseModel):
 
 
 # ----------------- COMANDA -----------------
+class EstoqueAlertaResponse(BaseModel):
+    insumo_id: str
+    nome: str
+    saldo_atual: float
+    unidade_medida: str
+
+
 class ComandaResponse(BaseModel):
     id: str
     cliente_id: Optional[str] = None
@@ -222,6 +229,9 @@ class ComandaResponse(BaseModel):
 
     # Cashier flow
     status_comanda: Optional[str] = None  # null | aguardando_pagamento
+
+    # Informational only: zero/negative stock never blocks the order.
+    estoque_alertas: List[EstoqueAlertaResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 

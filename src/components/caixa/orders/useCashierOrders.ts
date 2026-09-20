@@ -818,7 +818,22 @@ export function useCashierOrders({
           );
         }
         void Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
-        showToast('Status atualizado e cliente avisado automaticamente!');
+        const estoqueAlertas = Array.isArray(updatedComanda?.estoque_alertas)
+          ? updatedComanda.estoque_alertas
+          : [];
+        if (statusNovo === 'producao' && estoqueAlertas.length > 0) {
+          const nomes = estoqueAlertas
+            .map((alerta: any) => String(alerta?.nome || '').trim())
+            .filter(Boolean);
+          const resumo = nomes.slice(0, 2).join(', ') || 'ingrediente';
+          const restantes = nomes.length > 2 ? ` +${nomes.length - 2}` : '';
+          showToast(
+            `Pedido aceito. Estoque indica ${resumo}${restantes} zerado/negativo; confira o estoque físico.`,
+            'info',
+          );
+        } else {
+          showToast('Status atualizado e cliente avisado automaticamente!');
+        }
         return true;
       }
 
