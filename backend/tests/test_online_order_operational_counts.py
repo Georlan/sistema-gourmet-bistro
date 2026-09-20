@@ -26,22 +26,26 @@ def setup_operational_count_db():
             synchronize_session=False
         )
         db.query(Comanda).filter(Comanda.restaurante_id == RID).delete(synchronize_session=False)
-        db.query(Usuario).filter(Usuario.restaurante_id == RID).delete(synchronize_session=False)
-        db.query(Restaurante).filter(Restaurante.id == RID).delete(synchronize_session=False)
         db.commit()
 
-        db.add(Restaurante(id=RID, nome="KOMA Count", plano="pro", slug="koma-count"))
-        db.add(
-            Usuario(
-                id=ADMIN_ID,
-                restaurante_id=RID,
-                nome="Gerente Count",
-                email="count-admin@koma.test",
-                cargo="admin",
-                role="admin",
-                status="ativo",
+        if db.query(Restaurante).filter(Restaurante.id == RID).first() is None:
+            db.add(Restaurante(id=RID, nome="KOMA Count", plano="pro", slug="koma-count"))
+            db.flush()
+        if db.query(Usuario).filter(
+            Usuario.restaurante_id == RID,
+            Usuario.id == ADMIN_ID,
+        ).first() is None:
+            db.add(
+                Usuario(
+                    id=ADMIN_ID,
+                    restaurante_id=RID,
+                    nome="Gerente Count",
+                    email="count-admin@koma.test",
+                    cargo="admin",
+                    role="admin",
+                    status="ativo",
+                )
             )
-        )
         db.commit()
         yield
     finally:
