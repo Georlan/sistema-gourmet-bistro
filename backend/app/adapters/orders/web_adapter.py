@@ -53,6 +53,7 @@ from ...models import (
 )
 from ...schemas import CardapioPedidoCreate
 from ...services.clientes import normalizar_telefone_cliente
+from ...services.online_order_auto_accept import try_auto_accept_online_order_in_session
 from ...services.online_order_policy import evaluate_online_order_policy
 from ...services.online_payments import (
     OnlinePaymentConfigurationError,
@@ -576,6 +577,27 @@ class CardapioWebAdapter:
                     account=payment_account,
                 )
 
+            if not is_scheduled:
+                try:
+                    if try_auto_accept_online_order_in_session(
+                        db,
+                        restaurante_id=rest_id,
+                        comanda_id=order_dto.comanda_id,
+                        operator_user_id=garcom.id,
+                        requested_by="Autoaceite online",
+                    ):
+                        db.commit()
+                        if comanda is not None:
+                            db.refresh(comanda)
+                except Exception:
+                    # O pedido já é válido e persistido. Falha na automação não pode
+                    # transformar sucesso de checkout em erro nem duplicar retry.
+                    db.rollback()
+                    logger.exception(
+                        "Falha no autoaceite server-side do pedido %s",
+                        order_dto.comanda_id,
+                    )
+
         except HTTPException:
             db.rollback()
             raise
@@ -709,7 +731,11 @@ class CardapioWebAdapter:
             "numero_pedido": numero_pedido,
             "cliente_id": cliente_id,
             "scheduled_for": normalized_schedule.isoformat() if normalized_schedule is not None else None,
-            "delivery_status": "agendado" if is_scheduled else None,
+            "delivery_status": (
+                "agendado"
+                if is_scheduled
+                else (comanda.delivery_status if comanda is not None else None)
+            ),
             "total": float(order_dto.total),
             "tracking_token": tracking_token,
             "tracking_url": f"/acompanhar/{tracking_token}" if tracking_token else None,
