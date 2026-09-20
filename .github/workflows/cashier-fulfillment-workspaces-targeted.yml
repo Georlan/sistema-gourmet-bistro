@@ -1,0 +1,89 @@
+name: Cashier Fulfillment Workspaces Targeted
+
+on:
+  pull_request:
+    paths:
+      - "src/components/CaixaPanel.tsx"
+      - "src/components/caixa/orders/CashierPickups.tsx"
+      - "src/components/caixa/orders/CashierCouriers.tsx"
+      - "src/components/caixa/orders/cashierWorkspaceTypes.ts"
+      - "src/components/caixa/orders/deliveryOrderProjection.ts"
+      - "src/components/caixa/orders/digitalOrderPresentation.ts"
+      - "src/components/caixa/orders/useCashierOrders.ts"
+      - "backend/app/routes/orders_core.py"
+      - "tests/cashierFulfillmentWorkspaces.test.ts"
+      - "tests/cashierPickupsControl.test.ts"
+      - "tests/deliveryDispatchControl.test.ts"
+      - "tests/cashierCourierCheckoutWiring.test.ts"
+      - "e2e/cashier-fulfillment-workspaces.spec.ts"
+      - ".github/workflows/cashier-fulfillment-workspaces-targeted.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Fulfillment workspace contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run lint
+
+      - name: Run fulfillment contracts
+        run: >-
+          npx tsx --test
+          tests/cashierFulfillmentWorkspaces.test.ts
+          tests/cashierPickupsControl.test.ts
+          tests/deliveryDispatchControl.test.ts
+          tests/cashierCourierCheckoutWiring.test.ts
+
+      - name: Backend syntax check
+        run: python -m py_compile backend/app/routes/orders_core.py
+
+  browser:
+    name: Fulfillment mobile + desktop
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run mobile and desktop fulfillment smoke
+        run: >-
+          npx playwright test
+          e2e/cashier-fulfillment-workspaces.spec.ts
+          --project=mobile-390
+          --project=desktop-1366
