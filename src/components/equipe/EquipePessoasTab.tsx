@@ -24,6 +24,7 @@ interface EquipePessoasTabProps {
   users: SystemUser[];
   onCreate: (payload: { nome: string; telefone: string; cargo: string }) => Promise<void>;
   onResendInvite: (user: SystemUser) => Promise<void>;
+  onUpdateAccess: (user: SystemUser, payload: { cargo?: string; status?: 'ativo' | 'inativo' }) => Promise<void>;
   onRemove: (userId: string) => Promise<void>;
 }
 
@@ -48,7 +49,7 @@ function memberStatus(user: SystemUser): 'ativo' | 'pendente' | 'inativo' {
   return 'inativo';
 }
 
-export function EquipePessoasTab({ users, onCreate, onResendInvite, onRemove }: EquipePessoasTabProps) {
+export function EquipePessoasTab({ users, onCreate, onResendInvite, onUpdateAccess, onRemove }: EquipePessoasTabProps) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<TeamFilter>('todos');
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -134,6 +135,21 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onRemove }: 
     setBusyUserAction(`invite-${user.id}`);
     try {
       await onResendInvite(user);
+    } catch {
+      // A tela principal já apresenta a mensagem devolvida pela API.
+    } finally {
+      setBusyUserAction(null);
+    }
+  };
+
+  const handleAccessUpdate = async (
+    user: SystemUser,
+    payload: { cargo?: string; status?: 'ativo' | 'inativo' },
+  ) => {
+    if (busyUserAction) return;
+    setBusyUserAction(`access-${user.id}`);
+    try {
+      await onUpdateAccess(user, payload);
     } catch {
       // A tela principal já apresenta a mensagem devolvida pela API.
     } finally {
@@ -237,7 +253,24 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onRemove }: 
                     </div>
                     <div className="mt-3 flex flex-wrap items-end justify-between gap-3 border-t border-koma-border pt-3">
                       <div>
-                        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-koma-foreground"><ShieldCheck size={13} className="text-emerald-700 dark:text-emerald-400" /> {roleMeta.label}</span>
+                        {isAdmin ? (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-koma-foreground"><ShieldCheck size={13} className="text-emerald-700 dark:text-emerald-400" /> {roleMeta.label}</span>
+                        ) : (
+                          <label className="inline-flex items-center gap-1.5 text-[10px] font-bold text-koma-foreground">
+                            <ShieldCheck size={13} className="text-emerald-700 dark:text-emerald-400" />
+                            <span className="sr-only">Função de {user.nome}</span>
+                            <select
+                              value={role}
+                              disabled={Boolean(busyUserAction)}
+                              onChange={(event) => void handleAccessUpdate(user, { cargo: event.target.value })}
+                              className="rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] font-bold text-koma-foreground outline-none focus:border-emerald-500 disabled:opacity-60"
+                            >
+                              {INVITABLE_ROLES.map((roleOption) => (
+                                <option key={roleOption} value={roleOption}>{ROLE_META[roleOption].label}</option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
                         <p className="mt-0.5 text-[9px] text-koma-muted">{roleMeta.description}</p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -246,15 +279,15 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onRemove }: 
                             <Send size={13} /> {busyUserAction === `invite-${user.id}` ? 'Enviando...' : 'Reenviar convite'}
                           </button>
                         )}
-                        {!isAdmin && (
+                        {!isAdmin && status !== 'inativo' && (
                           <button
                             type="button"
                             disabled={Boolean(busyUserAction)}
                             onClick={() => void handleRemove(user.id)}
                             className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-[10px] font-bold text-rose-700 transition-colors hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60 dark:text-rose-300"
-                            aria-label={`Remover ${user.nome}`}
+                            aria-label={`Desativar ${user.nome}`}
                           >
-                            <Trash2 size={13} /> <span className="hidden sm:inline">Remover</span>
+                            <Trash2 size={13} /> <span className="hidden sm:inline">Desativar</span>
                           </button>
                         )}
                       </div>
