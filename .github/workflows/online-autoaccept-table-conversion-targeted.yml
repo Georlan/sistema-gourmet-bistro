@@ -17,6 +17,7 @@ on:
       - 'backend/app/services/atendimentos.py'
       - 'backend/tests/test_online_order_auto_accept.py'
       - 'backend/tests/test_online_order_operational_counts.py'
+      - 'backend/tests/test_first_client_payment_simulation.py'
       - 'backend/tests/test_atendimento_identity.py'
       - 'src/components/CaixaPanel.tsx'
       - 'src/components/caixa/orders/CaixaOrdersWorkspace.tsx'
@@ -76,4 +77,4 @@ jobs:
       - name: Run targeted regressions
         working-directory: backend
         run: |
-          python -m pytest -q -x             tests/test_online_order_auto_accept.py             tests/test_online_order_operational_counts.py             tests/test_atendimento_identity.py
+          python -m pytest -q -x tests/test_online_order_auto_accept.py tests/test_online_order_operational_counts.py tests/test_atendimento_identity.py tests/test_first_client_payment_simulation.py::test_dine_in_pix_approval_triggers_server_autoaccept_once
