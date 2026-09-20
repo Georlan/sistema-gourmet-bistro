@@ -28,6 +28,11 @@ git pull --ff-only origin main
 bash print-agent/install-linux.sh
 ```
 
+
+A partir da versão `2026.09.20.1`, o agente também instala a ponte local do
+simulador térmico em `127.0.0.1:17654-17664`. Ela só é usada pela bancada
+interna de engenharia e nunca envia bytes ao CUPS/USB durante a simulação.
+
 ## Instalação no Windows
 
 Pré-requisitos: a impressora disponível no Spooler do Windows. Se Python 3.10+

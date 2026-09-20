@@ -277,7 +277,7 @@ export default function PrintingSimulatorPage() {
         stage: "agent_bridge_connection",
         message: reason instanceof Error
           ? reason.message
-          : "Kôma Print local não encontrado nas portas autorizadas.",
+          : "Kôma Print local não encontrado nas portas autorizadas. Atualize o agente para 2026.09.20.1 ou superior e reinicie o serviço.",
       });
     } finally {
       setProbing(false);
@@ -294,7 +294,7 @@ export default function PrintingSimulatorPage() {
     if (!bridge) {
       setError({
         stage: "agent_bridge_connection",
-        message: "Conecte o Kôma Print local antes de simular.",
+        message: "A ponte local não está disponível. Use o Kôma Print 2026.09.20.1 ou superior antes de simular.",
       });
       return;
     }

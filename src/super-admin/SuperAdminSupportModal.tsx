@@ -82,6 +82,12 @@ export function SuperAdminSupportModal({
       );
       localStorage.removeItem(SUPPORT_SESSION_STORAGE_KEY);
 
+      // Modo Suporte inspeciona o tenant no estado real e nunca herda o
+      // modo restrito de implantação deixado por uma sessão anterior.
+      sessionStorage.removeItem("koma_onboarding_setup_mode");
+      sessionStorage.setItem("koma_active_tab", "operacao");
+      sessionStorage.setItem("koma_active_subtab", "pedidos");
+
       saveOperatorSession(data.access_token, {
         id: `support:${data.operator}`,
         nome: `Suporte KÔMA (${data.operator})`,

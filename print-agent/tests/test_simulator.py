@@ -71,3 +71,14 @@ def test_simulator_origin_allowlist_is_explicit():
     assert _origin_allowed("http://127.0.0.1:4173") is True
     assert _origin_allowed("https://tenant.komafood.com.br") is False
     assert _origin_allowed("https://example.com") is False
+
+
+
+def test_installers_ship_simulator_runtime_files():
+    linux_installer = (ROOT / "install-linux.sh").read_text(encoding="utf-8")
+    windows_installer = (ROOT / "install-windows.ps1").read_text(encoding="utf-8")
+
+    assert "simulator.py" in linux_installer
+    assert "wake_listener.py" in linux_installer
+    assert '"simulator.py"' in windows_installer
+    assert '"wake_listener.py"' in windows_installer
