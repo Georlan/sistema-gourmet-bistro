@@ -6,14 +6,16 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 
 const panel = source('../src/components/CaixaPanel.tsx');
 const workspace = source('../src/components/caixa/orders/CaixaOrdersWorkspace.tsx');
+const policyHook = source('../src/components/caixa/orders/useOnlineAutoAcceptPolicy.ts');
 const webAdapter = source('../backend/app/adapters/orders/web_adapter.py');
 const paymentService = source('../backend/app/services/online_payments/service.py');
 const scheduled = source('../backend/app/services/scheduled_orders.py');
 
 test('autoaccept toggle is a persisted backend policy, not a browser writer', () => {
-  assert.match(panel, /\/api\/online-orders\/control/);
-  assert.match(panel, /\/api\/online-orders\/auto-accept/);
-  assert.match(panel, /payload\?\.auto_accept === true/);
+  assert.match(panel, /useOnlineAutoAcceptPolicy/);
+  assert.match(policyHook, /\/api\/online-orders\/control/);
+  assert.match(policyHook, /\/api\/online-orders\/auto-accept/);
+  assert.match(policyHook, /payload\?\.auto_accept === true/);
   assert.doesNotMatch(workspace, /useAutomaticOrderAcceptance/);
   assert.doesNotMatch(workspace, /AutomaticOrderAcceptanceEffect/);
 });
