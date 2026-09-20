@@ -384,6 +384,54 @@ export function CaixaPanel({
   const [autoAccept, setAutoAccept] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    const loadAutoAccept = async () => {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/online-orders/control`, {
+          headers: authHeaders,
+          cache: 'no-store',
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (!cancelled) setAutoAccept(Boolean(payload?.auto_accept));
+      } catch {
+        // Falha de leitura não deve alterar pedidos; o próximo refresh tenta novamente.
+      }
+    };
+    void loadAutoAccept();
+    return () => { cancelled = true; };
+  }, [apiBaseUrl, authHeaders.Authorization]);
+
+  const handleAutoAcceptChange = useCallback(async (enabled: boolean) => {
+    const previous = autoAccept;
+    setAutoAccept(enabled);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/online-orders/auto-accept`, {
+        method: 'PUT',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(typeof payload?.detail === 'string' ? payload.detail : 'Não foi possível atualizar o autoaceite.');
+      }
+      setAutoAccept(Boolean(payload?.auto_accept));
+      showToast(
+        enabled
+          ? 'Autoaceite ativado no restaurante.'
+          : 'Autoaceite desativado no restaurante.',
+        'success',
+      );
+    } catch (error) {
+      setAutoAccept(previous);
+      showToast(
+        error instanceof Error ? error.message : 'Não foi possível atualizar o autoaceite.',
+        'error',
+      );
+    }
+  }, [apiBaseUrl, authHeaders, autoAccept]);
+
+  useEffect(() => {
     const handleOpenSangria = () => {
       setActiveTab('financeiro');
       setActiveSubTab('turno_atual');
@@ -928,7 +976,7 @@ export function CaixaPanel({
                   orders: deliveryOrders,
                   automatic: autoAccept,
                   drawerOpen: isDrawerOpen,
-                  onAutomaticChange: setAutoAccept,
+                  onAutomaticChange: (enabled) => { void handleAutoAcceptChange(enabled); },
                   onDrawerChange: setIsDrawerOpen,
                 }}
                 navigation={{
