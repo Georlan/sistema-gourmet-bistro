@@ -1856,10 +1856,31 @@ def atualizar_configuracoes(
         config.nicho = config_in.nicho
     if config_in.mapa_mesas_ativo is not None:
         config.mapa_mesas_ativo = config_in.mapa_mesas_ativo
-    if config_in.delivery_ativo is not None:
-        config.delivery_ativo = config_in.delivery_ativo
     if normalized_order_types is not None:
+        if (
+            config_in.delivery_ativo is not None
+            and bool(config_in.delivery_ativo) != ("delivery" in normalized_order_types)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="A modalidade delivery e o controle de delivery precisam ter o mesmo estado.",
+            )
         config.tipos_pedido_ativos = normalized_order_types
+        config.delivery_ativo = "delivery" in normalized_order_types
+    elif config_in.delivery_ativo is not None:
+        explicit_modes = normalize_order_types(config.tipos_pedido_ativos)
+        if explicit_modes is not None:
+            next_modes = [mode for mode in explicit_modes if mode != "delivery"]
+            if config_in.delivery_ativo:
+                next_modes.append("delivery")
+                next_modes = normalize_order_types(next_modes) or []
+            if not next_modes:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Mantenha ao menos uma modalidade de pedido ativa.",
+                )
+            config.tipos_pedido_ativos = next_modes
+        config.delivery_ativo = config_in.delivery_ativo
     if config_in.pedido_minimo is not None:
         config.pedido_minimo = config_in.pedido_minimo
     if config_in.frete_gratis_valor is not None:
