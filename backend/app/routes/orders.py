@@ -152,8 +152,8 @@ def _is_delivery(comanda: Comanda) -> bool:
 def _has_digital_order_lifecycle(comanda: Comanda) -> bool:
     """Diz se a comanda usa o ciclo operacional digital legado.
 
-    DELIVERY/PICKUP sempre usam esse ciclo. DINE_IN só usa quando a própria
-    comanda possui status operacional digital, preservando o salão tradicional.
+    DELIVERY/PICKUP sempre usam esse ciclo. DINE_IN usa quando há lançamento
+    com origem digital persistida, preservando o salão tradicional.
     """
     fulfillment = normalize_to_fulfillment(comanda.tipo)
     if fulfillment in {FulfillmentType.DELIVERY, FulfillmentType.PICKUP}:
