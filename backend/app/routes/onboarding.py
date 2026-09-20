@@ -289,8 +289,10 @@ def _operation_readiness(
         or 0 < service_charge_percent <= 100
     )
 
-    online_payment_enabled = bool(getattr(restaurant, "pagamento_online_ativo", False))
-    online_payment_ready = not online_payment_enabled or mercado_pago_connected
+    # No contrato atual, a própria conexão Mercado Pago é a chave que habilita
+    # pagamento online no Cardápio. Não existe um segundo toggle persistido.
+    online_payment_enabled = mercado_pago_connected
+    online_payment_ready = True
 
     blockers: list[str] = []
     if not configured:
@@ -301,9 +303,6 @@ def _operation_readiness(
         blockers.append("delivery_configuration")
     if service_charge_enabled and not service_charge_ready:
         blockers.append("service_charge")
-    if online_payment_enabled and not online_payment_ready:
-        blockers.append("mercado_pago")
-
     return {
         "configured": configured,
         "ready": configured and not blockers,
