@@ -52,6 +52,7 @@ import {
 import {
   StoredOrder,
   loadStoredOrders,
+  orderFulfillmentLabel,
   refreshAllStoredOrders,
   removeStoredOrder,
   clearAllStoredOrders,
@@ -845,7 +846,7 @@ export default function CardapioPage() {
                           : "O restaurante já atualizou o andamento do seu pedido."}
                   </p>
                   <p className="mt-1 text-[10px] text-koma-subtle">
-                    {isDeliveryOrder ? "Delivery" : "Retirada"} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total || 0)}
+                    {orderFulfillmentLabel(activeState.fulfillment)} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total || 0)}
                   </p>
                 </div>
               </div>
