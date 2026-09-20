@@ -2,10 +2,19 @@ import React from 'react';
 import { getOperatorSession, type OperationalPortal } from '../../utils/authSession';
 import { FirstAccessOnboarding, ONBOARDING_SETUP_MODE_KEY } from './FirstAccessOnboarding';
 import { useOnboardingAccessGate } from './useOnboardingAccessGate';
+import { SUPPORT_SESSION_STORAGE_KEY } from '../../super-admin/SuperAdminSupportModal';
 
 function readSetupMode(): boolean {
   try {
     return sessionStorage.getItem(ONBOARDING_SETUP_MODE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function readInternalSupportMode(): boolean {
+  try {
+    return Boolean(sessionStorage.getItem(SUPPORT_SESSION_STORAGE_KEY));
   } catch {
     return false;
   }
@@ -22,13 +31,14 @@ export function OnboardingOperationalBoundary({
   const role = String(session?.user?.role || session?.user?.cargo || '').trim().toLowerCase();
   const isManagementSetupOwner = portal === 'caixa' && (role === 'admin' || role === 'gerente');
   const setupMode = readSetupMode();
+  const internalSupportMode = readInternalSupportMode();
   const gate = useOnboardingAccessGate({
-    enabled: isManagementSetupOwner,
+    enabled: isManagementSetupOwner && !internalSupportMode,
     accessToken: session?.token || '',
   });
 
   if (!isManagementSetupOwner || !session?.token) return <>{children}</>;
-  if (setupMode) return <>{children}</>;
+  if (internalSupportMode || setupMode) return <>{children}</>;
 
   if (gate.isChecking || gate.state === 'idle') {
     return (
