@@ -2,7 +2,7 @@ import uuid
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from typing import List, Optional
 import logging
 
@@ -818,9 +818,10 @@ def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario 
         Comanda.restaurante_id == require_tenant_id(),
         or_(
             Comanda.tipo.in_(["Delivery", "Entrega", "Retirada", "Viagem"]),
-            (
-                Comanda.tipo.in_(["Consumo no Local", "Mesa", "Local"])
-                & Comanda.delivery_status.isnot(None)
+            and_(
+                Comanda.tipo.in_(["Consumo no Local", "Mesa", "Local"]),
+                Comanda.delivery_status.isnot(None),
+                Comanda.lancamentos.any(Lancamento.origem == "cardapio"),
             ),
         ),
         Comanda.fechada == False,
