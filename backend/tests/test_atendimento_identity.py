@@ -13,6 +13,7 @@ from app.operational_models import (
 )
 from app.services.atendimentos import (
     AtendimentoError,
+    associate_order_to_table,
     ensure_atendimento_for_comanda,
     ensure_launch_identity,
     format_order_family_id,
@@ -93,13 +94,19 @@ def setup_atendimento_identity():
         current_restaurante_id.reset(token)
 
 
-def _command(db, command_id: str, mesa: int, numero: int) -> Comanda:
+def _command(
+    db,
+    command_id: str,
+    mesa: int | None,
+    numero: int,
+    tipo: str = "Consumo no Local",
+) -> Comanda:
     command = Comanda(
         id=command_id,
         restaurante_id=TENANT,
         mesa_id=mesa,
         garcom_id=USER,
-        tipo="Consumo no Local",
+        tipo=tipo,
         numero_pedido=numero,
         fechada=False,
         criado_em=datetime.datetime(2026, 8, 16, 1, numero % 50),
@@ -135,6 +142,112 @@ def _launch(db, command: Comanda, launch_id: str, item_id: str) -> Lancamento:
     )
     db.flush()
     return launch
+
+
+
+def test_associate_dine_in_without_table_materializes_table_family():
+    db = SessionLocal()
+    try:
+        command = _command(db, "c-associate-dine-in", None, 301)
+
+        associated = associate_order_to_table(
+            db,
+            TENANT,
+            command.id,
+            3,
+            actor_id=USER,
+        )
+
+        assert associated.mesa_id == 3
+        link = (
+            db.query(AtendimentoComanda)
+            .filter(
+                AtendimentoComanda.restaurante_id == TENANT,
+                AtendimentoComanda.comanda_id == command.id,
+            )
+            .one()
+        )
+        account = (
+            db.query(AtendimentoMesa)
+            .filter(
+                AtendimentoMesa.restaurante_id == TENANT,
+                AtendimentoMesa.id == link.atendimento_id,
+            )
+            .one()
+        )
+        assert account.mesa_id == 3
+        assert account.status == "aberto"
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_associate_pickup_keeps_table_as_context_without_table_family():
+    db = SessionLocal()
+    try:
+        command = _command(db, "c-associate-pickup", None, 302, tipo="Retirada")
+
+        associated = associate_order_to_table(
+            db,
+            TENANT,
+            command.id,
+            4,
+            actor_id=USER,
+        )
+        assert associated.mesa_id == 4
+        assert (
+            db.query(AtendimentoComanda)
+            .filter(
+                AtendimentoComanda.restaurante_id == TENANT,
+                AtendimentoComanda.comanda_id == command.id,
+            )
+            .count()
+            == 0
+        )
+
+        reassociated = associate_order_to_table(
+            db,
+            TENANT,
+            command.id,
+            5,
+            actor_id=USER,
+        )
+        assert reassociated.mesa_id == 5
+        assert reassociated.mesa_transferida_de == 4
+        assert (
+            db.query(AtendimentoComanda)
+            .filter(
+                AtendimentoComanda.restaurante_id == TENANT,
+                AtendimentoComanda.comanda_id == command.id,
+            )
+            .count()
+            == 0
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_associate_delivery_to_table_is_rejected():
+    db = SessionLocal()
+    try:
+        command = _command(db, "c-associate-delivery", None, 303, tipo="Entrega")
+
+        with pytest.raises(AtendimentoError) as exc_info:
+            associate_order_to_table(
+                db,
+                TENANT,
+                command.id,
+                6,
+                actor_id=USER,
+            )
+
+        assert exc_info.value.status_code == 422
+        assert "delivery não podem ser vinculados" in str(exc_info.value)
+        assert command.mesa_id is None
+    finally:
+        db.rollback()
+        db.close()
 
 
 def test_excel_letters_do_not_have_artificial_26_limit():
