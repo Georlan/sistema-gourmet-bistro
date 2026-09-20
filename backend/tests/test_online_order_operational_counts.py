@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from app.database import Base, SessionLocal, current_restaurante_id, engine, tenant_session_scope
 from app.main import app
 from app.models import Comanda, Restaurante, Usuario
-from app.online_order_control_models import OnlineOrderControl
+from app.online_order_control_models import OnlineOrderControl, OnlineOrderOperationalAudit
 from app.routes.auth import create_access_token
 from app.services.online_order_control import operational_counts
 
@@ -19,6 +19,9 @@ def setup_operational_count_db():
     db = SessionLocal()
     token = current_restaurante_id.set(RID)
     try:
+        db.query(OnlineOrderOperationalAudit).filter(
+            OnlineOrderOperationalAudit.restaurante_id == RID
+        ).delete(synchronize_session=False)
         db.query(OnlineOrderControl).filter(OnlineOrderControl.restaurante_id == RID).delete(
             synchronize_session=False
         )
@@ -143,3 +146,42 @@ def test_operational_control_endpoint_uses_the_same_filtered_counts():
         "pronto": 0,
         "active": 1,
     }
+
+
+def test_auto_accept_control_is_persisted_server_side():
+    response = client.get("/api/online-orders/control", headers=_admin_headers())
+    assert response.status_code == 200, response.text
+    assert response.json()["auto_accept"] is False
+
+    enabled = client.put(
+        "/api/online-orders/auto-accept",
+        headers=_admin_headers(),
+        json={"enabled": True},
+    )
+    assert enabled.status_code == 200, enabled.text
+    assert enabled.json()["auto_accept"] is True
+
+    reloaded = client.get("/api/online-orders/control", headers=_admin_headers())
+    assert reloaded.status_code == 200, reloaded.text
+    assert reloaded.json()["auto_accept"] is True
+
+    db = SessionLocal()
+    try:
+        row = db.query(OnlineOrderControl).filter(
+            OnlineOrderControl.restaurante_id == RID
+        ).one()
+        assert row.auto_accept is True
+        audit = (
+            db.query(OnlineOrderOperationalAudit)
+            .filter(
+                OnlineOrderOperationalAudit.restaurante_id == RID,
+                OnlineOrderOperationalAudit.action == "online_orders_auto_accept_updated",
+            )
+            .order_by(OnlineOrderOperationalAudit.id.desc())
+            .first()
+        )
+        assert audit is not None
+        assert audit.before_data["auto_accept"] is False
+        assert audit.after_data["auto_accept"] is True
+    finally:
+        db.close()
