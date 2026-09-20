@@ -330,6 +330,7 @@ def update_onboarding_order_types(
 
     if before != normalized:
         config.tipos_pedido_ativos = normalized
+        config.delivery_ativo = "delivery" in normalized
         db.add(
             ActivityLog(
                 restaurante_id=tenant_id,
