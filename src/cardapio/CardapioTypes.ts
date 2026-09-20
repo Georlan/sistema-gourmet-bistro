@@ -110,7 +110,7 @@ export interface BrandConfig {
   availabilitySource?: string;
   nextOpening?: string;
   nextOpeningLabel?: string;
-  deliveryEnabled?: boolean;
+  deliveryEnabled?: boolean;\n  orderTypes?: Array<'consumo_local' | 'retirada' | 'delivery'>;
   pedidoMinimo?: number;
   freteGratisValor?: number;
   tipoTaxaEntrega?: string;
