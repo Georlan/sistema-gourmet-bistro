@@ -320,6 +320,82 @@ export default function PrintingSimulatorPage() {
     void probeBridge();
   }, [internalAccess, probeBridge, refreshBackend]);
 
+  useEffect(() => {
+    if (!bridge) {
+      setAutoStatus(null);
+      return;
+    }
+
+    let disposed = false;
+    const poll = async () => {
+      try {
+        const status = await fetchJson<AutoSimulationStatus>(
+          `http://127.0.0.1:${bridge.port}/simulator/auto/status`,
+          { cache: "no-store" },
+        );
+        if (disposed) return;
+        setAutoStatus(status);
+
+        const event = status.last_event;
+        if (!event || lastAutoJobIdRef.current === event.job.id) return;
+        lastAutoJobIdRef.current = event.job.id;
+        setSource(event.job);
+        setPayloadText(event.job.payload_text);
+        setResult(event.simulation);
+        setRoundtripMs(null);
+        setSources((current) => {
+          const summary: SourceSummary = {
+            id: event.job.id,
+            reference: event.job.reference,
+            document_type: event.job.document_type,
+            destination: event.job.destination,
+            source_type: event.job.source_type,
+            source_id: event.job.source_id,
+            status: event.job.status,
+            created_at: event.job.created_at,
+          };
+          return [summary, ...current.filter((item) => item.id !== summary.id)].slice(0, 20);
+        });
+      } catch {
+        if (!disposed) setAutoStatus(null);
+      }
+    };
+
+    void poll();
+    const intervalId = window.setInterval(() => void poll(), 600);
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [bridge]);
+
+  const toggleAutoSimulation = async () => {
+    if (!bridge || autoControlBusy) return;
+    setAutoControlBusy(true);
+    setError(null);
+    try {
+      const action = autoStatus?.enabled ? "stop" : "start";
+      const status = await fetchJson<AutoSimulationStatus>(
+        `http://127.0.0.1:${bridge.port}/simulator/auto/${action}`,
+        { method: "POST" },
+      );
+      lastAutoJobIdRef.current = null;
+      setAutoStatus(status);
+      if (action === "start") {
+        setRoundtripMs(null);
+      }
+    } catch (reason) {
+      setError({
+        stage: "auto_simulation_control",
+        message: reason instanceof Error
+          ? reason.message
+          : "Não foi possível alterar a simulação automática.",
+      });
+    } finally {
+      setAutoControlBusy(false);
+    }
+  };
+
   const simulate = async () => {
     if (!bridge) {
       setError({
