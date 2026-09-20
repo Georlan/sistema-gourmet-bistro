@@ -11,7 +11,6 @@ import {
 } from '../../../domain/cashierOrderProjection';
 import { formatCompactCurrency, formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import type { CashierTableCard, DeliveryOrderView, OrdersStage, PendingCashPayment, PendingCashPaymentCard } from './cashierWorkspaceTypes';
-import { useAutomaticOrderAcceptance } from './useAutomaticOrderAcceptance';
 import { getDigitalOrderAssociation, getDigitalOrderCustomerLabel, getDigitalOrderFulfillmentLabel, getDigitalOrderSourceLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
 
 export interface CaixaOrdersWorkspaceProps {
@@ -56,19 +55,6 @@ export interface CaixaOrdersWorkspaceProps {
   };
   readonly isLoading: boolean;
   readonly now: number;
-}
-
-function AutomaticOrderAcceptanceEffect({
-  enabled,
-  orders,
-  acceptOrder,
-}: {
-  readonly enabled: boolean;
-  readonly orders: readonly DeliveryOrderView[];
-  readonly acceptOrder: (order: DeliveryOrderView) => void;
-}) {
-  useAutomaticOrderAcceptance(enabled, orders, acceptOrder);
-  return null;
 }
 
 const digitalOrderIcon = (order: DeliveryOrderView) => {
@@ -172,11 +158,6 @@ export function CaixaOrdersWorkspace({
 
   return (
     <div className={"orders-workspace flex flex-col space-y-4"}>
-      <AutomaticOrderAcceptanceEffect
-        enabled={autoAccept}
-        orders={deliveryOrders}
-        acceptOrder={actions.acceptDigitalOrder}
-      />
       <OperationalBanner
         id="orders-heading"
         eyebrow="OPERAÇÃO"
