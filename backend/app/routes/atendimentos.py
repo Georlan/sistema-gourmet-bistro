@@ -296,7 +296,7 @@ def associar_mesa_ao_pedido(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Associa mesa a DINE_IN/PICKUP sem reutilizar a semântica de transferência."""
+    """Associa DINE_IN à mesa; PICKUP vira consumo local quando o cliente decide sentar."""
     require_waiter_permission(db, current_user, "perm_garcom_transferir_mesa")
     rid = require_tenant_id()
     try:
