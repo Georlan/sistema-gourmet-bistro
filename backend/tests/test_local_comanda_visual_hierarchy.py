@@ -149,11 +149,17 @@ def test_online_remote_engine_owns_customer_payment_financial_and_loyalty_contex
     assert "online_payment_status=(" in remote_engine
     assert "amount_paid=(" in remote_engine
     assert "show_financial_breakdown=is_primary" in remote_engine
-    assert "comanda.cliente_id" in remote_engine
+    assert "_resolve_registered_customer_id(" in remote_engine
     assert "float(comanda.valor_desconto_cashback or 0.0) > 0" in remote_engine
     assert "load_customer_relationship_metrics(" in remote_engine
     assert "loyalty_previous_orders = relationship.pedidos_concluidos" in remote_engine
     assert "loyalty_previous_orders=(" in remote_engine
+
+    customer_helper = source.split(
+        "def _resolve_registered_customer_id", 1
+    )[1].split("def _operator_name", 1)[0]
+    assert "comanda.cliente_id" in customer_helper
+    assert "comanda.delivery_telefone" in customer_helper
 
 
 def test_dine_in_layout_selection_uses_remote_context_when_unseated_or_online():
