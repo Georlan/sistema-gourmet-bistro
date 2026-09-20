@@ -42,6 +42,7 @@ import { CashierPickups } from './caixa/orders/CashierPickups';
 import type { CashierTableCard } from './caixa/orders/cashierWorkspaceTypes';
 import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
 import { useCashierOrders } from './caixa/orders/useCashierOrders';
+import { useOnlineAutoAcceptPolicy } from './caixa/orders/useOnlineAutoAcceptPolicy';
 import { useCashierPdv } from './caixa/pdv/useCashierPdv';
 import { useCashierAlerts } from './caixa/realtime/useCashierAlerts';
 import { useCashierClock } from './caixa/realtime/useCashierClock';
@@ -381,54 +382,14 @@ export function CaixaPanel({
     return true;
   };
 
-  const [autoAccept, setAutoAccept] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    const loadAutoAcceptPolicy = async () => {
-      try {
-        const response = await fetch(`${apiBaseUrl}/api/online-orders/control`, {
-          headers: authHeaders,
-          cache: 'no-store',
-        });
-        if (!response.ok) return;
-        const payload = await response.json();
-        if (active) setAutoAccept(payload?.auto_accept === true);
-      } catch {
-        // O toggle continua conservadoramente desligado até a política ser lida.
-      }
-    };
-    void loadAutoAcceptPolicy();
-    return () => {
-      active = false;
-    };
-  }, [apiBaseUrl, authHeaders.Authorization]);
-
-  const handleAutoAcceptChange = async (enabled: boolean) => {
-    const previous = autoAccept;
-    setAutoAccept(enabled);
-    try {
-      const response = await fetch(`${apiBaseUrl}/api/online-orders/auto-accept`, {
-        method: 'PUT',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-      });
-      if (!response.ok) {
-        throw new Error('Não foi possível atualizar o autoaceite.');
-      }
-      const payload = await response.json();
-      setAutoAccept(payload?.auto_accept === true);
-      showToast(
-        payload?.auto_accept
-          ? 'Aceite automático ativado para todos os pedidos online.'
-          : 'Aceite automático desativado.',
-        'success',
-      );
-    } catch {
-      setAutoAccept(previous);
-      showToast('Não foi possível alterar o aceite automático.', 'error');
-    }
-  };
+  const {
+    automatic: autoAccept,
+    onAutomaticChange: handleAutoAcceptChange,
+  } = useOnlineAutoAcceptPolicy({
+    apiBaseUrl,
+    authHeaders,
+    showToast,
+  });
 
   useEffect(() => {
     const handleOpenSangria = () => {
