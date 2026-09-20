@@ -273,6 +273,8 @@ def _notification_for(snapshot: dict, comanda: Comanda, *, message_body: str | N
             "pronto": (
                 "Seu pedido está pronto e aguardando saída."
                 if fulfillment in {"delivery", "entrega"}
+                else "Seu pedido está pronto para servir no restaurante."
+                if fulfillment in {"consumo no local", "consumo_local", "dine_in", "local", "mesa"}
                 else "Seu pedido está pronto para retirada."
             ),
             "transito": "Seu pedido saiu para entrega.",
