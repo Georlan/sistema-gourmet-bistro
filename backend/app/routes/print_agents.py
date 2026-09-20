@@ -16,7 +16,7 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, Field
-from sqlalchemy import func, text
+from sqlalchemy import and_, func, or_, text
 from sqlalchemy.orm import Session
 
 from ..database import (
@@ -1223,6 +1223,123 @@ def list_print_simulator_sources(
             }
             for job in jobs
         ]
+    }
+
+
+@router.get(
+    "/simulator/agent-feed",
+    summary="Observar novos PrintJobs sem reservá-los",
+)
+def get_print_simulator_agent_feed(
+    after_created_at: Optional[str] = Query(default=None, max_length=64),
+    after_id: str = Query(default="", max_length=100),
+    limit: int = Query(default=10, ge=1, le=20),
+    agent: PrintAgentToken = Depends(get_current_agent),
+    db: Session = Depends(get_db),
+):
+    """Feed read-only para a simulação sombra do agente local.
+
+    A primeira chamada sem cursor apenas ancora o relógio do servidor. Chamadas
+    seguintes devolvem PrintJobs criados depois do cursor, sem claim, sem mudar
+    status e sem tocar no spooler. O agente já é tenant-scoped pela credencial.
+    """
+    observed_at = datetime.datetime.now(datetime.timezone.utc)
+
+    if not after_created_at:
+        return {
+            "observed_at": observed_at.isoformat(),
+            "cursor": {
+                "created_at": observed_at.isoformat(),
+                "id": "",
+            },
+            "items": [],
+        }
+
+    try:
+        cursor_at = datetime.datetime.fromisoformat(
+            after_created_at.replace("Z", "+00:00")
+        )
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cursor temporal do simulador inválido.",
+        ) from exc
+    cursor_at = _as_utc(cursor_at)
+    cursor_id = str(after_id or "")
+
+    jobs = (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.restaurante_id == agent.restaurante_id,
+            PrintJob.payload_text != "",
+            or_(
+                PrintJob.created_at > cursor_at,
+                and_(
+                    PrintJob.created_at == cursor_at,
+                    PrintJob.id > cursor_id,
+                ),
+            ),
+        )
+        .order_by(PrintJob.created_at.asc(), PrintJob.id.asc())
+        .limit(limit)
+        .all()
+    )
+
+    items = []
+    for job in jobs:
+        created_at = _as_utc(job.created_at)
+        claimed_at = _as_utc(job.claimed_at)
+        printed_at = _as_utc(job.printed_at)
+        reference = _print_job_reference(job)
+        items.append(
+            {
+                "id": job.id,
+                "reference": reference["label"],
+                "document_type": job.document_type,
+                "destination": job.destination,
+                "source_type": job.source_type,
+                "source_id": job.source_id,
+                "status": job.status,
+                "payload_text": job.payload_text,
+                "created_at": created_at.isoformat() if created_at else None,
+                "claimed_at": claimed_at.isoformat() if claimed_at else None,
+                "printed_at": printed_at.isoformat() if printed_at else None,
+                "queue_latency_ms": (
+                    _queue_latency_ms(created_at, claimed_at)
+                    if created_at and claimed_at
+                    else None
+                ),
+                "server_observed_latency_ms": (
+                    max(
+                        0,
+                        round(
+                            (observed_at - created_at).total_seconds() * 1000
+                        ),
+                    )
+                    if created_at
+                    else None
+                ),
+                "physical_completion_tracking": False,
+            }
+        )
+
+    if jobs:
+        last_job = jobs[-1]
+        last_created_at = _as_utc(last_job.created_at) or observed_at
+        next_cursor = {
+            "created_at": last_created_at.isoformat(),
+            "id": str(last_job.id),
+        }
+    else:
+        next_cursor = {
+            "created_at": cursor_at.isoformat(),
+            "id": cursor_id,
+        }
+
+    return {
+        "observed_at": observed_at.isoformat(),
+        "cursor": next_cursor,
+        "items": items,
     }
 
 
