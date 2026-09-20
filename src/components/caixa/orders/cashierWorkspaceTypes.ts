@@ -12,7 +12,7 @@ export interface DeliveryOrderView {
   origemOperacional: 'smartpos' | 'cardapio' | 'caixa' | 'garcom' | 'desconhecida';
   isQuickSale: boolean;
   quantidadeItens: number;
-  modalidade: 'delivery' | 'retirada';
+  modalidade: 'delivery' | 'retirada' | 'consumo_local';
   pago: boolean;
   status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
   endereco?: string;
