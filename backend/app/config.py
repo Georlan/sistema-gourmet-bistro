@@ -276,8 +276,12 @@ class Settings:
         os.getenv("ONLINE_PAYMENT_PLAN_FEES_ENABLED", "false").lower() == "true"
     )
     ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES: int = max(
-        5,
-        min(int(os.getenv("ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES", "5")), 1440),
+        30,
+        min(int(os.getenv("ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES", "30")), 1440),
+    )
+    ONLINE_PAYMENT_PIX_CLOSE_GRACE_MINUTES: int = max(
+        1,
+        min(int(os.getenv("ONLINE_PAYMENT_PIX_CLOSE_GRACE_MINUTES", "5")), 30),
     )
     ONLINE_PAYMENT_REQUEST_TIMEOUT_SECONDS: float = max(
         2.0,
