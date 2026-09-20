@@ -133,25 +133,6 @@ export function CashierPrintingSettings({
               testInProgress={isTestingPrinter}
             />
 
-            <div className="flex flex-col gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <strong className="text-xs font-bold text-koma-foreground">Bancada virtual de impressão</strong>
-                <p className="text-[11px] leading-relaxed text-koma-muted">
-                  Abre a página isolada que lê um PrintJob real, passa pelo mesmo builder ESC/POS do agente local
-                  e mostra papel virtual, bytes, comandos e tempos observados sem acionar a impressora.
-                </p>
-              </div>
-              <a
-                href="/ferramentas/simulador-impressao"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-koma-card px-4 text-xs font-bold text-koma-foreground transition hover:border-sky-400/60 hover:text-sky-300"
-              >
-                <Printer size={15} />
-                Abrir simulador térmico
-              </a>
-            </div>
-
             <div className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:flex-row sm:items-center sm:justify-between shadow-xs">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
