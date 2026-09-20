@@ -73,7 +73,13 @@ test('resposta curta de aceite preserva itens e total até a reconciliação com
 });
 
 test('ignora salão e pedidos digitais já encerrados no snapshot inicial', () => {
-  const salon = baseOrder({ id: 'table-1', mesaId: 9, tipo: 'Consumo no Local', deliveryStatus: null });
+  const salon = baseOrder({
+    id: 'table-1',
+    mesaId: 9,
+    tipo: 'Consumo no Local',
+    deliveryStatus: null,
+    origemOperacional: 'garcom',
+  });
   const finalized = baseOrder({ id: 'delivery-finalized', deliveryStatus: 'finalizado' });
   const rejected = baseOrder({ id: 'delivery-rejected', deliveryStatus: 'recusado' });
   const active = baseOrder({ id: 'delivery-active', deliveryStatus: 'pendente' });
@@ -131,6 +137,7 @@ test('projeta consumo no local digital e mantém salão tradicional fora do flux
       tipo: 'Consumo no Local',
       mesaId: 7,
       deliveryStatus: null,
+      origemOperacional: 'garcom',
     })),
     true,
   );
