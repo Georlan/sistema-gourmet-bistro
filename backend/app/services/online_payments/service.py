@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from ...config import settings
 from ...database import SessionLocal
 from ...domain.orders.events import OrderCreated
-from ...domain.orders.types import FulfillmentType, OrderChannel
+from ...domain.orders.types import FulfillmentType, OrderChannel, normalize_to_fulfillment
 from ...models import (
     CaixaTurno,
     Comanda,
@@ -430,9 +430,7 @@ class OnlinePaymentService:
                     display_number=str(comanda.numero_pedido),
                     check_number=comanda.numero_pedido,
                     channel=OrderChannel.WEB_CARDAPIO,
-                    fulfillment=(
-                        FulfillmentType.PICKUP if comanda.tipo == "Retirada" else FulfillmentType.DELIVERY
-                    ),
+                    fulfillment=normalize_to_fulfillment(comanda.tipo),
                     total=_money(locked_intent.amount),
                     items_count=len([item for item in comanda.itens if item.status != "cancelado"]),
                     customer_name=comanda.identificador,
