@@ -185,7 +185,7 @@ export default function CashierReports({
               <span
                 className={"text-[9px] uppercase tracking-wider font-bold text-koma-subtle block"}
               >
-                Pronto para entrega
+                Pedidos digitais prontos
               </span>
               <strong className={"text-xl text-emerald-500 font-mono block mt-1"}>
                 {deliveryOrders.filter((o) => o.status === 'pronto').length}
