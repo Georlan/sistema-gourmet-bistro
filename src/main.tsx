@@ -12,6 +12,7 @@ import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
 
 import {
   KOMA_OPERATIONAL_APP_URL,
+  isCentralSupportOperationalBridge,
   isOperationalAppHost,
   parseTenantSubdomain,
   resolveKomaHost,
@@ -106,6 +107,7 @@ function bypassTenantSuspensionBoundary(): boolean {
 
   return pathname === "/recuperar-senha"
     || pathname.startsWith("/super-admin")
+    || isCentralSupportOperationalBridge()
     || pathname.startsWith("/ferramentas/simulador-impressao")
     || pathname.startsWith("/c/")
     || pathname.startsWith("/cardapio")
@@ -165,8 +167,10 @@ const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
 const isOnboardingAwareManagementRoute = isHostedManagementEntryRoute();
+const isInternalSupportOperationalRoute = isCentralSupportOperationalBridge();
 const hasCustomerSupportSurface =
   !pathname.startsWith("/super-admin")
+  && !isInternalSupportOperationalRoute
   && (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isSmartPosRoute);
 
 // O Chrome mobile pode esconder path/query na barra e fazer links legados
