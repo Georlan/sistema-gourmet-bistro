@@ -6,6 +6,7 @@ from app.models import (
     CaixaTurno,
     Categoria,
     Comanda,
+    ConfiguracaoRestaurante,
     Insumo,
     MovimentacaoEstoque,
     Produto,
@@ -38,6 +39,16 @@ def _seed_tenant(restaurante_id: int):
                     plano="premium",
                     slug=f"koma-aceite-{restaurante_id}",
                     status_override="Automático",
+                )
+            )
+            db.flush()
+            db.add(
+                ConfiguracaoRestaurante(
+                    restaurante_id=restaurante_id,
+                    delivery_ativo=True,
+                    tipo_taxa_entrega="fixa",
+                    taxa_entrega_fixa=0.0,
+                    pedido_minimo=0.0,
                 )
             )
             db.commit()
