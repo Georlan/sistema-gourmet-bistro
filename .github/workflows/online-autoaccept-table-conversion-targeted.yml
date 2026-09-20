@@ -21,6 +21,8 @@ on:
       - 'backend/tests/test_atendimento_identity.py'
       - 'src/components/CaixaPanel.tsx'
       - 'src/components/caixa/orders/CaixaOrdersWorkspace.tsx'
+      - 'src/components/caixa/orders/useOnlineAutoAcceptPolicy.ts'
+      - 'tests/cashierArchitecture.test.ts'
   workflow_dispatch:
 
 permissions:
