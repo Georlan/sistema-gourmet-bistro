@@ -676,22 +676,25 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   <div
                     className={"grid grid-cols-3 gap-1 bg-koma-input p-1 rounded-xl border border-koma-border"}
                   >
-                    {[
-                      { id: 'retirada', label: 'Retirada / Viagem' },
-                      { id: 'entrega', label: 'Delivery' },
-                      { id: 'mesa', label: 'Mesa' },
-                    ].map((type) => (
+                    {([
+                      { id: 'pickup', label: 'Retirada' },
+                      { id: 'delivery', label: 'Delivery' },
+                      { id: 'dine_in', label: 'Consumo local' },
+                    ] as const).map((type) => (
                       <button
                         key={type.id}
                         type="button"
-                        onClick={() => setPdvOrderType(type.id as any)}
+                        onClick={() => {
+                          setPdvOrderType(type.id);
+                          if (type.id === 'delivery') setPdvTargetMesaId(0);
+                        }}
                         className={`py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
                           pdvOrderType === type.id
                             ? 'bg-[#10b981] text-zinc-950 font-extrabold'
                             : 'text-koma-subtle hover:text-koma-foreground'
                         }`}
                       >
-                        {type.id === 'retirada' ? 'Retirada' : type.id === 'entrega' ? 'Delivery' : 'Mesa'}
+                        {type.label}
                       </button>
                     ))}
                   </div>
@@ -699,18 +702,18 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                     <summary className="w-fit cursor-pointer list-none font-semibold hover:text-koma-secondary">
                       Ver atalhos de teclado
                     </summary>
-                    <span className="mt-1 block font-mono">F2 Retirada · F3 Mesa · F8 Delivery · F4 Finalizar</span>
+                    <span className="mt-1 block font-mono">F2 Retirada · F3 Consumo local · F8 Delivery · F4 Finalizar</span>
                   </details>
                 </div>
 
-                {pdvOrderType === 'mesa' && (
+                {pdvOrderType !== 'delivery' && (
                   <div className="space-y-2">
                     <div className={"flex items-center justify-between gap-3"}>
                       <label
                         htmlFor="pdv-target-table"
                         className={"block text-[8px] font-bold uppercase tracking-wider text-koma-subtle"}
                       >
-                        Mesa de destino
+                        {pdvOrderType === 'pickup' ? 'Associar a uma mesa (opcional)' : 'Mesa (opcional)'}
                       </label>
                       <span className={"text-[8px] text-koma-muted"}>
                         {pdvOccupiedTableCount} em atendimento
@@ -730,9 +733,8 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           ? 'border-[#6b2d37] bg-[#1b1013] focus:border-[#8a3d49] focus:ring-[#6b2d37]/20'
                           : 'border-koma-border bg-koma-input focus:border-[#00b894]/70 focus:ring-[#00b894]/10',
                       )}
-                      required
                     >
-                      <option value="">Selecione uma mesa</option>
+                      <option value="">Sem mesa</option>
                       {pdvTableOptions.map((option) => (
                         <option
                           key={option.table.id}
@@ -782,24 +784,32 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           )}
                         >
                           {!selectedPdvTableOption
-                            ? 'Escolha onde este pedido será lançado'
-                            : selectedPdvTableOption.isOccupied
-                              ? `${selectedPdvTableOption.label} já está em atendimento`
-                              : `${selectedPdvTableOption.label} está livre`}
+                            ? pdvOrderType === 'pickup'
+                              ? 'Retirada sem mesa'
+                              : 'Consumo no local sem mesa'
+                            : pdvOrderType === 'pickup'
+                              ? `${selectedPdvTableOption.label} será associada à retirada`
+                              : selectedPdvTableOption.isOccupied
+                                ? `${selectedPdvTableOption.label} já está em atendimento`
+                                : `${selectedPdvTableOption.label} está livre`}
                         </strong>
                         <span className={"mt-0.5 block text-[8px] leading-relaxed text-koma-muted"}>
-                          {selectedPdvTableOption?.isOccupied
-                            ? 'Você pode continuar: os novos itens serão adicionados ao atendimento da mesa.'
-                            : selectedPdvTableOption
-                              ? 'O primeiro lançamento abrirá o atendimento automaticamente.'
-                              : 'Mesas ocupadas continuam disponíveis e aparecem identificadas na lista.'}
+                          {pdvOrderType === 'pickup'
+                            ? selectedPdvTableOption
+                              ? 'A associação organiza o pedido; a modalidade continua sendo Retirada.'
+                              : 'Você pode deixar sem mesa e associar depois, se necessário.'
+                            : selectedPdvTableOption?.isOccupied
+                              ? 'Você pode continuar: os novos itens serão adicionados ao atendimento da mesa.'
+                              : selectedPdvTableOption
+                                ? 'O primeiro lançamento abrirá o atendimento automaticamente.'
+                                : 'O pedido permanece consumo no local sem vínculo com mesa.'}
                         </span>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {(pdvOrderType === 'retirada' || pdvOrderType === 'entrega') && (
+                {(pdvOrderType === 'pickup' || pdvOrderType === 'delivery') && (
                   <div className="space-y-2">
                     <div className={"grid grid-cols-2 gap-2"}>
                       <div className="space-y-1">
@@ -855,7 +865,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                         {pdvCustomerLookup === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
                       </p>
                     )}
-                    {pdvOrderType === 'entrega' && (
+                    {pdvOrderType === 'delivery' && (
                       <div className="rounded-xl border border-koma-border bg-koma-card/40 p-2">
                         <DeliveryAddressFields
                           value={pdvDeliveryAddressDraft}

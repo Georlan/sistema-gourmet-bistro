@@ -659,7 +659,6 @@ def test_pagamento_da_mesa_distribui_entre_multiplas_comandas():
     finally:
         db.close()
 
-
 def test_current_behavior_reproduces_stale_item_selection_bug():
     """Reproduz seleção obsoleta: pagamento aceita subconjunto e quita item não confirmado."""
     headers = get_pdv_auth_headers()

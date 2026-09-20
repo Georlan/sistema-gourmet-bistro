@@ -43,14 +43,26 @@ export type PickupOrderBuckets = {
  * completo em vez de exibir um pedido fictício de R$ 0,00. A leitura dedicada
  * seguinte continua sendo a autoridade e substitui o card normalmente.
  */
+const isPlaceholderCustomerName = (value: unknown) => {
+  const normalized = String(value || '').trim().toLocaleLowerCase('pt-BR');
+  return !normalized || normalized === 'cliente sem nome';
+};
+
 export function reconcileDeliveryOrderAfterStatus(
   previous: DeliveryOrderView,
   incoming: DeliveryOrderView,
 ): DeliveryOrderView {
-  if (incoming.quantidadeItens > 0 || previous.quantidadeItens <= 0) return incoming;
+  const identityAwareIncoming =
+    isPlaceholderCustomerName(incoming.cliente) && !isPlaceholderCustomerName(previous.cliente)
+      ? { ...incoming, cliente: previous.cliente }
+      : incoming;
+
+  if (identityAwareIncoming.quantidadeItens > 0 || previous.quantidadeItens <= 0) {
+    return identityAwareIncoming;
+  }
 
   return {
-    ...incoming,
+    ...identityAwareIncoming,
     cliente: previous.cliente,
     telefone: previous.telefone,
     itens: previous.itens,
