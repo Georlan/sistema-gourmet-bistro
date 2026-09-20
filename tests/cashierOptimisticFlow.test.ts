@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import type { Order } from '../src/types';
-import { projectDeliveryOrdersFromSharedSnapshot } from '../src/components/caixa/orders/deliveryOrderProjection';
+import {
+  projectDeliveryOrdersFromSharedSnapshot,
+  reconcileDeliveryOrderAfterStatus,
+} from '../src/components/caixa/orders/deliveryOrderProjection';
 
 const source = (path: string) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
@@ -50,6 +53,32 @@ test('optimistic Caixa delivery keeps the operational information needed by the 
   assert.equal(projected.origemOperacional, 'caixa');
   assert.equal(projected.modalidade, 'delivery');
   assert.equal(projected.status, 'producao');
+});
+
+test('delivery hydration never replaces a known customer with the generic placeholder', () => {
+  const base = {
+    id: 'order-1',
+    telefone: '88999999999',
+    itens: '1x Hambúrguer',
+    detailItems: [],
+    total: 20,
+    canal: 'site',
+    origemOperacional: 'caixa',
+    isQuickSale: false,
+    quantidadeItens: 1,
+    modalidade: 'retirada',
+    pago: false,
+    status: 'producao',
+    endereco: '',
+    criadoEm: '12:00',
+  } as const;
+
+  const previous = { ...base, cliente: 'Georlan' } as any;
+  const incoming = { ...base, cliente: 'Cliente Sem Nome' } as any;
+  assert.equal(reconcileDeliveryOrderAfterStatus(previous, incoming).cliente, 'Georlan');
+
+  const authoritative = { ...base, cliente: 'Nome Atualizado' } as any;
+  assert.equal(reconcileDeliveryOrderAfterStatus(previous, authoritative).cliente, 'Nome Atualizado');
 });
 
 test('PDV reconciles or rolls back the temporary order instead of leaving duplicate cards', () => {
