@@ -101,7 +101,11 @@ def test_status_notification_uses_stable_tag_and_human_status():
 def test_ready_notification_differs_by_fulfillment():
     pickup = SimpleNamespace(id="p1", restaurante_id=1, numero_pedido=1, tipo="Retirada")
     delivery = SimpleNamespace(id="p2", restaurante_id=1, numero_pedido=2, tipo="Delivery")
+    dine_in = SimpleNamespace(id="p3", restaurante_id=1, numero_pedido=3, tipo="Consumo no Local")
     snapshot = {"payload": {"kind": "status", "status": "pronto", "conversation_id": "c"}}
 
     assert "retirada" in web_push._notification_for(snapshot, pickup)["body"].lower()
     assert "aguardando saída" in web_push._notification_for(snapshot, delivery)["body"].lower()
+    dine_in_body = web_push._notification_for(snapshot, dine_in)["body"].lower()
+    assert "pronto para servir" in dine_in_body
+    assert "retirada" not in dine_in_body

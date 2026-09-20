@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, selectinload
 
-from ..database import get_db, tenant_session_scope
+from ..database import SessionLocal, get_db, tenant_session_scope
 from ..models import Comanda, Item, Restaurante
 from ..online_order_control_models import OnlineOrderCustomerBlock
 from ..order_chat_models import OrderConversation, OrderMessage
@@ -522,9 +522,16 @@ def desativar_push_do_pedido(
 async def stream_eventos_pedido(
     token: str,
     request: Request,
-    db: Session = Depends(get_db),
 ):
-    resolved = resolve_public_tracking(db, token)
+    # SSE é uma resposta potencialmente longa. Nunca mantenha a sessão HTTP
+    # (e portanto uma conexão do pool) viva durante o streaming. O capability
+    # token é resolvido em uma sessão curta que é fechada antes de criar o
+    # StreamingResponse; a partir daí o hub trabalha somente em memória/Redis.
+    db = SessionLocal()
+    try:
+        resolved = resolve_public_tracking(db, token)
+    finally:
+        db.close()
     if not resolved:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
     _restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
