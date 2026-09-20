@@ -233,6 +233,10 @@ class CreateOrderCommand:
             raise InvalidFulfillmentDetailsError(
                 "Pedidos com modalidade DELIVERY exigem informações de entrega (DeliveryInput)."
             )
+        if self.fulfillment == FulfillmentType.DELIVERY and self.table_id is not None:
+            raise InvalidFulfillmentDetailsError(
+                "Pedidos de delivery não podem ser vinculados a uma mesa."
+            )
 
 
 @dataclass(frozen=True)
