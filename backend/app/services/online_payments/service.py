@@ -642,8 +642,10 @@ class OnlinePaymentService:
         """Resolve Pix do turno antes de adquirir o lock final de fechamento.
 
         O fechamento consulta sempre o provedor para intents com payment_id externo.
-        Intents ainda pendentes só podem ser canceladas após a validade operacional
-        do QR Code. Nenhuma intenção é movida para outro turno.
+        Intents ainda pendentes só podem ser canceladas após a janela operacional
+        de fechamento. A validade do QR no provedor permanece independente e
+        respeita o mínimo aceito pelo Mercado Pago. Nenhuma intenção é movida
+        para outro turno.
         """
         current_time = _as_utc(now or datetime.datetime.now(datetime.timezone.utc))
         intents = db.query(OnlinePaymentIntent).filter(
@@ -706,14 +708,10 @@ class OnlinePaymentService:
                     continue
 
             created_at = _as_utc(intent.created_at)
-            expires_at = (
-                _as_utc(intent.expires_at)
-                if intent.expires_at is not None
-                else created_at + datetime.timedelta(
-                    minutes=settings.ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES
-                )
+            close_grace_at = created_at + datetime.timedelta(
+                minutes=settings.ONLINE_PAYMENT_PIX_CLOSE_GRACE_MINUTES
             )
-            if current_time < expires_at:
+            if current_time < close_grace_at:
                 continue
 
             if intent.status == "created" and not intent.external_payment_id:
