@@ -42,7 +42,7 @@ from ..services.online_order_policy import (
     next_schedule_opening,
     next_schedule_opening_label,
 )
-from ..services.delivery_fee_policy import resolve_distance_delivery_fee
+from ..services.delivery_fee_policy import resolve_distance_delivery_fee\nfrom ..services.operational_modes import explicit_order_types
 from .products import notify_catalog_update, ordered_categories as _ordered_categories
 
 logger = logging.getLogger("koma.cardapio_digital")
@@ -207,6 +207,12 @@ def _public_restaurant_payload(
     pagamento_online_ativo: bool = False,
 ) -> dict:
     policy = evaluate_online_order_policy(restaurante, configuracao)
+    configured_order_types = explicit_order_types(configuracao)
+    delivery_enabled = (
+        "delivery" in configured_order_types
+        if configured_order_types is not None
+        else (configuracao.delivery_ativo is not False if configuracao else True)
+    )
     next_opening = (
         next_schedule_opening(restaurante.horarios_funcionamento)
         if not policy.accepting_orders and policy.source == "schedule"
@@ -237,7 +243,8 @@ def _public_restaurant_payload(
         "horarios_funcionamento": restaurante.horarios_funcionamento,
         "formas_pagamento_aceitas": restaurante.formas_pagamento_aceitas,
         "pagamento_online_ativo": pagamento_online_ativo,
-        "delivery_ativo": configuracao.delivery_ativo is not False if configuracao else True,
+        "delivery_ativo": delivery_enabled,
+        "tipos_pedido_ativos": configured_order_types,
         "cor_primaria": restaurante.cor_primaria,
         "cor_fundo": restaurante.cor_fundo,
         "pedido_minimo": float(configuracao.pedido_minimo or 0.0) if configuracao and configuracao.pedido_minimo is not None else 0.0,
