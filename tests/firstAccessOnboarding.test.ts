@@ -43,14 +43,18 @@ test('configured restaurants prioritize function search and can resume setup fro
   assert.match(cashierSettings, /removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
 });
 
-test('required onboarding persists and blocks normal operation until 3 of 3 is complete', () => {
-  assert.match(onboarding, /Antes de liberar a operação, conclua os 3 passos essenciais/);
-  assert.match(onboarding, /requiredComplete/);
-  assert.match(onboarding, /Entrar no KÔMA/);
+test('onboarding separates configuration from readiness and requires explicit trial start', () => {
+  assert.match(onboarding, /Primeiro conclua a configuração do restaurante/);
+  assert.match(onboarding, /configurationComplete/);
+  assert.match(onboarding, /readyToOperate/);
+  assert.match(onboarding, /\/api\/onboarding\/start-trial/);
+  assert.match(onboarding, /Iniciar 7 dias e fazer teste/);
+  assert.match(onboarding, /tipos_pedido_ativos/);
   assert.match(onboarding, /sessionStorage\.setItem\(ONBOARDING_SETUP_MODE_KEY, '1'\)/);
   assert.match(onboarding, /sessionStorage\.removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
   assert.match(boundary, /!gate\.requiredComplete/);
   assert.match(boundary, /<FirstAccessOnboarding/);
+  assert.match(gateHook, /trialPending/);
   assert.match(gateHook, /\/api\/onboarding\/status/);
 });
 
@@ -103,23 +107,27 @@ test('onboarding status request cannot trap first access in infinite loading', (
   assert.match(onboarding, /const controller = new AbortController\(\)/);
   assert.match(onboarding, /setTimeout\(\(\) => controller\.abort\(\), ONBOARDING_LOAD_TIMEOUT_MS\)/);
   assert.match(onboarding, /signal: controller\.signal/);
-  assert.match(onboarding, /Tente novamente para continuar a implantação/);
+  assert.match(onboarding, /O onboarding demorou para responder\. Tente novamente/);
   assert.match(onboarding, /clearTimeout\(timeoutId\)/);
 });
 
-test('onboarding uses canonical server progress and exposes the five launch steps', () => {
+test('onboarding uses canonical readiness and keeps the launch flow compact', () => {
   assert.match(onboarding, /\/api\/onboarding\/status/);
   for (const label of [
     'Complete os dados do restaurante',
     'Defina os horários de funcionamento',
-    'Monte o primeiro cardápio',
+    'Publique o primeiro produto',
+    'Defina como o restaurante vai operar',
     'Conecte o Mercado Pago',
-    'Faça um primeiro pedido de teste',
+    'Valide com um pedido de teste',
   ]) {
     assert.match(onboarding, new RegExp(label));
   }
+  assert.match(onboarding, /Configuração concluída/);
+  assert.match(onboarding, /Pronto para operar/);
+  assert.match(onboarding, /pedido → preparo → pagamento → conclusão/);
   assert.match(onboarding, /daysRemaining/);
-  assert.match(onboarding, /Atualizar progresso/);
+  assert.match(onboarding, /Atualizar/);
   assert.match(onboarding, /Disponível depois/);
 });
 
