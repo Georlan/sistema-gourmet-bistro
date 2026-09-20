@@ -2,7 +2,7 @@ import uuid
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from typing import List, Optional
 import logging
 
