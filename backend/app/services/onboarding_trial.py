@@ -162,7 +162,7 @@ def ensure_trial_started_after_onboarding(
             restaurante_id=restaurante_id,
             actor=actor,
             action="SAAS_TRIAL_START_AFTER_ONBOARDING",
-            reason="Implantação essencial concluída; início automático dos 7 dias grátis",
+            reason="Cliente concluiu a configuração mínima e iniciou explicitamente os 7 dias grátis",
             before_data={
                 "status": previous_status,
                 "trial_started_at": None,
