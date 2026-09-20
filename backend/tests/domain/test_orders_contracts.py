@@ -144,6 +144,31 @@ class TestOrderStateMachine:
         assert OrderStatus.REJECTED in targets
 
 
+    def test_dine_in_ready_completes_without_delivery_dispatch(self):
+        targets = OrderStateMachine.get_allowed_targets(
+            current_status=OrderStatus.READY,
+            fulfillment=FulfillmentType.DINE_IN,
+        )
+        assert OrderStatus.COMPLETED in targets
+        assert OrderStatus.REJECTED in targets
+        assert OrderStatus.DISPATCHED not in targets
+
+        completed = OrderStateMachine.validate_transition(
+            current_status=OrderStatus.READY,
+            target_status=OrderStatus.COMPLETED,
+            fulfillment=FulfillmentType.DINE_IN,
+        )
+        assert completed.changed is True
+        assert completed.is_terminal is True
+
+        with pytest.raises(InvalidOrderTransitionError):
+            OrderStateMachine.validate_transition(
+                current_status=OrderStatus.READY,
+                target_status=OrderStatus.DISPATCHED,
+                fulfillment=FulfillmentType.DINE_IN,
+            )
+
+
 class TestOrderCommandsAndInvariants:
     def test_item_input_rejects_zero_or_negative_quantity(self):
         with pytest.raises(InvalidItemQuantityError):
