@@ -14,6 +14,7 @@ from sqlalchemy.orm.exc import UnmappedInstanceError
 
 from ..models import CaixaTurno
 from ..timezone_utils import get_operational_now
+from .operational_modes import explicit_order_types
 
 
 _DAY_INDEX = {
@@ -45,6 +46,7 @@ class OnlineOrderPolicy:
     accepting_orders: bool
     delivery_enabled: bool
     pickup_enabled: bool
+    dine_in_enabled: bool = True
     reason: str | None = None
     source: str = "automatic"
 
@@ -293,13 +295,20 @@ def evaluate_online_order_policy(
     """
 
     override = _normalize_text(getattr(restaurante, "status_override", "automatico"))
-    configured_delivery = (
-        getattr(configuracao, "delivery_ativo", True)
-        if configuracao is not None
-        else True
-    )
-    delivery_enabled = configured_delivery is not False
-    pickup_enabled = True
+    explicit_modes = explicit_order_types(configuracao)
+    if explicit_modes is None:
+        configured_delivery = (
+            getattr(configuracao, "delivery_ativo", True)
+            if configuracao is not None
+            else True
+        )
+        delivery_enabled = configured_delivery is not False
+        pickup_enabled = True
+        dine_in_enabled = True
+    else:
+        delivery_enabled = "delivery" in explicit_modes
+        pickup_enabled = "retirada" in explicit_modes
+        dine_in_enabled = "consumo_local" in explicit_modes
 
     if _infer_emergency_pause(restaurante, now=now):
         return OnlineOrderPolicy(
@@ -347,13 +356,22 @@ def evaluate_online_order_policy(
         )
 
     normalized_mode = _normalize_text(modalidade)
-    if normalized_mode == "delivery" and not delivery_enabled:
+    mode_allowed = {
+        "delivery": delivery_enabled,
+        "retirada": pickup_enabled,
+        "pickup": pickup_enabled,
+        "consumo local": dine_in_enabled,
+        "consumo no local": dine_in_enabled,
+        "dine in": dine_in_enabled,
+    }.get(normalized_mode, True)
+    if not mode_allowed:
         return OnlineOrderPolicy(
             accepting_orders=False,
-            delivery_enabled=False,
+            delivery_enabled=delivery_enabled,
             pickup_enabled=pickup_enabled,
-            reason="O delivery está desativado para este restaurante.",
-            source="delivery_disabled",
+            dine_in_enabled=dine_in_enabled,
+            reason="Esta modalidade de pedido está desativada para este restaurante.",
+            source="fulfillment_disabled",
         )
 
     source = "schedule_cash" if schedule_state is True else "automatic"
@@ -366,5 +384,6 @@ def evaluate_online_order_policy(
         accepting_orders=True,
         delivery_enabled=delivery_enabled,
         pickup_enabled=pickup_enabled,
+        dine_in_enabled=dine_in_enabled,
         source=source,
     )
