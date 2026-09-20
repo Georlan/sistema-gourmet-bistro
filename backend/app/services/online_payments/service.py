@@ -444,6 +444,16 @@ class OnlinePaymentService:
                     aggregate_id=str(lancamento.id),
                 )
 
+        if approval_effects_applied:
+            from ..online_order_control import auto_accept_online_order_if_enabled
+
+            auto_accept_online_order_if_enabled(
+                db,
+                restaurante_id=account.restaurante_id,
+                comanda=comanda,
+                operator_user_id=getattr(comanda, "garcom_id", None),
+            )
+
         return locked_intent, approval_effects_applied
 
     @classmethod
