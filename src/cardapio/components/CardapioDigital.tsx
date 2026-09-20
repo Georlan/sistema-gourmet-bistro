@@ -342,17 +342,14 @@ export default function CardapioDigital({
       scheduledForIso = target.toISOString();
     }
 
-    const savedMesa = localStorage.getItem("koma_mesa_numero");
-    const finalClienteNome = (savedMesa && deliveryMethod !== "delivery")
-      ? `${normalizedName} (Mesa ${savedMesa})`
-      : normalizedName;
-
-    const cleanedItems = buildCardapioOrderItems(cart, finalClienteNome);
+    // Mesa não é inferida pelo Cardápio Online. Consumo local nasce sem mesa
+    // e pode receber uma associação operacional depois, no Caixa.
+    const cleanedItems = buildCardapioOrderItems(cart, normalizedName);
 
     const orderRequest = {
       restaurante_id: targetRestauranteId,
       itens: cleanedItems,
-      cliente_nome: finalClienteNome,
+      cliente_nome: normalizedName,
       cliente_telefone: normalizedPhone,
       endereco_entrega: deliveryMethod === "delivery" ? normalizedAddress : "",
       address_snapshot: deliveryMethod === "delivery" ? addressSnapshot || undefined : undefined,
