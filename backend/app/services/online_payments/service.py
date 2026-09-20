@@ -714,7 +714,7 @@ class OnlinePaymentService:
             if current_time < close_grace_at:
                 continue
 
-            if intent.status == "created" and not intent.external_payment_id:
+            if intent.status in {"created", "error"} and not intent.external_payment_id:
                 locked_intent = db.query(OnlinePaymentIntent).filter(
                     OnlinePaymentIntent.restaurante_id == restaurant_id,
                     OnlinePaymentIntent.id == intent.id,
