@@ -23,6 +23,7 @@ on:
       - 'src/cardapio/**'
       - 'src/components/CaixaPanel.tsx'
       - 'src/components/caixa/orders/CaixaOrdersWorkspace.tsx'
+      - 'src/components/caixa/orders/useOnlineOrderAutoAcceptPolicy.ts'
       - 'tests/automatic_order_acceptance.test.ts'
       - 'tests/orderStateContract.test.ts'
   workflow_dispatch:
