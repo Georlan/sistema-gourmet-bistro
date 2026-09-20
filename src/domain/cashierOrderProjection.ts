@@ -23,7 +23,7 @@ export function getCashierDeliveryStatusLabel(status?: string, modalidade?: stri
     if (modalidade === 'dine_in') return 'Pronto para servir';
     return 'Pronto para retirada';
   }
-  if (status === 'transito') return modalidade === 'delivery' ? 'Em rota' : 'Em atendimento';
+  if (status === 'transito') return modalidade === 'delivery' ? 'Em rota' : 'Aguardando retirada';
   if (status === 'pendente' || status === 'analise') return 'Aguardando aceite';
   return 'Em atendimento';
 }
