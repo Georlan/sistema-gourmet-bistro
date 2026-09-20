@@ -23,6 +23,25 @@ type OptimisticOrderRemoveDetail = {
   orderId?: string;
 };
 
+const isPlaceholderOrderIdentifier = (value: unknown) => {
+  const normalized = String(value || '').trim().toLocaleLowerCase('pt-BR');
+  return !normalized || normalized === 'cliente sem nome';
+};
+
+export function preserveOptimisticOrderIdentity(
+  optimistic: Order | undefined,
+  mapped: Order,
+): Order {
+  if (!optimistic) return mapped;
+  if (
+    isPlaceholderOrderIdentifier(mapped.identificador)
+    && !isPlaceholderOrderIdentifier(optimistic.identificador)
+  ) {
+    return { ...mapped, identificador: optimistic.identificador };
+  }
+  return mapped;
+}
+
 /** Owns the shared order snapshot, response mapping, targeted refresh and optimistic overlays. */
 export function useOperationalOrders({
   liveProdutos,
@@ -76,12 +95,16 @@ export function useOperationalOrders({
       if (!tempId.startsWith('temp-') || !comanda?.id) return;
 
       const mappedOrder = mapBackendComandaToOperationalOrder({ comanda, liveProdutos });
-      setOrders((current) => [
-        mappedOrder,
-        ...current.filter(
-          (order) => String(order.id) !== tempId && String(order.id) !== String(mappedOrder.id),
-        ),
-      ]);
+      setOrders((current) => {
+        const optimisticOrder = current.find((order) => String(order.id) === tempId);
+        const reconciledOrder = preserveOptimisticOrderIdentity(optimisticOrder, mappedOrder);
+        return [
+          reconciledOrder,
+          ...current.filter(
+            (order) => String(order.id) !== tempId && String(order.id) !== String(mappedOrder.id),
+          ),
+        ];
+      });
       setFetchError(null);
     };
 
