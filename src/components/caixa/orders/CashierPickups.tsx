@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Clock3, PackageCheck, Search, Store } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getCashierOrderSlaData } from '../../../domain/cashierOrderProjection';
 import { localCalendarDate, parseBackendTimestamp } from '../../../utils/dateTime';
@@ -99,6 +99,7 @@ export function CashierPickups({
   const [completedRecent, setCompletedRecent] = useState<CompletedPickupApiOrder[]>([]);
   const [historyError, setHistoryError] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
+  const pendingIdsRef = useRef<Set<string>>(new Set());
 
   const refreshCompleted = useCallback(async () => {
     try {
@@ -166,15 +167,15 @@ export function CashierPickups({
   if (activeSubTab !== 'retiradas') return null;
 
   const setPending = (orderId: string, pending: boolean) => {
-    setPendingIds((current) => {
-      const next = new Set(current);
-      if (pending) next.add(orderId);
-      else next.delete(orderId);
-      return next;
-    });
+    const next = new Set(pendingIdsRef.current);
+    if (pending) next.add(orderId);
+    else next.delete(orderId);
+    pendingIdsRef.current = next;
+    setPendingIds(next);
   };
 
   const acceptPickup = async (order: DeliveryOrderView) => {
+    if (pendingIdsRef.current.has(order.id)) return;
     setPending(order.id, true);
     try {
       await handleAcceptPendingDeliveryOrder(order);
@@ -184,6 +185,7 @@ export function CashierPickups({
   };
 
   const markReady = async (order: DeliveryOrderView) => {
+    if (pendingIdsRef.current.has(order.id)) return;
     setPending(order.id, true);
     try {
       await handleAdvanceDigitalOrder(order);
@@ -193,6 +195,7 @@ export function CashierPickups({
   };
 
   const finishPickup = async (order: DeliveryOrderView) => {
+    if (pendingIdsRef.current.has(order.id)) return;
     setPending(order.id, true);
     try {
       await handleFinalizeDigitalOrder(order);
