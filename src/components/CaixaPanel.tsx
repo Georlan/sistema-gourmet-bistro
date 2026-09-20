@@ -257,6 +257,7 @@ export function CaixaPanel({
     handleCancelTableConsumption,
     getTableMovementContext,
     deliveryOrders,
+    deliveryOrdersLoadState,
     motoboys,
     motoboysLoadState,
     selectedMotoboys,
@@ -981,9 +982,12 @@ export function CaixaPanel({
             <CashierPickups
               activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
               deliveryOrders={deliveryOrders}
+              deliveryOrdersLoadState={deliveryOrdersLoadState}
               apiBaseUrl={apiBaseUrl}
               authHeaders={authHeaders}
               now={nowTimestamp}
+              handleAcceptPendingDeliveryOrder={handleAcceptPendingDeliveryOrder}
+              handleRejectPendingDeliveryOrder={handleRejectPendingDeliveryOrder}
               handleAdvanceDigitalOrder={handleAdvanceDigitalOrder}
               handleFinalizeDigitalOrder={handleFinalizeDigitalOrder}
               openDeliveryOrderDetails={openDeliveryOrderDetails}
@@ -1155,6 +1159,7 @@ export function CaixaPanel({
             <CashierCouriers
               activeSubTab={activeSubTab}
               deliveryOrders={deliveryOrders}
+              deliveryOrdersLoadState={deliveryOrdersLoadState}
               selectedMotoboys={selectedMotoboys}
               setSelectedMotoboys={setSelectedMotoboys}
               motoboys={motoboys}
@@ -1162,6 +1167,13 @@ export function CaixaPanel({
               handleDespacharKanban={handleDespacharKanban}
               handleRevogarAcessoMotoboy={handleRevogarAcessoMotoboy}
               handleFinalizarPedido={handleFinalizeCourierOrder}
+              handleAcceptPendingDeliveryOrder={handleAcceptPendingDeliveryOrder}
+              handleRejectPendingDeliveryOrder={handleRejectPendingDeliveryOrder}
+              handleAdvanceDigitalOrder={handleAdvanceDigitalOrder}
+              openDeliveryOrderDetails={openDeliveryOrderDetails}
+              apiBaseUrl={apiBaseUrl}
+              authHeaders={authHeaders}
+              now={nowTimestamp}
               handleAddMotoboy={handleAddMotoboy}
               novoMotoboyNome={novoMotoboyNome}
               novoMotoboyTelefone={novoMotoboyTelefone}
