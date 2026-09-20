@@ -309,6 +309,11 @@ export default function CardapioPage() {
         about: String(restaurant.sobre_nos || ""),
         paymentMethods,
         onlinePaymentEnabled: restaurant.pagamento_online_ativo === true,
+        activeOrderTypes: Array.isArray(restaurant.tipos_pedido_ativos)
+          ? restaurant.tipos_pedido_ativos.filter((item: unknown): item is "consumo_local" | "retirada" | "delivery" =>
+              item === "consumo_local" || item === "retirada" || item === "delivery"
+            )
+          : undefined,
         operatingHours,
         googleMapsUrl: String(restaurant.google_maps_url || ""),
         deliveryEnabled: restaurant.delivery_ativo !== false,
