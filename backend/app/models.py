@@ -944,6 +944,9 @@ class ConfiguracaoRestaurante(Base):
     nicho = Column(String, default="hamburgueria")  # "hamburgueria" | "pizzaria" | "doceria" | "alacarte" | "selfservice"
     mapa_mesas_ativo = Column(Boolean, default=True)
     delivery_ativo = Column(Boolean, default=True)
+    # Seleção explícita feita pelo restaurante durante o onboarding. NULL significa
+    # que um tenant novo ainda não confirmou como pretende receber pedidos.
+    tipos_pedido_ativos = Column(JSON, nullable=True)
     pedido_minimo = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     frete_gratis_valor = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     tipo_taxa_entrega = Column(String, default="fixa")  # "fixa" | "bairro" | "distancia"
