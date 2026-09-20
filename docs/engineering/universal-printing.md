@@ -183,8 +183,9 @@ Antes de merge: backend completo, frontend, browser matrix e PostgreSQL conforme
 
 ## Simulador térmico local
 
-A bancada em `/ferramentas/simulador-impressao` é uma ferramenta administrativa
-de diagnóstico e não cria um segundo sistema de impressão.
+A bancada em `/ferramentas/simulador-impressao` é uma ferramenta interna de engenharia da plataforma,
+não uma funcionalidade do restaurante. Ela exige Super Admin + Modo Suporte auditado no tenant alvo
+e não cria um segundo sistema de impressão.
 
 Fluxo:
 
@@ -237,8 +238,10 @@ do papel; portanto `physical_print_time_ms` permanece `null`.
 
 `GET /api/print-agents/simulator/sources` lista metadados recentes e
 `GET /api/print-agents/simulator/sources/{job_id}` entrega o `payload_text`
-exato para usuários com `impressao:administrar`. Ambas são leituras
-tenant-scoped: não reservam, reabrem, reimprimem nem alteram o job.
+exato somente quando a requisição vem de um Modo Suporte auditado da plataforma.
+Um admin/gerente/caixa normal do restaurante recebe `403`. Ambas são leituras
+tenant-scoped: não reservam, reabrem, reimprimem nem alteram o job. A ferramenta
+não é anunciada nem linkada nas configurações operacionais do restaurante.
 
 O campo de edição manual da página é uma entrada técnica. Regras de pedido,
 mesa, delivery, preço e roteamento continuam pertencendo ao Core de Impressão;
