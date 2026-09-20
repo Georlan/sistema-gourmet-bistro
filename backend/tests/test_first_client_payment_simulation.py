@@ -28,6 +28,7 @@ from app.application.orders.commands import (
     OrderItemInput,
 )
 from app.application.orders.service import OrderApplicationService
+from app.application.printing import PrintingApplicationService
 from app.config import settings
 from app.database import Base, SessionLocal, current_restaurante_id, engine
 from app.domain.orders.types import FulfillmentType, OrderChannel
@@ -48,6 +49,7 @@ from app.models import (
     RestaurantPaymentAccount,
     Usuario,
 )
+from app.online_order_control_models import OnlineOrderControl, OnlineOrderOperationalAudit
 from app.online_payment_refund_models import OnlinePaymentRefund
 from app.services.cash_reconciliation import RefundDomainError
 from app.services.online_payments.mercado_pago import MercadoPagoProvider
@@ -58,6 +60,7 @@ from app.services.refund_guard import create_refund_guarded
 SUCCESS_RESTAURANT_ID = 8841
 REFUSAL_RESTAURANT_ID = 8842
 DINE_IN_RESTAURANT_ID = 8843
+AUTO_ACCEPT_RESTAURANT_ID = 8844
 PAYMENT_EXTERNAL_ID = "990001"
 REFUND_EXTERNAL_ID = "880001"
 ORDER_TOTAL = Decimal("100.00")
@@ -81,6 +84,8 @@ def _session(restaurante_id: int):
 def _cleanup(db, restaurante_id: int) -> None:
     # Ordem explícita para respeitar FKs também no PostgreSQL real.
     for model in (
+        OnlineOrderOperationalAudit,
+        OnlineOrderControl,
         OnlinePaymentRefund,
         PagamentoEstornoAlocacao,
         PagamentoEstornoLiquidacao,
@@ -547,6 +552,81 @@ def test_dine_in_pix_split_approval_and_full_lifecycle_simulation(monkeypatch):
         db.refresh(comanda)
         assert comanda.delivery_status == "finalizado"
         assert comanda.online_payment_status == "approved"
+    finally:
+        db.rollback()
+        _cleanup(db, restaurante_id)
+        db.close()
+        current_restaurante_id.reset(tenant_token)
+
+
+
+
+def test_dine_in_pix_approval_triggers_server_autoaccept_once(monkeypatch):
+    """Pix aprovado dispara o autoaceite persistido sem depender do Caixa aberto no browser."""
+    restaurante_id = AUTO_ACCEPT_RESTAURANT_ID
+    tenant_token = current_restaurante_id.set(restaurante_id)
+    db = _session(restaurante_id)
+    try:
+        _cleanup(db, restaurante_id)
+        monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+        monkeypatch.setattr(settings, "KOMA_PUBLIC_API_URL", "https://api.koma.test")
+        state = _simulated_provider(monkeypatch)
+
+        user_id, account, _shift, comanda, intent = _seed_online_order(
+            db,
+            restaurante_id,
+            fulfillment=FulfillmentType.DINE_IN,
+        )
+        db.add(
+            OnlineOrderControl(
+                restaurante_id=restaurante_id,
+                auto_accept=True,
+                auto_pause=False,
+                paused=False,
+            )
+        )
+        db.commit()
+
+        printed = []
+        monkeypatch.setattr(
+            PrintingApplicationService,
+            "request_print",
+            lambda db_session, print_intent: printed.append(print_intent) or [],
+        )
+
+        created = OnlinePaymentService.ensure_pix_created(
+            db,
+            intent=intent,
+            payer_email="cliente.autoaccept@example.invalid",
+            account=account,
+        )
+        assert created.status == "pending"
+        db.refresh(comanda)
+        assert comanda.delivery_status == "pendente"
+        assert printed == []
+
+        settled, first_approval = OnlinePaymentService.reconcile_provider_payment(
+            db,
+            account=account,
+            external_payment_id=PAYMENT_EXTERNAL_ID,
+        )
+        assert first_approval is True
+        assert settled is not None and settled.status == "approved"
+        db.refresh(comanda)
+        assert comanda.online_payment_status == "approved"
+        assert comanda.delivery_status == "producao"
+        assert len(printed) == 1
+
+        _, second_approval = OnlinePaymentService.reconcile_provider_payment(
+            db,
+            account=account,
+            external_payment_id=PAYMENT_EXTERNAL_ID,
+        )
+        assert second_approval is False
+        db.refresh(comanda)
+        assert comanda.delivery_status == "producao"
+        assert len(printed) == 1
+        assert len(_requests_by(state, "GET", f"/v1/payments/{PAYMENT_EXTERNAL_ID}")) == 2
     finally:
         db.rollback()
         _cleanup(db, restaurante_id)
