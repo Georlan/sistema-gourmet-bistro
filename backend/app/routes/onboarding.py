@@ -289,7 +289,8 @@ def get_onboarding_status(
     # O primeiro GET do checklist após o 3/3 faz a transição idempotente. Isso
     # garante que abrir/recarregar a implantação seja suficiente para iniciar o
     # trial, sem botão extra e sem consumir dias durante cadastro/configuração.
-    if required_complete and setup_pending:
+    is_internal_support = bool(getattr(current_user, "is_support_mode", False))
+    if required_complete and setup_pending and not is_internal_support:
         ensure_trial_started_after_onboarding(
             db,
             restaurante_id=tenant_id,
