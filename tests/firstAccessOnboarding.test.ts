@@ -133,5 +133,7 @@ test('audited support mode bypasses customer onboarding without mutating tenant 
   assert.match(boundary, /SUPPORT_SESSION_STORAGE_KEY/);
   assert.match(boundary, /readInternalSupportMode/);
   assert.match(boundary, /enabled: isManagementSetupOwner && !internalSupportMode/);
+  assert.match(boundary, /internalSupportMode && setupMode/);
+  assert.match(boundary, /sessionStorage\.removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
   assert.match(boundary, /if \(internalSupportMode \|\| setupMode\) return <>\{children\}<\/>/);
 });
