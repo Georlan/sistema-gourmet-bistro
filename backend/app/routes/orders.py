@@ -32,7 +32,7 @@ from ..domain.orders.types import (
     normalize_to_order_status,
     to_legacy_order_status,
 )
-from ..models import Comanda, Motoboy, Restaurante, Usuario
+from ..models import Comanda, Lancamento, Motoboy, Restaurante, Usuario
 from ..schemas import ComandaResponse
 from ..security import motoboy_rate_limiter, require_permission, verify_motoboy_token
 from ..services.notificacoes import agendar_notificacao_whatsapp_task
@@ -158,9 +158,15 @@ def _has_digital_order_lifecycle(comanda: Comanda) -> bool:
     fulfillment = normalize_to_fulfillment(comanda.tipo)
     if fulfillment in {FulfillmentType.DELIVERY, FulfillmentType.PICKUP}:
         return True
-    return (
-        fulfillment == FulfillmentType.DINE_IN
-        and bool(str(comanda.delivery_status or "").strip())
+    if fulfillment != FulfillmentType.DINE_IN:
+        return False
+
+    # Para consumo local, origem define o canal; delivery_status define somente
+    # o estado. Isso evita classificar uma mesa de salão como digital apenas
+    # porque algum dado legado carregou status operacional.
+    return any(
+        str(lancamento.origem or "").strip().casefold() == "cardapio"
+        for lancamento in (comanda.lancamentos or [])
     )
 
 
