@@ -865,8 +865,10 @@ def associate_order_to_table(
 ) -> Comanda:
     """Associa uma comanda aberta a uma mesa sem confundir associação com transferência.
 
-    Consumo no local passa a participar da família operacional da mesa. Retirada
-    mantém a mesa apenas como contexto do pedido e não cria AtendimentoMesa.
+    Consumo no local participa da família operacional da mesa. Quando uma
+    Retirada é associada porque o cliente decidiu consumir no restaurante, a
+    modalidade atual passa canonicamente a Consumo no Local e a família da mesa
+    é materializada; a conversão fica registrada no histórico operacional.
     Delivery nunca pode receber mesa.
     """
     command = (
@@ -900,10 +902,14 @@ def associate_order_to_table(
         )
 
     current_table = int(command.mesa_id) if command.mesa_id is not None else None
-    if current_table == mesa_id:
-        return command
 
     if fulfillment == FulfillmentType.DINE_IN:
+        if current_table == mesa_id:
+            # Idempotência também repara registros locais legados que tenham
+            # mesa_id, mas ainda não possuam a família operacional materializada.
+            ensure_atendimento_for_comanda(db, command, actor_id=actor_id)
+            db.flush()
+            return command
         if current_table is not None:
             return transfer_group_by_comanda(
                 db,
@@ -919,11 +925,29 @@ def associate_order_to_table(
         db.flush()
         return command
 
-    # PICKUP: mesa é apenas contexto operacional do pedido. Não materializamos
-    # AtendimentoMesa nem transformamos retirada em consumo no local.
-    if current_table is not None:
+    # PICKUP + mesa representa uma decisão operacional nova: o cliente deixou
+    # de retirar para consumir no estabelecimento. A modalidade atual muda para
+    # DINE_IN e o histórico da família preserva explicitamente a origem.
+    previous_type = str(command.tipo or "Retirada")
+    if current_table is not None and current_table != mesa_id:
         command.mesa_transferida_de = current_table
+    command.tipo = "Consumo no Local"
     command.mesa_id = mesa_id
+    db.flush()
+    account = ensure_atendimento_for_comanda(db, command, actor_id=actor_id)
+    _record_movement(
+        db,
+        account,
+        "conversao_modalidade",
+        actor_id=actor_id,
+        origin=current_table,
+        destination=mesa_id,
+        details={
+            "modalidade_anterior": previous_type,
+            "modalidade_atual": "Consumo no Local",
+            "motivo": "associacao_mesa",
+        },
+    )
     db.flush()
     return command
 
