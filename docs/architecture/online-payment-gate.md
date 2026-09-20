@@ -18,6 +18,30 @@ O KÔMA separa a criação técnica do pedido da sua liberação operacional.
 6. Somente `approved` cria `Pagamento`, marca os itens como pagos, muda a barreira para `approved` e publica `OrderCreated`.
 7. Repetições de webhook e reconciliação são idempotentes.
 
+## Fechamento do Caixa e Pix assíncrono
+
+O Pix online pertence ao turno de Caixa em que a intenção foi criada. Esse vínculo é histórico: `OnlinePaymentIntent.turno_id` não é transferido para um turno posterior.
+
+A validade operacional padrão do Pix é de **5 minutos**. No fechamento do turno, o backend consulta a verdade do Mercado Pago antes de decidir:
+
+- `approved`: materializa exatamente um `Pagamento(status="aprovado")` no mesmo `turno_id`; o pedido continua válido e o turno não fecha enquanto a comanda permanecer aberta.
+- `created/pending/error` ainda dentro da validade: o fechamento é bloqueado.
+- pendente após a validade: o backend tenta cancelar no Mercado Pago; somente uma resposta autoritativa terminal libera o pedido como abandonado.
+- `rejected/cancelled/expired`: o pedido ainda não publicado é encerrado como inválido, seus itens são cancelados e ele deixa de bloquear o Caixa.
+- estado incerto, indisponibilidade do provedor ou divergência financeira: o fechamento falha fechado.
+
+A corrida aprovação × cancelamento é resolvida pela fonte de verdade do provedor. Se a aprovação vencer, o recebimento é materializado no turno original e o fechamento é interrompido. Se o cancelamento vencer, nenhum `Pagamento` é criado.
+
+Invariante financeira do fechamento:
+
+`turno fechado => não existe OnlinePaymentIntent financeiramente indefinida originada no turno`.
+
+Para toda intenção aprovada:
+
+`OnlinePaymentIntent.status == approved => existe exatamente um Pagamento aprovado, com mesmo valor e mesmo turno_id`.
+
+Nenhum caminho normal pode reconhecer uma aprovação tardia em outro turno.
+
 ## Autoridade dos termos comerciais e taxa KÔMA
 
 O catálogo em `backend/app/subscription.py` descreve a oferta vigente para **novas contratações**. Ele não é a autoridade financeira de um tenant que já possui aceite.
