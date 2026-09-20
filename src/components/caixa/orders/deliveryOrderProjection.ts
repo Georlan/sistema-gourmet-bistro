@@ -3,7 +3,7 @@ import { getCashierOrderSlaData } from '../../../domain/cashierOrderProjection';
 import { formatBackendTime } from '../../../utils/dateTime';
 import type { DeliveryOrderView } from './cashierWorkspaceTypes';
 
-const ACTIVE_DELIVERY_STATUSES = new Set<DeliveryOrderView['status']>([
+const ACTIVE_DIGITAL_STATUSES = new Set<DeliveryOrderView['status']>([
   'pendente',
   'analise',
   'producao',
@@ -11,17 +11,36 @@ const ACTIVE_DELIVERY_STATUSES = new Set<DeliveryOrderView['status']>([
   'transito',
 ]);
 
-const DIGITAL_TYPES = new Set(['delivery', 'entrega', 'retirada']);
+const DELIVERY_TYPES = new Set(['delivery', 'entrega']);
+const PICKUP_TYPES = new Set(['retirada', 'pickup', 'viagem', 'balcao', 'balcão']);
+const DINE_IN_TYPES = new Set(['consumo no local', 'consumo_local', 'dine_in', 'mesa', 'local', 'salao', 'salão']);
 
-export function readActiveDeliveryStatus(raw: unknown): DeliveryOrderView['status'] | null {
+export function readActiveDigitalOrderStatus(raw: unknown): DeliveryOrderView['status'] | null {
   const status = String(raw || '').trim().toLowerCase() as DeliveryOrderView['status'];
-  return ACTIVE_DELIVERY_STATUSES.has(status) ? status : null;
+  return ACTIVE_DIGITAL_STATUSES.has(status) ? status : null;
+}
+
+/** Alias legado enquanto os consumidores migram do vocabulário "delivery". */
+export function readActiveDeliveryStatus(raw: unknown): DeliveryOrderView['status'] | null {
+  return readActiveDigitalOrderStatus(raw);
+}
+
+export function readDigitalOrderFulfillment(
+  rawType: unknown,
+  rawAddress: unknown = '',
+): DeliveryOrderView['modalidade'] | null {
+  const type = String(rawType || '').trim().toLowerCase();
+  if (DELIVERY_TYPES.has(type)) return 'delivery';
+  if (PICKUP_TYPES.has(type)) return 'retirada';
+  if (DINE_IN_TYPES.has(type)) return 'dine_in';
+  if (/retirada\s+no\s+balc[aã]o/i.test(String(rawAddress || ''))) return 'retirada';
+  return null;
 }
 
 function readActiveDigitalStatus(order: Order): DeliveryOrderView['status'] | null {
-  const type = String(order.tipo || '').trim().toLowerCase();
-  if (!DIGITAL_TYPES.has(type)) return null;
-  return readActiveDeliveryStatus(order.deliveryStatus);
+  const fulfillment = readDigitalOrderFulfillment(order.tipo, order.deliveryAddress);
+  if (!fulfillment) return null;
+  return readActiveDigitalOrderStatus(order.deliveryStatus);
 }
 
 export type CourierDeliveryBuckets = {
@@ -173,11 +192,8 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       .join(' + ') || 'Nenhum item';
     const subtotal = activeItems.reduce((sum, item) => sum + (Number(item.preco) || 0), 0);
     const rawAddress = String(order.deliveryAddress || '').trim();
-    const rawType = String(order.tipo || '').toLowerCase();
-    const modalidade: DeliveryOrderView['modalidade'] =
-      rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress)
-        ? 'retirada'
-        : 'delivery';
+    const modalidade = readDigitalOrderFulfillment(order.tipo, rawAddress);
+    if (!modalidade) return [];
 
     const origemOperacional = order.origemOperacional || 'desconhecida';
     let canal: DeliveryOrderView['canal'] = origemOperacional === 'smartpos' ? 'smartpos' : 'site';

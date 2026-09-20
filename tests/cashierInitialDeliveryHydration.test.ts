@@ -6,6 +6,7 @@ import {
   projectDeliveryOrdersFromSharedSnapshot,
   reconcileDeliveryOrderAfterStatus,
 } from '../src/components/caixa/orders/deliveryOrderProjection';
+import { isCashierTableOrder } from '../src/domain/cashierOrderProjection';
 import type { Order } from '../src/types';
 
 const baseOrder = (overrides: Partial<Order> = {}): Order => ({
@@ -72,7 +73,13 @@ test('resposta curta de aceite preserva itens e total até a reconciliação com
 });
 
 test('ignora salão e pedidos digitais já encerrados no snapshot inicial', () => {
-  const salon = baseOrder({ id: 'table-1', mesaId: 9, tipo: 'Consumo no Local' });
+  const salon = baseOrder({
+    id: 'table-1',
+    mesaId: 9,
+    tipo: 'Consumo no Local',
+    deliveryStatus: null,
+    origemOperacional: 'garcom',
+  });
   const finalized = baseOrder({ id: 'delivery-finalized', deliveryStatus: 'finalizado' });
   const rejected = baseOrder({ id: 'delivery-rejected', deliveryStatus: 'recusado' });
   const active = baseOrder({ id: 'delivery-active', deliveryStatus: 'pendente' });
@@ -80,6 +87,59 @@ test('ignora salão e pedidos digitais já encerrados no snapshot inicial', () =
   assert.deepEqual(
     projectDeliveryOrdersFromSharedSnapshot([salon, finalized, rejected, active]).map((order) => order.id),
     ['delivery-active'],
+  );
+});
+
+test('projeta consumo no local digital e mantém salão tradicional fora do fluxo digital', () => {
+  const [digitalDineIn] = projectDeliveryOrdersFromSharedSnapshot([
+    baseOrder({
+      id: 'dine-in-digital',
+      tipo: 'Consumo no Local',
+      mesaId: 0,
+      deliveryStatus: 'pendente',
+      deliveryAddress: '',
+      deliveryTax: 0,
+    }),
+  ]);
+
+  assert.ok(digitalDineIn);
+  assert.equal(digitalDineIn.modalidade, 'dine_in');
+  assert.equal(digitalDineIn.status, 'pendente');
+  assert.equal(digitalDineIn.endereco, '');
+
+  const [associated] = projectDeliveryOrdersFromSharedSnapshot([
+    baseOrder({
+      id: 'dine-in-associated',
+      tipo: 'Consumo no Local',
+      mesaId: 7,
+      deliveryStatus: 'producao',
+      deliveryAddress: '',
+      deliveryTax: 0,
+    }),
+  ]);
+
+  assert.ok(associated);
+  assert.equal(associated.modalidade, 'dine_in');
+  assert.equal(associated.mesaId, 7);
+
+  assert.equal(
+    isCashierTableOrder(baseOrder({
+      id: 'dine-in-associated',
+      tipo: 'Consumo no Local',
+      mesaId: 7,
+      deliveryStatus: 'producao',
+    })),
+    false,
+  );
+  assert.equal(
+    isCashierTableOrder(baseOrder({
+      id: 'salon-traditional',
+      tipo: 'Consumo no Local',
+      mesaId: 7,
+      deliveryStatus: null,
+      origemOperacional: 'garcom',
+    })),
+    true,
   );
 });
 

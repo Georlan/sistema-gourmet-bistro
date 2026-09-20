@@ -2,7 +2,7 @@ import uuid
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from typing import List, Optional
 import logging
 
@@ -539,7 +539,7 @@ def fechar_comanda(
     status_anterior = comanda.delivery_status
     comanda.fechada = True
     comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
-    if comanda.tipo in {"Delivery", "Entrega", "Retirada", "Viagem", "balcao", "balcão"}:
+    if comanda.delivery_status is not None or comanda.tipo in {"Delivery", "Entrega", "Retirada", "Viagem", "balcao", "balcão"}:
         if comanda.delivery_status != "recusado":
             comanda.delivery_status = "finalizado"
             for lanc in (comanda.lancamentos or []):
@@ -813,12 +813,17 @@ def update_item_status(
 @router.get("/delivery/ativos", response_model=List[ComandaDetail])
 def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
-    Retorna todas as comandas de delivery ou retirada que não estejam finalizadas/fechadas.
-    Inclui as pendentes (na gaveta de aceite) e as em produção/trânsito.
-    """
+    Retorna comandas com ciclo operacional digital que ainda estão abertas.\n    Inclui delivery, retirada e consumo no local digital; consumo de salão\n    tradicional continua fora porque não possui delivery_status legado.\n    """
     return db.query(Comanda).filter(
         Comanda.restaurante_id == require_tenant_id(),
-        Comanda.tipo.in_(["Delivery", "Entrega", "Retirada"]),
+        or_(
+            Comanda.tipo.in_(["Delivery", "Entrega", "Retirada", "Viagem"]),
+            and_(
+                Comanda.tipo.in_(["Consumo no Local", "Mesa", "Local"]),
+                Comanda.delivery_status.isnot(None),
+                Comanda.lancamentos.any(Lancamento.origem == "cardapio"),
+            ),
+        ),
         Comanda.fechada == False,
         or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
     ).all()

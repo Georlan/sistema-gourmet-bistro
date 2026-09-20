@@ -39,6 +39,6 @@ test('ignora itens já pagos ou cancelados ao decidir a finalização', () => {
 });
 
 test('nunca usa a regra de auto-fechamento de pedido digital em mesa de salão', () => {
-  const table = digitalOrder({ mesaId: 7, tipo: 'Consumo no Local' });
+  const table = digitalOrder({ mesaId: 7, tipo: 'Consumo no Local', deliveryStatus: null });
   assert.equal(shouldAutoCloseDigitalOrderAfterPayment(table, ['item-a', 'item-b']), false);
 });

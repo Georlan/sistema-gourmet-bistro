@@ -18,7 +18,11 @@ export function projectCashierDeliveryState(status?: string, modalidade?: string
 
 export function getCashierDeliveryStatusLabel(status?: string, modalidade?: string): string {
   if (status === 'producao') return 'Em preparo';
-  if (status === 'pronto') return modalidade === 'delivery' ? 'Pronto para envio' : 'Pronto para retirada';
+  if (status === 'pronto') {
+    if (modalidade === 'delivery') return 'Pronto para envio';
+    if (modalidade === 'dine_in') return 'Pronto para servir';
+    return 'Pronto para retirada';
+  }
   if (status === 'transito') return modalidade === 'delivery' ? 'Em rota' : 'Aguardando retirada';
   if (status === 'pendente' || status === 'analise') return 'Aguardando aceite';
   return 'Em atendimento';
@@ -52,7 +56,23 @@ type CashierNumberSource = Partial<Pick<Order, 'id' | 'numeroPedido' | 'displayN
 /** This predicate classifies fulfillment only; it does not decide payment state. */
 export const isCashierTableOrder = (order: Order | null | undefined) => {
   if (!order || Number(order.mesaId) <= 0) return false;
-  return !['delivery', 'entrega', 'retirada'].includes(String(order.tipo || '').toLowerCase());
+
+  const normalizedType = String(order.tipo || '').trim().toLowerCase();
+  if (['delivery', 'entrega', 'retirada', 'pickup'].includes(normalizedType)) return false;
+
+  const isDineIn = ['consumo no local', 'consumo_local', 'dine_in', 'mesa', 'local', 'salao', 'salão']
+    .includes(normalizedType);
+  if (!isDineIn) return true;
+
+  // Origem define se o consumo local nasceu em canal digital. A mesa é somente
+  // localização e deliveryStatus é somente ciclo operacional. O fallback por
+  // status fica restrito a snapshots legados sem origem conhecida.
+  const origin = String(order.origemOperacional || '').trim().toLowerCase();
+  if (origin === 'cardapio') return false;
+  if (['caixa', 'garcom', 'smartpos'].includes(origin)) return true;
+
+  return !['pendente', 'analise', 'producao', 'pronto', 'transito']
+    .includes(String(order.deliveryStatus || '').toLowerCase());
 };
 
 /**

@@ -7,7 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..domain.orders.events import OrderCreated
-from ..domain.orders.types import FulfillmentType, OrderChannel
+from ..domain.orders.types import FulfillmentType, OrderChannel, normalize_to_fulfillment
 from ..models import Comanda, Lancamento
 from ..scheduled_models import ScheduledOrder
 from .capabilities import has_capability
@@ -123,11 +123,7 @@ def _publish_created_event(db: Session, comanda: Comanda) -> None:
         display_number=str(comanda.numero_pedido),
         check_number=comanda.numero_pedido,
         channel=OrderChannel.WEB_CARDAPIO,
-        fulfillment=(
-            FulfillmentType.PICKUP
-            if comanda.tipo == "Retirada"
-            else FulfillmentType.DELIVERY
-        ),
+        fulfillment=normalize_to_fulfillment(comanda.tipo),
         total=_order_total(comanda),
         items_count=len([item for item in comanda.itens if item.status != "cancelado"]),
         customer_name=comanda.identificador,

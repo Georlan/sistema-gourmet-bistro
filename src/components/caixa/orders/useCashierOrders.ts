@@ -8,6 +8,7 @@ import type { CashierTableCard, DeliveryOrderView } from '../orders/cashierWorks
 import {
   projectDeliveryOrdersFromSharedSnapshot,
   readActiveDeliveryStatus,
+  readDigitalOrderFulfillment,
   reconcileDeliveryOrderAfterStatus,
 } from './deliveryOrderProjection';
 
@@ -89,7 +90,8 @@ export function useCashierOrders({
     );
     const normalizedType = String(order?.modalidade || order?.tipo || '').toLowerCase();
     const isDigitalOrder =
-      Number(order?.mesaId || 0) <= 0 || ['delivery', 'entrega', 'retirada'].includes(normalizedType);
+      Number(order?.mesaId || 0) <= 0
+      || ['delivery', 'entrega', 'retirada', 'pickup', 'dine_in', 'consumo_local', 'consumo no local'].includes(normalizedType);
     const comandaIds = new Set(
       activeItems.map((item: any) => String(item.comandaId || order.comandaId || order.id)).filter(Boolean)
     );
@@ -403,8 +405,8 @@ export function useCashierOrders({
     else if (c.identificador && c.identificador.toLowerCase().includes('whats')) canal = 'whats';
 
     const rawAddress = String(c.delivery_endereco || '').trim();
-    const rawType = String(c.tipo || '').toLowerCase();
-    const modalidade = rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress) ? 'retirada' : 'delivery';
+    const modalidade = readDigitalOrderFulfillment(c.tipo, rawAddress);
+    if (!modalidade) return null;
     const isQuickSale =
       modalidade === 'retirada' &&
       (origemOperacional === 'smartpos' ||
