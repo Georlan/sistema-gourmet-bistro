@@ -474,6 +474,7 @@ class PagamentoResponse(BaseModel):
     metodo: str
     status: str
     idempotency_key: Optional[str] = None
+    item_ids: Optional[List[str]] = None
     cliente_id: Optional[str] = None
     cpf_cliente: Optional[str] = None
     nome_cliente: Optional[str] = None

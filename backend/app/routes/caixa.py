@@ -71,6 +71,57 @@ def _valor_monetario(valor: object) -> Decimal:
     return Decimal(str(valor or 0)).quantize(_CENTAVO, rounding=ROUND_HALF_UP)
 
 
+_ITEM_SELECTION_CHANGED_DETAIL = (
+    "A conta mudou enquanto você recebia. Um ou mais itens selecionados já foram "
+    "pagos, cancelados ou alterados. Atualize a conta, revise a seleção e confirme novamente."
+)
+
+
+def _normalized_item_ids(item_ids: Optional[List[str]]) -> List[str]:
+    return list(dict.fromkeys(item_ids or []))
+
+
+def _same_item_scope(existing: Pagamento, item_ids: Optional[List[str]]) -> bool:
+    return sorted(existing.item_ids or []) == sorted(_normalized_item_ids(item_ids))
+
+
+def _lock_exact_payment_items(
+    db: Session,
+    *,
+    restaurante_id: int,
+    comanda_ids: List[str],
+    item_ids: Optional[List[str]],
+    require_ready: bool,
+) -> List[Item]:
+    requested_ids = _normalized_item_ids(item_ids)
+    if not requested_ids:
+        return []
+
+    items = db.query(Item).filter(
+        Item.restaurante_id == restaurante_id,
+        Item.comanda_id.in_(comanda_ids),
+        Item.id.in_(requested_ids),
+    ).with_for_update().all()
+    by_id = {item.id: item for item in items}
+
+    changed = any(
+        item_id not in by_id
+        or by_id[item_id].pago
+        or by_id[item_id].status == "cancelado"
+        or (
+            require_ready
+            and by_id[item_id].status not in {"pronto", "entregue"}
+        )
+        for item_id in requested_ids
+    )
+    if changed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_ITEM_SELECTION_CHANGED_DETAIL,
+        )
+    return [by_id[item_id] for item_id in requested_ids]
+
+
 def _totais_financeiros_turno(db: Session, restaurante_id: int, turno: CaixaTurno) -> dict:
     return cash_shift_totals(db, restaurante_id, turno).as_legacy_dict()
 
@@ -816,6 +867,15 @@ def registrar_pagamento_mesa(
         Pagamento.idempotency_key == pag_in.idempotency_key,
     ).first()
     if existing:
+        if (
+            _valor_monetario(existing.valor) != _valor_monetario(pag_in.valor)
+            or existing.metodo != pag_in.metodo
+            or not _same_item_scope(existing, pag_in.item_ids)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A chave idempotente já foi usada em outro pagamento.",
+            )
         return existing
 
     if pag_in.metodo not in _METODOS_PAGAMENTO:
@@ -863,28 +923,14 @@ def registrar_pagamento_mesa(
         ConfiguracaoRestaurante.restaurante_id == rest_id
     ).first()
 
-    itens_selecionados: List[Item] = []
-    if pag_in.item_ids:
-        ids_solicitados = list(dict.fromkeys(pag_in.item_ids))
-        itens_disponiveis = {
-            item.id: item
-            for comanda in comandas
-            for item in comanda.itens
-            if item.status in {"pronto", "entregue"} and not item.pago
-        }
-        itens_selecionados = [
-            itens_disponiveis[item_id]
-            for item_id in ids_solicitados
-            if item_id in itens_disponiveis
-        ]
-        if len(itens_selecionados) != len(ids_solicitados):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "Um ou mais itens selecionados não pertencem à mesa, "
-                    "ainda estão em preparo, foram cancelados ou já estão pagos."
-                ),
-            )
+    ids_solicitados = _normalized_item_ids(pag_in.item_ids)
+    itens_selecionados = _lock_exact_payment_items(
+        db,
+        restaurante_id=rest_id,
+        comanda_ids=[comanda.id for comanda in comandas],
+        item_ids=ids_solicitados,
+        require_ready=True,
+    )
 
     debitos = _debitos_da_mesa(
         comandas,
@@ -915,55 +961,117 @@ def registrar_pagamento_mesa(
             subtotal_selecionado
             * (Decimal("1.00") + taxa_percentual / Decimal("100"))
         )
-        valor_necessario = min(total_selecionado, saldo_mesa)
-        if valor_solicitado < valor_necessario:
+        if total_selecionado > saldo_mesa:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_ITEM_SELECTION_CHANGED_DETAIL,
+            )
+        if valor_solicitado != total_selecionado:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "Para dar baixa nos itens selecionados, receba o valor "
-                    "total da seleção ou limpe a seleção para lançar um "
-                    "pagamento livre."
+                    "Para pagar itens selecionados, o valor deve corresponder "
+                    "exatamente ao total da seleção."
                 ),
             )
 
-    valor_aplicado = min(valor_solicitado, saldo_mesa)
-    restante_a_distribuir = valor_aplicado
+    valor_aplicado = (
+        valor_solicitado
+        if itens_selecionados
+        else min(valor_solicitado, saldo_mesa)
+    )
     agora = datetime.datetime.now(datetime.timezone.utc)
     comandas_quitadas: List[Comanda] = []
-
-    for debito in debitos:
-        if restante_a_distribuir <= Decimal("0.00"):
-            break
-        if debito["saldo"] <= Decimal("0.00"):
-            continue
-
-        valor_na_comanda = min(restante_a_distribuir, debito["saldo"])
-        novo_total_pago = min(
-            debito["total"],
-            debito["pago"] + valor_na_comanda,
-        )
-        comanda = debito["comanda"]
-        comanda.valor_pago = float(_valor_monetario(novo_total_pago))
-        restante_a_distribuir -= valor_na_comanda
-
-        if novo_total_pago >= debito["total"]:
-            for item in comanda.itens:
-                if item.status != "cancelado":
-                    item.pago = True
-            comanda.fechada = True
-            comanda.fechado_em = agora
-            comanda.status_comanda = None
-            comandas_quitadas.append(comanda)
+    debitos_by_comanda = {
+        debito["comanda"].id: debito
+        for debito in debitos
+    }
 
     if itens_selecionados:
+        # Pagamento por itens não usa a distribuição FIFO da mesa. O valor
+        # confirmado é atribuído somente às comandas que possuem os itens
+        # selecionados, preservando o escopo escolhido pelo operador.
+        selected_subtotals: dict[str, Decimal] = {}
+        selected_comanda_ids: List[str] = []
+        for item in itens_selecionados:
+            if item.comanda_id not in selected_subtotals:
+                selected_subtotals[item.comanda_id] = Decimal("0.00")
+                selected_comanda_ids.append(item.comanda_id)
+            selected_subtotals[item.comanda_id] += _valor_monetario(item.preco_unit)
+
+        selected_allocations: dict[str, Decimal] = {}
+        allocated = Decimal("0.00")
+        for index, comanda_id in enumerate(selected_comanda_ids):
+            if index == len(selected_comanda_ids) - 1:
+                amount = valor_aplicado - allocated
+            else:
+                amount = _valor_monetario(
+                    selected_subtotals[comanda_id]
+                    * (Decimal("1.00") + taxa_percentual / Decimal("100"))
+                )
+                allocated += amount
+            selected_allocations[comanda_id] = amount
+
+        if any(
+            selected_allocations[comanda_id] > debitos_by_comanda[comanda_id]["saldo"]
+            for comanda_id in selected_comanda_ids
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_ITEM_SELECTION_CHANGED_DETAIL,
+            )
+
+        for comanda_id in selected_comanda_ids:
+            debito = debitos_by_comanda[comanda_id]
+            novo_total_pago = _valor_monetario(
+                debito["pago"] + selected_allocations[comanda_id]
+            )
+            comanda = debito["comanda"]
+            comanda.valor_pago = float(novo_total_pago)
+            if novo_total_pago >= debito["total"]:
+                for item in comanda.itens:
+                    if item.status != "cancelado":
+                        item.pago = True
+                comanda.fechada = True
+                comanda.fechado_em = agora
+                comanda.status_comanda = None
+                comandas_quitadas.append(comanda)
+
         for item in itens_selecionados:
             item.pago = True
 
-    comanda_referencia = next(
-        debito["comanda"]
-        for debito in debitos
-        if debito["saldo"] > Decimal("0.00")
-    )
+        comanda_referencia = debitos_by_comanda[selected_comanda_ids[0]]["comanda"]
+    else:
+        restante_a_distribuir = valor_aplicado
+        for debito in debitos:
+            if restante_a_distribuir <= Decimal("0.00"):
+                break
+            if debito["saldo"] <= Decimal("0.00"):
+                continue
+
+            valor_na_comanda = min(restante_a_distribuir, debito["saldo"])
+            novo_total_pago = min(
+                debito["total"],
+                debito["pago"] + valor_na_comanda,
+            )
+            comanda = debito["comanda"]
+            comanda.valor_pago = float(_valor_monetario(novo_total_pago))
+            restante_a_distribuir -= valor_na_comanda
+
+            if novo_total_pago >= debito["total"]:
+                for item in comanda.itens:
+                    if item.status != "cancelado":
+                        item.pago = True
+                comanda.fechada = True
+                comanda.fechado_em = agora
+                comanda.status_comanda = None
+                comandas_quitadas.append(comanda)
+
+        comanda_referencia = next(
+            debito["comanda"]
+            for debito in debitos
+            if debito["saldo"] > Decimal("0.00")
+        )
 
     cliente_pagamento = _resolver_cliente_pagamento(
         db,
@@ -1016,6 +1124,7 @@ def registrar_pagamento_mesa(
         metodo=pag_in.metodo,
         status="aprovado",
         idempotency_key=pag_in.idempotency_key,
+        item_ids=ids_solicitados or None,
         cliente_id=cliente_pagamento.id if cliente_pagamento else None,
         cpf_cliente=(
             cliente_pagamento.telefone if cliente_pagamento else pag_in.cpf_cliente
@@ -1049,6 +1158,15 @@ def registrar_pagamento_mesa(
             Pagamento.idempotency_key == pag_in.idempotency_key,
         ).first()
         if existing:
+            if (
+                _valor_monetario(existing.valor) != _valor_monetario(pag_in.valor)
+                or existing.metodo != pag_in.metodo
+                or not _same_item_scope(existing, pag_in.item_ids)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="A chave idempotente já foi usada em outro pagamento.",
+                )
             return existing
         logger.exception("Falha de integridade ao processar pagamento da mesa")
         raise HTTPException(
@@ -1123,6 +1241,7 @@ def registrar_pagamento_comanda(
             existing.comanda_id != comanda_id
             or _valor_monetario(existing.valor) != _valor_monetario(pag_in.valor)
             or existing.metodo != pag_in.metodo
+            or not _same_item_scope(existing, pag_in.item_ids)
         ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -1184,12 +1303,43 @@ def registrar_pagamento_comanda(
             detail="Comanda já está fechada e liquidada."
         )
 
+    # Validate payment method before interpreting the financial scope.
+    if pag_in.metodo not in _METODOS_PAGAMENTO:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Método de pagamento inválido. Use 'dinheiro', 'pix', 'cartao_debito' ou 'cartao_credito'."
+        )
+
+    ids_solicitados = _normalized_item_ids(pag_in.item_ids)
+    itens_selecionados = _lock_exact_payment_items(
+        db,
+        restaurante_id=rest_id,
+        comanda_ids=[comanda_id],
+        item_ids=ids_solicitados,
+        require_ready=False,
+    )
+    valor_solicitado = _valor_monetario(pag_in.valor)
+    if itens_selecionados:
+        total_selecionado = _valor_monetario(sum(
+            (_valor_monetario(item.preco_unit) for item in itens_selecionados),
+            Decimal("0.00"),
+        ))
+        if valor_solicitado != total_selecionado:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="O valor deve corresponder exatamente aos itens selecionados.",
+            )
+
     saldo_aberto = max(
         Decimal("0.00"),
         _subtotal_ativo(comanda) - _valor_monetario(comanda.valor_pago),
     )
-    valor_solicitado = _valor_monetario(pag_in.valor)
     if valor_solicitado > saldo_aberto:
+        if itens_selecionados:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_ITEM_SELECTION_CHANGED_DETAIL,
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -1197,15 +1347,9 @@ def registrar_pagamento_comanda(
                 f"Saldo atual: R$ {saldo_aberto:.2f}."
             ),
         )
-        
-    # Validate payment method
-    if pag_in.metodo not in _METODOS_PAGAMENTO:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Método de pagamento inválido. Use 'dinheiro', 'pix', 'cartao_debito' ou 'cartao_credito'."
-        )
 
-    # Determine if payment should be pending confirmation (Garçom + Dinheiro)
+    # Determine if payment should be pending confirmation (Garçom + Dinheiro).
+    # A seleção permanece persistida no Pagamento para ser revalidada no Caixa.
     is_pending = (
         current_user.role == "garcom"
         and pag_in.metodo == "dinheiro"
@@ -1213,29 +1357,9 @@ def registrar_pagamento_comanda(
     )
     pag_status = "pendente" if is_pending else "aprovado"
 
-    # 3. Process payment if approved immediately
     if not is_pending:
-        if pag_in.item_ids:
-            # Pay by item selection
-            itens_selecionados = db.query(Item).filter(
-                Item.restaurante_id == rest_id,
-                Item.comanda_id == comanda_id,
-                Item.id.in_(pag_in.item_ids),
-                Item.status != 'cancelado',
-                Item.pago == False
-            ).all()
-            
-            if not itens_selecionados:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Nenhum item válido pendente de pagamento foi selecionado."
-                )
-                
-            # Settle selected items only if the payment valor covers their subtotal
-            subtotal_selecionado = sum(item.preco_unit for item in itens_selecionados)
-            if pag_in.valor >= round(subtotal_selecionado, 2) - 0.01:
-                for item in itens_selecionados:
-                    item.pago = True
+        for item in itens_selecionados:
+            item.pago = True
 
     # Create the Pagamento transaction
     novo_pagamento = Pagamento(
@@ -1247,6 +1371,7 @@ def registrar_pagamento_comanda(
         metodo=pag_in.metodo,
         status=pag_status,
         idempotency_key=pag_in.idempotency_key,
+        item_ids=ids_solicitados or None,
         cliente_id=cliente_pagamento.id if cliente_pagamento else None,
         cpf_cliente=(
             cliente_pagamento.telefone if cliente_pagamento else pag_in.cpf_cliente
@@ -1324,6 +1449,7 @@ def registrar_pagamento_comanda(
                 existing.comanda_id != comanda_id
                 or _valor_monetario(existing.valor) != _valor_monetario(pag_in.valor)
                 or existing.metodo != pag_in.metodo
+                or not _same_item_scope(existing, pag_in.item_ids)
             ):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
@@ -1429,6 +1555,24 @@ def aprovar_pagamento(
     ).with_for_update().first()
     if comanda is None:
         raise HTTPException(status_code=409, detail="Comanda do pagamento não encontrada.")
+    itens_selecionados = _lock_exact_payment_items(
+        db,
+        restaurante_id=rest_id,
+        comanda_ids=[comanda.id],
+        item_ids=pagamento.item_ids,
+        require_ready=False,
+    )
+    if itens_selecionados:
+        total_selecionado = _valor_monetario(sum(
+            (_valor_monetario(item.preco_unit) for item in itens_selecionados),
+            Decimal("0.00"),
+        ))
+        if _valor_monetario(pagamento.valor) != total_selecionado:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_ITEM_SELECTION_CHANGED_DETAIL,
+            )
+
     saldo_aberto = max(
         Decimal("0.00"),
         _subtotal_ativo(comanda) - _valor_monetario(comanda.valor_pago),
@@ -1437,17 +1581,24 @@ def aprovar_pagamento(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "A comanda já foi liquidada ou não possui saldo suficiente "
-                "para aprovar este pagamento pendente."
+                _ITEM_SELECTION_CHANGED_DETAIL
+                if itens_selecionados
+                else (
+                    "A comanda já foi liquidada ou não possui saldo suficiente "
+                    "para aprovar este pagamento pendente."
+                )
             ),
         )
-        
+
     pagamento.status = "aprovado"
     comanda.valor_pago = float(_valor_monetario(
         _valor_monetario(comanda.valor_pago) + _valor_monetario(pagamento.valor)
     ))
-    
-    # Aprovar dinheiro também respeita o saldo monetário, sem depender de itens.
+    for item in itens_selecionados:
+        item.pago = True
+
+    # A quitação continua monetária; o escopo persistido impede que uma aprovação
+    # por itens seja reinterpretada como pagamento livre.
     subtotal_total = float(_subtotal_ativo(comanda))
     
     if comanda.valor_pago >= subtotal_total:

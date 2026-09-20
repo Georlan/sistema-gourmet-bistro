@@ -209,6 +209,52 @@ export function useCheckoutController({
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
 
   const [paymentCPF, setPaymentCPF] = useState('');
+  const [selectionConflictTarget, setSelectionConflictTarget] = useState<{
+    orderId: string;
+    mesaId: number | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!selectionConflictTarget) return;
+
+    const refreshedOrder =
+      selectionConflictTarget.mesaId && selectionConflictTarget.mesaId > 0
+        ? buildTableCheckoutOrder(
+            orders.filter(
+              (order) =>
+                Number(order.mesaId) === Number(selectionConflictTarget.mesaId) &&
+                isTableCheckoutOrder(order)
+            )
+          )
+        : orders.find((order) => order.id === selectionConflictTarget.orderId) || null;
+
+    setSelectedItemIds([]);
+    setPaymentValor('');
+    setPaymentMetodo('');
+    setIdempotencyKey('');
+
+    if (refreshedOrder) {
+      setSelectedOrder(refreshedOrder);
+    } else {
+      setSelectedOrder(null);
+      setShowCheckoutModal(false);
+    }
+    setSelectionConflictTarget(null);
+  }, [orders, selectionConflictTarget]);
+
+  const refreshAfterItemSelectionConflict = async () => {
+    const target = {
+      orderId: selectedOrder?.id || '',
+      mesaId: selectedOrder?.mesaId ? Number(selectedOrder.mesaId) : null,
+    };
+    await onRefreshOrders();
+    setSelectionConflictTarget(target);
+    const message =
+      'A conta mudou enquanto você recebia. Um ou mais itens selecionados já foram pagos, cancelados ou alterados. ' +
+      'Atualizamos a conta; revise a seleção e confirme novamente.';
+    showToast(message, 'info');
+    return message;
+  };
 
   const selectPaymentMetodo = (
     metodo: '' | 'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'
@@ -306,6 +352,13 @@ export function useCheckoutController({
         });
         if (!res.ok) {
           const errData = await res.json();
+          if (
+            res.status === 409 &&
+            selectedItemIds.length > 0 &&
+            String(errData.detail || '').startsWith('A conta mudou enquanto você recebia.')
+          ) {
+            throw new Error(await refreshAfterItemSelectionConflict());
+          }
           throw new Error(errData.detail || 'Erro ao registrar pagamento da mesa');
         }
       } else if (selectedItemIds.length > 0) {
@@ -352,6 +405,12 @@ export function useCheckoutController({
           });
           if (!res.ok) {
             const errData = await res.json();
+            if (
+              res.status === 409 &&
+              String(errData.detail || '').startsWith('A conta mudou enquanto você recebia.')
+            ) {
+              throw new Error(await refreshAfterItemSelectionConflict());
+            }
             throw new Error(errData.detail || `Erro ao pagar itens da comanda ${cid}`);
           }
           idx++;
@@ -463,9 +522,10 @@ export function useCheckoutController({
     const taxa = taxaServicoAtiva && includeServiceTax ? subtotal * (serviceTaxRate / 100) : 0;
     const selectedTotal = subtotal + taxa;
 
-    return isTableCheckoutOrder(order)
-      ? Math.min(selectedTotal, getCheckoutBalance(order, includeServiceTax))
-      : selectedTotal;
+    // Pagamento por itens é estrito: o valor exibido e enviado corresponde
+    // exatamente aos itens confirmados. Saldo monetário parcial não transforma
+    // silenciosamente a seleção em "pagar o restante".
+    return selectedTotal;
   };
 
   const handleOpenTablePayment = async (order: CashierTableCard['order']) => {
