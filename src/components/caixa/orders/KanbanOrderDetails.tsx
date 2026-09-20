@@ -386,26 +386,28 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
             )}
             {Boolean(selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0) && (
               <div className={"space-y-2 w-full"}>
-                <div className={"flex gap-2 w-full"}>
-                  <button
-                    type="button"
-                    onClick={actions.printFullTable}
-                    title="Reimprime todos os itens ativos da mesa"
-                    className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
-                  >
-                    <Printer size={13} />
-                    <span>Reimpressão total</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={actions.printTableValues}
-                    title="Imprime a Conta da Mesa"
-                    className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
-                  >
-                    <Printer size={13} />
-                    <span>Conta da Mesa</span>
-                  </button>
-                </div>
+                {selectedKanbanOrder.contextoSalao && (
+                  <div className={"flex gap-2 w-full"}>
+                    <button
+                      type="button"
+                      onClick={actions.printFullTable}
+                      title="Reimprime todos os itens ativos da mesa"
+                      className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
+                    >
+                      <Printer size={13} />
+                      <span>Reimpressão total</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={actions.printTableValues}
+                      title="Imprime a Conta da Mesa"
+                      className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
+                    >
+                      <Printer size={13} />
+                      <span>Conta da Mesa</span>
+                    </button>
+                  </div>
+                )}
                 {selectedKanbanOrder.contextoSalao && (
                   <div className={"flex gap-2 w-full"}>
                     <select
