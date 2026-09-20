@@ -905,15 +905,26 @@ def registrar_pagamento_mesa(
         Comanda.criado_em.asc(),
         Comanda.id.asc(),
     ).with_for_update().all()
+    # A primeira leitura idempotente acontece antes dos locks. Duas chamadas
+    # iguais podem ter observado "ausente" ao mesmo tempo; após serializar no
+    # turno/comandas, revalide a chave antes de interpretar o estado dos itens.
+    existing = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.idempotency_key == pag_in.idempotency_key,
+    ).first()
+    if existing:
+        if (
+            _valor_monetario(existing.valor) != _valor_monetario(pag_in.valor)
+            or existing.metodo != pag_in.metodo
+            or not _same_item_scope(existing, pag_in.item_ids)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A chave idempotente já foi usada em outro pagamento.",
+            )
+        return existing
+
     if not comandas:
-        # Uma repetição concorrente pode chegar depois que a primeira chamada
-        # já fechou a mesa. A chave idempotente continua sendo a fonte de verdade.
-        existing = db.query(Pagamento).filter(
-            Pagamento.restaurante_id == rest_id,
-            Pagamento.idempotency_key == pag_in.idempotency_key,
-        ).first()
-        if existing:
-            return existing
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Nenhuma comanda aberta foi encontrada para esta mesa.",
@@ -1270,6 +1281,26 @@ def registrar_pagamento_comanda(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Comanda não encontrada"
         )
+
+    # Releia a chave depois do lock da comanda. Isso transforma retries
+    # simultâneos da mesma tentativa no mesmo Pagamento, em vez de tratá-los
+    # como uma seleção stale criada pelo commit concorrente.
+    existing = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.idempotency_key == pag_in.idempotency_key,
+    ).first()
+    if existing:
+        if (
+            existing.comanda_id != comanda_id
+            or _valor_monetario(existing.valor) != _valor_monetario(pag_in.valor)
+            or existing.metodo != pag_in.metodo
+            or not _same_item_scope(existing, pag_in.item_ids)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A chave idempotente já foi usada em outro pagamento.",
+            )
+        return existing
 
     cliente_pagamento = _resolver_cliente_pagamento(
         db,
