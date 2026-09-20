@@ -137,7 +137,7 @@ def provision_restaurant_for_contract(
     acceptance: dict[str, Any],
     billing_setup: BillingSetupData | None = None,
     actor: str = "saas_checkout",
-    reason: str = "Ativação da conta com trial preservado até a conclusão da implantação essencial",
+    reason: str = "Ativação da conta com trial preservado até o início explícito da operação",
 ) -> dict[str, Any]:
     """
     Provisiona atomicamente o restaurante, configurações, admin inicial e assinatura SaaS.
