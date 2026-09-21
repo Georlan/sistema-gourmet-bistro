@@ -7,8 +7,10 @@ import React from "react";
 import {
   CheckCircle2,
   Clock3,
+  Copy,
   MessageCircle,
   Package,
+  QrCode,
   RefreshCw,
   Trash2,
   X,
@@ -87,6 +89,8 @@ export default function CardapioOrdersDrawer({
   hasFloatingCart = false,
 }: CardapioOrdersDrawerProps) {
   const [chatOrderId, setChatOrderId] = React.useState<string | null>(null);
+  const [pixModalOrder, setPixModalOrder] = React.useState<StoredOrder | null>(null);
+  const [copiedPix, setCopiedPix] = React.useState(false);
   const [floatingOpen, setFloatingOpen] = React.useState(false);
   const [unreadByOrder, setUnreadByOrder] = React.useState<Record<string, number>>({});
   const [requestedPushOrder, setRequestedPushOrder] = React.useState<RequestedPushOrder | null>(
@@ -669,8 +673,44 @@ export default function CardapioOrdersDrawer({
                           </div>
                         )}
 
+                        {state.phase === "payment_pending" && (
+                          <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-left">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <QrCode className="h-4 w-4 text-amber-400 shrink-0" />
+                                <span className="text-[11px] font-black text-amber-300">
+                                  Aguardando pagamento Pix
+                                </span>
+                              </div>
+                              {order.pagamento?.qr_code && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPixModalOrder(order)}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 px-2.5 py-1 text-[10px] font-black text-white shadow transition"
+                                >
+                                  <QrCode className="h-3 w-3" />
+                                  Pagar Pix
+                                </button>
+                              )}
+                            </div>
+                            <p className="mt-1 text-[10px] text-amber-200/80 leading-relaxed">
+                              O restaurante só começará o preparo após a confirmação do Pix.
+                            </p>
+                          </div>
+                        )}
+
                         <div className="mt-3 flex items-center justify-between border-t border-koma-border/60 pt-2.5">
                           <div className="flex flex-wrap items-center gap-2">
+                            {state.phase === "payment_pending" && order.pagamento?.qr_code && (
+                              <button
+                                type="button"
+                                onClick={() => setPixModalOrder(order)}
+                                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-3 py-1.5 text-[10px] font-black text-white shadow-sm transition"
+                              >
+                                <QrCode className="h-3.5 w-3.5" />
+                                Pagar Pix
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => {
@@ -820,6 +860,107 @@ export default function CardapioOrdersDrawer({
           )}
         </div>
       </div>
+
+      {pixModalOrder && pixModalOrder.pagamento?.qr_code && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm transition-opacity"
+          id="pix-payment-modal-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setPixModalOrder(null);
+              setCopiedPix(false);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl border border-koma-border bg-koma-card p-5 text-center shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Pagamento Pix do Pedido #${pixModalOrder.numero_pedido}`}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-koma-border/60">
+              <div className="flex items-center gap-2">
+                <div className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/15 text-emerald-400">
+                  <QrCode className="h-4 w-4" />
+                </div>
+                <div className="text-left">
+                  <h3 className="text-xs font-black text-white">
+                    Pagar Pedido #{pixModalOrder.numero_pedido}
+                  </h3>
+                  <span className="text-[10px] text-koma-muted">Pagamento via Pix</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPixModalOrder(null);
+                  setCopiedPix(false);
+                }}
+                className="grid h-8 w-8 place-items-center rounded-xl border border-koma-border text-koma-secondary hover:text-white"
+                aria-label="Fechar modal Pix"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="my-4">
+              <span className="text-xs font-bold text-koma-muted block">Valor total</span>
+              <span className="text-2xl font-black text-emerald-400 block mt-0.5">
+                {formatCurrency(pixModalOrder.total)}
+              </span>
+            </div>
+
+            {pixModalOrder.pagamento.qr_code_base64 && (
+              <div className="mx-auto my-3 flex justify-center">
+                <img
+                  className="h-48 w-48 rounded-2xl bg-white p-2.5 shadow-md"
+                  src={`data:image/png;base64,${pixModalOrder.pagamento.qr_code_base64}`}
+                  alt="QR Code Pix do pedido"
+                />
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                if (pixModalOrder?.pagamento?.qr_code) {
+                  void navigator.clipboard.writeText(pixModalOrder.pagamento.qr_code);
+                  setCopiedPix(true);
+                  setTimeout(() => setCopiedPix(false), 3000);
+                }
+              }}
+              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 text-xs font-black text-white shadow-lg transition"
+            >
+              {copiedPix ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  Código Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4" />
+                  Copiar código Pix
+                </>
+              )}
+            </button>
+
+            {pixModalOrder.pagamento.ticket_url && (
+              <a
+                href={pixModalOrder.pagamento.ticket_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 flex h-10 w-full items-center justify-center rounded-xl border border-koma-border text-xs font-bold text-koma-foreground hover:bg-koma-raised"
+              >
+                Abrir link do pagamento
+              </a>
+            )}
+
+            <p className="mt-3 text-[10px] leading-relaxed text-koma-muted">
+              A confirmação do pagamento é automática. Assim que confirmado, o restaurante iniciará o preparo do seu pedido.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

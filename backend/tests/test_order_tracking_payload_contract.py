@@ -14,3 +14,12 @@ def test_tracking_payload_keeps_closed_at_compatible_in_conversation_block():
 
     assert '"conversa": {' in source
     assert source.count('"closed_at": closed_at_iso') >= 2
+
+
+def test_tracking_payload_exposes_pagamento_and_resolves_online_payment_state():
+    source = Path("backend/app/routes/order_tracking.py").read_text(encoding="utf-8")
+
+    assert "def _resolve_tracking_payment_state(" in source
+    assert '"pagamento": pagamento_payload' in source
+    assert "payment_pending=payment_pending" in source
+    assert "payment_failed=payment_failed" in source

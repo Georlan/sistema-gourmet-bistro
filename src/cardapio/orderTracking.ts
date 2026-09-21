@@ -74,6 +74,15 @@ export interface StoredOrder {
   created_at?: string;
   tracking_token?: string;
   tracking_url?: string;
+  pagamento?: {
+    status?: string;
+    cobranca_online?: boolean;
+    metodo?: string;
+    qr_code?: string | null;
+    qr_code_base64?: string | null;
+    ticket_url?: string | null;
+    expira_em?: string | null;
+  };
 }
 
 const STATUS_ALIASES: Record<string, CanonicalOrderStatus> = {
@@ -273,6 +282,7 @@ function minimalPersistedOrder(order: StoredOrder, now = Date.now()): StoredOrde
     fechado: Boolean(order.fechado),
     created_at: order.created_at ? String(order.created_at) : undefined,
     tracking_token: trackingToken || undefined,
+    pagamento: order.pagamento ? { ...order.pagamento } : undefined,
   };
 }
 
@@ -453,6 +463,7 @@ export async function fetchOrderLiveStatus(
     fechado: isClosed,
     created_at: data.criado_em || order.created_at,
     itens: Array.isArray(data.itens) ? data.itens : order.itens,
+    pagamento: data.pagamento ?? order.pagamento,
   };
 }
 
