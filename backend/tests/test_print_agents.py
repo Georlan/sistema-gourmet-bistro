@@ -966,6 +966,33 @@ def test_print_monitor_reports_tenant_health_delays_and_spooler_state():
             idempotency_key="idemp:reference:2",
             created_at=now - datetime.timedelta(minutes=3),
         ))
+        db.add(PrintJob(
+            id="job-auto-origin-2",
+            restaurante_id=2,
+            document_type="producao",
+            destination="BAR",
+            source_type="lancamento",
+            source_id="l-auto-origin-2",
+            payload_text="PEDIDO #50\nVIA: BAR",
+            status="pending",
+            idempotency_key="universal:auto:l-auto-origin-2:bar",
+            created_at=now - datetime.timedelta(seconds=30),
+        ))
+        db.add(PrintJob(
+            id="job-manual-reprint-origin-2",
+            restaurante_id=2,
+            document_type="producao",
+            destination="COZINHA",
+            source_type="reimpressao",
+            source_id="c-manual-reprint-2",
+            payload_text="PEDIDO #43\nREIMPRESSÃO",
+            status="pending",
+            idempotency_key=(
+                "universal:reimpressao:c-manual-reprint-2:"
+                "cozinha:20260920202952000000"
+            ),
+            created_at=now - datetime.timedelta(seconds=20),
+        ))
         db.commit()
     finally:
         db.close()
@@ -983,6 +1010,22 @@ def test_print_monitor_reports_tenant_health_delays_and_spooler_state():
     assert payload["summary"]["active_agents"] == 2
     assert payload["summary"]["delayed"] == 1
     assert payload["physical_completion_tracking"] is False
+    assert payload["summary"]["queue_origins"]["automatic"] >= 1
+    assert payload["summary"]["queue_origins"]["manual_reprint"] >= 1
+
+    queue_jobs = {job["id"]: job for job in payload["queue_jobs"]}
+    assert queue_jobs["job-auto-origin-2"]["origin_kind"] == "automatic"
+    assert queue_jobs["job-auto-origin-2"]["origin_label"] == "Automática"
+    assert queue_jobs["job-auto-origin-2"]["is_reprint"] is False
+    assert (
+        queue_jobs["job-manual-reprint-origin-2"]["origin_kind"]
+        == "manual_reprint"
+    )
+    assert (
+        queue_jobs["job-manual-reprint-origin-2"]["origin_label"]
+        == "Reimpressão manual"
+    )
+    assert queue_jobs["job-manual-reprint-origin-2"]["is_reprint"] is True
 
     agent_ids = {agent["agent_id"] for agent in payload["agents"]}
     assert agent_ids == {"desktop-caixa-2", "desktop-antigo-2"}

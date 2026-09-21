@@ -109,6 +109,26 @@ def _field(job, name: str):
     return getattr(job, name)
 
 
+def _print_job_origin(job) -> dict[str, str]:
+    source_type = str(_field(job, "source_type") or "").strip().casefold()
+    idempotency_key = str(_field(job, "idempotency_key") or "").strip().casefold()
+
+    if (
+        source_type == "reimpressao"
+        or idempotency_key.startswith("reprint:")
+        or idempotency_key.startswith("universal:reimpressao:")
+    ):
+        return {"kind": "manual_reprint", "label": "Reimpressão manual"}
+    if idempotency_key.startswith("universal:auto:"):
+        return {"kind": "automatic", "label": "Automática"}
+    if (
+        source_type.startswith("teste")
+        or idempotency_key.startswith("inject:teste")
+    ):
+        return {"kind": "test", "label": "Teste"}
+    return {"kind": "manual", "label": "Manual"}
+
+
 def _queue_latency_ms(
     created_at: Optional[datetime.datetime],
     claimed_at: datetime.datetime,
@@ -924,6 +944,31 @@ def get_print_monitor(
         .all()
     )
     status_counts = {job_status: count for job_status, count in status_rows}
+    unresolved_jobs_for_origin = (
+        db.query(
+            PrintJob.source_type,
+            PrintJob.idempotency_key,
+        )
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.status.in_(UNRESOLVED_JOB_STATUSES),
+        )
+        .all()
+    )
+    queue_origins = {
+        "automatic": 0,
+        "manual": 0,
+        "manual_reprint": 0,
+        "test": 0,
+    }
+    for source_type, idempotency_key in unresolved_jobs_for_origin:
+        origin = _print_job_origin(
+            {
+                "source_type": source_type,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        queue_origins[origin["kind"]] += 1
     failed_today = (
         db.query(func.count(PrintJob.id))
         .filter(
@@ -1070,6 +1115,7 @@ def get_print_monitor(
         )
         accepted_by_spooler = job.status == "printed"
         reference = _print_job_reference(job)
+        origin = _print_job_origin(job)
 
         return {
                 "id": job.id,
@@ -1077,6 +1123,8 @@ def get_print_monitor(
                 "destination": job.destination,
                 "source_type": job.source_type,
                 "source_id": job.source_id,
+                "origin_kind": origin["kind"],
+                "origin_label": origin["label"],
                 "reference": reference["label"],
                 "order_number": reference["order_number"],
                 "table_number": reference["table_number"],
@@ -1104,7 +1152,7 @@ def get_print_monitor(
                 "printed_at": printed_at.isoformat() if printed_at else None,
                 "age_seconds": age_seconds,
                 "delayed": is_delayed,
-                "is_reprint": str(job.idempotency_key).startswith("reprint:"),
+                "is_reprint": origin["kind"] == "manual_reprint",
                 "can_reprint": job.status in {
                     "printed",
                     "spooler_accepted",
@@ -1156,6 +1204,7 @@ def get_print_monitor(
                 agent["ready_printer_count"]
                 for agent in agent_payload
             ),
+            "queue_origins": queue_origins,
             "printer_ready": any(
                 agent["printer_ready"]
                 for agent in agent_payload
@@ -1214,6 +1263,8 @@ def list_print_simulator_sources(
                 "destination": job.destination,
                 "source_type": job.source_type,
                 "source_id": job.source_id,
+                "origin_kind": _print_job_origin(job)["kind"],
+                "origin_label": _print_job_origin(job)["label"],
                 "status": job.status,
                 "created_at": (
                     _as_utc(job.created_at).isoformat()
@@ -1384,6 +1435,8 @@ def get_print_simulator_source(
         "destination": job.destination,
         "source_type": job.source_type,
         "source_id": job.source_id,
+        "origin_kind": _print_job_origin(job)["kind"],
+        "origin_label": _print_job_origin(job)["label"],
         "status": job.status,
         "payload_text": job.payload_text,
         "created_at": created_at.isoformat() if created_at else None,

@@ -73,3 +73,11 @@ test("automatic simulator observes new jobs without becoming the print queue aut
   assert.match(page, /Modo sombra: não faz claim, não altera o status do PrintJob/);
   assert.match(page, /2026\.09\.20\.2/);
 });
+
+
+test("simulator surfaces print origin instead of hiding reprints among normal jobs", () => {
+  assert.match(routes, /"origin_kind": _print_job_origin\(job\)\["kind"\]/);
+  assert.match(routes, /"origin_label": _print_job_origin\(job\)\["label"\]/);
+  assert.match(page, /Origem da impressão/);
+  assert.match(page, /item\.origin_label \|\| item\.source_type/);
+});
