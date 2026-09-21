@@ -202,10 +202,15 @@ async def importar_xml(
         insumo_id = f"ins-{rest_id}-{slugify(desc)}"
 
         # Search existing Insumo
-        insumo = db.query(Insumo).filter(
-            Insumo.id == insumo_id,
-            Insumo.restaurante_id == rest_id
-        ).first()
+        insumo = (
+            db.query(Insumo)
+            .filter(
+                Insumo.id == insumo_id,
+                Insumo.restaurante_id == rest_id,
+            )
+            .with_for_update()
+            .first()
+        )
 
         if not insumo:
             insumo = Insumo(
@@ -537,7 +542,12 @@ def ajustar_insumo(
 ):
     check_caixa_permission(current_user)
     rest_id = require_tenant_id()
-    insumo = db.query(Insumo).filter_by(id=insumo_id, restaurante_id=rest_id).first()
+    insumo = (
+        db.query(Insumo)
+        .filter_by(id=insumo_id, restaurante_id=rest_id)
+        .with_for_update()
+        .first()
+    )
     if not insumo:
         raise HTTPException(status_code=404, detail="Insumo não encontrado.")
         
@@ -689,7 +699,12 @@ def create_entrada_manual(
                 raise HTTPException(status_code=400, detail=f"Custo unitário inválido para o insumo {item_in.insumo_id}.")
 
             # Busca insumo existente ou cria inline
-            insumo = db.query(Insumo).filter_by(id=item_in.insumo_id, restaurante_id=rest_id).first()
+            insumo = (
+                db.query(Insumo)
+                .filter_by(id=item_in.insumo_id, restaurante_id=rest_id)
+                .with_for_update()
+                .first()
+            )
             if not insumo and item_in.insumo_nome:
                 ins_id = slugify(item_in.insumo_nome) if not item_in.insumo_id else item_in.insumo_id
                 insumo = Insumo(
@@ -840,7 +855,12 @@ def create_movimentacao(
     if not data.motivo or not data.motivo.strip():
         raise HTTPException(status_code=400, detail="O motivo da movimentação é obrigatório.")
 
-    insumo = db.query(Insumo).filter_by(id=data.insumo_id, restaurante_id=rest_id).first()
+    insumo = (
+        db.query(Insumo)
+        .filter_by(id=data.insumo_id, restaurante_id=rest_id)
+        .with_for_update()
+        .first()
+    )
     if not insumo:
         raise HTTPException(status_code=404, detail="Insumo não encontrado.")
 

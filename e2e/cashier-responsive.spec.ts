@@ -342,11 +342,23 @@ test('Relatórios preservam uma leitura responsiva sem consultas legadas duplica
   expect(requests.filter(path => path === '/relatorios/visao-geral')).toHaveLength(1);
   expect(requests.filter(path => path === '/garcons/relatorio')).toHaveLength(0);
 
-  await page.getByRole('button', { name: 'Financeiro', exact: true }).click();
+  const reportsSubnav = page.locator('.cashier-subnav');
+  await expect(reportsSubnav.getByRole('button')).toHaveCount(4);
+
+  const visibleSidebar = page.locator('.cashier-sidebar:visible');
+  if (await visibleSidebar.isVisible()) {
+    const reportShortcuts = visibleSidebar.getByLabel('Atalhos de Relatórios');
+    for (const label of ['Visão Geral', 'Financeiro', 'Produtos', 'Equipe']) {
+      await expect(reportShortcuts.getByRole('button', { name: label, exact: true })).toBeVisible();
+      await expect(reportsSubnav.getByRole('button', { name: label, exact: true })).toBeVisible();
+    }
+  }
+
+  await reportsSubnav.getByRole('button', { name: 'Financeiro', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Recebimentos por meio' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: 'Produtos', exact: true }).click();
+  await reportsSubnav.getByRole('button', { name: 'Produtos', exact: true }).click();
   await expect(page.getByText('Consumo não é faturamento.', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Unidades', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Valor', exact: true })).toBeVisible();
@@ -354,7 +366,7 @@ test('Relatórios preservam uma leitura responsiva sem consultas legadas duplica
   expect(requests.filter(path => path === '/produtos/categorias')).toHaveLength(0);
   await expectNoHorizontalOverflow(page);
 
-  await page.locator('#relatorios-subtab-equipe').click();
+  await reportsSubnav.getByRole('button', { name: 'Equipe', exact: true }).click();
   await expect(page.getByText('Desempenho por Funcionário', { exact: true })).toBeVisible();
   await expect(page.getByText('Valor atribuído', { exact: true })).toBeVisible();
   expect(requests.filter(path => path === '/garcons/relatorio')).toHaveLength(0);
@@ -388,7 +400,17 @@ test('Equipe concentra convites e acessos sem funções ou consultas duplicadas'
   await expectNoHorizontalOverflow(page);
   await inviteDialog.getByRole('button', { name: 'Fechar convite' }).click();
 
-  await page.getByRole('button', { name: 'Funções e acessos', exact: true }).click();
+  const teamSubnav = page.locator('.cashier-subnav');
+  await expect(teamSubnav.getByRole('button')).toHaveCount(2);
+
+  const visibleSidebar = page.locator('.cashier-sidebar:visible');
+  if (await visibleSidebar.isVisible()) {
+    const teamShortcuts = visibleSidebar.getByLabel('Atalhos de Equipe');
+    await expect(teamShortcuts.getByRole('button', { name: 'Pessoas', exact: true })).toBeVisible();
+    await expect(teamShortcuts.getByRole('button', { name: 'Funções e acessos', exact: true })).toBeVisible();
+  }
+
+  await teamSubnav.getByRole('button', { name: 'Funções e acessos', exact: true }).click();
   await expect(page.getByLabel('Funções e acessos')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Operador de caixa', exact: true })).toHaveCount(1);
   await expect(page.getByRole('heading', { name: 'Operador Caixa', exact: true })).toHaveCount(0);

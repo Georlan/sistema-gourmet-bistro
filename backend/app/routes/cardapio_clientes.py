@@ -75,7 +75,40 @@ def _profile(cliente: Cliente) -> CustomerProfileResponse:
         endereco=cliente.endereco or "",
         saldo_pontos=int(cliente.saldo_pontos or 0),
         saldo_cashback=float(cliente.saldo_cashback or 0),
+        telefone_verificado=cliente.telefone_verificado_em is not None,
     )
+
+
+def _consume_otp_challenge(
+    db: Session,
+    *,
+    restaurante_id: int,
+    telefone: str,
+    codigo: str,
+) -> OtpChallenge:
+    telefone_hash = hash_phone_for_otp(restaurante_id, telefone)
+    challenge = db.query(OtpChallenge).filter(
+        OtpChallenge.restaurante_id == restaurante_id,
+        OtpChallenge.telefone_hash == telefone_hash,
+    ).with_for_update().first()
+    now = _utcnow()
+    if challenge is None:
+        raise HTTPException(status_code=400, detail=_GENERIC_OTP_ERROR)
+    expires_at = challenge.expira_em
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+    max_attempts = max(1, settings.CUSTOMER_OTP_MAX_ATTEMPTS)
+    if expires_at <= now or int(challenge.tentativas or 0) >= max_attempts:
+        db.delete(challenge)
+        db.commit()
+        raise HTTPException(status_code=400, detail=_GENERIC_OTP_ERROR)
+    if not otp_matches(restaurante_id, telefone, codigo, challenge.otp_hash):
+        challenge.tentativas = int(challenge.tentativas or 0) + 1
+        if challenge.tentativas >= max_attempts:
+            db.delete(challenge)
+        db.commit()
+        raise HTTPException(status_code=400, detail=_GENERIC_OTP_ERROR)
+    return challenge
 
 
 from ..services.public_orders import (
@@ -179,36 +212,41 @@ def register_customer(
                 detail="Já existe uma conta com este e-mail neste restaurante. Faça login.",
             )
 
-        # 2. Verificar se já existe cliente com este telefone
-        # REGRA DE SEGURANÇA (Anti-Account Takeover):
-        # NUNCA adotar cliente guest silenciosamente apenas pelo telefone.
-        # Sem canal verificado (SMS/WhatsApp OTP), conhecer o telefone de outra pessoa
-        # NÃO dá direito a reivindicar histórico/saldo antigo.
+        challenge = _consume_otp_challenge(
+            db,
+            restaurante_id=restaurante_id,
+            telefone=telefone_normalizado,
+            codigo=payload.codigo,
+        )
+
+        # Com o telefone confirmado, o cadastro pode adotar com segurança a ficha
+        # criada anteriormente pelo Caixa e manter histórico, pontos e cashback.
         cliente_por_tel = db.query(Cliente).filter(
             Cliente.restaurante_id == restaurante_id,
             Cliente.telefone == telefone_normalizado,
         ).with_for_update().first()
 
-        if cliente_por_tel is not None:
+        if cliente_por_tel is not None and (cliente_por_tel.email or cliente_por_tel.senha_hash):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Este telefone já está associado a um cadastro neste restaurante.",
+                detail="Este telefone já possui uma conta neste restaurante. Faça login.",
             )
 
         import uuid
         senha_hasheada = get_password_hash(payload.senha)
-        cliente = Cliente(
-            id=str(uuid.uuid4()),
-            restaurante_id=restaurante_id,
-            telefone=telefone_normalizado,
-            nome=nome_normalizado,
-            email=email_normalizado,
-            senha_hash=senha_hasheada,
-            endereco=(payload.endereco or "").strip() or None,
-            saldo_pontos=0,
-            saldo_cashback=0.0,
+        created = cliente_por_tel is None
+        cliente = cliente_por_tel or Cliente(
+            id=str(uuid.uuid4()), restaurante_id=restaurante_id,
+            telefone=telefone_normalizado, saldo_pontos=0, saldo_cashback=0.0,
         )
-        db.add(cliente)
+        cliente.nome = nome_normalizado
+        cliente.email = email_normalizado
+        cliente.senha_hash = senha_hasheada
+        cliente.endereco = (payload.endereco or "").strip() or cliente.endereco
+        cliente.telefone_verificado_em = _utcnow()
+        if created:
+            db.add(cliente)
+        db.delete(challenge)
         db.commit()
         db.refresh(cliente)
 
@@ -221,7 +259,7 @@ def register_customer(
             {
                 "event": "customers_updated",
                 "detail": {
-                    "action": "created",
+                    "action": "created" if created else "updated",
                     "cliente_id": cliente.id,
                 },
             },
@@ -437,41 +475,12 @@ def verify_customer_otp(
             window_seconds=settings.CUSTOMER_OTP_WINDOW_SECONDS,
         )
 
-        telefone_hash = hash_phone_for_otp(restaurante_id, payload.telefone)
-        challenge = db.query(OtpChallenge).filter(
-            OtpChallenge.restaurante_id == restaurante_id,
-            OtpChallenge.telefone_hash == telefone_hash,
-        ).with_for_update().first()
-        now = _utcnow()
-
-        if challenge is None:
-            raise HTTPException(status_code=400, detail=_GENERIC_OTP_ERROR)
-
-        expires_at = challenge.expira_em
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
-        if expires_at <= now:
-            db.delete(challenge)
-            db.commit()
-            raise HTTPException(status_code=400, detail=_GENERIC_OTP_ERROR)
-
-        max_attempts = max(1, settings.CUSTOMER_OTP_MAX_ATTEMPTS)
-        if int(challenge.tentativas or 0) >= max_attempts:
-            db.delete(challenge)
-            db.commit()
-            raise HTTPException(status_code=400, detail=_GENERIC_OTP_ERROR)
-
-        if not otp_matches(
-            restaurante_id,
-            payload.telefone,
-            payload.codigo,
-            challenge.otp_hash,
-        ):
-            challenge.tentativas = int(challenge.tentativas or 0) + 1
-            if challenge.tentativas >= max_attempts:
-                db.delete(challenge)
-            db.commit()
-            raise HTTPException(status_code=400, detail=_GENERIC_OTP_ERROR)
+        challenge = _consume_otp_challenge(
+            db,
+            restaurante_id=restaurante_id,
+            telefone=payload.telefone,
+            codigo=payload.codigo,
+        )
 
         cliente = buscar_cliente_por_telefone(
             db,
@@ -487,6 +496,7 @@ def verify_customer_otp(
             nome=payload.nome,
             endereco=payload.endereco,
         )
+        cliente.telefone_verificado_em = _utcnow()
         db.delete(challenge)
         db.commit()
         db.refresh(cliente)

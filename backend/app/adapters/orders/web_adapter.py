@@ -54,6 +54,7 @@ from ...models import (
 from ...schemas import CardapioPedidoCreate
 from ...services.clientes import normalizar_telefone_cliente
 from ...services.online_order_policy import evaluate_online_order_policy
+from ...services.operational_modes import mode_is_allowed
 from ...services.online_payments import (
     OnlinePaymentConfigurationError,
     OnlinePaymentService,
@@ -244,10 +245,10 @@ class CardapioWebAdapter:
     ) -> dict[str, Any]:
         """Processa a requisição pública HTTP de criação de pedido pelo Cardápio Web."""
         modalidade = payload.tipo_pedido.strip().lower()
-        if modalidade not in {"delivery", "retirada"}:
+        if modalidade not in {"delivery", "retirada", "consumo_local"}:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="tipo_pedido deve ser 'delivery' ou 'retirada'.",
+                detail="tipo_pedido deve ser 'delivery', 'retirada' ou 'consumo_local'.",
             )
 
         address_snapshot = (
@@ -316,8 +317,12 @@ class CardapioWebAdapter:
                 detail="Pagamento no atendimento aceita dinheiro, cartão de crédito ou cartão de débito.",
             )
 
-        tipo_comanda = "Retirada" if modalidade == "retirada" else "Delivery"
-        endereco_comanda = None if modalidade == "retirada" else endereco_entrega
+        tipo_comanda = {
+            "delivery": "Delivery",
+            "retirada": "Retirada",
+            "consumo_local": "Consumo no Local",
+        }[modalidade]
+        endereco_comanda = endereco_entrega if modalidade == "delivery" else None
 
         rest_id = resolve_restaurant_id(str(payload.restaurante_id), None, db)
         token_context = current_restaurante_id.set(rest_id)
@@ -398,6 +403,11 @@ class CardapioWebAdapter:
             configuracao = db.query(ConfiguracaoRestaurante).filter(
                 ConfiguracaoRestaurante.restaurante_id == rest_id,
             ).first()
+            if not mode_is_allowed(configuracao, modalidade):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Esta modalidade de pedido está desativada para o restaurante.",
+                )
             policy_now = None
             if normalized_schedule is not None:
                 operational_tz = get_operational_now().tzinfo
@@ -458,7 +468,11 @@ class CardapioWebAdapter:
                 payment_account = OnlinePaymentService.active_account(db, rest_id)
                 payment_shift = OnlinePaymentService.open_shift(db, rest_id)
 
-            fulfillment = FulfillmentType.DELIVERY if modalidade == "delivery" else FulfillmentType.PICKUP
+            fulfillment = {
+                "delivery": FulfillmentType.DELIVERY,
+                "retirada": FulfillmentType.PICKUP,
+                "consumo_local": FulfillmentType.DINE_IN,
+            }[modalidade]
             items_input = tuple(
                 OrderItemInput(
                     product_id=item.produto_id,
@@ -534,6 +548,18 @@ class CardapioWebAdapter:
                     db.commit()
             except Exception:
                 logger.exception("Falha ao criar conversa para o pedido %s", order_dto.comanda_id)
+
+            if not online_payment and not is_scheduled and comanda is not None:
+                from ...services.online_order_control import auto_accept_online_order_if_enabled
+
+                if auto_accept_online_order_if_enabled(
+                    db,
+                    restaurante_id=rest_id,
+                    comanda=comanda,
+                    operator_user_id=garcom.id,
+                ):
+                    db.commit()
+                    db.refresh(comanda)
 
             if is_scheduled:
                 if comanda is None or normalized_schedule is None:

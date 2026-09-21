@@ -4,7 +4,7 @@ from sqlalchemy import event
 
 from app.database import SessionLocal, engine
 from app.models import Categoria, Comanda, Item, Lancamento, Produto, Restaurante, Usuario
-from app.order_chat_models import OrderConversation
+from app.order_chat_models import OrderConversation, OrderMessage
 from app.routes import order_tracking
 
 
@@ -136,3 +136,59 @@ def test_order_tracking_query_count_does_not_scale_with_items(monkeypatch):
     assert [item["nome"] for item in payload["itens"]] == [f"Produto {index}" for index in range(8)]
     assert len(optimized_selects) == 4
     assert len(optimized_selects) < len(legacy_selects)
+
+    with SessionLocal() as db:
+        db.add(
+            OrderConversation(
+                id=conversation_id,
+                restaurante_id=restaurante_id,
+                pedido_id=comanda_id,
+                public_access_token_hash=uuid.uuid4().hex * 2,
+            )
+        )
+        db.flush()
+        db.add_all([
+            OrderMessage(
+                id=f"msg-track-perf-{suffix}-1",
+                restaurante_id=restaurante_id,
+                conversation_id=conversation_id,
+                pedido_id=comanda_id,
+                sender_type="staff",
+                sender_user_id=user_id,
+                    body="Mensagem 1",
+                    feed_seq=1,
+            ),
+            OrderMessage(
+                id=f"msg-track-perf-{suffix}-2",
+                restaurante_id=restaurante_id,
+                conversation_id=conversation_id,
+                pedido_id=comanda_id,
+                sender_type="staff",
+                sender_user_id=user_id,
+                    body="Mensagem 2",
+                    feed_seq=2,
+            ),
+            OrderMessage(
+                id=f"msg-track-perf-{suffix}-3",
+                restaurante_id=restaurante_id,
+                conversation_id=conversation_id,
+                pedido_id=comanda_id,
+                sender_type="customer",
+                    body="Resposta do cliente",
+                    feed_seq=3,
+            ),
+        ])
+        db.commit()
+
+    def summary_projection():
+        with SessionLocal() as db:
+            return order_tracking.consultar_resumo_pedido_por_token("opaque-test-token", db)
+
+    summary, summary_selects = _capture_selects(summary_projection)
+
+    assert summary["id"] == comanda_id
+    assert summary["status"] == "pendente"
+    assert summary["conversa"]["unread_count"] == 2
+    assert "itens" not in summary
+    assert "restaurante" not in summary
+    assert len(summary_selects) <= 2

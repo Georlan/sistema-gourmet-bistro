@@ -179,3 +179,94 @@ seus contratos específicos quando a semântica é diferente.
 
 Antes de merge: backend completo, frontend, browser matrix e PostgreSQL conforme
 `AGENTS.md`; sem bypass de branch protection e sem testes destrutivos em produção.
+
+
+## Simulador térmico local
+
+A bancada em `/ferramentas/simulador-impressao` é uma ferramenta interna de engenharia da plataforma,
+não uma funcionalidade do restaurante. Ela exige Super Admin + Modo Suporte auditado no tenant alvo
+e não cria um segundo sistema de impressão.
+
+Fluxo:
+
+```text
+PrintJob persistido (backend, tenant-scoped, somente leitura)
+        |
+        v
+página do simulador
+        |
+        | localhost 127.0.0.1:17654-17664
+        v
+Kôma Print Agent
+        |
+        | build_escpos_payload(..., encoding="cp860")
+        v
+bytes ESC/POS exatos
+        |
+        +--> parser visual / trace de comandos
+        |
+        X    CUPS / Spooler / /dev/usb/lp* NÃO são chamados
+```
+
+A ponte local reaproveita a faixa de portas já autorizada pelo CSP para o
+pareamento do agente. Ela permanece bindada exclusivamente em
+`127.0.0.1` e aceita as origens oficiais do KÔMA e os hosts loopback usados
+em desenvolvimento/teste.
+
+A simulação usa o mesmo `build_escpos_payload` dos adapters Linux/Windows.
+Por isso, tamanho RAW, encoding CP860, inicialização, feed e corte são
+observações do pipeline real. O parser visual reconhece somente os comandos
+que o KÔMA emite hoje (fonte A/B, negrito, altura dupla, espaçamento, quebra de
+linha e corte). Sequências desconhecidas são exibidas como desconhecidas em
+vez de receberem uma interpretação presumida.
+
+### Tempos
+
+A tela pode exibir somente medidas observáveis:
+
+- `agent_render_ms`: `perf_counter_ns` em torno da construção ESC/POS e do
+  parser local;
+- roundtrip navegador ↔ agente: medido pelo navegador na requisição localhost;
+- fila backend → claim: apenas quando o PrintJob real possui
+  `created_at` e `claimed_at`.
+
+Não existe estimativa automática de velocidade do motor, avanço físico ou
+guilhotina. O agente atual confirma aceitação pelo spooler, não a saída física
+do papel; portanto `physical_print_time_ms` permanece `null`.
+
+### Fonte dos dados
+
+`GET /api/print-agents/simulator/sources` lista metadados recentes e
+`GET /api/print-agents/simulator/sources/{job_id}` entrega o `payload_text`
+exato somente quando a requisição vem de um Modo Suporte auditado da plataforma.
+Um admin/gerente/caixa normal do restaurante recebe `403`. Ambas são leituras
+tenant-scoped: não reservam, reabrem, reimprimem nem alteram o job. A ferramenta
+não é anunciada nem linkada nas configurações operacionais do restaurante.
+
+O campo de edição manual da página é uma entrada técnica. Regras de pedido,
+mesa, delivery, preço e roteamento continuam pertencendo ao Core de Impressão;
+o frontend não possui formatter térmico próprio.
+
+
+### Simulação automática em modo sombra
+
+A bancada interna pode ativar uma observação automática do fluxo real de
+PrintJobs. Esse modo existe para medir o caminho **criação do PrintJob → wake-up
+do agente → leitura do backend → conversão ESC/POS**, sem confundir a medição com
+uma impressão física.
+
+O contrato é deliberadamente não autoritativo:
+
+- a ativação começa com um cursor do relógio do backend e ignora backlog anterior;
+- o feed do agente é autenticado pelo token tenant-scoped já usado pelo Print Agent;
+- cada item observado mantém o `PrintJob` intacto: sem claim, sem `agent_id`,
+  sem `claimed_at`, sem `printed_at` e sem mudança de status;
+- o daemon reaproveita `simulate_payload` e, portanto, o mesmo
+  `build_escpos_payload(..., encoding="cp860")` da impressão real;
+- nenhum adapter físico, CUPS, Spooler ou `/dev/usb/lp*` é chamado;
+- a bancada mostra separadamente latência observada no servidor, roundtrip do
+  feed e tempo de renderização; um valor agregado é identificado apenas como
+  limite superior conservador, nunca como tempo físico.
+
+O modo sombra é opt-in e local. Reiniciar o agente o deixa desligado novamente.
+A fila PostgreSQL continua sendo a única autoridade da impressão física.

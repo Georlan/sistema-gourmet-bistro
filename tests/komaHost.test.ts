@@ -66,6 +66,18 @@ describe('resolveKomaHost', () => {
     }
   });
 
+  it('honors explicit operational views on localhost and preview hosts', () => {
+    for (const host of ['localhost', '127.0.0.1', 'preview-652.pages.dev']) {
+      const caixa = resolveKomaHost(host, '/', '?view=caixa');
+      assert.equal(caixa.kind, 'generic');
+      assert.equal(caixa.surface, 'caixa');
+
+      const garcom = resolveKomaHost(host, '/', '?view=garcom');
+      assert.equal(garcom.kind, 'generic');
+      assert.equal(garcom.surface, 'garcom');
+    }
+  });
+
   it('keeps explicit public routes sovereign on Cloudflare previews', () => {
     const resolved = resolveKomaHost('preview-652.pages.dev', '/c/pordosol', '');
     assert.equal(resolved.kind, 'tenant');
@@ -77,6 +89,31 @@ describe('resolveKomaHost', () => {
     const resolved = resolveKomaHost('central.komafood.com.br', '/', '');
     assert.equal(resolved.kind, 'central');
     assert.equal(resolved.surface, 'central');
+  });
+
+
+  it('keeps arbitrary caixa query on central inside Super Admin', () => {
+    const resolved = resolveKomaHost('central.komafood.com.br', '/', '?view=caixa');
+    assert.equal(resolved.kind, 'central');
+    assert.equal(resolved.surface, 'central');
+  });
+
+  it('honors only the audited support bridge on central', () => {
+    const resolved = resolveKomaHost(
+      'central.komafood.com.br',
+      '/',
+      '?view=caixa&support=1',
+    );
+    assert.equal(resolved.kind, 'generic');
+    assert.equal(resolved.surface, 'caixa');
+    assert.equal(resolved.tenantSlug, null);
+
+    const wrongSupportFlag = resolveKomaHost(
+      'central.komafood.com.br',
+      '/',
+      '?view=caixa&support=0',
+    );
+    assert.equal(wrongSupportFlag.surface, 'central');
   });
 
   it('resolves /super-admin path to central', () => {

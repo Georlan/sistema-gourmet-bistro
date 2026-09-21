@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { BrandConfig } from '../src/cardapio/CardapioTypes';
 import { getAvailablePaymentMethods, getCheckoutPaymentMethods, getPaymentSelectionError, resolvePaymentSelection, PAYMENT_UNAVAILABLE_MESSAGE, PAYMENT_RESELECT_MESSAGE, type PaymentMethod } from '../src/cardapio/paymentMethods';
 import CardapioPaymentOptions from '../src/cardapio/components/CardapioPaymentOptions';
+import CardapioPaymentSummary from '../src/cardapio/components/CardapioPaymentSummary';
 register('./helpers/staticAssetsLoader.mjs', import.meta.url);
 Object.defineProperty(globalThis, 'window', {
   configurable: true,
@@ -106,6 +107,15 @@ test('sacola com dinheiro mostra troco e loja vazia não habilita revisão', () 
     assert.match(html, /<button[^>]*disabled=""[^>]*id="btn-confirm-order"/);
     assert.doesNotMatch(html, />Pix<|>Dinheiro<|>Cartão de crédito<|>Cartão de débito</);
   }
+});
+
+test('consumo local descreve pagamento presencial sem chamar de retirada', () => {
+  const html = renderToStaticMarkup(createElement(CardapioPaymentSummary, {
+    method: 'dinheiro',
+    fulfillment: 'dine_in',
+  }));
+  assert.match(html, /no atendimento/);
+  assert.doesNotMatch(html, /na retirada|na entrega/);
 });
 
 test('revisão aceita débito configurado e não mostra troco indevido', () => {

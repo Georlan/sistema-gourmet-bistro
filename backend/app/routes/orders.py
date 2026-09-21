@@ -26,13 +26,16 @@ from ..config import settings
 from ..database import current_restaurante_id, get_db, require_tenant_id
 from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
 from ..domain.orders.types import (
+    FulfillmentType,
     OrderStatus,
+    normalize_to_fulfillment,
     normalize_to_order_status,
     to_legacy_order_status,
 )
-from ..models import Comanda, Motoboy, Restaurante, Usuario
+from ..models import Comanda, Lancamento, Motoboy, Restaurante, Usuario
 from ..schemas import ComandaResponse
 from ..security import motoboy_rate_limiter, require_permission, verify_motoboy_token
+from ..services.inventory import alertas_estoque_dos_itens
 from ..services.notificacoes import agendar_notificacao_whatsapp_task
 from ..services.shifts import require_open_cash_shift
 from ..websocket_manager import manager
@@ -147,13 +150,30 @@ def _is_delivery(comanda: Comanda) -> bool:
     return (comanda.tipo or "").strip().casefold() in {"delivery", "entrega"}
 
 
-def _is_delivery_or_pickup(comanda: Comanda) -> bool:
-    return (comanda.tipo or "").strip().casefold() in {
-        "delivery",
-        "entrega",
-        "retirada",
-        "viagem",
+def _has_digital_order_lifecycle(comanda: Comanda) -> bool:
+    """Diz se a comanda usa o ciclo operacional digital legado.
+
+    DELIVERY/PICKUP sempre usam esse ciclo. DINE_IN usa quando veio do
+    Cardápio Online ou quando o Caixa o criou sem mesa com ciclo operacional
+    explícito, preservando o salão tradicional.
+    """
+    fulfillment = normalize_to_fulfillment(comanda.tipo)
+    if fulfillment in {FulfillmentType.DELIVERY, FulfillmentType.PICKUP}:
+        return True
+    if fulfillment != FulfillmentType.DINE_IN:
+        return False
+
+    origins = {
+        str(lancamento.origem or "").strip().casefold()
+        for lancamento in (comanda.lancamentos or [])
     }
+    if "cardapio" in origins:
+        return True
+
+    # Consumo local criado pelo Caixa sem mesa recebe explicitamente um ciclo
+    # operacional (producao -> pronto -> concluido). Se uma mesa for associada
+    # depois, o status permanece e o pedido continua nessa mesma fila.
+    return "caixa" in origins and bool(str(comanda.delivery_status or "").strip())
 
 
 def _normalize_legacy_progress_target(comanda: Comanda, target: str) -> str:
@@ -192,10 +212,10 @@ def atualizar_status_delivery(
     )
     if not comanda:
         raise HTTPException(status_code=404, detail="Comanda não encontrada")
-    if not _is_delivery_or_pickup(comanda):
+    if not _has_digital_order_lifecycle(comanda):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A comanda informada não é um pedido de delivery ou retirada.",
+            detail="A comanda informada não possui ciclo operacional digital.",
         )
 
     target = _normalize_legacy_progress_target(comanda, target)
@@ -234,6 +254,12 @@ def atualizar_status_delivery(
     if not transition.changed:
         return transition.comanda
 
+    estoque_alertas = (
+        alertas_estoque_dos_itens(db, comanda.itens or [])
+        if target_status == OrderStatus.PREPARING
+        else []
+    )
+
     if transition.first_accept:
         try:
             PrintingApplicationService.request_print(
@@ -270,7 +296,9 @@ def atualizar_status_delivery(
         {"event": "tables_updated"},
         rid,
     )
-    return comanda
+    response_payload = ComandaResponse.model_validate(comanda).model_dump()
+    response_payload["estoque_alertas"] = estoque_alertas
+    return response_payload
 
 
 @router.put("/{comanda_id}/delivery/entregador", response_model=ComandaResponse)

@@ -30,3 +30,16 @@ test('cashier salon projection is imported from its canonical owner without comp
     assert.doesNotMatch(content, obsoleteImport);
   }
 });
+
+
+test('team self-service keeps invite creation and uses explicit access lifecycle', () => {
+  const team = source('src/components/caixa/team/CashierTeam.tsx');
+  const people = source('src/components/equipe/EquipePessoasTab.tsx');
+  assert.match(team, /method: 'PATCH'/);
+  assert.match(team, /Desativar este acesso\?/);
+  assert.match(team, /onUpdateAccess=\{handleUpdateAccess\}/);
+  assert.match(people, /INVITABLE_ROLES/);
+  assert.match(people, /handleAccessUpdate/);
+  assert.match(people, />Desativar</);
+  assert.doesNotMatch(people, />Remover</);
+});

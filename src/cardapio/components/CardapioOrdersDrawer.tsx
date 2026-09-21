@@ -17,7 +17,9 @@ import {
 import clsx from "clsx";
 import { API_BASE_URL } from "../../config/api";
 import {
+  OrderStateContract,
   StoredOrder,
+  orderFulfillmentLabel,
   resolveOrderState,
 } from "../orderTracking";
 import CardapioOrderChatPanel from "./CardapioOrderChatPanel";
@@ -30,6 +32,13 @@ interface CardapioOrdersDrawerProps {
   onSelectOrder: (orderId: string) => void;
   onRefresh: () => void;
   onRemoveOrder: (orderId: string) => void;
+  onRealtimeStatus?: (
+    orderId: string,
+    status: string,
+    closedAt: string | null,
+    tipo?: string,
+    state?: OrderStateContract,
+  ) => void;
   isRefreshing?: boolean;
   hasFloatingCart?: boolean;
 }
@@ -73,6 +82,7 @@ export default function CardapioOrdersDrawer({
   onSelectOrder,
   onRefresh,
   onRemoveOrder,
+  onRealtimeStatus,
   isRefreshing = false,
   hasFloatingCart = false,
 }: CardapioOrdersDrawerProps) {
@@ -82,15 +92,21 @@ export default function CardapioOrdersDrawer({
   const [requestedPushOrder, setRequestedPushOrder] = React.useState<RequestedPushOrder | null>(
     () => requestedPushOrderFromHash(),
   );
+  const chatOrderIdRef = React.useRef<string | null>(null);
+  const seenRealtimeMessageIdsRef = React.useRef<Set<string>>(new Set());
   const drawerOpen = isOpen || floatingOpen;
 
   const ordersWithChat = React.useMemo(
     () => orders.filter((order) => Boolean(resolveTrackingToken(order))),
     [orders],
   );
+  const activeChatOrders = React.useMemo(
+    () => ordersWithChat.filter((order) => !resolveOrderState(order).terminal),
+    [ordersWithChat],
+  );
 
   const refreshUnreadCounts = React.useCallback(async () => {
-    const targets = ordersWithChat
+    const targets = activeChatOrders
       .map((order) => ({ order, token: resolveTrackingToken(order) }))
       .filter((item): item is { order: StoredOrder; token: string } => Boolean(item.token));
 
@@ -103,11 +119,26 @@ export default function CardapioOrdersDrawer({
       targets.map(async ({ order, token }) => {
         try {
           const response = await fetch(
-            `${API_BASE_URL}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}`,
+            `${API_BASE_URL}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}/summary`,
             { cache: "no-store" },
           );
           if (!response.ok) return null;
-          const payload = await response.json() as { conversa?: { unread_count?: number } };
+          const payload = await response.json() as {
+            status?: string;
+            tipo?: string;
+            state?: OrderStateContract;
+            closed_at?: string | null;
+            conversa?: { unread_count?: number };
+          };
+          if (payload.status) {
+            onRealtimeStatus?.(
+              order.id,
+              payload.status,
+              payload.closed_at || null,
+              payload.tipo,
+              payload.state,
+            );
+          }
           return [order.id, Math.max(0, Number(payload?.conversa?.unread_count || 0))] as const;
         } catch {
           return null;
@@ -121,26 +152,124 @@ export default function CardapioOrdersDrawer({
         if (result) next[result[0]] = result[1];
       });
       Object.keys(next).forEach((orderId) => {
-        if (!ordersWithChat.some((order) => order.id === orderId)) delete next[orderId];
+        if (!activeChatOrders.some((order) => order.id === orderId)) delete next[orderId];
       });
       return next;
     });
-  }, [ordersWithChat]);
+  }, [activeChatOrders, onRealtimeStatus]);
+
+  React.useEffect(() => {
+    chatOrderIdRef.current = chatOrderId;
+  }, [chatOrderId]);
 
   React.useEffect(() => {
     void refreshUnreadCounts();
-    const interval = window.setInterval(() => {
-      if (!document.hidden) void refreshUnreadCounts();
-    }, 6000);
+    if (activeChatOrders.length === 0) return;
+
+    const sources: EventSource[] = [];
+    const healthyOrders = new Set<string>();
+    const openedOrders = new Set<string>();
+    let fallbackInterval: number | null = null;
+
+    const stopFallback = () => {
+      if (fallbackInterval !== null) {
+        window.clearInterval(fallbackInterval);
+        fallbackInterval = null;
+      }
+    };
+    const startFallback = () => {
+      if (fallbackInterval !== null) return;
+      fallbackInterval = window.setInterval(() => {
+        if (!document.hidden) void refreshUnreadCounts();
+      }, 30000);
+    };
+    const markHealthy = (orderId: string) => {
+      healthyOrders.add(orderId);
+      if (healthyOrders.size === activeChatOrders.length) stopFallback();
+    };
+    const markDegraded = (orderId: string) => {
+      healthyOrders.delete(orderId);
+      startFallback();
+    };
+
+    activeChatOrders.forEach((order) => {
+      const token = resolveTrackingToken(order);
+      if (!token) return;
+      const source = new EventSource(
+        `${API_BASE_URL}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}/events`,
+      );
+      sources.push(source);
+
+      source.onopen = () => {
+        const isReconnect = openedOrders.has(order.id);
+        openedOrders.add(order.id);
+        markHealthy(order.id);
+        if (isReconnect) void refreshUnreadCounts();
+      };
+      source.onerror = () => markDegraded(order.id);
+      source.addEventListener("connected", () => { void refreshUnreadCounts(); });
+
+      source.addEventListener("message", (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data) as { id?: unknown; sender_type?: unknown };
+          const messageId = typeof data.id === "string" ? data.id : null;
+          if (messageId) {
+            if (seenRealtimeMessageIdsRef.current.has(messageId)) return;
+            seenRealtimeMessageIdsRef.current.add(messageId);
+            if (seenRealtimeMessageIdsRef.current.size > 200) {
+              const oldest = seenRealtimeMessageIdsRef.current.values().next().value;
+              if (oldest) seenRealtimeMessageIdsRef.current.delete(oldest);
+            }
+          }
+          if (data.sender_type === "staff" && chatOrderIdRef.current !== order.id) {
+            setUnreadByOrder((current) => ({
+              ...current,
+              [order.id]: Math.max(0, Number(current[order.id] || 0)) + 1,
+            }));
+          }
+        } catch {
+          markDegraded(order.id);
+        }
+      });
+
+      source.addEventListener("read_update", (event) => {
+        try {
+          const data = JSON.parse((event as MessageEvent).data) as { reader?: unknown };
+          if (data.reader === "customer") {
+            setUnreadByOrder((current) => ({ ...current, [order.id]: 0 }));
+          }
+        } catch {
+          markDegraded(order.id);
+        }
+      });
+
+      source.addEventListener("status", (event) => {
+        try {
+          const data = JSON.parse((event as MessageEvent).data) as { status?: unknown; closed_at?: unknown };
+          const status = typeof data.status === "string" ? data.status : "";
+          if (!status) return;
+          onRealtimeStatus?.(
+            order.id,
+            status,
+            typeof data.closed_at === "string" ? data.closed_at : null,
+          );
+        } catch {
+          markDegraded(order.id);
+        }
+      });
+    });
+
     const onVisibilityChange = () => {
-      if (!document.hidden) void refreshUnreadCounts();
+      if (!document.hidden && fallbackInterval !== null) void refreshUnreadCounts();
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
-      window.clearInterval(interval);
+      sources.forEach((source) => source.close());
+      stopFallback();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [refreshUnreadCounts]);
+  }, [activeChatOrders, onRealtimeStatus, refreshUnreadCounts]);
 
   React.useEffect(() => {
     if (chatOrderId && !orders.some((order) => order.id === chatOrderId)) {
@@ -154,8 +283,8 @@ export default function CardapioOrdersDrawer({
   );
 
   const totalUnread = React.useMemo(
-    () => ordersWithChat.reduce((total, order) => total + unreadFor(order.id), 0),
-    [ordersWithChat, unreadFor],
+    () => activeChatOrders.reduce((total, order) => total + unreadFor(order.id), 0),
+    [activeChatOrders, unreadFor],
   );
 
   const sortUnreadFirst = React.useCallback(
@@ -282,9 +411,9 @@ export default function CardapioOrdersDrawer({
     return (
       <div
         className={clsx(
-          "fixed right-4 z-40 sm:right-6 transition-all duration-300 pointer-events-auto",
+          "fixed right-4 z-40 sm:right-6 transition-[opacity,transform] duration-300 pointer-events-auto",
           hasFloatingCart
-            ? "bottom-24"
+            ? "bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))]"
             : "bottom-5 sm:bottom-6 pb-[env(safe-area-inset-bottom,0px)]"
         )}
         id="floating-order-chat-container"
@@ -484,7 +613,7 @@ export default function CardapioOrdersDrawer({
                                   Pedido #{order.numero_pedido}
                                 </span>
                                 <span className="rounded-md bg-koma-raised px-1.5 py-0.5 text-[9px] font-bold text-koma-secondary">
-                                  {isDelivery ? "Delivery" : "Retirada"}
+                                  {orderFulfillmentLabel(state.fulfillment)}
                                 </span>
                                 {unread > 0 && (
                                   <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[8px] font-black uppercase tracking-wide text-black animate-pulse">
@@ -623,7 +752,7 @@ export default function CardapioOrdersDrawer({
                                   Pedido #{order.numero_pedido}
                                 </span>
                                 <span className="rounded-md bg-koma-raised px-1.5 py-0.5 text-[8px] font-bold text-koma-muted">
-                                  {isDelivery ? "Delivery" : "Retirada"}
+                                  {orderFulfillmentLabel(state.fulfillment)}
                                 </span>
                                 {unread > 0 && (
                                   <span className="rounded-full bg-emerald-400 px-1.5 py-0.5 text-[8px] font-black text-black">

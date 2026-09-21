@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
+from app.financial_models import PagamentoAlocacao
 from app.security import create_access_token
 from app.models import (
     Restaurante,
@@ -656,5 +657,360 @@ def test_pagamento_da_mesa_distribui_entre_multiplas_comandas():
         )
         assert comandas_abertas == 0
         assert total_pagamentos == 42.0
+    finally:
+        db.close()
+
+def test_stale_item_selection_returns_conflict_without_financial_effect():
+    """Uma confirmação stale nunca é reinterpretada para o subconjunto restante."""
+    headers = get_pdv_auth_headers()
+
+    opened = client.post(
+        "/caixa/turno/abrir",
+        headers=headers,
+        json={"saldo_inicial": 0},
+    )
+    assert opened.status_code == 201, opened.text
+
+    db = SessionLocal()
+    try:
+        comanda = Comanda(
+            id="cmd-stale-items-777",
+            restaurante_id=777,
+            mesa_id=None,
+            garcom_id="usr_pdv_777",
+            tipo="Retirada",
+            numero_pedido=77731,
+            delivery_status="pronto",
+            status_comanda="aguardando_pagamento",
+            valor_pago=0.0,
+            fechada=False,
+        )
+        lancamento = Lancamento(
+            id="lan-stale-items-777",
+            restaurante_id=777,
+            comanda_id=comanda.id,
+            garcom_id="usr_pdv_777",
+            status="pronto",
+        )
+        items = [
+            Item(
+                id=f"item-stale-{suffix}",
+                restaurante_id=777,
+                comanda_id=comanda.id,
+                lancamento_id=lancamento.id,
+                produto_id="prod-pdv-777",
+                preco_unit=42.0,
+                status="pronto",
+                pago=False,
+            )
+            for suffix in ("a", "b", "c")
+        ]
+        db.add_all([comanda, lancamento, *items])
+        db.commit()
+    finally:
+        db.close()
+
+    first = client.post(
+        "/caixa/comandas/cmd-stale-items-777/pagar",
+        headers=headers,
+        json={
+            "valor": 42.0,
+            "metodo": "pix",
+            "item_ids": ["item-stale-a"],
+            "idempotency_key": "stale-item-first-777",
+        },
+    )
+    assert first.status_code == 201, first.text
+
+    stale = client.post(
+        "/caixa/comandas/cmd-stale-items-777/pagar",
+        headers=headers,
+        json={
+            "valor": 84.0,
+            "metodo": "cartao_credito",
+            "item_ids": ["item-stale-a", "item-stale-b"],
+            "idempotency_key": "stale-item-second-777",
+        },
+    )
+    assert stale.status_code == 409, stale.text
+    assert stale.json()["detail"].startswith("A conta mudou enquanto você recebia.")
+
+    db = SessionLocal()
+    try:
+        persisted = db.query(Comanda).filter(
+            Comanda.restaurante_id == 777,
+            Comanda.id == "cmd-stale-items-777",
+        ).one()
+        item_state = {
+            item.id: item.pago
+            for item in db.query(Item).filter(
+                Item.restaurante_id == 777,
+                Item.comanda_id == persisted.id,
+            ).all()
+        }
+        payments = db.query(Pagamento).filter(
+            Pagamento.restaurante_id == 777,
+            Pagamento.comanda_id == persisted.id,
+        ).all()
+
+        assert float(persisted.valor_pago) == 42.0
+        assert persisted.fechada is False
+        assert item_state == {
+            "item-stale-a": True,
+            "item-stale-b": False,
+            "item-stale-c": False,
+        }
+        assert len(payments) == 1
+        assert float(payments[0].valor) == 42.0
+        assert payments[0].item_ids == ["item-stale-a"]
+    finally:
+        db.close()
+
+
+def test_table_item_selection_returns_conflict_when_an_item_was_paid_elsewhere():
+    headers = get_pdv_auth_headers()
+    assert client.post(
+        "/caixa/turno/abrir",
+        headers=headers,
+        json={"saldo_inicial": 0},
+    ).status_code == 201
+
+    criar_comanda_mesa(
+        comanda_id="cmd-table-stale-a",
+        item_id="item-table-stale-a",
+        valor=15.0,
+        numero_pedido=77741,
+    )
+    criar_comanda_mesa(
+        comanda_id="cmd-table-stale-b",
+        item_id="item-table-stale-b",
+        valor=27.0,
+        numero_pedido=77742,
+    )
+
+    first = client.post(
+        "/caixa/mesas/7/pagar",
+        headers=headers,
+        json={
+            "valor": 15.0,
+            "metodo": "pix",
+            "incluir_taxa_servico": False,
+            "item_ids": ["item-table-stale-a"],
+            "idempotency_key": "table-stale-first-777",
+        },
+    )
+    assert first.status_code == 201, first.text
+
+    stale = client.post(
+        "/caixa/mesas/7/pagar",
+        headers=headers,
+        json={
+            "valor": 42.0,
+            "metodo": "cartao_credito",
+            "incluir_taxa_servico": False,
+            "item_ids": ["item-table-stale-a", "item-table-stale-b"],
+            "idempotency_key": "table-stale-second-777",
+        },
+    )
+    assert stale.status_code == 409, stale.text
+    assert stale.json()["detail"].startswith("A conta mudou enquanto você recebia.")
+
+    db = SessionLocal()
+    try:
+        second_item = db.query(Item).filter(Item.id == "item-table-stale-b").one()
+        payments = db.query(Pagamento).filter(
+            Pagamento.restaurante_id == 777,
+        ).all()
+        assert second_item.pago is False
+        assert len(payments) == 1
+        assert float(payments[0].valor) == 15.0
+    finally:
+        db.close()
+
+
+
+def test_table_item_payment_allocates_value_only_to_selected_items_command():
+    """Selecionar item da segunda comanda não pode creditar a primeira por FIFO."""
+    headers = get_pdv_auth_headers()
+    assert client.post(
+        "/caixa/turno/abrir",
+        headers=headers,
+        json={"saldo_inicial": 0},
+    ).status_code == 201
+
+    criar_comanda_mesa(
+        comanda_id="cmd-scope-owner-a",
+        item_id="item-scope-owner-a",
+        valor=15.0,
+        numero_pedido=77745,
+    )
+    criar_comanda_mesa(
+        comanda_id="cmd-scope-owner-b",
+        item_id="item-scope-owner-b",
+        valor=27.0,
+        numero_pedido=77746,
+    )
+
+    paid = client.post(
+        "/caixa/mesas/7/pagar",
+        headers=headers,
+        json={
+            "valor": 27.0,
+            "metodo": "pix",
+            "incluir_taxa_servico": False,
+            "item_ids": ["item-scope-owner-b"],
+            "idempotency_key": "scope-owner-second-command-777",
+        },
+    )
+    assert paid.status_code == 201, paid.text
+    assert paid.json()["item_ids"] == ["item-scope-owner-b"]
+
+    db = SessionLocal()
+    try:
+        first = db.query(Comanda).filter(Comanda.id == "cmd-scope-owner-a").one()
+        second = db.query(Comanda).filter(Comanda.id == "cmd-scope-owner-b").one()
+        item_a = db.query(Item).filter(Item.id == "item-scope-owner-a").one()
+        item_b = db.query(Item).filter(Item.id == "item-scope-owner-b").one()
+        allocation = db.query(PagamentoAlocacao).filter(
+            PagamentoAlocacao.pagamento_id == paid.json()["id"]
+        ).one()
+
+        assert float(first.valor_pago) == 0.0
+        assert float(second.valor_pago) == 27.0
+        assert item_a.pago is False
+        assert item_b.pago is True
+        assert allocation.comanda_id == second.id
+        assert float(allocation.valor) == 27.0
+    finally:
+        db.close()
+
+def test_pending_cash_item_scope_is_preserved_and_revalidated_on_approval():
+    headers_caixa = get_pdv_auth_headers()
+    assert client.post(
+        "/caixa/turno/abrir",
+        headers=headers_caixa,
+        json={"saldo_inicial": 0},
+    ).status_code == 201
+
+    db = SessionLocal()
+    try:
+        garcom = db.query(Usuario).filter(Usuario.id == "usr_garcom_items_777").first()
+        if garcom is None:
+            garcom = Usuario(
+                id="usr_garcom_items_777",
+                nome="Garçom Itens",
+                usuario="garcom-items-777",
+                email="garcom-items-777@koma.test",
+                senha_hash="$2b$12$dummyhashforcaixatestsuite",
+                role="garcom",
+                cargo="garcom",
+                status="ativo",
+                restaurante_id=777,
+            )
+            db.add(garcom)
+
+        comanda = Comanda(
+            id="cmd-pending-items-777",
+            restaurante_id=777,
+            mesa_id=None,
+            garcom_id="usr_garcom_items_777",
+            tipo="Retirada",
+            numero_pedido=77751,
+            delivery_status="pronto",
+            status_comanda="aguardando_pagamento",
+            valor_pago=0.0,
+            fechada=False,
+        )
+        lancamento = Lancamento(
+            id="lan-pending-items-777",
+            restaurante_id=777,
+            comanda_id=comanda.id,
+            garcom_id="usr_garcom_items_777",
+            status="pronto",
+        )
+        db.add_all([
+            garcom if garcom not in db else garcom,
+            comanda,
+            lancamento,
+            Item(
+                id="item-pending-a",
+                restaurante_id=777,
+                comanda_id=comanda.id,
+                lancamento_id=lancamento.id,
+                produto_id="prod-pdv-777",
+                preco_unit=42.0,
+                status="pronto",
+                pago=False,
+            ),
+            Item(
+                id="item-pending-b",
+                restaurante_id=777,
+                comanda_id=comanda.id,
+                lancamento_id=lancamento.id,
+                produto_id="prod-pdv-777",
+                preco_unit=42.0,
+                status="pronto",
+                pago=False,
+            ),
+        ])
+        db.commit()
+    finally:
+        db.close()
+
+    garcom_token = create_access_token(
+        subject="usr_garcom_items_777",
+        restaurante_id=777,
+        role="garcom",
+    )
+    headers_garcom = {"Authorization": f"Bearer {garcom_token}"}
+
+    pending = client.post(
+        "/caixa/comandas/cmd-pending-items-777/pagar",
+        headers=headers_garcom,
+        json={
+            "valor": 42.0,
+            "metodo": "dinheiro",
+            "item_ids": ["item-pending-a"],
+            "idempotency_key": "pending-item-scope-777",
+        },
+    )
+    assert pending.status_code == 201, pending.text
+    assert pending.json()["status"] == "pendente"
+    assert pending.json()["item_ids"] == ["item-pending-a"]
+
+    concurrent = client.post(
+        "/caixa/comandas/cmd-pending-items-777/pagar",
+        headers=headers_caixa,
+        json={
+            "valor": 42.0,
+            "metodo": "pix",
+            "item_ids": ["item-pending-a"],
+            "idempotency_key": "pending-item-winner-777",
+        },
+    )
+    assert concurrent.status_code == 201, concurrent.text
+
+    approval = client.post(
+        f"/caixa/pagamentos/{pending.json()['id']}/aprovar",
+        headers=headers_caixa,
+    )
+    assert approval.status_code == 409, approval.text
+    assert approval.json()["detail"].startswith("A conta mudou enquanto você recebia.")
+
+    db = SessionLocal()
+    try:
+        stale_payment = db.query(Pagamento).filter(
+            Pagamento.id == pending.json()["id"]
+        ).one()
+        command = db.query(Comanda).filter(
+            Comanda.id == "cmd-pending-items-777"
+        ).one()
+        item_a = db.query(Item).filter(Item.id == "item-pending-a").one()
+        item_b = db.query(Item).filter(Item.id == "item-pending-b").one()
+        assert stale_payment.status == "pendente"
+        assert stale_payment.item_ids == ["item-pending-a"]
+        assert float(command.valor_pago) == 42.0
+        assert item_a.pago is True
+        assert item_b.pago is False
     finally:
         db.close()

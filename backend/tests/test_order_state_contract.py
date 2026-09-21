@@ -78,6 +78,20 @@ def test_conversation_closed_disables_chat_even_while_order_is_active():
     assert state["can_chat"] is False
 
 
+def test_failed_pix_is_terminal_and_does_not_remain_in_progress():
+    failed = build_order_state_contract(
+        "pendente",
+        "Retirada",
+        payment_failed=True,
+    )
+
+    assert failed["phase"] == "payment_failed"
+    assert failed["label"] == "Pagamento não gerado"
+    assert failed["terminal"] is True
+    assert failed["rejected"] is True
+    assert failed["can_chat"] is False
+
+
 def test_closed_tracking_forces_completed_without_overwriting_rejection():
     class Order:
         delivery_status = "producao"

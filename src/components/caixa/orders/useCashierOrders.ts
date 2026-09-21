@@ -5,7 +5,12 @@ import type { Order } from '../../../types';
 import { formatBackendTime } from '../../../utils/dateTime';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 import type { CashierTableCard, DeliveryOrderView } from '../orders/cashierWorkspaceTypes';
-import { projectDeliveryOrdersFromSharedSnapshot, readActiveDeliveryStatus } from './deliveryOrderProjection';
+import {
+  projectDeliveryOrdersFromSharedSnapshot,
+  readActiveDeliveryStatus,
+  readDigitalOrderFulfillment,
+  reconcileDeliveryOrderAfterStatus,
+} from './deliveryOrderProjection';
 
 type Props = Pick<
   CaixaPanelProps,
@@ -85,7 +90,8 @@ export function useCashierOrders({
     );
     const normalizedType = String(order?.modalidade || order?.tipo || '').toLowerCase();
     const isDigitalOrder =
-      Number(order?.mesaId || 0) <= 0 || ['delivery', 'entrega', 'retirada'].includes(normalizedType);
+      Number(order?.mesaId || 0) <= 0
+      || ['delivery', 'entrega', 'retirada', 'pickup', 'dine_in', 'consumo_local', 'consumo no local'].includes(normalizedType);
     const comandaIds = new Set(
       activeItems.map((item: any) => String(item.comandaId || order.comandaId || order.id)).filter(Boolean)
     );
@@ -243,6 +249,9 @@ export function useCashierOrders({
   const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>(
     () => projectDeliveryOrdersFromSharedSnapshot(orders)
   );
+  const [deliveryOrdersLoadState, setDeliveryOrdersLoadState] = useState<'loading' | 'loaded' | 'error'>(
+    () => projectDeliveryOrdersFromSharedSnapshot(orders).length > 0 ? 'loaded' : 'loading'
+  );
   const deliveryOrdersRequestRef = useRef(0);
   const pendingDeliveryMutationRef = useRef<Record<string, PendingDeliveryMutation>>({});
   const deliveryMutationSequenceRef = useRef(0);
@@ -378,6 +387,8 @@ export function useCashierOrders({
     const itensStr = Object.entries(itemCounts).map(([name, qty]) => `${qty}x ${name}`).join(' + ') || 'Nenhum item';
     const subtotal = activeItems.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
     const total = subtotal + (c.delivery_taxa || 0);
+    const amountPaid = Math.max(0, Number(c.valor_pago) || 0);
+    const amountDue = Math.max(0, total - amountPaid);
     const parsedTime = formatBackendTime(c.criado_em);
     const criadoEm = parsedTime === '—' ? '12:00' : parsedTime;
 
@@ -399,8 +410,8 @@ export function useCashierOrders({
     else if (c.identificador && c.identificador.toLowerCase().includes('whats')) canal = 'whats';
 
     const rawAddress = String(c.delivery_endereco || '').trim();
-    const rawType = String(c.tipo || '').toLowerCase();
-    const modalidade = rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress) ? 'retirada' : 'delivery';
+    const modalidade = readDigitalOrderFulfillment(c.tipo, rawAddress);
+    if (!modalidade) return null;
     const isQuickSale =
       modalidade === 'retirada' &&
       (origemOperacional === 'smartpos' ||
@@ -413,6 +424,8 @@ export function useCashierOrders({
       itens: itensStr,
       detailItems: activeItems,
       total,
+      amountPaid,
+      amountDue,
       canal,
       origemOperacional,
       isQuickSale,
@@ -421,10 +434,14 @@ export function useCashierOrders({
       pago: activeItems.length > 0 && activeItems.every((it: any) => Boolean(it.pago)),
       status,
       endereco: modalidade === 'delivery' ? rawAddress : '',
+      paymentMethod: c.delivery_forma_pagamento || null,
+      changeFor: c.delivery_troco_para == null ? null : Number(c.delivery_troco_para),
       motoboyId: c.motoboy_id ?? null,
       criadoEm,
       created_at: c.criado_em,
       numeroPedido: c.numero_pedido,
+      mesaId: Number(c.mesa_id || 0) || null,
+      garcomNome: c.criada_por?.nome || c.garcom?.nome || '',
     };
   };
 
@@ -449,6 +466,7 @@ export function useCashierOrders({
 
   const fetchDeliveryOrders = async () => {
     const requestId = ++deliveryOrdersRequestRef.current;
+    setDeliveryOrdersLoadState((current) => current === 'loaded' ? current : 'loading');
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders });
       if (res.ok) {
@@ -466,11 +484,66 @@ export function useCashierOrders({
               ...(pendingCourier ? { motoboyId: pendingCourier.value ? Number(pendingCourier.value) : null } : {}),
             };
           });
-        setDeliveryOrders(mapped);
+        setDeliveryOrders((current) => {
+          const previousById = new Map(current.map((order) => [String(order.id), order]));
+          return mapped.map((order: DeliveryOrderView) => {
+            const previous = previousById.get(String(order.id));
+            return previous ? reconcileDeliveryOrderAfterStatus(previous, order) : order;
+          });
+        });
         syncSelectedMotoboysFromServer(mapped);
+        setDeliveryOrdersLoadState('loaded');
+      } else if (requestId === deliveryOrdersRequestRef.current) {
+        setDeliveryOrdersLoadState('error');
       }
     } catch (err) {
-      if (requestId === deliveryOrdersRequestRef.current) console.error('Error fetching delivery orders', err);
+      if (requestId === deliveryOrdersRequestRef.current) {
+        setDeliveryOrdersLoadState('error');
+        console.error('Error fetching delivery orders', err);
+      }
+    }
+  };
+
+  const handleAssociateTableToOrder = async (order: any) => {
+    const targetMesaId = Number(tableTransferTargetId || 0);
+    const primaryComandaId = String(order?.comandaId || order?.id || '');
+    const normalizedType = String(order?.modalidade || order?.tipo || '').trim().toLowerCase();
+    const isDelivery = ['delivery', 'entrega'].includes(normalizedType);
+    if (!targetMesaId || !primaryComandaId || isTransferringTable) return false;
+    if (isDelivery) {
+      showToast('Pedidos de delivery não podem ser associados a uma mesa.', 'error');
+      return false;
+    }
+
+    setIsTransferringTable(true);
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/comandas/${encodeURIComponent(primaryComandaId)}/associar-mesa/${targetMesaId}`,
+        {
+          method: 'POST',
+          headers: authHeaders,
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail || 'Não foi possível associar o pedido à mesa.');
+
+      setDeliveryOrders((current) =>
+        current.map((candidate) =>
+          String(candidate.id) === primaryComandaId
+            ? { ...candidate, mesaId: targetMesaId }
+            : candidate,
+        ),
+      );
+      setSelectedKanbanOrder(null);
+      setTableTransferTargetId('');
+      await Promise.allSettled([onRefreshOrders(), fetchDeliveryOrders()]);
+      showToast(`Pedido associado à Mesa ${targetMesaId}.`, 'success');
+      return true;
+    } catch (error: any) {
+      showToast(error?.message || 'Não foi possível associar o pedido à mesa.', 'error');
+      return false;
+    } finally {
+      setIsTransferringTable(false);
     }
   };
 
@@ -652,7 +725,7 @@ export function useCashierOrders({
     setSelectedKanbanOrder({
       id: order.id,
       comandaId: order.id,
-      mesaId: 0,
+      mesaId: order.mesaId || 0,
       quantidadeItens: order.quantidadeItens,
       identificador: order.cliente,
       itens: itemsMapped,
@@ -665,8 +738,11 @@ export function useCashierOrders({
       canal: order.canal,
       telefone: order.telefone,
       endereco: order.endereco,
+      paymentMethod: order.paymentMethod,
+      changeFor: order.changeFor,
       criadoEm: order.criadoEm,
       created_at: order.created_at,
+      garcomNome: order.garcomNome,
       lancamentoId: itemsMapped.find((item: any) => item.lancamentoId)?.lancamentoId,
       courierAssignment: order.modalidade === 'delivery'
         ? {
@@ -733,12 +809,31 @@ export function useCashierOrders({
           const projected = mapComandaToDeliveryView(updatedComanda);
           setDeliveryOrders((current) =>
             projected
-              ? current.map((order) => (String(order.id) === orderKey ? projected : order))
+              ? current.map((order) => (
+                  String(order.id) === orderKey
+                    ? reconcileDeliveryOrderAfterStatus(order, projected)
+                    : order
+                ))
               : current.filter((order) => String(order.id) !== orderKey)
           );
         }
         void Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
-        showToast('Status atualizado e cliente avisado automaticamente!');
+        const estoqueAlertas = Array.isArray(updatedComanda?.estoque_alertas)
+          ? updatedComanda.estoque_alertas
+          : [];
+        if (statusNovo === 'producao' && estoqueAlertas.length > 0) {
+          const nomes = estoqueAlertas
+            .map((alerta: any) => String(alerta?.nome || '').trim())
+            .filter(Boolean);
+          const resumo = nomes.slice(0, 2).join(', ') || 'ingrediente';
+          const restantes = nomes.length > 2 ? ` +${nomes.length - 2}` : '';
+          showToast(
+            `Pedido aceito. Estoque indica ${resumo}${restantes} zerado/negativo; confira o estoque físico.`,
+            'info',
+          );
+        } else {
+          showToast('Status atualizado e cliente avisado automaticamente!');
+        }
         return true;
       }
 
@@ -998,6 +1093,7 @@ export function useCashierOrders({
     });
 
   const handleTransferSelectedKanbanTable = () => handleTransferTableFromSalon(selectedKanbanOrder);
+  const handleAssociateSelectedKanbanTable = () => handleAssociateTableToOrder(selectedKanbanOrder);
   const handleCancelSelectedKanbanConsumption = () =>
     selectedKanbanOrder.contextoSalao
       ? openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))
@@ -1035,6 +1131,7 @@ export function useCashierOrders({
     handleTransferTableFromSalon,
     getTableMovementContext,
     deliveryOrders,
+    deliveryOrdersLoadState,
     motoboys,
     motoboysLoadState,
     selectedMotoboys,
@@ -1068,6 +1165,7 @@ export function useCashierOrders({
     handlePrintSelectedKanbanValues,
     handleInspectSalonTable,
     handleTransferSelectedKanbanTable,
+    handleAssociateSelectedKanbanTable,
     handleCancelSelectedKanbanConsumption,
     handleCancelSelectedKanbanOrder,
   };

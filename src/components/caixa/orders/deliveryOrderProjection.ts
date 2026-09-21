@@ -1,8 +1,9 @@
 import type { Order } from '../../../types';
+import { getCashierOrderSlaData } from '../../../domain/cashierOrderProjection';
 import { formatBackendTime } from '../../../utils/dateTime';
 import type { DeliveryOrderView } from './cashierWorkspaceTypes';
 
-const ACTIVE_DELIVERY_STATUSES = new Set<DeliveryOrderView['status']>([
+const ACTIVE_DIGITAL_STATUSES = new Set<DeliveryOrderView['status']>([
   'pendente',
   'analise',
   'producao',
@@ -10,17 +11,36 @@ const ACTIVE_DELIVERY_STATUSES = new Set<DeliveryOrderView['status']>([
   'transito',
 ]);
 
-const DIGITAL_TYPES = new Set(['delivery', 'entrega', 'retirada']);
+const DELIVERY_TYPES = new Set(['delivery', 'entrega']);
+const PICKUP_TYPES = new Set(['retirada', 'pickup', 'viagem', 'balcao', 'balcão']);
+const DINE_IN_TYPES = new Set(['consumo no local', 'consumo_local', 'dine_in', 'mesa', 'local', 'salao', 'salão']);
 
-export function readActiveDeliveryStatus(raw: unknown): DeliveryOrderView['status'] | null {
+export function readActiveDigitalOrderStatus(raw: unknown): DeliveryOrderView['status'] | null {
   const status = String(raw || '').trim().toLowerCase() as DeliveryOrderView['status'];
-  return ACTIVE_DELIVERY_STATUSES.has(status) ? status : null;
+  return ACTIVE_DIGITAL_STATUSES.has(status) ? status : null;
+}
+
+/** Alias legado enquanto os consumidores migram do vocabulário "delivery". */
+export function readActiveDeliveryStatus(raw: unknown): DeliveryOrderView['status'] | null {
+  return readActiveDigitalOrderStatus(raw);
+}
+
+export function readDigitalOrderFulfillment(
+  rawType: unknown,
+  rawAddress: unknown = '',
+): DeliveryOrderView['modalidade'] | null {
+  const type = String(rawType || '').trim().toLowerCase();
+  if (DELIVERY_TYPES.has(type)) return 'delivery';
+  if (PICKUP_TYPES.has(type)) return 'retirada';
+  if (DINE_IN_TYPES.has(type)) return 'dine_in';
+  if (/retirada\s+no\s+balc[aã]o/i.test(String(rawAddress || ''))) return 'retirada';
+  return null;
 }
 
 function readActiveDigitalStatus(order: Order): DeliveryOrderView['status'] | null {
-  const type = String(order.tipo || '').trim().toLowerCase();
-  if (!DIGITAL_TYPES.has(type)) return null;
-  return readActiveDeliveryStatus(order.deliveryStatus);
+  const fulfillment = readDigitalOrderFulfillment(order.tipo, order.deliveryAddress);
+  if (!fulfillment) return null;
+  return readActiveDigitalOrderStatus(order.deliveryStatus);
 }
 
 export type CourierDeliveryBuckets = {
@@ -28,6 +48,92 @@ export type CourierDeliveryBuckets = {
   ready: DeliveryOrderView[];
   inTransit: DeliveryOrderView[];
 };
+
+export type PickupOrderBuckets = {
+  awaitingAcceptance: DeliveryOrderView[];
+  preparing: DeliveryOrderView[];
+  ready: DeliveryOrderView[];
+  late: DeliveryOrderView[];
+};
+
+/**
+ * A resposta de uma transição de status pode ser deliberadamente compacta e
+ * omitir os itens. Durante essa janela, mantém o último snapshot operacional
+ * completo em vez de exibir um pedido fictício de R$ 0,00. A leitura dedicada
+ * seguinte continua sendo a autoridade e substitui o card normalmente.
+ */
+const isPlaceholderCustomerName = (value: unknown) => {
+  const normalized = String(value || '').trim().toLocaleLowerCase('pt-BR');
+  return !normalized || normalized === 'cliente sem nome';
+};
+
+export function reconcileDeliveryOrderAfterStatus(
+  previous: DeliveryOrderView,
+  incoming: DeliveryOrderView,
+): DeliveryOrderView {
+  const identityAwareIncoming =
+    isPlaceholderCustomerName(incoming.cliente) && !isPlaceholderCustomerName(previous.cliente)
+      ? { ...incoming, cliente: previous.cliente }
+      : incoming;
+
+  if (identityAwareIncoming.quantidadeItens > 0 || previous.quantidadeItens <= 0) {
+    return identityAwareIncoming;
+  }
+
+  return {
+    ...identityAwareIncoming,
+    cliente: previous.cliente,
+    telefone: previous.telefone,
+    itens: previous.itens,
+    detailItems: previous.detailItems,
+    total: previous.total,
+    amountPaid: incoming.amountPaid ?? previous.amountPaid,
+    amountDue: incoming.amountDue ?? previous.amountDue,
+    quantidadeItens: previous.quantidadeItens,
+    pago: previous.pago,
+    endereco: previous.endereco,
+    canal: previous.canal,
+    origemOperacional: previous.origemOperacional,
+    isQuickSale: previous.isQuickSale,
+    modalidade: previous.modalidade,
+    paymentMethod: incoming.paymentMethod ?? previous.paymentMethod,
+    changeFor: incoming.changeFor ?? previous.changeFor,
+    numeroPedido: incoming.numeroPedido ?? previous.numeroPedido,
+    mesaId: incoming.mesaId ?? previous.mesaId,
+    garcomNome: incoming.garcomNome ?? previous.garcomNome,
+  };
+}
+
+export function bucketPickupOrders(
+  orders: readonly DeliveryOrderView[],
+  now: number,
+): PickupOrderBuckets {
+  const buckets: PickupOrderBuckets = {
+    awaitingAcceptance: [],
+    preparing: [],
+    ready: [],
+    late: [],
+  };
+
+  orders.forEach((order) => {
+    if (order.modalidade !== 'retirada' || order.isQuickSale) return;
+
+    if (getCashierOrderSlaData(order, now).minutes > 25) {
+      buckets.late.push(order);
+    }
+
+    if (order.status === 'pendente' || order.status === 'analise') {
+      buckets.awaitingAcceptance.push(order);
+    } else if (order.status === 'producao') {
+      buckets.preparing.push(order);
+    } else if (order.status === 'pronto' || order.status === 'transito') {
+      buckets.ready.push(order);
+    }
+  });
+
+  return buckets;
+}
+
 
 /**
  * A tela de Entregas é deliberadamente exclusiva de delivery. O Kanban geral
@@ -87,12 +193,12 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       .map(([name, qty]) => `${qty}x ${name}`)
       .join(' + ') || 'Nenhum item';
     const subtotal = activeItems.reduce((sum, item) => sum + (Number(item.preco) || 0), 0);
+    const total = subtotal + (Number(order.deliveryTax) || 0);
+    const amountPaid = Math.max(0, Number(order.valorPago) || 0);
+    const amountDue = Math.max(0, total - amountPaid);
     const rawAddress = String(order.deliveryAddress || '').trim();
-    const rawType = String(order.tipo || '').toLowerCase();
-    const modalidade: DeliveryOrderView['modalidade'] =
-      rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress)
-        ? 'retirada'
-        : 'delivery';
+    const modalidade = readDigitalOrderFulfillment(order.tipo, rawAddress);
+    if (!modalidade) return [];
 
     const origemOperacional = order.origemOperacional || 'desconhecida';
     let canal: DeliveryOrderView['canal'] = origemOperacional === 'smartpos' ? 'smartpos' : 'site';
@@ -114,7 +220,9 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       telefone: order.clientePhone || '',
       itens,
       detailItems: activeItems,
-      total: subtotal + (Number(order.deliveryTax) || 0),
+      total,
+      amountPaid,
+      amountDue,
       canal,
       origemOperacional,
       isQuickSale,
@@ -123,10 +231,14 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       pago: activeItems.length > 0 && activeItems.every((item) => Boolean(item.pago)),
       status,
       endereco: modalidade === 'delivery' ? rawAddress : '',
+      paymentMethod: order.paymentMethod ?? null,
+      changeFor: order.changeFor ?? null,
       motoboyId: order.motoboyId ?? null,
       criadoEm: parsedTime === '—' ? '12:00' : parsedTime,
       created_at: order.created_at,
       numeroPedido: order.numeroPedido,
+      mesaId: Number(order.mesaId || 0) || null,
+      garcomNome: order.garcomNome,
     }];
   });
 }

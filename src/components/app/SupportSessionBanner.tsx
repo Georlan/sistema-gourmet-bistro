@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Clock, LogOut, ShieldAlert } from "lucide-react";
+import { Clock, LogOut, Printer, ShieldAlert } from "lucide-react";
 import { clearOperatorSession, getOperatorAccessToken } from "../../utils/authSession";
 import {
   SUPPORT_SESSION_STORAGE_KEY,
@@ -119,6 +119,13 @@ export function SupportSessionBanner() {
       </div>
 
       <div className="flex items-center gap-3">
+        <a
+          href="/ferramentas/simulador-impressao"
+          className="flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1 font-bold text-amber-200 transition-colors hover:bg-amber-500/20"
+        >
+          <Printer className="h-3 w-3" />
+          Simulador térmico
+        </a>
         <span className="flex items-center gap-1 font-mono font-semibold text-amber-300">
           <Clock className="h-3.5 w-3.5 text-amber-400" />
           {remainingText || "Calculando..."}

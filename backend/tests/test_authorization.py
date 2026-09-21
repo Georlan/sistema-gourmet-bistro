@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, SessionLocal, get_db, current_restaurante_id
 from app.models import (
+    ActivityLog,
     Categoria,
     Comanda,
     ConfiguracaoRestaurante,
@@ -658,6 +659,72 @@ def test_direct_password_user_creation_endpoint_is_removed():
         )
 
 
+def test_caixa_can_change_non_admin_team_role_and_action_is_audited():
+    client = TestClient(app)
+    headers = get_auth_headers(client, "caixa", "123")
+
+    response = client.patch(
+        "/auth/usuarios/u-garcom",
+        headers=headers,
+        json={"cargo": "gerente"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["cargo"] == "gerente"
+    with TestingSessionLocal() as db:
+        saved = db.get(Usuario, "u-garcom")
+        assert saved is not None
+        assert saved.cargo == "gerente"
+        audit = db.query(ActivityLog).filter(
+            ActivityLog.restaurante_id == 1,
+            ActivityLog.action == "TEAM_ACCESS_UPDATE",
+        ).one()
+        assert audit.garcom_id == "u-caixa"
+        assert "user_id=u-garcom" in audit.details
+        assert "garcom->gerente" in audit.details
+
+
+def test_team_role_change_cannot_target_another_tenant():
+    client = TestClient(app)
+    headers = get_auth_headers(client, "admin", "123")
+
+    response = client.patch(
+        "/auth/usuarios/u-outro-tenant",
+        headers=headers,
+        json={"cargo": "gerente"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_team_self_service_cannot_promote_to_admin():
+    client = TestClient(app)
+    headers = get_auth_headers(client, "admin", "123")
+
+    response = client.patch(
+        "/auth/usuarios/u-garcom",
+        headers=headers,
+        json={"cargo": "admin"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_pending_invite_cannot_be_activated_by_team_admin():
+    client = TestClient(app)
+    headers = get_auth_headers(client, "admin", "123")
+
+    response = client.patch(
+        "/auth/usuarios/u-pendente",
+        headers=headers,
+        json={"status": "ativo"},
+    )
+
+    assert response.status_code == 409
+    with TestingSessionLocal() as db:
+        assert db.get(Usuario, "u-pendente").status == "pendente_ativacao"
+
+
 def test_admin_cannot_delete_self():
     client = TestClient(app)
     headers = get_auth_headers(client, "admin", "123")
@@ -684,7 +751,7 @@ def test_admin_cannot_delete_user_from_another_tenant():
         current_restaurante_id.reset(tenant_token)
 
 
-def test_team_removal_broadcasts_realtime_refresh(monkeypatch):
+def test_team_deactivation_preserves_identity_revokes_session_and_audits(monkeypatch):
     events = []
 
     async def capture_broadcast(message, *args, **kwargs):
@@ -692,15 +759,28 @@ def test_team_removal_broadcasts_realtime_refresh(monkeypatch):
 
     monkeypatch.setattr(auth_route.manager, "broadcast", capture_broadcast)
     client = TestClient(app)
+    employee_headers = get_auth_headers(client, "garcom", "123")
     headers = get_auth_headers(client, "admin", "123")
 
     response = client.delete("/auth/usuarios/u-garcom", headers=headers)
 
     assert response.status_code == 204, response.text
+    with TestingSessionLocal() as db:
+        saved = db.get(Usuario, "u-garcom")
+        assert saved is not None
+        assert saved.status == "inativo"
+        audit = db.query(ActivityLog).filter(
+            ActivityLog.restaurante_id == 1,
+            ActivityLog.action == "TEAM_ACCESS_DEACTIVATE",
+        ).one()
+        assert audit.garcom_id == "u-admin"
+        assert "user_id=u-garcom" in audit.details
+    revoked = client.get("/auth/usuarios", headers=employee_headers)
+    assert revoked.status_code in {401, 403}
     assert len(events) == 1
     message, _, kwargs = events[0]
     assert message["event"] == "team_updated"
-    assert message["detail"]["action"] in {"deleted", "deactivated"}
+    assert message["detail"]["action"] == "deactivated"
     assert message["detail"]["user_id"] == "u-garcom"
     assert kwargs["restaurante_id"] == 1
     assert kwargs["target_audience"] == "internal"

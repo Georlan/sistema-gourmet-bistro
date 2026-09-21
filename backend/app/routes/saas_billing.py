@@ -167,6 +167,14 @@ def activate_contract_without_fixed_billing(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Aceite contratual não encontrado para este protocolo.",
         )
+    if acceptance.get("plan_change_restaurante_id") is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Este protocolo pertence a uma mudança de plano de tenant existente "
+                "e não pode usar o checkout de contratação inicial."
+            ),
+        )
 
     existing_tenant_id = acceptance.get("linked_restaurante_id")
     if existing_tenant_id is not None:
@@ -276,6 +284,14 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
     acceptance = resolve_activation_acceptance(db, normalized_protocol)
     if acceptance is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aceite contratual não encontrado para este protocolo.")
+    if acceptance.get("plan_change_restaurante_id") is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Este protocolo pertence a uma mudança de plano de tenant existente "
+                "e não pode criar billing setup de contratação inicial."
+            ),
+        )
 
     existing_tenant_id = acceptance.get("linked_restaurante_id")
     if existing_tenant_id is not None:

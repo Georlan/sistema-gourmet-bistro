@@ -1,28 +1,19 @@
-import { describe, it } from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { getAutomaticallyAcceptableOrders } from '../src/components/caixa/orders/automaticOrderAcceptance';
-import type { DeliveryOrderView } from '../src/components/caixa/orders/cashierWorkspaceTypes';
+import test from 'node:test';
 
-const order = (id: string, status: DeliveryOrderView['status']): DeliveryOrderView => ({
-  id,
-  cliente: `Cliente ${id}`,
-  telefone: '',
-  itens: '1x Item',
-  total: 10,
-  canal: 'site',
-  origemOperacional: 'cardapio',
-  isQuickSale: false,
-  quantidadeItens: 1,
-  modalidade: 'retirada',
-  pago: false,
-  status,
-  criadoEm: '12:00',
-});
+const panel = readFileSync('src/components/CaixaPanel.tsx', 'utf8');
+const workspace = readFileSync('src/components/caixa/orders/CaixaOrdersWorkspace.tsx', 'utf8');
+const policyHook = readFileSync(
+  'src/components/caixa/orders/useOnlineOrderAutoAcceptPolicy.ts',
+  'utf8',
+);
 
-describe('automatic order acceptance policy', () => {
-  it('filtra candidatos conforme a opcao', () => {
-    const pending = order('1', 'pendente');
-    assert.deepEqual(getAutomaticallyAcceptableOrders(false, [pending]), []);
-    assert.deepEqual(getAutomaticallyAcceptableOrders(true, [pending, order('2', 'producao')]), [pending]);
-  });
+test('autoaceite é uma política persistida no backend, não um executor do navegador', () => {
+  assert.match(panel, /useOnlineOrderAutoAcceptPolicy/);
+  assert.match(policyHook, /\/api\/online-orders\/control/);
+  assert.match(policyHook, /\/api\/online-orders\/auto-accept/);
+  assert.match(policyHook, /payload\?\.auto_accept/);
+  assert.equal(workspace.includes('useAutomaticOrderAcceptance'), false);
+  assert.equal(workspace.includes('AutomaticOrderAcceptanceEffect'), false);
 });

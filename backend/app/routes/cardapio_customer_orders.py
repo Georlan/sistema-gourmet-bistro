@@ -18,7 +18,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
-from ..models import Comanda, GrupoModificador, Item, ItemModificador, OpcaoModificador
+from ..models import Comanda, GrupoModificador, Item, ItemModificador, OnlinePaymentIntent, OpcaoModificador
 from ..services.order_chat_service import compute_comanda_total
 from ..services.order_state_contract import build_order_state_contract
 from .cardapio_clientes import customer_token_scope
@@ -236,11 +236,28 @@ def list_customer_orders(
         has_more = len(rows) > limit
         page = rows[:limit]
         modifiers_by_item = _build_modifier_lookup(db, claims.restaurante_id, page)
+        payment_status_by_order = {
+            str(comanda_id): payment_status
+            for comanda_id, payment_status in db.query(
+                OnlinePaymentIntent.comanda_id,
+                OnlinePaymentIntent.status,
+            ).filter(
+                OnlinePaymentIntent.restaurante_id == claims.restaurante_id,
+                OnlinePaymentIntent.comanda_id.in_([order.id for order in page]),
+            ).all()
+        }
 
         items: list[CustomerOrderHistoryOrder] = []
         for comanda in page:
             effective_status = _effective_status(comanda)
-            state_contract = build_order_state_contract(effective_status, comanda.tipo)
+            payment_failed = payment_status_by_order.get(str(comanda.id)) == "error"
+            if payment_failed:
+                effective_status = "falha_pagamento"
+            state_contract = build_order_state_contract(
+                effective_status,
+                comanda.tipo,
+                payment_failed=payment_failed,
+            )
             items.append(
                 CustomerOrderHistoryOrder(
                     id=str(comanda.id),

@@ -1,7 +1,6 @@
 import clsx from 'clsx';
 import { Search } from 'lucide-react';
 import React, { useEffect, useId, useMemo, useState } from 'react';
-import { requestCashierSettingsTab } from '../settings/cashierSettingsNavigation';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
 import type { CashierNavigationGroup } from './cashierNavigation';
 import {
@@ -37,7 +36,6 @@ export function CashierSidebarSearch({
   }, [query]);
 
   const openResult = (entry: CashierFunctionSearchEntry) => {
-    if (entry.settingsTab) requestCashierSettingsTab(entry.settingsTab);
     handleSidebarNavigation(entry.navigationId, closeMobile);
     setQuery('');
   };

@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import type { Order } from '../src/types';
-import { projectDeliveryOrdersFromSharedSnapshot } from '../src/components/caixa/orders/deliveryOrderProjection';
+import {
+  projectDeliveryOrdersFromSharedSnapshot,
+  reconcileDeliveryOrderAfterStatus,
+} from '../src/components/caixa/orders/deliveryOrderProjection';
+import { preserveOptimisticOrderIdentity } from '../src/components/app/data/operationalOrderMapping';
 
 const source = (path: string) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
@@ -52,6 +56,55 @@ test('optimistic Caixa delivery keeps the operational information needed by the 
   assert.equal(projected.status, 'producao');
 });
 
+test('delivery hydration never replaces a known customer with the generic placeholder', () => {
+  const base = {
+    id: 'order-1',
+    telefone: '88999999999',
+    itens: '1x Hambúrguer',
+    detailItems: [],
+    total: 20,
+    canal: 'site',
+    origemOperacional: 'caixa',
+    isQuickSale: false,
+    quantidadeItens: 1,
+    modalidade: 'retirada',
+    pago: false,
+    status: 'producao',
+    endereco: '',
+    criadoEm: '12:00',
+  } as const;
+
+  const previous = { ...base, cliente: 'Georlan' } as any;
+  const incoming = { ...base, cliente: 'Cliente Sem Nome' } as any;
+  assert.equal(reconcileDeliveryOrderAfterStatus(previous, incoming).cliente, 'Georlan');
+
+  const authoritative = { ...base, cliente: 'Nome Atualizado' } as any;
+  assert.equal(reconcileDeliveryOrderAfterStatus(previous, authoritative).cliente, 'Nome Atualizado');
+});
+
+test('temp to confirmed reconciliation never regresses a known customer name', () => {
+  const optimistic = {
+    id: 'temp-identity',
+    identificador: 'georlan',
+  } as Order;
+  const mapped = {
+    id: 'confirmed-identity',
+    identificador: '',
+  } as Order;
+
+  assert.equal(
+    preserveOptimisticOrderIdentity(optimistic, mapped).identificador,
+    'georlan',
+  );
+  assert.equal(
+    preserveOptimisticOrderIdentity(
+      optimistic,
+      { ...mapped, identificador: 'Nome Atualizado' },
+    ).identificador,
+    'Nome Atualizado',
+  );
+});
+
 test('PDV reconciles or rolls back the temporary order instead of leaving duplicate cards', () => {
   const pdv = source('src/components/caixa/pdv/useCashierPdv.ts');
   const operational = source('src/components/app/data/useOperationalOrders.ts');
@@ -65,6 +118,21 @@ test('PDV reconciles or rolls back the temporary order instead of leaving duplic
   assert.match(cashierOrders, /id\.startsWith\('temp-'\)/);
 });
 
+test('PDV models fulfillment separately from optional table association', () => {
+  const pdv = source('src/components/caixa/pdv/useCashierPdv.ts');
+  const view = source('src/components/caixa/pdv/CashierPdvView.tsx');
+
+  assert.match(pdv, /useState<'pickup' \| 'delivery' \| 'dine_in'>\('pickup'\)/);
+  assert.match(pdv, /mesa_id: orderType === 'delivery' \? null : mesaId \|\| null/);
+  assert.doesNotMatch(pdv, /Selecione a mesa de destino antes de lançar o pedido/);
+  assert.match(pdv, /getElementById\('pdv-target-table'\)/);
+
+  assert.match(view, /pdvOrderType !== 'delivery'/);
+  assert.match(view, /<option value="">Sem mesa<\/option>/);
+  assert.match(view, /type\.id === 'delivery'\) setPdvTargetMesaId\(0\)/);
+  assert.match(view, /id: 'dine_in', label: 'Consumo local'/);
+});
+
 test('customer lookup keeps validation and cancellation while removing artificial wait', () => {
   const pdv = source('src/components/caixa/pdv/useCashierPdv.ts');
 
@@ -73,4 +141,18 @@ test('customer lookup keeps validation and cancellation while removing artificia
   assert.match(pdv, /controller\.abort\(\)/);
   assert.match(pdv, /\}, 180\);/);
   assert.doesNotMatch(pdv, /\}, 350\);/);
+});
+
+test('order modal associates eligible unlinked orders to a table through the dedicated endpoint', () => {
+  const orders = source('src/components/caixa/orders/useCashierOrders.ts');
+  const details = source('src/components/caixa/orders/KanbanOrderDetails.tsx');
+  const owner = source('src/components/CaixaPanel.tsx');
+
+  assert.match(orders, /\/comandas\/\$\{encodeURIComponent\(primaryComandaId\)\}\/associar-mesa\/\$\{targetMesaId\}/);
+  assert.match(orders, /Pedidos de delivery não podem ser associados a uma mesa/);
+  assert.match(details, /Associar à mesa…/);
+  assert.match(details, /selectedCanAssociateTable/);
+  assert.match(details, /'retirada', 'pickup', 'dine_in', 'consumo_local', 'consumo no local'/);
+  assert.match(details, /onClick=\{actions\.associateTable\}/);
+  assert.match(owner, /associateTable: handleAssociateSelectedKanbanTable/);
 });

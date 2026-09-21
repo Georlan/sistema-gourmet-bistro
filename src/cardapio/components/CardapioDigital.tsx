@@ -18,11 +18,12 @@ import {
   X,
 } from "lucide-react";
 import { BrandConfig } from "../CardapioTypes";
-import { CartItem } from "./CardapioCartDrawer";
+import { CartItem, type CardapioFulfillment } from "./CardapioCartDrawer";
 import { API_BASE_URL } from "../../config/api";
 import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/whatsappUtils";
 import type { DeliveryAddressSnapshot } from "../../domain/deliveryAddress";
 import { createSecureIdempotencyKey } from "../../utils/secureIdempotency";
+import { authRequestErrorMessage } from "../../utils/authRequest";
 import { formatCardapioApiError } from "../orderApiErrors";
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems } from "../orderItems";
@@ -59,7 +60,7 @@ interface CardapioDigitalProps {
   activeBrand: BrandConfig;
   cart: CartItem[];
   deliveryFee: number;
-  deliveryMethod: "delivery" | "pickup";
+  deliveryMethod: CardapioFulfillment;
   address: string;
   addressSnapshot?: DeliveryAddressSnapshot | null;
   customerName: string;
@@ -107,6 +108,24 @@ const formatScheduledDate = (value?: string | null) => {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+};
+
+const publicFulfillmentValue = (fulfillment: CardapioFulfillment) => {
+  if (fulfillment === "delivery") return "delivery";
+  if (fulfillment === "dine_in") return "consumo_local";
+  return "retirada";
+};
+
+const storedFulfillmentLabel = (fulfillment: CardapioFulfillment) => {
+  if (fulfillment === "delivery") return "Delivery";
+  if (fulfillment === "dine_in") return "Consumo no Local";
+  return "Retirada";
+};
+
+const checkoutFulfillmentLabel = (fulfillment: CardapioFulfillment) => {
+  if (fulfillment === "delivery") return "Entrega";
+  if (fulfillment === "dine_in") return "Consumo local";
+  return "Retirada";
 };
 
 export default function CardapioDigital({
@@ -323,17 +342,14 @@ export default function CardapioDigital({
       scheduledForIso = target.toISOString();
     }
 
-    const savedMesa = localStorage.getItem("koma_mesa_numero");
-    const finalClienteNome = (savedMesa && deliveryMethod !== "delivery")
-      ? `${normalizedName} (Mesa ${savedMesa})`
-      : normalizedName;
-
-    const cleanedItems = buildCardapioOrderItems(cart, finalClienteNome);
+    // Mesa não é inferida pelo Cardápio Online. Consumo local nasce sem mesa
+    // e pode receber uma associação operacional depois, no Caixa.
+    const cleanedItems = buildCardapioOrderItems(cart, normalizedName);
 
     const orderRequest = {
       restaurante_id: targetRestauranteId,
       itens: cleanedItems,
-      cliente_nome: finalClienteNome,
+      cliente_nome: normalizedName,
       cliente_telefone: normalizedPhone,
       endereco_entrega: deliveryMethod === "delivery" ? normalizedAddress : "",
       address_snapshot: deliveryMethod === "delivery" ? addressSnapshot || undefined : undefined,
@@ -345,7 +361,7 @@ export default function CardapioDigital({
       bairro: deliveryMethod === "delivery" ? bairro?.trim() || undefined : undefined,
       cupom_codigo: cupomCodigo?.trim().toUpperCase() || undefined,
       usar_cashback: usarCashback,
-      tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada",
+      tipo_pedido: publicFulfillmentValue(deliveryMethod),
       scheduled_for: scheduledForIso || null,
     };
     const fingerprint = buildOrderSubmissionFingerprint(orderRequest);
@@ -407,7 +423,7 @@ export default function CardapioDigital({
         restaurante_id: targetRestauranteId,
         cliente_nome: normalizedName,
         cliente_telefone: normalizedPhone,
-        tipo: deliveryMethod === "delivery" ? "Delivery" : "Retirada",
+        tipo: storedFulfillmentLabel(deliveryMethod),
         total: orderTotal,
         idempotency_key: idempotencyKey,
         status: confirmedSchedule
@@ -445,9 +461,10 @@ export default function CardapioDigital({
       setErrorMessage(
         error instanceof DOMException && error.name === "AbortError"
           ? "A confirmação demorou mais que o esperado. Tente novamente: o Kôma reutiliza a mesma tentativa sem duplicar o pedido."
-          : error instanceof Error
-            ? error.message
-            : "Não foi possível enviar o pedido. Verifique sua conexão e tente novamente.",
+          : authRequestErrorMessage(
+              error,
+              "Não foi possível enviar o pedido. Verifique sua conexão e tente novamente.",
+            ),
       );
     } finally {
       window.clearTimeout(timeoutId);
@@ -509,7 +526,7 @@ export default function CardapioDigital({
             </div>
 
             <div className="mt-4 grid grid-cols-3 gap-2 text-[9px] font-bold">
-              {["Sacola", deliveryMethod === "delivery" ? "Entrega" : "Retirada", "Revisão"].map((label, index) => (
+              {["Sacola", checkoutFulfillmentLabel(deliveryMethod), "Revisão"].map((label, index) => (
                 <div key={label} className={index < 2 ? "flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] px-2 py-2 text-emerald-500" : "flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2 py-2 text-koma-foreground"}>
                   {index < 2 ? <Check className="h-3 w-3" /> : <span className="grid h-4 w-4 place-items-center rounded-full bg-emerald-500 text-[8px] text-white">3</span>}{label}
                 </div>
@@ -548,7 +565,7 @@ export default function CardapioDigital({
               )}
 
               <div className="mt-5 grid w-full max-w-md gap-2 text-left sm:grid-cols-2">
-                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Modalidade</span><p className="mt-1 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? `Entrega · ${address}` : "Retirada no balcão"}</p></div>
+                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Modalidade</span><p className="mt-1 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? `Entrega · ${address}` : deliveryMethod === "dine_in" ? "Consumo no local" : "Retirada no balcão"}</p></div>
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Total</span><p className="mt-1 text-base font-black text-emerald-500">{formatPrice(createdOrder.total ?? estimatedTotal)}</p></div>
                 {isCreatedOrderScheduled && (
                   <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3.5 sm:col-span-2"><span className="text-[9px] font-black uppercase tracking-wider text-emerald-500">Agendado para</span><p className="mt-1 text-[11px] font-bold text-koma-foreground">{createdScheduleLabel}</p></div>
@@ -582,7 +599,7 @@ export default function CardapioDigital({
             <div className="space-y-5">
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><UserRound className="h-3.5 w-3.5 text-emerald-500" /> Contato</div><p className="mt-2 text-xs font-black text-koma-foreground">{customerName}</p><p className="mt-0.5 text-[10px] text-koma-muted">{customerPhone}</p></div>
-                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><MapPin className="h-3.5 w-3.5 text-emerald-500" /> {deliveryMethod === "delivery" ? "Entrega" : "Retirada"}</div><p className="mt-2 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? address : activeBrand.address || "Retirada no balcão do restaurante"}</p></div>
+                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><MapPin className="h-3.5 w-3.5 text-emerald-500" /> {checkoutFulfillmentLabel(deliveryMethod)}</div><p className="mt-2 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? address : deliveryMethod === "dine_in" ? activeBrand.address || "Consumo no estabelecimento" : activeBrand.address || "Retirada no balcão do restaurante"}</p></div>
               </div>
 
               {scheduledOrdersEnabled && (

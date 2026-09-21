@@ -6,20 +6,31 @@ import { getCashierNavigationItem, getCashierNavigationTarget } from '../src/com
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-test('Cardápio online expõe três workspaces sem perder os owners detalhados', () => {
+test('Cardápio online espelha as mesmas funções no menu lateral e na subnavegação horizontal', () => {
   const online = getCashierNavigationItem('cardapio_digital');
   assert.deepEqual(
     online?.children?.map((child) => child.label),
-    ['Loja', 'Operação', 'Divulgação'],
+    ['Perfil', 'Marca', 'Pedidos online', 'Clientes bloqueados', 'Entrega', 'Pagamentos', 'Divulgação'],
   );
-  assert.deepEqual(getCashierNavigationTarget('online_loja'), { tab: 'cardapio_digital', subTab: 'cardapio_perfil' });
-  assert.deepEqual(getCashierNavigationTarget('online_operacao'), { tab: 'cardapio_digital', subTab: 'cardapio_pedidos' });
+  assert.deepEqual(getCashierNavigationTarget('online_perfil'), { tab: 'cardapio_digital', subTab: 'cardapio_perfil' });
+  assert.deepEqual(getCashierNavigationTarget('online_bloqueios'), { tab: 'cardapio_digital', subTab: 'cardapio_bloqueios' });
+  assert.deepEqual(getCashierNavigationTarget('online_entrega'), { tab: 'cardapio_digital', subTab: 'cardapio_entrega' });
+  assert.deepEqual(getCashierNavigationTarget('online_pagamentos'), { tab: 'cardapio_digital', subTab: 'cardapio_pagamentos' });
   assert.deepEqual(getCashierNavigationTarget('online_divulgacao'), { tab: 'cardapio_digital', subTab: 'cardapio_qr_links' });
 
   const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
-  for (const detail of ['Perfil', 'Marca', 'Pedidos & horários', 'Entrega & áreas', 'Pagamentos', 'QR & links']) {
-    assert.match(onlineMenu, new RegExp(detail.replace('&', '\\&')));
-  }
+  assert.doesNotMatch(onlineMenu, /CompactOnlineMenuNavigation|detailsByWorkspace|workspaceBySection/);
+
+  const caixa = source('../src/components/CaixaPanel.tsx');
+  assert.match(caixa, /onlineMenuSubnavItems = getCashierNavigationItem\('cardapio_digital'\)\?\.children \?\? \[\]/);
+  assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
+  assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
+});
+
+test('Configurações também espelha filhos verticais na subnavegação horizontal', () => {
+  const caixa = source('../src/components/CaixaPanel.tsx');
+  assert.match(caixa, /settingsSubnavItems = getCashierNavigationItem\('impressao_salao'\)\?\.children \?\? \[\]/);
+  assert.match(caixa, /activeTab === 'impressao_salao' && settingsSubnavItems\.map/);
 });
 
 test('CashierOnlineMenu routes channel concerns to their canonical owners', () => {
@@ -57,10 +68,13 @@ test('Cardápio online mantém apenas fluxos canônicos sem atalhos paralelos de
   assert.doesNotMatch(onlineMenu, /fetch\([^\n]*(?:cupons|fidelidade)/i);
 });
 
-test('Pedidos & horários no longer owns payment or delivery configuration', () => {
+test('Pedidos online keeps hours as restaurant setup and does not own payment or delivery configuration', () => {
   const orders = source('../src/components/caixa/online-menu/OnlineMenuOrdersSettings.tsx');
   assert.match(orders, /status_override/);
   assert.match(orders, /horarios_funcionamento/);
+  assert.match(orders, /ONBOARDING_SETUP_MODE_KEY/);
+  assert.match(orders, /Horário do estabelecimento/);
+  assert.match(orders, /O cardápio só aceita pedidos quando o caixa estiver aberto e o horário cadastrado permitir/);
   assert.doesNotMatch(orders, /formas_pagamento_aceitas/);
   assert.doesNotMatch(orders, /tabela_taxas_bairros/);
   assert.doesNotMatch(orders, /\/caixa\/configuracoes/);

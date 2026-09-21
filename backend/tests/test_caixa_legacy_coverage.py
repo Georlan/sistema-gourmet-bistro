@@ -147,24 +147,24 @@ def test_caixa_payments():
     assert resp.status_code == 200
     item_id = resp.json()[0]["itens"][0]["id"]
     
-    # 3b. Pay inferior value for selected item (R$ 5.00 on R$ 20.00 item)
-    # Item should NOT be marked as paid and comanda should remain open
+    # 3b. Pagamento por itens é estrito: valor inferior ao item é inválido.
     resp = client.post(f"/caixa/comandas/{comanda_id}/pagar", json={
         "valor": 5.0,
         "metodo": "dinheiro",
         "item_ids": [item_id],
         "idempotency_key": "pagamento-parcial-item",
     }, headers=headers_caixa)
-    assert resp.status_code == 201
+    assert resp.status_code == 400
+    assert "exatamente" in resp.json()["detail"].lower()
     
     resp = client.get(f"/comandas/detalhes/todos?fechada=false", headers=headers_garcom)
     assert resp.status_code == 200
     comanda = resp.json()[0]
     assert comanda["fechada"] == False
     assert comanda["itens"][0]["pago"] == False
-    assert comanda["valor_pago"] == 5.0
+    assert comanda["valor_pago"] == 0.0
     
-    # 4. Pay remaining item value (Client A pays for their burguer: R$ 20.00)
+    # 4. Quita exatamente o item selecionado.
     resp = client.post(f"/caixa/comandas/{comanda_id}/pagar", json={
         "valor": 20.0,
         "metodo": "pix",
@@ -174,17 +174,18 @@ def test_caixa_payments():
     assert resp.status_code == 201
     assert resp.json()["valor"] == 20.0
     assert resp.json()["metodo"] == "pix"
+    assert resp.json()["item_ids"] == [item_id]
     
-    # 5. Check comanda is still open but has payment registered
+    # 5. A comanda continua aberta com somente o item confirmado liquidado.
     resp = client.get(f"/comandas/detalhes/todos?fechada=false", headers=headers_garcom)
     assert resp.status_code == 200
     comanda = resp.json()[0]
     assert comanda["fechada"] == False
-    assert comanda["valor_pago"] == 25.0
+    assert comanda["valor_pago"] == 20.0
     
-    # 6. Liquida exatamente o saldo restante; o backend rejeita sobrepagamento.
+    # 6. Pagamento por valor liquida exatamente o saldo restante.
     resp = client.post(f"/caixa/comandas/{comanda_id}/pagar", json={
-        "valor": 15.0,
+        "valor": 20.0,
         "metodo": "dinheiro",
         "idempotency_key": "pagamento-comanda-final",
     }, headers=headers_caixa)

@@ -4,6 +4,7 @@ Tests for print agent authentication, atomic claiming, anti-duplication, and stu
 import hashlib
 import pytest
 import datetime
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -12,7 +13,8 @@ from app.database import Base, get_db, current_restaurante_id
 from app.models import Restaurante, Usuario, PrintAgentToken, PrintJob
 from app.routes import print_agents as print_agents_route
 from app.routes.print_agents import hash_token
-from app.security import create_access_token
+from app.security import create_access_token, get_current_user
+from app.support_models import SupportOperatorUser
 from app.main import app
 
 DB_FILE = "./test_print_agents.db"
@@ -22,6 +24,41 @@ engine = create_engine(
     connect_args={"check_same_thread": False, "timeout": 30}
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.mark.parametrize(
+    "payload_text",
+    [
+        "TOTAL DO PEDIDO: R$ 42,00",
+        "TOTAL DESTE PEDIDO: R$ 99,90",
+    ],
+)
+def test_print_reference_does_not_treat_brl_total_as_order_number(payload_text):
+    job = SimpleNamespace(
+        payload_text=payload_text,
+        source_type="pedido",
+        source_id="pedido-sem-numero",
+        document_type="producao",
+    )
+
+    reference = print_agents_route._print_job_reference(job)
+
+    assert reference["label"] == "Pedido"
+    assert reference["order_number"] is None
+
+
+def test_print_reference_keeps_legacy_identity_with_explicit_hash():
+    job = SimpleNamespace(
+        payload_text="PEDIDO: #9516\nTOTAL DO PEDIDO: R$ 42,00",
+        source_type="pedido",
+        source_id="pedido-9516",
+        document_type="producao",
+    )
+
+    reference = print_agents_route._print_job_reference(job)
+
+    assert reference["label"] == "Pedido #9516"
+    assert reference["order_number"] == "9516"
 
 
 def test_agent_token_hash_never_matches_the_raw_secret():
@@ -187,6 +224,76 @@ def test_concurrent_claim_second_agent_gets_conflict():
     resp2 = client.post("/api/print-agents/jobs/job-1001/claim", headers=headers2)
     assert resp2.status_code == 409, f"Esperado 409 Conflict, obteve {resp2.status_code}"
     assert "já foi assumido" in resp2.json()["detail"]
+
+
+def test_shadow_simulator_feed_starts_now_and_never_claims_jobs():
+    client = TestClient(app)
+    headers = {"X-Agent-Token": "token_agent_1"}
+
+    initial = client.get(
+        "/api/print-agents/simulator/agent-feed",
+        headers=headers,
+    )
+    assert initial.status_code == 200
+    assert initial.json()["items"] == []
+    cursor = initial.json()["cursor"]
+    cursor_at = datetime.datetime.fromisoformat(cursor["created_at"])
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            PrintJob(
+                id="job-shadow-new",
+                restaurante_id=1,
+                document_type="producao",
+                destination="COZINHA",
+                source_type="pedido",
+                source_id="pedido-shadow",
+                payload_text="PEDIDO #742\n1x X-Salada",
+                status="pending",
+                idempotency_key="idemp:shadow:new",
+                created_at=cursor_at + datetime.timedelta(milliseconds=1),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    observed = client.get(
+        "/api/print-agents/simulator/agent-feed",
+        headers=headers,
+        params={
+            "after_created_at": cursor["created_at"],
+            "after_id": cursor["id"],
+        },
+    )
+
+    assert observed.status_code == 200
+    items = observed.json()["items"]
+    assert [item["id"] for item in items] == ["job-shadow-new"]
+    assert items[0]["reference"] == "Pedido #742"
+    assert items[0]["server_observed_latency_ms"] >= 0
+    assert items[0]["physical_completion_tracking"] is False
+
+    db = TestingSessionLocal()
+    try:
+        job = db.query(PrintJob).filter_by(id="job-shadow-new").one()
+        assert job.status == "pending"
+        assert job.claimed_at is None
+        assert job.agent_id is None
+        assert job.printed_at is None
+    finally:
+        db.close()
+
+
+def test_shadow_simulator_feed_rejects_invalid_cursor():
+    response = TestClient(app).get(
+        "/api/print-agents/simulator/agent-feed",
+        headers={"X-Agent-Token": "token_agent_1"},
+        params={"after_created_at": "not-a-date"},
+    )
+
+    assert response.status_code == 400
 
 
 def test_claim_next_reserves_job_in_one_request():
@@ -859,6 +966,33 @@ def test_print_monitor_reports_tenant_health_delays_and_spooler_state():
             idempotency_key="idemp:reference:2",
             created_at=now - datetime.timedelta(minutes=3),
         ))
+        db.add(PrintJob(
+            id="job-auto-origin-2",
+            restaurante_id=2,
+            document_type="producao",
+            destination="BAR",
+            source_type="lancamento",
+            source_id="l-auto-origin-2",
+            payload_text="PEDIDO #50\nVIA: BAR",
+            status="pending",
+            idempotency_key="universal:auto:l-auto-origin-2:bar",
+            created_at=now - datetime.timedelta(seconds=30),
+        ))
+        db.add(PrintJob(
+            id="job-manual-reprint-origin-2",
+            restaurante_id=2,
+            document_type="producao",
+            destination="COZINHA",
+            source_type="reimpressao",
+            source_id="c-manual-reprint-2",
+            payload_text="PEDIDO #43\nREIMPRESSÃO",
+            status="pending",
+            idempotency_key=(
+                "universal:reimpressao:c-manual-reprint-2:"
+                "cozinha:20260920202952000000"
+            ),
+            created_at=now - datetime.timedelta(seconds=20),
+        ))
         db.commit()
     finally:
         db.close()
@@ -876,6 +1010,22 @@ def test_print_monitor_reports_tenant_health_delays_and_spooler_state():
     assert payload["summary"]["active_agents"] == 2
     assert payload["summary"]["delayed"] == 1
     assert payload["physical_completion_tracking"] is False
+    assert payload["summary"]["queue_origins"]["automatic"] >= 1
+    assert payload["summary"]["queue_origins"]["manual_reprint"] >= 1
+
+    queue_jobs = {job["id"]: job for job in payload["queue_jobs"]}
+    assert queue_jobs["job-auto-origin-2"]["origin_kind"] == "automatic"
+    assert queue_jobs["job-auto-origin-2"]["origin_label"] == "Automática"
+    assert queue_jobs["job-auto-origin-2"]["is_reprint"] is False
+    assert (
+        queue_jobs["job-manual-reprint-origin-2"]["origin_kind"]
+        == "manual_reprint"
+    )
+    assert (
+        queue_jobs["job-manual-reprint-origin-2"]["origin_label"]
+        == "Reimpressão manual"
+    )
+    assert queue_jobs["job-manual-reprint-origin-2"]["is_reprint"] is True
 
     agent_ids = {agent["agent_id"] for agent in payload["agents"]}
     assert agent_ids == {"desktop-caixa-2", "desktop-antigo-2"}
@@ -1453,3 +1603,63 @@ def test_compacted_print_can_no_longer_be_reprinted():
     )
 
     assert response.status_code == 410
+
+
+
+def test_print_simulator_sources_reject_restaurant_admin():
+    response = TestClient(app).get(
+        "/api/print-agents/simulator/sources",
+        headers=jwt_headers("2", 2, "admin"),
+    )
+    assert response.status_code == 403
+    assert "Modo Suporte interno" in response.json()["detail"]
+
+
+def test_print_simulator_sources_are_support_only_tenant_scoped_and_read_only():
+    support_user = SupportOperatorUser(
+        operator="owner@koma.test",
+        restaurante_id=2,
+        session_id="support-print-simulator",
+        reason="Homologação interna do simulador térmico",
+    )
+    app.dependency_overrides[get_current_user] = lambda: support_user
+    tenant_token = current_restaurante_id.set(2)
+    try:
+        client = TestClient(app)
+        response = client.get("/api/print-agents/simulator/sources")
+        assert response.status_code == 200, response.text
+        items = response.json()["items"]
+        assert [item["id"] for item in items] == ["job-2001"]
+        assert "payload_text" not in items[0]
+
+        detail = client.get(
+            "/api/print-agents/simulator/sources/job-2001",
+        )
+        assert detail.status_code == 200, detail.text
+        payload = detail.json()
+        assert payload["payload_text"] == "1x Pedido tenant 2"
+        assert payload["physical_completion_tracking"] is False
+
+        cross_tenant = client.get(
+            "/api/print-agents/simulator/sources/job-1001",
+        )
+        assert cross_tenant.status_code == 404
+
+        db = TestingSessionLocal()
+        try:
+            job = db.query(PrintJob).filter_by(id="job-2001").one()
+            assert job.status == "pending"
+            assert job.agent_id is None
+        finally:
+            db.close()
+    finally:
+        current_restaurante_id.reset(tenant_token)
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_print_simulator_sources_reject_waiter():
+    response = TestClient(app).get(
+        "/api/print-agents/simulator/sources",
+        headers=jwt_headers("garcom-2", 2, "garcom"),
+    )
+    assert response.status_code == 403

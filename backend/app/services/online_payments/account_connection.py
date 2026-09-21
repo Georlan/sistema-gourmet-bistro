@@ -6,12 +6,21 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from ...config import settings
 from ...models import RestaurantPaymentAccount
 from .oauth import MercadoPagoOAuthTokens
 
 
 class MercadoPagoAccountConnectionError(RuntimeError):
     """Raised when a connected seller account cannot be persisted safely."""
+
+
+def is_marketplace_owner_account(provider_user_id: str | None) -> bool:
+    marketplace_user_id = settings.MERCADO_PAGO_MARKETPLACE_USER_ID.strip()
+    return bool(
+        marketplace_user_id
+        and str(provider_user_id or "").strip() == marketplace_user_id
+    )
 
 
 def configured_webhook_secret() -> str:
@@ -47,6 +56,11 @@ def upsert_mercado_pago_account(
     """
     if int(restaurant_id) <= 0:
         raise MercadoPagoAccountConnectionError("restaurant_id inválido.")
+    if is_marketplace_owner_account(tokens.provider_user_id):
+        raise MercadoPagoAccountConnectionError(
+            "A conta proprietária da aplicação KÔMA não pode ser conectada como restaurante. "
+            "Conecte a conta Mercado Pago que pertence ao estabelecimento para manter o split."
+        )
 
     secret = (webhook_secret or configured_webhook_secret()).strip()
     if not secret:
@@ -94,10 +108,11 @@ def payment_account_status(account: RestaurantPaymentAccount | None) -> dict[str
             "token_expires_at": None,
         }
 
+    self_connected = is_marketplace_owner_account(account.provider_user_id)
     return {
         "provider": "mercado_pago",
-        "connected": account.status == "active",
-        "status": account.status,
+        "connected": account.status == "active" and not self_connected,
+        "status": "error" if self_connected else account.status,
         "provider_user_id": account.provider_user_id,
         "token_expires_at": (
             account.token_expires_at.isoformat()

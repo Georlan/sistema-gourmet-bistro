@@ -66,6 +66,42 @@ test('produção oculta respeita permissão sem inventar estado financeiro e mer
   assert.equal(tableCardPresentation({ ...state, mergedIntoMesaId: 8 }).label, 'Junto com mesa 8');
 });
 
+test('nome da mesa e referência do pedido não quebram no card mobile do garçom', () => {
+  const mobileTable = { ...table, id: 1, nome: 'Mesa 01' };
+  const order = makeCheck([makeItem('A', 'preparando', 40)], { mesaId: 1, numeroPedido: 40 });
+  const markup = renderToStaticMarkup(React.createElement(MesaCard, {
+    table: mobileTable, orders: [order], currentTime: now, activeWaiterId: 'waiter',
+    draftCount: 0, hasPendingPayment: false, onClick() {},
+  }));
+
+  assert.match(markup, /whitespace-normal break-words[^>]*title="Mesa 01"[^>]*>Mesa 01<\/strong>/);
+  assert.doesNotMatch(markup, /truncate[^>]*title="Mesa 01"/);
+  assert.match(markup, /shrink-0 whitespace-nowrap[^>]*title="Pedido #40"[^>]*>Ped\. 40<\/span>/);
+  assert.doesNotMatch(markup, />Pedido 40<\/span>/);
+});
+
+test('card mostra só o pedido principal após mesclagem e preserva o pedido ao transferir para mesa livre', () => {
+  const mergedTable = { ...table, id: 43, nome: 'Mesa 43' };
+  const principal = makeCheck([], { id: 'check-43', mesaId: 43, numeroPedido: 43 });
+  const incoming = makeCheck([], { id: 'check-46', mesaId: 43, numeroPedido: 46, mesaOrigemId: 46 });
+  const mergedMarkup = renderToStaticMarkup(React.createElement(MesaCard, {
+    table: mergedTable, orders: [principal, incoming], currentTime: now, activeWaiterId: 'waiter',
+    draftCount: 0, hasPendingPayment: false, onClick() {},
+  }));
+
+  assert.match(mergedMarkup, /title="Pedido #43"[^>]*>Ped\. 43<\/span>/);
+  assert.doesNotMatch(mergedMarkup, />Ped\. 43 \+1<\/span>/);
+
+  const freeTarget = { ...table, id: 50, nome: 'Mesa 50' };
+  const transferred = makeCheck([], { id: 'check-46', mesaId: 50, numeroPedido: 46, mesaTransferidaDe: 46 });
+  const transferredMarkup = renderToStaticMarkup(React.createElement(MesaCard, {
+    table: freeTarget, orders: [transferred], currentTime: now, activeWaiterId: 'waiter',
+    draftCount: 0, hasPendingPayment: false, onClick() {},
+  }));
+
+  assert.match(transferredMarkup, /title="Pedido #46"[^>]*>Ped\. 46<\/span>/);
+});
+
 test('overview keeps empty-session consumption reachable and suppresses merged-table actions', () => {
   const cards = projectCashierSalonTables([{ ...table, status: 'ocupada' }, { id: 8, capacidade: 2 }], [], [], now);
   const actions = { inspectTable() {}, openTableOrder() {} };

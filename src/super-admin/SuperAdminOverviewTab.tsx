@@ -266,8 +266,8 @@ export function SuperAdminOverviewTab({
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-koma-secondary">Split comercial</span>
-                <span className="text-koma-muted font-mono">{SUBSCRIPTION_PLANS.map(p => formatPercentage(p.splitFeeRate)).join(" / ")}</span>
+                <span className="text-koma-secondary">Catálogo de split</span>
+                <span className="text-koma-muted font-mono" title="Oferta vigente para novos aceites; consulte o contrato de cada tenant para a taxa efetiva">{SUBSCRIPTION_PLANS.map(p => formatPercentage(p.splitFeeRate)).join(" / ")}</span>
               </div>
             </div>
             <button type="button" onClick={() => onNavigateToTab("operations")} className="w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-lg text-xs font-semibold text-koma-secondary flex items-center justify-center gap-1">

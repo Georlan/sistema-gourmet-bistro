@@ -452,6 +452,63 @@ class SaasMercadoPagoService:
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Erro de comunicação ao consultar assinatura.") from exc
 
+    def update_preapproval_amount(
+        self,
+        preapproval_id: str,
+        *,
+        amount: Decimal,
+        plan: str,
+    ) -> dict[str, Any]:
+        """Atualiza somente o valor da recorrência existente, sem trocar ciclo ou meio."""
+        self._ensure_provider_ready()
+        clean_id = preapproval_id.strip()
+        if not clean_id:
+            raise SaasMercadoPagoError(
+                "ID de preapproval inválido para atualização de plano.",
+                status_code=400,
+            )
+        normalized_amount = Decimal(str(amount)).quantize(Decimal("0.01"))
+        if normalized_amount <= 0:
+            raise SaasMercadoPagoError(
+                "Uma recorrência existente não pode ser atualizada para valor zero.",
+                status_code=422,
+            )
+        payload = {
+            "reason": f"KÔMA - Plano {plan.strip().capitalize()}",
+            "auto_recurring": {
+                "transaction_amount": float(normalized_amount),
+                "currency_id": "BRL",
+            },
+        }
+        if self.is_mock:
+            return {
+                "id": clean_id,
+                "status": "authorized",
+                "reason": payload["reason"],
+                "auto_recurring": payload["auto_recurring"],
+            }
+        try:
+            with self._client() as client:
+                resp = client.put(f"/preapproval/{clean_id}", json=payload)
+                if resp.status_code >= 400:
+                    data = (
+                        resp.json()
+                        if resp.headers.get("content-type", "").startswith("application/json")
+                        else {}
+                    )
+                    detail = data.get("message") or data.get("error") or resp.text
+                    raise SaasMercadoPagoError(
+                        f"Atualização de valor da assinatura falhou: {detail}",
+                        status_code=resp.status_code,
+                    )
+                result = resp.json()
+                self._validate_merchant_identity(result)
+                return result
+        except httpx.RequestError as exc:
+            raise SaasMercadoPagoError(
+                "Erro de comunicação ao atualizar o valor da assinatura."
+            ) from exc
+
     def cancel_preapproval(self, preapproval_id: str) -> dict[str, Any]:
         self._ensure_provider_ready()
         if self.is_mock:

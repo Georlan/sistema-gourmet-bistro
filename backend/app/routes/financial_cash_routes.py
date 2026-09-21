@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
 from ..financial_models import PagamentoEstorno
-from ..models import CaixaTurno, Pagamento, Usuario
+from ..models import CaixaTurno, OnlinePaymentIntent, Pagamento, Usuario
 from ..security import require_permission
 from ..services.cash_reconciliation import (
     RefundDomainError,
@@ -19,6 +19,13 @@ from ..services.cash_reconciliation import (
     count_open_commands,
     money,
     refund_payload,
+)
+from ..services.online_payments.mercado_pago import MercadoPagoError
+from ..services.online_payments.service import (
+    OnlinePaymentConfigurationError,
+    OnlinePaymentService,
+    OnlinePaymentValidationError,
+    UNRESOLVED_ONLINE_PAYMENT_STATUSES,
 )
 from ..services.refund_guard import create_refund_guarded as create_refund
 from ..services.refund_ui import refundable_payment_payload_human as _refundable_payment_payload
@@ -231,21 +238,61 @@ def fechar_turno_reconciliado(
     current_user: Usuario = Depends(require_permission("caixa:operar")),
 ):
     rest_id = require_tenant_id()
+    candidate_shift = _open_shift(db, rest_id)
+    if candidate_shift is None:
+        raise HTTPException(status_code=400, detail="Não há turno aberto para fechamento.")
+
+    # Antes do lock final do turno, consulta a verdade do provedor. Isso evita
+    # deadlock com webhook (intent -> turno) e permite que uma aprovação atrasada
+    # seja materializada no turno original antes da decisão de fechamento.
+    try:
+        OnlinePaymentService.prepare_shift_for_close(
+            db,
+            restaurant_id=rest_id,
+            shift_id=candidate_shift.id,
+        )
+    except OnlinePaymentValidationError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Existe um Pix online com estado financeiro inconsistente. O caixa não foi fechado.",
+        ) from exc
+    except (OnlinePaymentConfigurationError, MercadoPagoError) as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível confirmar com segurança os Pix online do turno. Tente o fechamento novamente.",
+        ) from exc
+
+    # Criações de Pix também adquirem este lock antes de fixar turno_id. Depois
+    # daqui nenhuma nova intenção pode nascer neste turno enquanto o fechamento
+    # decide e grava o estado final.
     shift = db.query(CaixaTurno).with_for_update().filter(
         CaixaTurno.restaurante_id == rest_id,
+        CaixaTurno.id == candidate_shift.id,
         CaixaTurno.status == "aberto",
     ).first()
     if shift is None:
-        raise HTTPException(status_code=400, detail="Não há turno aberto para fechamento.")
+        raise HTTPException(
+            status_code=409,
+            detail="O estado do turno mudou durante o fechamento. Atualize o caixa e tente novamente.",
+        )
 
+    unresolved_online = int(db.query(OnlinePaymentIntent).filter(
+        OnlinePaymentIntent.restaurante_id == rest_id,
+        OnlinePaymentIntent.turno_id == shift.id,
+        OnlinePaymentIntent.status.in_(UNRESOLVED_ONLINE_PAYMENT_STATUSES),
+    ).count())
     pending = int(db.query(Pagamento).filter(
         Pagamento.restaurante_id == rest_id,
         Pagamento.turno_id == shift.id,
         Pagamento.status == "pendente",
     ).count())
     open_commands = count_open_commands(db, rest_id)
-    if pending or open_commands:
+    if unresolved_online or pending or open_commands:
         parts = []
+        if unresolved_online:
+            parts.append(f"{unresolved_online} Pix online aguardando confirmação ou cancelamento")
         if pending:
             parts.append(f"{pending} pagamento(s) aguardando confirmação")
         if open_commands:

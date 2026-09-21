@@ -50,7 +50,7 @@ export function SuperAdminBillingTab({
           </div>
           <p className="text-[11px] text-koma-subtle">
             {tenantsAvailable
-              ? "Soma dos preços de catálogo dos planos ativos; não é receita recebida"
+              ? "Soma dos preços do catálogo atual pelos perfis de recursos ativos; não é receita recebida e não representa os contratos dos tenants"
               : "Fonte de restaurantes indisponível"}
           </p>
         </div>
@@ -92,7 +92,7 @@ export function SuperAdminBillingTab({
           <div>
             <h3 className="text-base font-bold text-koma-foreground flex items-center gap-2">
               <ReceiptText className="w-5 h-5 text-[#00b894]" />
-              Catálogo Comercial Oficial KÔMA
+              Catálogo vigente para novas contratações
             </h3>
             <p className="text-xs text-koma-muted mt-0.5">
               Consumido diretamente da fonte oficial ({SUBSCRIPTION_PLANS.length} planos com {formatPercentage(ANNUAL_DISCOUNT_RATE)} de desconto anual)
@@ -121,7 +121,7 @@ export function SuperAdminBillingTab({
                     <span className="text-sm font-bold text-koma-foreground">{plan.name}</span>
                     {tenantCount !== null ? (
                       <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-zinc-800 text-koma-secondary">
-                        {tenantCount} cliente(s)
+                        {tenantCount} perfil(is)
                       </span>
                     ) : (
                       <span className="text-[10px] text-koma-subtle font-mono">

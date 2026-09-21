@@ -64,6 +64,7 @@ from ...services.atendimentos import (
     ensure_launch_identity,
 )
 from ...services.capabilities import has_capability
+from ...services.operational_modes import mode_is_allowed
 from ...services.clientes import (
     buscar_cliente_por_id,
     cadastrar_ou_atualizar_cliente,
@@ -107,6 +108,7 @@ class PosAdapter:
         tipo_pedido = {
             "consumo no local": "Consumo no Local",
             "mesa": "Consumo no Local",
+            "local": "Consumo no Local",
             "delivery": "Entrega",
             "entrega": "Entrega",
             "retirada": "Retirada",
@@ -118,7 +120,23 @@ class PosAdapter:
         if tipo_pedido is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Tipo de pedido inválido. Use Mesa, Delivery ou Retirada.",
+                detail="Tipo de pedido inválido. Use Consumo no Local, Delivery ou Retirada.",
+            )
+
+        config = (
+            db.query(ConfiguracaoRestaurante)
+            .filter(ConfiguracaoRestaurante.restaurante_id == rid)
+            .one_or_none()
+        )
+        canonical_mode = {
+            "Consumo no Local": "consumo_local",
+            "Retirada": "retirada",
+            "Entrega": "delivery",
+        }[tipo_pedido]
+        if not mode_is_allowed(config, canonical_mode):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Esta modalidade de pedido está desativada para o restaurante.",
             )
 
         address_snapshot = (
@@ -141,15 +159,13 @@ class PosAdapter:
 
         require_open_cash_shift(db, rid)
 
-        if tipo_pedido == "Consumo no Local" and venda_in.mesa_id is None:
+        # Modalidade e associação a mesa são dimensões independentes:
+        # consumo no local e retirada podem existir com ou sem mesa. Delivery
+        # continua sem mesa porque seu destino canônico é o endereço de entrega.
+        if tipo_pedido == "Entrega" and venda_in.mesa_id is not None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Selecione uma mesa para pedidos de consumo no local.",
-            )
-        if tipo_pedido != "Consumo no Local" and venda_in.mesa_id is not None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Pedidos de delivery ou retirada não podem ser vinculados a uma mesa.",
+                detail="Pedidos de delivery não podem ser vinculados a uma mesa.",
             )
 
         if tipo_pedido == "Entrega":
@@ -301,6 +317,7 @@ class PosAdapter:
             delivery=delivery_input,
             idempotency_key=normalized_idempotency_key,
             operator_user_id=garcom_id,
+            onboarding_test=bool(venda_in.onboarding_test),
             table_id=str(venda_in.mesa_id) if venda_in.mesa_id is not None else None,
         )
 

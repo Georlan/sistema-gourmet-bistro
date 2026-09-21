@@ -27,6 +27,7 @@ def test_every_http_operation_has_exactly_one_owner():
     ("POST", "/mesas/{mesa_id}/imprimir-recibo", "atendimentos.imprimir_recibo_mesa_com_identidade"),
     ("POST", "/comandas/{comanda_id}/lancamentos", "atendimentos.lancar_itens_na_familia_principal"),
     ("POST", "/comandas/venda-direta", "atendimentos.venda_direta_respeitando_familia_principal"),
+    ("POST", "/comandas/{comanda_id}/associar-mesa/{mesa_id}", "atendimentos.associar_mesa_ao_pedido"),
     ("POST", "/comandas/{comanda_id}/transferir/{nova_mesa_id}", "atendimentos.transferir_atendimento_compativel"),
     ("POST", "/comandas/mesclar", "atendimentos.mesclar_atendimentos_compativel"),
     ("POST", "/comandas/desmesclar", "atendimentos.desmesclar_atendimento_compativel"),

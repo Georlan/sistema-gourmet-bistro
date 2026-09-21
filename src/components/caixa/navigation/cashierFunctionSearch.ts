@@ -1,4 +1,3 @@
-import type { CashierSettingsTab } from '../settings/cashierSettingsNavigation';
 import type { CashierNavigationGroup } from './cashierNavigation';
 
 export type CashierFunctionSearchEntry = {
@@ -6,7 +5,6 @@ export type CashierFunctionSearchEntry = {
   label: string;
   context: string;
   navigationId: string;
-  settingsTab?: CashierSettingsTab;
   aliases?: readonly string[];
 };
 
@@ -15,6 +13,7 @@ const NAVIGATION_ALIASES: Readonly<Record<string, readonly string[]>> = {
   vendas_novo_pedido: ['pdv', 'balcao', 'balcão', 'comanda', 'abrir pedido'],
   vendas_salao: ['atendimento salao', 'atendimento salão'],
   vendas_cozinha: ['kds', 'producao', 'produção'],
+  vendas_retiradas: ['retirada', 'retiradas', 'pickup', 'pedido para retirar', 'retirar pedido', 'balcao retirada', 'balcão retirada'],
   vendas_entregas: ['delivery', 'motoboy', 'entregador', 'entregadores'],
   caixa_turno_atual: ['abrir caixa', 'caixa aberto', 'caixa fechado'],
   caixa_movimentacoes: ['sangria', 'suprimento', 'retirada caixa', 'entrada caixa', 'ajuste caixa'],
@@ -27,58 +26,34 @@ const NAVIGATION_ALIASES: Readonly<Record<string, readonly string[]>> = {
   estoque_inventario: ['contagem', 'inventario', 'inventário'],
   estoque_fornecedores: ['fornecedor', 'fornecedores', 'distribuidor', 'distribuidores'],
   clientes: ['crm', 'cadastro cliente', 'cadastro clientes'],
-  online_loja: ['loja online', 'perfil cardapio', 'perfil cardápio', 'marca cardapio', 'marca cardápio'],
-  online_operacao: ['pedidos online', 'entrega online', 'pagamentos online', 'delivery online'],
+  online_perfil: ['loja online', 'perfil cardapio', 'perfil cardápio', 'dados restaurante online'],
+  online_marca: ['marca cardapio', 'marca cardápio', 'logo cardapio', 'banner cardapio'],
+  online_pedidos: ['pedidos online', 'horario', 'horários', 'pedidos agendados'],
+  online_bloqueios: ['clientes bloqueados', 'bloqueio cliente', 'desbloquear cliente', 'historico bloqueios', 'histórico bloqueios'],
+  online_entrega: ['entrega online', 'delivery online', 'taxa de entrega', 'valor por km', 'frete', 'ponto de partida'],
+  online_pagamentos: ['pagamentos online', 'formas de pagamento', 'pix cardapio', 'dinheiro cardapio'],
   online_divulgacao: ['qr code', 'qrcode', 'link cardapio', 'link cardápio'],
-  relatorios: ['dashboard', 'indicadores', 'faturamento', 'dre', 'fluxo de caixa', 'mais vendidos'],
-  permissoes_cargos: ['equipe', 'funcionarios', 'funcionários', 'cargos', 'permissoes', 'permissões'],
-  config_operacao: ['configuracao', 'configuração', 'preferencias', 'preferências'],
+  relatorios: ['dashboard', 'indicadores', 'faturamento'],
+  relatorios_visao_geral: ['dashboard', 'indicadores', 'visao geral', 'visão geral', 'faturamento'],
+  relatorios_financeiro: ['dre', 'fluxo de caixa', 'recebimentos', 'financeiro'],
+  relatorios_produtos: ['mais vendidos', 'top produtos', 'cmv', 'produtos'],
+  relatorios_equipe: ['desempenho equipe', 'garcom', 'garçom', 'equipe'],
+  permissoes_cargos: ['equipe'],
+  equipe_pessoas: ['pessoas', 'funcionarios', 'funcionários', 'colaboradores', 'convites'],
+  equipe_funcoes_acessos: ['funcoes', 'funções', 'acessos', 'cargos', 'permissoes', 'permissões'],
+  impressao_salao: ['configuracao', 'configuração', 'preferencias', 'preferências'],
+  config_aparencia: ['tema', 'tema claro', 'tema escuro', 'fonte', 'tamanho do texto', 'texto grande'],
+  config_impressao: ['impressora', 'impressoras', 'cupom', 'fila impressao', 'fila impressão', 'teste impressora'],
+  config_mesas: ['cadastro mesas', 'capacidade mesa', 'nomes mesas'],
+  config_garcom: ['garcom', 'garçom', 'garcons', 'garçons', 'atendente', 'atendimento', 'app garcom', 'app garçom'],
+  config_taxa: ['taxa servico', 'taxa serviço', 'gorjeta', 'percentual servico', 'percentual serviço', '10%'],
+  config_implantacao: ['implantacao', 'implantação', 'ativacao', 'ativação', 'primeiro acesso', 'onboarding'],
   config_integracoes: ['integracao', 'integração', 'integracoes', 'integrações', 'mercado pago', 'pix', 'oauth'],
-  assinatura_pix: ['plano', 'planos', 'assinatura', 'cobranca', 'cobrança'],
+  assinatura_pix: ['assinatura', 'cobranca', 'cobrança', 'conta assinatura'],
+  assinatura_meu_plano: ['meu plano', 'plano atual', 'assinatura atual'],
+  assinatura_planos_upgrade: ['planos', 'upgrade', 'comparar planos', 'mudar plano'],
+  assinatura_contrato_documentos: ['contrato', 'documentos', 'comprovante', 'termos'],
 };
-
-const SETTINGS_DEEP_LINKS: readonly CashierFunctionSearchEntry[] = [
-  {
-    id: 'settings_aparencia',
-    label: 'Aparência',
-    context: 'Configurações › Neste dispositivo',
-    navigationId: 'config_operacao',
-    settingsTab: 'aparencia',
-    aliases: ['tema', 'tema claro', 'tema escuro', 'fonte', 'tamanho do texto', 'texto grande'],
-  },
-  {
-    id: 'settings_impressao',
-    label: 'Impressão',
-    context: 'Configurações › Neste dispositivo',
-    navigationId: 'config_operacao',
-    settingsTab: 'impressao',
-    aliases: ['impressora', 'impressoras', 'cupom', 'fila impressao', 'fila impressão', 'teste impressora'],
-  },
-  {
-    id: 'settings_mesas',
-    label: 'Mesas',
-    context: 'Configurações › Operação do salão',
-    navigationId: 'config_operacao',
-    settingsTab: 'mesas',
-    aliases: ['cadastro mesas', 'capacidade mesa', 'nomes mesas'],
-  },
-  {
-    id: 'settings_garcom',
-    label: 'App do Garçom',
-    context: 'Configurações › Operação do salão',
-    navigationId: 'config_operacao',
-    settingsTab: 'garcom',
-    aliases: ['garcom', 'garçom', 'garcons', 'garçons', 'atendente', 'atendimento', 'app garcom', 'app garçom'],
-  },
-  {
-    id: 'settings_taxa',
-    label: 'Taxa de Serviço',
-    context: 'Configurações › Operação do salão',
-    navigationId: 'config_operacao',
-    settingsTab: 'taxa',
-    aliases: ['taxa servico', 'taxa serviço', 'gorjeta', 'percentual servico', 'percentual serviço', '10%'],
-  },
-];
 
 export function normalizeCashierFunctionSearch(value: string): string {
   return value
@@ -148,7 +123,7 @@ export function buildCashierFunctionSearchEntries(
     }),
   );
 
-  return [...SETTINGS_DEEP_LINKS, ...navigationEntries];
+  return navigationEntries;
 }
 
 export function searchCashierFunctions(

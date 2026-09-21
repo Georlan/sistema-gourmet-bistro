@@ -6,7 +6,7 @@ from app.database import Base, SessionLocal, current_restaurante_id, engine, ten
 from app.main import app
 from app.models import Comanda, Restaurante, Usuario
 from app.online_order_control_models import OnlineOrderCustomerBlock, OnlineOrderOperationalAudit
-from app.order_chat_models import OrderMessage
+from app.order_chat_models import OrderConversationEvent
 from app.routes.auth import create_access_token
 from app.services.order_chat_service import create_conversation_for_order
 
@@ -104,15 +104,15 @@ def test_reasoned_rejection_uses_canonical_lifecycle():
             assert order.delivery_status == "recusado"
             assert order.fechada is True
             notice = (
-                db.query(OrderMessage)
+                db.query(OrderConversationEvent)
                 .filter(
-                    OrderMessage.restaurante_id == RID,
-                    OrderMessage.pedido_id == order.id,
-                    OrderMessage.event_key == "rejection_reason",
+                    OrderConversationEvent.restaurante_id == RID,
+                    OrderConversationEvent.pedido_id == order.id,
+                    OrderConversationEvent.event_key == "rejection_reason",
                 )
                 .one()
             )
-            assert notice.sender_type == "system"
+            assert notice.event_key == "rejection_reason"
             assert notice.body == f"Motivo informado pelo restaurante: {reason}"
     finally:
         db.close()

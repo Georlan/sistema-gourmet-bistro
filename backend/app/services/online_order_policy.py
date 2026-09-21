@@ -29,6 +29,15 @@ _DAY_PATTERN = re.compile(
     r"\b(segunda|terca|quarta|quinta|sexta|sabado|domingo)\b"
 )
 _TIME_PATTERN = re.compile(r"\b([01]?\d|2[0-3])(?::([0-5]\d))?h?\b")
+_WEEKDAY_LABELS = (
+    "segunda-feira",
+    "terça-feira",
+    "quarta-feira",
+    "quinta-feira",
+    "sexta-feira",
+    "sábado",
+    "domingo",
+)
 
 
 @dataclass(frozen=True)
@@ -161,6 +170,60 @@ def schedule_is_open(
     return False if parsed_any else None
 
 
+def next_schedule_opening(
+    schedule: Any,
+    *,
+    now: datetime.datetime | None = None,
+) -> datetime.datetime | None:
+    """Retorna a próxima abertura configurada no fuso operacional.
+
+    A agenda continua sendo a fonte de verdade: esta função apenas projeta a
+    próxima borda de abertura para comunicação pública.
+    """
+    local_now = now or get_operational_now()
+    candidates: list[datetime.datetime] = []
+
+    for days_raw, hours_raw in _schedule_entries(schedule):
+        days = _parse_days(days_raw)
+        intervals = _parse_hours(hours_raw)
+        if not days or not intervals:
+            continue
+
+        for offset in range(8):
+            candidate_date = (local_now + datetime.timedelta(days=offset)).date()
+            if candidate_date.weekday() not in days:
+                continue
+            for start, _end in intervals:
+                candidate = datetime.datetime.combine(
+                    candidate_date,
+                    start,
+                    tzinfo=local_now.tzinfo,
+                )
+                if candidate > local_now:
+                    candidates.append(candidate)
+
+    return min(candidates) if candidates else None
+
+
+def next_schedule_opening_label(
+    schedule: Any,
+    *,
+    now: datetime.datetime | None = None,
+) -> str | None:
+    local_now = now or get_operational_now()
+    opening = next_schedule_opening(schedule, now=local_now)
+    if opening is None:
+        return None
+
+    days_ahead = (opening.date() - local_now.date()).days
+    time_label = opening.strftime("%H:%M")
+    if days_ahead == 0:
+        return f"hoje às {time_label}"
+    if days_ahead == 1:
+        return f"amanhã às {time_label}"
+    return f"{_WEEKDAY_LABELS[opening.weekday()]} às {time_label}"
+
+
 def _restaurant_session(restaurante: Any):
     try:
         return object_session(restaurante)
@@ -221,9 +284,9 @@ def evaluate_online_order_policy(
     Precedência operacional:
     1. Pausa de emergência dedicada bloqueia sempre;
     2. Forçado Fechado bloqueia sempre;
-    3. Forçado Aberto ignora apenas a agenda;
-    4. Caixa aberto ignora apenas a agenda;
-    5. sem override operacional, vale o horário cadastrado.
+    3. agenda válida fecha o cardápio fora dos horários cadastrados;
+    4. dentro da agenda, o cardápio acompanha o turno do caixa;
+    5. sem agenda interpretável, caixa/override preservam compatibilidade.
 
     Restrições específicas, como delivery desativado, continuam valendo mesmo
     com caixa aberto.
@@ -258,21 +321,30 @@ def evaluate_online_order_policy(
 
     forced_open = "forcado aberto" in override or override == "aberto"
     cash_shift_open = _infer_open_cash_shift(restaurante) if cash_open is None else cash_open
-    operational_open = forced_open or cash_shift_open
+    schedule_state = schedule_is_open(
+        getattr(restaurante, "horarios_funcionamento", None),
+        now=now,
+    )
 
-    if not operational_open:
-        schedule_state = schedule_is_open(
-            getattr(restaurante, "horarios_funcionamento", None),
-            now=now,
+    # Quando há uma agenda válida, ela é autoritativa para o fechamento.
+    # Abrir o caixa não deve fazer o cardápio aceitar pedidos fora do horário.
+    if schedule_state is False:
+        return OnlineOrderPolicy(
+            accepting_orders=False,
+            delivery_enabled=delivery_enabled,
+            pickup_enabled=pickup_enabled,
+            reason="O estabelecimento está fechado neste horário.",
+            source="schedule",
         )
-        if schedule_state is False:
-            return OnlineOrderPolicy(
-                accepting_orders=False,
-                delivery_enabled=delivery_enabled,
-                pickup_enabled=pickup_enabled,
-                reason="O restaurante está fora do horário de pedidos online.",
-                source="schedule",
-            )
+
+    if schedule_state is True and not cash_shift_open:
+        return OnlineOrderPolicy(
+            accepting_orders=False,
+            delivery_enabled=delivery_enabled,
+            pickup_enabled=pickup_enabled,
+            reason="O estabelecimento está fechado até a abertura do caixa.",
+            source="cash_closed",
+        )
 
     normalized_mode = _normalize_text(modalidade)
     if normalized_mode == "delivery" and not delivery_enabled:
@@ -284,10 +356,10 @@ def evaluate_online_order_policy(
             source="delivery_disabled",
         )
 
-    source = "automatic"
-    if forced_open:
+    source = "schedule_cash" if schedule_state is True else "automatic"
+    if schedule_state is not True and forced_open:
         source = "forced_open"
-    elif cash_shift_open:
+    elif schedule_state is not True and cash_shift_open:
         source = "cash_open"
 
     return OnlineOrderPolicy(

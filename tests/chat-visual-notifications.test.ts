@@ -13,6 +13,7 @@ const trackingRoute = source('../backend/app/routes/order_tracking.py');
 const cashierChatRoute = source('../backend/app/routes/caixa_chat.py');
 const archiveService = source('../backend/app/services/order_chat_archive_service.py');
 const cardapioRoute = source('../backend/app/routes/cardapio.py');
+const cardapioPage = source('../src/cardapio/CardapioPage.tsx');
 
 test('cardapio mantém um gatilho flutuante de chat dentro da própria página', () => {
   assert.match(drawer, /floating-order-chat-trigger/);
@@ -53,11 +54,47 @@ test('cliente recebe badge visual de mensagens não lidas do restaurante', () =>
   assert.match(trackingRoute, /"unread_count": customer_unread_count/);
 });
 
-test('conversa aberta continua marcando novas respostas como lidas', () => {
-  assert.match(clientPanel, /messages\.length/);
+test('conversa aberta marca leitura só quando existe resposta observada da equipe', () => {
+  assert.match(clientPanel, /observedStaffUnreadRef/);
+  assert.match(clientPanel, /incoming\.sender_type === "staff"/);
+  assert.match(clientPanel, /readInFlightRef/);
   assert.match(clientPanel, /\/read/);
   assert.match(clientPanel, /visibilitychange/);
+  assert.doesNotMatch(clientPanel, /\[markRead, messages\.length\]/);
 });
+
+
+test('cardapio usa SSE e resumo leve em vez de polling contínuo de pedidos', () => {
+  assert.match(drawer, /new EventSource/);
+  assert.match(drawer, /\/summary/);
+  assert.match(drawer, /30000/);
+  assert.doesNotMatch(drawer, /6000/);
+  assert.match(clientPanel, /\$\{apiRoot\}\/summary/);
+  assert.match(clientPanel, /isReconnect[\s\S]*void refresh\(\)/);
+  assert.match(drawer, /openedOrders/);
+  assert.doesNotMatch(cardapioPage, /ACTIVE_ORDER_REFRESH_MS/);
+  assert.doesNotMatch(cardapioPage, /setInterval\(refresh/);
+  assert.match(cardapioPage, /onRealtimeStatus=\{handleRealtimeOrderStatus\}/);
+});
+
+test('resumo público de tracking evita carregar itens e restaurante no hot path', () => {
+  assert.match(trackingRoute, /@router\.get\("\/\{token\}\/summary"/);
+  assert.match(trackingRoute, /func\.count\(OrderMessage\.id\)/);
+  assert.match(trackingRoute, /customer_unread_count/);
+});
+
+test('realtime do acompanhamento sincroniza a modalidade convertida do pedido', () => {
+  assert.match(drawer, /tipo\?: string;/);
+  assert.match(drawer, /state\?: OrderStateContract;/);
+  assert.match(drawer, /payload\.tipo/);
+  assert.match(drawer, /payload\.state/);
+  assert.match(cardapioPage, /backendState\?: OrderStateContract/);
+  assert.match(cardapioPage, /const nextTipo = String\(tipo \|\| order\.tipo/);
+  assert.match(cardapioPage, /currentState\).*JSON\.stringify\(state\)/);
+  assert.match(cardapioPage, /tipo: nextTipo/);
+});
+
+
 
 test('caixa usa realtime autenticado e polling somente como fallback', () => {
   assert.match(cashierHook, /\/api\/caixa\/conversas\/unread-count/);
@@ -83,6 +120,12 @@ test('drawer do Caixa protege seleção contra respostas HTTP atrasadas e não i
   assert.match(cashierDrawer, /\{message\.body\}/);
 });
 
+test('Caixa evita POST de leitura quando a conversa já está zerada', () => {
+  assert.match(cashierDrawer, /unreadByConversationRef/);
+  assert.match(cashierDrawer, /if \(!force && \(unreadByConversationRef\.current\.get\(conversationId\) \|\| 0\) <= 0\) return/);
+  assert.match(cashierDrawer, /force: true/);
+});
+
 test('read_update do Caixa não recarrega a thread nem dispara nova marcação de leitura', () => {
   assert.match(cashierDrawer, /case 'read_update':/);
   const readUpdateBlock = cashierDrawer.split("case 'read_update':")[1]?.split('default:')[0] ?? '';
@@ -93,12 +136,13 @@ test('read_update do Caixa não recarrega a thread nem dispara nova marcação d
   assert.match(cashierDrawer, /items\.some\(\(item\) => item\.id === message\.id\)/);
 });
 
-test('central do Caixa prioriza atenção, oferece respostas rápidas e composer multilinha', () => {
+test('central do Caixa prioriza atenção sem permitir resposta rápida fingir status', () => {
   assert.match(cashierDrawer, /sortedConversations/);
   assert.match(cashierDrawer, /isWaitingForStaff/);
   assert.match(cashierDrawer, /aguardando resposta/);
   assert.match(cashierDrawer, /QUICK_REPLIES/);
-  assert.match(cashierDrawer, /Estamos preparando seu pedido\./);
+  assert.match(cashierDrawer, /Certo, vamos verificar\./);
+  assert.doesNotMatch(cashierDrawer, /Seu pedido saiu para entrega\./);
   assert.match(cashierDrawer, /textarea/);
   assert.match(cashierDrawer, /Enter envia · Shift\+Enter quebra linha/);
   assert.match(cashierDrawer, /aria-modal="true"/);
@@ -107,36 +151,33 @@ test('central do Caixa prioriza atenção, oferece respostas rápidas e composer
 test('central do Caixa fecha por backdrop e Escape sem apagar o realtime corrigido', () => {
   assert.match(cashierDrawer, /event\.target === event\.currentTarget/);
   assert.match(cashierDrawer, /event\.key === 'Escape'/);
+  assert.match(cashierDrawer, /case 'reconnected':/);
   assert.match(cashierDrawer, /case 'new_message':/);
   assert.match(cashierDrawer, /case 'status_changed':/);
   assert.match(cashierDrawer, /case 'read_update':/);
+  assert.match(cashierHook, /event: 'reconnected'/);
 });
 
-test('central do Caixa arquiva pedidos terminais sem apagar histórico', () => {
-  assert.match(cashierDrawer, /type ConversationFilter = 'active' \| 'archived' \| 'all'/);
-  assert.match(cashierDrawer, /isArchivedConversation/);
-  assert.match(cashierDrawer, /TERMINAL_CHAT_STATUSES/);
-  assert.match(cashierDrawer, /'finalizado'/);
-  assert.match(cashierDrawer, /Ativas/);
-  assert.match(cashierDrawer, /Arquivadas/);
-  assert.match(cashierDrawer, /Todas/);
-  assert.match(cashierDrawer, /type="search"/);
-  assert.match(cashierDrawer, /Buscar pedido, cliente ou mensagem/);
-  assert.match(cashierDrawer, /Conversa arquivada/);
-  assert.match(cashierChatRoute, /list_caixa_conversations_for_central/);
-  assert.match(archiveService, /OrderConversation\.closed_at\.isnot\(None\)/);
-  assert.match(archiveService, /"closed_at": conversation\.closed_at\.isoformat/);
+test('central do Caixa consulta somente conversas operacionais ativas', () => {
+  assert.match(cashierChatRoute, /list_caixa_conversations/);
+  assert.doesNotMatch(cashierChatRoute, /list_caixa_conversations_for_central/);
+  assert.match(cashierDrawer, /Somente pedidos ativos/);
+  assert.doesNotMatch(cashierDrawer, /filterButton\('archived'/);
+  assert.doesNotMatch(cashierDrawer, /filterButton\('all'/);
 });
 
-test('mensagem nova em pedido terminal volta para a fila como pós-venda', () => {
-  assert.match(cashierDrawer, /conversation\.unread_count <= 0/);
-  assert.match(cashierDrawer, /!isWaitingForStaff\(conversation\)/);
-  assert.match(cashierDrawer, /Pós-venda/);
-  assert.match(cashierDrawer, /volta automaticamente para Ativas como pós-venda/);
-  assert.match(trackingRoute, /reopen_completed_conversation_if_needed/);
-  assert.match(trackingRoute, /state_contract\["can_chat"\] = True/);
-  assert.match(archiveService, /conversation\.closed_at = None/);
-  assert.match(archiveService, /"status": "post_sale"/);
-  assert.match(clientPanel, /atendimento de pós-venda sem reabrir o pedido/);
-  assert.doesNotMatch(clientPanel, /Boolean\(closedAt\)/);
+test('pedido terminal permanece read-only e não reabre pós-venda', () => {
+  assert.doesNotMatch(trackingRoute, /reopen_completed_conversation_if_needed/);
+  assert.doesNotMatch(trackingRoute, /state_contract\["can_chat"\] = True/);
+  assert.doesNotMatch(clientPanel, /atendimento de pós-venda/);
+  assert.doesNotMatch(archiveService, /conversation\.closed_at = None/);
+});
+
+
+test('rascunhos ficam locais e envios carregam chave idempotente', () => {
+  assert.match(clientPanel, /sessionStorage\.setItem\(draftKey, input\)/);
+  assert.match(clientPanel, /client_message_id: clientMessageId/);
+  assert.match(cashierDrawer, /CASHIER_CHAT_DRAFT_TTL_MS/);
+  assert.match(cashierDrawer, /localStorage\.setItem/);
+  assert.match(cashierDrawer, /client_message_id: clientMessageId/);
 });

@@ -41,6 +41,8 @@ class OnlinePaymentProvider(Protocol):
 
     def get_payment(self, external_payment_id: str) -> ProviderPayment: ...
 
+    def cancel_payment(self, external_payment_id: str) -> ProviderPayment: ...
+
     def refund_payment(
         self,
         external_payment_id: str,

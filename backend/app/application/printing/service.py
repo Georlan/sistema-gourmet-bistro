@@ -70,6 +70,18 @@ class PrintingApplicationService:
                         "Pedido local não possui impressão de despacho",
                         status_code=422,
                     )
+                # Consumo local pode nascer sem mesa no Cardápio Online/PDV.
+                # Nesses casos (e em qualquer pedido originalmente online) usamos
+                # a via remota da mesma fonte canônica, preservando cliente,
+                # pagamento e origem sem inventar uma mesa.
+                if cls._uses_remote_order_layout(lancamento, comanda):
+                    return cls._run_remote_order_engine(
+                        db,
+                        intent,
+                        lancamento,
+                        comanda,
+                        source_items,
+                    )
                 return cls._run_dine_in_order_engine(
                     db,
                     intent,
@@ -172,6 +184,22 @@ class PrintingApplicationService:
             turno_id,
         )
         return [job] if job is not None else []
+
+    @staticmethod
+    def _uses_remote_order_layout(
+        lancamento: Optional[Lancamento],
+        comanda: Comanda,
+    ) -> bool:
+        """Define o layout sem confundir modalidade com localização.
+
+        Pedidos originados no Cardápio Online mantêm o contexto remoto mesmo se
+        uma mesa for associada depois. DINE_IN sem mesa também precisa desse
+        caminho, pois não existe identidade de mesa a imprimir.
+        """
+        origin = str(
+            lancamento.origem if lancamento is not None else ""
+        ).strip().casefold()
+        return origin == "cardapio" or comanda.mesa_id is None
 
     @classmethod
     def _run_dine_in_order_engine(
@@ -346,6 +374,20 @@ class PrintingApplicationService:
         is_online_order = origin_label == "CARDÁPIO ONLINE"
         customer_name = str(comanda.identificador or "").strip() or None
         is_delivery = cls._is_delivery_type(comanda.tipo)
+        is_dine_in = cls._is_dine_in_type(comanda.tipo)
+        table_id = (
+            int(comanda.mesa_id)
+            if is_dine_in and comanda.mesa_id is not None
+            else None
+        )
+        if is_online_order:
+            location_label = None
+        elif is_delivery:
+            location_label = "ENTREGA"
+        elif is_dine_in:
+            location_label = None if table_id is not None else "SEM MESA"
+        else:
+            location_label = "BALCÃO"
         operator_name = cls._operator_name(lancamento, comanda)
         loyalty_previous_orders: Optional[int] = None
         customer_id = cls._resolve_registered_customer_id(
@@ -371,12 +413,9 @@ class PrintingApplicationService:
             is_primary = destination_key == str(primary_destination).strip().upper()
             variant = ComandaVariant(
                 origin_label=origin_label,
-                location_label=(
-                    None
-                    if is_online_order
-                    else ("ENTREGA" if is_delivery else "BALCÃO")
-                ),
+                location_label=location_label,
                 operator_label=(None if is_online_order else "OPERADOR"),
+                table_id=table_id,
                 customer_name=customer_name if is_primary else None,
                 customer_phone=(comanda.delivery_telefone if is_primary else None),
                 loyalty_previous_orders=(
@@ -673,6 +712,17 @@ class PrintingApplicationService:
     def _is_delivery_type(tipo: object) -> bool:
         normalized = str(tipo or "").strip().casefold()
         return any(term in normalized for term in ("delivery", "entrega"))
+
+    @staticmethod
+    def _is_dine_in_type(tipo: object) -> bool:
+        normalized = str(tipo or "").strip().casefold()
+        return normalized in {
+            "consumo no local",
+            "consumo_local",
+            "dine_in",
+            "mesa",
+            "local",
+        }
 
     @staticmethod
     def _to_print_item(item: Item) -> PrintItem:

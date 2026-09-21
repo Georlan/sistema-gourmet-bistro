@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 import uuid
 from decimal import Decimal
@@ -15,10 +16,12 @@ from sqlalchemy.pool import StaticPool
 from app.contract_models import ContractAcceptance, RestaurantContractAcceptance
 from app.contract_validation import is_valid_cnpj, is_valid_cpf, tax_id_kind
 from app.crypt import decrypt_field, encrypt_field
+from app.config import settings
 from app.database import current_restaurante_id
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.routes import contracts, super_admin_contracts
 from app.services.billing_service import tenant_commercial_terms
+from app.services.online_payments.service import OnlinePaymentService
 from app.subscription import (
     COMMERCIAL_PRICING_VERSION,
     subscription_annual_monthly_equivalent,
@@ -322,6 +325,118 @@ def test_legacy_v25_snapshot_remains_authoritative_and_immutable(client_and_sess
         db.refresh(acceptance)
         assert acceptance.receipt_snapshot_encrypted == frozen_ciphertext
         assert json.loads(decrypt_field(acceptance.receipt_snapshot_encrypted)) == legacy_receipt
+    finally:
+        db.close()
+
+
+def test_latest_linked_acceptance_switches_future_split_without_rewriting_history(
+    client_and_session,
+    monkeypatch,
+):
+    client, Session = client_and_session
+    old_response = client.post(
+        "/api/contracts/accept",
+        json=_payload(plan="pro", billing_cycle="mensal"),
+    )
+    new_response = client.post(
+        "/api/contracts/accept",
+        json=_payload(plan="premium", billing_cycle="mensal"),
+    )
+    assert old_response.status_code == 201, old_response.text
+    assert new_response.status_code == 201, new_response.text
+
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    db = Session()
+    try:
+        old_acceptance = (
+            db.query(ContractAcceptance)
+            .filter(ContractAcceptance.protocol == old_response.json()["protocol"])
+            .one()
+        )
+        new_acceptance = (
+            db.query(ContractAcceptance)
+            .filter(ContractAcceptance.protocol == new_response.json()["protocol"])
+            .one()
+        )
+
+        old_receipt = json.loads(
+            decrypt_field(old_acceptance.receipt_snapshot_encrypted)
+        )
+        old_receipt["commercial"].pop("pricingVersion", None)
+        old_receipt["commercial"]["fixedMonthlyPrice"] = "209.00"
+        old_receipt["commercial"]["billingAmount"] = "209.00"
+        old_receipt["commercial"]["annualMonthlyEquivalent"] = None
+        old_receipt["commercial"]["marketplaceRate"] = "0.006900"
+        old_receipt["documents"]["version"] = "2.5"
+        old_snapshot = json.dumps(
+            old_receipt,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        old_acceptance.receipt_snapshot_encrypted = encrypt_field(old_snapshot)
+        old_acceptance.fixed_monthly_price = Decimal("209.00")
+        old_acceptance.billing_amount = Decimal("209.00")
+        old_acceptance.marketplace_rate = Decimal("0.0069")
+        old_acceptance.legal_version = "2.5"
+
+        base_time = dt.datetime(2026, 9, 18, 12, 0, tzinfo=dt.timezone.utc)
+        db.add(
+            RestaurantContractAcceptance(
+                id="00000000-0000-0000-0000-000000000001",
+                restaurante_id=991,
+                acceptance_id=old_acceptance.id,
+                linked_at=base_time,
+            )
+        )
+        db.commit()
+        frozen_old_ciphertext = old_acceptance.receipt_snapshot_encrypted
+
+        # O slug de recursos já pode até dizer Premium: dinheiro continua Pro 2.5
+        # enquanto o novo aceite ainda não virou autoridade.
+        restaurant = SimpleNamespace(
+            id=991,
+            plano="premium",
+            billing_mode="subscription",
+        )
+        assert OnlinePaymentService.marketplace_fee_for_tenant(
+            db,
+            Decimal("100.00"),
+            restaurant,
+        ) == Decimal("0.69")
+
+        # A mudança financeira só acontece quando o novo aceite é vinculado.
+        db.add(
+            RestaurantContractAcceptance(
+                id="00000000-0000-0000-0000-000000000002",
+                restaurante_id=991,
+                acceptance_id=new_acceptance.id,
+                linked_at=base_time + dt.timedelta(seconds=1),
+            )
+        )
+        db.commit()
+
+        terms = tenant_commercial_terms(db, 991)
+        assert terms is not None
+        assert terms.protocol == new_response.json()["protocol"]
+        assert terms.plan == "premium"
+        assert terms.marketplace_rate == Decimal("0.002000")
+        assert terms.pricing_version == COMMERCIAL_PRICING_VERSION
+        assert OnlinePaymentService.marketplace_fee_for_tenant(
+            db,
+            Decimal("100.00"),
+            restaurant,
+        ) == Decimal("0.20")
+
+        # O histórico contratual anterior permanece imutável.
+        db.refresh(old_acceptance)
+        assert old_acceptance.receipt_snapshot_encrypted == frozen_old_ciphertext
+        assert (
+            json.loads(decrypt_field(old_acceptance.receipt_snapshot_encrypted))
+            ["commercial"]["marketplaceRate"]
+            == "0.006900"
+        )
+        assert old_acceptance.legal_version == "2.5"
     finally:
         db.close()
 

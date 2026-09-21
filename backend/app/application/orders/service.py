@@ -125,11 +125,8 @@ def _parse_troco_para_float(val: Any) -> float | None:
 def _emit_chat_status_event(db: Session, restaurant_id: int, comanda_id: str, status: str | None) -> None:
     if not status:
         return
-    try:
-        from ...services.order_chat_service import post_system_order_event
-        post_system_order_event(db, restaurant_id, comanda_id, status)
-    except Exception:
-        logger.debug("Chat status event not emitted for order %s", comanda_id)
+    from ...services.order_chat_service import post_system_order_event
+    post_system_order_event(db, restaurant_id, comanda_id, status)
 
 
 class OrderApplicationService:
@@ -417,7 +414,10 @@ class OrderApplicationService:
             fulfillment=cmd.fulfillment,
             items_subtotal=subtotal_base,
             neighborhood=delivery_neighborhood,
-            delivery_address=delivery_addr,
+            # O cálculo por distância depende das coordenadas do snapshot.
+            # ``delivery_addr`` é apenas a representação textual legada e não
+            # pode substituir o value object estruturado nesta fronteira.
+            delivery_address=delivery_address_snapshot,
         )
 
         pricing_context = validated_input.to_pricing_context(
@@ -487,7 +487,23 @@ class OrderApplicationService:
             if comanda and comanda.fechada:
                 raise OrderValidationError("Não é permitido adicionar pedidos a uma comanda fechada.")
 
-        # Status inicial de comanda e lançamento
+        # Status inicial de comanda e lançamento.
+        #
+        # delivery_status é uma coluna legada que hoje armazena o ciclo
+        # operacional dos pedidos digitais; não deve ser interpretada como
+        # classificação de modalidade. Por isso DINE_IN originado em canal
+        # digital também recebe pendente -> produção -> pronto -> concluído,
+        # enquanto consumo local criado no POS/garçom continua no fluxo de salão.
+        digital_intake_channels = {
+            OrderChannel.WEB_CARDAPIO,
+            OrderChannel.QR_MESA,
+            OrderChannel.KIOSK,
+            OrderChannel.IFOOD,
+            OrderChannel.NINE_NINE_FOOD,
+            OrderChannel.KEETA,
+            OrderChannel.WHATSAPP,
+            OrderChannel.API,
+        }
         if cmd.channel == OrderChannel.POS:
             if cmd.fulfillment == FulfillmentType.PICKUP:
                 tipo_comanda = "Retirada"
@@ -499,7 +515,10 @@ class OrderApplicationService:
                 initial_lancamento_status = "producao"
             else:
                 tipo_comanda = "Consumo no Local"
-                auto_delivery_status = None
+                # Consumo local sem mesa precisa de uma fila operacional própria
+                # no Caixa. Quando já nasce vinculado a mesa, continua sendo
+                # salão tradicional e não recebe ciclo digital legado.
+                auto_delivery_status = "producao" if not cmd.table_id else None
                 initial_lancamento_status = "producao"
         elif cmd.fulfillment == FulfillmentType.PICKUP:
             tipo_comanda = "Retirada"
@@ -511,8 +530,9 @@ class OrderApplicationService:
             initial_lancamento_status = "pendente"
         else:
             tipo_comanda = "Consumo no Local"
-            auto_delivery_status = None
-            initial_lancamento_status = "producao"
+            is_digital_dine_in = cmd.channel in digital_intake_channels
+            auto_delivery_status = "pendente" if is_digital_dine_in else None
+            initial_lancamento_status = "pendente" if is_digital_dine_in else "producao"
 
         cupom_db_id = None
         coupon_discount_applied = Decimal("0.00")
@@ -588,6 +608,7 @@ class OrderApplicationService:
                     identificador=cmd.customer.name if cmd.customer else None,
                     numero_pedido=numero_pedido,
                     fechada=False,
+                    onboarding_test=bool(cmd.onboarding_test),
                     criado_em=datetime.datetime.now(datetime.timezone.utc),
                     delivery_status=auto_delivery_status,
                     delivery_telefone=clean_phone,
@@ -827,9 +848,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
-        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
-
         if commit:
+            _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
             db.commit()
             db.refresh(comanda)
             if lancamento:
@@ -891,9 +911,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
-        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
-
         if commit:
+            _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
             db.commit()
             db.refresh(comanda)
             if lancamento:
@@ -967,9 +986,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
-        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
-
         if commit:
+            _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
             db.commit()
             db.refresh(comanda)
             if lancamento:
@@ -1033,9 +1051,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
-        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
-
         if commit:
+            _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
             db.commit()
             db.refresh(comanda)
             if lancamento:
@@ -1095,9 +1112,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
-        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
-
         if commit:
+            _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
             db.commit()
             db.refresh(comanda)
             if lancamento:
@@ -1174,9 +1190,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
-        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
-
         if commit:
+            _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
             db.commit()
             db.refresh(comanda)
             if lancamento:

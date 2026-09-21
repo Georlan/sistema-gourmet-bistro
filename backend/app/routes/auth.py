@@ -7,8 +7,8 @@ import uuid
 import logging
 
 from ..database import bind_session_to_tenant, get_db, current_restaurante_id
-from ..models import Restaurante, Usuario
-from ..schemas import LoginRequest, LoginResponse, UsuarioResponse, AtivarContaRequest
+from ..models import ActivityLog, Restaurante, Usuario
+from ..schemas import LoginRequest, LoginResponse, UsuarioAccessUpdate, UsuarioResponse, AtivarContaRequest
 from ..security import (
     create_access_token,
     get_password_hash,
@@ -422,36 +422,133 @@ def get_usuarios(
         Usuario.restaurante_id == current_user.restaurante_id
     ).all()
 
-@router.delete("/usuarios/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_usuario(
+@router.patch("/usuarios/{user_id}", response_model=UsuarioResponse)
+def update_usuario_access(
     user_id: str,
+    payload: UsuarioAccessUpdate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("equipe:administrar"))
+    current_user: Usuario = Depends(require_permission("equipe:administrar")),
 ):
-    """Deleta um usuário do sistema."""
+    """Altera função/status sem permitir criação indireta de administradores."""
     if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Não é possível excluir o próprio usuário autenticado.",
+            detail="Altere o acesso de outra pessoa da equipe; seu próprio acesso não pode ser modificado aqui.",
         )
 
     usuario = db.query(Usuario).filter(
         Usuario.id == user_id,
         Usuario.restaurante_id == current_user.restaurante_id,
-    ).first()
+    ).with_for_update().first()
     if not usuario:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuário não encontrado."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado.")
 
     target_role = (usuario.role or usuario.cargo or "").lower().strip()
     actor_role = (current_user.role or current_user.cargo or "").lower().strip()
     if target_role in {"admin", "superadmin"} and actor_role not in {"admin", "superadmin"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Somente administradores podem excluir ou desativar contas administrativas.",
+            detail="Somente administradores podem alterar contas administrativas.",
+        )
+
+    next_role = payload.cargo or target_role
+    next_status = payload.status or str(usuario.status or "pendente_ativacao").lower().strip()
+    if usuario.status == "pendente_ativacao" and payload.status == "ativo":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Convite pendente precisa ser ativado pela própria pessoa antes de receber acesso.",
+        )
+    if payload.status == "ativo" and not usuario.senha_hash:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este acesso ainda não possui credencial própria; reenvie o convite em vez de ativar manualmente.",
+        )
+
+    if target_role in {"admin", "superadmin"} and next_role not in {"admin", "superadmin"}:
+        admin_rows = db.query(Usuario.id, Usuario.status).filter(
+            Usuario.restaurante_id == current_user.restaurante_id,
+            Usuario.cargo.in_(("admin", "superadmin")),
+        ).with_for_update().all()
+        remaining = any(
+            admin_id != usuario.id and str(admin_status or "").lower().strip() == "ativo"
+            for admin_id, admin_status in admin_rows
+        )
+        if not remaining:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="O restaurante deve manter pelo menos um administrador ativo.",
+            )
+
+    before_role = target_role
+    before_status = str(usuario.status or "pendente_ativacao").lower().strip()
+    if payload.cargo is not None:
+        usuario.cargo = payload.cargo
+    if payload.status is not None:
+        usuario.status = payload.status
+        if payload.status == "inativo":
+            usuario.token_convite = None
+            usuario.token_expira_em = None
+            if before_status == "ativo":
+                revoke_user_sessions(
+                    db,
+                    user_id=usuario.id,
+                    restaurante_id=current_user.restaurante_id,
+                )
+
+    after_role = (usuario.role or usuario.cargo or "").lower().strip()
+    after_status = str(usuario.status or "").lower().strip()
+    if before_role == after_role and before_status == after_status:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Nenhuma alteração efetiva foi informada.")
+
+    db.add(ActivityLog(
+        restaurante_id=current_user.restaurante_id,
+        garcom_id=current_user.id,
+        action="TEAM_ACCESS_UPDATE",
+        details=(
+            f"user_id={usuario.id}; cargo={before_role}->{after_role}; "
+            f"status={before_status}->{after_status}"
+        ),
+    ))
+    db.commit()
+    db.refresh(usuario)
+
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "team_updated", "detail": {"action": "updated", "user_id": usuario.id}},
+        restaurante_id=current_user.restaurante_id,
+        target_audience="internal",
+    )
+    return usuario
+
+
+@router.delete("/usuarios/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_usuario(
+    user_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("equipe:administrar")),
+):
+    """Desativa um acesso preservando histórico e revogando sessões emitidas."""
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não é possível desativar o próprio usuário autenticado.",
+        )
+
+    usuario = db.query(Usuario).filter(
+        Usuario.id == user_id,
+        Usuario.restaurante_id == current_user.restaurante_id,
+    ).with_for_update().first()
+    if not usuario:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado.")
+
+    target_role = (usuario.role or usuario.cargo or "").lower().strip()
+    actor_role = (current_user.role or current_user.cargo or "").lower().strip()
+    if target_role in {"admin", "superadmin"} and actor_role not in {"admin", "superadmin"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Somente administradores podem desativar contas administrativas.",
         )
 
     if target_role in {"admin", "superadmin"}:
@@ -460,42 +557,37 @@ def delete_usuario(
             Usuario.cargo.in_(("admin", "superadmin")),
         ).with_for_update().all()
         has_remaining_active_admin = any(
-            admin_id != usuario.id
-            and str(admin_status or "").lower().strip() == "ativo"
+            admin_id != usuario.id and str(admin_status or "").lower().strip() == "ativo"
             for admin_id, admin_status in admin_rows
         )
         if not has_remaining_active_admin:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="O restaurante deve manter pelo menos um administrador.",
+                detail="O restaurante deve manter pelo menos um administrador ativo.",
             )
 
-    mutation_action = "deleted"
-    try:
-        db.delete(usuario)
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        mutation_action = "deactivated"
-        target = db.query(Usuario).filter(
-            Usuario.id == user_id,
-            Usuario.restaurante_id == current_user.restaurante_id,
-        ).first()
-        if target:
-            target.status = "inativo"
+    before_status = str(usuario.status or "pendente_ativacao").lower().strip()
+    if before_status != "inativo":
+        usuario.status = "inativo"
+        usuario.token_convite = None
+        usuario.token_expira_em = None
+        if before_status == "ativo":
             revoke_user_sessions(
                 db,
-                user_id=target.id,
+                user_id=usuario.id,
                 restaurante_id=current_user.restaurante_id,
             )
-            db.commit()
+        db.add(ActivityLog(
+            restaurante_id=current_user.restaurante_id,
+            garcom_id=current_user.id,
+            action="TEAM_ACCESS_DEACTIVATE",
+            details=f"user_id={usuario.id}; cargo={target_role}; status={before_status}->inativo",
+        ))
+        db.commit()
 
     background_tasks.add_task(
         manager.broadcast,
-        {
-            "event": "team_updated",
-            "detail": {"action": mutation_action, "user_id": user_id},
-        },
+        {"event": "team_updated", "detail": {"action": "deactivated", "user_id": user_id}},
         restaurante_id=current_user.restaurante_id,
         target_audience="internal",
     )
@@ -505,7 +597,7 @@ def delete_usuario(
 # ----------------- PRIVACY REQUEST OPERATIONS -----------------
 from pydantic import BaseModel, Field
 from typing import Optional
-from ..models import Comanda, RascunhoPedido, MensagemWhatsApp, ActivityLog
+from ..models import Comanda, RascunhoPedido, MensagemWhatsApp
 
 class GdprOptOutRequest(BaseModel):
     telefone: str = Field(min_length=8, max_length=32)

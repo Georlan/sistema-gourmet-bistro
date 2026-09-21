@@ -10,6 +10,7 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 - [x] Caixa: reconciliar pedidos digitais e turno imediatamente ao retomar aba/janela, sem adicionar polling concorrente ao WebSocket.
 - [x] Caixa: impedir respostas de leitura fora de ordem de regredirem pedidos/turno após retomada do background.
 - [x] Caixa: avanço do Kanban digital otimista, com trava por pedido, rollback em erro e proteção contra leituras/realtime que tentem regredir a mutação pendente.
+- [x] Caixa: adicionar aba de Retiradas como visão operacional derivada do Kanban, com pendentes, prontas, atrasadas e concluídas do dia sem criar uma segunda máquina de estados.
 - [x] App do Garçom — onda 1: compactar o Salão, remover métricas duplicadas e deixar explícita a ação de cada mesa antes do toque.
 - [x] App do Garçom — onda 2: simplificar mesa → cardápio → revisão → lançamento; opções obrigatórias não passam pelo quick-add, CTAs mostram quantidade/valor/mesa e o rascunho fica travado durante envio.
 - [ ] App do Garçom — onda 3: consumo → itens prontos → pagamento/fechamento, removendo estados ambíguos e ações redundantes.
@@ -21,6 +22,8 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 - [ ] Cardápio Online — onda 2: consolidar navegação/configurações e manter poucos fluxos canônicos.
 - [ ] Super Admin — onda única: organizar ações do tenant por tarefa operacional, suporte, plano e status; destacar ações perigosas.
 - [ ] Onboarding — onda única: reduzir primeiro acesso às decisões essenciais até chegar ao Caixa operacional.
+- [x] Equipe: espelhar Pessoas e Funções e acessos na mesma árvore canônica do menu vertical e da barra horizontal.
+- [ ] Equipe: manter gestão de pessoas e acessos sem telas paralelas.
 - [ ] Equipe — onda única: tornar cargos/permissões explícitos e impedir ações administrativas ambíguas.
 
 ## P1 — Integridade que afeta a operação
@@ -33,7 +36,10 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 
 - [ ] Chat: reavaliar e reconstruir a retenção de 90 dias do PR #317 sobre a arquitetura atual.
 - [ ] Navegação do Caixa: validar agrupamentos, nomes e destinos com uso real; remover rotas/atalhos redundantes.
+- [x] Conta & assinatura: espelhar Meu Plano, Planos & Upgrade e Contrato e documentos na mesma árvore canônica do menu vertical e da barra horizontal, removendo as pills internas paralelas.
+- [x] Relatórios: espelhar Visão Geral, Financeiro, Produtos e Equipe na mesma árvore canônica do menu vertical e da barra horizontal.
 - [ ] Relatórios: manter somente atalhos e indicadores que levam a decisão operacional clara.
+- [x] Configurações: unificar Aparência, Impressão, Mesas, App do Garçom, Taxa de Serviço, Implantação inicial e Integrações na mesma árvore canônica, espelhada no menu vertical e na barra horizontal, sem cards internos de navegação.
 - [ ] Configurações: consolidar owners existentes e impedir novas telas paralelas para a mesma regra.
 
 ## Regra de execução — modo ondas

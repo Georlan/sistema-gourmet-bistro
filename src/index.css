@@ -1586,6 +1586,23 @@ body {
   background: var(--orders-stage);
 }
 
+.orders-card--source-online::before { width: 3px; background: #8b5cf6; opacity: 0.9; }
+.orders-card--source-waiter::before { width: 3px; background: #06b6d4; opacity: 0.9; }
+.orders-card--source-cashier::before { width: 3px; background: #f59e0b; opacity: 0.9; }
+.orders-card--source-smartpos::before { width: 3px; background: #10b981; opacity: 0.9; }
+
+.orders-card--fulfillment-retirada { box-shadow: inset 0 3px 0 rgba(6, 182, 212, 0.72), 0 4px 14px rgba(0, 0, 0, 0.08) !important; }
+.orders-card--fulfillment-delivery { box-shadow: inset 0 3px 0 rgba(139, 92, 246, 0.72), 0 4px 14px rgba(0, 0, 0, 0.08) !important; }
+.orders-card--salon { box-shadow: inset 0 3px 0 rgba(16, 185, 129, 0.72), 0 4px 14px rgba(0, 0, 0, 0.08) !important; }
+
+.orders-card--source-online .orders-card__number { color: #7c3aed; border-color: rgba(139, 92, 246, 0.3); background: rgba(139, 92, 246, 0.08); }
+.orders-card--source-waiter .orders-card__number { color: #0891b2; border-color: rgba(6, 182, 212, 0.3); background: rgba(6, 182, 212, 0.08); }
+.orders-card--source-cashier .orders-card__number { color: #b45309; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.08); }
+
+[data-koma-theme="dark"] .orders-card--source-online .orders-card__number { color: #c4b5fd; }
+[data-koma-theme="dark"] .orders-card--source-waiter .orders-card__number { color: #67e8f9; }
+[data-koma-theme="dark"] .orders-card--source-cashier .orders-card__number { color: #fcd34d; }
+
 .orders-card:hover {
   border-color: rgba(0, 201, 150, 0.4) !important;
   background: var(--koma-surface-raised) !important;
@@ -1644,6 +1661,14 @@ body {
 .orders-card__chip.is-muted {
   color: var(--koma-text-muted);
 }
+
+.orders-card__chip.is-table-link {
+  color: #6d28d9;
+  border-color: rgba(139, 92, 246, 0.3);
+  background: rgba(139, 92, 246, 0.09);
+}
+
+[data-koma-theme="dark"] .orders-card__chip.is-table-link { color: #c4b5fd; }
 
 .orders-card__chip.is-attention {
   color: #92400e;
@@ -2533,6 +2558,25 @@ body {
   .orders-column__body {
     overflow-y: visible !important;
     overscroll-behavior: auto;
+  }
+}
+
+/*
+ * Mobile/touch cashier uses the document as the single vertical scroll owner.
+ * PDV desktop keeps its bounded internal scroll, but on touch these nested
+ * overflow regions must not trap the swipe over product cards or the cart.
+ */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  .cashier-pdv-layout,
+  .cashier-pdv-catalog,
+  .cashier-pdv-cart {
+    overflow: visible !important;
+  }
+
+  .cashier-pdv-product-scroll,
+  .cashier-pdv-cart-scroll {
+    overflow-y: visible !important;
+    overscroll-behavior-y: auto;
   }
 }
 

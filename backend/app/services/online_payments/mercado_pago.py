@@ -102,6 +102,18 @@ def _provider_error_message(response: httpx.Response, action: str) -> str:
     return f"Mercado Pago recusou {action}{suffix}."
 
 
+def _provider_transport_error(action: str, exc: httpx.RequestError) -> MercadoPagoError:
+    logger.warning(
+        "Mercado Pago indisponível durante %s (%s).",
+        action,
+        type(exc).__name__,
+    )
+    return MercadoPagoError(
+        f"Mercado Pago ficou indisponível durante {action}.",
+        retryable=True,
+    )
+
+
 class MercadoPagoProvider:
     API_URL = "https://api.mercadopago.com"
 
@@ -167,11 +179,14 @@ class MercadoPagoProvider:
         }
         if marketplace_fee > 0:
             body["application_fee"] = float(marketplace_fee)
-        response = self._client.post(
-            "/v1/payments",
-            headers={"X-Idempotency-Key": idempotency_key},
-            json=body,
-        )
+        try:
+            response = self._client.post(
+                "/v1/payments",
+                headers={"X-Idempotency-Key": idempotency_key},
+                json=body,
+            )
+        except httpx.RequestError as exc:
+            raise _provider_transport_error("a criação do Pix", exc) from exc
         if response.status_code >= 400:
             message = _provider_error_message(response, "a criação do Pix")
             logger.warning("%s", message)
@@ -184,10 +199,30 @@ class MercadoPagoProvider:
 
     def get_payment(self, external_payment_id: str) -> ProviderPayment:
         payment_id = _validated_payment_id(external_payment_id)
-        response = self._client.get(f"/v1/payments/{payment_id:d}")
+        try:
+            response = self._client.get(f"/v1/payments/{payment_id:d}")
+        except httpx.RequestError as exc:
+            raise _provider_transport_error("a consulta do pagamento", exc) from exc
         if response.status_code >= 400:
             raise MercadoPagoError(
                 f"Mercado Pago não confirmou o pagamento ({response.status_code}).",
+                status_code=response.status_code,
+                retryable=response.status_code >= 500 or response.status_code in {408, 409, 429},
+            )
+        return self._map(response.json())
+
+    def cancel_payment(self, external_payment_id: str) -> ProviderPayment:
+        payment_id = _validated_payment_id(external_payment_id)
+        try:
+            response = self._client.put(
+                f"/v1/payments/{payment_id:d}",
+                json={"status": "cancelled"},
+            )
+        except httpx.RequestError as exc:
+            raise _provider_transport_error("o cancelamento do pagamento", exc) from exc
+        if response.status_code >= 400:
+            raise MercadoPagoError(
+                _provider_error_message(response, "o cancelamento do pagamento"),
                 status_code=response.status_code,
                 retryable=response.status_code >= 500 or response.status_code in {408, 409, 429},
             )
@@ -214,10 +249,13 @@ class MercadoPagoProvider:
         # omitido; enviamos a requisição sem corpo. Parcial leva somente amount.
         if amount is not None:
             request_kwargs["json"] = {"amount": float(Decimal(str(amount)))}
-        response = self._client.post(
-            f"/v1/payments/{payment_id:d}/refunds",
-            **request_kwargs,
-        )
+        try:
+            response = self._client.post(
+                f"/v1/payments/{payment_id:d}/refunds",
+                **request_kwargs,
+            )
+        except httpx.RequestError as exc:
+            raise _provider_transport_error("o reembolso", exc) from exc
         if response.status_code >= 400:
             raise MercadoPagoError(
                 _provider_error_message(response, "o reembolso"),

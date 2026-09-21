@@ -75,6 +75,8 @@ type BackendOptions = {
     aceitando_pedidos?: boolean;
     motivo_indisponibilidade?: string;
     origem_disponibilidade?: string;
+    proxima_abertura?: string;
+    proxima_abertura_texto?: string;
   };
 };
 
@@ -168,6 +170,46 @@ async function openCart(page: Page) {
   }
   await expect(page.getByRole('heading', { name: 'Sua sacola', exact: true })).toBeVisible();
 }
+
+test('sacola abre no primeiro toque real mesmo com o atalho de pedidos e chat visível', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'Regressão de toque coberta no viewport mobile com touch real.');
+
+  await mockPublicMenuBackend(page, []);
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#btn-fast-add-101').tap();
+
+  const cartTrigger = page.locator('#floating-cart-trigger');
+  const chatTrigger = page.locator('#floating-order-chat-trigger');
+  await expect(cartTrigger).toBeVisible();
+  await expect(chatTrigger).toBeVisible();
+
+  const cartBox = await cartTrigger.boundingBox();
+  const chatBox = await chatTrigger.boundingBox();
+  expect(cartBox).not.toBeNull();
+  expect(chatBox).not.toBeNull();
+  expect(chatBox!.y + chatBox!.height).toBeLessThanOrEqual(cartBox!.y - 4);
+
+  const hitTarget = await page.evaluate(({ x, y }) => {
+    const node = document.elementFromPoint(x, y);
+    return Boolean(node?.closest('#floating-cart-trigger'));
+  }, {
+    x: cartBox!.x + cartBox!.width / 2,
+    y: cartBox!.y + cartBox!.height / 2,
+  });
+  expect(hitTarget).toBe(true);
+
+  await cartTrigger.tap();
+  await expect(page.locator('#cart-drawer-container')).toBeVisible();
+  await page.locator('#btn-close-cart').tap();
+
+  const headerCart = page.locator('#btn-cart-header');
+  await expect(headerCart).toBeVisible();
+  const headerBox = await headerCart.boundingBox();
+  expect(headerBox?.width ?? 0).toBeGreaterThanOrEqual(44);
+  expect(headerBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await headerCart.tap();
+  await expect(page.locator('#cart-drawer-container')).toBeVisible();
+});
 
 async function fillDeliveryAddress(page: Page) {
   await page.locator('#delivery-address-cep').fill('60000000');
@@ -450,22 +492,25 @@ test('loja pausada mantém catálogo consultável e bloqueia criação de pedido
   expect(capturedOrders).toHaveLength(0);
 });
 
-test('modo automático bloqueia o pedido no catálogo quando o servidor informa fora do horário', async ({ page }) => {
+test('modo automático mostra estabelecimento fechado e informa quando abre novamente', async ({ page }) => {
   const capturedOrders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, capturedOrders, {
     statusOverride: 'Automático',
     restaurant: {
       aceitando_pedidos: false,
-      motivo_indisponibilidade: 'O restaurante está fora do horário de pedidos online.',
+      motivo_indisponibilidade: 'O estabelecimento está fechado neste horário.',
       origem_disponibilidade: 'schedule',
+      proxima_abertura: '2026-09-18T18:00:00-03:00',
+      proxima_abertura_texto: 'hoje às 18:00',
     },
   });
 
   await page.goto('/cardapio?restaurante_id=2');
-  await expect(page.locator('#brand-banner-hero').getByText('Fora do horário', { exact: true })).toBeVisible();
+  await expect(page.locator('#brand-banner-hero').getByText('Estabelecimento fechado · abre hoje às 18:00', { exact: true })).toBeVisible();
+  await expect(page.getByText('Estabelecimento fechado. Abre hoje às 18:00.', { exact: false })).toBeVisible();
   await expect(page.getByText('Pizza Margherita', { exact: true })).toBeVisible();
   await page.locator('#btn-fast-add-101').click();
-  await expect(page.getByText(/fora do horário de pedidos online.*consultar os produtos/i)).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('O estabelecimento está fechado neste horário.');
   await expect(page.locator('#floating-cart-trigger')).toHaveCount(0);
   expect(capturedOrders).toHaveLength(0);
 });

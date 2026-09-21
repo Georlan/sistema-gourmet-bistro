@@ -1,3 +1,4 @@
+import datetime
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -10,12 +11,46 @@ from app.models import (
     Cliente,
     Produto,
     PublicRateLimit,
+    OtpChallenge,
     Restaurante,
     Usuario,
 )
 from app.services.public_orders.customer_auth import authenticated_customer
+from app.services.customer_auth import hash_otp, hash_phone_for_otp
 
 client = TestClient(app)
+
+
+def register_verified(payload: dict):
+    codigo = "246810"
+    telefone = "".join(char for char in payload["telefone"] if char.isdigit())
+    restaurante_id = payload["restaurante_id"]
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(restaurante_id)
+    try:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        db.query(OtpChallenge).filter(
+            OtpChallenge.restaurante_id == restaurante_id,
+            OtpChallenge.telefone_hash == hash_phone_for_otp(restaurante_id, telefone),
+        ).delete(synchronize_session=False)
+        db.add(OtpChallenge(
+            restaurante_id=restaurante_id,
+            telefone_hash=hash_phone_for_otp(restaurante_id, telefone),
+            otp_hash=hash_otp(restaurante_id, telefone, codigo),
+            expira_em=now + datetime.timedelta(minutes=5),
+            ultimo_envio_em=now,
+            janela_iniciada_em=now,
+            envios_na_janela=1,
+            tentativas=0,
+        ))
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+    return client.post(
+        "/cardapio/clientes/cadastro",
+        json={**payload, "codigo": codigo},
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -65,7 +100,7 @@ def test_customer_registration_and_login_flow():
         "telefone": "11988887777",
         "endereco": "Rua das Flores, 123",
     }
-    res = client.post("/cardapio/clientes/cadastro", json=register_payload)
+    res = register_verified(register_payload)
     assert res.status_code == 201, res.text
     data = res.json()
     assert "access_token" in data
@@ -87,7 +122,7 @@ def test_customer_registration_and_login_flow():
     assert me_data["nome"] == "Maria Silva"
 
     # 3. Tentativa de cadastro com mesmo e-mail deve dar 409
-    res_dup = client.post("/cardapio/clientes/cadastro", json=register_payload)
+    res_dup = register_verified(register_payload)
     assert res_dup.status_code == 409
     assert "Já existe uma conta com este e-mail" in res_dup.json()["detail"]
 
@@ -130,12 +165,30 @@ def test_customer_registration_and_login_flow():
     assert login_data["cliente"]["email"] == "maria@exemplo.com"
 
 
-def test_customer_registration_cannot_claim_existing_guest_by_phone():
-    """Anti-Account Takeover: NUNCA adotar cliente guest silenciosamente pelo telefone.
+def test_customer_registration_requires_whatsapp_code():
+    response = client.post(
+        "/cardapio/clientes/cadastro",
+        json={
+            "restaurante_id": 101,
+            "nome": "Sem Confirmacao",
+            "email": "sem-confirmacao@exemplo.com",
+            "senha": "senhaSegura123",
+            "telefone": "11912345678",
+        },
+    )
+    assert response.status_code == 422
+    db = SessionLocal()
+    try:
+        assert db.query(Cliente).filter(
+            Cliente.restaurante_id == 101,
+            Cliente.email == "sem-confirmacao@exemplo.com",
+        ).first() is None
+    finally:
+        db.close()
 
-    Conhecer o telefone de outra pessoa NÃO pode conceder acesso ao histórico,
-    saldo de pontos ou cashback de outro cliente sem canal verificado.
-    """
+
+def test_verified_registration_claims_existing_cashier_customer_by_phone():
+    """O OTP permite vincular a ficha do Caixa sem duplicar cliente ou saldo."""
     # Pre-cria um cliente guest com histórico e saldo
     db = SessionLocal()
     token_var = current_restaurante_id.set(101)
@@ -156,17 +209,18 @@ def test_customer_registration_cannot_claim_existing_guest_by_phone():
         current_restaurante_id.reset(token_var)
         db.close()
 
-    # Um atacante tenta se cadastrar com o mesmo telefone para tentar roubar os pontos
+    # O titular confirma o número e transforma a ficha do Caixa em conta online.
     register_payload = {
         "restaurante_id": 101,
-        "nome": "Atacante Invasor",
-        "email": "invasor@evil.com",
+        "nome": "Cliente Balcao Original",
+        "email": "cliente@exemplo.com",
         "senha": "senhaInvasor123",
         "telefone": "11977776666",
     }
-    res = client.post("/cardapio/clientes/cadastro", json=register_payload)
-    assert res.status_code == 409
-    assert res.json()["detail"] == "Este telefone já está associado a um cadastro neste restaurante."
+    res = register_verified(register_payload)
+    assert res.status_code == 201, res.text
+    assert res.json()["cliente"]["id"] == "guest-uuid-1234"
+    assert res.json()["cliente"]["telefone_verificado"] is True
 
     # Verificar no banco que a conta guest original está 100% intacta
     db = SessionLocal()
@@ -178,8 +232,9 @@ def test_customer_registration_cannot_claim_existing_guest_by_phone():
         assert original.nome == "Cliente Balcao Original"
         assert original.saldo_pontos == 50
         assert original.saldo_cashback == 12.5
-        assert original.senha_hash is None
-        assert original.email is None
+        assert original.senha_hash is not None
+        assert original.email == "cliente@exemplo.com"
+        assert original.telefone_verificado_em is not None
     finally:
         db.close()
 
@@ -209,7 +264,7 @@ def test_customer_multi_tenant_isolation():
         "senha": "senhaRestaurante101",
         "telefone": "11955551111",
     }
-    res_101 = client.post("/cardapio/clientes/cadastro", json=payload_101)
+    res_101 = register_verified(payload_101)
     assert res_101.status_code == 201
     token_101 = res_101.json()["access_token"]
 
@@ -220,7 +275,7 @@ def test_customer_multi_tenant_isolation():
         "senha": "senhaRestaurante102",
         "telefone": "11955552222",
     }
-    res_102 = client.post("/cardapio/clientes/cadastro", json=payload_102)
+    res_102 = register_verified(payload_102)
     assert res_102.status_code == 201
     token_102 = res_102.json()["access_token"]
 
@@ -255,15 +310,14 @@ def test_customer_login_rate_limiting():
     """Brute-force protection: rate limit por conta bloqueia após 5 tentativas."""
     email = "bruteforce@exemplo.com"
     # Cadastrar conta
-    client.post(
-        "/cardapio/clientes/cadastro",
-        json={
+    register_verified(
+        {
             "restaurante_id": 101,
             "nome": "Vitima BF",
             "email": email,
             "senha": "senhaCorreta123",
             "telefone": "11944443333",
-        },
+        }
     )
 
     # 5 tentativas erradas
@@ -390,28 +444,25 @@ def test_customer_registration_rate_limiting():
 
     # 5 tentativas com e-mail duplicado
     for i in range(5):
-        client.post(
-            "/cardapio/clientes/cadastro",
-            json={
+        register_verified(
+            {
                 "restaurante_id": 101,
                 "nome": f"Cadastro {i}",
                 "email": email,
                 "senha": "senhaSegura123",
                 "telefone": f"1198888000{i}",
-            },
+            }
         )
 
     # 6ª tentativa deve estourar o rate limit de account (429)
-    res_blocked = client.post(
-        "/cardapio/clientes/cadastro",
-        json={
+    res_blocked = register_verified(
+        {
             "restaurante_id": 101,
             "nome": "Cadastro 6",
             "email": email,
             "senha": "senhaSegura123",
             "telefone": "11988880099",
-        },
+        }
     )
     assert res_blocked.status_code == 429
     assert "Muitas tentativas de cadastro" in res_blocked.json()["detail"]
-

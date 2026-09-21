@@ -74,6 +74,17 @@ def normalize_distance_fee_config(raw: Sequence[object] | object) -> dict:
         raise ValueError("Configure a cobrança automática por distância antes de publicar.")
 
     minimum_fee = validate_delivery_fee(item.get("taxa_minima"))
+
+    # Contrato simplificado atual: taxa mínima + valor por km.
+    if "valor_por_km" in item:
+        per_km_fee = validate_delivery_fee(item.get("valor_por_km"))
+        return {
+            "taxa_minima": float(minimum_fee),
+            "valor_por_km": float(per_km_fee),
+            "fallback_sem_localizacao": "minima",
+        }
+
+    # Compatibilidade com configurações gravadas antes da simplificação.
     included_km = _distance_decimal(item.get("km_inclusos"), field="A distância coberta pela taxa mínima")
     increment_fee = validate_delivery_fee(item.get("incremento_valor"))
     increment_km = _distance_decimal(item.get("incremento_km"), field="O intervalo de aumento")
@@ -146,6 +157,12 @@ def resolve_distance_delivery_fee(
         float(destination_latitude),
         float(destination_longitude),
     )
+
+    if "valor_por_km" in config:
+        per_km_fee = validate_delivery_fee(config["valor_por_km"])
+        calculated_fee = Decimal(str(distance_km)) * per_km_fee
+        fee = max(minimum_fee, calculated_fee)
+        return fee.quantize(_MONEY, rounding=ROUND_HALF_UP), distance_km
 
     max_distance = config.get("distancia_maxima_km")
     if max_distance is not None and distance_km > float(max_distance):

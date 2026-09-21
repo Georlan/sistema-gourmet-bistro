@@ -91,3 +91,19 @@ def test_create_pix_prefers_provider_message_and_safe_cause_code_over_generic_er
     assert "must-never-be-exposed@example.com" not in message
     assert "secret-provider-data" not in message
     assert "APP_USR-must-never-be-exposed-token" not in message
+
+
+def test_create_pix_translates_provider_timeout_into_retryable_payment_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("secret transport detail", request=request)
+
+    provider = _provider_with_transport(handler)
+
+    with pytest.raises(MercadoPagoError) as exc_info:
+        _create_pix(provider)
+
+    error = exc_info.value
+    assert error.status_code is None
+    assert error.retryable is True
+    assert "Mercado Pago ficou indisponível" in str(error)
+    assert "secret transport detail" not in str(error)

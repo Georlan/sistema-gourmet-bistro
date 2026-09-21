@@ -220,6 +220,7 @@ class CreateOrderCommand:
     idempotency_fingerprint_version: Optional[int] = None
     external_reference: Optional[ExternalOrderReference] = None
     operator_user_id: Optional[str | int] = None
+    onboarding_test: bool = False
     # Pedidos com pagamento online existem antes da autorização, mas ainda não
     # podem ser publicados para cozinha/caixa. O webhook publica após aprovar.
     defer_operational_publish: bool = False
@@ -232,6 +233,10 @@ class CreateOrderCommand:
         if self.fulfillment == FulfillmentType.DELIVERY and self.delivery is None:
             raise InvalidFulfillmentDetailsError(
                 "Pedidos com modalidade DELIVERY exigem informações de entrega (DeliveryInput)."
+            )
+        if self.fulfillment == FulfillmentType.DELIVERY and self.table_id is not None:
+            raise InvalidFulfillmentDetailsError(
+                "Pedidos de delivery não podem ser vinculados a uma mesa."
             )
 
 

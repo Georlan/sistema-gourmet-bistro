@@ -16,7 +16,7 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, Field
-from sqlalchemy import func, text
+from sqlalchemy import and_, func, or_, text
 from sqlalchemy.orm import Session
 
 from ..database import (
@@ -26,7 +26,7 @@ from ..database import (
     current_restaurante_id,
 )
 from ..models import PrintJob, PrintAgentToken, Usuario
-from ..security import require_permission
+from ..security import ensure_permission, get_current_user, require_permission
 from ..websocket_manager import manager
 from ..timezone_utils import OPERATIONAL_TIMEZONE
 
@@ -43,6 +43,20 @@ PRINT_QUEUE_VISIBLE_LIMIT = 50
 AGENT_COMMAND_TIMEOUT_SECONDS = 45
 UNRESOLVED_JOB_STATUSES = ("pending", "claimed", "printing")
 TERMINAL_JOB_STATUSES = ("printed", "failed", "cancelled")
+
+
+def require_internal_print_simulator_user(current_user=Depends(get_current_user)):
+    """Restringe a bancada térmica ao Modo Suporte auditado da plataforma."""
+    ensure_permission(current_user, "impressao:administrar")
+    if not bool(getattr(current_user, "is_support_mode", False)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Simulador térmico restrito ao Modo Suporte interno do KÔMA."
+            ),
+        )
+    return current_user
+
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -68,7 +82,9 @@ PRINT_HISTORY_TIMEZONE = OPERATIONAL_TIMEZONE
 
 ORDER_REFERENCE_PATTERNS = (
     re.compile(
-        r"\bPEDIDO\s*:\s*#?\s*([A-Z0-9][A-Z0-9._/-]*)",
+        # O "#" é obrigatório. Sem isso, "TOTAL DO PEDIDO: R$ 42,00"
+        # era interpretado como número de pedido "R".
+        r"\bPEDIDO\s*:\s*#\s*([A-Z0-9][A-Z0-9._/-]*)",
         re.IGNORECASE,
     ),
     re.compile(
@@ -91,6 +107,26 @@ def _field(job, name: str):
     if isinstance(job, Mapping):
         return job.get(name)
     return getattr(job, name)
+
+
+def _print_job_origin(job) -> dict[str, str]:
+    source_type = str(_field(job, "source_type") or "").strip().casefold()
+    idempotency_key = str(_field(job, "idempotency_key") or "").strip().casefold()
+
+    if (
+        source_type == "reimpressao"
+        or idempotency_key.startswith("reprint:")
+        or idempotency_key.startswith("universal:reimpressao:")
+    ):
+        return {"kind": "manual_reprint", "label": "Reimpressão manual"}
+    if idempotency_key.startswith("universal:auto:"):
+        return {"kind": "automatic", "label": "Automática"}
+    if (
+        source_type.startswith("teste")
+        or idempotency_key.startswith("inject:teste")
+    ):
+        return {"kind": "test", "label": "Teste"}
+    return {"kind": "manual", "label": "Manual"}
 
 
 def _queue_latency_ms(
@@ -908,6 +944,31 @@ def get_print_monitor(
         .all()
     )
     status_counts = {job_status: count for job_status, count in status_rows}
+    unresolved_jobs_for_origin = (
+        db.query(
+            PrintJob.source_type,
+            PrintJob.idempotency_key,
+        )
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.status.in_(UNRESOLVED_JOB_STATUSES),
+        )
+        .all()
+    )
+    queue_origins = {
+        "automatic": 0,
+        "manual": 0,
+        "manual_reprint": 0,
+        "test": 0,
+    }
+    for source_type, idempotency_key in unresolved_jobs_for_origin:
+        origin = _print_job_origin(
+            {
+                "source_type": source_type,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        queue_origins[origin["kind"]] += 1
     failed_today = (
         db.query(func.count(PrintJob.id))
         .filter(
@@ -1054,6 +1115,7 @@ def get_print_monitor(
         )
         accepted_by_spooler = job.status == "printed"
         reference = _print_job_reference(job)
+        origin = _print_job_origin(job)
 
         return {
                 "id": job.id,
@@ -1061,6 +1123,8 @@ def get_print_monitor(
                 "destination": job.destination,
                 "source_type": job.source_type,
                 "source_id": job.source_id,
+                "origin_kind": origin["kind"],
+                "origin_label": origin["label"],
                 "reference": reference["label"],
                 "order_number": reference["order_number"],
                 "table_number": reference["table_number"],
@@ -1088,7 +1152,7 @@ def get_print_monitor(
                 "printed_at": printed_at.isoformat() if printed_at else None,
                 "age_seconds": age_seconds,
                 "delayed": is_delayed,
-                "is_reprint": str(job.idempotency_key).startswith("reprint:"),
+                "is_reprint": origin["kind"] == "manual_reprint",
                 "can_reprint": job.status in {
                     "printed",
                     "spooler_accepted",
@@ -1140,6 +1204,7 @@ def get_print_monitor(
                 agent["ready_printer_count"]
                 for agent in agent_payload
             ),
+            "queue_origins": queue_origins,
             "printer_ready": any(
                 agent["printer_ready"]
                 for agent in agent_payload
@@ -1157,6 +1222,232 @@ def get_print_monitor(
         "jobs": job_payload,
         "history_jobs": history_payload,
         "queue_jobs": queue_payload,
+    }
+
+
+@router.get("/simulator/sources", summary="Listar payloads recentes para o simulador")
+def list_print_simulator_sources(
+    limit: int = Query(default=10, ge=1, le=20),
+    current_user = Depends(require_internal_print_simulator_user),
+    db: Session = Depends(get_db),
+):
+    """Expõe somente metadados de jobs recentes que ainda conservam payload.
+
+    É uma leitura tenant-scoped para a bancada de simulação. Não reserva,
+    reabre, reimprime ou altera PrintJob.
+    """
+    rest_id = (
+        current_restaurante_id.get()
+        or getattr(current_user, "restaurante_id", None)
+    )
+    if not rest_id:
+        raise HTTPException(status_code=400, detail="Restaurante não selecionado")
+
+    jobs = (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.payload_text != "",
+        )
+        .order_by(PrintJob.created_at.desc(), PrintJob.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "items": [
+            {
+                "id": job.id,
+                "reference": _print_job_reference(job)["label"],
+                "document_type": job.document_type,
+                "destination": job.destination,
+                "source_type": job.source_type,
+                "source_id": job.source_id,
+                "origin_kind": _print_job_origin(job)["kind"],
+                "origin_label": _print_job_origin(job)["label"],
+                "status": job.status,
+                "created_at": (
+                    _as_utc(job.created_at).isoformat()
+                    if job.created_at
+                    else None
+                ),
+            }
+            for job in jobs
+        ]
+    }
+
+
+@router.get(
+    "/simulator/agent-feed",
+    summary="Observar novos PrintJobs sem reservá-los",
+)
+def get_print_simulator_agent_feed(
+    after_created_at: Optional[str] = Query(default=None, max_length=64),
+    after_id: str = Query(default="", max_length=100),
+    limit: int = Query(default=10, ge=1, le=20),
+    agent: PrintAgentToken = Depends(get_current_agent),
+    db: Session = Depends(get_db),
+):
+    """Feed read-only para a simulação sombra do agente local.
+
+    A primeira chamada sem cursor apenas ancora o relógio do servidor. Chamadas
+    seguintes devolvem PrintJobs criados depois do cursor, sem claim, sem mudar
+    status e sem tocar no spooler. O agente já é tenant-scoped pela credencial.
+    """
+    observed_at = datetime.datetime.now(datetime.timezone.utc)
+
+    if not after_created_at:
+        return {
+            "observed_at": observed_at.isoformat(),
+            "cursor": {
+                "created_at": observed_at.isoformat(),
+                "id": "",
+            },
+            "items": [],
+        }
+
+    try:
+        cursor_at = datetime.datetime.fromisoformat(
+            after_created_at.replace("Z", "+00:00")
+        )
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cursor temporal do simulador inválido.",
+        ) from exc
+    cursor_at = _as_utc(cursor_at)
+    cursor_id = str(after_id or "")
+
+    jobs = (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.restaurante_id == agent.restaurante_id,
+            PrintJob.payload_text != "",
+            or_(
+                PrintJob.created_at > cursor_at,
+                and_(
+                    PrintJob.created_at == cursor_at,
+                    PrintJob.id > cursor_id,
+                ),
+            ),
+        )
+        .order_by(PrintJob.created_at.asc(), PrintJob.id.asc())
+        .limit(limit)
+        .all()
+    )
+
+    items = []
+    for job in jobs:
+        created_at = _as_utc(job.created_at)
+        claimed_at = _as_utc(job.claimed_at)
+        printed_at = _as_utc(job.printed_at)
+        reference = _print_job_reference(job)
+        items.append(
+            {
+                "id": job.id,
+                "reference": reference["label"],
+                "document_type": job.document_type,
+                "destination": job.destination,
+                "source_type": job.source_type,
+                "source_id": job.source_id,
+                "status": job.status,
+                "payload_text": job.payload_text,
+                "created_at": created_at.isoformat() if created_at else None,
+                "claimed_at": claimed_at.isoformat() if claimed_at else None,
+                "printed_at": printed_at.isoformat() if printed_at else None,
+                "queue_latency_ms": (
+                    _queue_latency_ms(created_at, claimed_at)
+                    if created_at and claimed_at
+                    else None
+                ),
+                "server_observed_latency_ms": (
+                    max(
+                        0,
+                        round(
+                            (observed_at - created_at).total_seconds() * 1000
+                        ),
+                    )
+                    if created_at
+                    else None
+                ),
+                "physical_completion_tracking": False,
+            }
+        )
+
+    if jobs:
+        last_job = jobs[-1]
+        last_created_at = _as_utc(last_job.created_at) or observed_at
+        next_cursor = {
+            "created_at": last_created_at.isoformat(),
+            "id": str(last_job.id),
+        }
+    else:
+        next_cursor = {
+            "created_at": cursor_at.isoformat(),
+            "id": cursor_id,
+        }
+
+    return {
+        "observed_at": observed_at.isoformat(),
+        "cursor": next_cursor,
+        "items": items,
+    }
+
+
+@router.get(
+    "/simulator/sources/{job_id}",
+    summary="Ler payload exato de um PrintJob para simulação",
+)
+def get_print_simulator_source(
+    job_id: str,
+    current_user = Depends(require_internal_print_simulator_user),
+    db: Session = Depends(get_db),
+):
+    """Retorna o payload persistido sem produzir efeitos na fila ou no hardware."""
+    rest_id = (
+        current_restaurante_id.get()
+        or getattr(current_user, "restaurante_id", None)
+    )
+    if not rest_id:
+        raise HTTPException(status_code=400, detail="Restaurante não selecionado")
+
+    job = (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.restaurante_id == rest_id,
+            PrintJob.id == job_id,
+        )
+        .first()
+    )
+    if not job or not job.payload_text:
+        raise HTTPException(
+            status_code=404,
+            detail="PrintJob não encontrado ou payload já compactado.",
+        )
+
+    claimed_at = _as_utc(job.claimed_at)
+    created_at = _as_utc(job.created_at)
+    printed_at = _as_utc(job.printed_at)
+    return {
+        "id": job.id,
+        "reference": _print_job_reference(job)["label"],
+        "document_type": job.document_type,
+        "destination": job.destination,
+        "source_type": job.source_type,
+        "source_id": job.source_id,
+        "origin_kind": _print_job_origin(job)["kind"],
+        "origin_label": _print_job_origin(job)["label"],
+        "status": job.status,
+        "payload_text": job.payload_text,
+        "created_at": created_at.isoformat() if created_at else None,
+        "claimed_at": claimed_at.isoformat() if claimed_at else None,
+        "printed_at": printed_at.isoformat() if printed_at else None,
+        "queue_latency_ms": (
+            _queue_latency_ms(created_at, claimed_at)
+            if created_at and claimed_at
+            else None
+        ),
+        "physical_completion_tracking": False,
     }
 
 

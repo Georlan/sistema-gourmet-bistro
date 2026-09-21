@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import json
 import math
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, insert, select, update
 from sqlalchemy.orm import Session
 
@@ -18,14 +20,32 @@ from ..catalog_assistance import (
     utc_now,
 )
 from ..database import get_db, require_tenant_id
-from ..models import Comanda, Produto, RestaurantPaymentAccount, Restaurante, Usuario
+from ..models import (
+    ActivityLog,
+    Comanda,
+    ConfiguracaoRestaurante,
+    Mesa,
+    Pagamento,
+    Produto,
+    RestaurantPaymentAccount,
+    Restaurante,
+    Usuario,
+)
 from ..saas_billing_models import SaaSSubscription
 from ..security import get_current_user
+from ..services.onboarding_readiness import evaluate_operation_readiness
 from ..services.onboarding_trial import ensure_trial_started_after_onboarding
+from ..services.operational_modes import explicit_order_types
 from .super_admin_onboarding import DEFAULT_TRIAL_DAYS, restaurant_trials
 
 
 router = APIRouter(prefix="/api/onboarding", tags=["Onboarding"])
+
+class OnboardingOperationsRequest(BaseModel):
+    order_types: list[Literal["consumo_local", "retirada", "delivery"]] = Field(min_length=1)
+
+    model_config = {"extra": "forbid"}
+
 
 
 def _as_utc(value: datetime.datetime | None) -> datetime.datetime | None:
@@ -97,7 +117,7 @@ def _profile_is_configured(restaurant: Restaurante) -> bool:
 
 def _required_progress(steps: dict[str, bool]) -> dict[str, int]:
     """Progresso da implantação sem transformar passos opcionais em bloqueadores."""
-    required_ids = ("profile", "hours", "catalog")
+    required_ids = ("profile", "hours", "catalog", "operations")
     completed = sum(1 for step_id in required_ids if steps.get(step_id, False))
     total = len(required_ids)
     return {
@@ -152,6 +172,11 @@ async def submit_catalog_assistance(
 ):
     """Recebe PDF/foto do cardápio para implantação assistida pela equipe KÔMA."""
     _require_onboarding_role(current_user)
+    if getattr(current_user, "is_support_mode", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Modo Suporte pode consultar, mas não alterar o onboarding do cliente.",
+        )
     tenant_id = require_tenant_id()
     restaurant = (
         db.query(Restaurante)
@@ -213,13 +238,22 @@ async def submit_catalog_assistance(
     }
 
 
-@router.get("/status")
-def get_onboarding_status(
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
-):
-    _require_onboarding_role(current_user)
+def _test_order_type_values(order_types: list[str]) -> list[str]:
+    values: list[str] = []
+    if "consumo_local" in order_types:
+        values.append("Consumo no Local")
+    if "retirada" in order_types:
+        values.append("Retirada")
+    if "delivery" in order_types:
+        values.extend(["Delivery", "Entrega"])
+    return values
 
+
+def _build_onboarding_status(
+    db: Session,
+    *,
+    current_user: Usuario,
+) -> dict[str, Any]:
     tenant_id = require_tenant_id()
     restaurant = (
         db.query(Restaurante)
@@ -232,15 +266,52 @@ def get_onboarding_status(
             detail="Restaurante não encontrado.",
         )
 
+    config = (
+        db.query(ConfiguracaoRestaurante)
+        .filter(ConfiguracaoRestaurante.restaurante_id == tenant_id)
+        .one_or_none()
+    )
+    subscription = (
+        db.query(SaaSSubscription)
+        .filter(SaaSSubscription.restaurante_id == tenant_id)
+        .one_or_none()
+    )
+    subscription_status = str(getattr(subscription, "status", "") or "").strip().lower()
+    setup_pending = bool(
+        subscription
+        and subscription.trial_started_at is None
+        and subscription_status in {"onboarding", "suspended"}
+    )
+    legacy_policy_allowed = bool(
+        subscription is None
+        or subscription.trial_started_at is not None
+        or subscription_status not in {"onboarding", "suspended"}
+    )
+
     product_count = int(
         db.query(func.count(Produto.id))
         .filter(Produto.restaurante_id == tenant_id)
         .scalar()
         or 0
     )
+    active_product_count = int(
+        db.query(func.count(Produto.id))
+        .filter(
+            Produto.restaurante_id == tenant_id,
+            Produto.ativo.is_(True),
+        )
+        .scalar()
+        or 0
+    )
     order_count = int(
         db.query(func.count(Comanda.id))
         .filter(Comanda.restaurante_id == tenant_id)
+        .scalar()
+        or 0
+    )
+    table_count = int(
+        db.query(func.count(Mesa.pk))
+        .filter(Mesa.restaurante_id == tenant_id)
         .scalar()
         or 0
     )
@@ -260,42 +331,61 @@ def get_onboarding_status(
         and payment_account.webhook_secret
     )
 
-    profile_configured = _profile_is_configured(restaurant)
-    hours_configured = _structured_has_items(restaurant.horarios_funcionamento)
-    catalog_configured = product_count > 0
-    first_order_detected = order_count > 0
+    operations = evaluate_operation_readiness(
+        config=config,
+        restaurant=restaurant,
+        table_count=table_count,
+        legacy_policy_allowed=legacy_policy_allowed,
+    )
+
+    explicit_modes = explicit_order_types(config)
+    test_order_detected = False
+    if subscription and subscription.trial_started_at is not None:
+        query = (
+            db.query(Comanda)
+            .join(
+                Pagamento,
+                (Pagamento.comanda_id == Comanda.id)
+                & (Pagamento.restaurante_id == Comanda.restaurante_id),
+            )
+            .filter(
+                Comanda.restaurante_id == tenant_id,
+                Comanda.onboarding_test.is_(True),
+                Comanda.fechada.is_(True),
+                Comanda.criado_em >= subscription.trial_started_at,
+                Pagamento.restaurante_id == tenant_id,
+                Pagamento.status == "aprovado",
+            )
+        )
+        if explicit_modes:
+            query = query.filter(Comanda.tipo.in_(_test_order_type_values(explicit_modes)))
+        test_order_detected = query.first() is not None
 
     steps = {
-        "profile": profile_configured,
-        "hours": hours_configured,
-        "catalog": catalog_configured,
+        "profile": _profile_is_configured(restaurant),
+        "hours": _structured_has_items(restaurant.horarios_funcionamento),
+        "catalog": active_product_count > 0,
+        "operations": bool(operations["ready"]),
         "mercadoPago": mercado_pago_connected,
-        "firstOrder": first_order_detected,
+        "firstOrder": test_order_detected,
     }
     progress = _required_progress(steps)
-    required_complete = progress["total"] > 0 and progress["completed"] >= progress["total"]
-
-    subscription = (
-        db.query(SaaSSubscription)
-        .filter(SaaSSubscription.restaurante_id == tenant_id)
-        .one_or_none()
+    configuration_complete = (
+        progress["total"] > 0
+        and progress["completed"] >= progress["total"]
     )
-    setup_pending = bool(
-        subscription
-        and subscription.trial_started_at is None
-        and str(subscription.status or "").strip().lower() in {"onboarding", "suspended"}
-    )
+    trial_started = bool(subscription and subscription.trial_started_at is not None)
+    ready_to_operate = configuration_complete and trial_started and test_order_detected
 
-    # O primeiro GET do checklist após o 3/3 faz a transição idempotente. Isso
-    # garante que abrir/recarregar a implantação seja suficiente para iniciar o
-    # trial, sem botão extra e sem consumir dias durante cadastro/configuração.
-    if required_complete and setup_pending:
-        ensure_trial_started_after_onboarding(
-            db,
-            restaurante_id=tenant_id,
-            actor=f"usuario:{current_user.id}",
-        )
-        setup_pending = False
+    blockers = [
+        key
+        for key in ("profile", "hours", "catalog", "operations")
+        if not steps[key]
+    ]
+    if configuration_complete and not trial_started:
+        blockers.append("trial")
+    elif configuration_complete and not test_order_detected:
+        blockers.append("test_order")
 
     trial_row = db.execute(
         select(restaurant_trials).where(restaurant_trials.c.restaurante_id == tenant_id)
@@ -308,15 +398,128 @@ def get_onboarding_status(
             "slug": str(restaurant.slug or ""),
             "plan": str(restaurant.plano or ""),
         },
-        "trial": _trial_status_payload(dict(trial_row) if trial_row else None, setup_pending=setup_pending),
+        "trial": _trial_status_payload(
+            dict(trial_row) if trial_row else None,
+            setup_pending=setup_pending,
+        ),
+        "trialCanStart": bool(
+            setup_pending
+            and configuration_complete
+            and not getattr(current_user, "is_support_mode", False)
+        ),
         "payments": {
             "mercadoPagoConnected": mercado_pago_connected,
+            "pixOnlineAvailable": mercado_pago_connected,
         },
         "counts": {
             "products": product_count,
+            "activeProducts": active_product_count,
             "orders": order_count,
+            "tables": table_count,
         },
+        "operations": operations,
         "catalogAssistance": _catalog_assistance_payload(db, tenant_id),
         "steps": steps,
         "progress": progress,
+        "readiness": {
+            "configurationComplete": configuration_complete,
+            "trialStarted": trial_started,
+            "readyToOperate": ready_to_operate,
+            "blockers": blockers,
+        },
     }
+
+
+@router.get("/status")
+def get_onboarding_status(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Read-only projection. Never starts trial or mutates onboarding state."""
+    _require_onboarding_role(current_user)
+    return _build_onboarding_status(db, current_user=current_user)
+
+
+@router.put("/operations")
+def update_onboarding_operations(
+    payload: OnboardingOperationsRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Persist only the canonical fulfillment policy; specialized settings stay separate."""
+    _require_onboarding_role(current_user)
+    if getattr(current_user, "is_support_mode", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Modo Suporte pode consultar, mas não alterar o onboarding do cliente.",
+        )
+    tenant_id = require_tenant_id()
+    config = (
+        db.query(ConfiguracaoRestaurante)
+        .filter(ConfiguracaoRestaurante.restaurante_id == tenant_id)
+        .one_or_none()
+    )
+    if config is None:
+        raise HTTPException(status_code=409, detail="Configurações do restaurante não encontradas.")
+
+    before = explicit_order_types(config)
+    after = list(dict.fromkeys(payload.order_types))
+    config.tipos_pedido_ativos = after
+    db.add(
+        ActivityLog(
+            restaurante_id=tenant_id,
+            garcom_id=current_user.id,
+            action="ONBOARDING_OPERATION_MODES_UPDATE",
+            details=json.dumps(
+                {"before": before, "after": after},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+        )
+    )
+    db.commit()
+    return _build_onboarding_status(db, current_user=current_user)
+
+
+@router.post("/start-trial")
+def start_trial_after_readiness(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Explicitly releases operation and starts the trial after minimum setup."""
+    _require_onboarding_role(current_user)
+    if getattr(current_user, "is_support_mode", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Modo Suporte não pode iniciar o período grátis do cliente.",
+        )
+
+    snapshot = _build_onboarding_status(db, current_user=current_user)
+    if not snapshot["readiness"]["configurationComplete"]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conclua a configuração mínima antes de iniciar o período grátis.",
+        )
+
+    if snapshot["trial"]["status"] == "setup":
+        result = ensure_trial_started_after_onboarding(
+            db,
+            restaurante_id=require_tenant_id(),
+            actor=f"usuario:{current_user.id}",
+        )
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="O período grátis não está disponível para esta assinatura.",
+            )
+        db.add(
+            ActivityLog(
+                restaurante_id=require_tenant_id(),
+                garcom_id=current_user.id,
+                action="ONBOARDING_TRIAL_STARTED",
+                details="Início explícito do período grátis e liberação operacional.",
+            )
+        )
+        db.commit()
+
+    return _build_onboarding_status(db, current_user=current_user)

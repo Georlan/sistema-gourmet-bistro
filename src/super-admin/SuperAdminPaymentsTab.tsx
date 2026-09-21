@@ -96,10 +96,10 @@ export function SuperAdminPaymentsTab({
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-koma-foreground flex items-center gap-2">
             <Layers className="w-4 h-4 text-[#00b894]" />
-            Regra comercial
+            Catálogo vigente
           </h3>
           <p className="text-[11px] text-koma-muted leading-relaxed">
-            A taxa KÔMA incide somente em pedido online pago. Tarifas do provedor são separadas.
+            A taxa KÔMA incide somente em pedido online pago. A tabela abaixo é a oferta vigente para novos aceites. A taxa efetiva de cada restaurante vem do contrato vinculado. Tarifas do provedor são separadas.
           </p>
           <div className="space-y-2">
             {SUBSCRIPTION_PLANS.map(plan => (

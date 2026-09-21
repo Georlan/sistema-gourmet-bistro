@@ -55,6 +55,23 @@ export function isOperationalAppHost(
   return hostname.trim().toLowerCase() === KOMA_OPERATIONAL_APP_HOST;
 }
 
+
+export function isCentralSupportOperationalBridge(
+  hostname: string = typeof window !== 'undefined' ? window.location.hostname : '',
+  pathname: string = typeof window !== 'undefined' ? window.location.pathname : '',
+  search: string = typeof window !== 'undefined' ? window.location.search : '',
+): boolean {
+  const cleanHost = hostname.trim().toLowerCase();
+  const params = new URLSearchParams(search);
+  const viewParam = params.get('view')?.toLowerCase() || '';
+  const isCentralHost = cleanHost === 'central.komafood.com.br' || cleanHost.startsWith('central.');
+
+  return isCentralHost
+    && pathname === '/'
+    && params.get('support') === '1'
+    && (viewParam === 'caixa' || viewParam === 'gerencia');
+}
+
 /**
  * Decompõe um subdomínio de primeiro nível nos componentes tenantSlug e superfície operacional.
  * Faz matching right-to-left para suportar slugs compostos com hífen (ex: "bar-do-sol-caixa").
@@ -108,12 +125,21 @@ export function resolveKomaHost(
   const isExplicitPublicRoute = pathname.startsWith('/cardapio')
     || pathname.startsWith('/c/')
     || viewParam === 'cardapio';
+  const isSupportOperationalBridge = isCentralSupportOperationalBridge(
+    cleanHost,
+    pathname,
+    search,
+  );
 
-  // 1. Central / SuperAdmin exclusivo.
+  // 1. Central / SuperAdmin exclusivo, salvo pela ponte efêmera de suporte
+  // criada pelo próprio Super Admin na mesma origem.
   if (
-    cleanHost === 'central.komafood.com.br' ||
-    cleanHost.startsWith('central.') ||
-    pathname.startsWith('/super-admin')
+    (
+      cleanHost === 'central.komafood.com.br'
+      || cleanHost.startsWith('central.')
+    )
+    && !isSupportOperationalBridge
+    || pathname.startsWith('/super-admin')
   ) {
     return {
       kind: 'central',
@@ -151,7 +177,27 @@ export function resolveKomaHost(
     };
   }
 
-  // 3. Landing page oficial.
+  // 3. Pontes operacionais explícitas. Devem vencer o fallback da landing em
+  // localhost/preview para manter os links legados de equipe utilizáveis.
+  if (viewParam === 'caixa' || viewParam === 'gerencia') {
+    return {
+      kind: 'generic',
+      surface: 'caixa',
+      tenantSlug: params.get('slug') || null,
+      rawHostname: cleanHost,
+    };
+  }
+
+  if (viewParam === 'garcom' || viewParam === 'salao') {
+    return {
+      kind: 'generic',
+      surface: 'garcom',
+      tenantSlug: params.get('slug') || null,
+      rawHostname: cleanHost,
+    };
+  }
+
+  // 4. Landing page oficial.
   const isApexLandingDomain = cleanHost === 'komafood.com.br'
     || cleanHost === 'www.komafood.com.br'
     || cleanHost.endsWith('.pages.dev')
@@ -168,7 +214,7 @@ export function resolveKomaHost(
     };
   }
 
-  // 4. Entrada operacional única. Rotas públicas explícitas continuam soberanas.
+  // 5. Entrada operacional única. Rotas públicas explícitas continuam soberanas.
   if (isOperationalAppHost(cleanHost) && !isExplicitPublicRoute) {
     return {
       kind: 'generic',
@@ -178,7 +224,7 @@ export function resolveKomaHost(
     };
   }
 
-  // 5. Subdomínios do komafood.com.br. Sufixos operacionais são compatibilidade legada.
+  // 6. Subdomínios do komafood.com.br. Sufixos operacionais são compatibilidade legada.
   if (cleanHost.endsWith('.komafood.com.br')) {
     const sub = cleanHost.replace(/\.komafood\.com\.br$/, '');
     const parsed = parseTenantSubdomain(sub);
@@ -192,7 +238,7 @@ export function resolveKomaHost(
     }
   }
 
-  // 6. Suporte a subdomínios locais para testes.
+  // 7. Suporte a subdomínios locais para testes.
   if (cleanHost.endsWith('.localhost')) {
     const sub = cleanHost.replace(/\.localhost$/, '');
     const parsed = parseTenantSubdomain(sub);
@@ -206,7 +252,7 @@ export function resolveKomaHost(
     }
   }
 
-  // 7. Ambientes de hospedagem compartilhada.
+  // 8. Ambientes de hospedagem compartilhada.
   const isPlatformHost = KNOWN_PLATFORM_ROOTS.some((root) => cleanHost.endsWith(root));
   const parts = cleanHost.split('.');
 
@@ -227,7 +273,7 @@ export function resolveKomaHost(
     }
   }
 
-  // 8. Fallback por path/search (ex: /cardapio, /c/:slug, ?slug=...).
+  // 9. Fallback por path/search (ex: /cardapio, /c/:slug, ?slug=...).
   const pathParts = pathname.split('/').filter(Boolean);
   let resolvedSlugFromPath: string | null = null;
   if (pathParts[0] === 'c' && pathParts[1]) {

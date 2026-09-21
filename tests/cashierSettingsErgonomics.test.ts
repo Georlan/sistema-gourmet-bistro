@@ -3,29 +3,47 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const settings = readFileSync('src/components/caixa/settings/CashierSettings.tsx', 'utf8');
-const settingsNavigation = readFileSync('src/components/caixa/settings/cashierSettingsNavigation.ts', 'utf8');
 const settingsController = readFileSync('src/components/caixa/settings/useCashierSettings.ts', 'utf8');
 const appearance = readFileSync('src/components/caixa/settings/CashierAppearanceSettings.tsx', 'utf8');
 const responsiveCss = readFileSync('src/components/caixa/navigation/cashierLowHeight.css', 'utf8');
 const waiterSettings = readFileSync('src/components/caixa/settings/CashierWaiterSettings.tsx', 'utf8');
 const waiterPermissions = readFileSync('src/components/caixa/settings/waiterPermissions.ts', 'utf8');
+const tableSettings = readFileSync('src/components/caixa/settings/CashierTableSettings.tsx', 'utf8');
 
-test('cashier settings expose task groups and remember the last operator section', () => {
-  assert.match(settingsNavigation, /CASHIER_SETTINGS_TAB_STORAGE_KEY = 'koma_cashier_settings_tab'/);
-  assert.match(settings, /useState<CashierSettingsTab>\(readInitialCashierSettingsTab\)/);
-  assert.match(settingsNavigation, /window\.localStorage\.getItem\(CASHIER_SETTINGS_TAB_STORAGE_KEY\)/);
-  assert.match(settingsNavigation, /window\.localStorage\.setItem\(CASHIER_SETTINGS_TAB_STORAGE_KEY, tab\)/);
-  assert.match(settings, /Configurações do Caixa/);
-  assert.match(settings, /aria-label="Configurações do caixa"/);
-  assert.match(settings, /label: 'Neste dispositivo'/);
-  assert.match(settings, /label: 'Operação do salão'/);
-  assert.match(settings, /label: 'Aparência'/);
-  assert.match(settings, /label: 'Impressão'/);
-  assert.match(settings, /label: 'Mesas'/);
-  assert.match(settings, /label: 'App do Garçom'/);
-  assert.match(settings, /label: 'Taxa de Serviço'/);
-  assert.match(settings, /onClick=\{\(\) => selectSettingsTab\(tab\.id\)\}/);
+test('cashier settings render only the active canonical destination without internal navigation cards', () => {
+  const navigation = readFileSync('src/components/caixa/navigation/cashierNavigation.ts', 'utf8');
+  const panel = readFileSync('src/components/CaixaPanel.tsx', 'utf8');
+
+  assert.match(navigation, /config_aparencia[\s\S]*Aparência[\s\S]*subTab: 'aparencia'/);
+  assert.match(navigation, /config_impressao[\s\S]*Impressão[\s\S]*subTab: 'impressao'/);
+  assert.match(navigation, /config_mesas[\s\S]*Mesas[\s\S]*subTab: 'mesas'/);
+  assert.match(navigation, /config_garcom[\s\S]*App do Garçom[\s\S]*subTab: 'garcom'/);
+  assert.match(navigation, /config_taxa[\s\S]*Taxa de Serviço[\s\S]*subTab: 'taxa'/);
+  assert.match(navigation, /config_implantacao[\s\S]*Implantação inicial[\s\S]*subTab: 'implantacao'/);
+  assert.match(navigation, /config_integracoes[\s\S]*Integrações[\s\S]*subTab: 'integracoes'/);
+  assert.match(panel, /settingsSubnavItems = getCashierNavigationItem\('impressao_salao'\)\?\.children \?\? \[\]/);
+  assert.match(panel, /activeTab === 'impressao_salao' && settingsSubnavItems\.map/);
+
+  assert.doesNotMatch(settings, /cashier-settings-tab|CASHIER_SETTINGS_GROUPS|selectSettingsTab|readInitialCashierSettingsTab/);
+  assert.doesNotMatch(settings, /Configurações do Caixa/);
+  assert.match(settings, /activeSubTab === 'aparencia'/);
+  assert.match(settings, /activeSubTab === 'impressao'/);
+  assert.match(settings, /activeSubTab === 'implantacao'/);
   assert.match(settings, /<CashierAppearanceSettings \/>/);
+  assert.match(settings, /<CashierIntegrationsSettings/);
+});
+
+test('table settings stay configuration-only and do not leak the operational salon', () => {
+  const panel = readFileSync('src/components/CaixaPanel.tsx', 'utf8');
+
+  assert.match(panel, /activeTab === 'operacao' && activeSubTab === 'mesas'/);
+  assert.match(panel, /activeTab === 'operacao' && cashShiftUiState !== 'open'/);
+  assert.match(panel, /active=\{activeTab === 'operacao' && activeSubTab === 'balcao'\}/);
+  assert.doesNotMatch(tableSettings, /OperationalBanner|prontas para receber|mesas cadastradas|lugares disponíveis|nomes personalizados/);
+  assert.match(tableSettings, /Configuração das mesas/);
+  assert.match(tableSettings, /Adicionar mesa/);
+  assert.match(tableSettings, /Crie, renomeie, ajuste a capacidade ou remova mesas/);
+  assert.match(tableSettings, /setEditingTable\(table\)/);
 });
 
 test('appearance settings persist theme and local text size using the cashier preference contract', () => {
@@ -47,17 +65,29 @@ test('mobile cashier topbar reserves independent 44px touch targets for menu, ch
   assert.match(responsiveCss, /\.cashier-subnav__button[\s\S]*min-height: 2\.75rem/);
 });
 
-test('cashier printing settings separates state and diagnostics, coupon, and delivery into operational contexts', () => {
+test('cashier printing settings keeps every action while prioritizing daily operation', () => {
   const printing = readFileSync('src/components/caixa/settings/CashierPrintingSettings.tsx', 'utf8');
+  const monitor = readFileSync('src/components/printing/PrintMonitorPanel.tsx', 'utf8');
 
-  // Contexto 1: Estado e diagnóstico
-  assert.match(printing, /Estado e diagnóstico/);
+  // Contexto 1: leitura operacional primeiro, homologação avançada sob demanda.
+  assert.match(printing, /Veja primeiro o que precisa de atenção/);
   assert.match(printing, /<PrintMonitorPanel/);
-  assert.match(printing, /Homologação do App do Garçom/);
-  assert.match(printing, /Teste extremo — Garçom/);
+  assert.match(printing, /Testes avançados/);
+  assert.match(printing, /Teste extremo do App do Garçom/);
+  assert.match(printing, /Gerar comanda de teste/);
   assert.match(printing, /\/impressao\/teste-extremo-garcom/);
   assert.match(printing, /sem criar pedido real, estoque ou movimento de caixa/);
   assert.match(printing, /Impressão não incluída no Kôma Pocket/);
+  assert.doesNotMatch(printing, /Fila ativa/);
+
+  // O monitor distingue agente, USB físico e fila em vez de fundir os estados.
+  assert.match(monitor, /label: 'agente local'/);
+  assert.match(monitor, /label: 'impressora física'/);
+  assert.match(monitor, /label: 'fila'/);
+  assert.match(monitor, /Kôma Print conectado; impressora física desconectada/);
+  assert.match(monitor, /agente online · USB desconectado/);
+  assert.doesNotMatch(monitor, /sem surpresa na fila/);
+  assert.doesNotMatch(monitor, /limite visual/);
 
   // Contexto 2: Cupom
   assert.match(printing, /aria-labelledby="printing-receipt-heading"/);
@@ -67,17 +97,20 @@ test('cashier printing settings separates state and diagnostics, coupon, and del
   assert.match(printing, /Mensagem adicional de rodapé:/);
   assert.match(printing, /SALVO NO RESTAURANTE/);
   assert.match(printing, /Prévia aproximada/);
+  assert.match(printing, /PEDIDO #305/);
+  assert.doesNotMatch(printing, /PEDIDO: #305/);
 
-  // Contexto 3: Delivery
+  // Contexto 3: Delivery vira uma escolha explícita de duas opções.
   assert.match(printing, /aria-labelledby="printing-delivery-heading"/);
-  assert.match(printing, /<Truck /);
-  assert.match(printing, /Unificar vias de delivery \(via única\)/);
+  assert.match(printing, /role="radiogroup"/);
+  assert.match(printing, /aria-checked=\{!unificarViasDelivery\}/);
+  assert.match(printing, /aria-checked=\{unificarViasDelivery\}/);
   assert.match(printing, /unificar_vias_delivery/);
-  assert.match(printing, /Via única \(marcado\)/);
-  assert.match(printing, /Vias separadas \(desmarcado\)/);
-  assert.match(printing, /Imprime uma única comanda com dados do cliente, itens e entrega juntos/);
+  assert.match(printing, />Vias separadas</);
+  assert.match(printing, />Via única</);
+  assert.doesNotMatch(printing, /marcado|desmarcado/);
 
-  // Contrato do controller preservado
+  // Contrato do controller preservado.
   assert.match(printing, /ReturnType<typeof useCashierSettings>/);
 });
 
@@ -108,4 +141,25 @@ test('waiter settings separate actionable permissions from future capabilities a
   assert.match(waiterPermissions, /title: 'Fechar conta pelo app'/);
   assert.match(waiterPermissions, /title: 'Transferir mesa ou comanda'/);
   assert.doesNotMatch(waiterPermissions, /title: 'Permitir que/);
+});
+
+
+test('printing queue explains FIFO order and job origin', () => {
+  const monitor = readFileSync('src/components/printing/PrintMonitorPanel.tsx', 'utf8');
+
+  assert.match(monitor, /mais antiga primeiro/);
+  assert.match(monitor, /friendlyQueueOrigin/);
+  assert.match(monitor, /Reimpressão manual/);
+  assert.match(monitor, /queue_origins/);
+  assert.match(monitor, /automática\(s\)/);
+  assert.match(monitor, /reimpressão\(ões\)/);
+});
+
+
+test('printing diagnostics distinguish total queue from delayed subset', () => {
+  const monitor = readFileSync('src/components/printing/PrintMonitorPanel.tsx', 'utf8');
+
+  assert.match(monitor, /\$\{queueTotal\} na fila; \$\{monitorData\.summary\.delayed\} atrasada\(s\)/);
+  assert.match(monitor, /Atraso significa mais de/);
+  assert.doesNotMatch(monitor, /impressão\(ões\) aguardando; agente local conectado/);
 });

@@ -6,6 +6,7 @@ via ``online_order_policy``; não existe endpoint público para pausar/reabrir l
 
 from __future__ import annotations
 
+import datetime
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -24,6 +25,8 @@ from ..services.online_order_control import (
     pause_online_orders,
     release_block,
     resume_online_orders,
+    auto_accept_pending_online_orders,
+    update_auto_accept,
     update_capacity,
 )
 from ..services.order_rejection_notice import append_rejection_reason_notice
@@ -44,6 +47,10 @@ class ResumeOrdersPayload(BaseModel):
 class CapacityPayload(BaseModel):
     max_active_orders: int | None = Field(default=None, ge=1, le=500)
     auto_pause: bool = False
+
+
+class AutoAcceptPayload(BaseModel):
+    enabled: bool
 
 
 class BlockCustomerPayload(BaseModel):
@@ -136,6 +143,32 @@ def resume_orders(
     return result
 
 
+@router.put("/auto-accept")
+def configure_auto_accept(
+    payload: AutoAcceptPayload,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(_authorized_operator),
+):
+    rid = require_tenant_id()
+    update_auto_accept(
+        db,
+        restaurante_id=rid,
+        actor_user_id=str(current_user.id),
+        enabled=payload.enabled,
+    )
+    if payload.enabled:
+        auto_accept_pending_online_orders(
+            db,
+            restaurante_id=rid,
+            operator_user_id=str(current_user.id),
+        )
+    db.commit()
+    result = operational_status(db, rid)
+    _notify_orders(background_tasks, rid)
+    return result
+
+
 @router.put("/capacity")
 def configure_capacity(
     payload: CapacityPayload,
@@ -225,27 +258,36 @@ def list_customer_blocks(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(_authorized_operator),
 ):
+    """Lista bloqueios ativos e histórico sem expor telefone/fingerprint."""
     del current_user
     rid = require_tenant_id()
+    now = datetime.datetime.now(datetime.timezone.utc)
     blocks = (
         db.query(OnlineOrderCustomerBlock)
-        .filter(
-            OnlineOrderCustomerBlock.restaurante_id == rid,
-            OnlineOrderCustomerBlock.active.is_(True),
-        )
+        .filter(OnlineOrderCustomerBlock.restaurante_id == rid)
         .order_by(OnlineOrderCustomerBlock.created_at.desc())
+        .limit(200)
         .all()
     )
-    return [
-        {
+
+    def serialize(block: OnlineOrderCustomerBlock):
+        expires_at = block.expires_at
+        if expires_at is not None and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        expired = bool(expires_at and expires_at <= now)
+        effective_active = bool(block.active) and not expired
+        block_status = "active" if effective_active else ("expired" if block.active else "released")
+        return {
             "id": block.id,
             "cliente_id": block.cliente_id,
             "reason": block.reason,
             "expires_at": block.expires_at.isoformat() if block.expires_at else None,
             "created_at": block.created_at.isoformat() if block.created_at else None,
+            "active": effective_active,
+            "status": block_status,
         }
-        for block in blocks
-    ]
+
+    return [serialize(block) for block in blocks]
 
 
 @router.post("/blocks/by-order/{comanda_id}", status_code=status.HTTP_201_CREATED)

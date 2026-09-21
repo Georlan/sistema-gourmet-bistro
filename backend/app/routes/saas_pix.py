@@ -124,6 +124,11 @@ def select_contract_pix(protocol: str, db: Session = Depends(get_db)):
     acceptance = resolve_activation_acceptance(db, normalized_protocol)
     if acceptance is None:
         raise HTTPException(404, "Aceite contratual não encontrado para este protocolo.")
+    if acceptance.get("plan_change_restaurante_id") is not None:
+        raise HTTPException(
+            409,
+            "Este protocolo pertence a uma mudança de plano e não pode usar o Pix da contratação inicial.",
+        )
     if not contract_fixed_billing_required(db, normalized_protocol):
         raise HTTPException(
             409,

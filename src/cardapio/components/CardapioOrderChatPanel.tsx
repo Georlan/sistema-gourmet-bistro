@@ -20,6 +20,7 @@ import {
   StoredOrder,
   fallbackOrderState,
   isOrderStateContract,
+  orderFulfillmentLabel,
 } from "../orderTracking";
 import "../cardapioChatPolish.css";
 import CardapioPushNotifications from "./CardapioPushNotifications";
@@ -39,9 +40,19 @@ interface TrackingPayload {
 
 interface TrackingMessage {
   id: string;
+  kind?: "message" | "order_event";
   sender_type: "system" | "customer" | "staff";
   body: string;
   created_at?: string | null;
+  seq?: number;
+}
+
+interface TrackingFeedPage {
+  items: TrackingMessage[];
+  has_more: boolean;
+  oldest_seq: number | null;
+  latest_seq: number | null;
+  purged_at: string | null;
 }
 
 interface CardapioOrderChatPanelProps {
@@ -80,13 +91,28 @@ export default function CardapioOrderChatPanel({
   onClose,
 }: CardapioOrderChatPanelProps) {
   const token = useMemo(() => resolveTrackingToken(order), [order]);
+  const draftKey = token ? `koma:order-chat-draft:v1:${order.id}` : null;
   const [tracking, setTracking] = useState<TrackingPayload | null>(null);
   const [messages, setMessages] = useState<TrackingMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [input, setInput] = useState(() => {
+    if (!draftKey || typeof sessionStorage === "undefined") return "";
+    try {
+      return sessionStorage.getItem(draftKey) || "";
+    } catch {
+      return "";
+    }
+  });
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pendingMessageIdRef = useRef<string | null>(null);
+  const readInFlightRef = useRef(false);
+  const readQueuedRef = useRef(false);
+  const observedStaffUnreadRef = useRef(false);
+  const latestSeqRef = useRef(0);
 
   const apiRoot = token
     ? `${API_BASE_URL}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}`
@@ -100,16 +126,32 @@ export default function CardapioOrderChatPanel({
     }
 
     try {
-      const [orderRes, messagesRes] = await Promise.all([
-        fetch(apiRoot, { cache: "no-store" }),
-        fetch(`${apiRoot}/messages`, { cache: "no-store" }),
+      const [orderRes, page] = await Promise.all([
+        fetch(`${apiRoot}/summary`, { cache: "no-store" }),
+        (async (): Promise<TrackingFeedPage | null> => {
+          const response = await fetch(`${apiRoot}/feed${latestSeqRef.current ? `?after_seq=${latestSeqRef.current}` : ""}`, { cache: "no-store" });
+          if (response.ok) {
+            const parsed = await response.json() as Partial<TrackingFeedPage>;
+            if (Array.isArray(parsed.items)) return parsed as TrackingFeedPage;
+          }
+          const legacy = await fetch(`${apiRoot}/messages`, { cache: "no-store" });
+          if (!legacy.ok) return null;
+          const items = await legacy.json() as TrackingMessage[];
+          return { items, has_more: false, oldest_seq: null, latest_seq: null, purged_at: null };
+        })(),
       ]);
       if (!orderRes.ok) throw new Error("Não foi possível atualizar o pedido.");
       const orderData = await orderRes.json() as TrackingPayload;
       setTracking(orderData);
-      if (messagesRes.ok) {
-        const messageData = await messagesRes.json() as TrackingMessage[];
-        if (Array.isArray(messageData)) setMessages(messageData);
+      if (page && Array.isArray(page.items)) {
+          const wasInitialPage = latestSeqRef.current === 0;
+          latestSeqRef.current = Math.max(latestSeqRef.current, page.latest_seq || 0);
+          setMessages((current) => {
+            const byId = new Map(current.map((item) => [item.id, item]));
+            page.items.forEach((item) => byId.set(item.id, item));
+            return [...byId.values()].sort((a, b) => (a.seq || 0) - (b.seq || 0));
+          });
+          if (wasInitialPage) setHasOlderMessages(page.has_more);
       }
       setError(null);
     } catch (err) {
@@ -119,9 +161,57 @@ export default function CardapioOrderChatPanel({
     }
   }, [apiRoot]);
 
-  const markRead = useCallback(() => {
-    if (!apiRoot || document.visibilityState !== "visible") return;
-    void fetch(`${apiRoot}/read`, { method: "POST" }).catch(() => {});
+  const loadOlder = useCallback(async () => {
+    const oldest = messages[0]?.seq;
+    if (!apiRoot || !oldest || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const response = await fetch(`${apiRoot}/feed?before_seq=${oldest}&limit=50`, { cache: "no-store" });
+      if (!response.ok) return;
+      const page = await response.json() as TrackingFeedPage;
+      setMessages((current) => [...page.items, ...current]);
+      setHasOlderMessages(page.has_more);
+    } finally { setLoadingOlder(false); }
+  }, [apiRoot, loadingOlder, messages]);
+
+  const markRead = useCallback(async () => {
+    if (
+      !apiRoot
+      || document.visibilityState !== "visible"
+      || !observedStaffUnreadRef.current
+    ) return;
+
+    if (readInFlightRef.current) {
+      readQueuedRef.current = true;
+      return;
+    }
+
+    readInFlightRef.current = true;
+    try {
+      do {
+        readQueuedRef.current = false;
+        if (!observedStaffUnreadRef.current || document.visibilityState !== "visible") break;
+        observedStaffUnreadRef.current = false;
+
+        const response = await fetch(`${apiRoot}/read`, { method: "POST" });
+        if (!response.ok) {
+          observedStaffUnreadRef.current = true;
+          break;
+        }
+        setTracking((current) => current
+          ? {
+              ...current,
+              conversa: current.conversa
+                ? { ...current.conversa, unread_count: 0 }
+                : current.conversa,
+            }
+          : current);
+      } while (readQueuedRef.current || observedStaffUnreadRef.current);
+    } catch {
+      observedStaffUnreadRef.current = true;
+    } finally {
+      readInFlightRef.current = false;
+    }
   }, [apiRoot]);
 
   useEffect(() => {
@@ -130,6 +220,7 @@ export default function CardapioOrderChatPanel({
 
     let source: EventSource | null = null;
     let fallbackInterval: number | null = null;
+    let hasOpenedOnce = false;
 
     const stopFallback = () => {
       if (fallbackInterval !== null) {
@@ -154,20 +245,65 @@ export default function CardapioOrderChatPanel({
 
     try {
       source = new EventSource(`${apiRoot}/events`);
-      source.onopen = stopFallback;
+      source.onopen = () => {
+        const isReconnect = hasOpenedOnce;
+        hasOpenedOnce = true;
+        stopFallback();
+        if (isReconnect) void refresh();
+      };
       source.onerror = startFallback;
+      source.addEventListener("connected", () => { void refresh(); });
       source.addEventListener("message", (event: MessageEvent) => {
         try {
           const incoming = JSON.parse(event.data) as TrackingMessage;
+          latestSeqRef.current = Math.max(latestSeqRef.current, incoming.seq || 0);
           setMessages((current) => current.some((item) => item.id === incoming.id)
             ? current
-            : [...current, incoming]);
+            : [...current, incoming].sort((a, b) => (a.seq || 0) - (b.seq || 0)));
+          if (incoming.sender_type === "staff") {
+            observedStaffUnreadRef.current = true;
+            if (document.visibilityState === "visible") void markRead();
+          }
         } catch {
           startFallback();
         }
       });
-      source.addEventListener("status", () => {
-        void refresh();
+      source.addEventListener("status", (event) => {
+        try {
+          const data = JSON.parse((event as MessageEvent).data) as {
+            status?: unknown;
+            closed_at?: unknown;
+            feed_event?: TrackingMessage;
+          };
+          if (data.feed_event?.id) {
+            const incoming = data.feed_event;
+            latestSeqRef.current = Math.max(latestSeqRef.current, incoming.seq || 0);
+            setMessages((current) => current.some((item) => item.id === incoming.id)
+              ? current
+              : [...current, incoming].sort((a, b) => (a.seq || 0) - (b.seq || 0)));
+          }
+          if (typeof data.status !== "string" || !data.status) return;
+          setTracking((current) => {
+            const tipo = current?.tipo || order.tipo || "Retirada";
+            const state = fallbackOrderState(data.status as string, tipo);
+            const closedAt = typeof data.closed_at === "string"
+              ? data.closed_at
+              : current?.closed_at || null;
+            return {
+              status: data.status as string,
+              tipo,
+              state,
+              closed_at: closedAt,
+              conversa: {
+                ...(current?.conversa || {}),
+                closed_at: closedAt,
+                can_chat: state.can_chat,
+              },
+            };
+          });
+        } catch {
+          startFallback();
+        }
       });
     } catch {
       source = null;
@@ -179,14 +315,24 @@ export default function CardapioOrderChatPanel({
       stopFallback();
       source?.close();
     };
-  }, [apiRoot, refresh]);
+  }, [apiRoot, markRead, order.tipo, refresh]);
+
+  const customerUnread = Math.max(0, Number(tracking?.conversa?.unread_count || 0));
 
   useEffect(() => {
-    markRead();
-    const handleVisibility = () => markRead();
+    if (customerUnread > 0) {
+      observedStaffUnreadRef.current = true;
+      if (document.visibilityState === "visible") void markRead();
+    }
+  }, [customerUnread, markRead]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void markRead();
+    };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [markRead, messages.length]);
+  }, [markRead]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -208,27 +354,44 @@ export default function CardapioOrderChatPanel({
     : ["Recebido", "Em preparo", "Pronto", "Concluído"];
   const isClosed = !state.can_chat || tracking?.conversa?.can_chat === false;
 
+  useEffect(() => {
+    if (!draftKey || typeof sessionStorage === "undefined") return;
+    if (isClosed || !input.trim()) {
+      try { sessionStorage.removeItem(draftKey); } catch {}
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      try { sessionStorage.setItem(draftKey, input); } catch {}
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [draftKey, input, isClosed]);
+
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     const body = input.trim();
     if (!apiRoot || !body || sending || isClosed) return;
 
+    const clientMessageId = pendingMessageIdRef.current || crypto.randomUUID();
+    pendingMessageIdRef.current = clientMessageId;
     setSending(true);
     setError(null);
     try {
       const response = await fetch(`${apiRoot}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({ body, client_message_id: clientMessageId }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.detail || "Não foi possível enviar a mensagem.");
       const sent = payload as TrackingMessage;
       setMessages((current) => current.some((item) => item.id === sent.id)
         ? current
-        : [...current, sent]);
+        : [...current, sent].sort((a, b) => (a.seq || 0) - (b.seq || 0)));
+      pendingMessageIdRef.current = null;
       setInput("");
-      void refresh();
+      if (draftKey) {
+        try { sessionStorage.removeItem(draftKey); } catch {}
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível enviar a mensagem.");
     } finally {
@@ -290,7 +453,7 @@ export default function CardapioOrderChatPanel({
               <p className={clsx("text-xs font-black", rejected ? "text-rose-400" : "text-emerald-400")}>{state.label}</p>
             </div>
           </div>
-          <span className="text-[10px] font-bold text-koma-muted">{isDelivery ? "Delivery" : "Retirada"}</span>
+          <span className="text-[10px] font-bold text-koma-muted">{orderFulfillmentLabel(state.fulfillment)}</span>
         </div>
 
         {!rejected && (
@@ -311,6 +474,12 @@ export default function CardapioOrderChatPanel({
       <CardapioPushNotifications order={order} />
 
       <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto p-4 sm:p-5" aria-live="polite">
+        {hasOlderMessages && (
+          <button type="button" onClick={() => void loadOlder()} disabled={loadingOlder}
+            className="mx-auto block rounded-lg border border-koma-border px-3 py-1.5 text-[10px] font-bold text-koma-secondary disabled:opacity-50">
+            {loadingOlder ? "Carregando…" : "Carregar mensagens anteriores"}
+          </button>
+        )}
         {loading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-xs text-koma-muted">Carregando conversa…</div>
         ) : messages.length === 0 ? (
@@ -358,13 +527,13 @@ export default function CardapioOrderChatPanel({
           </div>
         ) : (
           <div className="space-y-2">
-            {state.terminal && !rejected && (
-              <p className="text-[10px] text-koma-muted">Pedido concluído · sua mensagem abrirá um atendimento de pós-venda sem reabrir o pedido.</p>
-            )}
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
-                onChange={(event) => setInput(event.target.value)}
+                onChange={(event) => {
+                setInput(event.target.value);
+                pendingMessageIdRef.current = null;
+              }}
                 rows={1}
                 maxLength={1000}
                 placeholder="Escreva para o restaurante…"

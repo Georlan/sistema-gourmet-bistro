@@ -1,0 +1,101 @@
+name: Order Chat Targeted Gate
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/order_chat_models.py"
+      - "backend/app/routes/order_tracking.py"
+      - "backend/app/routes/caixa_chat.py"
+      - "backend/app/services/order_chat_*.py"
+      - "backend/app/services/order_rejection_notice.py"
+      - "backend/tests/test_order_chat*.py"
+      - "backend/alembic/versions/*order_feed_events.py"
+      - "backend/tests/test_order_tracking_performance.py"
+      - "backend/tests/test_online_order_reasoned_rejection.py"
+      - "src/cardapio/CardapioPage.tsx"
+      - "src/cardapio/orderTracking.ts"
+      - "src/cardapio/components/CardapioOrdersDrawer.tsx"
+      - "src/cardapio/components/CardapioOrderChatPanel.tsx"
+      - "src/components/CaixaPanel.tsx"
+      - "src/components/caixa/chat/**"
+      - "tests/chat-visual-notifications.test.ts"
+      - "tests/cardapio-inline-order-chat.test.ts"
+      - ".github/workflows/order-chat-targeted.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  chat-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chat_test
+          POSTGRES_PASSWORD: chat_test
+          POSTGRES_DB: chat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chat_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ORDER_CHAT_TEST_DATABASE_URL: postgresql://chat_test:chat_test@127.0.0.1:5432/chat_test
+      ENVIRONMENT: test
+      SECRET_KEY: order-chat-ci-secret-key
+      ENCRYPTION_KEY: dgvrWayyUxrh0PjzBcjn1AJ5woxjUE3lLTRptHDUSEQ=
+      DATABASE_URL: sqlite:///./order-chat-ci.db
+      MIGRATION_DATABASE_URL: sqlite:///./order-chat-ci.db
+      PYTHONPATH: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.15"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+
+      - name: Verify dependency compatibility
+        run: python -m pip check
+
+      - name: Compile chat modules
+        run: |
+          python -m py_compile backend/app/services/order_chat_hub.py
+          python -m py_compile backend/app/services/order_chat_service.py
+          python -m py_compile backend/app/services/order_chat_archive_service.py
+          python -m py_compile backend/app/services/order_rejection_notice.py
+          python -m py_compile backend/app/routes/order_tracking.py
+          python -m py_compile backend/app/routes/caixa_chat.py
+
+      - name: Run chat backend contracts
+        run: |
+          DATABASE_URL=sqlite:///./order-chat-unit-ci.db \
+          MIGRATION_DATABASE_URL=sqlite:///./order-chat-unit-ci.db \
+            python -m pytest -q -ra backend/tests/test_order_chat_unit.py backend/tests/test_order_chat_p0.py backend/tests/test_order_chat_p0_postgres.py
+
+          DATABASE_URL=sqlite:///./order-chat-performance-ci.db \
+          MIGRATION_DATABASE_URL=sqlite:///./order-chat-performance-ci.db \
+            python -m pytest -q -ra backend/tests/test_order_tracking_performance.py
+
+          DATABASE_URL=sqlite:///./order-chat-rejection-lifecycle-ci.db \
+          MIGRATION_DATABASE_URL=sqlite:///./order-chat-rejection-lifecycle-ci.db \
+            python -m pytest -q -ra \
+              backend/tests/test_online_order_reasoned_rejection.py::test_reasoned_rejection_uses_canonical_lifecycle
+
+          DATABASE_URL=sqlite:///./order-chat-rejection-block-ci.db \
+          MIGRATION_DATABASE_URL=sqlite:///./order-chat-rejection-block-ci.db \
+            python -m pytest -q -ra \
+              backend/tests/test_online_order_reasoned_rejection.py::test_rejection_can_block_future_orders_and_secure_tracking_explains_why

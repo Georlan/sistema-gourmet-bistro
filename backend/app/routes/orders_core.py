@@ -2,7 +2,7 @@ import uuid
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from typing import List, Optional
 import logging
 
@@ -539,7 +539,7 @@ def fechar_comanda(
     status_anterior = comanda.delivery_status
     comanda.fechada = True
     comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
-    if comanda.tipo in {"Delivery", "Entrega", "Retirada", "Viagem", "balcao", "balcão"}:
+    if comanda.delivery_status is not None or comanda.tipo in {"Delivery", "Entrega", "Retirada", "Viagem", "balcao", "balcão"}:
         if comanda.delivery_status != "recusado":
             comanda.delivery_status = "finalizado"
             for lanc in (comanda.lancamentos or []):
@@ -813,15 +813,76 @@ def update_item_status(
 @router.get("/delivery/ativos", response_model=List[ComandaDetail])
 def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
-    Retorna todas as comandas de delivery ou retirada que não estejam finalizadas/fechadas.
-    Inclui as pendentes (na gaveta de aceite) e as em produção/trânsito.
-    """
+    Retorna comandas com ciclo operacional da coluna central que ainda estão abertas.\n    Inclui delivery, retirada, consumo local online e consumo local do Caixa sem mesa;\n    salão tradicional continua fora porque não possui esse ciclo operacional.\n    """
     return db.query(Comanda).filter(
         Comanda.restaurante_id == require_tenant_id(),
-        Comanda.tipo.in_(["Delivery", "Entrega", "Retirada"]),
+        or_(
+            Comanda.tipo.in_(["Delivery", "Entrega", "Retirada", "Viagem"]),
+            and_(
+                Comanda.tipo.in_(["Consumo no Local", "Mesa", "Local"]),
+                Comanda.delivery_status.isnot(None),
+                Comanda.lancamentos.any(Lancamento.origem.in_(["cardapio", "caixa"])),
+            ),
+        ),
         Comanda.fechada == False,
         or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
     ).all()
+
+
+@router.get("/delivery/retiradas/concluidas-recentes", response_model=List[ComandaDetail])
+def listar_retiradas_concluidas_recentes(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Retorna retiradas fechadas recentemente para a visão operacional do dia.
+
+    A tela filtra o dia local do operador no cliente. O backend limita a janela
+    a 36 horas para cobrir viradas de fuso sem carregar o histórico inteiro.
+    Este endpoint é somente leitura; o ciclo de vida continua pertencendo à
+    máquina de estados e às ações canônicas de comanda.
+    """
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=36)
+    return (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == require_tenant_id(),
+            Comanda.tipo.in_(["Retirada", "Viagem"]),
+            Comanda.fechada.is_(True),
+            Comanda.fechado_em.isnot(None),
+            Comanda.fechado_em >= cutoff,
+            or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+        )
+        .order_by(Comanda.fechado_em.desc())
+        .limit(100)
+        .all()
+    )
+
+
+@router.get("/delivery/entregas/concluidas-recentes", response_model=List[ComandaDetail])
+def listar_entregas_concluidas_recentes(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Retorna deliveries fechados recentemente para consulta operacional.
+
+    A resposta é somente leitura e usa a mesma janela curta das retiradas. O
+    cliente recorta o dia local sem introduzir uma segunda máquina de estados.
+    """
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=36)
+    return (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == require_tenant_id(),
+            Comanda.tipo.in_(["Delivery", "Entrega"]),
+            Comanda.fechada.is_(True),
+            Comanda.fechado_em.isnot(None),
+            Comanda.fechado_em >= cutoff,
+            or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+        )
+        .order_by(Comanda.fechado_em.desc())
+        .limit(100)
+        .all()
+    )
 
 
 @router.get("/motoboys/lista", response_model=List[MotoboyResponse])

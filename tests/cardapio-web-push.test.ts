@@ -55,7 +55,9 @@ test("status do pedido usa tag estável e chat não sobrescreve status", () => {
 });
 
 test("preview de mensagem é resolvido no dispatcher sem copiar body para outbox", () => {
-  assert.match(caixaChat, /message_id=msg\.id/);
+  const chatService = readFileSync(new URL("../backend/app/services/order_chat_service.py", import.meta.url), "utf8");
+  assert.match(chatService, /message_id=msg\.id/);
+  assert.doesNotMatch(caixaChat, /enqueue_order_push_event/);
   assert.match(webPushBackend, /payload\["message_id"\]/);
   assert.match(webPushBackend, /message_body = message\.body/);
   assert.doesNotMatch(webPushBackend, /payload\["(?:body|message_body)"\]\s*=/);

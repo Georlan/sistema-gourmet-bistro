@@ -2,7 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../config/api';
 import { Order, Product } from '../../../types';
 import type { OperationalRequestContext, OperationalErrorSink } from '../operationalContracts';
-import { mapBackendComandaToOperationalOrder } from './operationalOrderMapping';
+import {
+  mapBackendComandaToOperationalOrder,
+  preserveOptimisticOrderIdentity,
+} from './operationalOrderMapping';
 
 type BoundaryProps = OperationalRequestContext & OperationalErrorSink & {
   liveProdutos: Product[];
@@ -76,12 +79,16 @@ export function useOperationalOrders({
       if (!tempId.startsWith('temp-') || !comanda?.id) return;
 
       const mappedOrder = mapBackendComandaToOperationalOrder({ comanda, liveProdutos });
-      setOrders((current) => [
-        mappedOrder,
-        ...current.filter(
-          (order) => String(order.id) !== tempId && String(order.id) !== String(mappedOrder.id),
-        ),
-      ]);
+      setOrders((current) => {
+        const optimisticOrder = current.find((order) => String(order.id) === tempId);
+        const reconciledOrder = preserveOptimisticOrderIdentity(optimisticOrder, mappedOrder);
+        return [
+          reconciledOrder,
+          ...current.filter(
+            (order) => String(order.id) !== tempId && String(order.id) !== String(mappedOrder.id),
+          ),
+        ];
+      });
       setFetchError(null);
     };
 

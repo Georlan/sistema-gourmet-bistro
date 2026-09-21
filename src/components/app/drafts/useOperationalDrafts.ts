@@ -45,8 +45,18 @@ export function useOperationalDrafts({
   fetchOrdersFromAPI,
   getAuthHeaders,
 }: BoundaryProps) {
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const isSubmittingRef = useRef<boolean>(false);
+  const [submittingMesaIds, setSubmittingMesaIds] = useState<Set<number>>(() => new Set());
+  const submittingMesaIdsRef = useRef<Set<number>>(new Set());
+
+  const setMesaSubmitting = (mesaId: number, submitting: boolean) => {
+    const next = new Set(submittingMesaIdsRef.current);
+    if (submitting) next.add(mesaId);
+    else next.delete(mesaId);
+    submittingMesaIdsRef.current = next;
+    setSubmittingMesaIds(next);
+  };
+
+  const isSubmittingMesa = (mesaId: number) => submittingMesaIds.has(mesaId);
   const initialStorageKeyRef = useRef<string | null>(null);
 
   const [drafts, setDrafts] = useState<{ [mesaId: number]: DraftItem[] }>(() => {
@@ -165,12 +175,11 @@ export function useOperationalDrafts({
     mesaId: number,
     orderType: 'Consumo no Local' | 'Retirada' | 'Entrega' = 'Consumo no Local',
   ) => {
-    if (isSubmittingRef.current) return;
+    if (submittingMesaIdsRef.current.has(mesaId)) return;
     const items = drafts[mesaId] || [];
     if (items.length === 0) return;
 
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
+    setMesaSubmitting(mesaId, true);
 
     const optimisticItems: any[] = items.flatMap((item) => {
       const qty = item.quantidade || 1;
@@ -218,7 +227,7 @@ export function useOperationalDrafts({
 
     const restoreDraftAndNotify = (errorMessage?: string) => {
       setDrafts((prev) => ({ ...prev, [mesaId]: items }));
-      setSelectedTableId(mesaId);
+      setSelectedTableId((current) => current === null || current === mesaId ? mesaId : current);
       fetchOrdersFromAPI();
       showToast(
         errorMessage
@@ -240,7 +249,6 @@ export function useOperationalDrafts({
         if (!openRes.ok) {
           const errData = await openRes.json().catch(() => null);
           restoreDraftAndNotify(errData?.detail || `Falha ao abrir comanda (${openRes.statusText})`);
-          setIsSubmitting(false);
           return;
         }
         const newComanda = await openRes.json();
@@ -283,7 +291,6 @@ export function useOperationalDrafts({
       if (!launchRes.ok) {
         const errData = await launchRes.json().catch(() => null);
         restoreDraftAndNotify(errData?.detail || `Falha ao lançar itens (${launchRes.statusText})`);
-        setIsSubmitting(false);
         return;
       }
 
@@ -299,13 +306,12 @@ export function useOperationalDrafts({
       console.error(err);
       restoreDraftAndNotify('Erro de conexão com o servidor.');
     } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
+      setMesaSubmitting(mesaId, false);
     }
   };
 
   return {
-    isSubmitting,
+    isSubmittingMesa,
     drafts,
     getDraftItems,
     handleAddToDraft,

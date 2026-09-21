@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..models import Restaurante
 from ..saas_billing_models import SaaSBillingSetup, SaaSSubscription
+from ..subscription import legacy_v25_marketplace_rate
 
 
 @dataclass(frozen=True)
@@ -96,7 +97,10 @@ def tenant_commercial_terms(
         link = (
             db.query(RestaurantContractAcceptance)
             .filter(RestaurantContractAcceptance.restaurante_id == restaurante_id)
-            .order_by(RestaurantContractAcceptance.linked_at.desc())
+            .order_by(
+                RestaurantContractAcceptance.linked_at.desc(),
+                RestaurantContractAcceptance.id.desc(),
+            )
             .first()
         )
         if link is None:
@@ -161,6 +165,28 @@ def tenant_commercial_terms(
         marketplace_rate=marketplace_rate,
         legal_version=legal_version,
         pricing_version=str(commercial.get("pricingVersion") or "").strip() or None,
+    )
+
+
+def tenant_marketplace_rate(db: Session, restaurant: Restaurante) -> Decimal:
+    """Resolve a taxa comercial efetiva sem consultar o catálogo vigente.
+
+    Tenants contratados usam sempre o snapshot do aceite mais recente. Somente
+    tenants explicitamente legados, ainda sem aceite, podem usar o fallback v2.5.
+    Um tenant de assinatura sem aceite falha fechado para impedir que uma troca
+    isolada de restaurante.plano altere a taxa financeira.
+    """
+    terms = tenant_commercial_terms(db, int(restaurant.id))
+    if terms is not None:
+        return terms.marketplace_rate
+
+    billing_mode = str(getattr(restaurant, "billing_mode", "") or "").strip().lower()
+    if billing_mode == "legacy":
+        return legacy_v25_marketplace_rate(restaurant.plano)
+
+    raise RuntimeError(
+        "Tenant de assinatura sem aceite comercial vinculado; "
+        "a taxa transacional não pode ser inferida pelo plano salvo."
     )
 
 

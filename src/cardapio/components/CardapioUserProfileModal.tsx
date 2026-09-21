@@ -168,7 +168,7 @@ export default function CardapioUserProfileModal({
               </div>
 
               <label className="block">
-                <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block mb-1">Celular verificado</span>
+                <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block mb-1">{user.phoneVerified ? "Celular verificado" : "Celular cadastrado"}</span>
                 <span className="relative block">
                   <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-koma-muted" />
                   <input
@@ -228,7 +228,7 @@ export default function CardapioUserProfileModal({
             <div className="space-y-5 animate-fade-in">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-[9px] font-bold text-primary tracking-widest uppercase">Celular verificado</span>
+                  <span className="text-[9px] font-bold text-primary tracking-widest uppercase">{user.phoneVerified ? "Celular verificado" : "Celular cadastrado"}</span>
                   <h3 className="font-display font-black text-sm text-koma-foreground">{user.name}</h3>
                 </div>
                 <button

@@ -32,6 +32,8 @@ def test_caixa_config_update_persists_canonical_delivery_fields():
     assert "config.tabela_taxas_km = (" in route
     assert '@router.put("/configuracoes/delivery-origin")' in route
     assert "DeliveryOriginUpdate" in route
+    assert '@router.get("/configuracoes/delivery-suggestion")' in route
+    assert "suggest_delivery_fee" in route
 
 
 def test_online_delivery_screen_uses_caixa_config_as_the_only_writer():
@@ -41,9 +43,16 @@ def test_online_delivery_screen_uses_caixa_config_as_the_only_writer():
     assert "/api/cardapio-digital/config" not in screen
     assert "pedido_minimo" in screen
     assert "frete_gratis_valor" in screen
-    assert "tabela_taxas_bairros" in screen
     assert "tabela_taxas_km" in screen
-    assert "Automático por distância" in screen
-    assert "Gerar sugestão" in screen
+    assert "tipo_taxa_entrega: 'distancia'" in screen
+    assert "Taxa de entrega automática" in screen
+    assert "Taxa mínima (R$)" in screen
+    assert "Valor por km (R$)" in screen
+    assert 'inputMode="decimal"' in screen
+    assert "0,50" in screen
     assert "${apiBaseUrl}/caixa/configuracoes/delivery-origin" in screen
-    assert "Usar localização deste dispositivo" in screen
+    assert "${apiBaseUrl}/caixa/configuracoes/delivery-suggestion" in screen
+    assert "Sugestão do KÔMA" in screen
+    assert "Usar sugestão" in screen
+    assert "Taxa única" not in screen
+    assert "Taxa por bairro" not in screen

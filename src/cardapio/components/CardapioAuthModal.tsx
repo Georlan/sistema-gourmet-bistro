@@ -5,7 +5,7 @@ import { PasswordRecoveryHelp } from "../../components/auth/PasswordRecoveryHelp
  */
 
 import React, { useState } from "react";
-import { ArrowRight, Coins, Lock, Mail, Phone, Sparkles, User, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Coins, Lock, Mail, Phone, Sparkles, User, X } from "lucide-react";
 import { API_BASE_URL } from "../../config/api";
 import { authFetch, authRequestErrorMessage } from "../../utils/authRequest";
 import {
@@ -37,6 +37,8 @@ export default function CardapioAuthModal({
   const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [registerStep, setRegisterStep] = useState<"details" | "otp">("details");
+  const [otpCode, setOtpCode] = useState("");
 
   const numericRestaurantId = Number(restaurantId);
 
@@ -114,6 +116,20 @@ export default function CardapioAuthModal({
     setErrorMessage("");
 
     try {
+      if (registerStep === "details") {
+        const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/otp/solicitar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ restaurante_id: numericRestaurantId, telefone: cleanPhone }),
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(data?.detail || "Não foi possível enviar o código.");
+        setRegisterStep("otp");
+        return;
+      }
+      if (!/^\d{6}$/.test(otpCode)) {
+        throw new Error("Informe o código de 6 dígitos enviado por WhatsApp.");
+      }
       const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/cadastro`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,6 +140,7 @@ export default function CardapioAuthModal({
           telefone: cleanPhone,
           senha: password,
           endereco: "",
+          codigo: otpCode,
         }),
       });
 
@@ -280,6 +297,7 @@ export default function CardapioAuthModal({
         ) : (
           /* Formulário de Cadastro */
           <form onSubmit={handleRegister} className="mt-4 space-y-3" id="auth-register-form">
+            {registerStep === "details" ? <>
             <label className="block">
               <span className="mb-1 block text-xs font-bold text-gray-300">Nome completo</span>
               <div className="relative">
@@ -357,13 +375,23 @@ export default function CardapioAuthModal({
                 />
               </div>
             </label>
+            </> : <div className="space-y-3">
+              <button type="button" onClick={() => { setRegisterStep("details"); setOtpCode(""); setErrorMessage(""); }} className="flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-white">
+                <ArrowLeft className="h-4 w-4" /> Alterar dados
+              </button>
+              <p className="text-sm text-gray-300">Enviamos um código para <strong>{formatBrazilianPhone(phone)}</strong>.</p>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold text-gray-300">Código do WhatsApp</span>
+                <input type="text" inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-center font-mono text-xl tracking-[0.4em] text-white outline-none focus:border-emerald-500" required />
+              </label>
+            </div>}
 
             <button
               type="submit"
               disabled={isSubmitting}
               className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 hover:shadow-emerald-500/30 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
             >
-              <span>{isSubmitting ? "Cadastrando..." : "Cadastrar e Acessar"}</span>
+              <span>{isSubmitting ? "Aguarde..." : registerStep === "details" ? "Enviar código pelo WhatsApp" : "Confirmar e criar conta"}</span>
               {!isSubmitting && <ArrowRight className="h-4 w-4" />}
             </button>
           </form>

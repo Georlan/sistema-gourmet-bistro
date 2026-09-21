@@ -24,10 +24,11 @@ test('courier delivered action routes the delivery through the canonical checkou
   const courierBridge = functionSlice(
     panel,
     'const handleFinalizeCourierOrder',
-    'const [autoAccept, setAutoAccept]',
+    'const { autoAccept, updateAutoAccept }',
   );
 
-  assert.match(couriers, /onClick=\{\(\) => handleFinalizarPedido\(order\.id\)\}/);
+  assert.match(couriers, /runOrderAction\(order\.id, \(\) => handleFinalizarPedido\(order\.id\)\)/);
+  assert.match(couriers, /pendingIdsRef\.current\.has\(orderId\)/);
   assert.match(panel, /handleFinalizarPedido=\{handleFinalizeCourierOrder\}/);
   assert.match(courierBridge, /deliveryOrders\.find\(\(order\) => order\.id === orderId\)/);
   assert.match(courierBridge, /await handleFinalizeDigitalOrder\(deliveryOrder\);/);
@@ -46,4 +47,7 @@ test('canonical digital finalization opens checkout when unpaid and only closes 
   assert.match(finalizeDigitalOrder, /setShowCheckoutModal\(true\);/);
   assert.match(finalizeDigitalOrder, /setCheckoutServiceTax\(false\);/);
   assert.match(finalizeDigitalOrder, /setSelectedItemIds\(activeUnpaidItemIds\);/);
+  assert.match(finalizeDigitalOrder, /dados financeiros deste pedido ainda estão sincronizando/);
+  assert.match(finalizeDigitalOrder, /await onRefreshOrders\(\);/);
+  assert.doesNotMatch(finalizeDigitalOrder, /handleFinalizarPedido\(order\.id\)/);
 });

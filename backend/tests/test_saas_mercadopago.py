@@ -291,6 +291,30 @@ def test_test_buyer_rejected_with_production_credentials_for_all_recurring_metho
         )
 
 
+def test_update_preapproval_amount_in_mock_preserves_existing_authorization(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    service = SaasMercadoPagoService("mock-token")
+    result = service.update_preapproval_amount(
+        "mock-sub-existing",
+        amount=Decimal("249.00"),
+        plan="premium",
+    )
+    assert result["id"] == "mock-sub-existing"
+    assert result["status"] == "authorized"
+    assert result["auto_recurring"] == {
+        "transaction_amount": 249.0,
+        "currency_id": "BRL",
+    }
+    assert result["reason"] == "KÔMA - Plano Premium"
+
+    with pytest.raises(SaasMercadoPagoError, match="valor zero"):
+        service.update_preapproval_amount(
+            "mock-sub-existing",
+            amount=Decimal("0.00"),
+            plan="pocket",
+        )
+
+
 def test_update_preapproval_next_payment_date_in_mock(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "test")
     service = SaasMercadoPagoService("mock-token")

@@ -35,6 +35,7 @@ const customerSession: CustomerSession = {
     address: 'Rua Privada, 123',
     points: 10,
     cashback: 4,
+    phoneVerified: true,
   },
 };
 

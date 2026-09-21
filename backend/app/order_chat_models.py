@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Uuid,
 )
 from sqlalchemy.orm import relationship
 
@@ -54,6 +55,8 @@ class OrderConversation(Base):
     customer_last_read_at = Column(DateTime(timezone=True), nullable=True)
     staff_last_read_at = Column(DateTime(timezone=True), nullable=True)
     closed_at = Column(DateTime(timezone=True), nullable=True)
+    chat_purged_at = Column(DateTime(timezone=True), nullable=True)
+    next_feed_seq = Column(Integer, nullable=False, default=1, server_default="1")
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
@@ -77,15 +80,21 @@ class OrderConversation(Base):
 
 
 class OrderMessage(Base):
-    """Mensagem de texto (cliente, staff ou sistema) em uma conversa de pedido."""
+    """Mensagem humana de cliente ou equipe; eventos pertencem ao feed próprio."""
 
     __tablename__ = "order_messages"
     __table_args__ = (
         CheckConstraint(
-            "sender_type IN ('customer', 'staff', 'system')",
+            "sender_type IN ('customer', 'staff')",
             name="ck_order_messages_sender_type",
         ),
         UniqueConstraint("conversation_id", "event_key", name="uq_order_messages_conv_event_key"),
+        UniqueConstraint(
+            "conversation_id",
+            "client_message_id",
+            name="uq_order_messages_conv_client_message_id",
+        ),
+        UniqueConstraint("conversation_id", "feed_seq", name="uq_order_messages_conv_feed_seq"),
         Index("ix_order_messages_conv_created", "conversation_id", "created_at"),
         Index("ix_order_messages_tenant_created", "restaurante_id", "created_at"),
     )
@@ -105,7 +114,7 @@ class OrderMessage(Base):
         index=True,
     )
     pedido_id = Column(String(64), nullable=False)
-    sender_type = Column(String(20), nullable=False)  # customer | staff | system
+    sender_type = Column(String(20), nullable=False)  # customer | staff
     sender_user_id = Column(String, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     body = Column(Text, nullable=False)
     # Mensagens históricas eram persistidas com html.escape(). O formato explícito
@@ -117,6 +126,10 @@ class OrderMessage(Base):
         server_default="plain_text_v2",
     )
     event_key = Column(String(64), nullable=True)
+    # UUID gerado pelo remetente para tornar retries HTTP de mensagens humanas idempotentes.
+    # event_key só preserva chaves idempotentes humanas do rollout anterior.
+    client_message_id = Column(Uuid(as_uuid=False), nullable=True)
+    feed_seq = Column(Integer, nullable=False)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
@@ -126,6 +139,29 @@ class OrderMessage(Base):
     conversation = relationship("OrderConversation", back_populates="messages")
     sender_user = relationship("Usuario", foreign_keys=[sender_user_id])
     restaurante = relationship("Restaurante", foreign_keys=[restaurante_id])
+
+
+class OrderConversationEvent(Base):
+    """Projeção histórica do pedido no feed, sem participar de unread/mensagens."""
+
+    __tablename__ = "order_conversation_events"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "event_key", name="uq_order_conversation_events_key"),
+        UniqueConstraint("conversation_id", "feed_seq", name="uq_order_events_conv_feed_seq"),
+        Index("ix_order_conversation_events_feed", "conversation_id", "created_at"),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"),
+                            default=lambda: current_restaurante_id.get(), nullable=False)
+    conversation_id = Column(String(36), ForeignKey("order_conversations.id", ondelete="CASCADE"), nullable=False)
+    pedido_id = Column(String(64), nullable=False)
+    event_key = Column(String(64), nullable=True)
+    status = Column(String(32), nullable=True)
+    body = Column(Text, nullable=False)
+    body_format = Column(String(32), nullable=False, default="plain_text_v2", server_default="plain_text_v2")
+    feed_seq = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 
 class OrderPushSubscription(Base):

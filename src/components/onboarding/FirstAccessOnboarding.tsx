@@ -18,6 +18,9 @@ import { API_BASE_URL } from '../../config/api';
 import { getSubscriptionPlan, type SubscriptionPlanId } from '../../config/subscriptionPlans';
 
 export const ONBOARDING_SETUP_MODE_KEY = 'koma_onboarding_setup_mode';
+const ONBOARDING_TEST_ORDER_KEY = 'koma_onboarding_test_order';
+
+type OrderType = 'consumo_local' | 'retirada' | 'delivery';
 
 type Props = {
   accessToken: string;
@@ -37,18 +40,33 @@ type OnboardingStatus = {
     endsAt: string | null;
     daysRemaining: number | null;
   };
+  trialCanStart: boolean;
   payments: {
     mercadoPagoConnected: boolean;
+    pixOnlineAvailable: boolean;
   };
   counts: {
     products: number;
+    activeProducts: number;
     orders: number;
+    tables: number;
+  };
+  operations: {
+    configured: boolean;
+    ready: boolean;
+    legacyPolicy: boolean;
+    orderTypes: OrderType[];
+    tableMapEnabled: boolean;
+    serviceChargeEnabled: boolean;
+    serviceChargePercent: number;
+    blockers: string[];
   };
   catalogAssistance: CatalogAssistanceSnapshot;
   steps: {
     profile: boolean;
     hours: boolean;
     catalog: boolean;
+    operations: boolean;
     mercadoPago: boolean;
     firstOrder: boolean;
   };
@@ -56,6 +74,12 @@ type OnboardingStatus = {
     completed: number;
     total: number;
     percent: number;
+  };
+  readiness: {
+    configurationComplete: boolean;
+    trialStarted: boolean;
+    readyToOperate: boolean;
+    blockers: string[];
   };
 };
 
@@ -74,6 +98,11 @@ type SetupStep = {
 };
 
 const ONBOARDING_LOAD_TIMEOUT_MS = 10_000;
+const ORDER_TYPE_OPTIONS: Array<{ value: OrderType; label: string; description: string }> = [
+  { value: 'retirada', label: 'Retirada', description: 'Pedidos retirados no balcão.' },
+  { value: 'consumo_local', label: 'Consumo no local', description: 'Pode operar com ou sem mapa de mesas.' },
+  { value: 'delivery', label: 'Delivery', description: 'Usa a configuração de entrega já existente.' },
+];
 
 const planLabel = (plan: string) => {
   if (plan === 'pocket' || plan === 'pro' || plan === 'premium') {
@@ -83,6 +112,7 @@ const planLabel = (plan: string) => {
 };
 
 const trialLabel = (trial: OnboardingStatus['trial']) => {
+  if (trial.status === 'setup') return 'Ainda não iniciado';
   if (trial.status === 'expired' || trial.status === 'ended') return 'Trial encerrado';
   if (trial.status === 'converted') return 'Plano ativo';
   if (typeof trial.daysRemaining === 'number') {
@@ -91,15 +121,40 @@ const trialLabel = (trial: OnboardingStatus['trial']) => {
   return 'Trial ativo';
 };
 
+const responseDetail = async (response: Response, fallback: string) => {
+  const payload = await response.json().catch(() => null) as { detail?: string } | null;
+  return payload?.detail || fallback;
+};
+
+const blockerLabel = (blocker: string) => {
+  if (blocker === 'order_types') return 'Escolha ao menos uma modalidade de pedido.';
+  if (blocker === 'dine_in_tables') return 'O mapa de mesas está ligado. Cadastre ao menos uma mesa ou desligue o mapa nas configurações.';
+  if (blocker === 'delivery_configuration') return 'Delivery foi escolhido. Finalize a taxa e a cobertura de entrega nas configurações.';
+  if (blocker === 'service_charge') return 'A taxa de serviço ativa precisa de um percentual válido.';
+  return blocker;
+};
+
 export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const [state, setState] = useState<LoadState>('loading');
   const [snapshot, setSnapshot] = useState<OnboardingStatus | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [orderTypes, setOrderTypes] = useState<OrderType[]>([]);
+  const [savingOperations, setSavingOperations] = useState(false);
+  const [startingTrial, setStartingTrial] = useState(false);
+  const [operationError, setOperationError] = useState('');
 
   const headers = useMemo(() => ({
     Authorization: `Bearer ${accessToken}`,
     Accept: 'application/json',
   }), [accessToken]);
+
+  const applySnapshot = useCallback((next: OnboardingStatus) => {
+    setSnapshot(next);
+    if (next.operations.orderTypes.length > 0) {
+      setOrderTypes(next.operations.orderTypes);
+    }
+    setState('ready');
+  }, []);
 
   const loadSnapshot = useCallback(async () => {
     setState('loading');
@@ -113,26 +168,23 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
         cache: 'no-store',
         signal: controller.signal,
       });
-      const payload = await response.json().catch(() => null) as OnboardingStatus | { detail?: string } | null;
       if (!response.ok) {
-        const detail = payload && 'detail' in payload ? payload.detail : null;
-        throw new Error(detail || 'Não foi possível carregar o checklist inicial.');
+        throw new Error(await responseDetail(response, 'Não foi possível carregar a implantação inicial.'));
       }
-      setSnapshot(payload as OnboardingStatus);
-      setState('ready');
+      applySnapshot(await response.json() as OnboardingStatus);
     } catch (error) {
       setState('error');
       setErrorMessage(
         error instanceof DOMException && error.name === 'AbortError'
-          ? 'O checklist demorou para responder. Tente novamente para continuar a implantação.'
+          ? 'A implantação demorou para responder. Tente novamente.'
           : error instanceof Error
             ? error.message
-            : 'Não foi possível carregar o checklist inicial.',
+            : 'Não foi possível carregar a implantação inicial.',
       );
     } finally {
       window.clearTimeout(timeoutId);
     }
-  }, [headers]);
+  }, [applySnapshot, headers]);
 
   useEffect(() => {
     void loadSnapshot();
@@ -150,11 +202,69 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     window.location.href = '/?view=caixa';
   };
 
+  const toggleOrderType = (value: OrderType) => {
+    setOrderTypes((current) =>
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value],
+    );
+  };
+
+  const saveOperations = async () => {
+    if (orderTypes.length === 0) {
+      setOperationError('Escolha ao menos uma modalidade de pedido.');
+      return;
+    }
+    setSavingOperations(true);
+    setOperationError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/onboarding/operations`, {
+        method: 'PUT',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_types: orderTypes }),
+      });
+      if (!response.ok) {
+        throw new Error(await responseDetail(response, 'Não foi possível salvar as modalidades.'));
+      }
+      applySnapshot(await response.json() as OnboardingStatus);
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : 'Não foi possível salvar as modalidades.');
+    } finally {
+      setSavingOperations(false);
+    }
+  };
+
+  const startTrial = async () => {
+    setStartingTrial(true);
+    setErrorMessage('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/onboarding/start-trial`, {
+        method: 'POST',
+        headers,
+      });
+      if (!response.ok) {
+        throw new Error(await responseDetail(response, 'Não foi possível iniciar o período grátis.'));
+      }
+      const next = await response.json() as OnboardingStatus;
+      applySnapshot(next);
+      try {
+        sessionStorage.setItem(ONBOARDING_TEST_ORDER_KEY, '1');
+      } catch {
+        // The order still works; readiness can be retried from a normal browser context.
+      }
+      openCashierAt('operacao', 'balcao', false);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Não foi possível iniciar o período grátis.');
+    } finally {
+      setStartingTrial(false);
+    }
+  };
+
   const steps: SetupStep[] = snapshot ? [
     {
       id: 'profile',
       title: 'Complete os dados do restaurante',
-      description: 'Endereço, apresentação, identidade visual e informações que aparecem para seus clientes.',
+      description: 'Preencha as informações básicas usadas na operação e no cardápio.',
       done: snapshot.steps.profile,
       actionLabel: snapshot.steps.profile ? 'Revisar dados' : 'Configurar dados',
       tab: 'cardapio_digital',
@@ -164,7 +274,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     {
       id: 'hours',
       title: 'Defina os horários de funcionamento',
-      description: 'O cardápio online usa os horários para saber quando o restaurante pode receber pedidos.',
+      description: 'A agenda controla quando o restaurante aparece como aberto e orienta pedidos online.',
       done: snapshot.steps.hours,
       actionLabel: snapshot.steps.hours ? 'Revisar horários' : 'Configurar horários',
       tab: 'cardapio_digital',
@@ -173,18 +283,18 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     },
     {
       id: 'catalog',
-      title: 'Monte o primeiro cardápio',
-      description: 'Envie PDF/foto para implantação assistida ou crie categorias e produtos manualmente. O passo conclui quando houver produtos publicados.',
+      title: 'Publique o primeiro produto',
+      description: 'A implantação só considera o catálogo pronto quando houver ao menos um produto ativo.',
       done: snapshot.steps.catalog,
-      actionLabel: snapshot.steps.catalog ? 'Abrir cardápio' : 'Criar manualmente',
+      actionLabel: snapshot.steps.catalog ? 'Abrir cardápio' : 'Criar produto',
       tab: 'cardapio',
       subTab: 'produtos',
       icon: UtensilsCrossed,
     },
     {
       id: 'payments',
-      title: 'Conecte o Mercado Pago',
-      description: 'Necessário apenas para receber Pix online pelo cardápio. Pode ser feito agora ou depois da implantação essencial.',
+      title: 'Conecte o Mercado Pago para Pix online',
+      description: 'O Cardápio Online funciona com pagamento no atendimento sem Mercado Pago. Conecte apenas para liberar Pix online.',
       done: snapshot.steps.mercadoPago,
       optional: true,
       actionLabel: snapshot.steps.mercadoPago ? 'Revisar conexão' : 'Conectar Mercado Pago',
@@ -194,11 +304,11 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     },
     {
       id: 'first-order',
-      title: 'Faça um primeiro pedido de teste',
-      description: 'Depois da implantação essencial, passe pelo fluxo de balcão para conferir produto, preparo, pagamento e operação.',
+      title: 'Valide com um pedido de teste',
+      description: 'Depois de iniciar o trial, o próximo pedido criado pelo Caixa pode ser usado para validar preparo, pagamento e fechamento reais.',
       done: snapshot.steps.firstOrder,
       optional: true,
-      actionLabel: snapshot.steps.firstOrder ? 'Ir para pedidos' : 'Criar pedido de teste',
+      actionLabel: snapshot.steps.firstOrder ? 'Ver pedidos' : 'Fazer pedido de teste',
       tab: 'operacao',
       subTab: 'balcao',
       icon: ShoppingBag,
@@ -221,7 +331,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       <main className="flex min-h-screen items-center justify-center bg-koma-page px-6 text-koma-foreground">
         <section className="w-full max-w-lg rounded-3xl border border-koma-border bg-koma-card p-7 text-center shadow-2xl">
           <h1 className="text-xl font-black">Sua conta está ativa</h1>
-          <p className="mt-2 text-sm text-koma-muted">{errorMessage || 'O checklist não pôde ser carregado agora.'}</p>
+          <p className="mt-2 text-sm text-koma-muted">{errorMessage || 'A implantação não pôde ser carregada agora.'}</p>
           <button type="button" onClick={() => void loadSnapshot()} className="mt-6 rounded-xl border border-koma-border px-4 py-3 text-xs font-black text-koma-foreground hover:border-emerald-500/40">
             Tentar novamente
           </button>
@@ -231,7 +341,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   }
 
   const restaurantName = snapshot.restaurant.name || String(user?.nome || 'Seu restaurante');
-  const requiredComplete = snapshot.progress.total > 0 && snapshot.progress.completed >= snapshot.progress.total;
+  const configurationComplete = snapshot.readiness.configurationComplete;
 
   return (
     <main className="min-h-screen bg-koma-page px-4 py-6 text-koma-foreground sm:px-6 lg:px-8">
@@ -245,7 +355,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 </div>
                 <h1 className="mt-4 text-2xl font-black sm:text-3xl">Bem-vindo ao KÔMA, {restaurantName}</h1>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-koma-muted">
-                  Antes de liberar a operação, conclua os 3 passos essenciais abaixo. Seu progresso fica salvo e esta tela continuará sendo seu ponto de partida até a implantação terminar.
+                  Conclua os quatro itens mínimos. Seu período grátis só começa quando você clicar para iniciar a operação.
                 </p>
               </div>
               <div className="grid min-w-[250px] grid-cols-2 gap-2">
@@ -265,12 +375,12 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <div className="flex items-center gap-2 text-sm font-black">
-                  <Sparkles size={16} className="text-emerald-400" /> Implantação inicial
+                  <Sparkles size={16} className="text-emerald-400" /> Configuração inicial
                 </div>
-                <p className="mt-1 text-xs text-koma-muted">{snapshot.progress.completed} de {snapshot.progress.total} passos essenciais concluídos</p>
+                <p className="mt-1 text-xs text-koma-muted">{snapshot.progress.completed} de {snapshot.progress.total} itens essenciais concluídos</p>
               </div>
               <button type="button" onClick={() => void loadSnapshot()} className="inline-flex items-center gap-2 self-start rounded-xl border border-koma-border px-3 py-2 text-[10px] font-black text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-400">
-                <RefreshCw size={12} /> Atualizar progresso
+                <RefreshCw size={12} /> Atualizar
               </button>
             </div>
 
@@ -280,14 +390,64 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               assistance={snapshot.catalogAssistance}
               onSubmitted={() => void loadSnapshot()}
             />
+
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-koma-raised">
               <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${snapshot.progress.percent}%` }} />
             </div>
 
+            <section className="mt-5 rounded-2xl border border-koma-border bg-koma-page p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    {snapshot.steps.operations ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
+                    <h2 className="text-sm font-black">Como o restaurante recebe pedidos?</h2>
+                  </div>
+                  <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted">
+                    Escolha as modalidades ativas. Isso não altera silenciosamente mapa de mesas, taxa de serviço ou regras de entrega.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={savingOperations}
+                  onClick={() => void saveOperations()}
+                  className="rounded-xl bg-emerald-500 px-4 py-2.5 text-[10px] font-black text-zinc-950 disabled:opacity-60"
+                >
+                  {savingOperations ? 'Salvando…' : 'Salvar modalidades'}
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                {ORDER_TYPE_OPTIONS.map((option) => {
+                  const selected = orderTypes.includes(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => toggleOrderType(option.value)}
+                      className={`rounded-xl border px-3 py-3 text-left transition ${selected ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-raised'}`}
+                    >
+                      <span className="block text-xs font-black">{option.label}</span>
+                      <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">{option.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {snapshot.operations.blockers.length > 0 && (
+                <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3">
+                  {snapshot.operations.blockers.map((blocker) => (
+                    <p key={blocker} className="text-[10px] text-amber-700 dark:text-amber-300">• {blockerLabel(blocker)}</p>
+                  ))}
+                </div>
+              )}
+              {operationError && <p className="mt-3 text-[10px] font-bold text-rose-600">{operationError}</p>}
+            </section>
+
             <div className="mt-5 space-y-3">
               {steps.map((step) => {
                 const Icon = step.icon;
-                const blockedUntilCore = step.id === 'first-order' && !requiredComplete;
+                const blockedUntilTrial = step.id === 'first-order' && !snapshot.readiness.trialStarted;
                 return (
                   <article key={step.id} className="flex flex-col gap-4 rounded-2xl border border-koma-border bg-koma-page p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 gap-3">
@@ -306,11 +466,11 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                       {step.done ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
                       <button
                         type="button"
-                        disabled={blockedUntilCore}
+                        disabled={blockedUntilTrial}
                         onClick={() => openCashierAt(step.tab, step.subTab, step.id !== 'first-order')}
                         className="inline-flex items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3 py-2 text-[10px] font-black transition hover:border-emerald-500/35 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-45"
                       >
-                        {blockedUntilCore ? 'Disponível depois' : step.actionLabel} <ArrowRight size={12} />
+                        {blockedUntilTrial ? 'Depois de iniciar' : step.actionLabel} <ArrowRight size={12} />
                       </button>
                     </div>
                   </article>
@@ -318,18 +478,55 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               })}
             </div>
 
+            {errorMessage && <p className="mt-4 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-[10px] font-bold text-rose-600">{errorMessage}</p>}
+
             <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-raised/40 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-black">{requiredComplete ? 'Implantação essencial concluída' : 'Finalize os 3 passos essenciais'}</p>
+                <p className="text-xs font-black">
+                  {!configurationComplete
+                    ? 'Finalize os quatro itens essenciais'
+                    : snapshot.trialCanStart
+                      ? 'Configuração concluída — você decide quando iniciar'
+                      : snapshot.readiness.readyToOperate
+                        ? 'Prontidão operacional validada'
+                        : 'Operação liberada — finalize o pedido de teste'}
+                </p>
                 <p className="mt-1 text-[10px] text-koma-muted">
-                  {requiredComplete
-                    ? 'A operação do restaurante já pode ser liberada. Você poderá revisar estas configurações depois.'
-                    : 'Dados do restaurante, horários e ao menos um produto publicado são necessários antes de entrar na operação.'}
+                  {!configurationComplete
+                    ? 'Dados do restaurante, horários, produto ativo e modalidades precisam estar prontos.'
+                    : snapshot.trialCanStart
+                      ? 'Ao iniciar, começam os 7 dias grátis e o próximo pedido do Caixa será marcado para validação do onboarding.'
+                      : snapshot.readiness.readyToOperate
+                        ? 'O pedido de teste foi pago e fechado com sucesso.'
+                        : 'Complete pagamento e fechamento do pedido de teste para registrar a prontidão.'}
                 </p>
               </div>
-              {requiredComplete && (
-                <button type="button" onClick={() => openCashierAt('operacao', 'pedidos', false)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-xs font-black text-zinc-950 transition hover:bg-emerald-400">
-                  Entrar no KÔMA <ArrowRight size={14} />
+
+              {configurationComplete && snapshot.trialCanStart && (
+                <button
+                  type="button"
+                  disabled={startingTrial}
+                  onClick={() => void startTrial()}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-xs font-black text-zinc-950 disabled:opacity-60"
+                >
+                  {startingTrial ? 'Iniciando…' : 'Iniciar 7 dias e fazer teste'} <ArrowRight size={14} />
+                </button>
+              )}
+
+              {configurationComplete && snapshot.readiness.trialStarted && !snapshot.readiness.readyToOperate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      sessionStorage.setItem(ONBOARDING_TEST_ORDER_KEY, '1');
+                    } catch {
+                      // Restricted storage only affects automatic marking.
+                    }
+                    openCashierAt('operacao', 'balcao', false);
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-koma-foreground px-5 py-3 text-xs font-black text-koma-page"
+                >
+                  Fazer pedido de teste <ArrowRight size={14} />
                 </button>
               )}
             </div>

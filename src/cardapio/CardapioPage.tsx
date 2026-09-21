@@ -50,18 +50,22 @@ import {
   saveCustomerSession,
 } from "./customerSession";
 import {
+  isOrderStateContract,
+  OrderStateContract,
   StoredOrder,
   loadStoredOrders,
   refreshAllStoredOrders,
   removeStoredOrder,
   clearAllStoredOrders,
+  fallbackOrderState,
+  orderFulfillmentLabel,
   resolveOrderState,
+  updateStoredOrderStatus,
 } from "./orderTracking";
 import { rebuildOrderFromCurrentCatalog } from "./repeatOrder";
 
 const KOMA_PRIMARY = "#00b894";
 const KOMA_BACKGROUND = "#090a0f";
-const ACTIVE_ORDER_REFRESH_MS = 20_000;
 // A consulta pública de CEP é apenas conveniência progressiva; o checkout
 // permanece totalmente utilizável com preenchimento manual.
 
@@ -137,6 +141,18 @@ export default function CardapioPage() {
       recentAddedCountRef.current = 0;
     }, 1800);
   }, []);
+
+  const openCart = useCallback(() => {
+    // Garante uma única superfície interativa ao abrir a sacola.
+    // Em celulares reais, FABs sobrepostos podem disputar o mesmo toque.
+    setSelectedProduct(null);
+    setIsOrdersDrawerOpen(false);
+    setIsStoreInfoOpen(false);
+    setIsProfileOpen(false);
+    setIsAuthOpen(false);
+    setIsCartOpen(true);
+  }, []);
+
 
   const activeOrders = useMemo(
     () => storedOrders.filter((order) => !resolveOrderState(order).terminal),
@@ -295,6 +311,11 @@ export default function CardapioPage() {
         about: String(restaurant.sobre_nos || ""),
         paymentMethods,
         onlinePaymentEnabled: restaurant.pagamento_online_ativo === true,
+        activeOrderTypes: Array.isArray(restaurant.tipos_pedido_ativos)
+          ? restaurant.tipos_pedido_ativos.filter((item: unknown): item is "consumo_local" | "retirada" | "delivery" =>
+              item === "consumo_local" || item === "retirada" || item === "delivery"
+            )
+          : undefined,
         operatingHours,
         googleMapsUrl: String(restaurant.google_maps_url || ""),
         deliveryEnabled: restaurant.delivery_ativo !== false,
@@ -310,9 +331,10 @@ export default function CardapioPage() {
         tabelaTaxasKm: Array.isArray(restaurant.tabela_taxas_km)
           ? restaurant.tabela_taxas_km.map((row: any) => ({
               taxa_minima: Number(row.taxa_minima || 0),
-              km_inclusos: Number(row.km_inclusos || 0),
-              incremento_valor: Number(row.incremento_valor || 0),
-              incremento_km: Number(row.incremento_km || 0),
+              valor_por_km: row.valor_por_km == null ? undefined : Number(row.valor_por_km),
+              km_inclusos: row.km_inclusos == null ? undefined : Number(row.km_inclusos),
+              incremento_valor: row.incremento_valor == null ? undefined : Number(row.incremento_valor),
+              incremento_km: row.incremento_km == null ? undefined : Number(row.incremento_km),
               taxa_maxima: row.taxa_maxima == null ? null : Number(row.taxa_maxima),
               distancia_maxima_km: row.distancia_maxima_km == null ? null : Number(row.distancia_maxima_km),
               fallback_sem_localizacao: 'minima' as const,
@@ -329,14 +351,24 @@ export default function CardapioPage() {
         acceptingOrders,
         orderingMessage: String(restaurant.motivo_indisponibilidade || ""),
         availabilitySource: String(restaurant.origem_disponibilidade || "automatic"),
+        nextOpening: restaurant.proxima_abertura ? String(restaurant.proxima_abertura) : undefined,
+        nextOpeningLabel: restaurant.proxima_abertura_texto ? String(restaurant.proxima_abertura_texto) : undefined,
       };
 
       setActiveBrand(brand);
       setActiveCategory((current) => current && brand.categories.includes(current) ? current : brand.categories[0] || "");
       const rid = Number(brand.id);
       if (Number.isFinite(rid)) {
-        setStoredOrders(loadStoredOrders(rid));
-        void checkActiveOrders(rid);
+        const stored = loadStoredOrders(rid);
+        setStoredOrders(stored);
+        // Pedidos modernos são reconciliados pelo SSE/summary do drawer.
+        // Somente registros legados sem capability token precisam de uma
+        // reconciliação HTTP inicial.
+        if (stored.some((order) => (
+          !order.tracking_token && !resolveOrderState(order).terminal
+        ))) {
+          void checkActiveOrders(rid);
+        }
       }
     } catch (error) {
       console.error("Falha ao carregar cardápio público:", error);
@@ -426,27 +458,6 @@ export default function CardapioPage() {
 
   useEffect(() => {
     if (!activeBrand?.id) return;
-    const restaurantId = Number(activeBrand.id);
-    if (!Number.isFinite(restaurantId)) return;
-
-    let intervalId: ReturnType<typeof setInterval> | undefined;
-    const refresh = () => {
-      if (document.hidden) return;
-      if (activeOrders.length > 0) void checkActiveOrders(restaurantId);
-    };
-    intervalId = setInterval(refresh, ACTIVE_ORDER_REFRESH_MS);
-    const onVisibility = () => {
-      if (!document.hidden) refresh();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [activeBrand?.id, activeOrders.length, checkActiveOrders]);
-
-  useEffect(() => {
-    if (!activeBrand?.id) return;
     const wsUrl = `${WS_BASE_URL}/ws/cliente?restaurante_id=${activeBrand.id}`;
     let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -458,7 +469,13 @@ export default function CardapioPage() {
       if (stopped || document.hidden) return;
       const socket = new WebSocket(wsUrl);
       ws = socket;
-      socket.onopen = () => { delay = 2000; };
+      socket.onopen = () => {
+        delay = 2000;
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = undefined;
+        }
+      };
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -466,9 +483,6 @@ export default function CardapioPage() {
           if (["catalog_updated", "config_updated", "store_status_changed"].includes(eventName)) {
             if (refreshTimer) clearTimeout(refreshTimer);
             refreshTimer = setTimeout(() => void loadRestaurantData(), 100);
-          }
-          if (["order_updated", "order_status_updated"].includes(eventName)) {
-            void checkActiveOrders(Number(activeBrand.id));
           }
         } catch {
           // Mensagem inválida do socket não interrompe o cardápio.
@@ -483,14 +497,21 @@ export default function CardapioPage() {
       socket.onerror = () => socket.close();
     };
 
+    const handleVisibility = () => {
+      if (document.hidden || stopped) return;
+      if (!ws || ws.readyState === WebSocket.CLOSED) connect();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
     connect();
     return () => {
       stopped = true;
+      document.removeEventListener("visibilitychange", handleVisibility);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (refreshTimer) clearTimeout(refreshTimer);
       ws?.close();
     };
-  }, [activeBrand?.id, checkActiveOrders, loadRestaurantData]);
+  }, [activeBrand?.id, loadRestaurantData]);
 
   const visibleCategories = useMemo(() => {
     if (!activeBrand) return [];
@@ -644,6 +665,48 @@ export default function CardapioPage() {
     setNotice("Sua identificação expirou. A sacola foi preservada e você pode continuar como visitante.");
   };
 
+  const handleRealtimeOrderStatus = useCallback((
+    orderId: string,
+    status: string,
+    closedAt: string | null,
+    tipo?: string,
+    backendState?: OrderStateContract,
+  ) => {
+    setStoredOrders((current) => {
+      let changed = false;
+      const next = current.map((order) => {
+        if (order.id !== orderId) return order;
+        const nextTipo = String(tipo || order.tipo || "Retirada");
+        const state = isOrderStateContract(backendState)
+          ? backendState
+          : fallbackOrderState(status, nextTipo);
+        const nextClosed = state.terminal || Boolean(closedAt);
+        const currentState = resolveOrderState(order);
+        const stateChanged = JSON.stringify(currentState) !== JSON.stringify(state);
+        if (
+          order.status === status
+          && order.tipo === nextTipo
+          && !stateChanged
+          && Boolean(order.fechado) === nextClosed
+        ) {
+          return order;
+        }
+
+        changed = true;
+        const updated: StoredOrder = {
+          ...order,
+          status,
+          tipo: nextTipo,
+          state,
+          fechado: nextClosed,
+        };
+        updateStoredOrderStatus(orderId, updated);
+        return updated;
+      });
+      return changed ? next : current;
+    });
+  }, []);
+
   const clearTrackedOrder = (orderId?: string) => {
     const targetId = orderId || activeOrder?.id;
     if (targetId) {
@@ -699,7 +762,7 @@ export default function CardapioPage() {
         user={user}
         onAuthClick={() => user ? setIsProfileOpen(true) : setIsAuthOpen(true)}
         onLogoClick={() => setIsStoreInfoOpen(true)}
-        onCartToggle={() => setIsCartOpen(true)}
+        onCartToggle={openCart}
         cartCount={cartCount}
         onOrdersClick={() => setIsOrdersDrawerOpen(true)}
         ordersCount={storedOrders.length}
@@ -797,7 +860,7 @@ export default function CardapioPage() {
                           : "O restaurante já atualizou o andamento do seu pedido."}
                   </p>
                   <p className="mt-1 text-[10px] text-koma-subtle">
-                    {isDeliveryOrder ? "Delivery" : "Retirada"} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total || 0)}
+                    {orderFulfillmentLabel(activeState.fulfillment)} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total || 0)}
                   </p>
                 </div>
               </div>
@@ -860,7 +923,13 @@ export default function CardapioPage() {
             )} />
             <span>
               {activeBrand.storeStatus === "closed"
-                ? (activeBrand.availabilitySource === "schedule" ? "Fora do horário" : "Pedidos pausados")
+                ? (activeBrand.availabilitySource === "schedule"
+                  ? activeBrand.nextOpeningLabel
+                    ? `Estabelecimento fechado · abre ${activeBrand.nextOpeningLabel}`
+                    : "Estabelecimento fechado"
+                  : activeBrand.availabilitySource === "cash_closed"
+                    ? "Estabelecimento fechado · aguardando abertura do caixa"
+                    : "Pedidos pausados")
                 : activeBrand.storeStatus === "open"
                   ? "Aberto para pedidos"
                   : "Ver horários"}
@@ -872,7 +941,17 @@ export default function CardapioPage() {
 
         {activeBrand.storeStatus === "closed" && (
           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
-            <strong>{activeBrand.availabilitySource === "schedule" ? "O restaurante está fora do horário de pedidos online." : "Pedidos pausados."}</strong>{activeBrand.availabilitySource === "schedule" ? " " : ` ${orderingMessage} `}O cardápio continua disponível para consulta.
+            <strong>
+              {activeBrand.availabilitySource === "schedule"
+                ? activeBrand.nextOpeningLabel
+                  ? `Estabelecimento fechado. Abre ${activeBrand.nextOpeningLabel}.`
+                  : "Estabelecimento fechado."
+                : activeBrand.availabilitySource === "cash_closed"
+                  ? "Estabelecimento fechado. Aguardando abertura do caixa."
+                  : "Pedidos pausados."}
+            </strong>
+            {!["schedule", "cash_closed"].includes(activeBrand.availabilitySource || "") && orderingMessage ? ` ${orderingMessage} ` : " "}
+            O cardápio continua disponível para consulta.
           </div>
         )}
 
@@ -944,9 +1023,9 @@ export default function CardapioPage() {
         </footer>
       </main>
 
-      {cartCount > 0 && !isCartOpen && (
-        <div className="fixed bottom-4 left-1/2 z-30 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:left-auto lg:right-5 lg:w-80 lg:translate-x-0">
-          <button type="button" onClick={() => setIsCartOpen(true)} className="flex h-14 w-full items-center justify-between rounded-2xl bg-emerald-500 px-4 text-white shadow-2xl" id="floating-cart-trigger">
+      {cartCount > 0 && !hasOpenOverlay && (
+        <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[44] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:left-auto lg:right-5 lg:w-80 lg:translate-x-0">
+          <button type="button" onClick={openCart} className="flex h-14 w-full touch-manipulation select-none items-center justify-between rounded-2xl bg-emerald-500 px-4 text-white shadow-2xl active:scale-[0.99]" id="floating-cart-trigger" aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}>
             <span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-white/15 text-xs font-black">{cartCount}</span><span className="text-xs font-black">Ver sacola</span></span>
             <span className="text-sm font-black">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}</span>
           </button>
@@ -1030,7 +1109,6 @@ export default function CardapioPage() {
             if (activeBrand?.id) {
               const rid = Number(activeBrand.id);
               setStoredOrders(loadStoredOrders(rid));
-              window.setTimeout(() => void checkActiveOrders(rid), 50);
             }
           }}
           onSessionExpired={handleSessionExpired}
@@ -1057,8 +1135,9 @@ export default function CardapioPage() {
             setStoredOrders(loadStoredOrders(Number(activeBrand.id)));
           }
         }}
+        onRealtimeStatus={handleRealtimeOrderStatus}
         isRefreshing={isRefreshingOrders}
-        hasFloatingCart={cartCount > 0 && !isCartOpen}
+        hasFloatingCart={cartCount > 0 && !hasOpenOverlay}
       />
     </div>
   );

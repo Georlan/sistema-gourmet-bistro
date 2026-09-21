@@ -70,17 +70,12 @@ class OrderStateMachine:
         elif current == OrderStatus.PREPARING:
             allowed = {OrderStatus.READY, OrderStatus.REJECTED}
         elif current == OrderStatus.READY:
-            if kind == FulfillmentType.PICKUP:
+            if kind in {FulfillmentType.PICKUP, FulfillmentType.DINE_IN}:
                 allowed = {OrderStatus.COMPLETED, OrderStatus.REJECTED}
             elif kind == FulfillmentType.DELIVERY:
                 allowed = {OrderStatus.DISPATCHED, OrderStatus.REJECTED}
             else:
-                # Preserva o comportamento histórico do tipo não-delivery/pickup.
-                allowed = {
-                    OrderStatus.DISPATCHED,
-                    OrderStatus.COMPLETED,
-                    OrderStatus.REJECTED,
-                }
+                allowed = {OrderStatus.COMPLETED, OrderStatus.REJECTED}
         elif current == OrderStatus.DISPATCHED:
             if kind == FulfillmentType.PICKUP:
                 allowed = {OrderStatus.REJECTED}

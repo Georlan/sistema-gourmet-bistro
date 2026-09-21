@@ -16,7 +16,8 @@ import {
 import clsx from 'clsx';
 import { API_BASE_URL } from '../../../config/api';
 import { getCashierDeliveryStatusLabel } from '../../../domain/cashierOrderProjection';
-import { consumeCashierChatEvents } from './cashierChatRealtime';
+import type { CashierChatStreamSnapshot } from './cashierChatRealtime';
+import type { CashierChatHealth } from './useCashierChat';
 
 export interface CaixaConversationItem {
   id: string;
@@ -46,6 +47,7 @@ export interface CaixaChatMessage {
   body: string;
   event_key?: string | null;
   created_at?: string | null;
+  seq?: number;
 }
 
 interface CashierConversationsDrawerProps {
@@ -54,11 +56,22 @@ interface CashierConversationsDrawerProps {
   onClose: () => void;
   onInspectOrder?: (pedidoId: string) => void;
   onUnreadCountChange?: (count: number) => void;
+  realtimeEvent?: CashierChatStreamSnapshot | null;
+  realtimeHealth?: CashierChatHealth;
+  draftScope?: string;
 }
 
 interface MessageState {
   conversationId: string | null;
   items: CaixaChatMessage[];
+  hasMore?: boolean;
+}
+
+interface CaixaFeedPage {
+  items: CaixaChatMessage[];
+  has_more: boolean;
+  oldest_seq: number | null;
+  latest_seq: number | null;
 }
 
 interface FetchConversationsOptions {
@@ -70,14 +83,77 @@ interface LoadMessagesOptions {
   markRead?: boolean;
 }
 
-type ConversationFilter = 'active' | 'archived' | 'all';
-
 const QUICK_REPLIES = [
-  'Estamos preparando seu pedido.',
-  'Está quase pronto.',
-  'Seu pedido está pronto para retirada.',
-  'Seu pedido saiu para entrega.',
+  'Certo, vamos verificar.',
+  'Obrigado pela informação.',
+  'Já repassamos sua observação para a equipe.',
+  'Um instante, por favor.',
 ] as const;
+
+const CASHIER_CHAT_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+
+const cashierDraftKey = (scope: string, conversationId: string) =>
+  `koma:cashier-chat-draft:v1:${scope}:${conversationId}`;
+
+function loadCashierDraft(scope: string, conversationId: string): string {
+  try {
+    const raw = localStorage.getItem(cashierDraftKey(scope, conversationId));
+    if (!raw) return '';
+    const parsed = JSON.parse(raw) as { body?: unknown; expiresAt?: unknown };
+    if (
+      typeof parsed.body !== 'string'
+      || typeof parsed.expiresAt !== 'number'
+      || parsed.expiresAt <= Date.now()
+    ) {
+      localStorage.removeItem(cashierDraftKey(scope, conversationId));
+      return '';
+    }
+    return parsed.body;
+  } catch {
+    return '';
+  }
+}
+
+function removeCashierDraft(scope: string, conversationId: string): void {
+  try { localStorage.removeItem(cashierDraftKey(scope, conversationId)); } catch {}
+}
+
+function pruneCashierDrafts(activeScope: string): void {
+  try {
+    const prefix = 'koma:cashier-chat-draft:v1:';
+    const activePrefix = `${prefix}${activeScope}:`;
+    const activeTenant = activeScope.split(':', 1)[0] || '';
+    const tenantPrefix = activeTenant ? `${prefix}${activeTenant}:` : '';
+    const now = Date.now();
+
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(prefix)) continue;
+
+      const raw = localStorage.getItem(key);
+      let expiredOrInvalid = false;
+      try {
+        const parsed = raw ? JSON.parse(raw) as { expiresAt?: unknown } : null;
+        expiredOrInvalid = !parsed
+          || typeof parsed.expiresAt !== 'number'
+          || parsed.expiresAt <= now;
+      } catch {
+        expiredOrInvalid = true;
+      }
+
+      const belongsToPreviousShift = Boolean(
+        tenantPrefix
+        && key.startsWith(tenantPrefix)
+        && !key.startsWith(activePrefix),
+      );
+      if (expiredOrInvalid || belongsToPreviousShift) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Storage restrito não pode bloquear o chat.
+  }
+}
 
 const TERMINAL_CHAT_STATUSES = new Set([
   'finalizado',
@@ -133,8 +209,8 @@ export const isTerminalConversation = (conversation: CaixaConversationItem) =>
   Boolean(conversation.closed_at) || TERMINAL_CHAT_STATUSES.has(normalizeStatus(conversation.status_pedido || ''));
 
 /**
- * Pedido terminal vira histórico por padrão. Se o cliente voltar a escrever,
- * a thread retorna para a fila ativa como pós-venda sem reabrir o pedido.
+ * Defesa visual para snapshots atrasados: pedido terminal nunca volta para a
+ * fila operacional e a escrita continua bloqueada pelo backend.
  */
 export const isArchivedConversation = (conversation: CaixaConversationItem) =>
   isTerminalConversation(conversation)
@@ -160,6 +236,9 @@ export function CashierConversationsDrawer({
   onClose,
   onInspectOrder,
   onUnreadCountChange,
+  realtimeEvent = null,
+  realtimeHealth = 'idle',
+  draftScope = 'default',
 }: CashierConversationsDrawerProps) {
   const [conversations, setConversations] = useState<CaixaConversationItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -169,52 +248,51 @@ export function CashierConversationsDrawer({
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('active');
   const [searchQuery, setSearchQuery] = useState('');
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const selectedIdRef = useRef<string | null>(null);
+  const messageStateRef = useRef<MessageState>(messageState);
   const messageGenerationRef = useRef(0);
   const messageAbortRef = useRef<AbortController | null>(null);
   const visibleMessageLoadRef = useRef(false);
   const markReadInFlightRef = useRef<Set<string>>(new Set());
+  const unreadByConversationRef = useRef<Map<string, number>>(new Map());
+  const pendingSendRef = useRef<{ conversationId: string; body: string; id: string } | null>(null);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
 
-  const activeCount = useMemo(
-    () => conversations.filter((conversation) => !isArchivedConversation(conversation)).length,
-    [conversations],
-  );
-  const archivedCount = useMemo(
-    () => conversations.filter(isArchivedConversation).length,
-    [conversations],
-  );
+  useEffect(() => { messageStateRef.current = messageState; }, [messageState]);
+
+  useEffect(() => {
+    unreadByConversationRef.current = new Map(
+      conversations.map((conversation) => [conversation.id, Math.max(0, conversation.unread_count || 0)]),
+    );
+  }, [conversations]);
+
+  useEffect(() => {
+    pruneCashierDrafts(draftScope);
+  }, [draftScope]);
+
+  const activeCount = conversations.length;
 
   const sortedConversations = useMemo(() => conversations
-    .filter((conversation) => {
-      const archived = isArchivedConversation(conversation);
-      if (conversationFilter === 'active' && archived) return false;
-      if (conversationFilter === 'archived' && !archived) return false;
-      return matchesConversationSearch(conversation, searchQuery);
-    })
+    .filter((conversation) => matchesConversationSearch(conversation, searchQuery))
     .sort((a, b) => {
       const unreadPriority = Number(b.unread_count > 0) - Number(a.unread_count > 0);
       if (unreadPriority !== 0) return unreadPriority;
       const waitingPriority = Number(isWaitingForStaff(b)) - Number(isWaitingForStaff(a));
       if (waitingPriority !== 0) return waitingPriority;
       return conversationTimestamp(b) - conversationTimestamp(a);
-    }), [conversationFilter, conversations, searchQuery]);
+    }), [conversations, searchQuery]);
 
   const selectedConv = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId) || null,
     [conversations, selectedId],
   );
   const selectedArchived = selectedConv ? isArchivedConversation(selectedConv) : false;
-  const selectedPostSale = selectedConv
-    ? isTerminalConversation(selectedConv) && !selectedArchived
-    : false;
 
   const messages = messageState.conversationId === selectedId ? messageState.items : [];
 
@@ -290,23 +368,31 @@ export function CashierConversationsDrawer({
     }
   }, [authorization, clearSelection]);
 
-  const markConversationRead = useCallback(async (conversationId: string) => {
+  const markConversationRead = useCallback(async (
+    conversationId: string,
+    { force = false }: { force?: boolean } = {},
+  ) => {
     if (!authorization || markReadInFlightRef.current.has(conversationId)) return;
+    if (!force && (unreadByConversationRef.current.get(conversationId) || 0) <= 0) return;
+
     markReadInFlightRef.current.add(conversationId);
+    unreadByConversationRef.current.set(conversationId, 0);
     setConversations((current) => current.map((conversation) => (
       conversation.id === conversationId ? { ...conversation, unread_count: 0 } : conversation
     )));
     try {
-      await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/read`, {
+      const response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/read`, {
         method: 'POST',
         headers: { Authorization: authorization },
       });
+      if (!response.ok) throw new Error(`Falha ao marcar conversa como lida (${response.status}).`);
     } catch {
       // O próximo snapshot autoritativo restaura a contagem se a marcação falhar.
+      void fetchConversations({ background: true });
     } finally {
       markReadInFlightRef.current.delete(conversationId);
     }
-  }, [authorization]);
+  }, [authorization, fetchConversations]);
 
   const loadMessages = useCallback(async (
     conversationId: string,
@@ -329,20 +415,44 @@ export function CashierConversationsDrawer({
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/messages`, {
+      const snapshot = messageStateRef.current;
+      const currentItems = snapshot.conversationId === conversationId ? snapshot.items : [];
+      const latestSeq = background ? currentItems.at(-1)?.seq : undefined;
+      const suffix = latestSeq ? `?after_seq=${latestSeq}` : '';
+      let response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/feed${suffix}`, {
         headers: { Authorization: authorization },
         cache: 'no-store',
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error(`Falha ao carregar conversa (${response.status}).`);
-      const items: CaixaChatMessage[] = await response.json();
+      let page: CaixaFeedPage | null = null;
+      if (response.ok) {
+        const parsed = await response.json() as Partial<CaixaFeedPage>;
+        if (Array.isArray(parsed.items)) page = parsed as CaixaFeedPage;
+      }
+      if (!response.ok || !page) {
+        response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/messages`, {
+          headers: { Authorization: authorization }, cache: 'no-store', signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Falha ao carregar conversa (${response.status}).`);
+        const items: CaixaChatMessage[] = await response.json();
+        page = { items, has_more: false, oldest_seq: null, latest_seq: null };
+      }
       if (
         controller.signal.aborted
         || generation !== messageGenerationRef.current
         || selectedIdRef.current !== conversationId
       ) return;
 
-      setMessageState({ conversationId, items: Array.isArray(items) ? items : [] });
+      setMessageState((current) => {
+        const existing = background && current.conversationId === conversationId ? current.items : [];
+        const byId = new Map(existing.map((item) => [item.id, item]));
+        page.items.forEach((item) => byId.set(item.id, item));
+        return {
+          conversationId,
+          items: [...byId.values()].sort((a, b) => (a.seq || 0) - (b.seq || 0)),
+          hasMore: background ? current.hasMore : page.has_more,
+        };
+      });
       if (markRead) void markConversationRead(conversationId);
       if (!background) window.setTimeout(() => scrollToBottom(false), 50);
     } catch (error) {
@@ -357,6 +467,19 @@ export function CashierConversationsDrawer({
     }
   }, [authorization, markConversationRead, scrollToBottom]);
 
+  const loadOlderMessages = useCallback(async () => {
+    if (!authorization || !selectedId || !messages[0]?.seq) return;
+    const response = await fetch(
+      `${API_BASE_URL}/api/caixa/conversas/${selectedId}/feed?before_seq=${messages[0].seq}&limit=50`,
+      { headers: { Authorization: authorization }, cache: 'no-store' },
+    );
+    if (!response.ok) return;
+    const page: CaixaFeedPage = await response.json();
+    setMessageState((current) => current.conversationId === selectedId
+      ? { ...current, items: [...page.items, ...current.items], hasMore: page.has_more }
+      : current);
+  }, [authorization, messages, selectedId]);
+
   const openConversation = useCallback((conversationId: string) => {
     selectedIdRef.current = conversationId;
     setSelectedId(conversationId);
@@ -370,8 +493,30 @@ export function CashierConversationsDrawer({
 
   useEffect(() => {
     if (!isOpen || !selectedId) return;
+    setReplyText(loadCashierDraft(draftScope, selectedId));
     void loadMessages(selectedId);
-  }, [isOpen, selectedId, loadMessages]);
+  }, [draftScope, isOpen, selectedId, loadMessages]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const timer = window.setTimeout(() => {
+      const body = replyText;
+      if (!body.trim()) {
+        removeCashierDraft(draftScope, selectedId);
+        return;
+      }
+      try {
+        localStorage.setItem(
+          cashierDraftKey(draftScope, selectedId),
+          JSON.stringify({
+            body,
+            expiresAt: Date.now() + CASHIER_CHAT_DRAFT_TTL_MS,
+          }),
+        );
+      } catch {}
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [draftScope, replyText, selectedId]);
 
   useEffect(() => {
     if (isOpen && !selectedId && sortedConversations.length > 0 && window.innerWidth >= 640) {
@@ -379,117 +524,91 @@ export function CashierConversationsDrawer({
     }
   }, [isOpen, openConversation, selectedId, sortedConversations]);
 
-  useEffect(() => {
-    if (!isOpen || !authorization) return;
-    const controller = new AbortController();
-    let fallbackInterval: number | null = null;
-    let reconnectTimer: number | null = null;
-    let stopped = false;
+  const appendRealtimeMessage = useCallback((data: Record<string, unknown> | null) => {
+    const eventConversationId = typeof data?.conversation_id === 'string' ? data.conversation_id : null;
+    const messageId = typeof data?.id === 'string' ? data.id : null;
+    const pedidoId = typeof data?.pedido_id === 'string' ? data.pedido_id : null;
+    const senderType = data?.sender_type;
+    const body = typeof data?.body === 'string' ? data.body : null;
+    if (
+      !eventConversationId
+      || !messageId
+      || !pedidoId
+      || !body
+      || (senderType !== 'system' && senderType !== 'customer' && senderType !== 'staff')
+    ) return;
 
-    const stopFallback = () => {
-      if (fallbackInterval !== null) {
-        window.clearInterval(fallbackInterval);
-        fallbackInterval = null;
-      }
+    const message: CaixaChatMessage = {
+      id: messageId,
+      conversation_id: eventConversationId,
+      pedido_id: pedidoId,
+      sender_type: senderType,
+      sender_user_id: typeof data?.sender_user_id === 'number' ? data.sender_user_id : null,
+      body,
+      event_key: typeof data?.event_key === 'string' ? data.event_key : null,
+      created_at: typeof data?.created_at === 'string' ? data.created_at : null,
+      seq: typeof data?.seq === 'number' ? data.seq : undefined,
     };
-    const refreshSelectedInBackground = () => {
+
+    if (selectedIdRef.current === eventConversationId) {
+      setMessageState((current) => {
+        const items = current.conversationId === eventConversationId ? current.items : [];
+        if (items.some((item) => item.id === message.id)) return current;
+        return { ...current, conversationId: eventConversationId,
+          items: [...items, message].sort((a, b) => (a.seq || 0) - (b.seq || 0)) };
+      });
+      window.setTimeout(() => scrollToBottom(true), 50);
+      if (senderType === 'customer' && document.visibilityState === 'visible') {
+        void markConversationRead(eventConversationId, { force: true });
+      }
+    }
+  }, [markConversationRead, scrollToBottom]);
+
+  useEffect(() => {
+    if (!isOpen || !realtimeEvent) return;
+    const { event, data } = realtimeEvent;
+    const eventConversationId = typeof data?.conversation_id === 'string' ? data.conversation_id : null;
+    switch (event) {
+      case 'reconnected': {
+        void fetchConversations({ background: true });
+        const current = selectedIdRef.current;
+        if (current) void loadMessages(current, { background: true, markRead: false });
+        return;
+      }
+      case 'new_message':
+        appendRealtimeMessage(data);
+        void fetchConversations({ background: true });
+        return;
+      case 'status_changed':
+        if (data?.feed_event && typeof data.feed_event === 'object') {
+          appendRealtimeMessage(data.feed_event as Record<string, unknown>);
+        }
+        void fetchConversations({ background: true });
+        return;
+      case 'read_update':
+        if (eventConversationId && data?.reader === 'staff') {
+          setConversations((current) => current.map((conversation) => (
+            conversation.id === eventConversationId
+              ? { ...conversation, unread_count: 0 }
+              : conversation
+          )));
+        }
+        return;
+      default:
+        return;
+    }
+  }, [appendRealtimeMessage, fetchConversations, isOpen, loadMessages, realtimeEvent]);
+
+  useEffect(() => {
+    if (!isOpen || realtimeHealth !== 'degraded') return;
+    const interval = window.setInterval(() => {
+      if (document.hidden) return;
+      void fetchConversations({ background: true });
       const current = selectedIdRef.current;
       if (current) void loadMessages(current, { background: true, markRead: false });
-    };
-    const startFallback = () => {
-      if (fallbackInterval !== null) return;
-      fallbackInterval = window.setInterval(() => {
-        if (document.hidden) return;
-        void fetchConversations({ background: true });
-        refreshSelectedInBackground();
-      }, 15000);
-    };
-
-    const appendRealtimeMessage = (data: Record<string, unknown> | null) => {
-      const eventConversationId = typeof data?.conversation_id === 'string' ? data.conversation_id : null;
-      const messageId = typeof data?.id === 'string' ? data.id : null;
-      const pedidoId = typeof data?.pedido_id === 'string' ? data.pedido_id : null;
-      const senderType = data?.sender_type;
-      const body = typeof data?.body === 'string' ? data.body : null;
-      if (
-        !eventConversationId
-        || !messageId
-        || !pedidoId
-        || !body
-        || (senderType !== 'system' && senderType !== 'customer' && senderType !== 'staff')
-      ) return;
-
-      const message: CaixaChatMessage = {
-        id: messageId,
-        conversation_id: eventConversationId,
-        pedido_id: pedidoId,
-        sender_type: senderType,
-        sender_user_id: typeof data?.sender_user_id === 'number' ? data.sender_user_id : null,
-        body,
-        event_key: typeof data?.event_key === 'string' ? data.event_key : null,
-        created_at: typeof data?.created_at === 'string' ? data.created_at : null,
-      };
-
-      if (selectedIdRef.current === eventConversationId) {
-        setMessageState((current) => {
-          const items = current.conversationId === eventConversationId ? current.items : [];
-          if (items.some((item) => item.id === message.id)) return current;
-          return { conversationId: eventConversationId, items: [...items, message] };
-        });
-        window.setTimeout(() => scrollToBottom(true), 50);
-        if (senderType === 'customer' && document.visibilityState === 'visible') {
-          void markConversationRead(eventConversationId);
-        }
-      }
-    };
-
-    const connect = () => {
-      if (stopped || controller.signal.aborted) return;
-      void consumeCashierChatEvents({
-        url: `${API_BASE_URL}/api/caixa/conversas/events`,
-        authorization,
-        signal: controller.signal,
-        onOpen: stopFallback,
-        onEvent: ({ event, data }) => {
-          if (event === 'connected') return;
-          const eventConversationId = typeof data?.conversation_id === 'string' ? data.conversation_id : null;
-          switch (event) {
-            case 'new_message':
-              appendRealtimeMessage(data);
-              void fetchConversations({ background: true });
-              return;
-            case 'status_changed':
-              void fetchConversations({ background: true });
-              return;
-            case 'read_update':
-              if (eventConversationId && data?.reader === 'staff') {
-                setConversations((current) => current.map((conversation) => (
-                  conversation.id === eventConversationId
-                    ? { ...conversation, unread_count: 0 }
-                    : conversation
-                )));
-              }
-              return;
-            default:
-              void fetchConversations({ background: true });
-          }
-        },
-      }).catch((error) => {
-        if (stopped || controller.signal.aborted) return;
-        console.warn('Realtime do chat do Caixa degradado; usando polling de fallback:', error);
-        startFallback();
-        reconnectTimer = window.setTimeout(connect, 5000);
-      });
-    };
-
-    connect();
-    return () => {
-      stopped = true;
-      controller.abort();
-      stopFallback();
-      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-    };
-  }, [authorization, fetchConversations, isOpen, loadMessages, markConversationRead, scrollToBottom]);
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [fetchConversations, isOpen, loadMessages, realtimeHealth]);
 
   useEffect(() => () => {
     messageGenerationRef.current += 1;
@@ -500,13 +619,26 @@ export function CashierConversationsDrawer({
     if (!selectedId || !replyText.trim() || sending || selectedArchived) return;
     const targetConversationId = selectedId;
     const bodyToSend = replyText.trim();
+    const pending = pendingSendRef.current;
+    const clientMessageId = (
+      pending
+      && pending.conversationId === targetConversationId
+      && pending.body === bodyToSend
+    )
+      ? pending.id
+      : crypto.randomUUID();
+    pendingSendRef.current = {
+      conversationId: targetConversationId,
+      body: bodyToSend,
+      id: clientMessageId,
+    };
     setSending(true);
     setErrorText(null);
     try {
       const response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${targetConversationId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: authorization },
-        body: JSON.stringify({ body: bodyToSend }),
+        body: JSON.stringify({ body: bodyToSend, client_message_id: clientMessageId }),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -517,8 +649,11 @@ export function CashierConversationsDrawer({
         setMessageState((current) => {
           const items = current.conversationId === targetConversationId ? current.items : [];
           if (items.some((message) => message.id === sentMessage.id)) return current;
-          return { conversationId: targetConversationId, items: [...items, sentMessage] };
+          return { ...current, conversationId: targetConversationId,
+            items: [...items, sentMessage].sort((a, b) => (a.seq || 0) - (b.seq || 0)) };
         });
+        pendingSendRef.current = null;
+        removeCashierDraft(draftScope, targetConversationId)
         setReplyText('');
         window.setTimeout(() => scrollToBottom(true), 50);
       }
@@ -542,7 +677,7 @@ export function CashierConversationsDrawer({
     } finally {
       setSending(false);
     }
-  }, [authorization, fetchConversations, replyText, selectedArchived, selectedId, sending, scrollToBottom]);
+  }, [authorization, draftScope, fetchConversations, replyText, selectedArchived, selectedId, sending, scrollToBottom]);
 
   const handleSendReply = (event: React.FormEvent) => {
     event.preventDefault();
@@ -556,22 +691,6 @@ export function CashierConversationsDrawer({
   };
 
   if (!isOpen) return null;
-
-  const filterButton = (value: ConversationFilter, label: string, count: number) => (
-    <button
-      type="button"
-      onClick={() => setConversationFilter(value)}
-      className={clsx(
-        'rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition',
-        conversationFilter === value
-          ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
-          : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200',
-      )}
-      aria-pressed={conversationFilter === value}
-    >
-      {label} <span className="ml-1 opacity-70">{count}</span>
-    </button>
-  );
 
   return (
     <div
@@ -605,7 +724,7 @@ export function CashierConversationsDrawer({
                   </span>
                 )}
               </div>
-              <p className="truncate text-xs text-zinc-400">Ativas por padrão · histórico finalizado fica em Arquivadas</p>
+              <p className="truncate text-xs text-zinc-400">Somente pedidos ativos · histórico não ocupa a fila operacional</p>
             </div>
           </div>
 
@@ -640,10 +759,9 @@ export function CashierConversationsDrawer({
             )}
           >
             <div className="shrink-0 border-b border-zinc-800/80 bg-zinc-950/95 px-3 py-2 backdrop-blur space-y-2">
-              <div className="flex items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-900 p-1">
-                {filterButton('active', 'Ativas', activeCount)}
-                {filterButton('archived', 'Arquivadas', archivedCount)}
-                {filterButton('all', 'Todas', conversations.length)}
+              <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-[10px] font-bold text-zinc-300">
+                <span>Pedidos ativos</span>
+                <span className="text-emerald-300">{activeCount}</span>
               </div>
               <input
                 type="search"
@@ -665,7 +783,7 @@ export function CashierConversationsDrawer({
               {sortedConversations.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center p-6 text-center text-zinc-500 text-xs">
                   <MessageSquare size={32} className="opacity-20 mb-3" />
-                  <p>{conversationFilter === 'archived' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa ativa no momento.'}</p>
+                  <p>Nenhuma conversa ativa no momento.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-zinc-800/70">
@@ -673,7 +791,6 @@ export function CashierConversationsDrawer({
                     const isSelected = conversation.id === selectedId;
                     const awaitingReply = isWaitingForStaff(conversation);
                     const archived = isArchivedConversation(conversation);
-                    const postSale = isTerminalConversation(conversation) && !archived;
                     return (
                       <button
                         key={conversation.id}
@@ -695,7 +812,6 @@ export function CashierConversationsDrawer({
                               {conversation.tipo_pedido}
                             </span>
                             {archived && <span className="text-[9px] font-bold text-zinc-500">Arquivada</span>}
-                            {postSale && <span className="text-[9px] font-bold text-amber-300">Pós-venda</span>}
                           </div>
                           {conversation.unread_count > 0 && (
                             <span className="min-w-5 h-5 px-1 rounded-full bg-emerald-400 text-emerald-950 text-[10px] font-black flex items-center justify-center">
@@ -752,7 +868,6 @@ export function CashierConversationsDrawer({
                         <h3 className="text-sm font-bold text-white">Pedido #{selectedConv.numero_pedido || '—'}</h3>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300">{conversationStatusLabel(selectedConv)}</span>
                         {selectedArchived && <span className="text-[10px] font-bold text-zinc-500">arquivada</span>}
-                        {selectedPostSale && <span className="text-[10px] font-bold text-amber-300">pós-venda</span>}
                         {isWaitingForStaff(selectedConv) && <span className="text-[10px] font-bold text-amber-300">aguardando sua resposta</span>}
                       </div>
                       <span className="block truncate text-xs text-zinc-400">
@@ -773,6 +888,12 @@ export function CashierConversationsDrawer({
                 </div>
 
                 <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 scroll-smooth">
+                  {messageState.conversationId === selectedId && messageState.hasMore && (
+                    <button type="button" onClick={() => void loadOlderMessages()}
+                      className="mx-auto block rounded-lg border border-zinc-700 px-3 py-1.5 text-[10px] font-semibold text-zinc-300 hover:border-emerald-500/60">
+                      Carregar mensagens anteriores
+                    </button>
+                  )}
                   {loadingMessages ? (
                     <div className="h-full flex items-center justify-center"><div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
                   ) : messages.length === 0 ? (
@@ -809,7 +930,7 @@ export function CashierConversationsDrawer({
                 <div className="border-t border-zinc-800 bg-zinc-900/75 p-3">
                   {selectedArchived ? (
                     <div className="rounded-xl border border-zinc-800 bg-zinc-950 px-3.5 py-3 text-xs text-zinc-400">
-                      Conversa arquivada. O histórico continua disponível; se o cliente enviar uma nova mensagem, ela volta automaticamente para Ativas como pós-venda.
+                      Pedido encerrado. O histórico permanece somente para leitura e não volta para a fila operacional.
                     </div>
                   ) : (
                     <>
@@ -873,7 +994,7 @@ export function CashierConversationsDrawer({
               <div className="text-zinc-500 text-xs flex flex-col items-center text-center px-6">
                 <MessageSquare size={32} className="opacity-20 mb-2" />
                 <p className="font-semibold text-zinc-400">Selecione uma conversa</p>
-                <p className="mt-1 text-[10px]">Ativas ficam limpas; o histórico permanece em Arquivadas.</p>
+                <p className="mt-1 text-[10px]">A fila mostra apenas pedidos em andamento.</p>
               </div>
             )}
           </div>

@@ -208,8 +208,11 @@ def consultar_status_pedido_publico(
             OnlinePaymentIntent.restaurante_id == int(rest_id),
             OnlinePaymentIntent.comanda_id == comanda.id,
         ).first()
-        if payment_intent is not None and payment_intent.status != "approved":
+        payment_failed = payment_intent is not None and payment_intent.status == "error"
+        if payment_intent is not None and payment_intent.status not in {"approved", "error"}:
             status_retorno = "aguardando_pagamento"
+        elif payment_failed:
+            status_retorno = "falha_pagamento"
 
         state_contract = build_order_state_contract(
             status_retorno,
@@ -217,6 +220,7 @@ def consultar_status_pedido_publico(
             conversation_closed=bool(comanda.fechada),
             scheduled_pending=status_retorno == "agendado",
             payment_pending=status_retorno == "aguardando_pagamento",
+            payment_failed=payment_failed,
         )
 
         return {

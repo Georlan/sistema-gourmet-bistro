@@ -44,6 +44,20 @@ class UsuarioCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+
+class UsuarioAccessUpdate(BaseModel):
+    cargo: Optional[Literal["gerente", "caixa", "garcom", "motoboy"]] = None
+    status: Optional[Literal["ativo", "inativo"]] = None
+
+    @model_validator(mode="after")
+    def validate_mutation(self):
+        if self.cargo is None and self.status is None:
+            raise ValueError("Informe ao menos uma alteração de cargo ou status.")
+        return self
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str
@@ -196,6 +210,13 @@ class ItemResponse(BaseModel):
 
 
 # ----------------- COMANDA -----------------
+class EstoqueAlertaResponse(BaseModel):
+    insumo_id: str
+    nome: str
+    saldo_atual: float
+    unidade_medida: str
+
+
 class ComandaResponse(BaseModel):
     id: str
     cliente_id: Optional[str] = None
@@ -216,10 +237,15 @@ class ComandaResponse(BaseModel):
     delivery_telefone: Optional[str] = None
     delivery_endereco: Optional[str] = None
     delivery_taxa: float = 0.0
+    delivery_forma_pagamento: Optional[str] = None
+    delivery_troco_para: Optional[float] = None
     motoboy_id: Optional[int] = None
 
     # Cashier flow
     status_comanda: Optional[str] = None  # null | aguardando_pagamento
+
+    # Informational only: zero/negative stock never blocks the order.
+    estoque_alertas: List[EstoqueAlertaResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -315,6 +341,7 @@ class VendaDiretaCreate(BaseModel):
     delivery_taxa: float = 0.0
     origem: Optional[Literal["smartpos"]] = None
     idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=128)
+    onboarding_test: bool = False
     itens: List[VendaDiretaItemSchema] = Field(min_length=1)
 
 class LancamentoCreate(BaseModel):
@@ -472,6 +499,7 @@ class PagamentoResponse(BaseModel):
     metodo: str
     status: str
     idempotency_key: Optional[str] = None
+    item_ids: Optional[List[str]] = None
     cliente_id: Optional[str] = None
     cpf_cliente: Optional[str] = None
     nome_cliente: Optional[str] = None
@@ -496,6 +524,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     nicho: str
     mapa_mesas_ativo: bool
     delivery_ativo: bool
+    tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
     taxa_servico_ativa: bool
     taxa_servico_padrao: float
     meta_mensal: Optional[float] = 0.0
@@ -551,6 +580,7 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     nicho: Optional[str] = None
     mapa_mesas_ativo: Optional[bool] = None
     delivery_ativo: Optional[bool] = None
+    tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
     pedido_minimo: Optional[float] = None
     frete_gratis_valor: Optional[float] = None
     tipo_taxa_entrega: Optional[str] = None
@@ -831,10 +861,13 @@ class CardapioPublicRestaurantResponse(BaseModel):
     aceitando_pedidos: bool = True
     motivo_indisponibilidade: Optional[str] = None
     origem_disponibilidade: str = "automatic"
+    proxima_abertura: Optional[str] = None
+    proxima_abertura_texto: Optional[str] = None
     socials: Optional[Any] = None
     horarios_funcionamento: Optional[Any] = None
     formas_pagamento_aceitas: Optional[Any] = None
     pagamento_online_ativo: bool = False
+    tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
     delivery_ativo: bool = True
     cor_primaria: Optional[str] = "#00b894"
     cor_fundo: Optional[str] = "#090a0f"
@@ -934,6 +967,7 @@ class CustomerProfileResponse(BaseModel):
     endereco: str = ""
     saldo_pontos: int = 0
     saldo_cashback: float = 0.0
+    telefone_verificado: bool = False
 
 
 class CustomerRegisterRequest(BaseModel):
@@ -943,6 +977,7 @@ class CustomerRegisterRequest(BaseModel):
     senha: str = Field(min_length=8, max_length=128)
     telefone: str = Field(min_length=10, max_length=20)
     endereco: Optional[str] = Field(default="", max_length=300)
+    codigo: str = Field(pattern=r"^\d{6}$")
 
     @field_validator("nome")
     @classmethod
@@ -1030,7 +1065,7 @@ class CardapioPedidoCreate(BaseModel):
     bairro: Optional[str] = Field(default=None, max_length=100)
     cupom_codigo: Optional[str] = Field(default=None, max_length=50)
     usar_cashback: bool = Field(default=False)
-    tipo_pedido: Literal["delivery", "retirada"] = "delivery"
+    tipo_pedido: Literal["delivery", "retirada", "consumo_local"] = "delivery"
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
 
     @field_validator("cliente_nome")

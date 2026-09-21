@@ -33,6 +33,7 @@ def _base_phase(status: OrderStatus) -> str:
 def _label(phase: str) -> str:
     return {
         "payment_pending": "Aguardando pagamento",
+        "payment_failed": "Pagamento não gerado",
         "scheduled": "Pedido agendado",
         "received": "Aguardando aceite",
         "preparing": "Em preparo",
@@ -46,7 +47,7 @@ def _label(phase: str) -> str:
 
 def _progress(phase: str, fulfillment: FulfillmentType) -> tuple[int, int]:
     total = 5 if fulfillment == FulfillmentType.DELIVERY else 4
-    if phase in {"rejected", "cancelled"}:
+    if phase in {"rejected", "cancelled", "payment_failed"}:
         return 0, total
     if phase in {"payment_pending", "scheduled", "received"}:
         return 1, total
@@ -66,6 +67,7 @@ def build_order_state_contract(
     conversation_closed: bool = False,
     scheduled_pending: bool = False,
     payment_pending: bool = False,
+    payment_failed: bool = False,
 ) -> dict:
     """Retorna o contrato estável usado pelo Cardápio e pelo chat do pedido."""
     canonical_status = normalize_to_order_status(status_value)
@@ -73,7 +75,11 @@ def build_order_state_contract(
     terminal = canonical_status in _TERMINAL
     rejected = canonical_status in _REJECTED
 
-    if terminal:
+    if payment_failed:
+        phase = "payment_failed"
+        terminal = True
+        rejected = True
+    elif terminal:
         phase = _base_phase(canonical_status)
     elif payment_pending:
         phase = "payment_pending"

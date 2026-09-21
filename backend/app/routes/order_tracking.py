@@ -15,22 +15,23 @@ import datetime
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, selectinload
 
-from ..database import get_db, tenant_session_scope
+from ..database import SessionLocal, get_db, tenant_session_scope
 from ..models import Comanda, Item, Restaurante
 from ..online_order_control_models import OnlineOrderCustomerBlock
 from ..order_chat_models import OrderConversation, OrderMessage
 from ..services.clientes import normalizar_telefone_cliente
 from ..services.customer_auth import hash_public_rate_key
-from ..services.order_chat_archive_service import reopen_completed_conversation_if_needed
 from ..services.order_chat_hub import order_chat_hub
 from ..services.order_chat_service import (
     compute_comanda_total,
+    list_feed_page,
+    list_recent_messages,
     mark_customer_read,
     resolve_public_tracking,
     send_customer_message,
@@ -49,6 +50,7 @@ router = APIRouter(prefix="/api/cardapio/pedidos/acompanhar", tags=["Cardapio - 
 
 class CustomerMessagePayload(BaseModel):
     body: str = Field(..., min_length=1, max_length=1000, description="Texto da mensagem")
+    client_message_id: str | None = Field(default=None, min_length=36, max_length=36)
 
 
 class PushSubscriptionKeysPayload(BaseModel):
@@ -70,13 +72,17 @@ def _sse_event(event_name: str, payload: dict[str, Any]) -> str:
     return f"event: {event_name}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
 
 
-def _effective_tracking_status(comanda: Comanda) -> str:
-    raw_status = (comanda.delivery_status or "pendente").strip().lower()
+def _effective_tracking_status_values(delivery_status: Any, fechada: Any) -> str:
+    raw_status = str(delivery_status or "pendente").strip().lower()
     if raw_status in {"recusado", "rejected", "cancelado", "cancelled"}:
         return raw_status
-    if comanda.fechada:
+    if bool(fechada):
         return "finalizado"
     return raw_status
+
+
+def _effective_tracking_status(comanda: Comanda) -> str:
+    return _effective_tracking_status_values(comanda.delivery_status, comanda.fechada)
 
 
 def _iso_or_none(value: Any) -> str | None:
@@ -152,6 +158,88 @@ def _active_ordering_block(
     return None
 
 
+@router.get("/{token}/summary", summary="Resumo leve e seguro do acompanhamento do pedido")
+def consultar_resumo_pedido_por_token(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """Projeção quente para realtime/fallback sem carregar itens, produto ou restaurante."""
+    resolved = resolve_public_tracking(db, token)
+    if not resolved:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+
+    restaurante_id, conversation_id, pedido_id, _resolved_closed_at = resolved
+    with tenant_session_scope(db, restaurante_id):
+        row = (
+            db.query(
+                Comanda.id.label("id"),
+                Comanda.delivery_status.label("delivery_status"),
+                Comanda.tipo.label("tipo"),
+                Comanda.fechada.label("fechada"),
+                OrderConversation.closed_at.label("closed_at"),
+                OrderConversation.customer_last_read_at.label("customer_last_read_at"),
+                func.count(OrderMessage.id).label("customer_unread_count"),
+            )
+            .join(
+                OrderConversation,
+                and_(
+                    OrderConversation.restaurante_id == Comanda.restaurante_id,
+                    OrderConversation.pedido_id == Comanda.id,
+                    OrderConversation.id == conversation_id,
+                ),
+            )
+            .outerjoin(
+                OrderMessage,
+                and_(
+                    OrderMessage.restaurante_id == OrderConversation.restaurante_id,
+                    OrderMessage.conversation_id == OrderConversation.id,
+                    OrderMessage.sender_type == "staff",
+                    or_(
+                        OrderConversation.customer_last_read_at.is_(None),
+                        OrderMessage.created_at > OrderConversation.customer_last_read_at,
+                    ),
+                ),
+            )
+            .filter(
+                Comanda.restaurante_id == restaurante_id,
+                Comanda.id == pedido_id,
+            )
+            .group_by(
+                Comanda.id,
+                Comanda.delivery_status,
+                Comanda.tipo,
+                Comanda.fechada,
+                OrderConversation.closed_at,
+                OrderConversation.customer_last_read_at,
+            )
+            .first()
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+
+        closed_at_iso = _iso_or_none(row.closed_at)
+        effective_status = _effective_tracking_status_values(row.delivery_status, row.fechada)
+        state_contract = build_order_state_contract(
+            effective_status,
+            row.tipo,
+            conversation_closed=row.closed_at is not None,
+        )
+        return {
+            "id": str(row.id),
+            "status": effective_status,
+            "state": state_contract,
+            "tipo": row.tipo or "Delivery",
+            "fechada": bool(row.fechada),
+            "closed_at": closed_at_iso,
+            "conversa": {
+                "id": conversation_id,
+                "closed_at": closed_at_iso,
+                "unread_count": int(row.customer_unread_count or 0),
+                "can_chat": state_contract["can_chat"],
+            },
+        }
+
+
 @router.get("/{token}", summary="Consulta segura dos dados de acompanhamento do pedido")
 def consultar_pedido_por_token(
     token: str,
@@ -211,10 +299,6 @@ def consultar_pedido_por_token(
             comanda.tipo,
             conversation_closed=closed_at is not None,
         )
-        # Pedido concluído mantém o histórico arquivado, mas o cliente pode
-        # iniciar um atendimento de pós-venda sem reabrir o pedido.
-        if effective_status == "finalizado":
-            state_contract["can_chat"] = True
         return {
             "id": comanda.id,
             "numero_pedido": comanda.numero_pedido,
@@ -256,16 +340,27 @@ def listar_mensagens_do_pedido(token: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
     restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
     with tenant_session_scope(db, restaurante_id):
-        messages = (
-            db.query(OrderMessage)
-            .filter(
-                OrderMessage.restaurante_id == restaurante_id,
-                OrderMessage.conversation_id == conversation_id,
-            )
-            .order_by(OrderMessage.created_at.asc())
-            .all()
+        return list_recent_messages(
+            db,
+            restaurante_id=restaurante_id,
+            conversation_id=conversation_id,
         )
-        return [serialize_message(msg) for msg in messages]
+
+
+@router.get("/{token}/feed", summary="Feed paginado da conversa do pedido")
+def listar_feed_do_pedido(
+    token: str, limit: int = Query(50, ge=1, le=100),
+    before_seq: int | None = Query(None, ge=1), after_seq: int | None = Query(None, ge=0),
+    db: Session = Depends(get_db),
+):
+    resolved = resolve_public_tracking(db, token)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+    restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
+    with tenant_session_scope(db, restaurante_id):
+        return list_feed_page(db, restaurante_id=restaurante_id,
+                              conversation_id=conversation_id, limit=limit,
+                              before_seq=before_seq, after_seq=after_seq)
 
 
 @router.post("/{token}/messages", summary="Envia mensagem do cliente para o restaurante")
@@ -302,17 +397,13 @@ def enviar_mensagem_do_cliente(
         )
         db.commit()
 
-        reopen_completed_conversation_if_needed(
-            db,
-            restaurante_id=restaurante_id,
-            conversation_id=conversation_id,
-        )
         msg = send_customer_message(
             db,
             restaurante_id=restaurante_id,
             conversation_id=conversation_id,
             pedido_id=pedido_id,
             raw_body=payload.body,
+            client_message_id=payload.client_message_id,
         )
         db.commit()
         db.refresh(msg)
@@ -326,9 +417,9 @@ def marcar_mensagens_lidas_cliente(token: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
     restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
     with tenant_session_scope(db, restaurante_id):
-        mark_customer_read(db, restaurante_id, conversation_id)
+        changed = mark_customer_read(db, restaurante_id, conversation_id)
         db.commit()
-        return {"status": "ok"}
+        return {"status": "ok", "changed": changed}
 
 
 @router.get("/{token}/push-config", summary="Configuração pública de Web Push para este pedido")
@@ -431,9 +522,16 @@ def desativar_push_do_pedido(
 async def stream_eventos_pedido(
     token: str,
     request: Request,
-    db: Session = Depends(get_db),
 ):
-    resolved = resolve_public_tracking(db, token)
+    # SSE é uma resposta potencialmente longa. Nunca mantenha a sessão HTTP
+    # (e portanto uma conexão do pool) viva durante o streaming. O capability
+    # token é resolvido em uma sessão curta que é fechada antes de criar o
+    # StreamingResponse; a partir daí o hub trabalha somente em memória/Redis.
+    db = SessionLocal()
+    try:
+        resolved = resolve_public_tracking(db, token)
+    finally:
+        db.close()
     if not resolved:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
     _restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
@@ -441,12 +539,19 @@ async def stream_eventos_pedido(
     async def event_generator():
         sub_id, queue = order_chat_hub.subscribe_conversation(conversation_id)
         try:
+            if not await order_chat_hub.wait_ready():
+                return
+            generation = order_chat_hub.generation
             yield _sse_event("connected", {"conversation_id": conversation_id})
             while not await request.is_disconnected():
+                if not order_chat_hub.ready or generation != order_chat_hub.generation:
+                    return
                 try:
                     event_payload = await asyncio.wait_for(queue.get(), timeout=15.0)
                     yield _sse_event(event_payload["event"], event_payload["data"])
                 except asyncio.TimeoutError:
+                    if not order_chat_hub.ready or generation != order_chat_hub.generation:
+                        return
                     yield ": keepalive\n\n"
         finally:
             order_chat_hub.unsubscribe_conversation(conversation_id, sub_id)

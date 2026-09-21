@@ -8,18 +8,24 @@ export interface DeliveryOrderView {
   itens: string;
   detailItems?: readonly import("./KanbanOrderDetails").KanbanDetailSourceItem[];
   total: number;
+  amountPaid?: number;
+  amountDue?: number;
   canal: 'ifood' | 'site' | 'whats' | 'smartpos';
   origemOperacional: 'smartpos' | 'cardapio' | 'caixa' | 'garcom' | 'desconhecida';
   isQuickSale: boolean;
   quantidadeItens: number;
-  modalidade: 'delivery' | 'retirada';
+  modalidade: 'delivery' | 'retirada' | 'dine_in';
   pago: boolean;
   status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
   endereco?: string;
+  paymentMethod?: string | null;
+  changeFor?: number | null;
   motoboyId?: number | null;
   criadoEm: string;
   created_at?: string;
   numeroPedido?: number;
+  mesaId?: number | null;
+  garcomNome?: string;
 }
 
 export interface SmartPosCardState {

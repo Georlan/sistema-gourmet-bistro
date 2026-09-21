@@ -12,6 +12,7 @@ import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
 
 import {
   KOMA_OPERATIONAL_APP_URL,
+  isCentralSupportOperationalBridge,
   isOperationalAppHost,
   parseTenantSubdomain,
   resolveKomaHost,
@@ -43,10 +44,19 @@ function isPublicCommercialRoute(): boolean {
 function isOperationalUtilityRoute(): boolean {
   const pathname = window.location.pathname;
   return pathname === "/recuperar-senha"
+    || pathname.startsWith("/ferramentas/simulador-impressao")
     || pathname.startsWith("/smartpos")
     || pathname.startsWith("/ativar")
     || pathname.startsWith("/acompanhar")
     || pathname.startsWith("/entregador");
+}
+
+function hasInternalSupportSessionContext(): boolean {
+  try {
+    return Boolean(window.sessionStorage.getItem("koma_support_session"));
+  } catch {
+    return false;
+  }
 }
 
 function isLocalOperationalTestRoute(): boolean {
@@ -80,6 +90,7 @@ function isCanonicalOperationalEntryRoute(): boolean {
 function isHostedManagementEntryRoute(): boolean {
   if (isOperationalAppHost() || isLocalOperationalTestRoute()) return false;
   if (isPublicMenuRoute() || isPublicCommercialRoute() || isOperationalUtilityRoute()) return false;
+  if (isCentralSupportOperationalBridge()) return hasInternalSupportSessionContext();
   return resolveKomaHost().surface === "caixa";
 }
 
@@ -105,6 +116,8 @@ function bypassTenantSuspensionBoundary(): boolean {
 
   return pathname === "/recuperar-senha"
     || pathname.startsWith("/super-admin")
+    || (isCentralSupportOperationalBridge() && hasInternalSupportSessionContext())
+    || pathname.startsWith("/ferramentas/simulador-impressao")
     || pathname.startsWith("/c/")
     || pathname.startsWith("/cardapio")
     || pathname.startsWith("/ativar")
@@ -158,12 +171,16 @@ if (sentryDsn) {
 
 const pathname = window.location.pathname;
 const isSmartPosRoute = pathname.startsWith("/smartpos");
+const isPrintSimulatorRoute = pathname.startsWith("/ferramentas/simulador-impressao");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
 const isOnboardingAwareManagementRoute = isHostedManagementEntryRoute();
+const isInternalSupportOperationalRoute =
+  isCentralSupportOperationalBridge() && hasInternalSupportSessionContext();
 const hasCustomerSupportSurface =
   !pathname.startsWith("/super-admin")
+  && !isInternalSupportOperationalRoute
   && (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isSmartPosRoute);
 
 // O Chrome mobile pode esconder path/query na barra e fazer links legados
@@ -182,9 +199,11 @@ if (
 const RootApp = React.lazy(
   pathname === "/recuperar-senha"
     ? () => import("./components/auth/PasswordResetPage")
+    : isPrintSimulatorRoute
+    ? () => import("./printing-simulator/PrintingSimulatorPage")
     : isSmartPosRoute
-    ? () => import("./smartpos/SmartPosPage")
-    : isLegalRoute
+      ? () => import("./smartpos/SmartPosPage")
+      : isLegalRoute
       ? () => import("./legal/LegalPage")
       : isPlanContractRoute
         ? () => import("./legal/PlanContractPageV2")

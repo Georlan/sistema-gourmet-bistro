@@ -84,15 +84,38 @@ export default function CashierTeam({
     }
   };
 
+  const handleUpdateAccess = async (
+    user: SystemUser,
+    payload: { cargo?: string; status?: 'ativo' | 'inativo' },
+  ) => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/auth/usuarios/${user.id}`, {
+        method: 'PATCH',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Não foi possível alterar o acesso.');
+      }
+      showToast('Acesso atualizado com sucesso!');
+      await fetchSystemUsers();
+    } catch (err: any) {
+      console.error(err);
+      showToast(err?.message || 'Erro ao atualizar o acesso.', 'error');
+      throw err;
+    }
+  };
+
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Deseja realmente excluir este funcionário?')) return;
+    if (!confirm('Desativar este acesso? O histórico será preservado e as sessões atuais serão encerradas.')) return;
     try {
       const res = await fetch(`${apiBaseUrl}/auth/usuarios/${userId}`, {
         method: 'DELETE',
         headers: authHeaders,
       });
       if (res.ok) {
-        showToast('Funcionário removido/desativado com sucesso!');
+        showToast('Acesso desativado e sessões revogadas com sucesso!');
         await fetchSystemUsers();
       } else {
         const errorData = await res.json().catch(() => ({}));
@@ -113,6 +136,7 @@ export default function CashierTeam({
           users={systemUsers}
           onCreate={handleAddUser}
           onResendInvite={handleResendInvite}
+          onUpdateAccess={handleUpdateAccess}
           onRemove={handleDeleteUser}
         />
       )}

@@ -124,7 +124,7 @@ test('workspace preserves card keyboard guards and stops action clicks before de
   let stopped = 0;
   const click = { stopPropagation: () => stopped++ };
   invoke(button(view, 'Marcar item como pronto'), 'onClick', click);
-  invoke(find(view, element => element.props['aria-label'] === 'Imprimir conferência da Varanda'), 'onClick', click);
+  invoke(find(view, element => element.props['aria-label'] === 'Imprimir conferência de Pedido #24'), 'onClick', click);
   invoke(button(view, 'Receber itens prontos'), 'onClick', click);
   assert.equal(stopped, 3);
   assert.deepEqual(acted, [props.columns.tableProduction[0].order, props.columns.tableProduction[0].order,
@@ -221,7 +221,7 @@ test('details groups visible units and delegates print/transfer/cancellation wit
     transfer: { targetId: '8', isTransferring: false, tables: [TABLE, { id: 8 }], onTargetChange: value => calls.push(value) },
     actions: { close: () => calls.push('close'), advanceDigitalOrder: () => calls.push('advance'),
       reprintProduction: () => calls.push('production'), printFullTable: () => calls.push('full'),
-      printTableValues: () => calls.push('values'), transferTable: () => calls.push('transfer'),
+      printTableValues: () => calls.push('values'), transferTable: () => calls.push('transfer'), associateTable: noop,
       cancelConsumption: () => calls.push('consumption'), cancelOrder: () => calls.push('order') },
   });
   const view = KanbanOrderDetails(props);
@@ -263,7 +263,7 @@ test('digital detail uses the same controlled advance and order-only cancellatio
     order: { id: 'digital-25', mesaId: 0, numeroPedido: 25, modalidade: 'retirada', deliveryStatus: 'producao', itens: [] },
     transfer: { targetId: '', onTargetChange: noop, isTransferring: false, tables: [] },
     actions: { close: noop, advanceDigitalOrder: () => calls.push('advance'), reprintProduction: noop,
-      printFullTable: noop, printTableValues: noop, transferTable: noop, cancelConsumption: noop,
+      printFullTable: noop, printTableValues: noop, transferTable: noop, associateTable: noop, cancelConsumption: noop,
       cancelOrder: () => calls.push('order') },
   };
   const view = KanbanOrderDetails(props);
@@ -271,4 +271,68 @@ test('digital detail uses the same controlled advance and order-only cancellatio
   invoke(button(view, 'Cancelar pedido'), 'onClick');
   assert.deepEqual(calls, ['advance', 'order']);
   assert.doesNotMatch(renderToStaticMarkup(createElement(KanbanOrderDetails, props)), /Mesa de destino/);
+});
+
+test('digital dine-in keeps digital identity before and after table association', () => {
+  const calls: string[] = [];
+  const baseProps: KanbanOrderDetailsProps = {
+    order: {
+      id: 'digital-dine-in-1',
+      mesaId: 0,
+      numeroPedido: 51,
+      modalidade: 'dine_in',
+      deliveryStatus: 'producao',
+      identificador: 'Cliente Local',
+      itens: [],
+    },
+    transfer: {
+      targetId: '7',
+      onTargetChange: noop,
+      isTransferring: false,
+      tables: [{ id: 7 }],
+    },
+    actions: {
+      close: noop,
+      advanceDigitalOrder: () => calls.push('advance'),
+      reprintProduction: noop,
+      printFullTable: noop,
+      printTableValues: noop,
+      transferTable: noop,
+      associateTable: () => calls.push('associate'),
+      cancelConsumption: noop,
+      cancelOrder: noop,
+    },
+  };
+
+  const unlinkedView = KanbanOrderDetails(baseProps);
+  const unlinkedMarkup = renderToStaticMarkup(createElement(KanbanOrderDetails, baseProps));
+  assert.match(unlinkedMarkup, /Consumo no local/);
+  invoke(button(unlinkedView, 'Marcar pronto para servir'), 'onClick');
+  invoke(button(unlinkedView, 'Associar'), 'onClick');
+  assert.deepEqual(calls, ['advance', 'associate']);
+
+  const associatedProps: KanbanOrderDetailsProps = {
+    ...baseProps,
+    order: { ...baseProps.order, mesaId: 7 },
+  };
+  const associatedMarkup = renderToStaticMarkup(createElement(KanbanOrderDetails, associatedProps));
+  assert.match(associatedMarkup, /Consumo local vinculado à mesa/);
+  assert.match(associatedMarkup, /Consumo local · Mesa 07/);
+  assert.doesNotMatch(associatedMarkup, /Atendimento do salão/);
+  assert.doesNotMatch(associatedMarkup, /Conta da Mesa|Reimpressão total/);
+});
+
+test('digital detail shows the payment method and requested cash change', () => {
+  const props: KanbanOrderDetailsProps = {
+    order: { id: 'digital-cash', mesaId: 0, numeroPedido: 49, modalidade: 'retirada', deliveryStatus: 'producao',
+      paymentMethod: 'dinheiro', changeFor: 100, itens: [] },
+    transfer: { targetId: '', onTargetChange: noop, isTransferring: false, tables: [] },
+    actions: { close: noop, advanceDigitalOrder: noop, reprintProduction: noop, printFullTable: noop,
+      printTableValues: noop, transferTable: noop, associateTable: noop, cancelConsumption: noop, cancelOrder: noop },
+  };
+
+  const markup = renderToStaticMarkup(createElement(KanbanOrderDetails, props));
+  assert.match(markup, /Pagamento no atendimento/);
+  assert.match(markup, /dinheiro/i);
+  assert.match(markup, /Troco para R\$\s*100,00/);
 });

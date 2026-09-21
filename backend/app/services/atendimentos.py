@@ -40,7 +40,12 @@ class PedidoIdentidade:
 
 
 # Reexporta a fonte canônica única do domínio
-from ..domain.orders.types import format_order_family_id, sequence_to_letters
+from ..domain.orders.types import (
+    FulfillmentType,
+    format_order_family_id,
+    normalize_to_fulfillment,
+    sequence_to_letters,
+)
 
 
 
@@ -848,6 +853,99 @@ def _update_linked_command_tables(
         elif clear_merge:
             command.mesa_origem_id = None
 
+
+
+def associate_order_to_table(
+    db: Session,
+    restaurante_id: int,
+    comanda_id: str,
+    mesa_id: int,
+    *,
+    actor_id: Optional[str] = None,
+) -> Comanda:
+    """Associa uma comanda aberta a uma mesa sem confundir associação com transferência.
+
+    Consumo no local passa a participar da família operacional da mesa. Quando uma
+    Retirada é associada porque o cliente decidiu permanecer no restaurante, a
+    modalidade atual passa canonicamente a Consumo no Local e o atendimento de
+    mesa é materializado. Delivery nunca pode receber mesa.
+    """
+    command = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.id == comanda_id,
+            Comanda.fechada == False,
+        )
+        .first()
+    )
+    if command is None:
+        raise AtendimentoError("Comanda não encontrada", status_code=404)
+
+    if (
+        db.query(Mesa.id)
+        .filter(
+            Mesa.restaurante_id == restaurante_id,
+            Mesa.id == mesa_id,
+        )
+        .first()
+        is None
+    ):
+        raise AtendimentoError("Mesa de destino não encontrada", status_code=404)
+
+    fulfillment = normalize_to_fulfillment(command.tipo)
+    if fulfillment == FulfillmentType.DELIVERY:
+        raise AtendimentoError(
+            "Pedidos de delivery não podem ser vinculados a uma mesa.",
+            status_code=422,
+        )
+
+    current_table = int(command.mesa_id) if command.mesa_id is not None else None
+    if current_table == mesa_id:
+        return command
+
+    if fulfillment == FulfillmentType.DINE_IN:
+        if current_table is not None:
+            return transfer_group_by_comanda(
+                db,
+                restaurante_id,
+                comanda_id,
+                mesa_id,
+                actor_id=actor_id,
+            )
+
+        command.mesa_id = mesa_id
+        db.flush()
+        ensure_atendimento_for_comanda(db, command, actor_id=actor_id)
+        db.flush()
+        return command
+
+    # PICKUP -> DINE_IN é uma mudança real de fulfillment: o cliente chegou,
+    # decidiu consumir no estabelecimento e agora precisa participar do mesmo
+    # atendimento onde novos itens poderão ser lançados.
+    original_type = str(command.tipo or "Retirada")
+    if current_table is not None:
+        command.mesa_transferida_de = current_table
+    command.tipo = "Consumo no Local"
+    command.mesa_id = mesa_id
+    db.flush()
+    account = ensure_atendimento_for_comanda(db, command, actor_id=actor_id)
+    _record_movement(
+        db,
+        account,
+        "conversao_modalidade",
+        actor_id=actor_id,
+        origin=current_table,
+        destination=mesa_id,
+        details={
+            "fulfillment_original": original_type,
+            "fulfillment_atual": "Consumo no Local",
+            "motivo": "cliente_optou_consumir_no_local",
+            "comanda_id": command.id,
+        },
+    )
+    db.flush()
+    return command
 
 def transfer_group_by_comanda(
     db: Session,

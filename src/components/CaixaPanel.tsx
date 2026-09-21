@@ -38,9 +38,11 @@ import { useCashierPreferences } from './caixa/navigation/useCashierPreferences'
 import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
 import { CashierCancelConsumptionDialog } from './caixa/orders/CashierCancelConsumptionDialog';
 import { CashierCouriers } from './caixa/orders/CashierCouriers';
+import { CashierPickups } from './caixa/orders/CashierPickups';
 import type { CashierTableCard } from './caixa/orders/cashierWorkspaceTypes';
 import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
 import { useCashierOrders } from './caixa/orders/useCashierOrders';
+import { useOnlineOrderAutoAcceptPolicy } from './caixa/orders/useOnlineOrderAutoAcceptPolicy';
 import { useCashierPdv } from './caixa/pdv/useCashierPdv';
 import { useCashierAlerts } from './caixa/realtime/useCashierAlerts';
 import { useCashierClock } from './caixa/realtime/useCashierClock';
@@ -65,6 +67,10 @@ const loadCashierReports = () => import('./caixa/reports/CashierReports');
 const loadCashierPdvView = () => import('./caixa/pdv/CashierPdvView');
 const operationSubnavItems = getCashierNavigationItem('operacao')?.children ?? [];
 const onlineMenuSubnavItems = getCashierNavigationItem('cardapio_digital')?.children ?? [];
+const settingsSubnavItems = getCashierNavigationItem('impressao_salao')?.children ?? [];
+const reportsSubnavItems = getCashierNavigationItem('relatorios')?.children ?? [];
+const teamSubnavItems = getCashierNavigationItem('permissoes_cargos')?.children ?? [];
+const subscriptionSubnavItems = getCashierNavigationItem('assinatura_pix')?.children ?? [];
 
 const formatClockTime = (value: unknown) => {
   const timestamp = normalizeOperationalTimestamp(value);
@@ -160,6 +166,8 @@ export function CaixaPanel({
     isChatDrawerOpen,
     setIsChatDrawerOpen,
     chatUnreadCount,
+    chatUnreadStatus,
+    chatRealtimeEvent,
     setChatUnreadCount,
   } = useCashierChat(apiBaseUrl, authHeaders.Authorization || "");
 
@@ -250,6 +258,7 @@ export function CaixaPanel({
     handleCancelTableConsumption,
     getTableMovementContext,
     deliveryOrders,
+    deliveryOrdersLoadState,
     motoboys,
     motoboysLoadState,
     selectedMotoboys,
@@ -281,6 +290,7 @@ export function CaixaPanel({
     handlePrintSelectedKanbanValues,
     handleInspectSalonTable,
     handleTransferSelectedKanbanTable,
+    handleAssociateSelectedKanbanTable,
     handleCancelSelectedKanbanConsumption,
     handleCancelSelectedKanbanOrder,
   } = useCashierOrders({
@@ -350,7 +360,6 @@ export function CaixaPanel({
     setSmartPosRecoveryError,
     fetchTurno,
     handleFecharDelivery,
-    handleFinalizarPedido,
   });
   const { handleConfirmPendingCashPayment, handleRejectPendingCashPayment } = checkout;
   const {
@@ -373,7 +382,11 @@ export function CaixaPanel({
     return true;
   };
 
-  const [autoAccept, setAutoAccept] = useState(false);
+  const { autoAccept, updateAutoAccept } = useOnlineOrderAutoAcceptPolicy({
+    apiBaseUrl,
+    authHeaders,
+    showToast,
+  });
 
   useEffect(() => {
     const handleOpenSangria = () => {
@@ -393,6 +406,7 @@ export function CaixaPanel({
     };
     const handleOpenImpressoras = () => {
       setActiveTab('impressao_salao');
+      setActiveSubTab('impressao');
     };
 
     window.addEventListener('koma-open-sangria', handleOpenSangria);
@@ -615,7 +629,7 @@ export function CaixaPanel({
   }, [deliveryOrders, nowTimestamp, pagamentosPendentes, tableOrdersInProduction, tableOrdersReady]);
 
   const handleOpenSalonTableOrder = (tableId: number) => {
-    setPdvOrderType('mesa');
+    setPdvOrderType('dine_in');
     setPdvTargetMesaId(tableId);
     setBalcaoMobileView('produtos');
     setActiveSubTab('balcao');
@@ -761,7 +775,7 @@ export function CaixaPanel({
             </div>
           </header>
 
-          <div className={"cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none"}>
+          <div className="cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none">
             {activeTab === 'operacao' && operationSubnavItems.map((sub) => (
               <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
                 {sub.label}
@@ -769,6 +783,12 @@ export function CaixaPanel({
             ))}
 
             {activeTab === 'cardapio_digital' && onlineMenuSubnavItems.map((sub) => (
+              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
+                {sub.label}
+              </button>
+            ))}
+
+            {activeTab === 'impressao_salao' && settingsSubnavItems.map((sub) => (
               <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
                 {sub.label}
               </button>
@@ -828,33 +848,42 @@ export function CaixaPanel({
               return <button key={sub.id} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
             })}
 
-            {(activeTab === 'relatorios' || activeTab === 'dashboard') && [
-              { id: 'visao_geral', label: 'Visão Geral' },
-              { id: 'financeiro', label: 'Financeiro' },
-              { id: 'produtos', label: 'Produtos' },
-              { id: 'equipe', label: 'Equipe' },
-            ].map((sub) => {
-              const isSubActive =
-                (sub.id === 'visao_geral' && ['visao_geral', 'metas', 'vendas', 'indicadores'].includes(activeSubTab)) ||
-                (sub.id === 'financeiro' && ['financeiro', 'dre', 'demonstrativo_dre'].includes(activeSubTab)) ||
-                (sub.id === 'produtos' && ['produtos', 'produtos_mais_vendidos', 'top10'].includes(activeSubTab)) ||
-                (sub.id === 'equipe' && ['equipe', 'desempenho_equipe'].includes(activeSubTab)) || activeSubTab === sub.id;
-              return <button key={sub.id} id={`relatorios-subtab-${sub.id}`} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
-            })}
+            {(activeTab === 'relatorios' || activeTab === 'dashboard') && reportsSubnavItems.map((sub) => (
+              <button
+                key={sub.id}
+                id={`relatorios-subtab-${sub.target.subTab}`}
+                onClick={() => handleSidebarNavigation(sub.id)}
+                className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
+              >
+                {sub.label}
+              </button>
+            ))}
 
-            {activeTab === 'permissoes_cargos' && [
-              { id: 'pessoas', label: 'Pessoas' },
-              { id: 'cargos_permissoes', label: 'Funções e acessos' },
-            ].map((sub) => {
-              const isSubActive =
-                (sub.id === 'pessoas' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab)) ||
-                (sub.id === 'cargos_permissoes' && ['cargos_permissoes', 'cargos', 'permissoes'].includes(activeSubTab)) || activeSubTab === sub.id;
-              return <button key={sub.id} id={`equipe-subtab-${sub.id}`} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
-            })}
+            {activeTab === 'permissoes_cargos' && teamSubnavItems.map((sub) => (
+              <button
+                key={sub.id}
+                id={`equipe-subtab-${sub.target.subTab}`}
+                onClick={() => handleSidebarNavigation(sub.id)}
+                className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
+              >
+                {sub.label}
+              </button>
+            ))}
+
+            {activeTab === 'assinatura_pix' && subscriptionSubnavItems.map((sub) => (
+              <button
+                key={sub.id}
+                id={`assinatura-subtab-${sub.target.subTab}`}
+                onClick={() => handleSidebarNavigation(sub.id)}
+                className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
+              >
+                {sub.label}
+              </button>
+            ))}
           </div>
 
           <div className={"cashier-content min-w-0 min-h-0 flex-1 p-5 relative"}>
-            {cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
+            {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
               <div className={"absolute inset-0 bg-black/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-8 space-y-4"}>
                 <div className={clsx('p-4 bg-koma-panel rounded-full border', cashShiftUiState === 'closed' ? 'border-amber-500/20 text-amber-500' : 'border-koma-border text-koma-muted')}>
                   {cashShiftUiState === 'loading' ? <Loader2 size={32} className="animate-spin" /> : <Lock size={32} />}
@@ -886,7 +915,7 @@ export function CaixaPanel({
               </div>
             )}
 
-            {activeSubTab === 'pedidos' && (
+            {activeTab === 'operacao' && activeSubTab === 'pedidos' && (
               <CaixaOrdersWorkspace
                 columns={{
                   tableProduction: filteredCol1.map(buildCashierTableCard),
@@ -904,7 +933,7 @@ export function CaixaPanel({
                   orders: deliveryOrders,
                   automatic: autoAccept,
                   drawerOpen: isDrawerOpen,
-                  onAutomaticChange: setAutoAccept,
+                  onAutomaticChange: (enabled) => { void updateAutoAccept(enabled); },
                   onDrawerChange: setIsDrawerOpen,
                 }}
                 navigation={{
@@ -931,9 +960,9 @@ export function CaixaPanel({
               />
             )}
 
-            <DeferredCashierSection active={activeSubTab === 'balcao'} label="Novo pedido" load={loadCashierPdvView} sectionProps={{ activeSubTab, catalogReady, isLoading, pdvTableOptions, pdv }} />
+            <DeferredCashierSection active={activeTab === 'operacao' && activeSubTab === 'balcao'} label="Novo pedido" load={loadCashierPdvView} sectionProps={{ activeSubTab, catalogReady, isLoading, pdvTableOptions, pdv }} />
 
-            {activeSubTab === 'mesas' && (
+            {activeTab === 'operacao' && activeSubTab === 'mesas' && (
               <CaixaSalonTab
                 cards={salonTableCards}
                 visibleCards={visibleSalonTableCards}
@@ -953,12 +982,26 @@ export function CaixaPanel({
               sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, deliveryOrders, activeKitchenItems, apiCategorias }}
             />
 
-            <CashierKitchen activeSubTab={activeSubTab} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
+            <CashierKitchen activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
+
+            <CashierPickups
+              activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
+              deliveryOrders={deliveryOrders}
+              deliveryOrdersLoadState={deliveryOrdersLoadState}
+              apiBaseUrl={apiBaseUrl}
+              authHeaders={authHeaders}
+              now={nowTimestamp}
+              handleAcceptPendingDeliveryOrder={handleAcceptPendingDeliveryOrder}
+              handleRejectPendingDeliveryOrder={handleRejectPendingDeliveryOrder}
+              handleAdvanceDigitalOrder={handleAdvanceDigitalOrder}
+              handleFinalizeDigitalOrder={handleFinalizeDigitalOrder}
+              openDeliveryOrderDetails={openDeliveryOrderDetails}
+            />
 
             <DeferredCashierSection active={activeTab === 'permissoes_cargos'} label="Equipe" load={loadCashierTeam} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast }} />
 
             <DeferredCashierSection
-              active={activeTab === 'impressao_salao' || activeSubTab === 'impressoras'}
+              active={activeTab === 'impressao_salao'}
               label="Configurações"
               load={loadCashierSettings}
               sectionProps={{
@@ -980,11 +1023,13 @@ export function CaixaPanel({
               }}
             />
 
-            {activeSubTab === 'planos' && (
+            {activeTab === 'assinatura_pix' && (
               <AssinaturaPixTab
                 currentPlanId={currentPlanId}
                 hasPrinting={hasPrinting}
                 hasOnlineMenu={hasOnlineMenu}
+                activeSubTab={activeSubTab}
+                setActiveSubTab={setActiveSubTab}
                 isTestPlan={restauranteConfig?.plano_modo_teste === true || isRestaurant2Test}
                 bannerNotice={planNoticeBanner}
               />
@@ -1119,6 +1164,7 @@ export function CaixaPanel({
             <CashierCouriers
               activeSubTab={activeSubTab}
               deliveryOrders={deliveryOrders}
+              deliveryOrdersLoadState={deliveryOrdersLoadState}
               selectedMotoboys={selectedMotoboys}
               setSelectedMotoboys={setSelectedMotoboys}
               motoboys={motoboys}
@@ -1126,6 +1172,13 @@ export function CaixaPanel({
               handleDespacharKanban={handleDespacharKanban}
               handleRevogarAcessoMotoboy={handleRevogarAcessoMotoboy}
               handleFinalizarPedido={handleFinalizeCourierOrder}
+              handleAcceptPendingDeliveryOrder={handleAcceptPendingDeliveryOrder}
+              handleRejectPendingDeliveryOrder={handleRejectPendingDeliveryOrder}
+              handleAdvanceDigitalOrder={handleAdvanceDigitalOrder}
+              openDeliveryOrderDetails={openDeliveryOrderDetails}
+              apiBaseUrl={apiBaseUrl}
+              authHeaders={authHeaders}
+              now={nowTimestamp}
               handleAddMotoboy={handleAddMotoboy}
               novoMotoboyNome={novoMotoboyNome}
               novoMotoboyTelefone={novoMotoboyTelefone}
@@ -1177,6 +1230,7 @@ export function CaixaPanel({
               printFullTable: handlePrintSelectedKanbanTable,
               printTableValues: handlePrintSelectedKanbanValues,
               transferTable: handleTransferSelectedKanbanTable,
+              associateTable: handleAssociateSelectedKanbanTable,
               cancelConsumption: handleCancelSelectedKanbanConsumption,
               cancelOrder: handleCancelSelectedKanbanOrder,
             }}
@@ -1226,6 +1280,9 @@ export function CaixaPanel({
           key={authHeaders.Authorization}
           authorization={authHeaders.Authorization || ""}
           isOpen={isChatDrawerOpen}
+          realtimeEvent={chatRealtimeEvent}
+          realtimeHealth={chatUnreadStatus}
+          draftScope={`${Number.isFinite(restId) ? restId : 'tenant'}:${turno?.id ?? 'no-shift'}`}
           onClose={() => setIsChatDrawerOpen(false)}
           onInspectOrder={(pedidoId) => {
             handleSidebarNavigation('vendas_pedidos');

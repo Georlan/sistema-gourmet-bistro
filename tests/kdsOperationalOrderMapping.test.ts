@@ -60,6 +60,19 @@ test('operational snapshot preserves the same human identity and channel on KDS 
   assert.equal(item.comandaId, 'order-91');
 });
 
+test('operational snapshot preserves cash change instructions for cashier details', () => {
+  const order = mapBackendComandaToOperationalOrder({
+    comanda: makeComanda({
+      delivery_forma_pagamento: 'dinheiro',
+      delivery_troco_para: 100,
+    }),
+    liveProdutos: [],
+  });
+
+  assert.equal(order.paymentMethod, 'dinheiro');
+  assert.equal(order.changeFor, 100);
+});
+
 test('table launch identity stays human-readable instead of falling back to technical ids', () => {
   const order = mapBackendComandaToOperationalOrder({
     comanda: makeComanda({

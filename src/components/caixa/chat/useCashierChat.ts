@@ -6,7 +6,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../config/api';
 import './cashierChatAttention.css';
-import { consumeCashierChatEvents } from './cashierChatRealtime';
+import {
+  consumeCashierChatEvents,
+  type CashierChatStreamSnapshot,
+} from './cashierChatRealtime';
 
 export type CashierChatHealth = 'idle' | 'loading' | 'healthy' | 'degraded';
 
@@ -24,6 +27,8 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
   const chatAudioCtxRef = useRef<AudioContext | null>(null);
   const chatAudioUnlockedRef = useRef(false);
   const soundedMessageIdsRef = useRef<Set<string>>(new Set());
+  const realtimeSequenceRef = useRef(0);
+  const [chatRealtimeEvent, setChatRealtimeEvent] = useState<CashierChatStreamSnapshot | null>(null);
   const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [chatUnreadStatus, setChatUnreadStatus] = useState<CashierChatHealth>('idle');
@@ -155,6 +160,7 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
     let fallbackInterval: number | null = null;
     let reconnectTimer: number | null = null;
     let stopped = false;
+    let hasOpenedOnce = false;
 
     const stopFallback = () => {
       if (fallbackInterval !== null) {
@@ -177,14 +183,43 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
         authorization,
         signal: controller.signal,
         onOpen: () => {
+          const isReconnect = hasOpenedOnce;
+          hasOpenedOnce = true;
           stopFallback();
           void fetchUnread();
+          if (isReconnect) {
+            realtimeSequenceRef.current += 1;
+            setChatRealtimeEvent({
+              event: 'reconnected',
+              data: null,
+              sequence: realtimeSequenceRef.current,
+            });
+          }
         },
         onEvent: ({ event, data }) => {
+          if (event === 'connected') {
+            void fetchUnread();
+            realtimeSequenceRef.current += 1;
+            setChatRealtimeEvent({ event: 'reconnected', data: null, sequence: realtimeSequenceRef.current });
+          }
+          if (event !== 'connected') {
+            realtimeSequenceRef.current += 1;
+            setChatRealtimeEvent({
+              event,
+              data,
+              sequence: realtimeSequenceRef.current,
+            });
+          }
           if (event === 'new_message') {
             maybePlayChatMessageAlert(data);
           }
-          if (event === 'new_message' || event === 'status_changed' || event === 'read_update') {
+          // O badge do Caixa só muda com mensagem do cliente ou leitura da equipe.
+          const affectsCashierUnread = (
+            event === 'new_message' && data?.sender_type === 'customer'
+          ) || (
+            event === 'read_update' && data?.reader === 'staff'
+          );
+          if (affectsCashierUnread) {
             void fetchUnread();
           }
         },
@@ -228,6 +263,7 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
     setIsChatDrawerOpen,
     chatUnreadCount,
     chatUnreadStatus,
+    chatRealtimeEvent,
     setChatUnreadCount,
     refreshChatUnreadCount: fetchUnread,
   };

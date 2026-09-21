@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -34,6 +36,7 @@ def setup_database():
         restaurante = db.query(Restaurante).filter(Restaurante.id == 1).one()
         restaurante.nome = "Economia Pro"
         restaurante.plano = "pro"
+        restaurante.billing_mode = "legacy"
         db.add(
             Usuario(
                 id="growth-admin",
@@ -77,6 +80,30 @@ def test_recommendation_endpoint_uses_authenticated_tenant_plan_rate():
     assert payload["economics"]["koma_revenue_per_average_order"] == 0.69
     assert payload["economics"]["contribution_margin_before_incentive_percent"] == 39.31
     assert payload["economics"]["safe_incentive_ceiling_percent"] == 19.31
+
+
+def test_recommendation_endpoint_uses_resolved_contract_rate_not_catalog_slug(monkeypatch):
+    monkeypatch.setattr(
+        "app.routes.cupons.tenant_marketplace_rate",
+        lambda _db, _restaurant: Decimal("0.0020"),
+    )
+    client = TestClient(app)
+    response = client.post(
+        "/caixa/cupons/economia/recomendacao",
+        headers=_headers(client),
+        json={
+            "average_ticket": 100,
+            "variable_cost_percent": 60,
+            "minimum_margin_percent": 20,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["economics"]["koma_fee_percent"] == 0.2
+    assert payload["economics"]["koma_revenue_per_average_order"] == 0.2
+    assert payload["economics"]["contribution_margin_before_incentive_percent"] == 39.8
+    assert payload["economics"]["safe_incentive_ceiling_percent"] == 19.8
     assert payload["options"][-1]["estimated_margin_after_incentive_percent"] == 20.0
 
 

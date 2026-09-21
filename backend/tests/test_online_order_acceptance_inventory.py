@@ -6,6 +6,7 @@ from app.models import (
     CaixaTurno,
     Categoria,
     Comanda,
+    ConfiguracaoRestaurante,
     Insumo,
     MovimentacaoEstoque,
     Produto,
@@ -38,6 +39,16 @@ def _seed_tenant(restaurante_id: int):
                     plano="premium",
                     slug=f"koma-aceite-{restaurante_id}",
                     status_override="Automático",
+                )
+            )
+            db.flush()
+            db.add(
+                ConfiguracaoRestaurante(
+                    restaurante_id=restaurante_id,
+                    delivery_ativo=True,
+                    tipo_taxa_entrega="fixa",
+                    taxa_entrega_fixa=0.0,
+                    pedido_minimo=0.0,
                 )
             )
             db.commit()
@@ -269,3 +280,97 @@ def test_salto_pendente_para_pronto_e_rejeitado_sem_baixa(monkeypatch):
     stock, movements = _stock_and_movements(restaurante_id, seeded["insumo_id"])
     assert stock == 10.0
     assert all(origin != SALE_ORIGIN for origin, _ in movements)
+
+def test_estoque_zero_ou_negativo_avisa_sem_bloquear_nem_pausar_produto(monkeypatch):
+    restaurante_id = 941104
+    seeded = _seed_tenant(restaurante_id)
+    monkeypatch.setattr(
+        orders_routes,
+        "_agendar_notificacao_whatsapp_status",
+        lambda *args, **kwargs: None,
+    )
+
+    token = current_restaurante_id.set(restaurante_id)
+    try:
+        with SessionLocal() as db:
+            insumo = db.query(Insumo).filter(
+                Insumo.restaurante_id == restaurante_id,
+                Insumo.id == seeded["insumo_id"],
+            ).one()
+            insumo.estoque_atual = 2.0
+            db.commit()
+    finally:
+        current_restaurante_id.reset(token)
+
+    first_payload = _public_payload(restaurante_id, seeded["product_id"], "14")
+    first_created = client.post(
+        "/cardapio/pedidos",
+        json=first_payload,
+        headers={"X-Idempotency-Key": first_payload["idempotency_key"]},
+    )
+    assert first_created.status_code == 201, first_created.text
+
+    first_accept = client.put(
+        f"/comandas/{first_created.json()['comanda_id']}/delivery/status?status_novo=producao",
+        headers=seeded["headers"],
+    )
+    assert first_accept.status_code == 200, first_accept.text
+    assert first_accept.json()["delivery_status"] == "producao"
+    assert first_accept.json()["estoque_alertas"] == [
+        {
+            "insumo_id": seeded["insumo_id"],
+            "nome": "Ingrediente do aceite",
+            "saldo_atual": 0.0,
+            "unidade_medida": "un",
+        }
+    ]
+
+    second_payload = _public_payload(restaurante_id, seeded["product_id"], "15")
+    second_created = client.post(
+        "/cardapio/pedidos",
+        json=second_payload,
+        headers={"X-Idempotency-Key": second_payload["idempotency_key"]},
+    )
+    assert second_created.status_code == 201, second_created.text
+
+    second_accept = client.put(
+        f"/comandas/{second_created.json()['comanda_id']}/delivery/status?status_novo=producao",
+        headers=seeded["headers"],
+    )
+    assert second_accept.status_code == 200, second_accept.text
+    assert second_accept.json()["estoque_alertas"][0]["saldo_atual"] == -2.0
+
+    stock, movements = _stock_and_movements(restaurante_id, seeded["insumo_id"])
+    assert stock == -2.0
+    assert len([item for item in movements if item[0] == SALE_ORIGIN]) == 2
+
+    public_menu = client.get(
+        "/api/cardapio-digital/public",
+        params={"restaurante_id": restaurante_id},
+    )
+    assert public_menu.status_code == 200, public_menu.text
+    assert seeded["product_id"] in {
+        product["id"] for product in public_menu.json()["produtos"]
+    }
+
+    token = current_restaurante_id.set(restaurante_id)
+    try:
+        with SessionLocal() as db:
+            product = db.query(Produto).filter(
+                Produto.restaurante_id == restaurante_id,
+                Produto.id == seeded["product_id"],
+            ).one()
+            assert product.ativo is True
+    finally:
+        current_restaurante_id.reset(token)
+
+    cancelled = client.put(
+        f"/comandas/{second_created.json()['comanda_id']}/delivery/status?status_novo=recusado",
+        headers=seeded["headers"],
+    )
+    assert cancelled.status_code == 200, cancelled.text
+
+    stock, movements = _stock_and_movements(restaurante_id, seeded["insumo_id"])
+    assert stock == 0.0
+    assert len([item for item in movements if item[0] == SALE_REVERSAL_ORIGIN]) == 1
+

@@ -37,7 +37,11 @@ from ..schemas import (
 )
 from ..websocket_manager import manager
 from ..services.restaurant_profile import apply_restaurant_profile_update
-from ..services.online_order_policy import evaluate_online_order_policy
+from ..services.online_order_policy import (
+    evaluate_online_order_policy,
+    next_schedule_opening,
+    next_schedule_opening_label,
+)
 from ..services.delivery_fee_policy import resolve_distance_delivery_fee
 from .products import notify_catalog_update, ordered_categories as _ordered_categories
 
@@ -203,6 +207,16 @@ def _public_restaurant_payload(
     pagamento_online_ativo: bool = False,
 ) -> dict:
     policy = evaluate_online_order_policy(restaurante, configuracao)
+    next_opening = (
+        next_schedule_opening(restaurante.horarios_funcionamento)
+        if not policy.accepting_orders and policy.source == "schedule"
+        else None
+    )
+    next_opening_label = (
+        next_schedule_opening_label(restaurante.horarios_funcionamento)
+        if next_opening is not None
+        else None
+    )
     return {
         "id": restaurante.id,
         "nome": restaurante.nome,
@@ -217,10 +231,13 @@ def _public_restaurant_payload(
         "aceitando_pedidos": policy.accepting_orders,
         "motivo_indisponibilidade": policy.reason,
         "origem_disponibilidade": policy.source,
+        "proxima_abertura": next_opening.isoformat() if next_opening is not None else None,
+        "proxima_abertura_texto": next_opening_label,
         "socials": restaurante.socials,
         "horarios_funcionamento": restaurante.horarios_funcionamento,
         "formas_pagamento_aceitas": restaurante.formas_pagamento_aceitas,
         "pagamento_online_ativo": pagamento_online_ativo,
+        "tipos_pedido_ativos": configuracao.tipos_pedido_ativos if configuracao else None,
         "delivery_ativo": configuracao.delivery_ativo is not False if configuracao else True,
         "cor_primaria": restaurante.cor_primaria,
         "cor_fundo": restaurante.cor_fundo,

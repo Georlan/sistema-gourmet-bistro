@@ -156,3 +156,40 @@ for (const viewport of [
     expect(drawerOverflow).toBeLessThanOrEqual(1);
   });
 }
+
+test('feed preserva evento separado e retry HTTP reutiliza UUID sem duplicar mensagem', async ({ page }) => {
+  await mockBackend(page);
+  await seedOrder(page);
+  const ids: string[] = [];
+  const feed: Record<string, unknown>[] = [{
+    id: 'order-event-ready', kind: 'order_event', sender_type: 'system',
+    status: 'producao', body: 'Pedido confirmado no feed.', created_at: '2026-09-10T06:00:00Z',
+  }];
+  await page.route('**/api/cardapio/pedidos/acompanhar/*/messages', async route => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      ids.push(body.client_message_id);
+      if (ids.length === 1) {
+        feed.push({ id: 'human-1', kind: 'message', sender_type: 'customer', body: body.body });
+        await route.abort('failed'); // Commit happened, HTTP response was lost.
+      } else {
+        await route.fulfill({ json: feed[1] });
+      }
+      return;
+    }
+    await route.fulfill({ json: feed });
+  });
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#floating-order-chat-trigger').click();
+  const panel = page.locator('#inline-order-chat-panel');
+  await expect(panel.getByText('Pedido confirmado no feed.')).toBeVisible();
+  await panel.getByPlaceholder('Escreva para o restaurante…').fill('Sem cebola, por favor.');
+  await panel.getByRole('button', { name: 'Enviar mensagem' }).click();
+  await expect(panel.getByRole('button', { name: 'Enviar mensagem' })).toBeEnabled();
+  await panel.getByRole('button', { name: 'Enviar mensagem' }).click();
+  await expect(panel.getByPlaceholder('Escreva para o restaurante…')).toHaveValue('');
+  expect(ids).toHaveLength(2);
+  expect(ids[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  expect(ids[1]).toBe(ids[0]);
+  await expect(panel.getByText('Sem cebola, por favor.', { exact: true })).toHaveCount(1);
+});

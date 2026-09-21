@@ -53,6 +53,15 @@ async function navigate(page: Page, label: string) {
   await expect(page.locator('#mobile-caixa-sidebar')).not.toBeVisible();
 }
 
+async function navigateHorizontal(page: Page, label: string) {
+  const subnav = page.locator('.cashier-subnav');
+  await expect(subnav).toBeVisible();
+  const button = subnav.getByRole('button', { name: label, exact: true });
+  await button.click();
+  await expect(button).toHaveClass(/is-active/);
+  await expect(page.locator('#mobile-caixa-sidebar')).not.toBeVisible();
+}
+
 const mobileViewports = [
   { width: 360, height: 800 },
   { width: 390, height: 844 },
@@ -186,7 +195,7 @@ test('interação real mobile: abre e fecha menu principal e conversas sem quebr
   await expect(chatPanel).not.toBeVisible();
 
   // 3. Navegar nas subtabs de Vendas
-  for (const label of ['Novo pedido', 'Salão', 'Cozinha', 'Entregas', 'Pedidos']) {
+  for (const label of ['Novo pedido', 'Salão', 'Cozinha', 'Retiradas', 'Entregas', 'Pedidos']) {
     const tabBtn = page.locator('.cashier-subnav__button', { hasText: label });
     await tabBtn.click();
     await expect(tabBtn).toHaveClass(/is-active/);
@@ -194,85 +203,74 @@ test('interação real mobile: abre e fecha menu principal e conversas sem quebr
   }
 });
 
-test('configurações do caixa cobrem todas as áreas com ergonomia mobile e contraste no modo claro', async ({ page }) => {
+test('configurações usam somente a navegação canônica vertical + horizontal no mobile', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await openCashier(page, 'light');
   await navigate(page, 'Configurações');
 
-  await expect(page.getByRole('heading', { name: 'Configurações do Caixa' })).toBeVisible();
-  const settingsTabs = page.locator('.cashier-settings-tab');
-  await expect(settingsTabs).toHaveCount(5);
+  const subnav = page.locator('.cashier-subnav');
+  await expect(subnav).toBeVisible();
+  await expect(subnav.getByRole('button')).toHaveCount(7);
+  await expect(subnav.getByRole('button', { name: 'Aparência', exact: true })).toHaveClass(/is-active/);
+  await expect(page.locator('.cashier-settings-tab')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Configurações do Caixa' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Aparência deste caixa' })).toBeVisible();
 
-  for (const tab of await settingsTabs.all()) {
-    const tabBox = await tab.boundingBox();
-    expect(tabBox?.height ?? 0).toBeGreaterThanOrEqual(44);
-  }
-
-  // 1. Área Aparência: alternar tema e tamanho do texto
-  const darkThemeBtn = page.getByRole('button', { name: /Escuro/ });
-  await darkThemeBtn.click();
-  await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'dark');
-
-  const lightThemeBtn = page.getByRole('button', { name: /Claro/ });
-  await lightThemeBtn.click();
-  await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'light');
-
-  // Tamanho do texto
-  const bigFontBtn = page.getByRole('button', { name: /^A\+ Grande/ });
-  await bigFontBtn.click();
-  const storedFont = await page.evaluate(() => localStorage.getItem('koma_font_size'));
-  expect(storedFont).toBe('grande');
-
-  const defaultFontBtn = page.getByRole('button', { name: /^A Padrão/ });
-  await defaultFontBtn.click();
-  const resetFont = await page.evaluate(() => localStorage.getItem('koma_font_size'));
-  expect(resetFont).toBe('padrao');
-
-  // 2. Área Impressão
-  await page.getByRole('button', { name: /^Impressão/ }).click();
-  await expect(page.getByText('Personalização do cupom')).toBeVisible();
-  await expectNoHorizontalOverflow(page);
-
-  // 3. Área Mesas
-  await page.getByRole('button', { name: /^Mesas/ }).click();
+  // O mesmo destino também existe no menu vertical e fecha a gaveta ao navegar.
+  await navigate(page, 'Mesas');
   await expect(page.getByText('Configuração das mesas')).toBeVisible();
+  await expect(page.getByText('Mesas por situação', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Mesas prontas para receber', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('mesas cadastradas', { exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-operational-state]')).toHaveCount(0);
   const addTableBtn = page.getByRole('button', { name: /Adicionar mesa/i });
   await expect(addTableBtn).toBeVisible();
   const addTableBox = await addTableBtn.boundingBox();
   expect(addTableBox?.height ?? 0).toBeGreaterThanOrEqual(44);
 
-  // Abrir modal de adicionar mesa e fechar
   await addTableBtn.click();
   await expect(page.getByRole('heading', { name: 'Adicionar mesa' })).toBeVisible();
-  const cancelBtn = page.getByRole('button', { name: 'Cancelar' });
-  await expect(cancelBtn).toBeVisible();
-  await cancelBtn.click();
+  await page.getByRole('button', { name: 'Cancelar' }).click();
   await expect(page.getByRole('heading', { name: 'Adicionar mesa' })).not.toBeVisible();
+
+  // A partir daqui a troca acontece pela faixa horizontal sem reabrir o menu.
+  await navigateHorizontal(page, 'Aparência');
+  const darkThemeBtn = page.getByRole('button', { name: /Escuro/ });
+  await darkThemeBtn.click();
+  await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'dark');
+  const lightThemeBtn = page.getByRole('button', { name: /Claro/ });
+  await lightThemeBtn.click();
+  await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'light');
+
+  const bigFontBtn = page.getByRole('button', { name: /^A\+ Grande/ });
+  await bigFontBtn.click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_font_size'))).toBe('grande');
+  await page.getByRole('button', { name: /^A Padrão/ }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_font_size'))).toBe('padrao');
+
+  await navigateHorizontal(page, 'Impressão');
+  await expect(page.getByRole('heading', { name: 'Estado e diagnóstico', exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  // 4. Área App do Garçom
-  await page.getByRole('button', { name: /^App do Garçom/ }).click();
-  await expect(page.getByText('Permissões do App do Garçom')).toBeVisible();
-  for (const sub of ['1. Pedido', '2. Fechamento de Conta', '3. Atendimento']) {
-    const subBtn = page.getByRole('button', { name: sub });
-    await expect(subBtn).toBeVisible();
-    await subBtn.click();
-  }
+  await navigateHorizontal(page, 'App do Garçom');
+  await expect(page.getByRole('heading', { name: 'Permissões da equipe', exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  // 5. Área Taxa de Serviço
-  await page.getByRole('button', { name: /^Taxa de Serviço/ }).click();
+  await navigateHorizontal(page, 'Taxa de Serviço');
   await expect(page.getByText('Taxa de Serviço do Salão')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  // 6. Área Integrações (via menu lateral do caixa)
-  await navigate(page, 'Integrações');
+  await navigateHorizontal(page, 'Implantação inicial');
+  await expect(page.getByRole('heading', { name: 'Implantação inicial', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reabrir implantação inicial', exact: true })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  await navigateHorizontal(page, 'Integrações');
   await expect(page.getByRole('heading', { name: 'Pagamentos e serviços externos' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Mercado Pago' })).toBeVisible();
   await expect(page.getByText('Conectado')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  // Validação de contraste das cores do topbar no modo claro
   const topbarStyles = await page.locator('.cashier-topbar').evaluate((element) => {
     const styles = getComputedStyle(element);
     const title = element.querySelector('h2');
@@ -287,3 +285,27 @@ test('configurações do caixa cobrem todas as áreas com ergonomia mobile e con
   expect(topbarStyles.border).not.toBe(topbarStyles.background);
 });
 
+test('configurações espelham os mesmos sete destinos no menu vertical e horizontal no notebook', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await openCashier(page, 'dark');
+
+  const sidebar = page.locator('.cashier-sidebar:visible');
+  await sidebar.getByRole('button', { name: 'Configurações', exact: true }).click();
+
+  const subnav = page.locator('.cashier-subnav');
+  const labels = ['Aparência', 'Impressão', 'Mesas', 'App do Garçom', 'Taxa de Serviço', 'Implantação inicial', 'Integrações'];
+
+  for (const label of labels) {
+    await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
+    await expect(subnav.getByRole('button', { name: label, exact: true })).toBeVisible();
+  }
+
+  await navigateHorizontal(page, 'Mesas');
+  await expect(sidebar.getByRole('button', { name: 'Mesas', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByText('Configuração das mesas')).toBeVisible();
+  await expect(page.getByText('Mesas por situação', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Mesas prontas para receber', { exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-operational-state]')).toHaveCount(0);
+  await expect(page.locator('.cashier-settings-tab')).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});

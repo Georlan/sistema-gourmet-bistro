@@ -445,6 +445,65 @@ class TestDeliveryCanonicalRules:
             db.commit()
             db.close()
 
+    def test_public_order_distance_fee_uses_structured_address_coordinates(
+        self, char_client, char_setup
+    ):
+        db: Session = SessionLocal()
+        try:
+            config = self._get_or_create_config(db)
+            restaurante = db.query(Restaurante).filter(Restaurante.id == CHAR_RESTAURANT_ID).first()
+            assert restaurante is not None
+            restaurante.latitude = -3.7319
+            restaurante.longitude = -38.5267
+            config.tipo_taxa_entrega = "distancia"
+            config.tabela_taxas_km = [{"taxa_minima": 5, "valor_por_km": 1}]
+            config.frete_gratis_valor = 0
+            db.commit()
+
+            payload = {
+                "restaurante_id": CHAR_RESTAURANT_ID,
+                "itens": [{"produto_id": "prod-char-simples", "quantidade": 1}],
+                "cliente_nome": "Cliente Distância",
+                "cliente_telefone": "11988880000",
+                "endereco_entrega": "Rua Estruturada, 123",
+                "address_snapshot": {
+                    "logradouro": "Rua Estruturada",
+                    "numero": "123",
+                    "bairro": "Centro",
+                    "cidade": "Fortaleza",
+                    "uf": "CE",
+                    "cep": "60000000",
+                    "latitude": -3.7319,
+                    "longitude": -38.4365,
+                },
+                "bairro": "Centro",
+                "taxa_entrega": 0.01,
+                "forma_pagamento": "na_entrega",
+                "forma_pagamento_detalhe": "dinheiro",
+                "tipo_pedido": "delivery",
+                "idempotency_key": "distance-structured-address-001",
+            }
+
+            response = char_client.post(
+                "/cardapio/pedidos",
+                json=payload,
+                headers={"X-Idempotency-Key": payload["idempotency_key"]},
+            )
+
+            assert response.status_code == 201, response.text
+            data = response.json()
+            # Produto custa R$ 25; total maior que R$ 30 comprova que o
+            # servidor recalculou o frete pela distância, sem confiar nos
+            # R$ 0,01 enviados pelo cliente.
+            assert data["total"] > 30
+        finally:
+            restaurante.latitude = None
+            restaurante.longitude = None
+            config.tipo_taxa_entrega = "fixa"
+            config.tabela_taxas_km = []
+            db.commit()
+            db.close()
+
     def test_configuracoes_rejeita_bairros_duplicados_normalizados(self, char_client, char_setup):
         response = char_client.put(
             "/caixa/configuracoes",
