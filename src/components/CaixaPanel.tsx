@@ -42,6 +42,7 @@ import { CashierPickups } from './caixa/orders/CashierPickups';
 import type { CashierTableCard } from './caixa/orders/cashierWorkspaceTypes';
 import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
 import { useCashierOrders } from './caixa/orders/useCashierOrders';
+import { useOnlineOrderAutoAcceptPolicy } from './caixa/orders/useOnlineOrderAutoAcceptPolicy';
 import { useCashierPdv } from './caixa/pdv/useCashierPdv';
 import { useCashierAlerts } from './caixa/realtime/useCashierAlerts';
 import { useCashierClock } from './caixa/realtime/useCashierClock';
@@ -381,7 +382,11 @@ export function CaixaPanel({
     return true;
   };
 
-  const [autoAccept, setAutoAccept] = useState(false);
+  const { autoAccept, updateAutoAccept } = useOnlineOrderAutoAcceptPolicy({
+    apiBaseUrl,
+    authHeaders,
+    showToast,
+  });
 
   useEffect(() => {
     const handleOpenSangria = () => {
@@ -928,7 +933,7 @@ export function CaixaPanel({
                   orders: deliveryOrders,
                   automatic: autoAccept,
                   drawerOpen: isDrawerOpen,
-                  onAutomaticChange: setAutoAccept,
+                  onAutomaticChange: (enabled) => { void updateAutoAccept(enabled); },
                   onDrawerChange: setIsDrawerOpen,
                 }}
                 navigation={{

@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.database import Base, SessionLocal, current_restaurante_id, engine, tenant_session_scope
 from app.main import app
-from app.models import Comanda, Restaurante, Usuario
+from app.models import CaixaTurno, Comanda, Lancamento, Restaurante, Usuario
 from app.online_order_control_models import (
     OnlineOrderControl,
     OnlineOrderCustomerBlock,
@@ -18,6 +18,7 @@ from app.services.online_order_control import (
     capacity_gate_before_order,
     customer_is_blocked,
     operational_counts,
+    auto_accept_online_order_if_enabled,
 )
 from app.services.online_order_policy import evaluate_online_order_policy
 
@@ -45,6 +46,12 @@ def setup_operational_safety_db():
         ).delete(synchronize_session=False)
         db.query(ScheduledOrder).filter(
             ScheduledOrder.restaurante_id.in_([RID, RID_OTHER])
+        ).delete(synchronize_session=False)
+        db.query(Lancamento).filter(
+            Lancamento.restaurante_id.in_([RID, RID_OTHER])
+        ).delete(synchronize_session=False)
+        db.query(CaixaTurno).filter(
+            CaixaTurno.restaurante_id.in_([RID, RID_OTHER])
         ).delete(synchronize_session=False)
         db.query(Comanda).filter(Comanda.restaurante_id.in_([RID, RID_OTHER])).delete(
             synchronize_session=False
@@ -109,13 +116,14 @@ def _add_order(
     order_id: str,
     status_value: str = "pendente",
     phone: str = "11999990000",
+    tipo: str = "Retirada",
 ):
     order = Comanda(
         id=order_id,
         restaurante_id=RID,
         garcom_id=ADMIN_ID,
         numero_pedido=db.query(Comanda).filter(Comanda.restaurante_id == RID).count() + 1,
-        tipo="Retirada",
+        tipo=tipo,
         identificador="Cliente Safety",
         delivery_status=status_value,
         delivery_telefone=phone,
@@ -309,3 +317,101 @@ def test_operational_control_rejects_unauthenticated_callers():
         json={"reason": "Não autorizado", "duration_minutes": 15},
     )
     assert response.status_code in (401, 403)
+
+
+def test_auto_accept_policy_is_persisted_and_audited_via_backend():
+    enabled = client.put(
+        "/api/online-orders/auto-accept",
+        headers=_admin_headers(),
+        json={"enabled": True},
+    )
+    assert enabled.status_code == 200, enabled.text
+    assert enabled.json()["auto_accept"] is True
+
+    refreshed = client.get("/api/online-orders/control", headers=_admin_headers())
+    assert refreshed.status_code == 200
+    assert refreshed.json()["auto_accept"] is True
+
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, RID):
+            assert db.query(OnlineOrderOperationalAudit).filter(
+                OnlineOrderOperationalAudit.restaurante_id == RID,
+                OnlineOrderOperationalAudit.action == "online_orders_auto_accept_updated",
+            ).count() == 1
+    finally:
+        db.close()
+
+
+def test_backend_auto_accepts_all_cardapio_fulfillments_and_ignores_non_online_order():
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, RID):
+            db.add(OnlineOrderControl(restaurante_id=RID, auto_accept=True))
+            db.add(
+                CaixaTurno(
+                    restaurante_id=RID,
+                    aberto_por_id=ADMIN_ID,
+                    saldo_inicial=0,
+                    status="aberto",
+                )
+            )
+
+            online_orders = []
+            for index, tipo in enumerate(("Retirada", "Delivery", "Consumo no Local"), start=1):
+                order = _add_order(
+                    db,
+                    order_id=f"auto-accept-online-{index}",
+                    tipo=tipo,
+                )
+                launch = Lancamento(
+                    id=f"auto-launch-online-{index}",
+                    restaurante_id=RID,
+                    comanda_id=order.id,
+                    garcom_id=ADMIN_ID,
+                    origem="cardapio",
+                    status="pendente",
+                )
+                db.add(launch)
+                online_orders.append((order, launch))
+
+            pos = _add_order(db, order_id="auto-accept-pos-1")
+            pos_launch = Lancamento(
+                id="auto-launch-pos-1",
+                restaurante_id=RID,
+                comanda_id=pos.id,
+                garcom_id=ADMIN_ID,
+                origem="caixa",
+                status="pendente",
+            )
+            db.add(pos_launch)
+            db.commit()
+
+            for order, launch in online_orders:
+                assert auto_accept_online_order_if_enabled(
+                    db,
+                    restaurante_id=RID,
+                    comanda=order,
+                    operator_user_id=ADMIN_ID,
+                ) is True
+                db.commit()
+                db.refresh(order)
+                db.refresh(launch)
+                assert order.delivery_status == "producao"
+                assert launch.status == "producao"
+
+            assert auto_accept_online_order_if_enabled(
+                db,
+                restaurante_id=RID,
+                comanda=pos,
+                operator_user_id=ADMIN_ID,
+            ) is False
+            db.refresh(pos)
+            assert pos.delivery_status == "pendente"
+
+            assert db.query(OnlineOrderOperationalAudit).filter(
+                OnlineOrderOperationalAudit.restaurante_id == RID,
+                OnlineOrderOperationalAudit.action == "online_order_auto_accepted",
+            ).count() == 3
+    finally:
+        db.close()

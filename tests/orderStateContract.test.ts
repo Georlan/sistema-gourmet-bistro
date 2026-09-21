@@ -24,3 +24,15 @@ test('fallback de compatibilidade é mapa exato, não substring', () => {
   assert.match(trackingSource, /const STATUS_ALIASES:/);
   assert.match(trackingSource, /STATUS_ALIASES\[rawStatus\]/);
 });
+
+test('fulfillment público tem rótulo ternário e não rebaixa dine-in para retirada', () => {
+  assert.match(trackingSource, /export function orderFulfillmentLabel/);
+  assert.match(trackingSource, /if \(fulfillment === "delivery"\) return "Delivery"/);
+  assert.match(trackingSource, /if \(fulfillment === "pickup"\) return "Retirada"/);
+  assert.match(trackingSource, /return "Consumo local"/);
+  assert.match(drawerSource, /orderFulfillmentLabel\(state\.fulfillment\)/);
+  assert.match(chatSource, /orderFulfillmentLabel\(state\.fulfillment\)/);
+  assert.match(pageSource, /orderFulfillmentLabel\(activeState\.fulfillment\)/);
+  assert.equal(drawerSource.includes('isDelivery ? "Delivery" : "Retirada"'), false);
+  assert.equal(chatSource.includes('isDelivery ? "Delivery" : "Retirada"'), false);
+});

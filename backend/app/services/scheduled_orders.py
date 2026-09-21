@@ -164,6 +164,18 @@ def release_due_scheduled_orders_in_session(
         comanda.online_payment_status = None
         _publish_created_event(db, comanda)
         record.released_at = now
+        # autoflush está desativado globalmente; publique a liberação antes de
+        # consultar a política para que o helper não enxergue o próprio agendamento
+        # como ainda pendente.
+        db.flush()
+
+        from .online_order_control import auto_accept_online_order_if_enabled
+        auto_accept_online_order_if_enabled(
+            db,
+            restaurante_id=restaurante_id,
+            comanda=comanda,
+            operator_user_id=getattr(comanda, "garcom_id", None),
+        )
         released += 1
 
     if released:
