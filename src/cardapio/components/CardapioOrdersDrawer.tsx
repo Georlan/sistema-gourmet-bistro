@@ -17,6 +17,7 @@ import {
 import clsx from "clsx";
 import { API_BASE_URL } from "../../config/api";
 import {
+  OrderStateContract,
   StoredOrder,
   orderFulfillmentLabel,
   resolveOrderState,
@@ -31,7 +32,13 @@ interface CardapioOrdersDrawerProps {
   onSelectOrder: (orderId: string) => void;
   onRefresh: () => void;
   onRemoveOrder: (orderId: string) => void;
-  onRealtimeStatus?: (orderId: string, status: string, closedAt: string | null) => void;
+  onRealtimeStatus?: (
+    orderId: string,
+    status: string,
+    closedAt: string | null,
+    tipo?: string,
+    state?: OrderStateContract,
+  ) => void;
   isRefreshing?: boolean;
   hasFloatingCart?: boolean;
 }
@@ -118,11 +125,19 @@ export default function CardapioOrdersDrawer({
           if (!response.ok) return null;
           const payload = await response.json() as {
             status?: string;
+            tipo?: string;
+            state?: OrderStateContract;
             closed_at?: string | null;
             conversa?: { unread_count?: number };
           };
           if (payload.status) {
-            onRealtimeStatus?.(order.id, payload.status, payload.closed_at || null);
+            onRealtimeStatus?.(
+              order.id,
+              payload.status,
+              payload.closed_at || null,
+              payload.tipo,
+              payload.state,
+            );
           }
           return [order.id, Math.max(0, Number(payload?.conversa?.unread_count || 0))] as const;
         } catch {

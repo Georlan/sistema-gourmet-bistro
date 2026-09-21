@@ -50,6 +50,8 @@ import {
   saveCustomerSession,
 } from "./customerSession";
 import {
+  isOrderStateContract,
+  OrderStateContract,
   StoredOrder,
   loadStoredOrders,
   refreshAllStoredOrders,
@@ -667,18 +669,24 @@ export default function CardapioPage() {
     orderId: string,
     status: string,
     closedAt: string | null,
+    tipo?: string,
+    backendState?: OrderStateContract,
   ) => {
     setStoredOrders((current) => {
       let changed = false;
       const next = current.map((order) => {
         if (order.id !== orderId) return order;
-        const state = fallbackOrderState(status, order.tipo);
+        const nextTipo = String(tipo || order.tipo || "Retirada");
+        const state = isOrderStateContract(backendState)
+          ? backendState
+          : fallbackOrderState(status, nextTipo);
         const nextClosed = state.terminal || Boolean(closedAt);
         const currentState = resolveOrderState(order);
+        const stateChanged = JSON.stringify(currentState) !== JSON.stringify(state);
         if (
           order.status === status
-          && currentState.status === state.status
-          && currentState.phase === state.phase
+          && order.tipo === nextTipo
+          && !stateChanged
           && Boolean(order.fechado) === nextClosed
         ) {
           return order;
@@ -688,6 +696,7 @@ export default function CardapioPage() {
         const updated: StoredOrder = {
           ...order,
           status,
+          tipo: nextTipo,
           state,
           fechado: nextClosed,
         };
