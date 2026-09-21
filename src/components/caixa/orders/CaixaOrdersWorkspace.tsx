@@ -12,6 +12,7 @@ import {
 import { formatCompactCurrency, formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import type { CashierTableCard, DeliveryOrderView, OrdersStage, PendingCashPayment, PendingCashPaymentCard } from './cashierWorkspaceTypes';
 import { getDigitalOrderAssociation, getDigitalOrderCustomerLabel, getDigitalOrderFulfillmentLabel, getDigitalOrderSourceLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
+import { DigitalReceiptAction } from '../digital-receipt/DigitalReceiptAction';
 
 export interface CaixaOrdersWorkspaceProps {
   readonly columns: {
@@ -53,6 +54,9 @@ export interface CaixaOrdersWorkspaceProps {
     readonly openTablePayment: (order: CashierTableCard['order']) => void;
     readonly finalizeDigitalOrder: (order: DeliveryOrderView) => void;
   };
+  readonly hasPrinting?: boolean;
+  readonly restaurantConfig?: Record<string, unknown> | null;
+  readonly onToast?: (msg: string, type: 'success' | 'error' | 'info') => void;
   readonly isLoading: boolean;
   readonly now: number;
 }
@@ -98,17 +102,17 @@ const renderCompactItemsList = (
   }
 
   const visibleItems = isExpanded ? itemList : itemList.slice(0, 3);
-  const hiddenCount = itemList.length - 3;
+  const hiddenCount = itemList.length - visibleItems.length;
 
   return (
-    <div className={"orders-card__items space-y-0.5 p-2 rounded-lg"}>
-      <ul className="space-y-0.5">
-        {visibleItems.map((it, idx) => (
-          <li key={idx} className={"font-medium text-xs text-koma-secondary flex items-center justify-between font-sans truncate"}>
-            <span className="truncate">{it.qty}× {it.name}</span>
-          </li>
-        ))}
-      </ul>
+    <div className={"orders-card__items p-2 rounded-lg space-y-1"}>
+      {visibleItems.map((it, idx) => (
+        <div key={`${it.name}-${idx}`} className={"flex justify-between items-center text-xs"}>
+          <span className={"font-semibold text-koma-foreground font-sans truncate"}>
+            <strong className={"orders-card__item-qty font-mono mr-1"}>{it.qty}x</strong> {it.name}
+          </span>
+        </div>
+      ))}
       {itemList.length > 3 && (
         <button
           type="button"
@@ -127,6 +131,7 @@ const renderCompactItemsList = (
 export function CaixaOrdersWorkspace({
   columns, pendingCashPayments: pagamentosPendentes, insights: operationalOrderInsights,
   search, acceptance, navigation, actions, isLoading, now: nowTimestamp,
+  hasPrinting = true, restaurantConfig, onToast,
 }: CaixaOrdersWorkspaceProps) {
   const { tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
     tableClosing: filteredCol2Table, digitalFinalization: filteredDeliveryFinalization } = columns;
@@ -461,15 +466,30 @@ export function CaixaOrdersWorkspace({
                         </div>
                         <div className="orders-card__identity-side">
                           <span className="orders-card__price">{formatCurrency(totalVal)}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); actions.printConference(order); }}
-                            className="orders-card__icon"
-                            title="Imprimir pré-conta / conferência"
-                            aria-label={`Imprimir conferência de ${presentation.title}`}
-                          >
-                            <Printer size={12} />
-                          </button>
+                          {hasPrinting !== false ? (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); actions.printConference(order); }}
+                              className="orders-card__icon"
+                              title="Imprimir pré-conta / conferência"
+                              aria-label={`Imprimir conferência de ${presentation.title}`}
+                            >
+                              <Printer size={12} />
+                            </button>
+                          ) : (
+                            <DigitalReceiptAction
+                              compact
+                              order={{
+                                mesaId: order.mesaId,
+                                identificador: presentation.title,
+                                itens: order.itens,
+                                valorPago: order.valorPago,
+                                clientePhone: order.clientePhone,
+                              }}
+                              restaurantConfig={restaurantConfig}
+                              onToast={onToast}
+                            />
+                          )}
                         </div>
                       </div>
                       {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
@@ -560,15 +580,30 @@ export function CaixaOrdersWorkspace({
                         <div className="orders-card__identity-side">
                           <span className="orders-card__price">{formatCurrency(order.total)}</span>
                           <div className="flex items-center justify-end gap-1">
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); actions.printConference(order); }}
-                              className="orders-card__icon"
-                              title="Imprimir pré-conta / conferência"
-                              aria-label={`Imprimir conferência do pedido ${humanOrderNumber(order)}`}
-                            >
-                              <Printer size={12} />
-                            </button>
+                            {hasPrinting !== false ? (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); actions.printConference(order); }}
+                                className="orders-card__icon"
+                                title="Imprimir pré-conta / conferência"
+                                aria-label={`Imprimir conferência do pedido ${humanOrderNumber(order)}`}
+                              >
+                                <Printer size={12} />
+                              </button>
+                            ) : (
+                              <DigitalReceiptAction
+                                compact
+                                order={{
+                                  identificador: getDigitalOrderCustomerLabel(order),
+                                  itens: order.itens as any,
+                                  numeroPedido: order.numeroPedido,
+                                  total: order.total,
+                                  clientePhone: order.telefone,
+                                }}
+                                restaurantConfig={restaurantConfig}
+                                onToast={onToast}
+                              />
+                            )}
                           </div>
                         </div>
                       </div>
@@ -686,15 +721,30 @@ export function CaixaOrdersWorkspace({
                         </div>
                         <div className="orders-card__identity-side">
                           <span className="orders-card__price" title={pendingTableItems > 0 && !contaPedida ? 'Valor dos itens prontos' : 'Valor a receber'}>{formatCurrency(totalVal)}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); actions.printConference(order); }}
-                            className="orders-card__icon"
-                            title="Imprimir pré-conta / conferência"
-                            aria-label={`Imprimir conferência da ${presentation.title}`}
-                          >
-                            <Printer size={12} />
-                          </button>
+                          {hasPrinting !== false ? (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); actions.printConference(order); }}
+                              className="orders-card__icon"
+                              title="Imprimir pré-conta / conferência"
+                              aria-label={`Imprimir conferência da ${presentation.title}`}
+                            >
+                              <Printer size={12} />
+                            </button>
+                          ) : (
+                            <DigitalReceiptAction
+                              compact
+                              order={{
+                                mesaId: order.mesaId,
+                                identificador: presentation.title,
+                                itens: order.itens,
+                                valorPago: order.valorPago,
+                                clientePhone: order.clientePhone,
+                              }}
+                              restaurantConfig={restaurantConfig}
+                              onToast={onToast}
+                            />
+                          )}
                         </div>
                       </div>
                       {pendingTableItems > 0 && (
@@ -776,15 +826,30 @@ export function CaixaOrdersWorkspace({
                         <div className="orders-card__identity-side">
                           <span className="orders-card__price">{formatCurrency(order.total)}</span>
                           <div className="flex items-center justify-end gap-1">
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); actions.printConference(order); }}
-                              className="orders-card__icon"
-                              title="Imprimir pré-conta / conferência"
-                              aria-label={`Imprimir conferência do pedido ${humanOrderNumber(order)}`}
-                            >
-                              <Printer size={12} />
-                            </button>
+                            {hasPrinting !== false ? (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); actions.printConference(order); }}
+                                className="orders-card__icon"
+                                title="Imprimir pré-conta / conferência"
+                                aria-label={`Imprimir conferência do pedido ${humanOrderNumber(order)}`}
+                              >
+                                <Printer size={12} />
+                              </button>
+                            ) : (
+                              <DigitalReceiptAction
+                                compact
+                                order={{
+                                  identificador: getDigitalOrderCustomerLabel(order),
+                                  itens: order.itens as any,
+                                  numeroPedido: order.numeroPedido,
+                                  total: order.total,
+                                  clientePhone: order.telefone,
+                                }}
+                                restaurantConfig={restaurantConfig}
+                                onToast={onToast}
+                              />
+                            )}
                           </div>
                         </div>
                       </div>

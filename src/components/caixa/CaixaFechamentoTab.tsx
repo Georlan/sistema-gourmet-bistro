@@ -17,6 +17,7 @@ import { CaixaTurnoResumo, FechamentoCaixaResult } from '../../types';
 import { imprimirComprovanteFechamento } from '../../config/caixaService';
 import { formatBackendDateTime } from '../../utils/dateTime';
 import { MoneyInput } from '../MoneyInput';
+import { buildWhatsAppShiftReceipt, shareDigitalReceipt } from './digital-receipt/digitalReceipt';
 
 interface CaixaFechamentoTabProps {
   isTurnoAberto: boolean;
@@ -33,6 +34,8 @@ interface CaixaFechamentoTabProps {
   onOpenNovoTurnoModal?: () => void;
   onNavigateToPendingPayments?: () => void;
   onNavigateToOpenComandas?: () => void;
+  hasPrinting?: boolean;
+  restaurantName?: string;
 }
 
 const money = new Intl.NumberFormat('pt-BR', {
@@ -129,6 +132,8 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   onOpenNovoTurnoModal,
   onNavigateToPendingPayments,
   onNavigateToOpenComandas,
+  hasPrinting = true,
+  restaurantName = 'KÔMA',
 }) => {
   const [closingMode, setClosingMode] = useState<'rapida' | 'cega'>('rapida');
   const [cardAutomatic, setCardAutomatic] = useState(true);
@@ -244,6 +249,37 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
     }
   };
 
+  const [shareSuccess, setShareSuccess] = useState(false);
+
+  const handleShareComprovante = async () => {
+    if (!turnoResumo && !fechamentoResult) return;
+    const resumoData = turnoResumo || {
+      turno_id: fechamentoResult?.turno_id,
+      aberto_por_nome: 'Caixa',
+      total_vendas: (fechamentoResult?.esperado_dinheiro || 0) + (fechamentoResult?.esperado_cartao || 0) + (fechamentoResult?.esperado_pix || 0),
+      totais_por_metodo: {
+        dinheiro: fechamentoResult?.esperado_dinheiro,
+        cartao_debito: fechamentoResult?.esperado_cartao,
+        pix: fechamentoResult?.esperado_pix,
+      },
+      saldo_inicial: 0,
+      total_suprimentos: 0,
+      total_sangrias: 0,
+      saldo_dinheiro_gaveta: fechamentoResult?.declarado_dinheiro || 0,
+    };
+    const text = buildWhatsAppShiftReceipt(resumoData as any, restaurantName);
+    await shareDigitalReceipt({
+      text,
+      onSuccess: () => {
+        setShareSuccess(true);
+        setTimeout(() => setShareSuccess(false), 2500);
+      },
+      onError: () => {
+        setErrorMsg('Não foi possível compartilhar o fechamento.');
+      },
+    });
+  };
+
   if (!isTurnoAberto && fechamentoResult) {
     const difference = fechamentoResult.diferenca_total;
     const isExact = Math.abs(difference) < 0.01;
@@ -345,8 +381,18 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
             </button>
           )}
           
-          <button type="button" onClick={handlePrintComprovante} disabled={isPrinting} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-4 py-3 text-xs font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground disabled:cursor-not-allowed disabled:opacity-60">
-            <Printer size={16} /> {isPrinting ? 'Enviando para impressão...' : 'Imprimir comprovante'}
+          {hasPrinting !== false && (
+            <button type="button" onClick={handlePrintComprovante} disabled={isPrinting} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-4 py-3 text-xs font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground disabled:cursor-not-allowed disabled:opacity-60">
+              <Printer size={16} /> {isPrinting ? 'Enviando para impressão...' : 'Imprimir comprovante'}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleShareComprovante}
+            className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-bold text-emerald-700 dark:text-emerald-300 transition-colors hover:bg-emerald-500/20 cursor-pointer"
+          >
+            <Smartphone size={16} /> {shareSuccess ? 'Copiado / Compartilhado!' : 'Compartilhar fechamento (WhatsApp)'}
           </button>
         </aside>
       </div>

@@ -10,6 +10,11 @@ import type {
   PendingCashPayment,
   SmartPosCardState,
 } from '../orders/cashierWorkspaceTypes';
+import {
+  buildWhatsAppOrderReceipt,
+  shareDigitalReceipt,
+  type RestaurantReceiptInfo,
+} from '../digital-receipt/digitalReceipt';
 
 type Props = Pick<
   CaixaPanelProps,
@@ -650,6 +655,21 @@ export function useCheckoutController({
     }
   };
 
+  const shareCheckoutBill = async (restaurantInfo?: RestaurantReceiptInfo | null) => {
+    if (!selectedOrder) return;
+    const text = buildWhatsAppOrderReceipt(
+      selectedOrder,
+      restaurantInfo,
+      { taxaServicoAtiva, serviceTaxRate }
+    );
+    await shareDigitalReceipt({
+      text,
+      phone: selectedOrder.clientePhone,
+      onSuccess: (msg) => showToast(msg, 'success'),
+      onError: () => showToast('Não foi possível compartilhar a conta.', 'error'),
+    });
+  };
+
   const handleConfirmPendingCashPayment = async (pag: PendingCashPayment) => {
     if (onRemovePendingPaymentOptimistic) onRemovePendingPaymentOptimistic(pag.id);
     try {
@@ -694,6 +714,7 @@ export function useCheckoutController({
     handleRejectPendingCashPayment,
     printCheckoutReceipt,
     printCheckoutValues,
+    shareCheckoutBill,
     isProcessingPayment,
     selectedOrder,
     setSelectedOrder,
