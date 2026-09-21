@@ -118,8 +118,8 @@ class TestPosAdapter:
                 db.commit()
             db.close()
 
-    def test_pos_adapter_rejects_missing_table_for_dine_in(self, char_client, char_setup):
-        """[VALIDAÇÃO] Consumo no Local sem mesa é rejeitado."""
+    def test_pos_adapter_accepts_dine_in_without_table(self, char_client, char_setup):
+        """[CONTRATO] Consumo no Local pode nascer sem mesa associada."""
         headers = char_setup["headers"]
         payload = {
             "tipo": "mesa",
@@ -127,5 +127,40 @@ class TestPosAdapter:
             "itens": [{"produto_id": "prod-char-simples"}],
         }
         res = char_client.post("/comandas/venda-direta", json=payload, headers=headers)
+        assert res.status_code == 201
+        data = res.json()
+        assert data["tipo"] == "Consumo no Local"
+        assert data["mesa_id"] is None
+        assert data["delivery_status"] == "producao"
+
+    def test_pos_adapter_accepts_pickup_associated_with_table(self, char_client, char_setup):
+        """[CONTRATO] Retirada preserva a mesa opcional sem mudar de modalidade."""
+        headers = char_setup["headers"]
+        payload = {
+            "tipo": "retirada",
+            "mesa_id": 1,
+            "identificador": "Cliente Retirada",
+            "delivery_telefone": "81999997777",
+            "itens": [{"produto_id": "prod-char-simples"}],
+        }
+        res = char_client.post("/comandas/venda-direta", json=payload, headers=headers)
+        assert res.status_code == 201
+        data = res.json()
+        assert data["tipo"] == "Retirada"
+        assert data["mesa_id"] == 1
+        assert data["delivery_status"] == "producao"
+
+    def test_pos_adapter_rejects_delivery_associated_with_table(self, char_client, char_setup):
+        """[CONTRATO] Delivery usa endereço como referência e não aceita mesa."""
+        headers = char_setup["headers"]
+        payload = {
+            "tipo": "entrega",
+            "mesa_id": 1,
+            "identificador": "Cliente Delivery",
+            "delivery_telefone": "81999998888",
+            "delivery_endereco": "Rua de Teste, 100",
+            "itens": [{"produto_id": "prod-char-simples"}],
+        }
+        res = char_client.post("/comandas/venda-direta", json=payload, headers=headers)
         assert res.status_code == 422
-        assert "Selecione uma mesa" in res.json()["detail"]
+        assert res.json()["detail"] == "Pedidos de delivery não podem ser vinculados a uma mesa."
