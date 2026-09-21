@@ -32,6 +32,7 @@ PRINT_CORE_ALLOWED_FILES = {
     "app/services/printing.py",
     "app/printer_service.py",
     "app/routes/print_agents.py",
+    "app/routes/printing.py",
 }
 
 FORBIDDEN_CALLS_OUTSIDE_PRINT_CORE = {
