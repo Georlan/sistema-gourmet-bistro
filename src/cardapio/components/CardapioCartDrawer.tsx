@@ -391,7 +391,7 @@ export default function CardapioCartDrawer({
           message: "Localização não autorizada. Você pode continuar normalmente com a taxa mínima.",
         });
       },
-      { enableHighAccuracy: false, timeout: 8_000, maximumAge: 120_000 },
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 30_000 },
     );
   };
 

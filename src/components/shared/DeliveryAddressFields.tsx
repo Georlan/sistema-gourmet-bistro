@@ -104,36 +104,51 @@ export default function DeliveryAddressFields({
             required
           />
         </label>
-        <label>
-          <span className={labelClass}>Bairro</span>
-          {neighborhoodOptions.length > 0 ? (
-            <select
-              id={`${idPrefix}-bairro`}
-              autoComplete="address-level3"
-              value={value.bairro}
-              onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'bairro', event.target.value))}
-              className={inputClass}
-              required
-            >
-              <option value="">Selecione...</option>
-              {neighborhoodOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label || option.value}
-                </option>
-              ))}
-            </select>
-          ) : (
+        <div className="space-y-1.5">
+          <label className="block">
+            <span className={labelClass}>Bairro</span>
             <input
               id={`${idPrefix}-bairro`}
+              list={`${idPrefix}-bairro-options`}
               autoComplete="address-level3"
-              placeholder="Centro"
+              placeholder={neighborhoodOptions.length > 0 ? "Digite ou selecione o bairro" : "Centro"}
               value={value.bairro}
               onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'bairro', event.target.value))}
               className={inputClass}
               required
             />
+            {neighborhoodOptions.length > 0 && (
+              <datalist id={`${idPrefix}-bairro-options`}>
+                {neighborhoodOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label || option.value}
+                  </option>
+                ))}
+              </datalist>
+            )}
+          </label>
+          {neighborhoodOptions.length > 0 && !compact && (
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {neighborhoodOptions.map((option) => {
+                const isSelected = value.bairro.trim().toLowerCase() === option.value.trim().toLowerCase();
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onChange(updateDeliveryAddressGeographicField(value, 'bairro', option.value))}
+                    className={`inline-flex items-center rounded-lg border px-2 py-1 text-[10px] font-medium transition ${
+                      isSelected
+                        ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400 font-bold'
+                        : 'border-koma-border bg-koma-panel text-koma-muted hover:border-emerald-500/30 hover:text-koma-foreground'
+                    }`}
+                  >
+                    {option.label || option.value}
+                  </button>
+                );
+              })}
+            </div>
           )}
-        </label>
+        </div>
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)_92px] gap-2">

@@ -221,8 +221,11 @@ class OrderApplicationService:
                     break
 
             if matched_bairro_taxa is None:
-                raise OrderValidationError(
-                    f"O bairro '{clean_bairro}' não está na área de entrega atendida pelo restaurante."
+                fallback_fee = getattr(config, "taxa_entrega_fixa", None)
+                matched_bairro_taxa = (
+                    _validated_configured_delivery_fee(fallback_fee)
+                    if fallback_fee is not None
+                    else Decimal("0.00")
                 )
 
         if tipo_taxa == "distancia":

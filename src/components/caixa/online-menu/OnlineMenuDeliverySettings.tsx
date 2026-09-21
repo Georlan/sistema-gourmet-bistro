@@ -245,7 +245,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
         setIsSavingOrigin(false);
         setFeedback({ type: 'error', text: 'Localização não autorizada. Faça isso em um dispositivo que esteja no restaurante.' });
       },
-      { enableHighAccuracy: false, timeout: 8_000, maximumAge: 120_000 },
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 30_000 },
     );
   };
 
@@ -402,10 +402,28 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
 
         {config.tipo_taxa_entrega === 'bairro' && (
           <div className="mt-4 border-t border-koma-border pt-4">
+            <div className="mb-4 rounded-xl border border-koma-border bg-koma-card p-4">
+              <label className="block max-w-sm">
+                <FieldLabel>Taxa padrão para outros bairros (R$)</FieldLabel>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={config.taxa_entrega_fixa || ''}
+                  onChange={(event) => setConfig((current) => ({ ...current, taxa_entrega_fixa: Number(event.target.value) || 0 }))}
+                  className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
+                  placeholder="0,00"
+                />
+                <span className="mt-1.5 block text-[9px] leading-relaxed text-koma-muted">
+                  Cobrada caso o cliente digite um bairro que ainda não está na lista abaixo. Garante que a operação nunca seja travada.
+                </span>
+              </label>
+            </div>
+
             <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h4 className="text-xs font-black text-koma-foreground">Bairros atendidos</h4>
-                <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">Cadastre somente os bairros em que o restaurante realmente entrega.</p>
+                <h4 className="text-xs font-black text-koma-foreground">Bairros com taxa diferenciada</h4>
+                <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">Cadastre os bairros atendidos. O cliente poderá selecioná-los rapidamente no cardápio.</p>
               </div>
               <button
                 type="button"

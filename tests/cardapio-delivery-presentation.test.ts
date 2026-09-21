@@ -17,8 +17,8 @@ test('bairro selecionado mantém taxa e comparação sem diferença entre maiús
   assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8, tabelaTaxasBairros: neighborhoods }, 25, 'CENTRO'), { fee: 5, awaitingNeighborhood: false });
 });
 
-test('bairro desconhecido não promete taxa confirmada nem muda o fallback existente', () => {
-  assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8, tabelaTaxasBairros: neighborhoods }, 25, 'Outro'), { fee: 8, awaitingNeighborhood: true });
+test('bairro fora da lista não barra a operação e aplica a taxa padrão de fallback', () => {
+  assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8, tabelaTaxasBairros: neighborhoods }, 25, 'Outro'), { fee: 8, awaitingNeighborhood: false });
 });
 
 test('taxa zero do bairro permanece gratuita', () => {
