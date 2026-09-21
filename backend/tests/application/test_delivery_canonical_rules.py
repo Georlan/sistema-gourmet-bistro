@@ -162,56 +162,54 @@ class TestDeliveryCanonicalRules:
             db.commit()
             db.close()
 
-    def test_resolve_delivery_fee_bairro_inexistente_rejeita(self, char_setup):
-        """Bairro fora da tabela cadastrada deve ser rejeitado por falta de cobertura."""
+    def test_resolve_delivery_fee_bairro_inexistente_usa_taxa_padrao_fallback(self, char_setup):
+        """Bairro fora da tabela cadastrada não trava a operação: aplica taxa padrão de fallback."""
         db: Session = SessionLocal()
         try:
             config = self._get_or_create_config(db)
             config.tipo_taxa_entrega = "bairro"
             config.tabela_taxas_bairros = [{"bairro": "Centro", "taxa": 5.0}]
+            config.taxa_entrega_fixa = 7.0  # Taxa padrão / mínima para outros bairros
             db.commit()
 
-            with pytest.raises(OrderValidationError) as exc:
-                OrderApplicationService.resolve_server_delivery_fee(
-                    db=db,
-                    restaurante_id=CHAR_RESTAURANT_ID,
-                    fulfillment=FulfillmentType.DELIVERY,
-                    items_subtotal=Decimal("40.00"),
-                    neighborhood="Bairro Longe",
-                )
-            assert "não está na área de entrega" in str(exc.value)
+            fee = OrderApplicationService.resolve_server_delivery_fee(
+                db=db,
+                restaurante_id=CHAR_RESTAURANT_ID,
+                fulfillment=FulfillmentType.DELIVERY,
+                items_subtotal=Decimal("40.00"),
+                neighborhood="Bairro Novo",
+            )
+            assert fee == Decimal("7.00")
         finally:
             config.tipo_taxa_entrega = "fixa"
+            config.taxa_entrega_fixa = 0.0
             db.commit()
             db.close()
 
-    def test_resolve_delivery_fee_cobertura_validada_antes_do_frete_gratis(self, char_setup):
-        """Invariante crítica: frete grátis NÃO anula a checagem de cobertura.
-
-        Se o bairro estiver fora da área atendida, o pedido deve falhar mesmo
-        que o subtotal ultrapasse o limiar de frete grátis.
-        """
+    def test_resolve_delivery_fee_bairro_inexistente_com_frete_gratis(self, char_setup):
+        """Bairro fora da tabela atinge frete grátis quando ultrapassa o limiar."""
         db: Session = SessionLocal()
         try:
             config = self._get_or_create_config(db)
             config.tipo_taxa_entrega = "bairro"
             config.tabela_taxas_bairros = [{"bairro": "Centro", "taxa": 5.0}]
+            config.taxa_entrega_fixa = 7.0
             config.frete_gratis_valor = 50.0  # Frete grátis a partir de R$ 50
             db.commit()
 
-            # Subtotal R$ 200,00 (acima de R$ 50), mas bairro não atendido:
-            with pytest.raises(OrderValidationError) as exc:
-                OrderApplicationService.resolve_server_delivery_fee(
-                    db=db,
-                    restaurante_id=CHAR_RESTAURANT_ID,
-                    fulfillment=FulfillmentType.DELIVERY,
-                    items_subtotal=Decimal("200.00"),
-                    neighborhood="Fora da Cidade",
-                )
-            assert "não está na área de entrega" in str(exc.value)
+            # Subtotal R$ 200,00 (acima de R$ 50), bairro não listado: zera o frete
+            fee = OrderApplicationService.resolve_server_delivery_fee(
+                db=db,
+                restaurante_id=CHAR_RESTAURANT_ID,
+                fulfillment=FulfillmentType.DELIVERY,
+                items_subtotal=Decimal("200.00"),
+                neighborhood="Bairro Qualquer",
+            )
+            assert fee == Decimal("0.00")
         finally:
             config.tipo_taxa_entrega = "fixa"
             config.frete_gratis_valor = 0.0
+            config.taxa_entrega_fixa = 0.0
             db.commit()
             db.close()
 
@@ -521,29 +519,29 @@ class TestDeliveryCanonicalRules:
         assert response.status_code == 422
         assert "duplicado" in response.json()["detail"]
 
-    def test_public_cardapio_order_rejects_unserved_neighborhood_even_with_high_subtotal(
+    def test_public_cardapio_order_accepts_unlisted_neighborhood_with_fallback_fee(
         self, char_client, char_setup
     ):
-        """No endpoint público /cardapio/pedidos, bairro fora da cobertura é rejeitado com 400 mesmo com subtotal alto."""
+        """No endpoint público /cardapio/pedidos, bairro não listado não é rejeitado: aplica a taxa padrão."""
         db: Session = SessionLocal()
         try:
             config = self._get_or_create_config(db)
             config.tipo_taxa_entrega = "bairro"
             config.tabela_taxas_bairros = [{"bairro": "Centro", "taxa": 5.0}]
-            config.frete_gratis_valor = 30.0
+            config.taxa_entrega_fixa = 6.5  # Taxa padrão / mínima para outros bairros
+            config.frete_gratis_valor = 100.0  # Abaixo dos R$ 100, cobra os R$ 6.50
             db.commit()
 
-            # Cliente envia pedido com bairro fora da área atendida
             payload = {
                 "restaurante_id": CHAR_RESTAURANT_ID,
                 "itens": [{
                     "produto_id": "prod-char-simples",
-                    "quantidade": 3,  # 3 x 25.00 = 75.00 (acima dos R$ 30 de frete grátis)
+                    "quantidade": 1,  # 1 x 25.00 = 25.00
                 }],
                 "cliente_nome": "Cliente Fora",
                 "cliente_telefone": "11988880000",
-                "endereco_entrega": "Rua Sem Cobertura, 123",
-                "bairro": "Bairro Inexistente",
+                "endereco_entrega": "Rua Nova, 123",
+                "bairro": "Bairro Não Listado",
                 "taxa_entrega": 0.0,
                 "forma_pagamento": "na_entrega",
                 "tipo_pedido": "delivery",
@@ -555,11 +553,12 @@ class TestDeliveryCanonicalRules:
                 json=payload,
                 headers={"X-Idempotency-Key": payload["idempotency_key"]},
             )
-            assert res.status_code == 400
-            assert "não está na área de entrega" in res.json()["detail"]
+            assert res.status_code == 201
+            assert res.json()["total"] == 31.50
         finally:
             config.tipo_taxa_entrega = "fixa"
             config.frete_gratis_valor = 0.0
+            config.taxa_entrega_fixa = 0.0
             config.tabela_taxas_bairros = []
             db.commit()
             db.close()

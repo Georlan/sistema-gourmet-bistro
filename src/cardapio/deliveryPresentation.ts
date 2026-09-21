@@ -33,12 +33,13 @@ export function getDeliveryQuote(config: DeliveryConfig | undefined, subtotal: n
 
   if (mode === 'bairro') {
     const neighborhoods = config?.tabelaTaxasBairros ?? [];
-    const selected = bairro
-      ? neighborhoods.find((row) => row.bairro.toLowerCase() === bairro.toLowerCase())
+    const cleanBairro = (bairro || '').trim();
+    const selected = cleanBairro
+      ? neighborhoods.find((row) => row.bairro.toLowerCase() === cleanBairro.toLowerCase())
       : undefined;
     return {
       fee: freeBySubtotal ? 0 : selected?.taxa ?? config?.taxaEntregaPadrao ?? 0,
-      awaitingNeighborhood: neighborhoods.length > 0 && !selected && !freeBySubtotal,
+      awaitingNeighborhood: !cleanBairro && !freeBySubtotal,
     };
   }
 
