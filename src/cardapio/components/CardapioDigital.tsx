@@ -479,7 +479,11 @@ export default function CardapioDigital({
       || !["created", "pending", "in_process"].includes(createdOrder.pagamento.status)
     ) return;
     let cancelled = false;
+    let isFetching = false;
     const checkPayment = async () => {
+      if (cancelled || isFetching) return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      isFetching = true;
       try {
         const response = await fetch(
           `${API_BASE_URL}/cardapio/pedidos/${encodeURIComponent(createdOrder.comanda_id)}/status?key=${encodeURIComponent(idempotencyKeyRef.current)}`,
@@ -493,7 +497,9 @@ export default function CardapioDigital({
           pagamento: current.pagamento ? { ...current.pagamento, status: nextStatus } : current.pagamento,
         } : current);
       } catch {
-        // O webhook é a autoridade; uma falha de consulta só adia a atualização visual.
+        // O webhook é a autoridade; uma falha pontual de rede ou DNS só adia a checagem sem travar a UI.
+      } finally {
+        isFetching = false;
       }
     };
     void checkPayment();

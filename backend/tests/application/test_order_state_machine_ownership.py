@@ -47,7 +47,7 @@ def test_domain_state_machine_is_the_dependency_owner():
         ("producao", "delivery", {"pronto", "recusado"}),
         ("pronto", "delivery", {"transito", "recusado"}),
         ("pronto", "retirada", {"finalizado", "recusado"}),
-        ("pronto", "mesa", {"transito", "finalizado", "recusado"}),
+        ("pronto", "mesa", {"finalizado", "recusado"}),
         ("transito", "delivery", {"finalizado", "recusado"}),
         ("transito", "retirada", {"recusado"}),
         ("finalizado", "delivery", set()),
