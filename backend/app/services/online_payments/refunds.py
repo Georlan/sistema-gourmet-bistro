@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import hashlib
 import json
 import uuid
@@ -12,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ...financial_models import PagamentoEstorno
-from ...models import OnlinePaymentIntent, Pagamento, RestaurantPaymentAccount
+from ...models import Comanda, OnlinePaymentIntent, Pagamento, RestaurantPaymentAccount
 from ...online_payment_refund_models import OnlinePaymentRefund
 from ..cash_reconciliation import RefundDomainError, create_refund, money
 from .mercado_pago import MercadoPagoError, MercadoPagoProvider
@@ -92,6 +93,60 @@ def _load_local_refund(
             status_code=409,
         )
     return refund
+
+
+def _close_refunded_order_in_session(
+    db: Session,
+    *,
+    restaurante_id: int,
+    comanda_id: str,
+    intent: OnlinePaymentIntent,
+    usuario_id: str | None = None,
+) -> None:
+    """Encerra a comanda, cancela itens e notifica o Caixa após reembolso confirmado."""
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    comanda = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.id == comanda_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if comanda is not None and not comanda.fechada:
+        comanda.online_payment_status = "cancelled"
+        comanda.delivery_status = "recusado"
+        comanda.fechada = True
+        comanda.fechado_em = now_utc
+        intent.status = "cancelled"
+        for item in comanda.itens:
+            if item.status != "cancelado":
+                item.status = "cancelado"
+        try:
+            from ..inventory import estornar_estoque_dos_itens
+            estornar_estoque_dos_itens(db, comanda.itens, usuario_id=usuario_id)
+        except Exception:
+            pass
+        try:
+            from ...order_chat_models import OrderConversation
+            conversation = (
+                db.query(OrderConversation)
+                .filter(
+                    OrderConversation.restaurante_id == restaurante_id,
+                    OrderConversation.pedido_id == comanda.id,
+                )
+                .first()
+            )
+            if conversation is not None and conversation.closed_at is None:
+                conversation.closed_at = now_utc
+        except Exception:
+            pass
+        try:
+            from ...websocket_manager import manager
+            manager.broadcast_sync({"event": "tables_updated"}, restaurante_id)
+        except Exception:
+            pass
 
 
 def create_mercado_pago_refund(
@@ -378,8 +433,16 @@ def create_mercado_pago_refund(
             "Reembolso externo ainda não confirmado.",
             status_code=503,
         )
+
     local = _load_local_refund(db, restaurante_id=restaurante_id, row=row)
     if local is not None:
+        _close_refunded_order_in_session(
+            db,
+            restaurante_id=restaurante_id,
+            comanda_id=intent.comanda_id,
+            intent=intent,
+            usuario_id=usuario_id,
+        )
         return local
 
     # Use a chave da reserva original mesmo quando a UI trouxe uma nova chave na
@@ -400,6 +463,13 @@ def create_mercado_pago_refund(
         )
         row.estorno_id = refund.id
         row.error_message = None
+        _close_refunded_order_in_session(
+            db,
+            restaurante_id=restaurante_id,
+            comanda_id=intent.comanda_id,
+            intent=intent,
+            usuario_id=usuario_id,
+        )
         db.flush()
         return refund
     except RefundDomainError as exc:

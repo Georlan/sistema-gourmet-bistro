@@ -7,6 +7,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   CheckCircle2,
   Clock3,
+  Copy,
+  QrCode,
   RefreshCw,
   Search,
   ShoppingBag,
@@ -126,6 +128,8 @@ export default function CardapioPage() {
   const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
   const [storedOrders, setStoredOrders] = useState<StoredOrder[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [pixModalOrder, setPixModalOrder] = useState<StoredOrder | null>(null);
+  const [copiedPix, setCopiedPix] = useState(false);
   const [user, setUser] = useState<CustomerProfile | null>(null);
   const [customerToken, setCustomerToken] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -864,7 +868,16 @@ export default function CardapioPage() {
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2 sm:shrink-0">
+              <div className="flex gap-2 sm:shrink-0 flex-wrap items-center">
+                {activeState.phase === "payment_pending" && activeOrder.pagamento?.qr_code && (
+                  <button
+                    type="button"
+                    onClick={() => setPixModalOrder(activeOrder)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-3.5 text-[10px] font-black text-white shadow transition"
+                  >
+                    <QrCode className="h-3.5 w-3.5" /> Pagar Pix
+                  </button>
+                )}
                 {!terminal && (
                   <button
                     type="button"
@@ -1139,6 +1152,107 @@ export default function CardapioPage() {
         isRefreshing={isRefreshingOrders}
         hasFloatingCart={cartCount > 0 && !hasOpenOverlay}
       />
+
+      {pixModalOrder && pixModalOrder.pagamento?.qr_code && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm transition-opacity"
+          id="page-pix-payment-modal-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setPixModalOrder(null);
+              setCopiedPix(false);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl border border-koma-border bg-koma-card p-5 text-center shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Pagamento Pix do Pedido #${pixModalOrder.numero_pedido}`}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-koma-border/60">
+              <div className="flex items-center gap-2">
+                <div className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/15 text-emerald-400">
+                  <QrCode className="h-4 w-4" />
+                </div>
+                <div className="text-left">
+                  <h3 className="text-xs font-black text-white">
+                    Pagar Pedido #{pixModalOrder.numero_pedido}
+                  </h3>
+                  <span className="text-[10px] text-koma-muted">Pagamento via Pix</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPixModalOrder(null);
+                  setCopiedPix(false);
+                }}
+                className="grid h-8 w-8 place-items-center rounded-xl border border-koma-border text-koma-secondary hover:text-white"
+                aria-label="Fechar modal Pix"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="my-4">
+              <span className="text-xs font-bold text-koma-muted block">Valor total</span>
+              <span className="text-2xl font-black text-emerald-400 block mt-0.5">
+                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(pixModalOrder.total || 0)}
+              </span>
+            </div>
+
+            {pixModalOrder.pagamento.qr_code_base64 && (
+              <div className="mx-auto my-3 flex justify-center">
+                <img
+                  className="h-48 w-48 rounded-2xl bg-white p-2.5 shadow-md"
+                  src={`data:image/png;base64,${pixModalOrder.pagamento.qr_code_base64}`}
+                  alt="QR Code Pix do pedido"
+                />
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                if (pixModalOrder?.pagamento?.qr_code) {
+                  void navigator.clipboard.writeText(pixModalOrder.pagamento.qr_code);
+                  setCopiedPix(true);
+                  setTimeout(() => setCopiedPix(false), 3000);
+                }
+              }}
+              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 text-xs font-black text-white shadow-lg transition"
+            >
+              {copiedPix ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  Código Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4" />
+                  Copiar código Pix
+                </>
+              )}
+            </button>
+
+            {pixModalOrder.pagamento.ticket_url && (
+              <a
+                href={pixModalOrder.pagamento.ticket_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 flex h-10 w-full items-center justify-center rounded-xl border border-koma-border text-xs font-bold text-koma-foreground hover:bg-koma-raised"
+              >
+                Abrir link do pagamento
+              </a>
+            )}
+
+            <p className="mt-3 text-[10px] leading-relaxed text-koma-muted">
+              A confirmação do pagamento é automática. Assim que confirmado, o restaurante iniciará o preparo do seu pedido.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

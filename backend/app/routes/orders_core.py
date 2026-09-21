@@ -127,6 +127,20 @@ def _agendar_notificacao_whatsapp_status(
 
 # ----------------- READ ENDPOINTS -----------------
 
+def _operational_online_payment_filter():
+    """Garante que pedidos originados com cobrança Pix online só aparecem no Caixa após aprovação."""
+    return or_(
+        Comanda.online_payment_status == "approved",
+        and_(
+            Comanda.online_payment_status.is_(None),
+            or_(
+                Comanda.delivery_forma_pagamento.is_(None),
+                Comanda.delivery_forma_pagamento != "pix",
+            ),
+        ),
+    )
+
+
 @router.get("/", response_model=List[ComandaResponse])
 def get_comandas(
     mesa_id: Optional[int] = None,
@@ -140,7 +154,7 @@ def get_comandas(
     rest_id = require_tenant_id()
     query = db.query(Comanda).filter(
         Comanda.restaurante_id == rest_id,
-        or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+        _operational_online_payment_filter(),
     )
     if mesa_id is not None:
         query = query.filter(Comanda.mesa_id == mesa_id)
@@ -164,7 +178,7 @@ def get_comandas_detalhes(
         selectinload(Comanda.lancamentos).selectinload(Lancamento.itens).joinedload(Item.produto),
     ).filter(
         Comanda.restaurante_id == require_tenant_id(),
-        or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+        _operational_online_payment_filter(),
     )
     if mesa_id is not None:
         query = query.filter(Comanda.mesa_id == mesa_id)
@@ -188,7 +202,7 @@ def get_comanda(comanda_id: str, db: Session = Depends(get_db), current_user: Us
         .filter(
             Comanda.restaurante_id == require_tenant_id(),
             Comanda.id == comanda_id,
-            or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+            _operational_online_payment_filter(),
         )
         .first()
     )
@@ -825,7 +839,7 @@ def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario 
             ),
         ),
         Comanda.fechada == False,
-        or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+        _operational_online_payment_filter(),
     ).all()
 
 
@@ -850,7 +864,7 @@ def listar_retiradas_concluidas_recentes(
             Comanda.fechada.is_(True),
             Comanda.fechado_em.isnot(None),
             Comanda.fechado_em >= cutoff,
-            or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+            _operational_online_payment_filter(),
         )
         .order_by(Comanda.fechado_em.desc())
         .limit(100)
@@ -877,7 +891,7 @@ def listar_entregas_concluidas_recentes(
             Comanda.fechada.is_(True),
             Comanda.fechado_em.isnot(None),
             Comanda.fechado_em >= cutoff,
-            or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+            _operational_online_payment_filter(),
         )
         .order_by(Comanda.fechado_em.desc())
         .limit(100)

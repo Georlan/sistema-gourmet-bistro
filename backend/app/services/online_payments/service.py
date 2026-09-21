@@ -332,11 +332,34 @@ class OnlinePaymentService:
         locked_intent.external_payment_id = payment.external_id
         mapped = _mapped_status(payment.status)
 
-        # Aprovação financeira é monotônica: um snapshot posterior pendente ou
-        # rejeitado não desfaz receita já reconhecida. Estados terminais sem
-        # recebimento também não regridem para pendente. Uma aprovação posterior
-        # a cancelamento/expiração é uma anomalia que precisa de conciliação manual.
+        # Aprovação financeira é monotônica contra snapshots pendentes ou rejeitados transitórios.
+        # No entanto, se o provedor informar que o pagamento foi estornado/reembolsado ou cancelado,
+        # o ciclo operacional deve ser imediatamente baixado.
         if locked_intent.status == "approved" and mapped != "approved":
+            provider_status = (payment.status or "").strip().lower()
+            if provider_status in {"refunded", "cancelled", "charged_back"}:
+                comanda = db.query(Comanda).filter(
+                    Comanda.restaurante_id == account.restaurante_id,
+                    Comanda.id == locked_intent.comanda_id,
+                ).with_for_update().one()
+                locked_intent.status = "cancelled"
+                comanda.online_payment_status = "cancelled"
+                comanda.delivery_status = "recusado"
+                comanda.fechada = True
+                comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+                for item in comanda.itens:
+                    if item.status != "cancelado":
+                        item.status = "cancelado"
+                try:
+                    from ...order_chat_models import OrderConversation
+                    conversation = db.query(OrderConversation).filter(
+                        OrderConversation.restaurante_id == account.restaurante_id,
+                        OrderConversation.pedido_id == comanda.id,
+                    ).first()
+                    if conversation is not None and conversation.closed_at is None:
+                        conversation.closed_at = comanda.fechado_em
+                except Exception:
+                    pass
             return locked_intent, False
         if locked_intent.status in UNPAID_TERMINAL_STATUSES:
             if mapped == "approved":

@@ -22,7 +22,7 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import SessionLocal, get_db, tenant_session_scope
-from ..models import Comanda, Item, Restaurante
+from ..models import Comanda, Item, OnlinePaymentIntent, Restaurante
 from ..online_order_control_models import OnlineOrderCustomerBlock
 from ..order_chat_models import OrderConversation, OrderMessage
 from ..services.clientes import normalizar_telefone_cliente
@@ -158,6 +158,98 @@ def _active_ordering_block(
     return None
 
 
+def _resolve_tracking_payment_state(
+    db: Session,
+    *,
+    restaurante_id: int,
+    comanda_id: str,
+    delivery_status: Any,
+    fechada: bool,
+) -> tuple[str, dict[str, Any], bool, bool, dict[str, Any] | None]:
+    """Resolve o ciclo de vida do pagamento online para o acompanhamento público.
+
+    Retorna: (effective_status, state_contract_kwargs, payment_pending, payment_failed, pagamento_payload)
+    Se o intent Pix pendente tiver expirado, marca automaticamente comanda e intent como expirados/cancelados.
+    """
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    intent = (
+        db.query(OnlinePaymentIntent)
+        .filter(
+            OnlinePaymentIntent.restaurante_id == restaurante_id,
+            OnlinePaymentIntent.comanda_id == comanda_id,
+        )
+        .first()
+    )
+
+    raw_status = str(delivery_status or "pendente").strip().lower()
+    effective_status = _effective_tracking_status_values(raw_status, fechada)
+    payment_pending = False
+    payment_failed = False
+    pagamento_payload: dict[str, Any] | None = None
+
+    if intent is not None:
+        expires_at = intent.expires_at
+        if expires_at is not None and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+
+        # 1. Intent pendente que já expirou
+        if intent.status in {"created", "pending"} and expires_at is not None and expires_at <= now_utc:
+            intent.status = "expired"
+            comanda = (
+                db.query(Comanda)
+                .filter(Comanda.restaurante_id == restaurante_id, Comanda.id == comanda_id)
+                .first()
+            )
+            if comanda is not None and not comanda.fechada:
+                comanda.online_payment_status = "expired"
+                comanda.delivery_status = "recusado"
+                comanda.fechada = True
+                comanda.fechado_em = now_utc
+                for item in comanda.itens:
+                    if item.status != "cancelado":
+                        item.status = "cancelado"
+                try:
+                    from ..services.inventory import estornar_estoque_dos_itens
+                    estornar_estoque_dos_itens(db, comanda.itens)
+                except Exception:
+                    pass
+                try:
+                    from ..websocket_manager import manager
+                    manager.broadcast_sync({"event": "tables_updated"}, restaurante_id)
+                except Exception:
+                    pass
+            db.flush()
+            effective_status = "cancelado"
+            payment_failed = True
+
+        # 2. Intent pendente ainda válido
+        elif intent.status in {"created", "pending"} and not fechada and effective_status not in {"recusado", "rejected", "cancelado", "cancelled"}:
+            effective_status = "aguardando_pagamento"
+            payment_pending = True
+
+        # 3. Intent com erro ou rejeitado
+        elif intent.status in {"error", "rejected"}:
+            effective_status = "falha_pagamento"
+            payment_failed = True
+
+        # 4. Intent cancelado ou expirado
+        elif intent.status in {"cancelled", "expired"}:
+            effective_status = "cancelado"
+            payment_failed = True
+
+        pagamento_payload = {
+            "status": intent.status,
+            "cobranca_online": True,
+            "metodo": intent.method,
+            "qr_code": intent.qr_code,
+            "qr_code_base64": intent.qr_code_base64,
+            "ticket_url": intent.ticket_url,
+            "expira_em": intent.expires_at.isoformat() if intent.expires_at else None,
+        }
+
+    return effective_status, payment_pending, payment_failed, pagamento_payload
+
+
 @router.get("/{token}/summary", summary="Resumo leve e seguro do acompanhamento do pedido")
 def consultar_resumo_pedido_por_token(
     token: str,
@@ -218,11 +310,24 @@ def consultar_resumo_pedido_por_token(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
 
         closed_at_iso = _iso_or_none(row.closed_at)
-        effective_status = _effective_tracking_status_values(row.delivery_status, row.fechada)
+        (
+            effective_status,
+            payment_pending,
+            payment_failed,
+            pagamento_payload,
+        ) = _resolve_tracking_payment_state(
+            db,
+            restaurante_id=restaurante_id,
+            comanda_id=row.id,
+            delivery_status=row.delivery_status,
+            fechada=bool(row.fechada),
+        )
         state_contract = build_order_state_contract(
             effective_status,
             row.tipo,
             conversation_closed=row.closed_at is not None,
+            payment_pending=payment_pending,
+            payment_failed=payment_failed,
         )
         return {
             "id": str(row.id),
@@ -231,6 +336,7 @@ def consultar_resumo_pedido_por_token(
             "tipo": row.tipo or "Delivery",
             "fechada": bool(row.fechada),
             "closed_at": closed_at_iso,
+            "pagamento": pagamento_payload,
             "conversa": {
                 "id": conversation_id,
                 "closed_at": closed_at_iso,
@@ -293,11 +399,24 @@ def consultar_pedido_por_token(
         ]
 
         closed_at_iso = _iso_or_none(closed_at)
-        effective_status = _effective_tracking_status(comanda)
+        (
+            effective_status,
+            payment_pending,
+            payment_failed,
+            pagamento_payload,
+        ) = _resolve_tracking_payment_state(
+            db,
+            restaurante_id=restaurante_id,
+            comanda_id=comanda.id,
+            delivery_status=comanda.delivery_status,
+            fechada=bool(comanda.fechada),
+        )
         state_contract = build_order_state_contract(
             effective_status,
             comanda.tipo,
             conversation_closed=closed_at is not None,
+            payment_pending=payment_pending,
+            payment_failed=payment_failed,
         )
         return {
             "id": comanda.id,
@@ -313,6 +432,7 @@ def consultar_pedido_por_token(
             "criado_em": comanda.criado_em.isoformat() if comanda.criado_em else None,
             "closed_at": closed_at_iso,
             "itens": itens_payload,
+            "pagamento": pagamento_payload,
             "ordering_block": _active_ordering_block(
                 db,
                 restaurante_id=restaurante_id,

@@ -596,6 +596,15 @@ class OrderApplicationService:
                 comanda_id = str(cmd.check_id) if cmd.check_id else f"c-{uuid.uuid4().hex[:8]}"
                 numero_pedido = gerar_novo_numero_pedido_atomico(db, restaurante_id=cmd.restaurant_id)
 
+                is_online_pix = (
+                    cmd.defer_operational_publish
+                    or (
+                        cmd.channel == OrderChannel.WEB_CARDAPIO
+                        and str(cmd.payment_method or "").strip().lower() == "pix"
+                    )
+                )
+                initial_online_payment_status = "pending" if is_online_pix else None
+
                 comanda = Comanda(
                     id=comanda_id,
                     restaurante_id=cmd.restaurant_id,
@@ -618,6 +627,7 @@ class OrderApplicationService:
                     valor_desconto_cashback=float(quote.cashback_discount),
                     delivery_forma_pagamento=cmd.payment_method,
                     delivery_troco_para=parsed_troco,
+                    online_payment_status=initial_online_payment_status,
                     idempotency_key=cmd.idempotency_key,
                     idempotency_fingerprint=cmd.idempotency_fingerprint,
                     idempotency_fingerprint_version=cmd.idempotency_fingerprint_version,

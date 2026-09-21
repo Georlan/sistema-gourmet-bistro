@@ -208,11 +208,45 @@ def consultar_status_pedido_publico(
             OnlinePaymentIntent.restaurante_id == int(rest_id),
             OnlinePaymentIntent.comanda_id == comanda.id,
         ).first()
-        payment_failed = payment_intent is not None and payment_intent.status == "error"
-        if payment_intent is not None and payment_intent.status not in {"approved", "error"}:
-            status_retorno = "aguardando_pagamento"
-        elif payment_failed:
-            status_retorno = "falha_pagamento"
+
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        payment_failed = False
+        if payment_intent is not None:
+            expires_at = payment_intent.expires_at
+            if expires_at is not None and expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+
+            if payment_intent.status in {"created", "pending"} and expires_at is not None and expires_at <= now_utc:
+                payment_intent.status = "expired"
+                if not comanda.fechada:
+                    comanda.online_payment_status = "expired"
+                    comanda.delivery_status = "recusado"
+                    comanda.fechada = True
+                    comanda.fechado_em = now_utc
+                    for item in comanda.itens:
+                        if item.status != "cancelado":
+                            item.status = "cancelado"
+                    try:
+                        from ..services.inventory import estornar_estoque_dos_itens
+                        estornar_estoque_dos_itens(db, comanda.itens)
+                    except Exception:
+                        pass
+                    try:
+                        from ..websocket_manager import manager
+                        manager.broadcast_sync({"event": "tables_updated"}, int(rest_id))
+                    except Exception:
+                        pass
+                db.flush()
+                status_retorno = "cancelado"
+                payment_failed = True
+            elif payment_intent.status in {"created", "pending"} and not comanda.fechada and status_retorno not in {"recusado", "rejected", "cancelado", "cancelled"}:
+                status_retorno = "aguardando_pagamento"
+            elif payment_intent.status in {"error", "rejected"}:
+                status_retorno = "falha_pagamento"
+                payment_failed = True
+            elif payment_intent.status in {"cancelled", "expired"}:
+                status_retorno = "cancelado"
+                payment_failed = True
 
         state_contract = build_order_state_contract(
             status_retorno,
@@ -240,6 +274,9 @@ def consultar_status_pedido_publico(
                     "status": payment_intent.status,
                     "cobranca_online": True,
                     "metodo": payment_intent.method,
+                    "qr_code": payment_intent.qr_code,
+                    "qr_code_base64": payment_intent.qr_code_base64,
+                    "ticket_url": payment_intent.ticket_url,
                     "expira_em": payment_intent.expires_at.isoformat() if payment_intent.expires_at else None,
                 }
                 if payment_intent is not None

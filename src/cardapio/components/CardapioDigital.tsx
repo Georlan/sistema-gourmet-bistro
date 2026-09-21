@@ -439,6 +439,7 @@ export default function CardapioDigital({
         })),
         tracking_token: data.tracking_token,
         tracking_url: data.tracking_url,
+        pagamento: data.pagamento,
       };
       try {
         saveStoredOrder(orderObj);

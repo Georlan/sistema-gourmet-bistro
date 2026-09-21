@@ -294,9 +294,11 @@ def auto_accept_online_order_if_enabled(
         "analise",
     }:
         return False
+    forma_pagamento = str(getattr(comanda, "delivery_forma_pagamento", "") or "").strip().lower()
     payment_status = str(comanda.online_payment_status or "").strip().lower()
-    if payment_status and payment_status != "approved":
-        return False
+    if forma_pagamento == "pix" or payment_status:
+        if payment_status != "approved":
+            return False
 
     launch = (
         db.query(Lancamento)

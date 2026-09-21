@@ -153,5 +153,30 @@ class ConnectionManager:
             if isinstance(result, Exception):
                 self.disconnect(connection, restaurante_id)
 
+    def broadcast_sync(
+        self,
+        message: dict,
+        restaurante_id: int | None = None,
+        tenant_id: int | None = None,
+        target_audience: str | None = None,
+    ) -> None:
+        """Dispara broadcast de forma segura a partir de código síncrono ou threads de worker."""
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                loop.create_task(self.broadcast(message, restaurante_id=restaurante_id, tenant_id=tenant_id, target_audience=target_audience))
+                return
+        except RuntimeError:
+            pass
+
+        for _socket, (_rid, _uid, sock_loop) in list(self.identities.items()):
+            if not sock_loop.is_closed():
+                sock_loop.call_soon_threadsafe(
+                    lambda: asyncio.create_task(
+                        self.broadcast(message, restaurante_id=restaurante_id, tenant_id=tenant_id, target_audience=target_audience)
+                    )
+                )
+                return
+
 # Singleton instance of the connection manager
 manager = ConnectionManager()
