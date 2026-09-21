@@ -165,7 +165,7 @@ def _resolve_tracking_payment_state(
     comanda_id: str,
     delivery_status: Any,
     fechada: bool,
-) -> tuple[str, dict[str, Any], bool, bool, dict[str, Any] | None]:
+) -> tuple[str, bool, bool, dict[str, Any] | None]:
     """Resolve o ciclo de vida do pagamento online para o acompanhamento público.
 
     Retorna: (effective_status, state_contract_kwargs, payment_pending, payment_failed, pagamento_payload)
@@ -208,11 +208,8 @@ def _resolve_tracking_payment_state(
                 for item in comanda.itens:
                     if item.status != "cancelado":
                         item.status = "cancelado"
-                try:
-                    from ..services.inventory import estornar_estoque_dos_itens
-                    estornar_estoque_dos_itens(db, comanda.itens)
-                except Exception:
-                    pass
+                from ..services.inventory import estornar_estoque_dos_itens
+                estornar_estoque_dos_itens(db, comanda.itens)
                 try:
                     from ..websocket_manager import manager
                     manager.broadcast_sync({"event": "tables_updated"}, restaurante_id)
