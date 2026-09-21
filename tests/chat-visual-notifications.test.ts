@@ -83,6 +83,19 @@ test('resumo público de tracking evita carregar itens e restaurante no hot path
   assert.match(trackingRoute, /customer_unread_count/);
 });
 
+test('realtime do acompanhamento sincroniza a modalidade convertida do pedido', () => {
+  assert.match(drawer, /tipo\?: string;/);
+  assert.match(drawer, /state\?: OrderStateContract;/);
+  assert.match(drawer, /payload\.tipo/);
+  assert.match(drawer, /payload\.state/);
+  assert.match(cardapioPage, /backendState\?: OrderStateContract/);
+  assert.match(cardapioPage, /const nextTipo = String\(tipo \|\| order\.tipo/);
+  assert.match(cardapioPage, /currentState\).*JSON\.stringify\(state\)/);
+  assert.match(cardapioPage, /tipo: nextTipo/);
+});
+
+
+
 test('caixa usa realtime autenticado e polling somente como fallback', () => {
   assert.match(cashierHook, /\/api\/caixa\/conversas\/unread-count/);
   assert.match(cashierHook, /\/api\/caixa\/conversas\/events/);
