@@ -81,9 +81,7 @@ export const getDeliveryAddressValidationError = (draft: DeliveryAddressDraft): 
   const value = normalizeDeliveryAddressDraft(draft);
   if (!value.logradouro) return 'Informe o logradouro.';
   if (!value.numero) return 'Informe o número.';
-  if (!value.bairro) return 'Informe o bairro.';
-  if (!value.cidade) return 'Informe a cidade.';
-  if (value.uf.length !== 2) return 'Informe a UF com 2 letras.';
+  if (value.uf && value.uf.length !== 2) return 'Informe a UF com 2 letras.';
   if (value.cep && value.cep.length !== 8) return 'Informe um CEP com 8 dígitos ou deixe o campo vazio.';
   if ((value.latitude === null) !== (value.longitude === null)) {
     return 'Latitude e longitude devem ser informadas juntas.';
@@ -124,12 +122,16 @@ export const formatDeliveryAddressLegacy = (snapshot: DeliveryAddressSnapshot): 
   const formattedCep = postalCode.length === 8
     ? `${postalCode.slice(0, 5)}-${postalCode.slice(5)}`
     : postalCode;
+  const cityState = [
+    compactWhitespace(snapshot.cidade),
+    compactWhitespace(snapshot.uf).toUpperCase(),
+  ].filter(Boolean).join(' - ');
   const parts = [
     compactWhitespace(snapshot.logradouro),
     compactWhitespace(snapshot.numero),
     compactWhitespace(snapshot.complemento),
     compactWhitespace(snapshot.bairro),
-    `${compactWhitespace(snapshot.cidade)} - ${compactWhitespace(snapshot.uf).toUpperCase()}`,
+    cityState,
     formattedCep ? `CEP ${formattedCep}` : '',
   ].filter(Boolean);
   const reference = compactWhitespace(snapshot.referencia);
@@ -143,8 +145,8 @@ export const formatDeliveryAddressDraftLegacy = (draft: DeliveryAddressDraft): s
 };
 
 /**
- * Reconhece somente o formato que o próprio KÔMA gera. Endereços livres antigos
- * permanecem como dica visual e nunca são reinterpretados silenciosamente.
+ * Reconhece tanto o formato canônico completo quanto o simplificado por bairros.
+ * Endereços livres não padronizados permanecem como dica visual.
  */
 export const parseDeliveryAddressLegacy = (value: unknown): DeliveryAddressDraft | null => {
   let raw = compactWhitespace(value);
@@ -165,19 +167,25 @@ export const parseDeliveryAddressLegacy = (value: unknown): DeliveryAddressDraft
     raw = cepMatch[1].trim();
   }
 
+  let cidade = '';
+  let uf = '';
   const cityMatch = raw.match(/^(.*),\s*([^,]+?)\s*-\s*([A-Za-z]{2})$/);
-  if (!cityMatch) return null;
-  raw = cityMatch[1].trim();
-  const cidade = cityMatch[2].trim();
-  const uf = cityMatch[3].toUpperCase();
+  if (cityMatch) {
+    raw = cityMatch[1].trim();
+    cidade = cityMatch[2].trim();
+    uf = cityMatch[3].toUpperCase();
+  }
 
   const segments = raw.split(',').map((part) => part.trim()).filter(Boolean);
   if (segments.length < 3) return null;
 
   const logradouro = segments[0];
   const numero = segments[1];
+  if (!cityMatch && !/\d|^s\/n$/i.test(numero)) return null;
+
   const bairro = segments[segments.length - 1];
   const complemento = segments.length > 3 ? segments.slice(2, -1).join(', ') : '';
+
   const draft = normalizeDeliveryAddressDraft({
     logradouro,
     numero,

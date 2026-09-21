@@ -139,26 +139,27 @@ class TestDeliveryCanonicalRules:
             db.commit()
             db.close()
 
-    def test_resolve_delivery_fee_bairro_vazio_rejeita(self, char_setup):
-        """Em modo bairro, não informar o bairro resulta em OrderValidationError."""
+    def test_resolve_delivery_fee_bairro_vazio_usa_taxa_minima_fallback(self, char_setup):
+        """Em modo bairro, não informar o bairro aplica a taxa mínima/padrão de fallback sem erro."""
         db: Session = SessionLocal()
         try:
             config = self._get_or_create_config(db)
             config.tipo_taxa_entrega = "bairro"
             config.tabela_taxas_bairros = [{"bairro": "Centro", "taxa": 5.0}]
+            config.taxa_entrega_fixa = 7.0
             db.commit()
 
-            with pytest.raises(OrderValidationError) as exc:
-                OrderApplicationService.resolve_server_delivery_fee(
-                    db=db,
-                    restaurante_id=CHAR_RESTAURANT_ID,
-                    fulfillment=FulfillmentType.DELIVERY,
-                    items_subtotal=Decimal("40.00"),
-                    neighborhood="",
-                )
-            assert "Bairro de entrega é obrigatório" in str(exc.value)
+            fee = OrderApplicationService.resolve_server_delivery_fee(
+                db=db,
+                restaurante_id=CHAR_RESTAURANT_ID,
+                fulfillment=FulfillmentType.DELIVERY,
+                items_subtotal=Decimal("40.00"),
+                neighborhood="",
+            )
+            assert fee == Decimal("7.00")
         finally:
             config.tipo_taxa_entrega = "fixa"
+            config.taxa_entrega_fixa = 0.0
             db.commit()
             db.close()
 

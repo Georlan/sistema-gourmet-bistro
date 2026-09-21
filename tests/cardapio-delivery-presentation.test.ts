@@ -9,8 +9,8 @@ test('prévia de entrega tem taxa própria, independente da retirada selecionada
   assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8 }, 25, ''), { fee: 8, awaitingNeighborhood: false });
 });
 
-test('bairro não selecionado preserva taxa padrão e explicita que é estimada', () => {
-  assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8, tabelaTaxasBairros: neighborhoods }, 25, ''), { fee: 8, awaitingNeighborhood: true });
+test('bairro não selecionado aplica taxa padrão imediatamente como taxa mínima', () => {
+  assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8, tabelaTaxasBairros: neighborhoods }, 25, ''), { fee: 8, awaitingNeighborhood: false });
 });
 
 test('bairro selecionado mantém taxa e comparação sem diferença entre maiúsculas', () => {
@@ -53,7 +53,7 @@ test('modo distância usa taxa mínima como fallback antes da localização', ()
   assert.deepEqual(getDeliveryQuote(config, 25, ''), {
     fee: 5,
     awaitingNeighborhood: false,
-    awaitingLocation: true,
+    awaitingLocation: false,
   });
 });
 
@@ -79,10 +79,10 @@ test('UI expõe seleção, nome acessível do bairro e endereço legível sem al
   assert.match(cart, /O restaurante pode associar seu pedido a uma mesa depois/);
   assert.match(cart, /aria-pressed=\{deliveryMethod === "delivery"\}/);
   assert.match(cart, /idPrefix="delivery-address"/);
-  assert.match(deliveryAddressFields, /<span className=\{labelClass\}>Bairro<\/span>/);
+  assert.match(deliveryAddressFields, /<span className=\{labelClass\}>Bairro/);
   assert.match(deliveryAddressFields, /id=\{`\$\{idPrefix\}-bairro`\}/);
   assert.match(deliveryAddressFields, /autoComplete="address-line1"/);
-  assert.match(cart, /deliveryMethod === "delivery" \? effectiveDeliveryQuoteFee : 0/);
+  assert.match(cart, /deliveryMethod === "delivery" \? deliveryQuote\.fee : 0/);
 });
 
 test('resumo não promete total final, mostra mínimo e preserva bloqueio de loja pausada', () => {
@@ -101,17 +101,15 @@ test('promoção ausente não renderiza zero solto na sacola', () => {
   assert.match(cart, /\{freeDeliveryThreshold > 0 && deliveryMethod === "delivery" &&/);
 });
 
-test('checkout pede localização somente no contexto da entrega e mantém fallback mínimo', () => {
-  assert.match(cart, /Usar minha localização/);
-  assert.match(cart, /navigator\.geolocation\.getCurrentPosition/);
-  assert.match(cart, /Para outro endereço, continue sem localização/);
-  assert.match(cart, /taxa mínima/);
-  assert.match(deliveryAddressFields, /CEP <span className="font-normal opacity-70">\(opcional\)<\/span>/);
+test('checkout opera por taxa por bairro sem GPS automático e com campos simplificados', () => {
+  assert.doesNotMatch(cart, /Usar minha localização/);
+  assert.doesNotMatch(cart, /navigator\.geolocation/);
+  assert.match(deliveryAddressFields, /<span className=\{labelClass\}>Bairro <span className="font-normal opacity-70">\(opcional\)<\/span><\/span>/);
+  assert.doesNotMatch(deliveryAddressFields, />CEP</);
+  assert.doesNotMatch(deliveryAddressFields, />UF</);
+  assert.doesNotMatch(deliveryAddressFields, />Cidade</);
 });
 
-test('checkout exige uma posição atual e suficientemente precisa antes de cotar distância', () => {
-  assert.match(cart, /position\.coords\.accuracy > 200/);
-  assert.match(cart, /Ative a localização precisa e tente novamente/);
-  assert.match(cart, /enableHighAccuracy: true/);
-  assert.match(cart, /maximumAge: 0/);
+test('bairro não preenchido exibe aplicação da taxa padrão no resumo', () => {
+  assert.match(cart, /Taxa padrão de \$\{formatPrice\(deliveryQuote\.fee\)\} incluída no resumo\./);
 });
