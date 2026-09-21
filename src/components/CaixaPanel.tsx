@@ -30,6 +30,7 @@ import { DeferredCashierSection } from './caixa/loading/DeferredCashierSection';
 import { CashierConversationsDrawer } from './caixa/chat/CashierConversationsDrawer';
 import { useCashierChat } from './caixa/chat/useCashierChat';
 import { CashierDesktopSidebar } from './caixa/navigation/CashierDesktopSidebar';
+import { CashierMobileBottomBar } from './caixa/navigation/CashierMobileBottomBar';
 import { CashierMobileSidebar } from './caixa/navigation/CashierMobileSidebar';
 import { CashierOperatorDrawer } from './caixa/navigation/CashierOperatorDrawer';
 import { getCashierNavigationItem } from './caixa/navigation/cashierNavigation';
@@ -882,7 +883,7 @@ export function CaixaPanel({
             ))}
           </div>
 
-          <div className={"cashier-content min-w-0 min-h-0 flex-1 p-5 relative"}>
+          <div className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
             {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
               <div className={"absolute inset-0 bg-black/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-8 space-y-4"}>
                 <div className={clsx('p-4 bg-koma-panel rounded-full border', cashShiftUiState === 'closed' ? 'border-amber-500/20 text-amber-500' : 'border-koma-border text-koma-muted')}>
@@ -957,6 +958,9 @@ export function CaixaPanel({
                 }}
                 isLoading={isLoading}
                 now={nowTimestamp}
+                hasPrinting={hasPrinting}
+                restaurantConfig={restauranteConfig}
+                onToast={showToast}
               />
             )}
 
@@ -1141,6 +1145,8 @@ export function CaixaPanel({
                     turnoResumo={turnoResumo}
                     pendingPaymentsCount={pagamentosPendentes.length}
                     pendingPaymentsTotal={pendingPaymentsTotal}
+                    hasPrinting={hasPrinting}
+                    restaurantName={String(restauranteConfig?.nome || 'KÔMA')}
                     onConfirmFechamento={handleConfirmarFechamento}
                     onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
                     onNavigateToPendingPayments={() => {
@@ -1204,12 +1210,25 @@ export function CaixaPanel({
           errorMsg={errorMsg}
         />
 
-        <CheckoutDialog controller={checkout} smartPos={smartPos} errorMsg={errorMsg} taxaServicoAtiva={taxaServicoAtiva} serviceTaxRate={serviceTaxRate} />
+        <CheckoutDialog
+          controller={checkout}
+          smartPos={smartPos}
+          errorMsg={errorMsg}
+          taxaServicoAtiva={taxaServicoAtiva}
+          serviceTaxRate={serviceTaxRate}
+          hasPrinting={hasPrinting}
+          restaurantInfo={restauranteConfig as any}
+        />
 
         {selectedKanbanOrder && (
           <KanbanOrderDetails
             order={selectedKanbanOrder}
             saveObservation={saveItemObservation}
+            hasPrinting={hasPrinting}
+            restaurantConfig={restauranteConfig}
+            taxaServicoAtiva={taxaServicoAtiva}
+            serviceTaxRate={serviceTaxRate}
+            onToast={showToast}
             tableMovement={selectedKanbanOrder.contextoSalao ? getTableMovementContext(selectedKanbanOrder) : undefined}
             salonActions={selectedSalonCard ? {
               addConsumption: () => {
@@ -1290,6 +1309,19 @@ export function CaixaPanel({
             if (target) openDeliveryOrderDetails(target);
           }}
           onUnreadCountChange={setChatUnreadCount}
+        />
+
+        <CashierMobileBottomBar
+          activeTab={activeTab}
+          activeSubTab={activeSubTab}
+          onNavigate={(tab, subTab) => {
+            setActiveTab(tab);
+            setActiveSubTab(subTab);
+          }}
+          onOpenMenu={() => setIsMobileSidebarOpen(true)}
+          orderCount={sidebarOrderCount}
+          kitchenCount={activeKitchenItems.length}
+          shiftOpen={turno?.status === 'aberto'}
         />
       </SidebarProvider>
     </div>

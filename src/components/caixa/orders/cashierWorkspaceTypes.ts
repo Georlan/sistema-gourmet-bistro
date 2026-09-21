@@ -19,6 +19,7 @@ export interface DeliveryOrderView {
   status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
   endereco?: string;
   paymentMethod?: string | null;
+  onlinePaymentStatus?: string | null;
   changeFor?: number | null;
   motoboyId?: number | null;
   criadoEm: string;

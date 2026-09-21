@@ -4,6 +4,7 @@ import { isCashierTableOrder as isTableCheckoutOrder } from '../../../domain/cas
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
 import MoneyInput from '../../MoneyInput';
 import { formatCurrency } from '../cashierPresentation';
+import type { RestaurantReceiptInfo } from '../digital-receipt/digitalReceipt';
 import type { useCashierSmartPos } from '../smartpos/useCashierSmartPos';
 import type { CheckoutController } from './useCheckoutController';
 
@@ -21,10 +22,23 @@ interface Props {
   errorMsg: string;
   taxaServicoAtiva: boolean;
   serviceTaxRate: number;
+  hasPrinting?: boolean;
+  restaurantInfo?: RestaurantReceiptInfo | null;
 }
 
+/** @public Props type alias for use in tests and consuming code. */
+export type CheckoutDialogProps = Props;
+
 /** Controlled payment view. Its always-mounted controller owns the transaction lifecycle. */
-export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiva, serviceTaxRate }: Props) {
+export function CheckoutDialog({
+  controller,
+  smartPos,
+  errorMsg,
+  taxaServicoAtiva,
+  serviceTaxRate,
+  hasPrinting = true,
+  restaurantInfo,
+}: Props) {
   const {
     isProcessingPayment,
     selectedOrder,
@@ -50,6 +64,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
     getSelectedItemsTotal,
     printCheckoutReceipt,
     printCheckoutValues,
+    shareCheckoutBill,
   } = controller;
   const {
     getSmartPosCardState,
@@ -370,30 +385,47 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                 );
               })()}
 
-              {/* BARRA COMPACTA DE IMPRESSÃO */}
-              <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-koma-border/40 bg-koma-card/40 shrink-0">
-                <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider flex items-center gap-1.5">
-                  <Printer size={12} /> Impressão:
-                </span>
-                <div className="flex gap-1.5">
+              {/* BARRA DE COMPROVANTE: IMPRESSÃO OU DIGITAL */}
+              {hasPrinting !== false ? (
+                <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-koma-border/40 bg-koma-card/40 shrink-0">
+                  <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider flex items-center gap-1.5">
+                    <Printer size={12} /> Impressão:
+                  </span>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={printCheckoutReceipt}
+                      className="px-2.5 py-1 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-lg text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"
+                      title="Imprime a via térmica completa com todos os itens consumidos"
+                    >
+                      Reimpressão total
+                    </button>
+                    <button
+                      type="button"
+                      onClick={printCheckoutValues}
+                      className="px-2.5 py-1 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-lg text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"
+                      title="Imprime a Conta da Mesa com subtotal e taxa de serviço"
+                    >
+                      Imprimir Conta
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 shrink-0">
+                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Smartphone size={12} /> Conta digital:
+                  </span>
                   <button
                     type="button"
-                    onClick={printCheckoutReceipt}
-                    className="px-2.5 py-1 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-lg text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"
-                    title="Imprime a via térmica completa com todos os itens consumidos"
+                    onClick={() => shareCheckoutBill?.(restaurantInfo)}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold transition-all cursor-pointer text-center flex items-center gap-1.5 shadow-xs"
+                    title="Enviar conta para o WhatsApp ou copiar"
                   >
-                    Reimpressão total
-                  </button>
-                  <button
-                    type="button"
-                    onClick={printCheckoutValues}
-                    className="px-2.5 py-1 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-lg text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"
-                    title="Imprime a Conta da Mesa com subtotal e taxa de serviço"
-                  >
-                    Imprimir Conta
+                    <Smartphone size={13} />
+                    <span>Compartilhar Conta (WhatsApp)</span>
                   </button>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="space-y-3 sm:space-y-4 flex flex-col min-h-0">

@@ -12,6 +12,7 @@ import {
 } from '../../../domain/cashierOrderProjection';
 import { formatBackendTime } from '../../../utils/dateTime';
 import { formatCurrency, operationalOriginLabel } from '../cashierPresentation';
+import { DigitalReceiptAction } from '../digital-receipt/DigitalReceiptAction';
 
 export interface KanbanDetailSourceItem {
   readonly id?: string;
@@ -49,7 +50,10 @@ export interface KanbanDetailOrder {
   readonly modalidade?: string;
   readonly tipo?: string;
   readonly total?: number;
+  readonly amountPaid?: number;
+  readonly amountDue?: number;
   readonly deliveryStatus?: string;
+  readonly onlinePaymentStatus?: string | null;
   readonly identificador?: string;
   readonly telefone?: string;
   readonly paymentMethod?: string | null;
@@ -89,6 +93,11 @@ export interface KanbanOrderDetailsProps {
     readonly cancelConsumption: () => void;
     readonly cancelOrder: () => void;
   };
+  readonly hasPrinting?: boolean;
+  readonly restaurantConfig?: Record<string, unknown> | null;
+  readonly taxaServicoAtiva?: boolean;
+  readonly serviceTaxRate?: number;
+  readonly onToast?: (msg: string, type: 'success' | 'error' | 'info') => void;
 }
 
 type KanbanDetailItem = {
@@ -119,7 +128,19 @@ function groupKanbanDetailItems(items: readonly KanbanDetailSourceItem[]): Kanba
 }
 
 /** Modal UI only; owner callbacks preserve failure handling and close-on-success behavior. */
-export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actions, salonActions, tableMovement, saveObservation }: KanbanOrderDetailsProps) {
+export function KanbanOrderDetails({
+  order: selectedKanbanOrder,
+  transfer,
+  actions,
+  salonActions,
+  tableMovement,
+  saveObservation,
+  hasPrinting = true,
+  restaurantConfig,
+  taxaServicoAtiva,
+  serviceTaxRate,
+  onToast,
+}: KanbanOrderDetailsProps) {
   const { targetId: tableTransferTargetId, onTargetChange: setTableTransferTargetId,
     isTransferring: isTransferringTable, tables: salonTables } = transfer;
   const selectedDetailItems = selectedKanbanOrder
@@ -251,7 +272,7 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
         {/* Itens e info extras */}
         <div className="space-y-3">
           {selectedKanbanOrder.tableContext && <TableOrderContext context={selectedKanbanOrder.tableContext} />}
-          {selectedKanbanOrder.tableContext && selectedKanbanOrder.tableContext.launches.length > 0 && (
+          {hasPrinting !== false && selectedKanbanOrder.tableContext && selectedKanbanOrder.tableContext.launches.length > 0 && (
             <div className="space-y-2 rounded-xl border border-koma-border bg-koma-panel/60 p-3">
               <div className="orders-detail-modal__section-title">
                 <span>Pedidos desta mesa</span>
@@ -305,17 +326,53 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
               {selectedKanbanOrder.telefone && <span>{selectedKanbanOrder.telefone}</span>}
             </div>
           )}
-          {(selectedKanbanOrder.paymentMethod || Number(selectedKanbanOrder.changeFor || 0) > 0) && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3" aria-label="Pagamento do pedido">
-              <span className="block text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Pagamento no atendimento</span>
-              {selectedKanbanOrder.paymentMethod && (
-                <strong className="mt-1 block text-sm capitalize text-koma-foreground">{selectedKanbanOrder.paymentMethod}</strong>
-              )}
-              {Number(selectedKanbanOrder.changeFor || 0) > 0 && (
-                <p className="mt-1 text-xs font-bold text-koma-foreground">Troco para {formatCurrency(Number(selectedKanbanOrder.changeFor))}</p>
-              )}
-            </div>
-          )}
+          {(selectedKanbanOrder.paymentMethod || Number(selectedKanbanOrder.changeFor || 0) > 0) && (() => {
+            const isOnlinePaid =
+              selectedKanbanOrder.onlinePaymentStatus === 'approved' ||
+              (Number(selectedKanbanOrder.amountPaid || 0) >= Number(selectedKanbanOrder.total || 0) &&
+                Number(selectedKanbanOrder.total || 0) > 0);
+
+            if (isOnlinePaid) {
+              return (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3" aria-label="Pagamento do pedido">
+                  <div className="flex items-center gap-1.5">
+                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                    <span className="block text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                      Pagamento online aprovado
+                    </span>
+                  </div>
+                  {selectedKanbanOrder.paymentMethod && (
+                    <strong className="mt-1 block text-sm capitalize text-koma-foreground">
+                      {selectedKanbanOrder.paymentMethod}
+                    </strong>
+                  )}
+                  {Number(selectedKanbanOrder.amountPaid || 0) > 0 && (
+                    <p className="mt-0.5 text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                      Valor recebido: {formatCurrency(Number(selectedKanbanOrder.amountPaid))}
+                    </p>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3" aria-label="Pagamento do pedido">
+                <span className="block text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                  Pagamento no atendimento
+                </span>
+                {selectedKanbanOrder.paymentMethod && (
+                  <strong className="mt-1 block text-sm capitalize text-koma-foreground">
+                    {selectedKanbanOrder.paymentMethod}
+                  </strong>
+                )}
+                {Number(selectedKanbanOrder.changeFor || 0) > 0 && (
+                  <p className="mt-1 text-xs font-bold text-koma-foreground">
+                    Troco para {formatCurrency(Number(selectedKanbanOrder.changeFor))}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
           {selectedIsDelivery && selectedKanbanOrder.courierAssignment && (
             <div className="rounded-xl border border-koma-border bg-koma-panel/60 p-3 space-y-2">
               <div className="orders-detail-modal__section-title">
@@ -394,7 +451,7 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
                 </span>
               </button>
             )}
-            {!isWholeTableDetail && (
+            {!isWholeTableDetail && hasPrinting !== false && (
               <button
                 type="button"
                 onClick={() => actions.reprintProduction()}
@@ -407,26 +464,46 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
             {Boolean(selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0) && (
               <div className={"space-y-2 w-full"}>
                 {selectedKanbanOrder.contextoSalao && (
-                  <div className={"flex gap-2 w-full"}>
-                    <button
-                      type="button"
-                      onClick={actions.printFullTable}
-                      title="Reimprime todos os itens ativos da mesa"
-                      className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
-                    >
-                      <Printer size={13} />
-                      <span>Reimpressão total</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={actions.printTableValues}
-                      title="Imprime a Conta da Mesa"
-                      className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
-                    >
-                      <Printer size={13} />
-                      <span>Conta da Mesa</span>
-                    </button>
-                  </div>
+                  hasPrinting !== false ? (
+                    <div className={"flex gap-2 w-full"}>
+                      <button
+                        type="button"
+                        onClick={actions.printFullTable}
+                        title="Reimprime todos os itens ativos da mesa"
+                        className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
+                      >
+                        <Printer size={13} />
+                        <span>Reimpressão total</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={actions.printTableValues}
+                        title="Imprime a Conta da Mesa"
+                        className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
+                      >
+                        <Printer size={13} />
+                        <span>Conta da Mesa</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-full">
+                      <DigitalReceiptAction
+                        order={{
+                          mesaId: selectedKanbanOrder.mesaId,
+                          identificador: selectedKanbanOrder.identificador,
+                          itens: (selectedKanbanOrder.itens as any) || [],
+                          valorPago: selectedKanbanOrder.amountPaid || 0,
+                          telefone: selectedKanbanOrder.telefone,
+                        }}
+                        restaurantConfig={restaurantConfig}
+                        taxaServicoAtiva={taxaServicoAtiva}
+                        serviceTaxRate={serviceTaxRate}
+                        label="Compartilhar Conta da Mesa (WhatsApp)"
+                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                        onToast={onToast}
+                      />
+                    </div>
+                  )
                 )}
                 {selectedKanbanOrder.contextoSalao && (
                   <div className={"flex gap-2 w-full"}>
