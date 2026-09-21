@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock3,
+  QrCode,
   RefreshCw,
   Send,
   X,
@@ -59,6 +60,7 @@ interface CardapioOrderChatPanelProps {
   order: StoredOrder;
   onBack: () => void;
   onClose: () => void;
+  onPayPix?: () => void;
 }
 
 function resolveTrackingToken(order: StoredOrder): string | null {
@@ -89,6 +91,7 @@ export default function CardapioOrderChatPanel({
   order,
   onBack,
   onClose,
+  onPayPix,
 }: CardapioOrderChatPanelProps) {
   const token = useMemo(() => resolveTrackingToken(order), [order]);
   const draftKey = token ? `koma:order-chat-draft:v1:${order.id}` : null;
@@ -444,19 +447,37 @@ export default function CardapioOrderChatPanel({
           <div className="flex items-center gap-2">
             <div className={clsx(
               "grid h-8 w-8 place-items-center rounded-xl",
-              rejected ? "bg-rose-500/15 text-rose-400" : "bg-emerald-500/15 text-emerald-400",
+              rejected ? "bg-rose-500/15 text-rose-400" : state.phase === "payment_pending" ? "bg-amber-500/15 text-amber-400" : "bg-emerald-500/15 text-emerald-400",
             )}>
-              {rejected ? <XCircle className="h-4 w-4" /> : currentStep >= steps.length ? <CheckCircle2 className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
+              {rejected ? <XCircle className="h-4 w-4" /> : state.phase === "payment_pending" ? <QrCode className="h-4 w-4" /> : currentStep >= steps.length ? <CheckCircle2 className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
             </div>
             <div>
-              <span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Status atual</span>
-              <p className={clsx("text-xs font-black", rejected ? "text-rose-400" : "text-emerald-400")}>{state.label}</p>
+              <span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">
+                {state.phase === "payment_pending" ? "Status do pagamento" : "Status atual"}
+              </span>
+              <p className={clsx("text-xs font-black", rejected ? "text-rose-400" : state.phase === "payment_pending" ? "text-amber-300" : "text-emerald-400")}>{state.label}</p>
             </div>
           </div>
           <span className="text-[10px] font-bold text-koma-muted">{orderFulfillmentLabel(state.fulfillment)}</span>
         </div>
 
-        {!rejected && (
+        {state.phase === "payment_pending" ? (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-3">
+            <p className="min-w-0 text-[10px] leading-relaxed text-amber-200/80">
+              Confirme o Pix para liberar o pedido para o restaurante.
+            </p>
+            {order.pagamento?.qr_code && onPayPix && (
+              <button
+                type="button"
+                onClick={onPayPix}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-500 px-3 text-[10px] font-black text-white shadow transition hover:bg-emerald-400"
+              >
+                <QrCode className="h-3.5 w-3.5" />
+                Pagar Pix
+              </button>
+            )}
+          </div>
+        ) : !rejected ? (
           <div className={clsx("mt-3 grid gap-1", isDelivery ? "grid-cols-5" : "grid-cols-4")}>
             {steps.map((label, index) => {
               const passed = currentStep >= index + 1;
@@ -468,7 +489,7 @@ export default function CardapioOrderChatPanel({
               );
             })}
           </div>
-        )}
+        ) : null}
       </div>
 
       <CardapioPushNotifications order={order} />
