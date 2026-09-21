@@ -498,6 +498,10 @@ export default function CardapioOrdersDrawer({
             order={chatOrder}
             onBack={() => setChatOrderId(null)}
             onClose={closeDrawer}
+            onPayPix={() => {
+              setPixModalOrder(chatOrder);
+              setChatOrderId(null);
+            }}
           />
         </div>
       </div>

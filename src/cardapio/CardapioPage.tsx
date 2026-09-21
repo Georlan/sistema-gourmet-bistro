@@ -859,9 +859,11 @@ export default function CardapioPage() {
                       ? "O restaurante não conseguiu aceitar este pedido. Você pode montar um novo pedido quando quiser."
                       : terminal
                         ? "Este pedido foi concluído. O resumo continua aqui até você iniciar outro acompanhamento."
-                        : currentStep === 1
-                          ? "O pedido está no painel do restaurante aguardando aceite."
-                          : "O restaurante já atualizou o andamento do seu pedido."}
+                        : activeState.phase === "payment_pending"
+                          ? "O Pix ainda não foi confirmado. Assim que o pagamento for aprovado, o restaurante poderá aceitar o pedido."
+                          : currentStep === 1
+                            ? "O pedido entrou na operação e está aguardando o aceite do restaurante."
+                            : "O restaurante já atualizou o andamento do seu pedido."}
                   </p>
                   <p className="mt-1 text-[10px] text-koma-subtle">
                     {orderFulfillmentLabel(activeState.fulfillment)} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total || 0)}
@@ -894,8 +896,22 @@ export default function CardapioPage() {
               </div>
             </div>
 
-            {!rejected && (
-              <div className={clsx("mt-4 grid gap-1.5 border-t border-koma-border pt-3", isDeliveryOrder ? "grid-cols-5" : "grid-cols-4")}> 
+            {!rejected && activeState.phase === "payment_pending" ? (
+              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-3">
+                <div className="flex items-start gap-2.5">
+                  <QrCode className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                      Primeiro: confirme o Pix
+                    </p>
+                    <p className="mt-1 text-[10px] leading-relaxed text-amber-200/80">
+                      O andamento do preparo começa depois da confirmação automática do pagamento.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : !rejected ? (
+              <div className={clsx("mt-4 grid gap-1.5 border-t border-koma-border pt-3", isDeliveryOrder ? "grid-cols-5" : "grid-cols-4")}>
                 {trackingSteps.map((label, index) => {
                   const step = index + 1;
                   const passed = currentStep >= step;
@@ -907,7 +923,7 @@ export default function CardapioPage() {
                   );
                 })}
               </div>
-            )}
+            ) : null}
           </section>
         )}
 

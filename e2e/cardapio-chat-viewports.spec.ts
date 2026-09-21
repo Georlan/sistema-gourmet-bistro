@@ -157,6 +157,95 @@ for (const viewport of [
   });
 }
 
+test('Pix pendente prioriza pagamento no chat antes do andamento operacional', async ({ page }) => {
+  const paymentOrder = {
+    ...storedOrder,
+    id: 'pedido-pix-chat-e2e',
+    numero_pedido: 4322,
+    status: 'aguardando_pagamento',
+    state: {
+      status: 'pending',
+      phase: 'payment_pending',
+      label: 'Aguardando pagamento',
+      fulfillment: 'pickup',
+      terminal: false,
+      rejected: false,
+      can_chat: true,
+      can_cancel: false,
+      progress_step: 1,
+      progress_total: 4,
+    },
+    pagamento: {
+      status: 'pending',
+      cobranca_online: true,
+      metodo: 'pix',
+      qr_code: '00020126580014BR.GOV.BCB.PIX',
+      qr_code_base64: null,
+      ticket_url: 'https://example.test/pix',
+      expira_em: '2026-09-21T23:59:00Z',
+    },
+  };
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route(API_ORIGIN + '/**', async route => {
+    const request = route.request();
+    const { pathname } = new URL(request.url());
+
+    if (pathname === '/api/cardapio-digital/public') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(publicMenuPayload) });
+      return;
+    }
+    if (pathname === '/cardapio/clientes/me') {
+      await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ detail: 'sem sessão' }) });
+      return;
+    }
+    if (pathname.endsWith('/messages')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+    if (pathname.endsWith('/read') && request.method() === 'POST') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok' }) });
+      return;
+    }
+    if (pathname.endsWith('/events')) {
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: ': ready\n\n' });
+      return;
+    }
+    if (pathname.includes('/api/cardapio/pedidos/acompanhar/')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'aguardando_pagamento',
+          tipo: 'Retirada',
+          pagamento: paymentOrder.pagamento,
+          conversa: { unread_count: 0, can_chat: true, closed_at: null },
+          state: paymentOrder.state,
+        }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+  });
+
+  await page.addInitScript(order => {
+    window.sessionStorage.setItem('koma_active_orders', JSON.stringify([order]));
+  }, paymentOrder);
+
+  await page.goto('/cardapio?restaurante_id=2');
+  await expect(page.getByRole('heading', { name: 'Aguardando pagamento', exact: true })).toBeVisible();
+  await expect(page.getByText('Primeiro: confirme o Pix', { exact: true })).toBeVisible();
+  await expect(page.getByText('O pedido entrou na operação e está aguardando o aceite do restaurante.', { exact: true })).toHaveCount(0);
+
+  await page.locator('#floating-order-chat-trigger').click();
+  const panel = page.locator('#inline-order-chat-panel');
+  await expect(panel.getByText('Status do pagamento', { exact: true })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Pagar Pix', exact: true })).toBeVisible();
+
+  await panel.getByRole('button', { name: 'Pagar Pix', exact: true }).click();
+  await expect(page.locator('#pix-payment-modal-backdrop')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Pagamento Pix do Pedido #4322' })).toBeVisible();
+});
 test('feed preserva evento separado e retry HTTP reutiliza UUID sem duplicar mensagem', async ({ page }) => {
   await mockBackend(page);
   await seedOrder(page);
