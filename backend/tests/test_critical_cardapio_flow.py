@@ -17,6 +17,7 @@ from app.models import (
     CaixaTurno,
     Item,
     ActivityLog,
+    ConfiguracaoRestaurante,
 )
 from app.security import create_access_token
 from app.services.customer_auth import create_customer_access_token
@@ -46,6 +47,18 @@ def setup_cardapio_data():
             db.commit()
         elif rest.plano != "pro":
             rest.plano = "pro"
+            db.commit()
+
+        config = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == 100,
+        ).first()
+        if config is None:
+            db.add(ConfiguracaoRestaurante(
+                restaurante_id=100,
+                delivery_ativo=True,
+                tipo_taxa_entrega="fixa",
+                taxa_entrega_fixa=7.0,
+            ))
             db.commit()
 
         # Create Mesa 1 for restaurant 100
@@ -562,6 +575,7 @@ def test_caixa_delivery_manual_exige_dados_de_entrega():
     [
         ("delivery", "Rua das Flores, 123", "na_entrega", "Delivery", "Rua das Flores, 123", 7.0),
         ("retirada", "Retirada no Balcão", "na_entrega", "Retirada", None, 0.0),
+        ("consumo_local", "", "na_entrega", "Consumo no Local", None, 0.0),
     ],
 )
 def test_pedido_online_preserva_modalidade_no_kanban(
@@ -583,7 +597,11 @@ def test_pedido_online_preserva_modalidade_no_kanban(
             }
         ],
         "cliente_nome": f"Cliente {tipo_pedido}",
-        "cliente_telefone": "81999990000" if tipo_pedido == "delivery" else "81999990001",
+        "cliente_telefone": {
+            "delivery": "81999990000",
+            "retirada": "81999990001",
+            "consumo_local": "81999990002",
+        }[tipo_pedido],
         "endereco_entrega": endereco,
         "taxa_entrega": 8.0,
         "forma_pagamento": forma_pagamento,
@@ -591,7 +609,7 @@ def test_pedido_online_preserva_modalidade_no_kanban(
     }
 
     response = client.post("/cardapio/pedidos", json=payload)
-    assert response.status_code == 201
+    assert response.status_code == 201, response.text
     assert response.json()["pagamento"] == {
         "status": "pendente_no_atendimento",
         "cobranca_online": False,
