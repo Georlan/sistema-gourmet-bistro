@@ -27,7 +27,7 @@ export function getDeliveryQuote(config: DeliveryConfig | undefined, subtotal: n
     return {
       fee: freeBySubtotal ? 0 : minimumFee,
       awaitingNeighborhood: false,
-      awaitingLocation: !freeBySubtotal,
+      awaitingLocation: false,
     };
   }
 
@@ -39,7 +39,7 @@ export function getDeliveryQuote(config: DeliveryConfig | undefined, subtotal: n
       : undefined;
     return {
       fee: freeBySubtotal ? 0 : selected?.taxa ?? config?.taxaEntregaPadrao ?? 0,
-      awaitingNeighborhood: !cleanBairro && !freeBySubtotal,
+      awaitingNeighborhood: false,
     };
   }
 

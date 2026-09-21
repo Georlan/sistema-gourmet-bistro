@@ -212,9 +212,6 @@ test('sacola abre no primeiro toque real mesmo com o atalho de pedidos e chat vi
 });
 
 async function fillDeliveryAddress(page: Page) {
-  await page.locator('#delivery-address-cep').fill('60000000');
-  await page.locator('#delivery-address-uf').fill('CE');
-  await page.locator('#delivery-address-cidade').fill('Fortaleza');
   await page.locator('#delivery-address-bairro').fill('Centro');
   await page.locator('#delivery-address-logradouro').fill('Rua das Flores');
   await page.locator('#delivery-address-numero').fill('123');
@@ -362,7 +359,7 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
   await fillDeliveryAddress(page);
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
 
-  const canonicalAddress = 'Rua das Flores, 123, Centro, Fortaleza - CE, CEP 60000-000';
+  const canonicalAddress = 'Rua das Flores, 123, Centro';
   await expect(page.locator('#checkout-card').getByText(canonicalAddress, { exact: true })).toBeVisible();
   await expect(page.getByText(/Taxa de entrega estimada/)).toBeVisible();
   await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();

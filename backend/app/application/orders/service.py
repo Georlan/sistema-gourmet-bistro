@@ -204,18 +204,16 @@ class OrderApplicationService:
 
         if tipo_taxa == "bairro":
             clean_bairro = " ".join(str(neighborhood or "").strip().split())
-            if not clean_bairro:
-                raise OrderValidationError("Bairro de entrega é obrigatório quando a cobrança é por bairro.")
-
-            normalized_target = normalize_neighborhood(clean_bairro)
-            try:
-                tabela = normalize_neighborhood_fee_table(config.tabela_taxas_bairros or [])
-            except ValueError as exc:
-                raise OrderValidationError(str(exc)) from exc
-            for b in tabela:
-                if normalize_neighborhood(b["bairro"]) == normalized_target:
-                    matched_bairro_taxa = _validated_configured_delivery_fee(b.get("taxa"))
-                    break
+            if clean_bairro:
+                normalized_target = normalize_neighborhood(clean_bairro)
+                try:
+                    tabela = normalize_neighborhood_fee_table(config.tabela_taxas_bairros or [])
+                except ValueError as exc:
+                    raise OrderValidationError(str(exc)) from exc
+                for b in tabela:
+                    if normalize_neighborhood(b["bairro"]) == normalized_target:
+                        matched_bairro_taxa = _validated_configured_delivery_fee(b.get("taxa"))
+                        break
 
             if matched_bairro_taxa is None:
                 fallback_fee = getattr(config, "taxa_entrega_fixa", None)

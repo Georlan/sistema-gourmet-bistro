@@ -1,10 +1,8 @@
 import type { ChangeEvent } from 'react';
 import {
   type DeliveryAddressDraft,
-  formatCepInput,
   updateDeliveryAddressGeographicField,
 } from '../../domain/deliveryAddress';
-import PostalCodeLookupStatus from './PostalCodeLookupStatus';
 
 type NeighborhoodOption = {
   value: string;
@@ -54,101 +52,49 @@ export default function DeliveryAddressFields({
         </div>
       )}
 
-      <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-2">
-        <label>
-          <span className={labelClass}>CEP <span className="font-normal opacity-70">(opcional)</span></span>
+      <div className="space-y-1.5">
+        <label className="block">
+          <span className={labelClass}>Bairro <span className="font-normal opacity-70">(opcional)</span></span>
           <input
-            id={`${idPrefix}-cep`}
-            inputMode="numeric"
-            autoComplete="postal-code"
-            placeholder="00000-000"
-            value={formatCepInput(value.cep)}
-            onChange={(event) => onChange(updateDeliveryAddressGeographicField(
-              value,
-              'cep',
-              event.target.value.replace(/\D/g, '').slice(0, 8),
-            ))}
+            id={`${idPrefix}-bairro`}
+            list={`${idPrefix}-bairro-options`}
+            autoComplete="address-level3"
+            placeholder={neighborhoodOptions.length > 0 ? "Digite ou selecione o bairro" : "Ex.: Centro"}
+            value={value.bairro}
+            onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'bairro', event.target.value))}
             className={inputClass}
           />
-        </label>
-        <label>
-          <span className={labelClass}>UF</span>
-          <input
-            id={`${idPrefix}-uf`}
-            autoComplete="address-level1"
-            placeholder="CE"
-            maxLength={2}
-            value={value.uf}
-            onChange={(event) => onChange(updateDeliveryAddressGeographicField(
-              value,
-              'uf',
-              event.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase(),
-            ))}
-            className={inputClass}
-            required
-          />
-        </label>
-      </div>
-      <PostalCodeLookupStatus value={value} onChange={onChange} compact={compact} />
-
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <label>
-          <span className={labelClass}>Cidade</span>
-          <input
-            id={`${idPrefix}-cidade`}
-            autoComplete="address-level2"
-            placeholder="Fortaleza"
-            value={value.cidade}
-            onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'cidade', event.target.value))}
-            className={inputClass}
-            required
-          />
-        </label>
-        <div className="space-y-1.5">
-          <label className="block">
-            <span className={labelClass}>Bairro</span>
-            <input
-              id={`${idPrefix}-bairro`}
-              list={`${idPrefix}-bairro-options`}
-              autoComplete="address-level3"
-              placeholder={neighborhoodOptions.length > 0 ? "Digite ou selecione o bairro" : "Centro"}
-              value={value.bairro}
-              onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'bairro', event.target.value))}
-              className={inputClass}
-              required
-            />
-            {neighborhoodOptions.length > 0 && (
-              <datalist id={`${idPrefix}-bairro-options`}>
-                {neighborhoodOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label || option.value}
-                  </option>
-                ))}
-              </datalist>
-            )}
-          </label>
-          {neighborhoodOptions.length > 0 && !compact && (
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
-              {neighborhoodOptions.map((option) => {
-                const isSelected = value.bairro.trim().toLowerCase() === option.value.trim().toLowerCase();
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => onChange(updateDeliveryAddressGeographicField(value, 'bairro', option.value))}
-                    className={`inline-flex items-center rounded-lg border px-2 py-1 text-[10px] font-medium transition ${
-                      isSelected
-                        ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400 font-bold'
-                        : 'border-koma-border bg-koma-panel text-koma-muted hover:border-emerald-500/30 hover:text-koma-foreground'
-                    }`}
-                  >
-                    {option.label || option.value}
-                  </button>
-                );
-              })}
-            </div>
+          {neighborhoodOptions.length > 0 && (
+            <datalist id={`${idPrefix}-bairro-options`}>
+              {neighborhoodOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label || option.value}
+                </option>
+              ))}
+            </datalist>
           )}
-        </div>
+        </label>
+        {neighborhoodOptions.length > 0 && !compact && (
+          <div className="flex flex-wrap gap-1.5 pt-0.5">
+            {neighborhoodOptions.map((option) => {
+              const isSelected = value.bairro.trim().toLowerCase() === option.value.trim().toLowerCase();
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onChange(updateDeliveryAddressGeographicField(value, 'bairro', option.value))}
+                  className={`inline-flex items-center rounded-lg border px-2 py-1 text-[10px] font-medium transition ${
+                    isSelected
+                      ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-400 font-bold'
+                      : 'border-koma-border bg-koma-panel text-koma-muted hover:border-emerald-500/30 hover:text-koma-foreground'
+                  }`}
+                >
+                  {option.label || option.value}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)_92px] gap-2">
