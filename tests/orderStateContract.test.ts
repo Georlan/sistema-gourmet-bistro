@@ -25,9 +25,11 @@ test('fallback de compatibilidade é mapa exato, não substring', () => {
   assert.match(trackingSource, /STATUS_ALIASES\[rawStatus\]/);
 });
 
-
 test('fulfillment público tem rótulo ternário e não rebaixa dine-in para retirada', () => {
-  assert.match(trackingSource, /export function orderFulfillmentLabel/);\n  assert.match(trackingSource, /if \(fulfillment === "delivery"\) return "Delivery"/);\n  assert.match(trackingSource, /if \(fulfillment === "pickup"\) return "Retirada"/);\n  assert.match(trackingSource, /return "Consumo local"/);
+  assert.match(trackingSource, /export function orderFulfillmentLabel/);
+  assert.match(trackingSource, /if \(fulfillment === "delivery"\) return "Delivery"/);
+  assert.match(trackingSource, /if \(fulfillment === "pickup"\) return "Retirada"/);
+  assert.match(trackingSource, /return "Consumo local"/);
   assert.match(drawerSource, /orderFulfillmentLabel\(state\.fulfillment\)/);
   assert.match(chatSource, /orderFulfillmentLabel\(state\.fulfillment\)/);
   assert.match(pageSource, /orderFulfillmentLabel\(activeState\.fulfillment\)/);
