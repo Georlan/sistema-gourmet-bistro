@@ -123,11 +123,8 @@ def _close_refunded_order_in_session(
         for item in comanda.itens:
             if item.status != "cancelado":
                 item.status = "cancelado"
-        try:
-            from ..inventory import estornar_estoque_dos_itens
-            estornar_estoque_dos_itens(db, comanda.itens, usuario_id=usuario_id)
-        except Exception:
-            pass
+        from ..inventory import estornar_estoque_dos_itens
+        estornar_estoque_dos_itens(db, comanda.itens, usuario_id=usuario_id)
         try:
             from ...order_chat_models import OrderConversation
             conversation = (

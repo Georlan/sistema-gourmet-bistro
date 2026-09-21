@@ -338,28 +338,18 @@ class OnlinePaymentService:
         if locked_intent.status == "approved" and mapped != "approved":
             provider_status = (payment.status or "").strip().lower()
             if provider_status in {"refunded", "cancelled", "charged_back"}:
-                comanda = db.query(Comanda).filter(
-                    Comanda.restaurante_id == account.restaurante_id,
-                    Comanda.id == locked_intent.comanda_id,
-                ).with_for_update().one()
-                locked_intent.status = "cancelled"
-                comanda.online_payment_status = "cancelled"
-                comanda.delivery_status = "recusado"
-                comanda.fechada = True
-                comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
-                for item in comanda.itens:
-                    if item.status != "cancelado":
-                        item.status = "cancelado"
-                try:
-                    from ...order_chat_models import OrderConversation
-                    conversation = db.query(OrderConversation).filter(
-                        OrderConversation.restaurante_id == account.restaurante_id,
-                        OrderConversation.pedido_id == comanda.id,
-                    ).first()
-                    if conversation is not None and conversation.closed_at is None:
-                        conversation.closed_at = comanda.fechado_em
-                except Exception:
-                    pass
+                # Reembolso/cancelamento vindo diretamente do Mercado Pago deve
+                # usar exatamente o mesmo fechamento transacional do fluxo de
+                # reembolso manual: cancelar itens, estornar estoque e notificar
+                # o Caixa, sem duplicar a política em dois lugares.
+                from .refunds import _close_refunded_order_in_session
+
+                _close_refunded_order_in_session(
+                    db,
+                    restaurante_id=account.restaurante_id,
+                    comanda_id=locked_intent.comanda_id,
+                    intent=locked_intent,
+                )
             return locked_intent, False
         if locked_intent.status in UNPAID_TERMINAL_STATUSES:
             if mapped == "approved":
