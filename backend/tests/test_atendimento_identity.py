@@ -1,9 +1,21 @@
 import datetime
 
 import pytest
+from fastapi import BackgroundTasks
 
 from app.database import Base, SessionLocal, current_restaurante_id, engine
-from app.models import Categoria, Comanda, Item, Lancamento, Mesa, Produto, Restaurante, Usuario
+from app.models import (
+    CaixaTurno,
+    Categoria,
+    Comanda,
+    Item,
+    Lancamento,
+    Mesa,
+    PrintJob,
+    Produto,
+    Restaurante,
+    Usuario,
+)
 from app.operational_models import (
     AtendimentoComanda,
     AtendimentoMesa,
@@ -25,6 +37,8 @@ from app.services.atendimentos import (
     transfer_items_batch,
     unmerge_by_comanda,
 )
+from app.routes.atendimentos import lancar_itens_na_familia_principal
+from app.schemas import ItemCreate, LancamentoCreate
 
 
 TENANT = 1960
@@ -46,7 +60,9 @@ def setup_atendimento_identity():
         db.query(NumeradorOperacional).filter(NumeradorOperacional.restaurante_id == TENANT).delete(synchronize_session=False)
         db.query(Item).filter(Item.restaurante_id == TENANT).delete(synchronize_session=False)
         db.query(Lancamento).filter(Lancamento.restaurante_id == TENANT).delete(synchronize_session=False)
+        db.query(PrintJob).filter(PrintJob.restaurante_id == TENANT).delete(synchronize_session=False)
         db.query(Comanda).filter(Comanda.restaurante_id == TENANT).delete(synchronize_session=False)
+        db.query(CaixaTurno).filter(CaixaTurno.restaurante_id == TENANT).delete(synchronize_session=False)
         db.query(Produto).filter(Produto.restaurante_id == TENANT).delete(synchronize_session=False)
         db.query(Categoria).filter(Categoria.restaurante_id == TENANT).delete(synchronize_session=False)
         db.query(Mesa).filter(Mesa.restaurante_id == TENANT).delete(synchronize_session=False)
@@ -85,6 +101,14 @@ def setup_atendimento_identity():
                 nome="Produto Família",
                 preco=10.0,
                 ativo=True,
+            )
+        )
+        db.add(
+            CaixaTurno(
+                restaurante_id=TENANT,
+                aberto_por_id=USER,
+                saldo_inicial=0,
+                status="aberto",
             )
         )
         db.commit()
@@ -243,6 +267,110 @@ def test_associate_pickup_converts_to_dine_in_and_materializes_table_family():
             MovimentoAtendimento.tipo == "transferencia",
         ).count() >= 1
         db.commit()
+    finally:
+        db.close()
+
+
+def test_converted_pickup_accepts_idempotent_new_launch_in_same_table_family():
+    db = SessionLocal()
+    try:
+        command = _command(
+            db,
+            "c-converted-pickup-new-item",
+            None,
+            304,
+            tipo="Retirada",
+        )
+        original_launch = _launch(
+            db,
+            command,
+            "l-converted-pickup-original",
+            "i-converted-pickup-original",
+        )
+        original_launch.origem = "cardapio"
+        db.flush()
+
+        converted = associate_order_to_table(
+            db,
+            TENANT,
+            command.id,
+            4,
+            actor_id=USER,
+        )
+        db.commit()
+
+        payload = LancamentoCreate(
+            garcom_id=USER,
+            idempotency_key="converted-pickup-304-new-item",
+            itens=[
+                ItemCreate(
+                    produto_id=PRODUCT,
+                    observacao="Adicionado depois de sentar",
+                    cliente_nome="Cliente convertido",
+                )
+            ],
+        )
+        created = lancar_itens_na_familia_principal(
+            converted.id,
+            payload,
+            BackgroundTasks(),
+            db,
+            db.query(Usuario).filter(Usuario.id == USER).one(),
+        )
+
+        assert created.comanda_id == converted.id
+        db.refresh(converted)
+        assert converted.tipo == "Consumo no Local"
+        assert converted.mesa_id == 4
+
+        family_link = db.query(AtendimentoComanda).filter(
+            AtendimentoComanda.restaurante_id == TENANT,
+            AtendimentoComanda.comanda_id == converted.id,
+        ).one()
+        new_launch = db.query(Lancamento).filter(
+            Lancamento.restaurante_id == TENANT,
+            Lancamento.id == created.id,
+        ).one()
+        assert new_launch.comanda_id == converted.id
+        assert new_launch.id != original_launch.id
+        assert ensure_launch_identity(db, new_launch).atendimento_id == family_link.atendimento_id
+
+        new_items = db.query(Item).filter(
+            Item.restaurante_id == TENANT,
+            Item.lancamento_id == new_launch.id,
+        ).all()
+        assert len(new_items) == 1
+        assert new_items[0].observacao == "Adicionado depois de sentar"
+
+        # O trabalho automático referencia somente o novo lançamento. A cozinha
+        # não recebe novamente o lote original ao adicionar itens após sentar.
+        jobs = db.query(PrintJob).filter(
+            PrintJob.restaurante_id == TENANT,
+            PrintJob.source_id == new_launch.id,
+        ).all()
+        assert len(jobs) == 1
+        assert "ADICIONADO DEPOIS DE SENTAR" in jobs[0].payload_text.upper()
+        assert db.query(PrintJob).filter(
+            PrintJob.restaurante_id == TENANT,
+            PrintJob.source_id == original_launch.id,
+        ).count() == 0
+
+        replay = lancar_itens_na_familia_principal(
+            converted.id,
+            payload,
+            BackgroundTasks(),
+            db,
+            db.query(Usuario).filter(Usuario.id == USER).one(),
+        )
+        assert replay.id == new_launch.id
+        assert db.query(Item).filter(
+            Item.restaurante_id == TENANT,
+            Item.comanda_id == converted.id,
+        ).count() == 2
+        assert db.query(PrintJob).filter(
+            PrintJob.restaurante_id == TENANT,
+            PrintJob.source_id == new_launch.id,
+        ).count() == 1
     finally:
         db.close()
 
