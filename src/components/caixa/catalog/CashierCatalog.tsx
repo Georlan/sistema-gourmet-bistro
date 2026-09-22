@@ -311,15 +311,15 @@ export default function CashierCatalog({
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowProductModal(false);
           }}
-          className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-2 sm:p-4 overflow-hidden cursor-pointer"}
+          className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-0 sm:p-4 overflow-hidden cursor-pointer"}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="product-modal-title"
-            className={"w-full max-w-xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto bg-koma-card border border-koma-border rounded-3xl p-5 sm:p-6 space-y-4 text-left shadow-2xl relative animate-scale-in cursor-default"}
+            className={"w-full h-[100dvh] sm:h-auto max-w-xl max-h-[100dvh] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto bg-koma-card border-0 sm:border border-koma-border rounded-none sm:rounded-3xl px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-0 sm:p-6 space-y-4 text-left shadow-2xl relative animate-scale-in cursor-default"}
           >
-            <div className={"flex justify-between items-center pb-2 border-b border-koma-border"}>
+            <div className={"sticky top-0 z-20 -mx-4 flex min-h-16 items-center justify-between border-b border-koma-border bg-koma-card/95 px-4 py-3 backdrop-blur-md sm:static sm:mx-0 sm:min-h-0 sm:bg-transparent sm:px-0 sm:pb-2 sm:pt-0"}>
               <div>
                 <div className="flex items-center gap-2">
                   <h3 id="product-modal-title" className="text-base font-bold text-koma-foreground">
@@ -339,7 +339,7 @@ export default function CashierCatalog({
                 type="button"
                 onClick={() => setShowProductModal(false)}
                 aria-label="Fechar"
-                className={"p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"}
+                className={"grid h-11 w-11 place-items-center rounded-xl border border-koma-border text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer"}
               >
                 <X size={16} />
               </button>
@@ -479,7 +479,7 @@ export default function CashierCatalog({
                   placeholder="Ex: Cheeseburger Duplo"
                   value={prodFormNome}
                   onChange={(e) => setProdFormNome(e.target.value)}
-                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
+                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
               </div>
 
@@ -550,7 +550,7 @@ export default function CashierCatalog({
                   value={prodFormDescricao}
                   onChange={(e) => setProdFormDescricao(e.target.value)}
                   rows={2}
-                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
+                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
                 <p className="text-[9px] text-koma-muted">
                   Use uma frase curta com os principais ingredientes. Ela também ajuda na busca.
@@ -578,7 +578,7 @@ export default function CashierCatalog({
                       placeholder="Ex.: 001"
                       value={prodFormId}
                       onChange={(e) => setProdFormId(e.target.value)}
-                      className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
+                      className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                     />
                     <p className="text-[9px] leading-relaxed text-koma-muted">
                       O KÔMA já sugere um código. Altere apenas se sua operação usa código curto, etiqueta ou leitura no PDV.
@@ -599,7 +599,7 @@ export default function CashierCatalog({
                     type="button"
                     onClick={() => productImageInputRef.current?.click()}
                     disabled={isLoading}
-                    className="grid h-32 w-full shrink-0 place-items-center overflow-hidden rounded-xl border border-dashed border-koma-border bg-koma-raised transition hover:border-emerald-500/50 sm:w-44"
+                    className="grid h-24 w-full shrink-0 place-items-center overflow-hidden rounded-xl border border-dashed border-koma-border bg-koma-raised transition hover:border-emerald-500/50 sm:h-32 sm:w-44"
                     aria-label={productImagePreview ? 'Trocar foto do produto' : 'Adicionar foto do produto'}
                   >
                     {productImagePreview ? (
@@ -689,7 +689,7 @@ export default function CashierCatalog({
                 </div>
               </div>
 
-              <div className={"flex gap-2 pt-2"}>
+              <div className={"fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t border-koma-border bg-koma-card/95 p-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] backdrop-blur-md sm:sticky sm:-mx-1 sm:bottom-0 sm:rounded-xl sm:border sm:p-2"}>
                 <button
                   type="button"
                   onClick={() => setShowProductModal(false)}
