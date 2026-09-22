@@ -2305,6 +2305,104 @@ body {
 }
 
 @media (max-width: 768px) {
+  .cashier-sidebar--mobile {
+    width: min(23rem, 92vw) !important;
+  }
+
+  .cashier-sidebar--mobile .cashier-sidebar__header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding: 0.7rem !important;
+    background: var(--koma-surface-panel);
+  }
+
+  .cashier-sidebar--mobile .cashier-shift-card {
+    min-height: 3rem;
+    padding: 0.5rem 0.65rem;
+  }
+
+  .cashier-sidebar--mobile .cashier-sidebar__content {
+    padding: 0.45rem 0.6rem 1rem !important;
+  }
+
+  .cashier-mobile-quick-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+    margin-bottom: 0.65rem;
+  }
+
+  .cashier-mobile-quick-action {
+    display: flex;
+    min-width: 0;
+    min-height: 3.25rem;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.6rem 0.7rem;
+    color: var(--koma-text-secondary);
+    border: 1px solid var(--koma-border-default);
+    border-radius: 0.8rem;
+    background: var(--koma-surface-raised);
+    font-size: 0.7rem;
+    font-weight: 750;
+    text-align: left;
+  }
+
+  .cashier-mobile-quick-action svg {
+    flex: 0 0 auto;
+    color: var(--koma-accent);
+  }
+
+  .cashier-mobile-quick-action span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cashier-sidebar--mobile [data-sidebar="group"] {
+    padding-block: 0.12rem;
+  }
+
+  .cashier-sidebar--mobile [data-sidebar="group-label"] {
+    height: 1.35rem;
+    margin-top: 0.15rem;
+    font-size: 0.57rem !important;
+  }
+
+  .cashier-sidebar--mobile [data-sidebar="menu-button"] {
+    min-height: 2.8rem;
+    font-size: 0.78rem;
+  }
+
+  .cashier-sidebar--mobile .cashier-nav-children {
+    margin-top: 0.15rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .cashier-sidebar--mobile .cashier-nav-child {
+    min-height: 2.5rem;
+    font-size: 0.7rem;
+  }
+
+  .cashier-sidebar__footer--mobile {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    gap: 0.45rem !important;
+    padding: 0.55rem 0.7rem calc(0.55rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .cashier-sidebar__footer--mobile .cashier-operator {
+    padding-top: 0.45rem;
+  }
+
+  .cashier-sidebar__footer--mobile .cashier-operator__avatar {
+    width: 2rem;
+    height: 2rem;
+  }
+
   .cashier-shell {
     height: auto;
     min-height: 100svh;
