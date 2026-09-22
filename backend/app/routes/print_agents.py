@@ -825,12 +825,17 @@ class ReleaseJobsRequest(BaseModel):
 
 class DetectedPrinterReport(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    connection: Literal["usb", "network", "unknown"] = "unknown"
+    connection: Literal["usb", "bluetooth", "network", "unknown"] = "unknown"
     uri: Optional[str] = Field(default=None, max_length=300)
+    address: Optional[str] = Field(default=None, max_length=80)
     is_default: bool = False
     available: bool = False
     present: bool = False
     configured: bool = False
+    paired: bool = False
+    trusted: bool = False
+    connected: bool = False
+    spp: bool = False
 
 
 class PrinterDiagnosticsReport(BaseModel):

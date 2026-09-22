@@ -637,6 +637,59 @@ def test_only_heartbeat_updates_agent_last_seen():
         db.close()
 
 
+def test_heartbeat_accepts_bluetooth_spp_diagnostics_without_marking_usb_ready():
+    client = TestClient(app)
+    headers = {"X-Agent-Token": "token_agent_1"}
+
+    response = client.post(
+        "/api/print-agents/heartbeat",
+        headers=headers,
+        json={
+            "diagnostics": {
+                "adapter": "linux",
+                "platform": "linux",
+                "default_printer": None,
+                "printers": [
+                    {
+                        "name": "KA-1445",
+                        "connection": "bluetooth",
+                        "uri": "bluetooth://86:67:7A:6B:30:C4",
+                        "address": "86:67:7A:6B:30:C4",
+                        "is_default": False,
+                        "available": False,
+                        "present": False,
+                        "configured": True,
+                        "paired": True,
+                        "trusted": True,
+                        "connected": False,
+                        "spp": True,
+                    }
+                ],
+            }
+        },
+    )
+
+    assert response.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        agent = db.query(PrintAgentToken).filter_by(id="a1").one()
+        printer = agent.printer_diagnostics["printers"][0]
+        assert printer["name"] == "KA-1445"
+        assert printer["connection"] == "bluetooth"
+        assert printer["paired"] is True
+        assert printer["trusted"] is True
+        assert printer["spp"] is True
+        state = print_agents_route._agent_printer_state(
+            agent,
+            datetime.datetime.now(datetime.timezone.utc),
+        )
+        assert state["printer_ready"] is False
+        assert state["physical_printer_present"] is False
+    finally:
+        db.close()
+
+
 def test_heartbeat_broadcasts_only_when_presence_or_printer_changes(monkeypatch):
     events = []
 

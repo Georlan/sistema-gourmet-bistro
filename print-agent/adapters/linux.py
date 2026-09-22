@@ -6,6 +6,7 @@ import logging
 import os
 import glob
 import re
+import shutil
 import socket
 import subprocess
 from urllib.parse import unquote, urlsplit
@@ -25,6 +26,98 @@ def _run_cups_command(command: list[str]) -> subprocess.CompletedProcess:
         timeout=5,
         check=False,
     )
+
+
+def _run_bluetooth_command(command: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=3,
+        check=False,
+    )
+
+
+def _bluetooth_info_fields(output: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        fields[key.strip().casefold()] = value.strip()
+    return fields
+
+
+def _discover_bluetooth_spp_printers() -> list[dict[str, Any]]:
+    """
+    Lista dispositivos Bluetooth já conhecidos pelo BlueZ que oferecem SPP.
+
+    Esta etapa é somente diagnóstico. Não inicia scan, não conecta dispositivos
+    e não cria /dev/rfcomm*. USB/CUPS continua sendo o transporte principal.
+    """
+    if shutil.which("bluetoothctl") is None:
+        return []
+
+    try:
+        devices_probe = _run_bluetooth_command(["bluetoothctl", "devices"])
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if devices_probe.returncode != 0:
+        return []
+
+    printers: list[dict[str, Any]] = []
+    for raw_line in _decode_command_output(devices_probe).splitlines():
+        match = re.match(
+            r"^Device\s+([0-9A-Fa-f:]{17})\s+(.+)$",
+            raw_line.strip(),
+        )
+        if not match:
+            continue
+        address = match.group(1).upper()
+        discovered_name = match.group(2).strip()
+
+        try:
+            info_probe = _run_bluetooth_command(
+                ["bluetoothctl", "info", address]
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if info_probe.returncode != 0:
+            continue
+
+        info_text = _decode_command_output(info_probe)
+        if "00001101-0000-1000-8000-00805f9b34fb" not in info_text.casefold():
+            continue
+
+        fields = _bluetooth_info_fields(info_text)
+        paired = fields.get("paired", "").casefold() == "yes"
+        trusted = fields.get("trusted", "").casefold() == "yes"
+        connected = fields.get("connected", "").casefold() == "yes"
+        name = (
+            fields.get("name")
+            or fields.get("alias")
+            or discovered_name
+            or address
+        )
+
+        printers.append(
+            {
+                "name": name[:200],
+                "connection": "bluetooth",
+                "uri": f"bluetooth://{address}",
+                "address": address,
+                "is_default": False,
+                "available": connected and paired,
+                "present": connected,
+                "configured": paired,
+                "paired": paired,
+                "trusted": trusted,
+                "connected": connected,
+                "spp": True,
+            }
+        )
+    return printers
 
 
 def _resolve_automatic_cups_printer() -> Optional[str]:
@@ -409,6 +502,10 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
                 if key not in {"hardware_id", "serial"}
             }
             printers.append(public_device)
+
+        # Bluetooth entra somente como diagnóstico nesta fase. Nenhuma seleção
+        # automática ou rota de PrintJob usa estes destinos ainda.
+        printers.extend(_discover_bluetooth_spp_printers())
 
         return {
             "adapter": "linux",
