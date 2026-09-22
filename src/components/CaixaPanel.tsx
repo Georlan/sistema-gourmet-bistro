@@ -1314,8 +1314,7 @@ export function CaixaPanel({
           onUnreadCountChange={setChatUnreadCount}
         />
 
-        {currentPlanId === 'pocket' && (
-          <CashierMobileBottomBar
+        <CashierMobileBottomBar
             activeTab={activeTab}
           activeSubTab={activeSubTab}
           onNavigate={(tab, subTab) => {
@@ -1327,7 +1326,6 @@ export function CaixaPanel({
           kitchenCount={activeKitchenItems.length}
             shiftOpen={turno?.status === 'aberto'}
           />
-        )}
       </SidebarProvider>
     </div>
   );
