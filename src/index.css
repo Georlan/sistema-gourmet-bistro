@@ -2547,6 +2547,70 @@ body {
     font-size: 0.7rem;
   }
 
+  .product-editor-modal {
+    max-height: 100dvh !important;
+    height: 100dvh;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    overscroll-behavior: contain;
+  }
+
+  .product-editor-modal__header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    min-height: 4rem;
+    padding: 0.7rem 0.85rem;
+    background: var(--koma-surface-panel);
+  }
+
+  .product-editor-modal__header > div > p {
+    display: none;
+  }
+
+  .product-editor-modal__header > button {
+    display: grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    place-items: center;
+    border-color: var(--koma-border-default);
+    border-radius: 0.75rem;
+  }
+
+  .product-editor-modal__form {
+    padding: 0.8rem 0.85rem calc(5.75rem + env(safe-area-inset-bottom));
+  }
+
+  .product-editor-modal__form input,
+  .product-editor-modal__form select {
+    min-height: 2.9rem;
+    font-size: 16px;
+  }
+
+  .product-editor-modal__form textarea {
+    min-height: 5.5rem;
+    font-size: 16px;
+  }
+
+  .product-editor-modal__photo button[aria-label*="foto do produto"] {
+    height: 10rem;
+  }
+
+  .product-editor-modal__actions {
+    position: sticky;
+    z-index: 25;
+    bottom: 0;
+    margin: 0 -0.85rem calc(-5.75rem - env(safe-area-inset-bottom));
+    padding: 0.65rem 0.85rem calc(0.65rem + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--koma-border-default);
+    background: var(--koma-surface-panel);
+    box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.2);
+  }
+
+  .product-editor-modal__actions button {
+    min-height: 3rem;
+  }
+
   .cashier-subnav {
     padding-inline: 0.75rem !important;
   }
