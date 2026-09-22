@@ -139,7 +139,7 @@ export function OnlineMenuPaymentSettings({ apiBaseUrl, authHeaders, publicMenuU
               <label
                 key={option.id}
                 className={clsx(
-                  'flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition',
+                  'flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 transition',
                   checked ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-card hover:border-emerald-500/25',
                 )}
               >
@@ -149,11 +149,11 @@ export function OnlineMenuPaymentSettings({ apiBaseUrl, authHeaders, publicMenuU
                   onChange={(event) => setMethods((current) => event.target.checked
                     ? [...current, option.id]
                     : current.filter((item) => item !== option.id))}
-                  className="mt-0.5 h-4 w-4 accent-emerald-500"
+                  className="h-5 w-5 shrink-0 accent-emerald-500"
                 />
                 <span>
                   <strong className="block text-xs text-koma-foreground">{option.label}</strong>
-                  <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">{option.helper}</span>
+                  <span className="mt-0.5 hidden text-[9px] leading-relaxed text-koma-muted sm:block">{option.helper}</span>
                 </span>
               </label>
             );
@@ -198,7 +198,7 @@ export function OnlineMenuPaymentSettings({ apiBaseUrl, authHeaders, publicMenuU
       </section>
 
       {(feedback || hasUnsavedChanges) && (
-        <div className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
+        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel/95 p-3 shadow-lg backdrop-blur-md sm:bottom-3 sm:flex-row sm:items-center sm:justify-end">
           {feedback ? (
             <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
               {feedback.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}{feedback.text}
