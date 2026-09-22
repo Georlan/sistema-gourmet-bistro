@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { CaixaPanelProps } from '../cashierContracts';
+import type { SubscriptionPlanId } from '../../../config/subscriptionPlans';
 import type { useCashShift } from '../shift/useCashShift';
 import type { useCashierNavigation } from './useCashierNavigation';
 import type { useCashierPreferences } from './useCashierPreferences';
@@ -10,6 +11,7 @@ export type CashierSidebarProps = Pick<ReturnType<typeof useCashShift>, 'turno' 
   Pick<ReturnType<typeof useCashierPreferences>, 'changeFontSize' | 'fontSize' | 'setTheme' | 'theme'> &
   Pick<CaixaPanelProps, 'activeWaiterNome'> & {
     setIsOperatorDrawerOpen: Dispatch<SetStateAction<boolean>>;
+    planId: SubscriptionPlanId;
     hasOnlineMenu: boolean;
     sidebarOrderCount: number;
   };
