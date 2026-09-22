@@ -3143,16 +3143,16 @@ body {
 
 
 /* ==========================================================================
-   KÔMA Pocket mobile ergonomics
-   Pocket is the mobile-first plan. These rules are deliberately scoped to
-   the plan marker so Pro/Premium keep their existing responsive shell.
+   KÔMA mobile navigation ergonomics
+   All plans share the same mobile navigation presentation. Plan capabilities
+   remain untouched: Pro/Premium still expose their full menu through "Mais".
    ========================================================================== */
 @media (max-width: 768px), (hover: none) and (pointer: coarse) {
-  .cashier-shell[data-koma-plan="pocket"] {
-    --pocket-mobile-nav-height: calc(4rem + env(safe-area-inset-bottom));
+  .cashier-shell {
+    --mobile-nav-height: calc(4rem + env(safe-area-inset-bottom));
   }
 
-  .cashier-shell[data-koma-plan="pocket"] .cashier-content {
+  .cashier-shell .cashier-content {
     padding-bottom: calc(6.5rem + env(safe-area-inset-bottom)) !important;
   }
 
