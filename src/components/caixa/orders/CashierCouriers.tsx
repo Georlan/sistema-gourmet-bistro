@@ -193,8 +193,8 @@ export function CashierCouriers({
   };
 
   return (
-    <div className="space-y-4 text-left" id="cashier-deliveries-workspace">
-      <section className="rounded-3xl border border-koma-border bg-koma-card/60 p-4 sm:p-5">
+    <div className="cashier-fulfillment-mobile space-y-4 text-left" id="cashier-deliveries-workspace">
+      <section className="cashier-fulfillment-mobile__hero rounded-3xl border border-koma-border bg-koma-card/60 p-4 sm:p-5">
         <div className="flex flex-col gap-4 border-b border-koma-border pb-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-500">Controle de entregas</span>
@@ -231,7 +231,7 @@ export function CashierCouriers({
         )}
       </section>
 
-      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-3">
+      <div className="cashier-fulfillment-mobile__lanes grid grid-cols-1 gap-4 2xl:grid-cols-3">
         <section className="rounded-2xl border border-koma-border bg-koma-card/45 p-4">
           <div className="mb-3">
             <h3 className="text-xs font-extrabold text-koma-foreground">Aguardando e em preparo</h3>
