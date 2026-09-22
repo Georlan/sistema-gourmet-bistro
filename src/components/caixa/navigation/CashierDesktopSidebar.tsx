@@ -12,7 +12,7 @@ import {
 } from '../../ui/sidebar';
 import { OnlineOrderEmergencyControl } from '../online-menu/OnlineOrderEmergencyControl';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
-import { CASHIER_SIDEBAR_GROUPS } from './cashierNavigation';
+import { getCashierSidebarGroupsForPlan } from './cashierNavigation';
 import { CashierOnboardingShortcut } from './CashierOnboardingShortcut';
 import { CashierSidebarFooter } from './CashierSidebarFooter';
 import { CashierSidebarNavigation } from './CashierSidebarNavigation';
@@ -34,6 +34,7 @@ export function CashierDesktopSidebar({
   turno,
   turnoLoadState,
   setShowAbrirModal,
+  planId,
   hasOnlineMenu,
   isSidebarTabActive,
   sidebarOrderCount,
@@ -113,7 +114,7 @@ export function CashierDesktopSidebar({
             <CashierOnboardingShortcut />
           ) : (
             <CashierSidebarSearch
-              groups={CASHIER_SIDEBAR_GROUPS}
+              groups={getCashierSidebarGroupsForPlan(planId)}
               hasOnlineMenu={hasOnlineMenu}
               handleSidebarNavigation={handleSidebarNavigation}
             />
@@ -125,7 +126,7 @@ export function CashierDesktopSidebar({
           </div>
         ) : (
           <CashierSidebarNavigation
-            groups={CASHIER_SIDEBAR_GROUPS}
+            groups={getCashierSidebarGroupsForPlan(planId)}
             hasOnlineMenu={hasOnlineMenu}
             isSidebarTabActive={isSidebarTabActive}
             sidebarOrderCount={sidebarOrderCount}
