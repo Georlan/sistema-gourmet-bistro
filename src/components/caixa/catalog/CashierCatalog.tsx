@@ -25,6 +25,7 @@ interface Props {
   apiCategorias: CatalogCategory[];
   suggestedProductCode: string;
   hasOnlineMenu: boolean;
+  hasPrinting: boolean;
   fetchProdutos: () => Promise<void>;
   fetchCategorias: () => Promise<void>;
 }
@@ -43,6 +44,7 @@ export default function CashierCatalog({
   apiCategorias,
   suggestedProductCode,
   hasOnlineMenu,
+  hasPrinting,
   fetchProdutos,
   fetchCategorias,
   catalogReady,
@@ -263,7 +265,9 @@ export default function CashierCatalog({
             eyebrow="FLUXO DE PREPARO"
             title="Cada pedido"
             accent="vai ao lugar certo"
-            description="Escolha quais categorias imprimem na cozinha, no bar ou não precisam de via de preparo."
+            description={hasPrinting
+              ? "Escolha quais categorias imprimem na cozinha, no bar ou não precisam de via de preparo."
+              : "Escolha quais categorias aparecem na Cozinha, no Bar ou seguem direto sem uma etapa de preparo."}
             metrics={[
               { label: 'categorias', value: apiCategorias.length },
               {
@@ -272,7 +276,7 @@ export default function CashierCatalog({
               },
               { label: 'bar', value: apiCategorias.filter((category) => category.destino_impressao === 'BAR').length },
               {
-                label: 'não imprimir',
+                label: hasPrinting ? 'não imprimir' : 'sem preparo',
                 value: apiCategorias.filter((category) => category.destino_impressao === 'NENHUM').length,
               },
             ]}
@@ -282,6 +286,7 @@ export default function CashierCatalog({
             apiProdutos={apiProdutos}
             apiBaseUrl={apiBaseUrl}
             authHeaders={authHeaders}
+            hasPrinting={hasPrinting}
             fetchCategorias={fetchCategorias}
             showToast={showToast}
             onManageProducts={(categoryId) => {
