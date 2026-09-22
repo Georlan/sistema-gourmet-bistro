@@ -20,6 +20,7 @@ from config import AgentConfig
 from api_client import AGENT_VERSION, AgentAuthenticationError, KomaApiClient
 from journal import PrintJournal
 from adapters.file import FilePrinterAdapter
+from adapters.linux import _discover_bluetooth_spp_printers
 from adapters.windows import (
     WindowsPrinterAdapter,
     _is_virtual_printer,
@@ -42,6 +43,16 @@ def temp_dir():
     dir_path = tempfile.mkdtemp()
     yield dir_path
     shutil.rmtree(dir_path, ignore_errors=True)
+
+
+@pytest.fixture(autouse=True)
+def disable_live_bluetooth_discovery():
+    """Mantém a suíte determinística sem depender do bluetoothd do host."""
+    with patch(
+        "adapters.linux._discover_bluetooth_spp_printers",
+        return_value=[],
+    ):
+        yield
 
 
 def test_shadow_simulation_observes_and_renders_without_claiming():
@@ -315,6 +326,93 @@ def test_linux_adapter_does_not_fake_print_success(temp_dir):
         name for name in os.listdir(temp_dir)
         if name.startswith("ticket_")
     ]
+
+
+def test_linux_bluetooth_diagnostics_reports_paired_spp_printer():
+    devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"Device 86:67:7A:6B:30:C4 KA7\n",
+        stderr=b"",
+    )
+    info_probe = MagicMock(
+        returncode=0,
+        stdout=(
+            b"Device 86:67:7A:6B:30:C4 (public)\n"
+            b"\tName: KA-1445\n"
+            b"\tAlias: KA7\n"
+            b"\tIcon: printer\n"
+            b"\tPaired: yes\n"
+            b"\tBonded: yes\n"
+            b"\tTrusted: yes\n"
+            b"\tBlocked: no\n"
+            b"\tConnected: no\n"
+            b"\tUUID: Serial Port "
+            b"(00001101-0000-1000-8000-00805f9b34fb)\n"
+        ),
+        stderr=b"",
+    )
+
+    with (
+        patch(
+            "adapters.linux.shutil.which",
+            return_value="/usr/bin/bluetoothctl",
+        ),
+        patch(
+            "adapters.linux._run_bluetooth_command",
+            side_effect=[devices_probe, info_probe],
+        ),
+    ):
+        printers = _discover_bluetooth_spp_printers()
+
+    assert printers == [
+        {
+            "name": "KA-1445",
+            "connection": "bluetooth",
+            "uri": "bluetooth://86:67:7A:6B:30:C4",
+            "address": "86:67:7A:6B:30:C4",
+            "is_default": False,
+            "available": False,
+            "present": False,
+            "configured": True,
+            "paired": True,
+            "trusted": True,
+            "connected": False,
+            "spp": True,
+        }
+    ]
+
+
+def test_linux_bluetooth_diagnostics_ignores_devices_without_spp():
+    devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"Device 03:25:33:33:F6:D0 GamePadPlus V3\n",
+        stderr=b"",
+    )
+    info_probe = MagicMock(
+        returncode=0,
+        stdout=(
+            b"Device 03:25:33:33:F6:D0 (public)\n"
+            b"\tName: GamePadPlus V3\n"
+            b"\tPaired: yes\n"
+            b"\tTrusted: yes\n"
+            b"\tConnected: yes\n"
+            b"\tUUID: Human Interface Device "
+            b"(00001124-0000-1000-8000-00805f9b34fb)\n"
+        ),
+        stderr=b"",
+    )
+
+    with (
+        patch(
+            "adapters.linux.shutil.which",
+            return_value="/usr/bin/bluetoothctl",
+        ),
+        patch(
+            "adapters.linux._run_bluetooth_command",
+            side_effect=[devices_probe, info_probe],
+        ),
+    ):
+        assert _discover_bluetooth_spp_printers() == []
 
 
 def test_linux_adapter_reports_cups_usb_printer(temp_dir):
