@@ -165,14 +165,14 @@ test('CashierMobileBottomBar renders 5 standard tabs with operational status', (
 });
 
 
-test('Pocket owns the mobile shell and leaves standard plans on the existing navigation shell', () => {
+test('all plans share the mobile shell while Pocket keeps its plan-specific refinements', () => {
   const caixaPanel = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
   const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
 
   assert.match(caixaPanel, /data-koma-plan=\{currentPlanId\}/);
-  assert.match(caixaPanel, /\{currentPlanId === 'pocket' && \(/);
+  assert.match(caixaPanel, /<CashierMobileBottomBar/);
   assert.match(caixaPanel, /label: hasPrinting \? 'Preparo e impressão' : 'Preparo'/);
-  assert.match(cashierCss, /\.cashier-shell\[data-koma-plan="pocket"\] \.cashier-content/);
+  assert.match(cashierCss, /\.cashier-shell \.cashier-content/);
   assert.match(cashierCss, /padding-bottom: calc\(6\.5rem \+ env\(safe-area-inset-bottom\)\)/);
   assert.match(cashierCss, /\.cashier-shell\[data-koma-plan="pocket"\] \.cashier-salon-grid/);
 });
