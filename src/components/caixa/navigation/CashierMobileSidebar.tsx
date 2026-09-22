@@ -173,6 +173,7 @@ export function CashierMobileSidebar({
                 <CashierSidebarNavigation
                   groups={getCashierSidebarGroupsForPlan(planId)}
                   closeMobile
+                  expandActiveChildren={false}
                   hasOnlineMenu={hasOnlineMenu}
                   isSidebarTabActive={isSidebarTabActive}
                   sidebarOrderCount={sidebarOrderCount}
