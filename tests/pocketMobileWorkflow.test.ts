@@ -231,3 +231,16 @@ test('online menu mobile exposes the edit publish customer-preview loop', () => 
   assert.match(cashierCss, /\.online-menu-editor__publish/);
   assert.match(cashierCss, /position: sticky/);
 });
+
+
+test('mobile product editor behaves like a full-screen touch workflow', () => {
+  const catalog = readFileSync(new URL('../src/components/caixa/catalog/CashierCatalog.tsx', import.meta.url), 'utf8');
+  const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+
+  assert.match(catalog, /product-editor-modal__header/);
+  assert.match(catalog, /product-editor-modal__actions/);
+  assert.match(cashierCss, /\.product-editor-modal \{[\s\S]*height: 100dvh/);
+  assert.match(cashierCss, /\.product-editor-modal__actions \{[\s\S]*position: sticky/);
+  assert.match(cashierCss, /font-size: 16px/);
+  assert.match(cashierCss, /min-height: 3rem/);
+});
