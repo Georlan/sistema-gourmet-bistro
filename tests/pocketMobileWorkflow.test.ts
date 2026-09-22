@@ -184,3 +184,27 @@ test('mobile operation subnav avoids duplicating actions already pinned to the b
   assert.match(caixaPanel, /isPrimaryMobileBottomAction = \['vendas_novo_pedido', 'vendas_cozinha'\]\.includes\(sub\.id\)/);
   assert.match(caixaPanel, /isPrimaryMobileBottomAction && 'hidden lg:inline-flex'/);
 });
+
+
+test('mobile menu exposes practical owner shortcuts and compact touch-first shell', () => {
+  const mobileSidebar = readFileSync(new URL('../src/components/caixa/navigation/CashierMobileSidebar.tsx', import.meta.url), 'utf8');
+  const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+
+  assert.match(mobileSidebar, /cashier-mobile-quick-actions/);
+  assert.match(mobileSidebar, /label: 'Produtos'/);
+  assert.match(mobileSidebar, /label: 'Clientes'/);
+  assert.match(mobileSidebar, /label: 'Cardápio online'/);
+  assert.match(mobileSidebar, /label: 'Configurações'/);
+  assert.match(cashierCss, /\.cashier-sidebar--mobile/);
+  assert.match(cashierCss, /\.cashier-mobile-quick-action/);
+  assert.match(cashierCss, /min-height: 3\.25rem/);
+  assert.match(cashierCss, /\.cashier-sidebar__footer--mobile/);
+});
+
+test('mobile orders prioritize actionable controls above the fold', () => {
+  const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+
+  assert.match(cashierCss, /\.orders-workspace > \.operational-header \.orders-hero__copy > p:last-child/);
+  assert.match(cashierCss, /\.orders-search__input \{[\s\S]*min-height: 2\.75rem/);
+  assert.match(cashierCss, /\.orders-new-orders \{[\s\S]*min-height: 2\.75rem/);
+});
