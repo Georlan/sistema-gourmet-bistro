@@ -244,3 +244,18 @@ test('mobile product editor behaves like a full-screen touch workflow', () => {
   assert.match(cashierCss, /font-size: 16px/);
   assert.match(cashierCss, /min-height: 3rem/);
 });
+
+
+test('mobile salon pickup and delivery workspaces prioritize touch operation', () => {
+  const salon = readFileSync(new URL('../src/components/caixa/salao/CaixaSalonTab.tsx', import.meta.url), 'utf8');
+  const pickups = readFileSync(new URL('../src/components/caixa/orders/CashierPickups.tsx', import.meta.url), 'utf8');
+  const couriers = readFileSync(new URL('../src/components/caixa/orders/CashierCouriers.tsx', import.meta.url), 'utf8');
+  const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+
+  assert.match(salon, /cashier-salon-mobile/);
+  assert.match(pickups, /cashier-fulfillment-mobile/);
+  assert.match(couriers, /cashier-fulfillment-mobile/);
+  assert.match(cashierCss, /\.cashier-salon-grid \{[\s\S]*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(cashierCss, /\.cashier-fulfillment-mobile article button \{[\s\S]*min-height: 2\.75rem/);
+  assert.match(cashierCss, /\.cashier-fulfillment-mobile select \{[\s\S]*font-size: 16px/);
+});
