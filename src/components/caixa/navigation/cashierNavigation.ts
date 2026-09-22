@@ -209,11 +209,26 @@ export function getCashierSidebarGroupsForPlan(planId: SubscriptionPlanId): read
   if (planId !== 'pocket') return CASHIER_SIDEBAR_GROUPS;
 
   const hiddenPocketItems = new Set(['estoque', 'relatorios', 'permissoes_cargos']);
+  const hiddenPocketChildren = new Set(['config_impressao', 'config_garcom']);
 
   return CASHIER_SIDEBAR_GROUPS
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => !hiddenPocketItems.has(item.id)),
+      items: group.items
+        .filter((item) => !hiddenPocketItems.has(item.id))
+        .map((item) => {
+          if (!item.children?.length) return item;
+
+          const children = item.children
+            .filter((child) => !hiddenPocketChildren.has(child.id))
+            .map((child) =>
+              child.id === 'cardapio_preparo'
+                ? { ...child, label: 'Preparo' }
+                : child,
+            );
+
+          return { ...item, children };
+        }),
     }))
     .filter((group) => group.items.length > 0);
 }

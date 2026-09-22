@@ -375,6 +375,27 @@ test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redu
   assert.equal(pocketItems.includes('relatorios'), false);
   assert.equal(pocketItems.includes('permissoes_cargos'), false);
 
+  const pocketSettings = pocketGroups
+    .flatMap((group) => group.items)
+    .find((item) => item.id === 'impressao_salao');
+  assert.deepEqual(pocketSettings?.children?.map((child) => child.id), [
+    'config_aparencia',
+    'config_mesas',
+    'config_taxa',
+    'config_implantacao',
+    'config_integracoes',
+  ]);
+  assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_impressao'), false);
+  assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_garcom'), false);
+
+  const pocketCardapio = pocketGroups
+    .flatMap((group) => group.items)
+    .find((item) => item.id === 'cardapio');
+  assert.equal(
+    pocketCardapio?.children?.find((child) => child.id === 'cardapio_preparo')?.label,
+    'Preparo',
+  );
+
   assert.equal(getCashierSidebarGroupsForPlan('pro'), CASHIER_SIDEBAR_GROUPS);
   assert.equal(getCashierSidebarGroupsForPlan('premium'), CASHIER_SIDEBAR_GROUPS);
 });
