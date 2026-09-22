@@ -18,6 +18,7 @@ type Props = Pick<
 > & {
   groups: readonly CashierNavigationGroup[];
   closeMobile?: boolean;
+  expandActiveChildren?: boolean;
 };
 
 /** Shared renderer; responsive shells still consume the same Navigation Tree v2 catalog. */
@@ -28,6 +29,7 @@ export function CashierSidebarNavigation({
   sidebarOrderCount,
   handleSidebarNavigation,
   closeMobile = false,
+  expandActiveChildren = true,
 }: Props) {
   return (
     <>
@@ -58,7 +60,7 @@ export function CashierSidebarNavigation({
                       )}
                     </SidebarMenuButton>
 
-                    {item.children?.length && isActive ? (
+                    {item.children?.length && isActive && expandActiveChildren ? (
                       <div
                         className="cashier-nav-children ml-6 mt-1 space-y-0.5 border-l border-koma-border pl-2 group-data-[collapsible=icon]:hidden"
                         aria-label={`Atalhos de ${item.label}`}
