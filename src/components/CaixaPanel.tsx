@@ -1314,7 +1314,7 @@ export function CaixaPanel({
           onUnreadCountChange={setChatUnreadCount}
         />
 
-        {currentPlanId === 'pocket' && (
+        (
           <CashierMobileBottomBar
             activeTab={activeTab}
           activeSubTab={activeSubTab}
