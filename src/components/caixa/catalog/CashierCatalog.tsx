@@ -317,9 +317,9 @@ export default function CashierCatalog({
             role="dialog"
             aria-modal="true"
             aria-labelledby="product-modal-title"
-            className={"w-full max-w-xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto bg-koma-card border border-koma-border rounded-3xl p-5 sm:p-6 space-y-4 text-left shadow-2xl relative animate-scale-in cursor-default"}
+            className={"product-editor-modal w-full max-w-xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto bg-koma-card border border-koma-border rounded-3xl p-5 sm:p-6 space-y-4 text-left shadow-2xl relative animate-scale-in cursor-default"}
           >
-            <div className={"flex justify-between items-center pb-2 border-b border-koma-border"}>
+            <div className={"product-editor-modal__header flex justify-between items-center pb-2 border-b border-koma-border"}>
               <div>
                 <div className="flex items-center gap-2">
                   <h3 id="product-modal-title" className="text-base font-bold text-koma-foreground">
@@ -450,7 +450,7 @@ export default function CashierCatalog({
                   setIsLoading(false);
                 }
               }}
-              className={"space-y-5 text-xs"}
+              className={"product-editor-modal__form space-y-5 text-xs"}
             >
               {apiCategorias.length === 0 && (
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-[10px] text-amber-800 dark:text-amber-200">
@@ -587,7 +587,7 @@ export default function CashierCatalog({
                 </details>
               )}
 
-              <section className="rounded-xl border border-koma-border bg-koma-panel p-3">
+              <section className="product-editor-modal__photo rounded-xl border border-koma-border bg-koma-panel p-3">
                 <div className="mb-3">
                   <strong className="block text-[10px] text-koma-foreground">Foto do produto <span className="font-normal text-koma-muted">(opcional)</span></strong>
                   <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">
@@ -689,7 +689,7 @@ export default function CashierCatalog({
                 </div>
               </div>
 
-              <div className={"flex gap-2 pt-2"}>
+              <div className={"product-editor-modal__actions flex gap-2 pt-2"}>
                 <button
                   type="button"
                   onClick={() => setShowProductModal(false)}
