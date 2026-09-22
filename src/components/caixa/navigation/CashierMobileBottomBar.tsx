@@ -30,7 +30,7 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
   return (
     <nav
       aria-label="Navegação móvel principal"
-      className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-koma-panel/95 backdrop-blur-lg border-t border-koma-border safe-area-pb shadow-lg"
+      className="cashier-mobile-bottom-bar lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-koma-panel/95 backdrop-blur-lg border-t border-koma-border safe-area-pb shadow-lg"
     >
       <div className="grid grid-cols-5 h-14 items-center max-w-md mx-auto px-1">
         {/* 1. Vendas / Pedidos */}
