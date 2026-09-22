@@ -6,7 +6,7 @@ import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboardin
 import { SidebarContent, SidebarFooter, SidebarHeader } from '../../ui/sidebar';
 import { OnlineOrderEmergencyControl } from '../online-menu/OnlineOrderEmergencyControl';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
-import { CASHIER_SIDEBAR_GROUPS } from './cashierNavigation';
+import { getCashierSidebarGroupsForPlan } from './cashierNavigation';
 import { CashierOnboardingShortcut } from './CashierOnboardingShortcut';
 import { CashierSidebarFooter } from './CashierSidebarFooter';
 import { CashierSidebarNavigation } from './CashierSidebarNavigation';
@@ -32,6 +32,7 @@ export function CashierMobileSidebar({
   turno,
   turnoLoadState,
   setShowAbrirModal,
+  planId,
   hasOnlineMenu,
   isSidebarTabActive,
   sidebarOrderCount,
@@ -132,7 +133,7 @@ export function CashierMobileSidebar({
                   <CashierOnboardingShortcut mobile />
                 ) : (
                   <CashierSidebarSearch
-                    groups={CASHIER_SIDEBAR_GROUPS}
+                    groups={getCashierSidebarGroupsForPlan(planId)}
                     hasOnlineMenu={hasOnlineMenu}
                     handleSidebarNavigation={handleSidebarNavigation}
                     closeMobile
@@ -145,7 +146,7 @@ export function CashierMobileSidebar({
                 </div>
               ) : (
                 <CashierSidebarNavigation
-                  groups={CASHIER_SIDEBAR_GROUPS}
+                  groups={getCashierSidebarGroupsForPlan(planId)}
                   closeMobile
                   hasOnlineMenu={hasOnlineMenu}
                   isSidebarTabActive={isSidebarTabActive}
