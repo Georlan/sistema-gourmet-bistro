@@ -678,6 +678,7 @@ export function CaixaPanel({
           turno={turno}
           turnoLoadState={turnoLoadState}
           setShowAbrirModal={setShowAbrirModal}
+          planId={currentPlanId}
           hasOnlineMenu={hasOnlineMenu}
           isSidebarTabActive={isSidebarTabActive}
           sidebarOrderCount={sidebarOrderCount}
@@ -694,6 +695,7 @@ export function CaixaPanel({
           turno={turno}
           turnoLoadState={turnoLoadState}
           setShowAbrirModal={setShowAbrirModal}
+          planId={currentPlanId}
           hasOnlineMenu={hasOnlineMenu}
           isSidebarTabActive={isSidebarTabActive}
           sidebarOrderCount={sidebarOrderCount}
