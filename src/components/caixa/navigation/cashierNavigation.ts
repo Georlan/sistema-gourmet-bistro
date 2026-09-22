@@ -27,6 +27,7 @@ export type CashierNavigationChild = {
   target: CashierNavigationTarget;
   action?: CashierNavigationAction;
   badge?: 'orders';
+  plans?: readonly SubscriptionPlanId[];
 };
 
 export type CashierNavigationItem = {
@@ -35,6 +36,7 @@ export type CashierNavigationItem = {
   icon: LucideIcon;
   target: CashierNavigationTarget;
   capability?: 'online-menu';
+  plans?: readonly SubscriptionPlanId[];
   children?: readonly CashierNavigationChild[];
 };
 
@@ -107,6 +109,7 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
       {
         id: 'estoque',
         label: 'Estoque & compras',
+        plans: ['pro', 'premium'],
         icon: Package,
         target: { tab: 'estoque', subTab: 'insumos' },
         children: [
@@ -151,6 +154,7 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
       {
         id: 'relatorios',
         label: 'Relatórios',
+        plans: ['pro', 'premium'],
         icon: TrendingUp,
         target: { tab: 'relatorios', subTab: 'visao_geral' },
         children: [
@@ -163,6 +167,7 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
       {
         id: 'permissoes_cargos',
         label: 'Equipe',
+        plans: ['pro', 'premium'],
         icon: ShieldCheck,
         target: { tab: 'permissoes_cargos', subTab: 'pessoas' },
         children: [
@@ -182,9 +187,9 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         target: { tab: 'impressao_salao', subTab: 'aparencia' },
         children: [
           { id: 'config_aparencia', label: 'Aparência', target: { tab: 'impressao_salao', subTab: 'aparencia' } },
-          { id: 'config_impressao', label: 'Impressão', target: { tab: 'impressao_salao', subTab: 'impressao' } },
+          { id: 'config_impressao', label: 'Impressão', plans: ['pro', 'premium'], target: { tab: 'impressao_salao', subTab: 'impressao' } },
           { id: 'config_mesas', label: 'Mesas', target: { tab: 'impressao_salao', subTab: 'mesas' } },
-          { id: 'config_garcom', label: 'App do Garçom', target: { tab: 'impressao_salao', subTab: 'garcom' } },
+          { id: 'config_garcom', label: 'App do Garçom', plans: ['pro', 'premium'], target: { tab: 'impressao_salao', subTab: 'garcom' } },
           { id: 'config_taxa', label: 'Taxa de Serviço', target: { tab: 'impressao_salao', subTab: 'taxa' } },
           { id: 'config_implantacao', label: 'Implantação inicial', target: { tab: 'impressao_salao', subTab: 'implantacao' } },
           { id: 'config_integracoes', label: 'Integrações', target: { tab: 'impressao_salao', subTab: 'integracoes' } },
@@ -205,24 +210,26 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
   },
 ] as const;
 
+function isNavigationEntryAvailable(
+  plans: readonly SubscriptionPlanId[] | undefined,
+  planId: SubscriptionPlanId,
+): boolean {
+  return !plans || plans.includes(planId);
+}
+
 export function getCashierSidebarGroupsForPlan(planId: SubscriptionPlanId): readonly CashierNavigationGroup[] {
-  if (planId !== 'pocket') return CASHIER_SIDEBAR_GROUPS;
-
-  const hiddenPocketItems = new Set(['estoque', 'relatorios', 'permissoes_cargos']);
-  const hiddenPocketChildren = new Set(['config_impressao', 'config_garcom']);
-
   return CASHIER_SIDEBAR_GROUPS
     .map((group) => ({
       ...group,
       items: group.items
-        .filter((item) => !hiddenPocketItems.has(item.id))
+        .filter((item) => isNavigationEntryAvailable(item.plans, planId))
         .map((item) => {
           if (!item.children?.length) return item;
 
           const children = item.children
-            .filter((child) => !hiddenPocketChildren.has(child.id))
+            .filter((child) => isNavigationEntryAvailable(child.plans, planId))
             .map((child) =>
-              child.id === 'cardapio_preparo'
+              child.id === 'cardapio_preparo' && planId === 'pocket'
                 ? { ...child, label: 'Preparo' }
                 : child,
             );

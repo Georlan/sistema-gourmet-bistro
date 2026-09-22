@@ -360,6 +360,30 @@ test('online menu mirrors canonical destinations across responsive section navig
 });
 
 
+test('restrições de plano vivem na árvore canônica, não em listas paralelas de ids', () => {
+  const estoque = parents().find((item) => item.id === 'estoque');
+  const relatorios = parents().find((item) => item.id === 'relatorios');
+  const equipe = parents().find((item) => item.id === 'permissoes_cargos');
+  const settings = parents().find((item) => item.id === 'impressao_salao');
+
+  assert.deepEqual(estoque?.plans, ['pro', 'premium']);
+  assert.deepEqual(relatorios?.plans, ['pro', 'premium']);
+  assert.deepEqual(equipe?.plans, ['pro', 'premium']);
+  assert.deepEqual(
+    settings?.children?.find((child) => child.id === 'config_impressao')?.plans,
+    ['pro', 'premium'],
+  );
+  assert.deepEqual(
+    settings?.children?.find((child) => child.id === 'config_garcom')?.plans,
+    ['pro', 'premium'],
+  );
+
+  const source = readFileSync(
+    new URL('../src/components/caixa/navigation/cashierNavigation.ts', import.meta.url), 'utf8',
+  );
+  assert.doesNotMatch(source, /hiddenPocketItems|hiddenPocketChildren/);
+});
+
 test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redução', () => {
   const pocketGroups = getCashierSidebarGroupsForPlan('pocket');
   const pocketItems = pocketGroups.flatMap((group) => group.items.map((item) => item.id));
@@ -398,6 +422,6 @@ test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redu
     'Preparo',
   );
 
-  assert.equal(getCashierSidebarGroupsForPlan('pro'), CASHIER_SIDEBAR_GROUPS);
-  assert.equal(getCashierSidebarGroupsForPlan('premium'), CASHIER_SIDEBAR_GROUPS);
+  assert.deepEqual(getCashierSidebarGroupsForPlan('pro'), CASHIER_SIDEBAR_GROUPS);
+  assert.deepEqual(getCashierSidebarGroupsForPlan('premium'), CASHIER_SIDEBAR_GROUPS);
 });
