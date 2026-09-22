@@ -2473,6 +2473,80 @@ body {
     min-height: 2.75rem;
   }
 
+  .cardapio-products-mobile {
+    padding-bottom: 5.5rem;
+  }
+
+  .cardapio-products-categories {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-radius: 0.85rem;
+  }
+
+  .cardapio-products-toolbar {
+    padding: 0.6rem;
+  }
+
+  .cardapio-products-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .cardapio-products-actions > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .cardapio-products-create {
+    grid-column: 1 / -1;
+    min-height: 3rem;
+    order: -2;
+    font-size: 0.78rem;
+  }
+
+  .cardapio-products-preview {
+    min-height: 2.75rem;
+    order: -1;
+  }
+
+  .cardapio-products-select {
+    min-height: 2.75rem;
+  }
+
+  .online-menu-editor {
+    padding-bottom: 6rem;
+  }
+
+  .online-menu-editor__header {
+    padding: 0.75rem;
+  }
+
+  .online-menu-editor__header > div > p {
+    display: none;
+  }
+
+  .online-menu-editor__header a {
+    width: 100%;
+    min-height: 2.75rem;
+  }
+
+  .online-menu-editor__publish {
+    position: sticky;
+    z-index: 20;
+    bottom: calc(4.75rem + env(safe-area-inset-bottom));
+    padding: 0.55rem;
+    border-color: rgba(0, 201, 150, 0.3);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.16);
+  }
+
+  .online-menu-editor__publish button {
+    width: 100%;
+    min-height: 2.9rem;
+    font-size: 0.7rem;
+  }
+
   .cashier-subnav {
     padding-inline: 0.75rem !important;
   }
