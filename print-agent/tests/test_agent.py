@@ -415,6 +415,118 @@ def test_linux_bluetooth_diagnostics_ignores_devices_without_spp():
         assert _discover_bluetooth_spp_printers() == []
 
 
+def test_linux_adapter_deduplicates_cups_bluetooth_queue_with_bluez_device(
+    temp_dir,
+):
+    linux_adapter = get_adapter("linux", output_dir=temp_dir)
+    default_probe = MagicMock(
+        returncode=0,
+        stdout=b"destino padrao do sistema: Kapbom\n",
+        stderr=b"",
+    )
+    live_devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"",
+        stderr=b"",
+    )
+    devices_probe = MagicMock(
+        returncode=0,
+        stdout=(
+            b"dispositivo de G250: usb://Gertec/G250\n"
+            b"dispositivo de Kapbom: bluetooth://86677a6b30c4\n"
+        ),
+        stderr=b"",
+    )
+    bluetooth_printer = {
+        "name": "KA-1445",
+        "connection": "bluetooth",
+        "uri": "bluetooth://86:67:7A:6B:30:C4",
+        "address": "86:67:7A:6B:30:C4",
+        "is_default": False,
+        "available": False,
+        "present": False,
+        "configured": True,
+        "paired": True,
+        "trusted": True,
+        "connected": False,
+        "spp": True,
+    }
+
+    with (
+        patch(
+            "adapters.linux._run_cups_command",
+            side_effect=[
+                default_probe,
+                live_devices_probe,
+                devices_probe,
+            ],
+        ),
+        patch(
+            "adapters.linux._discover_bluetooth_spp_printers",
+            return_value=[bluetooth_printer],
+        ),
+        patch("adapters.linux.glob.glob", return_value=[]),
+    ):
+        diagnostics = linux_adapter.get_diagnostics()
+
+    bluetooth = [
+        printer
+        for printer in diagnostics["printers"]
+        if printer["connection"] == "bluetooth"
+    ]
+    assert bluetooth == [
+        {
+            **bluetooth_printer,
+            "is_default": True,
+        }
+    ]
+    assert diagnostics["default_printer"] == "KA-1445"
+    assert all(
+        printer["name"] != "Kapbom"
+        for printer in diagnostics["printers"]
+    )
+
+
+def test_linux_adapter_classifies_unmatched_cups_bluetooth_queue(temp_dir):
+    linux_adapter = get_adapter("linux", output_dir=temp_dir)
+    default_probe = MagicMock(returncode=1, stdout=b"", stderr=b"")
+    live_devices_probe = MagicMock(returncode=0, stdout=b"", stderr=b"")
+    devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"dispositivo de Kapbom: bluetooth://86677a6b30c4\n",
+        stderr=b"",
+    )
+
+    with (
+        patch(
+            "adapters.linux._run_cups_command",
+            side_effect=[
+                default_probe,
+                live_devices_probe,
+                devices_probe,
+            ],
+        ),
+        patch(
+            "adapters.linux._discover_bluetooth_spp_printers",
+            return_value=[],
+        ),
+        patch("adapters.linux.glob.glob", return_value=[]),
+    ):
+        diagnostics = linux_adapter.get_diagnostics()
+
+    assert diagnostics["printers"] == [
+        {
+            "name": "Kapbom",
+            "connection": "bluetooth",
+            "uri": "bluetooth://86677a6b30c4",
+            "is_default": False,
+            "available": False,
+            "present": False,
+            "configured": True,
+        }
+    ]
+
+
 def test_linux_adapter_reports_cups_usb_printer(temp_dir):
     linux_adapter = get_adapter("linux", output_dir=temp_dir)
     default_probe = MagicMock(

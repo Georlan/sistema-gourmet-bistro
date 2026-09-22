@@ -190,11 +190,26 @@ def _connection_from_uri(uri: str) -> str:
     normalized = (uri or "").strip().lower()
     if normalized.startswith("usb://") or "/dev/usb/" in normalized:
         return "usb"
+    if normalized.startswith("bluetooth://"):
+        return "bluetooth"
     if normalized.startswith(
         ("socket://", "ipp://", "ipps://", "lpd://", "http://", "https://")
     ):
         return "network"
     return "unknown"
+
+
+def _normalize_bluetooth_address(value: str) -> str:
+    raw = unquote((value or "").strip()).split("?", 1)[0]
+    if "://" in raw:
+        raw = raw.split("://", 1)[1]
+    compact = re.sub(r"[^0-9A-Fa-f]", "", raw)
+    if len(compact) != 12:
+        return ""
+    return ":".join(
+        compact[index:index + 2].upper()
+        for index in range(0, 12, 2)
+    )
 
 
 def _normalize_usb_uri(uri: str) -> str:
@@ -503,9 +518,51 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
             }
             printers.append(public_device)
 
-        # Bluetooth entra somente como diagnóstico nesta fase. Nenhuma seleção
-        # automática ou rota de PrintJob usa estes destinos ainda.
-        printers.extend(_discover_bluetooth_spp_printers())
+        # Bluetooth entra somente como diagnóstico nesta fase. Filas CUPS
+        # bluetooth:// e a descoberta BlueZ são duas visões do mesmo hardware;
+        # consolide por endereço para o painel não mostrar duplicatas.
+        discovered_bluetooth = _discover_bluetooth_spp_printers()
+        bluetooth_by_address = {
+            str(item.get("address") or ""): item
+            for item in discovered_bluetooth
+            if item.get("address")
+        }
+        merged_bluetooth_addresses: set[str] = set()
+        deduplicated_printers: list[dict[str, Any]] = []
+
+        for printer in printers:
+            if printer.get("connection") != "bluetooth":
+                deduplicated_printers.append(printer)
+                continue
+
+            address = _normalize_bluetooth_address(
+                str(printer.get("uri") or "")
+            )
+            bluez_printer = bluetooth_by_address.get(address)
+            if not bluez_printer:
+                deduplicated_printers.append(printer)
+                continue
+
+            merged = {
+                **bluez_printer,
+                "is_default": bool(printer.get("is_default")),
+                "configured": bool(
+                    bluez_printer.get("configured")
+                    or printer.get("configured")
+                ),
+            }
+            deduplicated_printers.append(merged)
+            merged_bluetooth_addresses.add(address)
+            if printer.get("is_default"):
+                default_printer = str(merged.get("name") or default_printer)
+
+        deduplicated_printers.extend(
+            item
+            for item in discovered_bluetooth
+            if str(item.get("address") or "")
+            not in merged_bluetooth_addresses
+        )
+        printers = deduplicated_printers
 
         return {
             "adapter": "linux",
