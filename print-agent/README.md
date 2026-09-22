@@ -28,17 +28,17 @@ git pull --ff-only origin main
 bash print-agent/install-linux.sh
 ```
 
-### Bluetooth SPP no Linux (diagnóstico experimental)
+### Bluetooth SPP no Linux (opcional para apresentação)
 
 USB/CUPS continua sendo o transporte principal e recomendado para operação de
-restaurante. A partir da versão `2026.09.22.1`, o agente Linux também lista no
-diagnóstico dispositivos Bluetooth já conhecidos pelo BlueZ que anunciam o
-serviço Serial Port Profile (SPP).
+restaurante. A versão `2026.09.22.1` adicionou a descoberta de dispositivos
+Bluetooth já conhecidos pelo BlueZ que anunciam Serial Port Profile (SPP).
 
-Nesta primeira etapa o Bluetooth é **somente diagnóstico**: o agente não inicia
-scan, não conecta a impressora, não cria `/dev/rfcomm*` e não direciona
-PrintJobs para Bluetooth. Isso permite validar a descoberta sem alterar o
-comportamento USB já homologado.
+A versão `2026.09.22.2` acrescenta um **teste Bluetooth explícito** no painel.
+Ele só aparece para dispositivos SPP pareados que também possuem uma fila
+`bluetooth://` no CUPS. O teste envia um cupom ESC/POS curto para essa fila e
+não muda a impressora memorizada pelo Kôma, não cria `/dev/rfcomm*` e não
+libera PrintJobs comuns para Bluetooth.
 
 Para conferir localmente o que o agente enxerga:
 
@@ -59,7 +59,9 @@ PY
 ```
 
 Uma impressora SPP pareada aparece com `connection: "bluetooth"` e URI no
-formato `bluetooth://AA:BB:CC:DD:EE:FF`. Dispositivos sem SPP são ignorados.
+formato `bluetooth://AA:BB:CC:DD:EE:FF`. Quando já existe uma fila CUPS para
+o mesmo MAC, o diagnóstico a consolida em uma única impressora e informa
+`cups_queue`. Dispositivos sem SPP são ignorados.
 
 
 A partir da versão `2026.09.20.1`, o agente também instala a ponte local do

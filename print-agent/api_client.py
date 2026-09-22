@@ -7,8 +7,8 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 import requests
 
 log = logging.getLogger("print-agent.api")
-AGENT_CAPABILITIES = ["connect_usb"]
-AGENT_VERSION = "2026.09.22.1"
+AGENT_CAPABILITIES = ["connect_usb", "test_bluetooth"]
+AGENT_VERSION = "2026.09.22.2"
 
 
 class AgentAuthenticationError(RuntimeError):

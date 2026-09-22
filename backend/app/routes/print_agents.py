@@ -349,7 +349,7 @@ def _expire_stale_agent_command(
         "success": False,
         "code": "command_expired",
         "message": (
-            "A busca USB não respondeu dentro do prazo. "
+            "A ação local de impressão não respondeu dentro do prazo. "
             "Tente novamente; se continuar, contate o suporte."
         ),
         "printer_name": None,
@@ -429,6 +429,9 @@ def _agent_printer_state(
         ),
         "supports_usb_commands": (
             diagnostics_fresh and "connect_usb" in capabilities
+        ),
+        "supports_bluetooth_test": (
+            diagnostics_fresh and "test_bluetooth" in capabilities
         ),
     }
 
@@ -828,6 +831,7 @@ class DetectedPrinterReport(BaseModel):
     connection: Literal["usb", "bluetooth", "network", "unknown"] = "unknown"
     uri: Optional[str] = Field(default=None, max_length=300)
     address: Optional[str] = Field(default=None, max_length=80)
+    cups_queue: Optional[str] = Field(default=None, max_length=200)
     is_default: bool = False
     available: bool = False
     present: bool = False
@@ -848,7 +852,7 @@ class PrinterDiagnosticsReport(BaseModel):
     )
     default_printer: Optional[str] = Field(default=None, max_length=200)
     error: Optional[str] = Field(default=None, max_length=300)
-    capabilities: List[Literal["connect_usb"]] = Field(
+    capabilities: List[Literal["connect_usb", "test_bluetooth"]] = Field(
         default_factory=list,
         max_length=10,
     )
@@ -859,6 +863,12 @@ class HeartbeatRequest(BaseModel):
 
 
 class ConnectUsbPrinterRequest(BaseModel):
+    agent_id: Optional[str] = Field(default=None, max_length=200)
+    printer_name: Optional[str] = Field(default=None, max_length=200)
+    printer_uri: Optional[str] = Field(default=None, max_length=300)
+
+
+class TestBluetoothPrinterRequest(BaseModel):
     agent_id: Optional[str] = Field(default=None, max_length=200)
     printer_name: Optional[str] = Field(default=None, max_length=200)
     printer_uri: Optional[str] = Field(default=None, max_length=300)
@@ -1084,6 +1094,9 @@ def get_print_monitor(
                 ],
                 "supports_usb_commands": printer_state[
                     "supports_usb_commands"
+                ],
+                "supports_bluetooth_test": printer_state[
+                    "supports_bluetooth_test"
                 ],
                 "printer_diagnostics": agent.printer_diagnostics,
                 "diagnostics_updated_at": (
@@ -1540,6 +1553,107 @@ def request_usb_printer_connection(
     command = {
         "id": command_id,
         "action": "connect_usb",
+        "printer_name": (req.printer_name or "").strip() or None,
+        "printer_uri": (req.printer_uri or "").strip() or None,
+        "requested_at": now.isoformat(),
+    }
+    agent.pending_command = command
+    agent.command_requested_at = now
+    agent.last_command_result = None
+    agent.command_completed_at = None
+    db.commit()
+    _schedule_print_monitor_refresh(background_tasks, rest_id)
+
+    return {
+        "status": "queued",
+        "agent_id": agent.agent_id,
+        "command": command,
+    }
+
+
+@router.post(
+    "/actions/test-bluetooth",
+    summary="Pedir ao agente local um teste explícito em impressora Bluetooth",
+)
+def request_bluetooth_printer_test(
+    req: TestBluetoothPrinterRequest,
+    background_tasks: BackgroundTasks,
+    current_user: Usuario = Depends(
+        require_permission("impressao:administrar")
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Enfileira um teste local isolado para uma impressora Bluetooth SPP.
+
+    Esta ação não torna Bluetooth o transporte padrão e não libera PrintJobs
+    Bluetooth. USB/CUPS continua sendo o caminho operacional principal.
+    """
+    rest_id = (
+        current_restaurante_id.get()
+        or getattr(current_user, "restaurante_id", None)
+    )
+    if not rest_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Restaurante não selecionado",
+        )
+
+    query = db.query(PrintAgentToken).filter(
+        PrintAgentToken.restaurante_id == rest_id,
+        PrintAgentToken.ativo == True,
+    )
+    if req.agent_id:
+        query = query.filter(
+            PrintAgentToken.agent_id == req.agent_id.strip()
+        )
+    agent = query.order_by(
+        PrintAgentToken.last_seen_at.desc()
+    ).first()
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "A impressão não está configurada neste computador. "
+                "Contate o suporte para concluir a preparação inicial."
+            ),
+        )
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    printer_state = _agent_printer_state(agent, now)
+    if not printer_state["online"]:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A impressão está temporariamente indisponível neste "
+                "computador. Tente novamente."
+            ),
+        )
+    if not printer_state["supports_bluetooth_test"]:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Este computador ainda não está preparado para testar "
+                "impressoras Bluetooth pelo Kôma."
+            ),
+        )
+
+    _expire_stale_agent_command(agent, now)
+    pending_age = _age_seconds(agent.command_requested_at, now)
+    if (
+        isinstance(agent.pending_command, Mapping)
+        and pending_age is not None
+        and pending_age <= AGENT_COMMAND_TIMEOUT_SECONDS
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Este computador já está executando uma ação de impressão.",
+        )
+
+    command_id = f"bt_{secrets.token_urlsafe(12)}"
+    command = {
+        "id": command_id,
+        "action": "test_bluetooth",
         "printer_name": (req.printer_name or "").strip() or None,
         "printer_uri": (req.printer_uri or "").strip() or None,
         "requested_at": now.isoformat(),

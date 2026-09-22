@@ -428,17 +428,18 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
                     elif uri.startswith("/dev/"):
                         present = os.path.exists(uri)
 
-                    printers.append(
-                        {
-                            "name": name[:200],
-                            "connection": connection,
-                            "uri": uri[:300],
-                            "is_default": name == default_printer,
-                            "available": present,
-                            "present": present,
-                            "configured": True,
-                        }
-                    )
+                    printer_entry = {
+                        "name": name[:200],
+                        "connection": connection,
+                        "uri": uri[:300],
+                        "is_default": name == default_printer,
+                        "available": present,
+                        "present": present,
+                        "configured": True,
+                    }
+                    if connection == "bluetooth":
+                        printer_entry["cups_queue"] = name[:200]
+                    printers.append(printer_entry)
             elif devices.stderr:
                 error = devices.stderr.decode(
                     "utf-8",
@@ -550,6 +551,11 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
                     bluez_printer.get("configured")
                     or printer.get("configured")
                 ),
+                "cups_queue": str(
+                    printer.get("cups_queue")
+                    or printer.get("name")
+                    or ""
+                )[:200] or None,
             }
             deduplicated_printers.append(merged)
             merged_bluetooth_addresses.add(address)
@@ -815,6 +821,158 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
             ),
             "printer_name": queue_name,
             "diagnostics": refreshed,
+        }
+
+    def test_bluetooth(
+        self,
+        requested_name: str = "",
+        requested_uri: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Envia um cupom curto pela fila CUPS Bluetooth já configurada.
+
+        Esta ação não altera a impressora padrão do Kôma e não habilita
+        PrintJobs Bluetooth. É uma bancada explícita para apresentação/teste.
+        """
+        diagnostics = self.get_diagnostics()
+        bluetooth_printers = [
+            printer
+            for printer in diagnostics.get("printers") or []
+            if (
+                isinstance(printer, dict)
+                and printer.get("connection") == "bluetooth"
+            )
+        ]
+        requested_address = _normalize_bluetooth_address(requested_uri)
+        selected = next(
+            (
+                printer
+                for printer in bluetooth_printers
+                if (
+                    requested_uri
+                    and str(printer.get("uri") or "") == requested_uri
+                )
+                or (
+                    requested_address
+                    and str(printer.get("address") or "") == requested_address
+                )
+                or (
+                    requested_name
+                    and str(printer.get("name") or "") == requested_name
+                )
+            ),
+            None,
+        )
+        if selected is None and len(bluetooth_printers) == 1:
+            selected = bluetooth_printers[0]
+        if selected is None:
+            return {
+                "success": False,
+                "code": (
+                    "multiple_bluetooth_printers"
+                    if len(bluetooth_printers) > 1
+                    else "bluetooth_not_found"
+                ),
+                "message": (
+                    "Há mais de uma impressora Bluetooth pareada. "
+                    "Escolha qual deseja testar."
+                    if len(bluetooth_printers) > 1
+                    else (
+                        "Nenhuma impressora Bluetooth SPP pareada foi "
+                        "encontrada neste computador."
+                    )
+                ),
+                "printer_name": None,
+                "diagnostics": diagnostics,
+            }
+
+        selected_name = str(selected.get("name") or "Bluetooth")
+        if selected.get("paired") is not True or selected.get("spp") is not True:
+            return {
+                "success": False,
+                "code": "bluetooth_not_ready",
+                "message": (
+                    "A impressora Bluetooth foi encontrada, mas ainda não "
+                    "está pareada como dispositivo serial compatível."
+                ),
+                "printer_name": selected_name,
+                "diagnostics": diagnostics,
+            }
+
+        cups_queue = str(selected.get("cups_queue") or "").strip()
+        if not cups_queue:
+            return {
+                "success": False,
+                "code": "bluetooth_queue_missing",
+                "message": (
+                    "A impressora está pareada, mas ainda não possui uma fila "
+                    "Bluetooth do CUPS neste computador."
+                ),
+                "printer_name": selected_name,
+                "diagnostics": diagnostics,
+            }
+
+        raw_payload = build_escpos_payload(
+            "KÔMA - TESTE BLUETOOTH\n"
+            f"Impressora: {selected_name}\n"
+            "Conexão local validada pelo Kôma Print.\n"
+        )
+        try:
+            proc = subprocess.run(
+                ["lp", "-d", cups_queue, "-o", "raw"],
+                input=raw_payload,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=15,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            log.error(
+                "[LINUX ADAPTER] Falha ao testar Bluetooth '%s': %s",
+                selected_name,
+                exc,
+            )
+            return {
+                "success": False,
+                "code": "bluetooth_test_failed",
+                "message": (
+                    "O Kôma encontrou a impressora Bluetooth, mas não "
+                    "conseguiu enviar o teste ao serviço de impressão."
+                ),
+                "printer_name": selected_name,
+                "diagnostics": diagnostics,
+            }
+
+        if proc.returncode != 0:
+            error = proc.stderr.decode(
+                "utf-8",
+                errors="replace",
+            ).strip()
+            log.error(
+                "[LINUX ADAPTER] CUPS recusou teste Bluetooth '%s': %s",
+                selected_name,
+                error or "erro desconhecido",
+            )
+            return {
+                "success": False,
+                "code": "bluetooth_test_failed",
+                "message": (
+                    "A fila Bluetooth recusou o teste. Ligue a impressora "
+                    "e tente novamente."
+                ),
+                "printer_name": selected_name,
+                "diagnostics": diagnostics,
+            }
+
+        return {
+            "success": True,
+            "code": "bluetooth_test_sent",
+            "message": (
+                "Teste Bluetooth enviado ao sistema de impressão. "
+                "Confirme se o papel saiu na impressora."
+            ),
+            "printer_name": selected_name,
+            "diagnostics": self.get_diagnostics(),
         }
 
     def print_ticket(

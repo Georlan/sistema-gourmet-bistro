@@ -1235,6 +1235,127 @@ def test_admin_can_connect_usb_and_agent_reports_result():
     assert agent["printer_ready"] is True
 
 
+def test_admin_can_request_isolated_bluetooth_test_without_usb_readiness():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    tenant_token = current_restaurante_id.set(2)
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintAgentToken(
+            id="agent-bluetooth-2",
+            restaurante_id=2,
+            agent_id="desktop-bluetooth-2",
+            token_hash=hash_token("bluetooth-agent-token"),
+            ativo=True,
+            last_seen_at=now,
+            printer_diagnostics={
+                "agent_version": "2026.09.22.2",
+                "adapter": "linux",
+                "platform": "linux",
+                "capabilities": ["connect_usb", "test_bluetooth"],
+                "default_printer": "KA-1445",
+                "printers": [
+                    {
+                        "name": "KA-1445",
+                        "connection": "bluetooth",
+                        "uri": "bluetooth://86:67:7A:6B:30:C4",
+                        "address": "86:67:7A:6B:30:C4",
+                        "cups_queue": "Kapbom",
+                        "is_default": True,
+                        "available": False,
+                        "present": False,
+                        "configured": True,
+                        "paired": True,
+                        "trusted": True,
+                        "connected": False,
+                        "spp": True,
+                    }
+                ],
+                "error": None,
+            },
+            diagnostics_updated_at=now,
+        ))
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(tenant_token)
+
+    client = TestClient(app)
+    requested = client.post(
+        "/api/print-agents/actions/test-bluetooth",
+        headers=jwt_headers("2", 2, "admin"),
+        json={
+            "agent_id": "desktop-bluetooth-2",
+            "printer_name": "KA-1445",
+            "printer_uri": "bluetooth://86:67:7A:6B:30:C4",
+        },
+    )
+
+    assert requested.status_code == 200
+    command = requested.json()["command"]
+    assert command["action"] == "test_bluetooth"
+    assert command["printer_name"] == "KA-1445"
+
+    heartbeat = client.post(
+        "/api/print-agents/heartbeat",
+        headers={"X-Agent-Token": "bluetooth-agent-token"},
+        json={},
+    )
+    assert heartbeat.status_code == 200
+    assert heartbeat.json()["command"]["id"] == command["id"]
+
+    completed = client.post(
+        f"/api/print-agents/actions/{command['id']}/complete",
+        headers={"X-Agent-Token": "bluetooth-agent-token"},
+        json={
+            "success": True,
+            "code": "bluetooth_test_sent",
+            "message": "Teste Bluetooth enviado ao sistema de impressão.",
+            "printer_name": "KA-1445",
+            "diagnostics": {
+                "agent_version": "2026.09.22.2",
+                "adapter": "linux",
+                "platform": "linux",
+                "capabilities": ["connect_usb", "test_bluetooth"],
+                "default_printer": "KA-1445",
+                "printers": [
+                    {
+                        "name": "KA-1445",
+                        "connection": "bluetooth",
+                        "uri": "bluetooth://86:67:7A:6B:30:C4",
+                        "address": "86:67:7A:6B:30:C4",
+                        "cups_queue": "Kapbom",
+                        "is_default": True,
+                        "available": False,
+                        "present": False,
+                        "configured": True,
+                        "paired": True,
+                        "trusted": True,
+                        "connected": False,
+                        "spp": True,
+                    }
+                ],
+                "error": None,
+            },
+        },
+    )
+    assert completed.status_code == 200
+
+    monitor = client.get(
+        "/api/print-agents/monitor",
+        headers=jwt_headers("2", 2, "admin"),
+    )
+    assert monitor.status_code == 200
+    agent = next(
+        item
+        for item in monitor.json()["agents"]
+        if item["agent_id"] == "desktop-bluetooth-2"
+    )
+    assert agent["supports_bluetooth_test"] is True
+    assert agent["printer_ready"] is False
+    assert agent["physical_printer_present"] is False
+    assert agent["last_command_result"]["success"] is True
+
+
 def test_usb_connection_rejects_legacy_agent_without_command_support():
     now = datetime.datetime.now(datetime.timezone.utc)
     tenant_token = current_restaurante_id.set(2)
