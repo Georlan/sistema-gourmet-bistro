@@ -176,3 +176,11 @@ test('all plans share the mobile shell while Pocket keeps its plan-specific refi
   assert.match(cashierCss, /padding-bottom: calc\(6\.5rem \+ env\(safe-area-inset-bottom\)\)/);
   assert.match(cashierCss, /\.cashier-shell\[data-koma-plan="pocket"\] \.cashier-salon-grid/);
 });
+
+
+test('mobile operation subnav avoids duplicating actions already pinned to the bottom bar', () => {
+  const caixaPanel = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
+
+  assert.match(caixaPanel, /isPrimaryMobileBottomAction = \['vendas_novo_pedido', 'vendas_cozinha'\]\.includes\(sub\.id\)/);
+  assert.match(caixaPanel, /isPrimaryMobileBottomAction && 'hidden lg:inline-flex'/);
+});
