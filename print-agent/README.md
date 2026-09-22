@@ -28,6 +28,39 @@ git pull --ff-only origin main
 bash print-agent/install-linux.sh
 ```
 
+### Bluetooth SPP no Linux (diagnóstico experimental)
+
+USB/CUPS continua sendo o transporte principal e recomendado para operação de
+restaurante. A partir da versão `2026.09.22.1`, o agente Linux também lista no
+diagnóstico dispositivos Bluetooth já conhecidos pelo BlueZ que anunciam o
+serviço Serial Port Profile (SPP).
+
+Nesta primeira etapa o Bluetooth é **somente diagnóstico**: o agente não inicia
+scan, não conecta a impressora, não cria `/dev/rfcomm*` e não direciona
+PrintJobs para Bluetooth. Isso permite validar a descoberta sem alterar o
+comportamento USB já homologado.
+
+Para conferir localmente o que o agente enxerga:
+
+```bash
+python3 - <<'PY'
+import json
+import sys
+
+sys.path.insert(0, "print-agent")
+from adapters.linux import LinuxPrinterAdapter
+
+print(json.dumps(
+    LinuxPrinterAdapter().get_diagnostics(),
+    ensure_ascii=False,
+    indent=2,
+))
+PY
+```
+
+Uma impressora SPP pareada aparece com `connection: "bluetooth"` e URI no
+formato `bluetooth://AA:BB:CC:DD:EE:FF`. Dispositivos sem SPP são ignorados.
+
 
 A partir da versão `2026.09.20.1`, o agente também instala a ponte local do
 simulador térmico em `127.0.0.1:17654-17664`. Ela só é usada pela bancada
