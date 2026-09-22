@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   CASHIER_SIDEBAR_GROUPS,
+  getCashierSidebarGroupsForPlan,
   getCashierNavigationAction,
   getCashierNavigationParentId,
   getCashierNavigationTarget,
@@ -354,4 +355,26 @@ test('online menu mirrors direct destinations in the horizontal subnav', () => {
   assert.match(caixa, /onlineMenuSubnavItems = getCashierNavigationItem\('cardapio_digital'\)\?\.children \?\? \[\]/);
   assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
   assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
+});
+
+
+test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redução', () => {
+  const pocketGroups = getCashierSidebarGroupsForPlan('pocket');
+  const pocketItems = pocketGroups.flatMap((group) => group.items.map((item) => item.id));
+
+  assert.deepEqual(pocketItems, [
+    'operacao',
+    'financeiro',
+    'cardapio',
+    'clientes',
+    'cardapio_digital',
+    'impressao_salao',
+    'assinatura_pix',
+  ]);
+  assert.equal(pocketItems.includes('estoque'), false);
+  assert.equal(pocketItems.includes('relatorios'), false);
+  assert.equal(pocketItems.includes('permissoes_cargos'), false);
+
+  assert.equal(getCashierSidebarGroupsForPlan('pro'), CASHIER_SIDEBAR_GROUPS);
+  assert.equal(getCashierSidebarGroupsForPlan('premium'), CASHIER_SIDEBAR_GROUPS);
 });
