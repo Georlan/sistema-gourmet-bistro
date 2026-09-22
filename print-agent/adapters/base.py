@@ -89,6 +89,27 @@ class BasePrinterAdapter(ABC):
             "diagnostics": self.get_diagnostics(),
         }
 
+    def test_bluetooth(
+        self,
+        requested_name: str = "",
+        requested_uri: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Envia um cupom de teste para uma impressora Bluetooth suportada.
+
+        USB continua sendo o transporte principal. Adaptadores sem suporte
+        Bluetooth retornam erro explícito sem alterar a impressora padrão.
+        """
+        return {
+            "success": False,
+            "code": "bluetooth_unsupported",
+            "message": (
+                "Este computador não oferece teste Bluetooth pelo Kôma Print."
+            ),
+            "printer_name": None,
+            "diagnostics": self.get_diagnostics(),
+        }
+
     @abstractmethod
     def print_ticket(
         self,
