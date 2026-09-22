@@ -780,11 +780,22 @@ export function CaixaPanel({
           </header>
 
           <div className="cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none">
-            {activeTab === 'operacao' && operationSubnavItems.map((sub) => (
-              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
-                {sub.label}
-              </button>
-            ))}
+            {activeTab === 'operacao' && operationSubnavItems.map((sub) => {
+              const isPrimaryMobileBottomAction = ['vendas_novo_pedido', 'vendas_cozinha'].includes(sub.id);
+              return (
+                <button
+                  key={sub.id}
+                  onClick={() => handleSidebarNavigation(sub.id)}
+                  className={clsx(
+                    'cashier-subnav__button',
+                    isPrimaryMobileBottomAction && 'hidden lg:inline-flex',
+                    isSidebarTabActive(sub.id) && 'is-active',
+                  )}
+                >
+                  {sub.label}
+                </button>
+              );
+            })}
 
             {activeTab === 'cardapio_digital' && onlineMenuSubnavItems.map((sub) => (
               <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
