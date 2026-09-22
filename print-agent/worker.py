@@ -73,7 +73,11 @@ class AgentMaintenance:
             # diagnostic/heartbeat calls never hold this lock.
             with self.hardware_lock:
                 result = execute_agent_command(self.adapter, command)
-                if result.get("success") and result.get("printer_name"):
+                if (
+                    str(command.get("action") or "") == "connect_usb"
+                    and result.get("success")
+                    and result.get("printer_name")
+                ):
                     try:
                         self.config.remember_printer(result["printer_name"])
                     except (OSError, ValueError):
@@ -135,7 +139,17 @@ def _diagnostics_have_ready_printer(diagnostics: dict) -> bool:
 def execute_agent_command(adapter, command: dict) -> dict:
     """Executa somente comandos locais conhecidos e sempre devolve diagnóstico."""
     action = str(command.get("action") or "")
-    if action != "connect_usb":
+    try:
+        if action == "connect_usb":
+            return adapter.connect_usb(
+                requested_name=str(command.get("printer_name") or ""),
+                requested_uri=str(command.get("printer_uri") or ""),
+            )
+        if action == "test_bluetooth":
+            return adapter.test_bluetooth(
+                requested_name=str(command.get("printer_name") or ""),
+                requested_uri=str(command.get("printer_uri") or ""),
+            )
         return {
             "success": False,
             "code": "unsupported_command",
@@ -143,21 +157,23 @@ def execute_agent_command(adapter, command: dict) -> dict:
             "printer_name": None,
             "diagnostics": adapter.get_diagnostics(),
         }
-    try:
-        return adapter.connect_usb(
-            requested_name=str(command.get("printer_name") or ""),
-            requested_uri=str(command.get("printer_uri") or ""),
-        )
     except Exception:
         log.exception(
-            "[COMANDO USB] Falha inesperada ao conectar impressora."
+            "[COMANDO LOCAL] Falha inesperada ao executar '%s'.",
+            action or "desconhecido",
         )
+        if action == "test_bluetooth":
+            message = (
+                "Não foi possível concluir o teste Bluetooth neste computador."
+            )
+        else:
+            message = (
+                "Não foi possível concluir a conexão automática com o USB."
+            )
         return {
             "success": False,
             "code": "command_failed",
-            "message": (
-                "Não foi possível concluir a conexão automática com o USB."
-            ),
+            "message": message,
             "printer_name": None,
             "diagnostics": adapter.get_diagnostics(),
         }
