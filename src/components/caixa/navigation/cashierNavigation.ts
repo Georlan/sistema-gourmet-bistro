@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { CashierTab } from '../cashierContracts';
+import type { SubscriptionPlanId } from '../../../config/subscriptionPlans';
 
 export type CashierNavigationTarget = {
   tab: CashierTab;
@@ -203,6 +204,19 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
     ],
   },
 ] as const;
+
+export function getCashierSidebarGroupsForPlan(planId: SubscriptionPlanId): readonly CashierNavigationGroup[] {
+  if (planId !== 'pocket') return CASHIER_SIDEBAR_GROUPS;
+
+  const hiddenPocketItems = new Set(['estoque', 'relatorios', 'permissoes_cargos']);
+
+  return CASHIER_SIDEBAR_GROUPS
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !hiddenPocketItems.has(item.id)),
+    }))
+    .filter((group) => group.items.length > 0);
+}
 
 const CASHIER_PARENT_ITEMS = CASHIER_SIDEBAR_GROUPS.flatMap((group) => group.items);
 const CASHIER_CHILD_ITEMS = CASHIER_PARENT_ITEMS.flatMap((parent) =>
