@@ -3140,3 +3140,70 @@ body {
   color: #ffffff !important;
   border-color: var(--koma-warning-hover);
 }
+
+
+/* ==========================================================================
+   KÔMA Pocket mobile ergonomics
+   Pocket is the mobile-first plan. These rules are deliberately scoped to
+   the plan marker so Pro/Premium keep their existing responsive shell.
+   ========================================================================== */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  .cashier-shell[data-koma-plan="pocket"] {
+    --pocket-mobile-nav-height: calc(4rem + env(safe-area-inset-bottom));
+  }
+
+  .cashier-shell[data-koma-plan="pocket"] .cashier-content {
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .cashier-shell[data-koma-plan="pocket"] .cashier-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+  }
+
+  .cashier-shell[data-koma-plan="pocket"] .cashier-subnav {
+    position: sticky;
+    top: 3.5rem;
+    z-index: 55;
+    padding-inline: 0.75rem !important;
+  }
+
+  .cashier-shell[data-koma-plan="pocket"] .cashier-subnav__button {
+    min-height: 2.75rem;
+    flex: 0 0 auto;
+    padding-inline: 0.8rem;
+    white-space: nowrap;
+  }
+
+  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+
+  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid > * {
+    min-width: 0;
+  }
+
+  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid .koma-table-free-action,
+  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid .koma-table-occupied-action {
+    min-height: 2.75rem;
+    font-size: 0.68rem;
+  }
+
+  .cashier-shell[data-koma-plan="pocket"] .orders-mobile-stages {
+    position: sticky;
+    top: 6.25rem;
+    z-index: 40;
+  }
+}
+
+.cashier-shell[data-koma-plan="pocket"] .cashier-mobile-bottom-bar {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (max-width: 380px) {
+  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid {
+    grid-template-columns: 1fr;
+  }
+}

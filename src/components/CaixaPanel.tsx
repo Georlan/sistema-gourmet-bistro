@@ -651,6 +651,7 @@ export function CaixaPanel({
 
   return (
     <div
+      data-koma-plan={currentPlanId}
       className={`cashier-shell flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${
         fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}
@@ -798,7 +799,7 @@ export function CaixaPanel({
             {activeTab === 'cardapio' && [
               { id: 'produtos', label: 'Produtos', count: apiProdutos.length },
               { id: 'complementos', label: 'Complementos' },
-              { id: 'categorias', label: 'Preparo e impressão', count: apiCategorias.length },
+              { id: 'categorias', label: hasPrinting ? 'Preparo e impressão' : 'Preparo', count: apiCategorias.length },
             ].map((sub) => (
               <button key={sub.id} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', activeSubTab === sub.id && 'is-active')}>
                 {sub.label}
@@ -1045,7 +1046,7 @@ export function CaixaPanel({
               active={activeTab === 'cardapio'}
               label="Cardápio"
               load={loadCashierCatalog}
-              sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, apiProdutos, apiCategorias, suggestedProductCode, hasOnlineMenu, fetchProdutos, fetchCategorias, catalogReady, restauranteConfig, onRefreshCategorias }}
+              sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, apiProdutos, apiCategorias, suggestedProductCode, hasOnlineMenu, hasPrinting, fetchProdutos, fetchCategorias, catalogReady, restauranteConfig, onRefreshCategorias }}
             />
 
             <DeferredCashierSection active={activeTab === 'estoque'} label="Estoque" load={loadCashierInventory} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, apiProdutos, isLoading }} />
@@ -1311,8 +1312,9 @@ export function CaixaPanel({
           onUnreadCountChange={setChatUnreadCount}
         />
 
-        <CashierMobileBottomBar
-          activeTab={activeTab}
+        {currentPlanId === 'pocket' && (
+          <CashierMobileBottomBar
+            activeTab={activeTab}
           activeSubTab={activeSubTab}
           onNavigate={(tab, subTab) => {
             setActiveTab(tab);
@@ -1321,8 +1323,9 @@ export function CaixaPanel({
           onOpenMenu={() => setIsMobileSidebarOpen(true)}
           orderCount={sidebarOrderCount}
           kitchenCount={activeKitchenItems.length}
-          shiftOpen={turno?.status === 'aberto'}
-        />
+            shiftOpen={turno?.status === 'aberto'}
+          />
+        )}
       </SidebarProvider>
     </div>
   );

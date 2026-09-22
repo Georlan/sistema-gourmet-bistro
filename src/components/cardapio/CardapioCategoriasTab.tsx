@@ -25,6 +25,7 @@ interface CardapioCategoriasTabProps {
   apiProdutos: Product[];
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
+  hasPrinting?: boolean;
   fetchCategorias: () => Promise<void>;
   showToast?: (message: string, type?: 'success' | 'error') => void;
   onCreateRequest?: number;
@@ -66,6 +67,7 @@ export function CardapioCategoriasTab({
   apiProdutos,
   apiBaseUrl,
   authHeaders,
+  hasPrinting = true,
   fetchCategorias,
   showToast,
   onCreateRequest,
@@ -193,7 +195,7 @@ export function CardapioCategoriasTab({
     { value: 'TODOS', label: 'Todas as categorias', description: 'Visão completa das rotas', icon: Layers3 },
     ...(['COZINHA', 'BAR', 'NENHUM'] as const).map((value) => ({
       value,
-      label: destinationMeta[value].shortLabel,
+      label: value === 'NENHUM' && !hasPrinting ? 'Sem preparo' : destinationMeta[value].shortLabel,
       description: destinationMeta[value].description,
       icon: destinationMeta[value].icon,
     })),
@@ -201,9 +203,9 @@ export function CardapioCategoriasTab({
 
   return (
     <div className="w-full space-y-4 pb-8 text-left animate-fade-in" aria-labelledby="catalog-categories-heading">
-      <h1 id="catalog-categories-heading" className="sr-only">Preparo e impressão do cardápio</h1>
+      <h1 id="catalog-categories-heading" className="sr-only">{hasPrinting ? 'Preparo e impressão do cardápio' : 'Preparo do cardápio'}</h1>
 
-      <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Rotas de impressão">
+      <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label={hasPrinting ? 'Rotas de impressão' : 'Rotas de preparo'}>
         {filterCards.map((card) => {
           const Icon = card.icon;
           const active = destinationFilter === card.value;
@@ -352,7 +354,7 @@ export function CardapioCategoriasTab({
                             onClick={() => void handleRouteChange(category, route)}
                             disabled={pendingRouteCategoryId !== null}
                             aria-pressed={selected}
-                            aria-label={`${routeMeta.label} para ${category.nome}`}
+                            aria-label={`${route === 'NENHUM' && !hasPrinting ? 'Sem preparo' : routeMeta.label} para ${category.nome}`}
                             title={routeMeta.description}
                             className={clsx(
                               'relative flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center text-[11px] font-black leading-tight outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-55 dark:focus-visible:ring-offset-[#111713]',
@@ -367,7 +369,7 @@ export function CardapioCategoriasTab({
                               </span>
                             )}
                             <RouteIcon size={17} aria-hidden="true" />
-                            <span>{route === 'NENHUM' ? 'Não imprimir' : routeMeta.shortLabel}</span>
+                            <span>{route === 'NENHUM' ? (hasPrinting ? 'Não imprimir' : 'Sem preparo') : routeMeta.shortLabel}</span>
                           </button>
                         );
                       })}

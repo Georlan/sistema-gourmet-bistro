@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -161,4 +162,17 @@ test('CashierMobileBottomBar renders 5 standard tabs with operational status', (
   assert.match(markup, /Mais/);
   assert.match(markup, />3<\/span>/); // Badge de pedidos
   assert.match(markup, />2<\/span>/); // Badge de cozinha
+});
+
+
+test('Pocket owns the mobile shell and leaves standard plans on the existing navigation shell', () => {
+  const caixaPanel = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
+  const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+
+  assert.match(caixaPanel, /data-koma-plan=\{currentPlanId\}/);
+  assert.match(caixaPanel, /\{currentPlanId === 'pocket' && \(/);
+  assert.match(caixaPanel, /label: hasPrinting \? 'Preparo e impressão' : 'Preparo'/);
+  assert.match(cashierCss, /\.cashier-shell\[data-koma-plan="pocket"\] \.cashier-content/);
+  assert.match(cashierCss, /padding-bottom: calc\(6\.5rem \+ env\(safe-area-inset-bottom\)\)/);
+  assert.match(cashierCss, /\.cashier-shell\[data-koma-plan="pocket"\] \.cashier-salon-grid/);
 });
