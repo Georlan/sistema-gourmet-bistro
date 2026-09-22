@@ -1789,6 +1789,14 @@ body {
   letter-spacing: -0.04em;
 }
 
+.orders-card__number-detail {
+  color: var(--koma-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 750;
+  line-height: 1;
+}
+
 .orders-card__number.is-quick-sale {
   color: #047857;
   border-color: rgba(5, 150, 105, 0.28);

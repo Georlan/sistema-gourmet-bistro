@@ -13,6 +13,7 @@ import {
 import { formatBackendTime } from '../../../utils/dateTime';
 import { formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import { DigitalReceiptAction } from '../digital-receipt/DigitalReceiptAction';
+import { getTableAssociationOptionLabel } from './digitalOrderPresentation';
 
 export interface KanbanDetailSourceItem {
   readonly id?: string;
@@ -80,7 +81,10 @@ export interface KanbanOrderDetailsProps {
     readonly targetId: string;
     readonly onTargetChange: (targetId: string) => void;
     readonly isTransferring: boolean;
-    readonly tables: readonly Pick<Table, 'id' | 'nome'>[];
+    readonly tables: readonly (Pick<Table, 'id' | 'nome'> & {
+      readonly isOccupied?: boolean;
+      readonly total?: number;
+    })[];
   };
   readonly actions: {
     readonly close: () => void;
@@ -195,6 +199,9 @@ export function KanbanOrderDetails({
       || selectedIsReadyDelivery
     );
   const isWholeTableDetail = Boolean(selectedKanbanOrder.tableContext);
+  const selectedAssociationTable = salonTables.find(
+    (table) => String(table.id) === String(tableTransferTargetId),
+  );
 
   return (
     <div
@@ -543,31 +550,56 @@ export function KanbanOrderDetails({
             {Number(selectedKanbanOrder.mesaId || 0) <= 0 && (
               <div className="w-full space-y-2">
                 {selectedCanAssociateTable && (
-                  <div className="flex gap-2 w-full">
-                    <select
-                      aria-label="Mesa para associar ao pedido"
-                      value={tableTransferTargetId}
-                      onChange={(event) => setTableTransferTargetId(event.target.value)}
-                      disabled={isTransferringTable}
-                      className="min-h-10 min-w-0 flex-1 rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-bold text-koma-secondary outline-none focus:border-emerald-500/60"
+                  <>
+                    <div className="flex gap-2 w-full">
+                      <select
+                        aria-label="Mesa para associar ao pedido"
+                        aria-describedby="association-table-status"
+                        value={tableTransferTargetId}
+                        onChange={(event) => setTableTransferTargetId(event.target.value)}
+                        disabled={isTransferringTable}
+                        className="min-h-10 min-w-0 flex-1 rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-bold text-koma-secondary outline-none focus:border-emerald-500/60"
+                      >
+                        <option value="">Associar à mesa…</option>
+                        {salonTables.map((table) => (
+                          <option key={table.id} value={table.id}>
+                            {getTableAssociationOptionLabel(table)}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={actions.associateTable}
+                        disabled={!tableTransferTargetId || isTransferringTable}
+                        className="flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {isTransferringTable ? <RefreshCw className="animate-spin" size={13} /> : <Users size={13} />}
+                        {selectedAssociationTable?.isOccupied ? 'Associar mesmo assim' : 'Associar'}
+                      </button>
+                    </div>
+                    <div
+                      id="association-table-status"
+                      role="status"
+                      className={clsx(
+                        'flex min-h-10 items-start gap-2 rounded-xl border px-3 py-2 text-[10px]',
+                        selectedAssociationTable?.isOccupied
+                          ? 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300'
+                          : 'border-koma-border bg-koma-panel text-koma-muted',
+                      )}
                     >
-                      <option value="">Associar à mesa…</option>
-                      {salonTables.map((table) => (
-                        <option key={table.id} value={table.id}>
-                          Mesa {table.id}{table.nome ? ` · ${table.nome}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={actions.associateTable}
-                      disabled={!tableTransferTargetId || isTransferringTable}
-                      className="flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {isTransferringTable ? <RefreshCw className="animate-spin" size={13} /> : <Users size={13} />}
-                      Associar
-                    </button>
-                  </div>
+                      <span aria-hidden="true" className={clsx(
+                        'mt-1 h-2 w-2 shrink-0 rounded-full',
+                        selectedAssociationTable?.isOccupied ? 'bg-rose-500' : selectedAssociationTable ? 'bg-emerald-500' : 'bg-koma-muted',
+                      )} />
+                      <span>
+                        {!selectedAssociationTable
+                          ? 'Escolha uma mesa. Mesas em atendimento estão marcadas com ●.'
+                          : selectedAssociationTable.isOccupied
+                            ? `Mesa ${selectedAssociationTable.id} já está em atendimento${Number(selectedAssociationTable.total || 0) > 0 ? `, com ${formatCurrency(Number(selectedAssociationTable.total))} em aberto` : ''}. Associe somente se este cliente estiver nessa mesa.`
+                            : `Mesa ${selectedAssociationTable.id} está livre e será vinculada a este pedido.`}
+                      </span>
+                    </div>
+                  </>
                 )}
                 <button
                   type="button"

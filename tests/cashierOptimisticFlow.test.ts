@@ -146,6 +146,7 @@ test('customer lookup keeps validation and cancellation while removing artificia
 test('order modal associates eligible unlinked orders to a table through the dedicated endpoint', () => {
   const orders = source('src/components/caixa/orders/useCashierOrders.ts');
   const details = source('src/components/caixa/orders/KanbanOrderDetails.tsx');
+  const presentation = source('src/components/caixa/orders/digitalOrderPresentation.ts');
   const owner = source('src/components/CaixaPanel.tsx');
 
   assert.match(orders, /\/comandas\/\$\{encodeURIComponent\(primaryComandaId\)\}\/associar-mesa\/\$\{targetMesaId\}/);
@@ -154,5 +155,10 @@ test('order modal associates eligible unlinked orders to a table through the ded
   assert.match(details, /selectedCanAssociateTable/);
   assert.match(details, /'retirada', 'pickup', 'dine_in', 'consumo_local', 'consumo no local'/);
   assert.match(details, /onClick=\{actions\.associateTable\}/);
+  assert.match(details, /getTableAssociationOptionLabel/);
+  assert.match(presentation, /EM ATENDIMENTO/);
+  assert.match(details, /Associar mesmo assim/);
+  assert.match(details, /Mesas em atendimento estão marcadas com ●/);
   assert.match(owner, /associateTable: handleAssociateSelectedKanbanTable/);
+  assert.match(owner, /pdvTableOptions\.map/);
 });

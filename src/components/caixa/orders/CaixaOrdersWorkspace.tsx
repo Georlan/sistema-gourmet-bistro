@@ -11,8 +11,8 @@ import {
 } from '../../../domain/cashierOrderProjection';
 import { formatCompactCurrency, formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import type { CashierTableCard, DeliveryOrderView, OrdersStage, PendingCashPayment, PendingCashPaymentCard } from './cashierWorkspaceTypes';
-import { getDigitalOrderAssociation, getDigitalOrderCustomerLabel, getDigitalOrderFulfillmentLabel, getDigitalOrderSourceLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
 import { DigitalReceiptAction } from '../digital-receipt/DigitalReceiptAction';
+import { getDigitalOrderAssociation, getDigitalOrderCustomerLabel, getDigitalOrderFulfillmentLabel, getDigitalOrderSourceLabel, getDigitalOrderTableBlockLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
 
 export interface CaixaOrdersWorkspaceProps {
   readonly columns: {
@@ -535,6 +535,8 @@ export function CaixaOrdersWorkspace({
                   const isDeliveryOrder = order.modalidade === 'delivery';
                   const badgeText = deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
                   const buttonText = isDeliveryOrder ? 'Pronto para sair' : order.modalidade === 'dine_in' ? 'Pronto para servir' : 'Pronto para retirada';
+                  const tableBlockLabel = getDigitalOrderTableBlockLabel(order);
+                  const orderNumber = humanOrderNumber(order);
                   return (
                     <div
                       key={order.id}
@@ -558,9 +560,10 @@ export function CaixaOrdersWorkspace({
                       )}
                     >
                       <div className="orders-card__identity">
-                        <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale')}>
-                          {digitalOrderIcon(order)}
-                          <strong>#{humanOrderNumber(order)}</strong>
+                        <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale', tableBlockLabel && 'is-table')}>
+                          {tableBlockLabel ? <Users size={15} /> : digitalOrderIcon(order)}
+                          <strong>{tableBlockLabel || `#${orderNumber}`}</strong>
+                          {tableBlockLabel && <span className="orders-card__number-detail">#{orderNumber}</span>}
                         </div>
                         <div className="min-w-0">
                           <strong className="orders-card__identity-title">
@@ -781,6 +784,8 @@ export function CaixaOrdersWorkspace({
                   const badgeText = order.pago
                     ? 'PAGO'
                     : deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
+                  const tableBlockLabel = getDigitalOrderTableBlockLabel(order);
+                  const orderNumber = humanOrderNumber(order);
                   return (
                     <div
                       key={`transito-${order.id}`}
@@ -804,9 +809,10 @@ export function CaixaOrdersWorkspace({
                       )}
                     >
                       <div className="orders-card__identity">
-                        <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale')}>
-                          {digitalOrderIcon(order)}
-                          <strong>#{humanOrderNumber(order)}</strong>
+                        <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale', tableBlockLabel && 'is-table')}>
+                          {tableBlockLabel ? <Users size={15} /> : digitalOrderIcon(order)}
+                          <strong>{tableBlockLabel || `#${orderNumber}`}</strong>
+                          {tableBlockLabel && <span className="orders-card__number-detail">#{orderNumber}</span>}
                         </div>
                         <div className="min-w-0">
                           <strong className="orders-card__identity-title">
