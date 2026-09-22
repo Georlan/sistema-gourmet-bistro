@@ -422,6 +422,6 @@ test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redu
     'Preparo',
   );
 
-  assert.equal(getCashierSidebarGroupsForPlan('pro'), CASHIER_SIDEBAR_GROUPS);
-  assert.equal(getCashierSidebarGroupsForPlan('premium'), CASHIER_SIDEBAR_GROUPS);
+  assert.deepEqual(getCashierSidebarGroupsForPlan('pro'), CASHIER_SIDEBAR_GROUPS);
+  assert.deepEqual(getCashierSidebarGroupsForPlan('premium'), CASHIER_SIDEBAR_GROUPS);
 });
