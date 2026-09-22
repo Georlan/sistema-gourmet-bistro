@@ -26,7 +26,7 @@ export function CaixaSalonTab({
   fetchError, actions,
 }: CaixaSalonTabProps) {
   return (
-    <div className={"orders-workspace flex h-full min-h-0 flex-col gap-3"}>
+    <div className={"orders-workspace cashier-salon-mobile flex h-full min-h-0 flex-col gap-3"}>
       <OperationalBanner
         id="tables-heading"
         eyebrow="SALÃO"
@@ -39,7 +39,7 @@ export function CaixaSalonTab({
           { label: 'maior atendimento', value: salonInsights.oldestService },
         ]}
       />
-      <section className={"flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-koma-border bg-koma-panel"}>
+      <section className={"cashier-salon-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-koma-border bg-koma-panel"}>
         <div className={"flex flex-col gap-2 border-b border-koma-border px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4"}>
           <div className={"flex w-full min-w-0 max-w-full gap-1 overflow-x-auto overscroll-x-contain rounded-xl bg-koma-page p-1.5 pr-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}>
             {[
