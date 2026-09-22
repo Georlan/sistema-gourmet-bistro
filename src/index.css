@@ -2426,6 +2426,51 @@ body {
 
   .orders-workspace {
     height: auto;
+    gap: 0.65rem;
+  }
+
+  .orders-workspace > .operational-header {
+    padding: 0.45rem 0.15rem 0.15rem;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .orders-workspace > .operational-header .orders-hero__copy > p:last-child {
+    display: none;
+  }
+
+  .orders-workspace > .operational-header .orders-eyebrow {
+    display: none;
+  }
+
+  .orders-workspace > .operational-header h1 {
+    font-size: 1.18rem;
+  }
+
+  .orders-workspace > .operational-header .orders-hero__metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+    margin-top: 0.45rem;
+  }
+
+  .orders-workspace > .operational-header .orders-hero__metrics > div {
+    min-height: 2.5rem;
+    padding: 0.4rem 0.5rem;
+  }
+
+  .orders-toolbar {
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .orders-search__input {
+    min-height: 2.75rem;
+    font-size: 0.8rem;
+  }
+
+  .orders-new-orders {
+    min-height: 2.75rem;
   }
 
   .cashier-subnav {
