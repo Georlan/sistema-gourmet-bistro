@@ -802,6 +802,23 @@ body {
   padding: 0.45rem 1.25rem !important;
 }
 
+.cashier-subnav__mobile-select {
+  width: 100%;
+}
+
+.cashier-subnav__mobile-select select {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.55rem 2.25rem 0.55rem 0.8rem;
+  color: var(--koma-text-primary);
+  border: 1px solid var(--koma-border-default);
+  border-radius: 0.8rem;
+  background: var(--koma-surface-raised);
+  font-size: 16px;
+  font-weight: 750;
+  outline: none;
+}
+
 .cashier-subnav__button {
   min-height: 2rem;
   flex: 0 0 auto;

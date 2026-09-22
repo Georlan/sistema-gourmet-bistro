@@ -97,7 +97,7 @@ export function OnlineMenuQrLinks({ publicMenuUrl }: Props) {
 
             <div className="rounded-xl border border-koma-border bg-koma-input p-3.5">
               <span className="block text-[9px] font-black uppercase tracking-[0.12em] text-koma-muted">URL pública</span>
-              <code className="mt-1.5 block break-all text-[11px] leading-relaxed text-koma-foreground">{publicUrl}</code>
+              <code className="mt-1.5 block truncate text-[11px] leading-relaxed text-koma-foreground" title={publicUrl}>{publicUrl.replace(/^https?:\/\//, '')}</code>
             </div>
 
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -126,7 +126,7 @@ export function OnlineMenuQrLinks({ publicMenuUrl }: Props) {
               </a>
             </div>
 
-            <div className="mt-5 rounded-xl border border-koma-border bg-koma-card p-4 text-[10px] leading-relaxed text-koma-muted">
+            <div className="mt-5 hidden rounded-xl border border-koma-border bg-koma-card p-4 text-[10px] leading-relaxed text-koma-muted lg:block">
               <strong className="block text-koma-foreground">Onde usar</strong>
               <span className="mt-1 block">Bio do Instagram, Google Meu Negócio, mensagem automática, materiais impressos e qualquer canal que precise abrir a vitrine pública.</span>
             </div>
@@ -139,12 +139,12 @@ export function OnlineMenuQrLinks({ publicMenuUrl }: Props) {
               </div>
               <div>
                 <h3 className="text-sm font-black text-koma-foreground">QR do cardápio</h3>
-                <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Gerado localmente no navegador. Nenhuma URL ou dado do restaurante é enviado a um serviço externo para criar o QR.</p>
+                <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Pronto para balcão, mesa, embalagem ou material impresso.</p>
               </div>
             </div>
 
             <div ref={qrRef} className="mx-auto grid w-fit place-items-center rounded-2xl bg-white p-5 shadow-sm">
-              <QRCodeSVG value={publicUrl} size={220} level="M" marginSize={2} title="QR Code do cardápio Kôma" />
+              <QRCodeSVG value={publicUrl} size={180} level="M" marginSize={2} title="QR Code do cardápio Kôma" />
             </div>
 
             <button

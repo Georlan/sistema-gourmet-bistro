@@ -231,3 +231,24 @@ test('online menu mobile exposes the edit publish customer-preview loop', () => 
   assert.match(cashierCss, /\.online-menu-editor__publish/);
   assert.match(cashierCss, /position: sticky/);
 });
+
+
+test('mobile information architecture avoids duplicated deep navigation', () => {
+  const mobileSidebar = readFileSync(new URL('../src/components/caixa/navigation/CashierMobileSidebar.tsx', import.meta.url), 'utf8');
+  const sidebarNavigation = readFileSync(new URL('../src/components/caixa/navigation/CashierSidebarNavigation.tsx', import.meta.url), 'utf8');
+  const caixaPanel = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
+
+  assert.match(mobileSidebar, /expandActiveChildren=\{false\}/);
+  assert.match(sidebarNavigation, /expandActiveChildren = true/);
+  assert.match(caixaPanel, /Seção do cardápio online/);
+  assert.match(caixaPanel, /'Cardápio online'/);
+});
+
+test('product editor keeps context and primary actions reachable on phones', () => {
+  const catalog = readFileSync(new URL('../src/components/caixa/catalog/CashierCatalog.tsx', import.meta.url), 'utf8');
+
+  assert.match(catalog, /h-\[100dvh\]/);
+  assert.match(catalog, /sticky top-0/);
+  assert.match(catalog, /safe-area-inset-bottom/);
+  assert.match(catalog, /text-base sm:text-xs/);
+});

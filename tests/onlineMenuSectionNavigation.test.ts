@@ -6,7 +6,7 @@ import { getCashierNavigationItem, getCashierNavigationTarget } from '../src/com
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-test('Cardápio online espelha as mesmas funções no menu lateral e na subnavegação horizontal', () => {
+test('Cardápio online espelha as mesmas funções na navegação responsiva', () => {
   const online = getCashierNavigationItem('cardapio_digital');
   assert.deepEqual(
     online?.children?.map((child) => child.label),
@@ -23,7 +23,9 @@ test('Cardápio online espelha as mesmas funções no menu lateral e na subnaveg
 
   const caixa = source('../src/components/CaixaPanel.tsx');
   assert.match(caixa, /onlineMenuSubnavItems = getCashierNavigationItem\('cardapio_digital'\)\?\.children \?\? \[\]/);
-  assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
+  assert.match(caixa, /activeTab === 'cardapio_digital'/);
+  assert.match(caixa, /onlineMenuSubnavItems\.map/);
+  assert.match(caixa, /Seção do cardápio online/);
   assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
 });
 
