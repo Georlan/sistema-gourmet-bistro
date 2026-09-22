@@ -36,6 +36,32 @@ export function getDigitalOrderAssociation(
   return `Mesa ${String(mesaId).padStart(2, '0')}${waiter ? ` · ${waiter}` : ''}`;
 }
 
+export function getDigitalOrderTableBlockLabel(
+  order: Pick<DeliveryOrderView, 'modalidade' | 'mesaId'>,
+): string | null {
+  const mesaId = Number(order.mesaId || 0);
+  if (!['retirada', 'dine_in'].includes(order.modalidade) || mesaId <= 0) return null;
+  return `M${mesaId}`;
+}
+
+export function getTableAssociationOptionLabel(table: {
+  id: number;
+  nome?: string;
+  isOccupied?: boolean;
+}): string {
+  const id = Number(table.id);
+  const configuredName = String(table.nome || '').trim();
+  const normalizedName = configuredName.toLocaleLowerCase('pt-BR');
+  const defaultNames = new Set([
+    `mesa ${id}`,
+    `mesa ${String(id).padStart(2, '0')}`,
+  ]);
+  const customName = configuredName && !defaultNames.has(normalizedName)
+    ? ` · ${configuredName}`
+    : '';
+  return `${table.isOccupied ? '●' : '○'} Mesa ${id}${customName}${table.isOccupied ? ' · EM ATENDIMENTO' : ' · livre'}`;
+}
+
 export function getDigitalOrderCustomerLabel(
   order: Pick<DeliveryOrderView, 'cliente' | 'modalidade' | 'mesaId' | 'origemOperacional'>,
 ): string {

@@ -134,7 +134,9 @@ def test_order_tracking_query_count_does_not_scale_with_items(monkeypatch):
 
     assert len(payload["itens"]) == 8
     assert [item["nome"] for item in payload["itens"]] == [f"Produto {index}" for index in range(8)]
-    assert len(optimized_selects) == 4
+    # The payment-state projection adds one constant lookup for the order's
+    # online payment intent; the count must remain independent of item volume.
+    assert len(optimized_selects) == 5
     assert len(optimized_selects) < len(legacy_selects)
 
     with SessionLocal() as db:

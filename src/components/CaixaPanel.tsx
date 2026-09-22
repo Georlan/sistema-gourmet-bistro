@@ -1273,7 +1273,17 @@ export function CaixaPanel({
               },
               canReceive: selectedSalonCard.tableOrders.length > 0,
             } : undefined}
-            transfer={{ targetId: tableTransferTargetId, onTargetChange: setTableTransferTargetId, isTransferring: isTransferringTable, tables: salonTables }}
+            transfer={{
+              targetId: tableTransferTargetId,
+              onTargetChange: setTableTransferTargetId,
+              isTransferring: isTransferringTable,
+              tables: pdvTableOptions.map(({ table, isOccupied, total }) => ({
+                id: table.id,
+                nome: table.nome,
+                isOccupied,
+                total,
+              })),
+            }}
             actions={{
               close: () => setSelectedKanbanOrder(null),
               advanceDigitalOrder: handleAdvanceSelectedKanbanOrder,
