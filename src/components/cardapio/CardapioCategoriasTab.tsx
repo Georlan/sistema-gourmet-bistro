@@ -25,6 +25,7 @@ interface CardapioCategoriasTabProps {
   apiProdutos: Product[];
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
+  hasPrinting?: boolean;
   fetchCategorias: () => Promise<void>;
   showToast?: (message: string, type?: 'success' | 'error') => void;
   onCreateRequest?: number;
@@ -66,6 +67,7 @@ export function CardapioCategoriasTab({
   apiProdutos,
   apiBaseUrl,
   authHeaders,
+  hasPrinting = true,
   fetchCategorias,
   showToast,
   onCreateRequest,
@@ -352,7 +354,7 @@ export function CardapioCategoriasTab({
                             onClick={() => void handleRouteChange(category, route)}
                             disabled={pendingRouteCategoryId !== null}
                             aria-pressed={selected}
-                            aria-label={`${routeMeta.label} para ${category.nome}`}
+                            aria-label={`${route === 'NENHUM' && !hasPrinting ? 'Sem preparo' : routeMeta.label} para ${category.nome}`}
                             title={routeMeta.description}
                             className={clsx(
                               'relative flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center text-[11px] font-black leading-tight outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-55 dark:focus-visible:ring-offset-[#111713]',
@@ -367,7 +369,7 @@ export function CardapioCategoriasTab({
                               </span>
                             )}
                             <RouteIcon size={17} aria-hidden="true" />
-                            <span>{route === 'NENHUM' ? 'Não imprimir' : routeMeta.shortLabel}</span>
+                            <span>{route === 'NENHUM' ? (hasPrinting ? 'Não imprimir' : 'Sem preparo') : routeMeta.shortLabel}</span>
                           </button>
                         );
                       })}
