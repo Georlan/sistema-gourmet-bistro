@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Bluetooth,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -20,17 +21,23 @@ import { parseBackendTimestamp } from '../../utils/dateTime';
 
 interface DetectedPrinter {
   name: string;
-  connection: 'usb' | 'network' | 'unknown';
+  connection: 'usb' | 'bluetooth' | 'network' | 'unknown';
   uri: string | null;
+  address?: string | null;
+  cups_queue?: string | null;
   is_default: boolean;
   available: boolean;
   present?: boolean;
   configured?: boolean;
+  paired?: boolean;
+  trusted?: boolean;
+  connected?: boolean;
+  spp?: boolean;
 }
 
 interface AgentCommand {
   id: string;
-  action: 'connect_usb';
+  action: 'connect_usb' | 'test_bluetooth';
   printer_name: string | null;
   printer_uri: string | null;
   requested_at: string;
@@ -56,6 +63,7 @@ interface PrintAgentHealth {
   printer_ready?: boolean;
   ready_printer_count?: number;
   supports_usb_commands?: boolean;
+  supports_bluetooth_test?: boolean;
   printer_diagnostics: {
     adapter: string;
     platform: string;
@@ -303,6 +311,7 @@ export function PrintMonitorPanel({
     (monitorData?.command_timeout_seconds || 45) + 5
   ) * 1_000;
   const hasPendingCommand = Boolean(activePendingCommand?.command);
+  const pendingCommandAction = activePendingCommand?.command?.action || null;
   const commandRunning = Boolean(
     hasPendingCommand
     && pendingCommandAgeMs <= usbSearchUiTimeoutMs
@@ -354,11 +363,13 @@ export function PrintMonitorPanel({
   useEffect(() => {
     if (!hasPendingCommand || commandRunning) return;
     setActionMessage(
-      'A busca USB não respondeu dentro do prazo e foi encerrada.'
+      pendingCommandAction === 'test_bluetooth'
+        ? 'O teste Bluetooth não respondeu dentro do prazo e foi encerrado.'
+        : 'A busca USB não respondeu dentro do prazo e foi encerrada.'
     );
     setActionSuccessful(false);
     setPendingCommandId(null);
-  }, [commandRunning, hasPendingCommand]);
+  }, [commandRunning, hasPendingCommand, pendingCommandAction]);
 
   const queueTotal = useMemo(() => {
     if (!monitorData?.summary) return 0;
@@ -397,6 +408,20 @@ export function PrintMonitorPanel({
             ...printer,
             agentIndex,
             agentId: agent.agent_id
+          }))
+      ))
+  ), [agentHasFreshDiagnostics, monitorData]);
+
+  const bluetoothPrinters = useMemo(() => (
+    (monitorData?.agents || [])
+      .filter(agent => agentHasFreshDiagnostics(agent))
+      .flatMap(agent => (
+        (agent.printer_diagnostics?.printers || [])
+          .filter(printer => printer.connection === 'bluetooth')
+          .map(printer => ({
+            ...printer,
+            agentId: agent.agent_id,
+            supportsBluetoothTest: agent.supports_bluetooth_test === true
           }))
       ))
   ), [agentHasFreshDiagnostics, monitorData]);
@@ -469,6 +494,50 @@ export function PrintMonitorPanel({
         requestError instanceof Error
           ? requestError.message
           : 'Não foi possível procurar a impressora USB.'
+      );
+      setError('');
+    }
+  };
+
+  const requestBluetoothTest = async (
+    agentId: string,
+    printer: DetectedPrinter
+  ) => {
+    if (pendingCommandId || commandRunning) return;
+    setActionMessage('');
+    setActionSuccessful(null);
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/api/print-agents/actions/test-bluetooth`,
+        {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            agent_id: agentId,
+            printer_name: printer.name,
+            printer_uri: printer.uri
+          })
+        }
+      );
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          data?.detail || 'Não foi possível iniciar o teste Bluetooth.'
+        );
+      }
+      setError('');
+      setPendingCommandId(data?.command?.id || null);
+      setActionMessage('Enviando teste para a impressora Bluetooth…');
+      await loadMonitor(false);
+    } catch (requestError) {
+      setActionSuccessful(false);
+      setActionMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Não foi possível testar a impressora Bluetooth.'
       );
       setError('');
     }
@@ -586,6 +655,13 @@ export function PrintMonitorPanel({
       };
     }
     if (commandRunning || pendingCommandId) {
+      if (pendingCommandAction === 'test_bluetooth') {
+        return {
+          tone: 'neutral',
+          title: 'Testando a impressora Bluetooth',
+          detail: 'O Kôma Print está enviando um cupom curto pela fila Bluetooth deste computador.'
+        };
+      }
       return {
         tone: 'neutral',
         title: 'Conectando a impressora USB',
@@ -671,6 +747,7 @@ export function PrintMonitorPanel({
     hasReadyPrinter,
     latestJob,
     monitorData,
+    pendingCommandAction,
     pendingCommandId,
     presentUsbPrinters.length,
     queueTotal,
@@ -1045,6 +1122,78 @@ export function PrintMonitorPanel({
           )}
         </div>
       </div>
+
+      {bluetoothPrinters.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-xs font-bold text-koma-foreground">
+                Bluetooth para apresentação
+              </h3>
+              <p className="mt-0.5 text-[10px] text-koma-muted">
+                Opcional. USB continua sendo a conexão principal para a operação do restaurante.
+              </p>
+            </div>
+            <span className="rounded-full border border-koma-border bg-koma-raised px-2.5 py-1 text-[9px] font-semibold text-koma-muted">
+              {bluetoothPrinters.length} pareada(s)
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {bluetoothPrinters.map((printer, index) => {
+              const canTest = (
+                printer.configured === true
+                && printer.paired === true
+                && printer.spp === true
+                && Boolean(printer.cups_queue)
+                && printer.supportsBluetoothTest
+              );
+              const busy = commandRunning || Boolean(pendingCommandId);
+              return (
+                <div
+                  key={`${printer.agentId}-${printer.uri || printer.name}-${index}`}
+                  className="rounded-2xl border border-koma-border bg-koma-panel p-4 shadow-xs"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-koma-raised text-koma-muted">
+                      <Bluetooth size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <strong className="block truncate text-xs font-bold text-koma-foreground">
+                        {printer.name}
+                      </strong>
+                      <span className="mt-0.5 block text-[9px] font-semibold text-koma-muted">
+                        {printer.paired
+                          ? printer.cups_queue
+                            ? 'Pareada · fila Bluetooth pronta para teste'
+                            : 'Pareada · fila do sistema não encontrada'
+                          : 'Bluetooth ainda não pareado'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void requestBluetoothTest(printer.agentId, printer)}
+                    disabled={busy || !hasOnlineAgent || !canTest}
+                    title={
+                      canTest
+                        ? 'Enviar um cupom curto somente para esta impressora Bluetooth'
+                        : 'A impressora precisa estar pareada e possuir uma fila Bluetooth no sistema'
+                    }
+                    className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 py-2 text-xs font-bold text-koma-foreground transition hover:border-sky-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer shadow-xs"
+                  >
+                    {busy
+                      ? <RefreshCw size={14} className="animate-spin" />
+                      : <Bluetooth size={14} />}
+                    {busy ? 'Testando…' : 'Imprimir teste Bluetooth'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-[#29292e]">
         <button
