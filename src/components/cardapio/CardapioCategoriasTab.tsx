@@ -195,7 +195,7 @@ export function CardapioCategoriasTab({
     { value: 'TODOS', label: 'Todas as categorias', description: 'Visão completa das rotas', icon: Layers3 },
     ...(['COZINHA', 'BAR', 'NENHUM'] as const).map((value) => ({
       value,
-      label: destinationMeta[value].shortLabel,
+      label: value === 'NENHUM' && !hasPrinting ? 'Sem preparo' : destinationMeta[value].shortLabel,
       description: destinationMeta[value].description,
       icon: destinationMeta[value].icon,
     })),
@@ -203,9 +203,9 @@ export function CardapioCategoriasTab({
 
   return (
     <div className="w-full space-y-4 pb-8 text-left animate-fade-in" aria-labelledby="catalog-categories-heading">
-      <h1 id="catalog-categories-heading" className="sr-only">Preparo e impressão do cardápio</h1>
+      <h1 id="catalog-categories-heading" className="sr-only">{hasPrinting ? 'Preparo e impressão do cardápio' : 'Preparo do cardápio'}</h1>
 
-      <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Rotas de impressão">
+      <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label={hasPrinting ? 'Rotas de impressão' : 'Rotas de preparo'}>
         {filterCards.map((card) => {
           const Icon = card.icon;
           const active = destinationFilter === card.value;
