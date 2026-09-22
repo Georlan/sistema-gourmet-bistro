@@ -478,6 +478,7 @@ def test_linux_adapter_deduplicates_cups_bluetooth_queue_with_bluez_device(
         {
             **bluetooth_printer,
             "is_default": True,
+            "cups_queue": "Kapbom",
         }
     ]
     assert diagnostics["default_printer"] == "KA-1445"
@@ -523,6 +524,7 @@ def test_linux_adapter_classifies_unmatched_cups_bluetooth_queue(temp_dir):
             "available": False,
             "present": False,
             "configured": True,
+            "cups_queue": "Kapbom",
         }
     ]
 
@@ -935,7 +937,7 @@ def test_api_client_reuses_http_session():
         assert session.post.call_args.kwargs["json"] == {
             "diagnostics": {
                 **diagnostics,
-                "capabilities": ["connect_usb"],
+                "capabilities": ["connect_usb", "test_bluetooth"],
                 "agent_version": AGENT_VERSION,
             }
         }
@@ -1011,6 +1013,129 @@ def test_agent_executes_connect_usb_command():
     )
 
 
+def test_agent_executes_bluetooth_test_command():
+    adapter = MagicMock()
+    adapter.test_bluetooth.return_value = {
+        "success": True,
+        "code": "bluetooth_test_sent",
+        "message": "Teste enviado.",
+        "printer_name": "KA-1445",
+        "diagnostics": {
+            "adapter": "linux",
+            "platform": "linux",
+            "printers": [],
+        },
+    }
+
+    result = execute_agent_command(
+        adapter,
+        {
+            "id": "bt-command-1",
+            "action": "test_bluetooth",
+            "printer_name": "KA-1445",
+            "printer_uri": "bluetooth://86:67:7A:6B:30:C4",
+        },
+    )
+
+    assert result["success"] is True
+    adapter.test_bluetooth.assert_called_once_with(
+        requested_name="KA-1445",
+        requested_uri="bluetooth://86:67:7A:6B:30:C4",
+    )
+    adapter.connect_usb.assert_not_called()
+
+
+def test_linux_adapter_sends_bluetooth_test_to_cups_queue(temp_dir):
+    adapter = get_adapter("linux", output_dir=temp_dir)
+    diagnostics = {
+        "adapter": "linux",
+        "platform": "linux",
+        "default_printer": "KA-1445",
+        "error": None,
+        "printers": [
+            {
+                "name": "KA-1445",
+                "connection": "bluetooth",
+                "uri": "bluetooth://86:67:7A:6B:30:C4",
+                "address": "86:67:7A:6B:30:C4",
+                "cups_queue": "Kapbom",
+                "is_default": True,
+                "available": False,
+                "present": False,
+                "configured": True,
+                "paired": True,
+                "trusted": True,
+                "connected": False,
+                "spp": True,
+            }
+        ],
+    }
+    adapter.get_diagnostics = MagicMock(return_value=diagnostics)
+    accepted = MagicMock(
+        returncode=0,
+        stdout=b"request id is Kapbom-42",
+        stderr=b"",
+    )
+
+    with patch(
+        "adapters.linux.subprocess.run",
+        return_value=accepted,
+    ) as run:
+        result = adapter.test_bluetooth(
+            requested_name="KA-1445",
+            requested_uri="bluetooth://86:67:7A:6B:30:C4",
+        )
+
+    assert result["success"] is True
+    assert result["code"] == "bluetooth_test_sent"
+    assert result["printer_name"] == "KA-1445"
+    assert run.call_args.args[0] == [
+        "lp",
+        "-d",
+        "Kapbom",
+        "-o",
+        "raw",
+    ]
+    assert run.call_args.kwargs["input"].startswith(b"\x1b@")
+
+
+def test_linux_adapter_requires_cups_queue_for_bluetooth_test(temp_dir):
+    adapter = get_adapter("linux", output_dir=temp_dir)
+    diagnostics = {
+        "adapter": "linux",
+        "platform": "linux",
+        "default_printer": None,
+        "error": None,
+        "printers": [
+            {
+                "name": "KA-1445",
+                "connection": "bluetooth",
+                "uri": "bluetooth://86:67:7A:6B:30:C4",
+                "address": "86:67:7A:6B:30:C4",
+                "is_default": False,
+                "available": False,
+                "present": False,
+                "configured": True,
+                "paired": True,
+                "trusted": True,
+                "connected": False,
+                "spp": True,
+            }
+        ],
+    }
+    adapter.get_diagnostics = MagicMock(return_value=diagnostics)
+
+    with patch("adapters.linux.subprocess.run") as run:
+        result = adapter.test_bluetooth(
+            requested_name="KA-1445",
+            requested_uri="bluetooth://86:67:7A:6B:30:C4",
+        )
+
+    assert result["success"] is False
+    assert result["code"] == "bluetooth_queue_missing"
+    run.assert_not_called()
+
+
 def test_api_client_completes_usb_command():
     with patch("api_client.requests.Session") as SessionClass:
         session = SessionClass.return_value
@@ -1037,7 +1162,7 @@ def test_api_client_completes_usb_command():
         )
         assert session.post.call_args.kwargs["json"][
             "diagnostics"
-        ]["capabilities"] == ["connect_usb"]
+        ]["capabilities"] == ["connect_usb", "test_bluetooth"]
 
 
 def test_api_client_reads_shadow_feed_without_claiming():
