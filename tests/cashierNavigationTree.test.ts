@@ -315,7 +315,7 @@ test('desktop and mobile delegate nested rendering to the same component', () =>
   );
   for (const source of [desktop, mobile]) {
     assert.match(source, /CashierSidebarNavigation/);
-    assert.match(source, /groups=\{CASHIER_SIDEBAR_GROUPS\}/);
+    assert.match(source, /groups=\{getCashierSidebarGroupsForPlan\(planId\)\}/);
     assert.doesNotMatch(source, /group\.items\.map/);
   }
 });
