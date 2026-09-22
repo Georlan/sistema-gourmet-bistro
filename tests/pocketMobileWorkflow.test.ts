@@ -208,3 +208,26 @@ test('mobile orders prioritize actionable controls above the fold', () => {
   assert.match(cashierCss, /\.orders-search__input \{[\s\S]*min-height: 2\.75rem/);
   assert.match(cashierCss, /\.orders-new-orders \{[\s\S]*min-height: 2\.75rem/);
 });
+
+
+test('mobile catalog prioritizes create preview and bulk actions', () => {
+  const products = readFileSync(new URL('../src/components/cardapio/CardapioProdutosTab.tsx', import.meta.url), 'utf8');
+  const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+
+  assert.match(products, /cardapio-products-actions/);
+  assert.match(products, /cardapio-products-create/);
+  assert.match(products, /cardapio-products-preview/);
+  assert.match(cashierCss, /\.cardapio-products-create/);
+  assert.match(cashierCss, /grid-column: 1 \/ -1/);
+});
+
+test('online menu mobile exposes the edit publish customer-preview loop', () => {
+  const editor = readFileSync(new URL('../src/components/cardapio/CardapioDigitalSettingsPanel.tsx', import.meta.url), 'utf8');
+  const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+
+  assert.match(editor, /Ver como cliente/);
+  assert.match(editor, /online-menu-editor__publish/);
+  assert.match(editor, /Salvar e publicar/);
+  assert.match(cashierCss, /\.online-menu-editor__publish/);
+  assert.match(cashierCss, /position: sticky/);
+});

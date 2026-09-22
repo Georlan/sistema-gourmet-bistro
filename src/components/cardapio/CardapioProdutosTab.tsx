@@ -281,8 +281,8 @@ export function CardapioProdutosTab({
   }
 
   return (
-    <div className="space-y-3">
-      <section className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-white/10 dark:bg-[#111713]">
+    <div className="cardapio-products-mobile space-y-3">
+      <section className="cardapio-products-categories rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-white/10 dark:bg-[#111713]">
         <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:thin]" aria-label="Categorias do cardápio">
           <button
             type="button"
@@ -328,7 +328,7 @@ export function CardapioProdutosTab({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-[#111713]">
+      <section className="cardapio-products-toolbar rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-[#111713]">
         <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
           <label className="relative min-w-0 flex-1">
             <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -351,7 +351,7 @@ export function CardapioProdutosTab({
               </button>
             )}
           </label>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="cardapio-products-actions flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => {
@@ -360,7 +360,7 @@ export function CardapioProdutosTab({
                 else setSelectionMode(true);
               }}
               className={clsx(
-                'inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-black transition',
+                'cardapio-products-select inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-black transition',
                 selectionMode
                   ? 'border-slate-300 bg-slate-100 text-slate-700 dark:border-white/15 dark:bg-white/5 dark:text-slate-200'
                   : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 hover:bg-emerald-500/15 dark:text-emerald-300',
@@ -374,7 +374,7 @@ export function CardapioProdutosTab({
                 href={previewUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 text-xs font-black text-slate-800 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/15 dark:text-white dark:hover:border-emerald-500/50 dark:hover:text-emerald-300"
+                className="cardapio-products-preview inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 text-xs font-black text-slate-800 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/15 dark:text-white dark:hover:border-emerald-500/50 dark:hover:text-emerald-300"
               >
                 <Eye size={16} /> Ver cardápio
               </a>
@@ -382,7 +382,7 @@ export function CardapioProdutosTab({
             <button
               type="button"
               onClick={onCreateProduct}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 transition hover:bg-emerald-400"
+              className="cardapio-products-create inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 transition hover:bg-emerald-400"
             >
               <Plus size={17} /> Novo produto
             </button>
