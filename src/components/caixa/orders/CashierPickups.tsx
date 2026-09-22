@@ -319,8 +319,8 @@ export function CashierPickups({
   };
 
   return (
-    <div className="space-y-4 text-left" id="cashier-pickups-workspace">
-      <section className="rounded-3xl border border-koma-border bg-koma-card/60 p-4 sm:p-5">
+    <div className="cashier-fulfillment-mobile space-y-4 text-left" id="cashier-pickups-workspace">
+      <section className="cashier-fulfillment-mobile__hero rounded-3xl border border-koma-border bg-koma-card/60 p-4 sm:p-5">
         <div className="flex flex-col gap-4 border-b border-koma-border pb-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="flex items-center gap-2 text-emerald-400">
@@ -376,7 +376,7 @@ export function CashierPickups({
         </label>
       </section>
 
-      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+      <div className="cashier-fulfillment-mobile__lanes grid grid-cols-1 gap-4 2xl:grid-cols-2">
         <section className="rounded-2xl border border-koma-border bg-koma-card/45 p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
