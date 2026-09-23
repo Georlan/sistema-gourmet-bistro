@@ -44,6 +44,14 @@ class CustomerOrderHistoryItem(BaseModel):
     modificadores: list[CustomerOrderHistoryModifier] = Field(default_factory=list)
 
 
+class CustomerOrderPaymentRecovery(BaseModel):
+    status: str
+    qr_code: str | None = None
+    qr_code_base64: str | None = None
+    ticket_url: str | None = None
+    expires_at: str | None = None
+
+
 class CustomerOrderHistoryOrder(BaseModel):
     id: str
     numero_pedido: int | str
@@ -57,6 +65,7 @@ class CustomerOrderHistoryOrder(BaseModel):
     desconto_cupom: float = Field(ge=0)
     desconto_cashback: float = Field(ge=0)
     itens: list[CustomerOrderHistoryItem] = Field(default_factory=list)
+    pagamento: CustomerOrderPaymentRecovery | None = None
 
 
 class CustomerOrderHistoryResponse(BaseModel):
@@ -236,12 +245,9 @@ def list_customer_orders(
         has_more = len(rows) > limit
         page = rows[:limit]
         modifiers_by_item = _build_modifier_lookup(db, claims.restaurante_id, page)
-        payment_status_by_order = {
-            str(comanda_id): payment_status
-            for comanda_id, payment_status in db.query(
-                OnlinePaymentIntent.comanda_id,
-                OnlinePaymentIntent.status,
-            ).filter(
+        payment_by_order = {
+            str(intent.comanda_id): intent
+            for intent in db.query(OnlinePaymentIntent).filter(
                 OnlinePaymentIntent.restaurante_id == claims.restaurante_id,
                 OnlinePaymentIntent.comanda_id.in_([order.id for order in page]),
             ).all()
@@ -250,7 +256,19 @@ def list_customer_orders(
         items: list[CustomerOrderHistoryOrder] = []
         for comanda in page:
             effective_status = _effective_status(comanda)
-            payment_failed = payment_status_by_order.get(str(comanda.id)) == "error"
+            intent = payment_by_order.get(str(comanda.id))
+            payment_failed = bool(intent and intent.status == "error")
+            payment_recovery = None
+            if intent and intent.status in {"created", "pending"} and intent.qr_code:
+                expires_at = intent.expires_at
+                if expires_at is None or _as_utc(expires_at) > datetime.datetime.now(datetime.timezone.utc):
+                    payment_recovery = CustomerOrderPaymentRecovery(
+                        status=intent.status,
+                        qr_code=intent.qr_code,
+                        qr_code_base64=intent.qr_code_base64,
+                        ticket_url=intent.ticket_url,
+                        expires_at=expires_at.isoformat() if expires_at else None,
+                    )
             if payment_failed:
                 effective_status = "falha_pagamento"
             state_contract = build_order_state_contract(
@@ -272,6 +290,7 @@ def list_customer_orders(
                     desconto_cupom=float(comanda.valor_desconto_cupom or 0.0),
                     desconto_cashback=float(comanda.valor_desconto_cashback or 0.0),
                     itens=_serialize_items(comanda, modifiers_by_item),
+                    pagamento=payment_recovery,
                 )
             )
 

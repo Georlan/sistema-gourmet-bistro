@@ -1,4 +1,4 @@
-import { ChevronDown, Lock } from 'lucide-react';
+import { ChevronDown, Gift, Lock } from 'lucide-react';
 import { CardapioDigitalSettingsPanel } from '../../cardapio/CardapioDigitalSettingsPanel';
 import type { CashierTab } from '../cashierContracts';
 import { getTenantPublicMenuUrl, resolveKomaHost } from '../../../domain/komaHost';
@@ -134,22 +134,39 @@ export default function CashierOnlineMenu({
     content = <OnlineMenuQrLinks publicMenuUrl={publicMenuUrl} />;
   } else {
     content = (
-      <CardapioDigitalSettingsPanel
-        key={authHeaders.Authorization || authHeaders.authorization}
-        apiBaseUrl={apiBaseUrl}
-        authHeaders={authHeaders}
-        publicMenuUrl={publicMenuUrl}
-        activeSection={activeSection}
-        onSectionChange={(section) => {
-          setActiveSubTab(
-            section === 'pedidos'
-              ? 'cardapio_pedidos'
-              : section === 'marca'
-                ? 'cardapio_marca'
-                : 'cardapio_perfil',
-          );
-        }}
-      />
+      <>
+        <CardapioDigitalSettingsPanel
+          key={authHeaders.Authorization || authHeaders.authorization}
+          apiBaseUrl={apiBaseUrl}
+          authHeaders={authHeaders}
+          publicMenuUrl={publicMenuUrl}
+          activeSection={activeSection}
+          onSectionChange={(section) => {
+            setActiveSubTab(
+              section === 'pedidos'
+                ? 'cardapio_pedidos'
+                : section === 'marca'
+                  ? 'cardapio_marca'
+                  : 'cardapio_perfil',
+            );
+          }}
+        />
+        {activeSection === 'perfil' && (
+          <section className="mt-4 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5" aria-labelledby="online-menu-benefits-settings-title">
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-500"><Gift size={18} aria-hidden="true" /></span>
+              <div>
+                <h2 id="online-menu-benefits-settings-title" className="text-sm font-black text-koma-foreground">Promoções e fidelidade</h2>
+                <p className="mt-1 text-xs leading-relaxed text-koma-muted">Os cupons públicos e a regra de pontos ou cashback configurados em Clientes aparecem em Benefícios no cardápio. O saldo pessoal aparece quando o cliente entra na conta.</p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" onClick={() => { setActiveTab('clientes'); setActiveSubTab('cupons'); }} className="min-h-11 rounded-xl border border-koma-border bg-koma-card px-4 text-xs font-bold text-koma-foreground">Configurar cupons</button>
+              <button type="button" onClick={() => { setActiveTab('clientes'); setActiveSubTab('fidelidade'); }} className="min-h-11 rounded-xl border border-koma-border bg-koma-card px-4 text-xs font-bold text-koma-foreground">Configurar fidelidade</button>
+            </div>
+          </section>
+        )}
+      </>
     );
   }
 

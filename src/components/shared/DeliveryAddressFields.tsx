@@ -1,8 +1,10 @@
 import type { ChangeEvent } from 'react';
 import {
   type DeliveryAddressDraft,
+  formatCepInput,
   updateDeliveryAddressGeographicField,
 } from '../../domain/deliveryAddress';
+import PostalCodeLookupStatus from './PostalCodeLookupStatus';
 
 type NeighborhoodOption = {
   value: string;
@@ -51,6 +53,21 @@ export default function DeliveryAddressFields({
           Endereço salvo anteriormente: {legacyHint}. Confirme os campos abaixo para este pedido.
         </div>
       )}
+
+      <label className="block">
+        <span className={labelClass}>CEP <span className="font-normal opacity-70">(opcional)</span></span>
+        <input
+          id={`${idPrefix}-cep`}
+          inputMode="numeric"
+          autoComplete="postal-code"
+          placeholder="00000-000"
+          maxLength={9}
+          value={formatCepInput(value.cep)}
+          onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'cep', event.target.value))}
+          className={inputClass}
+        />
+        <PostalCodeLookupStatus value={value} onChange={onChange} compact={compact} />
+      </label>
 
       <div className="space-y-1.5">
         <label className="block">

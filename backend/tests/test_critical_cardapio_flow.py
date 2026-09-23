@@ -256,7 +256,7 @@ def test_caixa_venda_direta_nao_passa_pela_gaveta_online(
         db.close()
 
 
-def test_pedido_digital_sem_otp_nao_se_apropria_de_cadastro():
+def test_pedido_digital_sem_otp_cria_cliente_sem_verificar_telefone():
     telefone_formatado = "(81) 98888-7711"
     telefone_normalizado = "81988887711"
 
@@ -283,11 +283,18 @@ def test_pedido_digital_sem_otp_nao_se_apropria_de_cadastro():
     db = SessionLocal()
     token_var = current_restaurante_id.set(100)
     try:
-        clientes = db.query(Cliente).filter(
+        cliente = db.query(Cliente).filter(
             Cliente.restaurante_id == 100,
             Cliente.telefone == telefone_normalizado,
-        ).all()
-        assert clientes == []
+        ).one()
+        comanda = db.query(Comanda).filter(
+            Comanda.restaurante_id == 100,
+            Comanda.id == primeiro.json().get("comanda_id", primeiro.json().get("id")),
+        ).one()
+        assert comanda.cliente_id == cliente.id
+        assert cliente.nome == "Cliente Inicial"
+        assert cliente.endereco == "Rua Inicial, 10"
+        assert cliente.telefone_verificado_em is None
     finally:
         current_restaurante_id.reset(token_var)
         db.close()

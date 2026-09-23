@@ -7,7 +7,6 @@ import React, { useEffect, useState } from "react";
 import { Facebook, Gift, Globe, Phone, RotateCcw } from "lucide-react";
 import { BrandConfig, LOCAL_LOGO_PLACEHOLDER } from "../CardapioTypes";
 import "../cardapioPublic.css";
-import CardapioBenefitsDrawer from "./CardapioBenefitsDrawer";
 import {
   KomaBagIcon,
   KomaInfoIcon,
@@ -29,6 +28,7 @@ interface CardapioHeaderProps {
   onCartToggle: () => void;
   cartCount: number;
   onOrdersClick?: () => void;
+  onBenefitsClick: () => void;
   ordersCount?: number;
   activeOrdersCount?: number;
 }
@@ -66,11 +66,11 @@ export default function CardapioHeader({
   onCartToggle,
   cartCount,
   onOrdersClick,
+  onBenefitsClick,
   ordersCount = 0,
   activeOrdersCount = 0,
 }: CardapioHeaderProps) {
   const [linkCopied, setLinkCopied] = useState(false);
-  const [benefitsOpen, setBenefitsOpen] = useState(false);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -181,7 +181,7 @@ export default function CardapioHeader({
               </button>
               <button
                 type="button"
-                onClick={() => setBenefitsOpen(true)}
+                onClick={onBenefitsClick}
                 className="cardapio-public-account-button"
                 title="Ofertas, créditos e pontos"
                 aria-label="Abrir benefícios do restaurante"
@@ -287,17 +287,6 @@ export default function CardapioHeader({
           </div>
         </div>
       </header>
-
-      <CardapioBenefitsDrawer
-        restaurantId={activeBrand.id}
-        isOpen={benefitsOpen}
-        onClose={() => setBenefitsOpen(false)}
-        user={user}
-        onAuthClick={() => {
-          setBenefitsOpen(false);
-          onAuthClick();
-        }}
-      />
 
       {linkCopied && (
         <div className="cardapio-public-toast" role="status">

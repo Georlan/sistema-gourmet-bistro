@@ -8,6 +8,9 @@ import {
   CheckCircle2,
   Clock3,
   Copy,
+  Gift,
+  House,
+  MessageCircle,
   QrCode,
   RefreshCw,
   Search,
@@ -26,6 +29,7 @@ import {
   getRestaurantAssetUrl,
 } from "./CardapioTypes";
 import CardapioHeader from "./components/CardapioHeader";
+import CardapioBenefitsDrawer from "./components/CardapioBenefitsDrawer";
 import CardapioCategoryNav from "./components/CardapioCategoryNav";
 import CardapioProductCard from "./components/CardapioProductCard";
 import CardapioProductModal from "./components/CardapioProductModal";
@@ -125,6 +129,7 @@ export default function CardapioPage() {
   const [isStoreInfoOpen, setIsStoreInfoOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isOrdersDrawerOpen, setIsOrdersDrawerOpen] = useState(false);
+  const [isBenefitsOpen, setIsBenefitsOpen] = useState(false);
   const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
   const [storedOrders, setStoredOrders] = useState<StoredOrder[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -151,6 +156,7 @@ export default function CardapioPage() {
     // Em celulares reais, FABs sobrepostos podem disputar o mesmo toque.
     setSelectedProduct(null);
     setIsOrdersDrawerOpen(false);
+    setIsBenefitsOpen(false);
     setIsStoreInfoOpen(false);
     setIsProfileOpen(false);
     setIsAuthOpen(false);
@@ -429,6 +435,33 @@ export default function CardapioPage() {
   }, [activeBrand?.id]);
 
   useEffect(() => {
+    if (!isBenefitsOpen || !activeBrand?.id || !customerToken) return;
+    const controller = new AbortController();
+    void fetch(`${API_BASE_URL}/cardapio/clientes/me`, {
+      headers: { "X-Koma-Customer-Token": customerToken },
+      cache: "no-store",
+      signal: controller.signal,
+    }).then(async (response) => {
+      if (controller.signal.aborted) return;
+      if (response.status === 401) {
+        clearCustomerSession(activeBrand.id);
+        setUser(null);
+        setCustomerToken(null);
+        return;
+      }
+      if (!response.ok) return;
+      const data = await response.json();
+      if (controller.signal.aborted || !data?.id) return;
+      const profile = mapCustomerProfile(data);
+      setUser(profile);
+      saveCustomerSession(activeBrand.id, { token: customerToken, profile });
+    }).catch(() => {
+      // O saldo exibido permanece disponível durante uma falha temporária de rede.
+    });
+    return () => controller.abort();
+  }, [isBenefitsOpen, activeBrand?.id, customerToken]);
+
+  useEffect(() => {
     if (!activeBrand) return;
     const root = document.documentElement;
     root.style.setProperty("--color-brand-primary", KOMA_PRIMARY);
@@ -448,7 +481,8 @@ export default function CardapioPage() {
     || isCheckoutOpen
     || isStoreInfoOpen
     || isProfileOpen
-    || isOrdersDrawerOpen,
+    || isOrdersDrawerOpen
+    || isBenefitsOpen,
   );
 
   useEffect(() => {
@@ -769,11 +803,12 @@ export default function CardapioPage() {
         onCartToggle={openCart}
         cartCount={cartCount}
         onOrdersClick={() => setIsOrdersDrawerOpen(true)}
+        onBenefitsClick={() => setIsBenefitsOpen(true)}
         ordersCount={storedOrders.length}
         activeOrdersCount={activeOrders.length}
       />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6" id="catalog-section">
+      <main className={clsx("mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6", cartCount > 0 && "has-mobile-cart")} id="catalog-section">
         {notice && !isCartOpen && !isCheckoutOpen && (
           <div
             className="fixed top-16 sm:top-20 left-1/2 z-[60] -translate-x-1/2 max-w-[calc(100vw-2rem)] rounded-full border border-emerald-500/30 bg-[#0d1612]/95 backdrop-blur-md px-4 py-2 text-center text-xs font-bold text-emerald-300 shadow-2xl animate-fade-in flex items-center gap-2 pointer-events-auto cursor-pointer"
@@ -1024,7 +1059,7 @@ export default function CardapioPage() {
               && smartSearchMatch(`${product.name} ${product.description || ""}`, searchQuery)
             ));
             return (
-              <section key={category} id={categorySectionId(category)} className="scroll-mt-28">
+              <section key={category} id={categorySectionId(category)} className="scroll-mt-[10.5rem]">
                 <div className="mb-3 flex items-center justify-between border-b border-koma-border pb-2.5">
                   <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-tight text-koma-foreground"><span className="h-4 w-1.5 rounded-full bg-emerald-500" />{category}</h2>
                   <span className="rounded-full bg-koma-raised px-2.5 py-1 text-[9px] font-bold text-koma-muted">{products.length} {products.length === 1 ? "item" : "itens"}</span>
@@ -1052,8 +1087,27 @@ export default function CardapioPage() {
         </footer>
       </main>
 
+      {!hasOpenOverlay && (
+        <nav className="cardapio-mobile-nav" aria-label="Navegação do cardápio" id="cardapio-mobile-nav">
+          <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Voltar ao início" id="mobile-nav-home">
+            <House aria-hidden="true" /><span>Início</span>
+          </button>
+          <button type="button" onClick={() => setIsOrdersDrawerOpen(true)} aria-label="Abrir pedidos e chat" id="mobile-nav-orders">
+            <MessageCircle aria-hidden="true" /><span>Pedidos</span>
+            {activeOrders.length > 0 && <small aria-hidden="true">{activeOrders.length > 9 ? "9+" : activeOrders.length}</small>}
+          </button>
+          <button type="button" onClick={() => setIsBenefitsOpen(true)} aria-label="Abrir benefícios" id="mobile-nav-benefits">
+            <Gift aria-hidden="true" /><span>Benefícios</span>
+          </button>
+          <button type="button" onClick={openCart} aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`} id="mobile-nav-cart">
+            <ShoppingBag aria-hidden="true" /><span>Sacola</span>
+            {cartCount > 0 && <small aria-hidden="true">{cartCount > 9 ? "9+" : cartCount}</small>}
+          </button>
+        </nav>
+      )}
+
       {cartCount > 0 && !hasOpenOverlay && (
-        <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[44] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:left-auto lg:right-5 lg:w-80 lg:translate-x-0">
+        <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[44] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:left-auto lg:right-5 lg:w-80 lg:translate-x-0" id="floating-cart-container">
           <button type="button" onClick={openCart} className="flex h-14 w-full touch-manipulation select-none items-center justify-between rounded-2xl bg-emerald-500 px-4 text-white shadow-2xl active:scale-[0.99]" id="floating-cart-trigger" aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}>
             <span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-white/15 text-xs font-black">{cartCount}</span><span className="text-xs font-black">Ver sacola</span></span>
             <span className="text-sm font-black">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}</span>
@@ -1106,6 +1160,17 @@ export default function CardapioPage() {
           onRepeatOrder={handleRepeatOrder}
         />
       )}
+
+      <CardapioBenefitsDrawer
+        restaurantId={activeBrand.id}
+        isOpen={isBenefitsOpen}
+        onClose={() => setIsBenefitsOpen(false)}
+        user={user}
+        onAuthClick={() => {
+          setIsBenefitsOpen(false);
+          setIsAuthOpen(true);
+        }}
+      />
 
       {isCheckoutOpen && checkoutRequest && (
         <CardapioDigital
