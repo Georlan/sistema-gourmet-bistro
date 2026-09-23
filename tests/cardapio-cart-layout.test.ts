@@ -35,7 +35,7 @@ test('fechar continua sendo um botão nomeado com alvo de toque de 44px', () => 
 
 test('aviso de item adicionado não encobre ações da sacola ou da confirmação', () => {
   assert.match(page, /\{notice && !isCartOpen && !isCheckoutOpen && \(/);
-  assert.match(page, /onClose=\{\(\) => setIsCartOpen\(false\)\}/);
+  assert.match(page, /onClose=\{\(\) => \{ setIsCartOpen\(false\); setCouponToApply\(""\); \}\}/);
 });
 
 test('gatilhos da sacola priorizam toque mobile e não disputam camada com o chat', () => {
