@@ -22,6 +22,14 @@ const formatarTelefoneTabela = (tel?: string) => {
   }
   return tel; // Retorna o valor original se contiver letras (como os usuários legados 'georlan', 'caixa1')
 };
+
+const ultimaCompraLabel = (dias?: number | null) => {
+  if (dias === null || dias === undefined) return 'Nunca';
+  if (dias === 0) return 'Hoje';
+  if (dias === 1) return 'Ontem';
+  return `há ${dias} dias`;
+};
+
 interface Props {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
@@ -112,6 +120,14 @@ export default function CashierCustomers({
   const [crmFormPontos, setCrmFormPontos] = useState<number>(0);
 
   const [crmFormCashback, setCrmFormCashback] = useState<number>(0);
+
+  const startEditingCustomer = (user: LoyaltyCustomer) => {
+    setEditingCrmUser(user);
+    setCrmFormNome(user.cliente);
+    setCrmFormTelefone(aplicarMascaraTelefoneInput(user.telefone));
+    setCrmFormPontos(user.pontos || 0);
+    setCrmFormCashback(user.saldoCashback || 0);
+  };
 
   const [showNewCrmModal, setShowNewCrmModal] = useState(false);
 
@@ -505,7 +521,41 @@ export default function CashierCustomers({
             className={"bg-koma-panel border border-koma-border rounded-2xl p-3 space-y-4 shadow-xs"}
           >
             {filteredLoyaltyUsers.length > 0 ? (
-              <div className={"overflow-x-auto border border-koma-border rounded-2xl"}>
+              <>
+              <div className="grid gap-2 md:hidden">
+                {filteredLoyaltyUsers.map((user) => (
+                  <article key={user.id} className="min-w-0 rounded-xl border border-koma-border bg-koma-raised p-3">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <strong className="block break-words text-sm text-koma-foreground">{user.cliente}</strong>
+                        <span className="block font-mono text-xs text-koma-muted">{formatarTelefoneTabela(user.telefone)}</span>
+                      </div>
+                      <button type="button" onClick={() => startEditingCustomer(user)} className="koma-btn-secondary shrink-0 rounded-lg px-3 py-2 text-xs font-bold">
+                        Editar
+                      </button>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-koma-border pt-3 text-xs">
+                      <div className="min-w-0">
+                        <dt className="text-[10px] text-koma-muted">Última compra</dt>
+                        <dd className="mt-1 font-mono text-koma-foreground">{ultimaCompraLabel(user.dias_sem_comprar)}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] text-koma-muted">Pedidos</dt>
+                        <dd className="mt-1 font-mono text-koma-foreground">{user.pedidos_concluidos ?? 0}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-[10px] text-koma-muted">Benefício</dt>
+                        <dd className="mt-1 break-words font-mono font-extrabold text-emerald-700 dark:text-emerald-400">
+                          {fidelidadeConfig.tipo_recompensa === 'PONTOS'
+                            ? `${user.pontos} pts`
+                            : `R$ ${user.saldoCashback.toFixed(2)}`}
+                        </dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+              <div className={"hidden overflow-x-auto border border-koma-border rounded-2xl md:block"}>
                 <table className={"w-full text-left text-xs"}>
                   <thead>
                     <tr
@@ -527,13 +577,7 @@ export default function CashierCustomers({
                           {formatarTelefoneTabela(user.telefone)}
                         </td>
                         <td className={"p-3.5 font-mono text-xs text-koma-muted"}>
-                          {user.dias_sem_comprar === null || user.dias_sem_comprar === undefined
-                            ? 'Nunca'
-                            : user.dias_sem_comprar === 0
-                            ? 'Hoje'
-                            : user.dias_sem_comprar === 1
-                            ? 'Ontem'
-                            : `há ${user.dias_sem_comprar} dias`}
+                          {ultimaCompraLabel(user.dias_sem_comprar)}
                         </td>
                         <td className={"p-3.5 font-mono text-xs text-koma-foreground"}>
                           {user.pedidos_concluidos ?? 0}
@@ -547,13 +591,7 @@ export default function CashierCustomers({
                         </td>
                         <td className={"p-3.5 text-right"}>
                           <button
-                            onClick={() => {
-                              setEditingCrmUser(user);
-                              setCrmFormNome(user.cliente);
-                              setCrmFormTelefone(aplicarMascaraTelefoneInput(user.telefone));
-                              setCrmFormPontos(user.pontos || 0);
-                              setCrmFormCashback(user.saldoCashback || 0);
-                            }}
+                            onClick={() => startEditingCustomer(user)}
                             className={"px-3.5 py-1.5 koma-btn-secondary rounded-xl transition-all cursor-pointer font-bold text-xs"}
                           >
                             Editar
@@ -564,6 +602,7 @@ export default function CashierCustomers({
                   </tbody>
                 </table>
               </div>
+              </>
             ) : (
               <KomaEmptyState
                 icon={<Users size={24} className="text-koma-muted" />}
