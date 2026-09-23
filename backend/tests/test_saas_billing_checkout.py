@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 import uuid
 from typing import Any
 
@@ -13,6 +14,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.contract_models import ContractAcceptance, RestaurantContractAcceptance
+from app.crypt import decrypt_field, encrypt_field
 from app.database import get_db
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
@@ -196,9 +198,32 @@ def _accept(client: TestClient, plan: str = "pro", cycle: str = "mensal") -> str
     return str(response.json()["protocol"])
 
 
+def _legacy_free_pocket(client: TestClient, Session) -> str:
+    """Simula um aceite Pocket R$ 0 já gravado antes do novo catálogo."""
+    protocol = _accept(client, "pocket", "mensal")
+    with Session() as db:
+        acceptance = db.query(ContractAcceptance).filter_by(protocol=protocol).one()
+        receipt = json.loads(decrypt_field(acceptance.receipt_snapshot_encrypted))
+        receipt["commercial"].update({
+            "pricingVersion": "2026-09-vnext",
+            "fixedMonthlyPrice": "0.00",
+            "billingAmount": "0.00",
+            "fixedBillingRequired": False,
+            "trialDays": 0,
+            "trialWaivesFixedFeeOnly": False,
+        })
+        receipt["documents"]["version"] = "2.6"
+        acceptance.fixed_monthly_price = 0
+        acceptance.billing_amount = 0
+        acceptance.legal_version = "2.6"
+        acceptance.receipt_snapshot_encrypted = encrypt_field(json.dumps(receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        db.commit()
+    return protocol
+
+
 def test_pocket_zero_activates_without_provider_recurrence(client_and_session, monkeypatch):
     client, Session = client_and_session
-    protocol = _accept(client, "pocket", "mensal")
+    protocol = _legacy_free_pocket(client, Session)
 
     service = saas_billing.default_saas_mp_service
 
@@ -236,7 +261,7 @@ def test_pocket_zero_activates_without_provider_recurrence(client_and_session, m
 
 def test_pocket_zero_rejects_any_preexisting_billing_setup(client_and_session):
     client, Session = client_and_session
-    protocol = _accept(client, "pocket", "mensal")
+    protocol = _legacy_free_pocket(client, Session)
 
     with Session() as db:
         upsert_billing_setup(
@@ -262,7 +287,7 @@ def test_pocket_zero_rejects_any_preexisting_billing_setup(client_and_session):
 
 def test_pocket_zero_rejects_paid_billing_setup_before_provider_call(client_and_session, monkeypatch):
     client, Session = client_and_session
-    protocol = _accept(client, "pocket", "mensal")
+    protocol = _legacy_free_pocket(client, Session)
     provider_called = False
 
     def _unexpected_provider(**_kwargs):
@@ -290,6 +315,23 @@ def test_pocket_zero_rejects_paid_billing_setup_before_provider_call(client_and_
 def test_paid_plan_billing_uses_signed_vnext_amounts(client_and_session):
     client, Session = client_and_session
     service = saas_billing.default_saas_mp_service
+
+    pocket_protocol = _accept(client, "pocket", "mensal")
+    free_activation = client.post(f"/api/contracts/{pocket_protocol}/billing/activate-free")
+    assert free_activation.status_code == 409
+    pocket = client.post(
+        f"/api/contracts/{pocket_protocol}/billing/setup",
+        json={"payment_method_type": "credit_card", "card_token_id": "tok_pocket"},
+    )
+    assert pocket.status_code == 200, pocket.text
+    assert pocket.json()["trialDays"] == 7
+    with Session() as db:
+        pocket_setup = get_billing_setup(db, pocket_protocol)
+        assert pocket_setup is not None
+        assert pocket_setup.provider_subscription_id
+        pocket_subscription_id = pocket_setup.provider_subscription_id
+    pocket_mandate = service.get_preapproval(pocket_subscription_id)
+    assert pocket_mandate["auto_recurring"]["transaction_amount"] == 39.9
 
     pro_protocol = _accept(client, "pro", "mensal")
     pro = client.post(

@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_CATALOG = REPO_ROOT / "src" / "config" / "subscriptionPlans.ts"
 
 EXPECTED_PRICES = {
-    "pocket": 0,
+    "pocket": Decimal("39.90"),
     "pro": 129,
     "premium": 249,
 }
@@ -32,14 +32,14 @@ LEGACY_RATES = {
 }
 
 
-def _frontend_plan(source: str, plan_id: str) -> tuple[int, Decimal]:
+def _frontend_plan(source: str, plan_id: str) -> tuple[Decimal, Decimal]:
     match = re.search(
-        rf"id:\s*'{plan_id}'.*?price:\s*(\d+).*?splitFeeRate:\s*([0-9.]+)",
+        rf"id:\s*'{plan_id}'.*?price:\s*([0-9.]+).*?splitFeeRate:\s*([0-9.]+)",
         source,
         flags=re.DOTALL,
     )
     assert match is not None, f"Plano {plan_id} não encontrado no catálogo frontend"
-    return int(match.group(1)), Decimal(match.group(2))
+    return Decimal(match.group(1)), Decimal(match.group(2))
 
 
 def test_commercial_catalog_is_synced_across_frontend_and_payment_backend():

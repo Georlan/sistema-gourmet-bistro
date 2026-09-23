@@ -133,10 +133,9 @@ def test_cpf_cnpj_validation_rejects_repeated_digits_and_accepts_valid_examples(
 
 
 def test_server_is_source_of_truth_for_contract_prices():
-    assert subscription_monthly_price("pocket") == Decimal("0.00")
+    assert subscription_monthly_price("pocket") == Decimal("39.90")
     assert subscription_marketplace_rate("pocket") == Decimal("0.0179")
-    assert subscription_annual_total("pocket") == Decimal("0.00")
-    assert subscription_annual_monthly_equivalent("pocket") == Decimal("0.00")
+    # O Pocket continua disponível apenas no ciclo mensal.
 
     assert subscription_monthly_price("pro") == Decimal("129.00")
     assert subscription_marketplace_rate("pro") == Decimal("0.0050")
@@ -164,13 +163,13 @@ def test_accept_persists_immutable_snapshot_and_returns_receipt(client_and_sessi
     assert data["protocol"].startswith("KOMA-CTR-")
     receipt = data["receipt"]
     assert receipt["commercial"]["pricingVersion"] == COMMERCIAL_PRICING_VERSION
-    assert receipt["commercial"]["fixedMonthlyPrice"] == "0.00"
-    assert receipt["commercial"]["billingAmount"] == "0.00"
+    assert receipt["commercial"]["fixedMonthlyPrice"] == "39.90"
+    assert receipt["commercial"]["billingAmount"] == "39.90"
     assert receipt["commercial"]["annualMonthlyEquivalent"] is None
     assert receipt["commercial"]["marketplaceRate"] == "0.017900"
-    assert receipt["commercial"]["fixedBillingRequired"] is False
-    assert receipt["commercial"]["trialDays"] == 0
-    assert receipt["commercial"]["trialWaivesFixedFeeOnly"] is False
+    assert receipt["commercial"]["fixedBillingRequired"] is True
+    assert receipt["commercial"]["trialDays"] == 7
+    assert receipt["commercial"]["trialWaivesFixedFeeOnly"] is True
     assert receipt["documents"]["sourceCommit"] == LEGAL_SOURCE_COMMIT
     assert receipt["documents"]["sourceBlobSha"] == LEGAL_SOURCE_BLOB_SHA
     assert receipt["evidence"]["sourceIp"] == "203.0.113.25"
@@ -227,7 +226,7 @@ def test_pocket_rejects_meaningless_annual_fixed_cycle(client_and_session):
         json=_payload(plan="pocket", billing_cycle="anual"),
     )
     assert response.status_code == 422
-    assert "não possui componente fixo anual" in response.json()["detail"]
+    assert "apenas no ciclo mensal" in response.json()["detail"]
 
 
 def test_tenant_commercial_terms_resolves_linked_signed_receipt(client_and_session):
@@ -255,8 +254,8 @@ def test_tenant_commercial_terms_resolves_linked_signed_receipt(client_and_sessi
         assert terms.protocol == accepted.json()["protocol"]
         assert terms.plan == "pocket"
         assert terms.billing_cycle == "mensal"
-        assert terms.fixed_monthly_price == Decimal("0.00")
-        assert terms.billing_amount == Decimal("0.00")
+        assert terms.fixed_monthly_price == Decimal("39.90")
+        assert terms.billing_amount == Decimal("39.90")
         assert terms.annual_monthly_equivalent is None
         assert terms.marketplace_rate == Decimal("0.017900")
         assert terms.legal_version == LEGAL_VERSION
@@ -310,7 +309,7 @@ def test_legacy_v25_snapshot_remains_authoritative_and_immutable(client_and_sess
         frozen_ciphertext = acceptance.receipt_snapshot_encrypted
 
         # Catálogo atual já é o vNext; o contrato antigo não acompanha a mudança.
-        assert subscription_monthly_price("pocket") == Decimal("0.00")
+        assert subscription_monthly_price("pocket") == Decimal("39.90")
         assert subscription_marketplace_rate("pocket") == Decimal("0.0179")
 
         terms = tenant_commercial_terms(db, 988)
@@ -541,9 +540,9 @@ def test_superadmin_inbox_lists_pending_acceptance_without_exposing_full_tax_ids
     assert item["status"] == "SIGNED_PENDING_ACTIVATION"
     assert item["plan"] == "pocket"
     assert item["billingCycle"] == "mensal"
-    assert item["fixedMonthlyPrice"] == "0.00"
-    assert item["billingAmount"] == "0.00"
-    assert item["billingStatus"] == "not_required"
+    assert item["fixedMonthlyPrice"] == "39.90"
+    assert item["billingAmount"] == "39.90"
+    assert item["billingStatus"] == "pending"
     assert item["activationEligible"] is True
     assert item["contractingPartyTaxIdLast4"] == VALID_CNPJ[-4:]
     assert item["representativeTaxIdLast4"] == VALID_CPF[-4:]

@@ -45,9 +45,9 @@ test('plan cards expose limitations and a canonical feature comparison without d
   assert.match(plans, /PLAN_COMPARISON_MATRIX/);
   assert.match(plans, /NÃO INCLUI NESTE PLANO/);
   assert.match(plans, /COMPARE TODOS OS RECURSOS/);
-  assert.match(plans, /POCKET SEM MENSALIDADE · PRO\/PREMIUM COM 7 DIAS/);
-  assert.match(plans, /Pocket já tem mensalidade fixa de R\$ 0/);
-  assert.match(plans, /teste isenta somente o componente fixo/);
+  assert.match(plans, /7 DIAS GRÁTIS NO COMPONENTE FIXO/);
+  assert.match(plans, /Nos planos Pocket, Pro e Premium elegíveis/);
+  assert.match(plans, /isenta somente o componente fixo/);
   assert.match(plans, /taxa KÔMA continua aplicável quando houver pagamento online elegível/);
   assert.match(catalog, /Sem KDS e impressão automática/);
   assert.match(catalog, /Sem app do entregador e fidelidade/);

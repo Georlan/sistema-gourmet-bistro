@@ -70,6 +70,8 @@ type ContractReceipt = {
     plan: string;
     billingCycle: string;
     fixedMonthlyPrice: string;
+    billingAmount?: string;
+    annualMonthlyEquivalent?: string | null;
     marketplaceRate: string;
   };
   documents: {
@@ -207,7 +209,24 @@ export default function PlanContractPageV2() {
     () => SUBSCRIPTION_PLANS.find((candidate) => candidate.id === activePlanId) ?? SUBSCRIPTION_PLANS[1],
     [activePlanId],
   );
-  const pricing = useMemo(() => getSubscriptionPricing(plan.price), [plan.price]);
+  const pricing = useMemo(() => {
+    if (!receipt) return getSubscriptionPricing(plan.price);
+    const fixedMonthlyPrice = Number.parseFloat(receipt.commercial.fixedMonthlyPrice);
+    const monthly = Number.isFinite(fixedMonthlyPrice) ? fixedMonthlyPrice : plan.price;
+    const acceptedAnnualTotal = Number.parseFloat(receipt.commercial.billingAmount || '');
+    const annualTotal = activeBillingCycle === 'anual' && Number.isFinite(acceptedAnnualTotal)
+      ? acceptedAnnualTotal
+      : getSubscriptionPricing(monthly).annualTotal;
+    return {
+      monthly,
+      annualTotal,
+      annualMonthlyEquivalent: annualTotal / 12,
+      annualSavings: monthly * 12 - annualTotal,
+    };
+  }, [receipt, plan.price, activeBillingCycle]);
+  const marketplaceRate = receipt
+    ? Number.parseFloat(receipt.commercial.marketplaceRate)
+    : plan.splitFeeRate;
   const fixedBillingRequired = receipt
     ? Number.parseFloat(receipt.commercial.fixedMonthlyPrice) > 0
     : plan.price > 0;
@@ -641,7 +660,7 @@ export default function PlanContractPageV2() {
 
           {step === 1 ? (
             <>
-              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">01 · PLANO E COBRANÇA</span><h1>Escolha o KÔMA certo para sua operação.</h1><p>Pocket começa sem mensalidade. Pro e Premium mantêm 7 dias de teste no componente fixo após a implantação essencial.</p></div>
+              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">01 · PLANO E COBRANÇA</span><h1>Escolha o KÔMA certo para sua operação.</h1><p>O Pocket custa R$ 39,90 por mês. Os três planos têm 7 dias de teste no componente fixo após a implantação essencial.</p></div>
               <div className="koma-sub-plan-grid" role="radiogroup" aria-label="Escolha um plano KÔMA">
                 {SUBSCRIPTION_PLANS.map(candidate => {
                   const candidatePricing = getSubscriptionPricing(candidate.price);
@@ -663,10 +682,10 @@ export default function PlanContractPageV2() {
                 })}
               </div>
               <div className="koma-sub-billing-selector" role="radiogroup" aria-label="Ciclo de cobrança">
-                <button type="button" role="radio" aria-checked={billingCycle === 'mensal'} className={billingCycle === 'mensal' ? 'is-selected' : ''} onClick={() => setBillingCycle('mensal')}><span>Mensal</span><strong>{formatCurrency(pricing.monthly)}/mês</strong><small>{selectedPlanId === 'pocket' ? 'Sem componente fixo.' : 'Primeira cobrança depois do trial.'}</small></button>
+                <button type="button" role="radio" aria-checked={billingCycle === 'mensal'} className={billingCycle === 'mensal' ? 'is-selected' : ''} onClick={() => setBillingCycle('mensal')}><span>Mensal</span><strong>{formatCurrency(pricing.monthly)}/mês</strong><small>Primeira cobrança depois do trial.</small></button>
                 {selectedPlanId !== 'pocket' && <button type="button" role="radio" aria-checked={billingCycle === 'anual'} className={billingCycle === 'anual' ? 'is-selected' : ''} onClick={() => setBillingCycle('anual')}><span>Anual <em>Economize 10%</em></span><strong>{formatCurrency(pricing.annualMonthlyEquivalent)}/mês equivalente</strong><small>{formatCurrency(pricing.annualTotal)} por ano, cobrado depois do trial. O desconto anual não altera a taxa percentual.</small></button>}
               </div>
-              <div className="koma-sub-trial-note"><Gift size={19} /><div><strong>{selectedPlanId === 'pocket' ? 'Pocket sem mensalidade fixa.' : '7 dias grátis no componente fixo.'}</strong><p>{selectedPlanId === 'pocket' ? 'Não é necessário cadastrar meio de pagamento para uma recorrência de R$ 0.' : 'Os 7 dias só começam depois dos 3 passos essenciais de implantação.'}</p></div></div>
+              <div className="koma-sub-trial-note"><Gift size={19} /><div><strong>7 dias grátis no componente fixo.</strong><p>Os 7 dias só começam depois dos 3 passos essenciais de implantação.</p></div></div>
             </>
           ) : step === 2 ? (
             <>
@@ -682,7 +701,7 @@ export default function PlanContractPageV2() {
           ) : (
             <>
               <button type="button" className="koma-sub-back" onClick={() => void handleSwitchPlanOrCycle()} disabled={isCheckingBilling}><ArrowLeft size={16} /> {isCheckingBilling ? 'Verificando…' : receipt ? 'Trocar plano ou ciclo' : 'Voltar para plano e cobrança'}</button>
-              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">03 · CONTRATAÇÃO{fixedBillingRequired ? ' E PAGAMENTO' : ''}</span><h1>Ative seu restaurante.</h1><p>{fixedBillingRequired ? 'Escolha cartão, Pix ou Saldo Mercado Pago. Hoje: R$ 0 de mensalidade fixa.' : 'Pocket não exige meio de pagamento para a mensalidade fixa de R$ 0.'}</p></div>
+              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">03 · CONTRATAÇÃO{fixedBillingRequired ? ' E PAGAMENTO' : ''}</span><h1>Ative seu restaurante.</h1><p>{fixedBillingRequired ? 'Escolha cartão, Pix ou Saldo Mercado Pago. Hoje: R$ 0 de mensalidade fixa.' : 'Seu contrato anterior mantém mensalidade fixa de R$ 0 e dispensa meio de pagamento.'}</p></div>
               {error && <div className="koma-sub-error" role="alert"><Info size={18} /> {error}</div>}
               {contractLocked && <div className="koma-sub-locked-note"><Lock size={17} /> O aceite jurídico já foi registrado para esta tentativa.</div>}
 
@@ -733,16 +752,16 @@ export default function PlanContractPageV2() {
                 ) : (
                   <section className="koma-sub-section-card">
                     <div className="koma-sub-section-title"><span><CheckCircle2 size={18} /></span><div><h2>Sem cobrança fixa</h2><p>O Pocket desta contratação tem mensalidade fixa de R$ 0. Nenhuma assinatura recorrente de R$ 0 será criada no Mercado Pago.</p></div></div>
-                    <div className="koma-sub-locked-note"><Info size={17} /> Pagamentos online dos seus clientes continuam separados: quando você conectar a conta Mercado Pago do restaurante, aplica-se a taxa KÔMA contratada de {formatPercentage(plan.splitFeeRate)} nos pagamentos elegíveis, além das tarifas do provedor.</div>
+                    <div className="koma-sub-locked-note"><Info size={17} /> Pagamentos online dos seus clientes continuam separados: quando você conectar a conta Mercado Pago do restaurante, aplica-se a taxa KÔMA contratada de {formatPercentage(marketplaceRate)} nos pagamentos elegíveis, além das tarifas do provedor.</div>
                   </section>
                 )}
 
                 <section className="koma-sub-legal-acceptance">
                   <input id="legal-acceptance" type="checkbox" checked={accepted} onChange={event => setAccepted(event.target.checked)} disabled={contractLocked} required />
                   <label htmlFor="legal-acceptance">
-                    Declaro que as informações estão corretas, que <strong>possuo poderes</strong> para contratar e aceito os <a href="/legal/termos" target="_blank" rel="noreferrer">Termos de Contratação</a>, as <a href="/legal/planos" target="_blank" rel="noreferrer">Condições Comerciais</a>, o <a href="/legal/dpa" target="_blank" rel="noreferrer">Anexo de Tratamento de Dados</a> e a <a href="/legal/privacidade" target="_blank" rel="noreferrer">Política de Privacidade</a>, versão {LEGAL_VERSION}.{' '}
+                    Declaro que as informações estão corretas, que <strong>possuo poderes</strong> para contratar e aceito os <a href="/legal/termos" target="_blank" rel="noreferrer">Termos de Contratação</a>, as <a href="/legal/planos" target="_blank" rel="noreferrer">Condições Comerciais</a>, o <a href="/legal/dpa" target="_blank" rel="noreferrer">Anexo de Tratamento de Dados</a> e a <a href="/legal/privacidade" target="_blank" rel="noreferrer">Política de Privacidade</a>, versão {receipt?.documents.version || LEGAL_VERSION}.{' '}
                     {!fixedBillingRequired
-                      ? <strong>Confirmo o Pocket com mensalidade fixa de R$ 0 e taxa KÔMA de {formatPercentage(plan.splitFeeRate)} sobre pagamentos online elegíveis. Não há recorrência fixa a autorizar.</strong>
+                      ? <strong>Confirmo o Pocket com mensalidade fixa de R$ 0 e taxa KÔMA de {formatPercentage(marketplaceRate)} sobre pagamentos online elegíveis. Não há recorrência fixa a autorizar.</strong>
                       : billingMethod === 'pix'
                         ? activeBillingCycle === 'anual'
                           ? <strong>Escolho Pix anual: R$ 0 hoje; depois da implantação e dos 7 dias grátis, será gerado um único QR Code/Pix Copia e Cola de {formatCurrency(nextChargeAmount)}, quitando os próximos 12 meses. Não há débito Pix automático.</strong>
@@ -761,7 +780,7 @@ export default function PlanContractPageV2() {
             <div className="koma-sub-summary-plan"><div><strong>{plan.name.replace('Kôma ', '')}</strong><span>{activeBillingCycle === 'anual' ? 'Plano anual' : 'Plano mensal'}</span></div><span className="koma-sub-summary-price">{activeBillingCycle === 'anual' ? `${formatCurrency(pricing.annualMonthlyEquivalent)}/mês equiv.` : `${formatCurrency(pricing.monthly)}/mês`}</span></div>
             <dl className="koma-sub-summary-list">
               {fixedBillingRequired && activeBillingCycle === 'anual' && <div><dt>Total anual após o trial</dt><dd>{formatCurrency(pricing.annualTotal)}</dd></div>}
-              <div><dt>Taxa KÔMA online</dt><dd>{formatPercentage(plan.splitFeeRate)}</dd></div><div><dt>Implantação</dt><dd>R$ 0</dd></div><div><dt>Prestador</dt><dd>{LEGAL_PROVIDER_NAME}</dd></div>
+              <div><dt>Taxa KÔMA online</dt><dd>{formatPercentage(marketplaceRate)}</dd></div><div><dt>Implantação</dt><dd>R$ 0</dd></div><div><dt>Prestador</dt><dd>{LEGAL_PROVIDER_NAME}</dd></div>
             </dl>
           </section>
           <section className="koma-sub-summary-card">
@@ -769,7 +788,7 @@ export default function PlanContractPageV2() {
               {!fixedBillingRequired ? (
                 <>
                   <div><span className="is-active"><CheckCircle2 size={16} /></span><div><strong>Hoje</strong><p>Mensalidade fixa do Pocket: R$ 0.</p></div></div>
-                  <div><span><Info size={16} /></span><div><strong>Pagamentos online</strong><p>Taxa KÔMA contratada: {formatPercentage(plan.splitFeeRate)} nos pagamentos elegíveis.</p></div></div>
+                  <div><span><Info size={16} /></span><div><strong>Pagamentos online</strong><p>Taxa KÔMA contratada: {formatPercentage(marketplaceRate)} nos pagamentos elegíveis.</p></div></div>
                 </>
               ) : (
                 <>

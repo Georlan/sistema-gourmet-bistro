@@ -14,7 +14,7 @@ test('fluxo unificado de contratação usa o checkout de três meios', () => {
   assert.match(main, /PlanContractPageV2/);
   assert.match(planContract, /01 · PLANO E COBRANÇA/);
   assert.match(planContract, /03 · CONTRATAÇÃO\{fixedBillingRequired \? ' E PAGAMENTO' : ''\}/);
-  assert.match(planContract, /Pocket não exige meio de pagamento para a mensalidade fixa de R\$ 0/);
+  assert.match(planContract, /Seu contrato anterior mantém mensalidade fixa de R\$ 0/);
   assert.match(planContract, /SUBSCRIPTION_PLANS\.map/);
 });
 
@@ -31,7 +31,7 @@ test('seleção comercial mantém Pocket mensal e anual apenas nos planos pagos'
   assert.match(planContract, /annualMonthlyEquivalent/);
   assert.match(planContract, /Os 7 dias só começam depois dos 3 passos essenciais/);
   assert.match(landingPlans, /Pro e Premium: valor mensal equivalente/);
-  assert.match(landingPlans, /Pocket permanece sem mensalidade e sem componente anual/);
+  assert.match(landingPlans, /Pocket permanece mensal, sem opção anual/);
   assert.doesNotMatch(planContract, /12 meses \+ 7 dias|dias adicionais de bônus/);
 });
 
