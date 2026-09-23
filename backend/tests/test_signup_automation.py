@@ -50,6 +50,24 @@ def test_signup_is_persisted_before_payment_and_resume_requires_secret(signup_cl
     assert resumed.headers["cache-control"] == "no-store"
 
 
+def test_new_signup_queues_owner_notice_once_before_acceptance(signup_client, monkeypatch):
+    client, Session = signup_client
+    monkeypatch.setattr(settings, "KOMA_OWNER_EMAIL", "owner@example.com")
+    monkeypatch.delenv("KOMA_OWNER_WHATSAPP_PHONE", raising=False)
+    created = client.post("/api/signups", json=DATA)
+    assert created.status_code == 201, created.text
+    with Session() as db:
+        notices = db.query(SignupNotification).all()
+        assert len(notices) == 1
+        assert notices[0].id == f"{created.json()['id']}:signup-started-owner:email"
+        assert notices[0].status == "pending"
+    updated = client.put("/api/signups/current", json=DATA,
+                         headers={"X-Signup-Token": created.json()["token"]})
+    assert updated.status_code == 200, updated.text
+    with Session() as db:
+        assert db.query(SignupNotification).count() == 1
+
+
 def test_signup_expiry_and_admin_authorization(signup_client):
     client, Session = signup_client
     token = client.post("/api/signups", json=DATA).json()["token"]

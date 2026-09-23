@@ -95,6 +95,27 @@ def enqueue_acceptance(
         )
 
 
+def enqueue_signup_started(db, *, signup_id, restaurant_name, plan, billing_cycle):
+    """Notify the operator as soon as a recoverable signup is persisted."""
+    owner_email = settings.KOMA_OWNER_EMAIL
+    owner_phone = os.getenv("KOMA_OWNER_WHATSAPP_PHONE", "").strip()
+    if not (owner_email or owner_phone):
+        return
+    enqueue(
+        db,
+        protocol=signup_id,
+        kind="signup-started-owner",
+        email=owner_email,
+        phone=owner_phone,
+        subject="Nova inscrição iniciada — KÔMA",
+        message=(
+            f"Nova inscrição KÔMA iniciada: {restaurant_name}. Plano: {plan} ({billing_cycle}). "
+            f"Identificador: {signup_id}. Acompanhe o status em "
+            f"{settings.KOMA_PUBLIC_APP_URL}/super-admin (aba Inscrições)."
+        ),
+    )
+
+
 def enqueue_activation(
     db,
     *,

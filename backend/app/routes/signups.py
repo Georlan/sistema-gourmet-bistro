@@ -101,6 +101,9 @@ def create_signup(payload: SignupInput, request: Request, response: Response, db
         db.execute(text("SELECT koma_internal.create_signup(:id, :token_hash, :payload_encrypted)"), values)
     else:
         db.add(RestaurantSignup(**values))
+    from ..services.signup_notifications import enqueue_signup_started
+    enqueue_signup_started(db, signup_id=values["id"], restaurant_name=payload.restaurant_name,
+                           plan=payload.plan, billing_cycle=payload.billing_cycle)
     db.commit()
     return {"id": values["id"], "token": token, "message": "Inscrição recebida. Você pode continuar agora ou retomar neste dispositivo por 30 dias."}
 
