@@ -87,8 +87,8 @@ Esses pontos podem futuramente embasar recomendações de economia, mas **não a
 É válido coexistirem simultaneamente, por exemplo:
 
 - Pocket legado: R$ 109 + 1,49%.
-- Pocket anterior: R$ 0 + 1,79%.
-- Pocket anterior: R$ 39,90 + 1,79%.
+- Pocket v2.6: R$ 0 + 1,79%.
+- Pocket v2.7: R$ 39,90 + 1,79%.
 - Pocket vigente: R$ 39 + 1,79%.
 - Pro vNext: R$ 129 + 0,50%.
 - Premium vNext: R$ 249 + 0,20%.
