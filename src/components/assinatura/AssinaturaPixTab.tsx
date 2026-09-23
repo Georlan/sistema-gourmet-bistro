@@ -272,7 +272,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             >
               <PricingSwitch isYearly={isYearly} onSwitch={setIsYearly} />
               <p className="min-h-4 text-[10px] text-koma-muted">
-                {isYearly ? 'Pro e Premium: 10% de desconto somente no componente fixo; Pocket continua sem componente anual' : 'Oferta atual mensal para comparação'}
+                {isYearly ? 'Pro e Premium: 10% de desconto somente no componente fixo; Pocket continua apenas mensal' : 'Oferta atual mensal para comparação'}
               </p>
             </TimelineContent>
           </div>
@@ -337,7 +337,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                           {isYearly && hasAnnualFixedPlan
                             ? `${formatCurrency(pricing.annualTotal)} cobrados anualmente`
                             : plan.id === 'pocket'
-                              ? 'Sem mensalidade fixa · sem componente anual'
+                              ? 'Cobrança mensal · sem opção anual'
                               : 'Cobrança mensal · sem taxa de implantação'}
                         </p>
                         <p className="mt-1 text-[10px] leading-4 text-koma-muted">

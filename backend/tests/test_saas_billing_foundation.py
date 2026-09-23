@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 import uuid
 from typing import Any
 
@@ -12,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.contract_models import ContractAcceptance, RestaurantContractAcceptance
+from app.crypt import decrypt_field, encrypt_field
 from app.database import Base
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
@@ -241,6 +243,25 @@ def test_billing_enforcement_treats_free_pocket_as_not_required(client_and_sessi
         plan="pocket",
         billing_cycle="mensal",
     )
+
+    # Aceite anterior ao novo catálogo: o snapshot de R$ 0 segue sem cobrança.
+    with Session() as db:
+        acceptance = db.query(ContractAcceptance).filter_by(protocol=protocol).one()
+        receipt = json.loads(decrypt_field(acceptance.receipt_snapshot_encrypted))
+        receipt["commercial"].update({
+            "pricingVersion": "2026-09-vnext",
+            "fixedMonthlyPrice": "0.00",
+            "billingAmount": "0.00",
+            "fixedBillingRequired": False,
+            "trialDays": 0,
+            "trialWaivesFixedFeeOnly": False,
+        })
+        receipt["documents"]["version"] = "2.6"
+        acceptance.fixed_monthly_price = 0
+        acceptance.billing_amount = 0
+        acceptance.legal_version = "2.6"
+        acceptance.receipt_snapshot_encrypted = encrypt_field(json.dumps(receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        db.commit()
 
     preview = client.get(f"/api/super-admin/contracts/preview/{protocol}")
     assert preview.status_code == 200, preview.text

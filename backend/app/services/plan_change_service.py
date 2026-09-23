@@ -755,7 +755,7 @@ def apply_plan_change(
         subscription.current_period_end = None
         subscription.grace_until = None
     else:
-        subscription.billing_cycle = change.billing_cycle
+        subscription.billing_cycle = _cycle_kind(change.billing_cycle)
         subscription.status = "active"
 
     subscription.updated_at = now

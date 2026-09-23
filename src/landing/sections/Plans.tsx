@@ -86,14 +86,14 @@ export function Plans() {
         </div>
         <p>
           {isYearly
-            ? `Pro e Premium: valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto somente no componente fixo. O Pocket permanece sem mensalidade e sem componente anual.`
+            ? `Pro e Premium: valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto somente no componente fixo. O Pocket permanece mensal, sem opção anual.`
             : 'Pague mês a mês, sem taxa de implantação.'}
         </p>
       </div>
 
       <div className="koma-plan-trial-note" role="note" aria-label="Condição do período de teste">
-        <strong>POCKET SEM MENSALIDADE · PRO/PREMIUM COM 7 DIAS</strong>
-        <span>O Pocket já tem mensalidade fixa de R$ 0. Nos planos Pro e Premium elegíveis, o teste isenta somente o componente fixo; a taxa KÔMA continua aplicável quando houver pagamento online elegível.</span>
+        <strong>7 DIAS GRÁTIS NO COMPONENTE FIXO</strong>
+        <span>Nos planos Pocket, Pro e Premium elegíveis, o teste começa após a implantação essencial e isenta somente o componente fixo; a taxa KÔMA continua aplicável quando houver pagamento online elegível.</span>
       </div>
 
       <div className="koma-plans-grid koma-plans-grid--simple">
@@ -131,7 +131,7 @@ export function Plans() {
                 {isYearly && hasAnnualFixedPlan
                   ? `${formatCurrency(pricing.annualTotal)} por ano · condições de pagamento exibidas na contratação`
                   : plan.id === 'pocket'
-                    ? 'Sem mensalidade fixa · sem componente anual'
+                    ? 'Cobrança mensal · sem opção anual'
                     : 'Sem taxa de implantação'}
               </p>
               {isYearly && hasAnnualFixedPlan && (

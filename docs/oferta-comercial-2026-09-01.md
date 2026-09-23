@@ -1,8 +1,8 @@
-# Oferta comercial — atualizada em 18/09/2026
+# Oferta comercial — atualizada em 23/09/2026
 
 ## Decisão
 
-A oferta comercial vigente do KÔMA usa três planos sem taxa de implantação e sem add-ons. O Pocket é a porta de entrada sem mensalidade fixa; Pro e Premium reduzem a taxa KÔMA conforme o restaurante cresce.
+A oferta comercial vigente do KÔMA usa três planos sem taxa de implantação e sem add-ons. O Pocket é a porta de entrada com mensalidade de R$ 39,90; Pro e Premium reduzem a taxa KÔMA conforme o restaurante cresce.
 
 O catálogo vigente serve para **novas contratações**. Ele não substitui os termos comerciais já aceitos por um tenant. Para contratos existentes, a autoridade financeira é o snapshot comercial vinculado ao restaurante.
 
@@ -12,7 +12,7 @@ A fonte compartilhada do catálogo público no frontend é `src/config/subscript
 
 | Plano | Assinatura mensal | Taxa KÔMA por pagamento online elegível | Posicionamento |
 | --- | ---: | ---: | --- |
-| Pocket | R$ 0/mês | 1,79% | Comece sem mensalidade |
+| Pocket | R$ 39,90/mês | 1,79% | Comece com o essencial |
 | Pro | R$ 129/mês | 0,50% | Seu restaurante cresceu. Sua taxa diminui |
 | Premium | R$ 249/mês | 0,20% | Mais volume, menor taxa |
 
@@ -25,8 +25,9 @@ Regras:
 - Tarifas do provedor de pagamento são separadas da taxa KÔMA.
 - Uma assinatura por estabelecimento.
 - Pro e Premium podem usar plano anual com 10% de desconto somente no componente fixo.
+- Novas contratações Pocket, Pro e Premium têm 7 dias de teste do componente fixo após a implantação essencial.
 - A taxa percentual não recebe desconto anual.
-- Pocket não possui componente fixo anual e não cria recorrência de R$ 0.
+- Pocket está disponível apenas no ciclo mensal. Contratos antigos de R$ 0 não criam recorrência de R$ 0.
 - Não existe upgrade automático por GMV.
 - Mudança do catálogo não altera contratos antigos.
 
@@ -76,7 +77,7 @@ As taxas permanecem 1,79% / 0,50% / 0,20% para novas contratações, independent
 
 Considerando apenas mensalidade fixa + taxa KÔMA e o mesmo volume mensal de pagamentos online elegíveis:
 
-- Pocket e Pro se igualam em **R$ 10.000/mês**: 1,79% × R$ 10.000 = R$ 179, e R$ 129 + 0,50% × R$ 10.000 = R$ 179.
+- Pocket e Pro se igualam em aproximadamente **R$ 6.906,98/mês**: R$ 39,90 + 1,79% × volume = R$ 129 + 0,50% × volume.
 - Pro e Premium se igualam em **R$ 40.000/mês**: R$ 129 + 0,50% × R$ 40.000 = R$ 329, e R$ 249 + 0,20% × R$ 40.000 = R$ 329.
 
 Esses pontos podem futuramente embasar recomendações de economia, mas **não autorizam mudança automática de plano**.
@@ -86,7 +87,8 @@ Esses pontos podem futuramente embasar recomendações de economia, mas **não a
 É válido coexistirem simultaneamente, por exemplo:
 
 - Pocket legado: R$ 109 + 1,49%.
-- Pocket vNext: R$ 0 + 1,79%.
+- Pocket anterior: R$ 0 + 1,79%.
+- Pocket vigente: R$ 39,90 + 1,79%.
 - Pro vNext: R$ 129 + 0,50%.
 - Premium vNext: R$ 249 + 0,20%.
 
@@ -98,7 +100,7 @@ Para tenants com aceite vinculado, preço fixo, billing amount, taxa transaciona
 
 Na landing:
 
-- Pocket: **“Comece sem mensalidade.”**
+- Pocket: **“Comece com o essencial por R$ 39,90/mês.”**
 - Pro: **“Seu restaurante cresceu. Sua taxa diminui.”**
 - Premium: **“Mais volume, menor taxa.”**
 - Pro mantém o destaque “Mais recomendado” enquanto essa for a decisão editorial; não usar “mais comprado” sem dado real.
@@ -113,4 +115,4 @@ Quando a flag estiver desligada, a fee deve ser zero. Quando estiver habilitada,
 
 Somente depois de homologar contrato, OAuth/marketplace, split, refund, chargeback e conciliação a variável deve ser alterada para `true` no ambiente que realmente cobrará a comissão. Um merge de código, sozinho, não deve iniciar cobrança em produção.
 
-Pocket R$ 0 não exige uma assinatura recorrente de R$ 0 no Mercado Pago. O tenant continua com `SaaSSubscription`/entitlement canônico e conecta separadamente a conta Mercado Pago OAuth do restaurante para receber pagamentos online dos seus clientes.
+Contratos Pocket novos exigem cobrança fixa de R$ 39,90 e usam o fluxo pago do checkout. Contratos anteriores Pocket R$ 0 não exigem assinatura recorrente de R$ 0 no Mercado Pago. O tenant conecta separadamente a conta Mercado Pago OAuth do restaurante para receber pagamentos online dos seus clientes.

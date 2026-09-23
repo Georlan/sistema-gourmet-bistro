@@ -237,7 +237,7 @@ def accept_contract(
     if payload.plan == "pocket" and payload.billing_cycle == "anual":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Pocket não possui componente fixo anual. Use o ciclo mensal sem mensalidade.",
+            detail="Pocket está disponível apenas no ciclo mensal.",
         )
 
     try:

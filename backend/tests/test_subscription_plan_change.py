@@ -336,7 +336,7 @@ def test_same_plan_legacy_pro_can_migrate_to_current_pro_terms(plan_change_env, 
     assert _fee(Session) == Decimal("0.50")
 
 
-def test_paid_to_pocket_cancels_recurrence_before_new_split_becomes_authority(
+def test_paid_to_pocket_updates_recurrence_before_new_split_becomes_authority(
     plan_change_env,
     monkeypatch,
 ):
@@ -348,11 +348,14 @@ def test_paid_to_pocket_cancels_recurrence_before_new_split_becomes_authority(
         "get_preapproval",
         lambda _ref: {"status": "authorized"},
     )
-    canceled: list[str] = []
+    updated: list[tuple[str, Decimal, str]] = []
     monkeypatch.setattr(
         default_saas_mp_service,
-        "cancel_preapproval",
-        lambda ref: (canceled.append(ref) or {"id": ref, "status": "cancelled"}),
+        "update_preapproval_amount",
+        lambda ref, *, amount, plan: (
+            updated.append((ref, Decimal(str(amount)), plan))
+            or {"id": ref, "status": "authorized"}
+        ),
     )
 
     accepted = client.post(
@@ -361,22 +364,21 @@ def test_paid_to_pocket_cancels_recurrence_before_new_split_becomes_authority(
     )
     assert accepted.status_code == 201, accepted.text
     change = accepted.json()
-    assert change["providerAction"] == "cancel"
-    assert change["receipt"]["commercial"]["billingAmount"] == "0.00"
+    assert change["providerAction"] == "update_amount"
+    assert change["receipt"]["commercial"]["billingAmount"] == "39.90"
     assert change["receipt"]["commercial"]["trialDays"] == 0
     assert _fee(Session) == Decimal("0.69")
 
     applied = client.post(f"/api/subscription/plan-change/{change['id']}/apply")
     assert applied.status_code == 200, applied.text
-    assert canceled == ["mock-pro-v25"]
+    assert updated == [("mock-pro-v25", Decimal("39.90"), "pocket")]
     assert _fee(Session) == Decimal("1.79")
 
     db = Session()
     try:
         sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == TENANT_ID).one()
-        assert sub.provider_subscription_id is None
-        assert sub.provider_customer_id is None
-        assert sub.payment_method_type is None
+        assert sub.provider_subscription_id == "mock-pro-v25"
+        assert sub.payment_method_type == "credit_card"
         assert sub.billing_cycle == "monthly"
         assert sub.status == "active"
     finally:
