@@ -16,7 +16,7 @@ describe('Super Admin Hardening & Integrity', () => {
 
     const pocket = SUBSCRIPTION_PLANS.find(p => p.id === 'pocket');
     assert.ok(pocket);
-    assert.equal(pocket.price, 39.9);
+    assert.equal(pocket.price, 39);
     assert.equal(pocket.splitFeeRate, 0.0179);
 
     const pro = SUBSCRIPTION_PLANS.find(p => p.id === 'pro');

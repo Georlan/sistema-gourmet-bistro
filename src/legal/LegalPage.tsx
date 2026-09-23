@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { ArrowLeft, ArrowRight, FileText, ShieldCheck } from 'lucide-react';
 import { KOMA_WORDMARK_ON_DARK_SRC } from '../brand/komaBrand';
-import { LEGAL_DOCUMENTS, findLegalDocument } from './legalContentV27';
+import { LEGAL_DOCUMENTS, findLegalDocument } from './legalContentV28';
 import './legal.css';
 
 function setLegalDocumentMeta(title: string, description: string) {

@@ -101,6 +101,10 @@ def _validate_recurring_mandate(
         raise HTTPException(409, "A autorização recorrente não corresponde ao contrato.")
     if _normalized_money(recurring.get("transaction_amount")) != _normalized_money(terms["commercial"]["billingAmount"]):
         raise HTTPException(409, "A autorização recorrente possui valor diferente do contrato.")
+    cycle = str(terms["commercial"].get("billingCycle") or "").strip().lower()
+    expected_frequency = 12 if cycle in {"anual", "annual"} else 1
+    if str(recurring.get("frequency") or "").strip() != str(expected_frequency) or str(recurring.get("frequency_type") or "").lower() != "months":
+        raise HTTPException(409, "A autorização recorrente possui ciclo diferente do contrato.")
     if recurring.get("currency_id") != "BRL":
         raise HTTPException(409, "A autorização recorrente possui moeda incompatível com o contrato.")
     free_trial = recurring.get("free_trial") or {}

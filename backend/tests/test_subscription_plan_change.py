@@ -365,13 +365,13 @@ def test_paid_to_pocket_updates_recurrence_before_new_split_becomes_authority(
     assert accepted.status_code == 201, accepted.text
     change = accepted.json()
     assert change["providerAction"] == "update_amount"
-    assert change["receipt"]["commercial"]["billingAmount"] == "39.90"
+    assert change["receipt"]["commercial"]["billingAmount"] == "39.00"
     assert change["receipt"]["commercial"]["trialDays"] == 0
     assert _fee(Session) == Decimal("0.69")
 
     applied = client.post(f"/api/subscription/plan-change/{change['id']}/apply")
     assert applied.status_code == 200, applied.text
-    assert updated == [("mock-pro-v25", Decimal("39.90"), "pocket")]
+    assert updated == [("mock-pro-v25", Decimal("39.00"), "pocket")]
     assert _fee(Session) == Decimal("1.79")
 
     db = Session()

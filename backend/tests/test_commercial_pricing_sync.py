@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_CATALOG = REPO_ROOT / "src" / "config" / "subscriptionPlans.ts"
 
 EXPECTED_PRICES = {
-    "pocket": Decimal("39.90"),
+    "pocket": Decimal("39.00"),
     "pro": 129,
     "premium": 249,
 }

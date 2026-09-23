@@ -1,4 +1,4 @@
-import { LEGAL_DOCUMENTS, LEGAL_VERSION, type LegalDocument } from './legalContentV27';
+import { LEGAL_DOCUMENTS, LEGAL_VERSION, type LegalDocument } from './legalContentV28';
 
 export const LEGAL_SOURCE_COMMIT = 'd6b8a35d97e57470f4a869a626e457fdf1892305';
 export const LEGAL_SOURCE_BLOB_SHA = 'd320afb497221bc75b7e2f987900f0a6b673a8d9';

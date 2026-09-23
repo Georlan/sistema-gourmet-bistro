@@ -660,7 +660,7 @@ export default function PlanContractPageV2() {
 
           {step === 1 ? (
             <>
-              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">01 · PLANO E COBRANÇA</span><h1>Escolha o KÔMA certo para sua operação.</h1><p>O Pocket custa R$ 39,90 por mês. Os três planos têm 7 dias de teste no componente fixo após a implantação essencial.</p></div>
+              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">01 · PLANO E COBRANÇA</span><h1>Escolha o KÔMA certo para sua operação.</h1><p>O Pocket custa R$ 39 por mês. Os três planos têm 7 dias de teste no componente fixo após a implantação essencial.</p></div>
               <div className="koma-sub-plan-grid" role="radiogroup" aria-label="Escolha um plano KÔMA">
                 {SUBSCRIPTION_PLANS.map(candidate => {
                   const candidatePricing = getSubscriptionPricing(candidate.price);

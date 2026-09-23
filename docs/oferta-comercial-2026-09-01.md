@@ -2,7 +2,7 @@
 
 ## Decisão
 
-A oferta comercial vigente do KÔMA usa três planos sem taxa de implantação e sem add-ons. O Pocket é a porta de entrada com mensalidade de R$ 39,90; Pro e Premium reduzem a taxa KÔMA conforme o restaurante cresce.
+A oferta comercial vigente do KÔMA usa três planos sem taxa de implantação e sem add-ons. O Pocket é a porta de entrada com mensalidade de R$ 39; Pro e Premium reduzem a taxa KÔMA conforme o restaurante cresce.
 
 O catálogo vigente serve para **novas contratações**. Ele não substitui os termos comerciais já aceitos por um tenant. Para contratos existentes, a autoridade financeira é o snapshot comercial vinculado ao restaurante.
 
@@ -12,7 +12,7 @@ A fonte compartilhada do catálogo público no frontend é `src/config/subscript
 
 | Plano | Assinatura mensal | Taxa KÔMA por pagamento online elegível | Posicionamento |
 | --- | ---: | ---: | --- |
-| Pocket | R$ 39,90/mês | 1,79% | Comece com o essencial |
+| Pocket | R$ 39/mês | 1,79% | Comece com o essencial |
 | Pro | R$ 129/mês | 0,50% | Seu restaurante cresceu. Sua taxa diminui |
 | Premium | R$ 249/mês | 0,20% | Mais volume, menor taxa |
 
@@ -77,7 +77,7 @@ As taxas permanecem 1,79% / 0,50% / 0,20% para novas contratações, independent
 
 Considerando apenas mensalidade fixa + taxa KÔMA e o mesmo volume mensal de pagamentos online elegíveis:
 
-- Pocket e Pro se igualam em aproximadamente **R$ 6.906,98/mês**: R$ 39,90 + 1,79% × volume = R$ 129 + 0,50% × volume.
+- Pocket e Pro se igualam em aproximadamente **R$ 6.976,74/mês**: R$ 39 + 1,79% × volume = R$ 129 + 0,50% × volume.
 - Pro e Premium se igualam em **R$ 40.000/mês**: R$ 129 + 0,50% × R$ 40.000 = R$ 329, e R$ 249 + 0,20% × R$ 40.000 = R$ 329.
 
 Esses pontos podem futuramente embasar recomendações de economia, mas **não autorizam mudança automática de plano**.
@@ -88,7 +88,8 @@ Esses pontos podem futuramente embasar recomendações de economia, mas **não a
 
 - Pocket legado: R$ 109 + 1,49%.
 - Pocket anterior: R$ 0 + 1,79%.
-- Pocket vigente: R$ 39,90 + 1,79%.
+- Pocket anterior: R$ 39,90 + 1,79%.
+- Pocket vigente: R$ 39 + 1,79%.
 - Pro vNext: R$ 129 + 0,50%.
 - Premium vNext: R$ 249 + 0,20%.
 
@@ -100,7 +101,7 @@ Para tenants com aceite vinculado, preço fixo, billing amount, taxa transaciona
 
 Na landing:
 
-- Pocket: **“Comece com o essencial por R$ 39,90/mês.”**
+- Pocket: **“Comece com o essencial por R$ 39/mês.”**
 - Pro: **“Seu restaurante cresceu. Sua taxa diminui.”**
 - Premium: **“Mais volume, menor taxa.”**
 - Pro mantém o destaque “Mais recomendado” enquanto essa for a decisão editorial; não usar “mais comprado” sem dado real.
@@ -115,4 +116,4 @@ Quando a flag estiver desligada, a fee deve ser zero. Quando estiver habilitada,
 
 Somente depois de homologar contrato, OAuth/marketplace, split, refund, chargeback e conciliação a variável deve ser alterada para `true` no ambiente que realmente cobrará a comissão. Um merge de código, sozinho, não deve iniciar cobrança em produção.
 
-Contratos Pocket novos exigem cobrança fixa de R$ 39,90 e usam o fluxo pago do checkout. Contratos anteriores Pocket R$ 0 não exigem assinatura recorrente de R$ 0 no Mercado Pago. O tenant conecta separadamente a conta Mercado Pago OAuth do restaurante para receber pagamentos online dos seus clientes.
+Contratos Pocket novos exigem cobrança fixa de R$ 39 e usam o fluxo pago do checkout. Contratos anteriores Pocket R$ 0 não exigem assinatura recorrente de R$ 0 no Mercado Pago. O tenant conecta separadamente a conta Mercado Pago OAuth do restaurante para receber pagamentos online dos seus clientes.

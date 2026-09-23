@@ -136,24 +136,34 @@ def test_saas_pix_subscription_tenant_without_acceptance_fails_closed(monkeypatc
     assert "sem aceite comercial" in str(exc_info.value.detail)
 
 
-def test_saas_pix_new_pro_uses_signed_vnext_amount(monkeypatch):
-    db = _FakeDb(SimpleNamespace(id=12, plano="pro"))
+@pytest.mark.parametrize(
+    ("plan", "cycle", "signed_amount"),
+    [
+        ("pocket", "monthly", "39.00"),
+        ("pro", "monthly", "129.00"),
+        ("pro", "annual", "1393.20"),
+        ("premium", "monthly", "249.00"),
+        ("premium", "annual", "2689.20"),
+    ],
+)
+def test_saas_pix_uses_signed_amount_for_each_new_plan_and_cycle(monkeypatch, plan, cycle, signed_amount):
+    db = _FakeDb(SimpleNamespace(id=12, plano=plan))
     subscription = SaaSSubscription(
         restaurante_id=12,
         provider="mercado_pago",
         payment_method_type="pix",
         status="active",
-        billing_cycle="monthly",
+        billing_cycle=cycle,
     )
     monkeypatch.setattr(
         saas_pix,
         "tenant_commercial_terms",
         lambda _db, _restaurant_id: SimpleNamespace(
-            billing_amount=Decimal("129.00")
+            billing_amount=Decimal(signed_amount)
         ),
     )
 
-    assert _subscription_amount(db, subscription, 12) == Decimal("129.00")
+    assert _subscription_amount(db, subscription, 12) == Decimal(signed_amount)
 
 
 def test_approved_monthly_pix_advances_one_month_but_never_reactivates_canceled_subscription():
