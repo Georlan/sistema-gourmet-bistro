@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { Loader2, Lock, Maximize2, Menu, MessageSquare, Minimize2 } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   getSubscriptionPlan,
   isAddonIncludedInPlan,
@@ -231,6 +231,14 @@ export function CaixaPanel({
     isSidebarTabActive,
     handleSidebarNavigation,
   } = useCashierNavigation({ hasOnlineMenu, showToast });
+
+  const cashierContentRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!window.matchMedia('(max-width: 1023px)').matches) return;
+    cashierContentRef.current?.scrollTo(0, 0);
+    window.scrollTo(0, 0);
+  }, [activeTab, activeSubTab]);
 
   const smartPos = useCashierSmartPos({
     apiBaseUrl,
@@ -915,7 +923,7 @@ export function CaixaPanel({
             ))}
           </div>
 
-          <div className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
+          <div ref={cashierContentRef} className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
             {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
               <div className={"absolute inset-0 bg-black/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-8 space-y-4"}>
                 <div className={clsx('p-4 bg-koma-panel rounded-full border', cashShiftUiState === 'closed' ? 'border-amber-500/20 text-amber-500' : 'border-koma-border text-koma-muted')}>
