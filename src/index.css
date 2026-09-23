@@ -2823,15 +2823,11 @@ body {
 }
 
 /*
- * Operational rule: a desktop-capable viewport always exposes every enabled
- * Kanban stage side by side. Container width may compact the cards, but it
- * must never turn desktop columns into click-to-switch tabs.
- *
- * The width branch also honors the browser's "desktop site" viewport on
- * touch devices. The fine-pointer branch keeps the rule true when a desktop
- * window is resized below the nominal tablet breakpoint.
+ * Keep every Kanban stage visible when the viewport has room for the board.
+ * Narrow windows need the same readable stage tabs as phones, regardless of
+ * whether their input device is a mouse or a touchscreen.
  */
-@media (min-width: 769px), (hover: hover) and (pointer: fine) {
+@media (min-width: 769px) {
   .orders-mobile-stages {
     display: none;
   }
