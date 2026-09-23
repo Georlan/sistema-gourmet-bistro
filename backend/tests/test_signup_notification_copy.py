@@ -59,6 +59,22 @@ def test_acceptance_notifies_owner_by_email_without_requiring_whatsapp(monkeypat
     assert "Acompanhe o status na aba Inscrições do SuperAdmin" in owner["message"]
 
 
+def test_signup_start_notifies_owner_before_contract_without_customer_data(monkeypatch):
+    calls = _capture_enqueue(monkeypatch)
+    monkeypatch.delenv("KOMA_OWNER_WHATSAPP_PHONE", raising=False)
+    monkeypatch.setattr(signup_notifications.settings, "KOMA_OWNER_EMAIL", "owner@example.com")
+    signup_notifications.enqueue_signup_started(
+        object(), signup_id="signup-123", restaurant_name="Restaurante QA",
+        plan="pro", billing_cycle="mensal",
+    )
+    assert len(calls) == 1
+    assert calls[0]["kind"] == "signup-started-owner"
+    assert calls[0]["protocol"] == "signup-123"
+    assert calls[0]["email"] == "owner@example.com"
+    assert "Restaurante QA" in calls[0]["message"]
+    assert "/super-admin" in calls[0]["message"]
+
+
 def test_release_required_message_describes_authorization_not_payment(monkeypatch):
     calls = _capture_enqueue(monkeypatch)
     monkeypatch.delenv("KOMA_OWNER_WHATSAPP_PHONE", raising=False)

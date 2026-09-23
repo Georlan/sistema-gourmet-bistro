@@ -160,9 +160,10 @@ function formatReceiptDate(value: string): string {
 export default function PlanContractPageV2() {
   const initialPlanId = useMemo(resolvePlanId, []);
   const initialCycle = useMemo(() => resolveBillingCycle(initialPlanId), [initialPlanId]);
-  const returnedFromBalance = useMemo(() => {
+  const returnedFromProvider = useMemo(() => {
     const value = new URLSearchParams(window.location.search).get('retorno');
-    return value === 'saldo-mercadopago' || value === 'account-money';
+    return value === 'saldo-mercadopago' || value === 'account-money'
+      || value === 'mercado-pago' || value === 'pix-automatico';
   }, []);
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -333,10 +334,16 @@ export default function PlanContractPageV2() {
     if (saved.activation) setActivationResult(saved.activation);
     setResumeCandidate(null);
     setStep(saved.receipt ? 3 : 2);
-    setSignupNotice(returnedFromBalance
+    setSignupNotice(returnedFromProvider
       ? 'Retomamos sua inscrição após a autorização no Mercado Pago.'
       : 'Inscrição recuperada. Você pode continuar de onde parou.');
   };
+
+  useEffect(() => {
+    if (returnedFromProvider && resumeCandidate?.receipt) applySavedSignup(resumeCandidate);
+    // The return from the hosted authorization must resume the saved contract automatically.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [returnedFromProvider, resumeCandidate]);
 
   const startFresh = () => {
     try { localStorage.removeItem('koma_signup_resume'); } catch { /* storage opcional */ }
@@ -352,20 +359,27 @@ export default function PlanContractPageV2() {
 
   useEffect(() => {
     if (!receipt || activationResult) return;
-    const timer = window.setInterval(async () => {
+    let active = true;
+    const checkBilling = async () => {
       if (document.hidden) return;
       try {
         const response = await fetch(`${API_BASE_URL}/api/contracts/${receipt.protocol}/billing/status`);
         if (!response.ok) return;
         const payload = await response.json();
+        if (!active) return;
+        if (payload.paymentMethodType === 'account_money' || payload.paymentMethodType === 'pix' || payload.paymentMethodType === 'credit_card') {
+          setBillingMethod(payload.paymentMethodType);
+        }
         if (payload.billingStatus === 'ready' && !payload.isActivated) {
           setActivationResult({ status: 'awaiting_release', message: 'Meio de pagamento confirmado. A contratação segue para liberação.' });
         } else if (payload.isActivated && payload.restaurantId) {
           setActivationResult({ restaurantId: String(payload.restaurantId), slug: payload.slug });
         }
       } catch { /* estado é recuperável ao recarregar */ }
-    }, 5000);
-    return () => window.clearInterval(timer);
+    };
+    void checkBilling();
+    const timer = window.setInterval(() => void checkBilling(), 5000);
+    return () => { active = false; window.clearInterval(timer); };
   }, [receipt, activationResult]);
 
   const updateField = (field: keyof ContractForm, value: string) => {
@@ -728,6 +742,7 @@ export default function PlanContractPageV2() {
                   )}
                   {billingMethod === 'pix' && capabilities.pix && <div className="koma-sub-locked-note"><QrCode size={17} /> Nenhum Pix é cobrado hoje. {activeBillingCycle === 'anual' ? 'Depois da implantação e dos 7 dias grátis, o KÔMA gerará um único QR Code e Pix Copia e Cola do valor anual, quitando os próximos 12 meses.' : 'Quando a primeira mensalidade vencer, o KÔMA exibirá o QR Code e o Pix Copia e Cola; um novo QR será gerado a cada vencimento mensal.'} Você poderá pagar com qualquer banco ou PSP Pix.</div>}
                   {billingMethod === 'account_money' && capabilities.account_money && <div className="koma-sub-locked-note"><Wallet size={17} /> Ao continuar, você será levado ao Mercado Pago apenas para autorizar o uso do seu saldo. A recorrência começa depois do trial.</div>}
+                  {!methodAvailable && <p role="status" className="koma-sub-locked-note">{billingMethodLabel} está indisponível nesta contratação. Escolha outro meio disponível para continuar; sua inscrição permanece salva.</p>}
                   {!capabilities.credit_card && !capabilities.pix && !capabilities.account_money && <p role="status">Sua inscrição fica salva. Os meios de pagamento estão temporariamente indisponíveis.</p>}
                 </section>
                 ) : (
