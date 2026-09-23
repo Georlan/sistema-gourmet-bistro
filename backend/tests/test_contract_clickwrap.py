@@ -135,7 +135,8 @@ def test_cpf_cnpj_validation_rejects_repeated_digits_and_accepts_valid_examples(
 def test_server_is_source_of_truth_for_contract_prices():
     assert subscription_monthly_price("pocket") == Decimal("39.00")
     assert subscription_marketplace_rate("pocket") == Decimal("0.0179")
-    # O Pocket continua disponível apenas no ciclo mensal.
+    assert subscription_annual_total("pocket") == Decimal("421.20")
+    assert subscription_annual_monthly_equivalent("pocket") == Decimal("35.10")
 
     assert subscription_monthly_price("pro") == Decimal("129.00")
     assert subscription_marketplace_rate("pro") == Decimal("0.0050")
@@ -219,14 +220,19 @@ def test_paid_annual_contract_snapshots_discounted_fixed_amount_only(client_and_
     assert premium_receipt["marketplaceRate"] == "0.002000"
 
 
-def test_pocket_rejects_meaningless_annual_fixed_cycle(client_and_session):
+def test_pocket_annual_contract_snapshots_discounted_fixed_amount_and_same_online_fee(client_and_session):
     client, _Session = client_and_session
     response = client.post(
         "/api/contracts/accept",
         json=_payload(plan="pocket", billing_cycle="anual"),
     )
-    assert response.status_code == 422
-    assert "apenas no ciclo mensal" in response.json()["detail"]
+    assert response.status_code == 201, response.text
+    commercial = response.json()["receipt"]["commercial"]
+    assert commercial["fixedMonthlyPrice"] == "39.00"
+    assert commercial["billingAmount"] == "421.20"
+    assert commercial["annualMonthlyEquivalent"] == "35.10"
+    assert commercial["marketplaceRate"] == "0.017900"
+    assert commercial["trialDays"] == 7
 
 
 def test_tenant_commercial_terms_resolves_linked_signed_receipt(client_and_session):

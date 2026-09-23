@@ -1,14 +1,16 @@
 import { expect, test } from '@playwright/test';
 
-test('Pocket publica R$ 39,00 e mantém apenas o ciclo mensal', async ({ page }) => {
+test('Pocket anual publica total de R$ 421,20 e mantém 1,79% por pedido online', async ({ page }) => {
   await page.route('**/api/contracts/payment-methods-v2', route => route.fulfill({
     json: { credit_card: true, pix: true, account_money: true, publicKey: 'TEST-public' },
   }));
   await page.goto('/contratar/pocket?cobranca=anual');
-  await expect(page).toHaveURL(/\/contratar\/pocket\?cobranca=mensal/);
-  await expect(page.getByRole('radio', { name: /^Pocket\b/ })).toContainText('R$ 39,00');
+  await expect(page).toHaveURL(/\/contratar\/pocket\?cobranca=anual/);
+  await expect(page.getByRole('radio', { name: /^Pocket\b/ })).toContainText('R$ 35,10');
+  await expect(page.getByRole('radio', { name: /^Pocket\b/ })).toContainText('1,79%');
   await expect(page.getByText('7 dias grátis no componente fixo.')).toBeVisible();
-  await expect(page.getByRole('radio', { name: /Anual/ })).toHaveCount(0);
+  await expect(page.getByRole('radio', { name: /^Anual/ })).toContainText('R$ 421,20');
+  await expect(page.locator('.koma-sub-summary-card').first()).toContainText('R$ 421,20');
 });
 
 test('Pocket novo exige meio de pagamento para a mensalidade', async ({ page }) => {

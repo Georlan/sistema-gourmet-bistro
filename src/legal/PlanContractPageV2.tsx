@@ -132,8 +132,7 @@ function resolvePlanId(): SubscriptionPlanId {
   return rawPlanId === 'pocket' || rawPlanId === 'pro' || rawPlanId === 'premium' ? rawPlanId : 'pro';
 }
 
-function resolveBillingCycle(planId: SubscriptionPlanId): BillingCycle {
-  if (planId === 'pocket') return 'mensal';
+function resolveBillingCycle(): BillingCycle {
   return new URLSearchParams(window.location.search).get('cobranca') === 'anual' ? 'anual' : 'mensal';
 }
 
@@ -161,7 +160,7 @@ function formatReceiptDate(value: string): string {
 
 export default function PlanContractPageV2() {
   const initialPlanId = useMemo(resolvePlanId, []);
-  const initialCycle = useMemo(() => resolveBillingCycle(initialPlanId), [initialPlanId]);
+  const initialCycle = useMemo(resolveBillingCycle, []);
   const returnedFromBalance = useMemo(() => {
     const value = new URLSearchParams(window.location.search).get('retorno');
     return value === 'saldo-mercadopago' || value === 'account-money';
@@ -291,12 +290,6 @@ export default function PlanContractPageV2() {
   useEffect(() => {
     document.title = `Contratar ${plan.name} | KÔMA`;
   }, [plan.name]);
-
-  useEffect(() => {
-    if (!contractLocked && selectedPlanId === 'pocket' && billingCycle !== 'mensal') {
-      setBillingCycle('mensal');
-    }
-  }, [selectedPlanId, billingCycle, contractLocked]);
 
   useEffect(() => {
     if (contractLocked) return;
@@ -665,16 +658,15 @@ export default function PlanContractPageV2() {
                 {SUBSCRIPTION_PLANS.map(candidate => {
                   const candidatePricing = getSubscriptionPricing(candidate.price);
                   const selected = candidate.id === selectedPlanId;
-                  const displayedPrice = billingCycle === 'anual' && candidate.id !== 'pocket'
+                  const displayedPrice = billingCycle === 'anual'
                     ? candidatePricing.annualMonthlyEquivalent
                     : candidatePricing.monthly;
                   return (
                     <button key={candidate.id} type="button" role="radio" aria-checked={selected} className={`koma-sub-plan-card ${selected ? 'is-selected' : ''}`} onClick={() => {
                         setSelectedPlanId(candidate.id);
-                        if (candidate.id === 'pocket') setBillingCycle('mensal');
                       }}>
                       <div className="koma-sub-plan-top"><span>{candidate.name.replace('Kôma ', '')}</span>{candidate.recommended && <em>Recomendado</em>}</div>
-                      <strong>{formatCurrency(displayedPrice)}<small>/mês{billingCycle === 'anual' && candidate.id !== 'pocket' ? ' equiv.' : ''}</small></strong>
+                      <strong>{formatCurrency(displayedPrice)}<small>/mês{billingCycle === 'anual' ? ' equiv.' : ''}</small></strong>
                       <p>{candidate.tagline}</p><span className="koma-sub-fee">{formatPercentage(candidate.splitFeeRate)} por pedido online pago</span>
                       <ul>{candidate.features.slice(0, 3).map(feature => <li key={feature}><Check size={14} /> {feature}</li>)}</ul>
                     </button>
@@ -683,7 +675,7 @@ export default function PlanContractPageV2() {
               </div>
               <div className="koma-sub-billing-selector" role="radiogroup" aria-label="Ciclo de cobrança">
                 <button type="button" role="radio" aria-checked={billingCycle === 'mensal'} className={billingCycle === 'mensal' ? 'is-selected' : ''} onClick={() => setBillingCycle('mensal')}><span>Mensal</span><strong>{formatCurrency(pricing.monthly)}/mês</strong><small>Primeira cobrança depois do trial.</small></button>
-                {selectedPlanId !== 'pocket' && <button type="button" role="radio" aria-checked={billingCycle === 'anual'} className={billingCycle === 'anual' ? 'is-selected' : ''} onClick={() => setBillingCycle('anual')}><span>Anual <em>Economize 10%</em></span><strong>{formatCurrency(pricing.annualMonthlyEquivalent)}/mês equivalente</strong><small>{formatCurrency(pricing.annualTotal)} por ano, cobrado depois do trial. O desconto anual não altera a taxa percentual.</small></button>}
+                <button type="button" role="radio" aria-checked={billingCycle === 'anual'} className={billingCycle === 'anual' ? 'is-selected' : ''} onClick={() => setBillingCycle('anual')}><span>Anual <em>Economize 10%</em></span><strong>{formatCurrency(pricing.annualMonthlyEquivalent)}/mês equivalente</strong><small>{formatCurrency(pricing.annualTotal)} por ano, cobrado depois do trial. O desconto anual não altera a taxa percentual.</small></button>
               </div>
               <div className="koma-sub-trial-note"><Gift size={19} /><div><strong>7 dias grátis no componente fixo.</strong><p>Os 7 dias só começam depois dos 3 passos essenciais de implantação.</p></div></div>
             </>

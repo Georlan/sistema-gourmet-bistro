@@ -140,6 +140,7 @@ def test_saas_pix_subscription_tenant_without_acceptance_fails_closed(monkeypatc
     ("plan", "cycle", "signed_amount"),
     [
         ("pocket", "monthly", "39.00"),
+        ("pocket", "annual", "421.20"),
         ("pro", "monthly", "129.00"),
         ("pro", "annual", "1393.20"),
         ("premium", "monthly", "249.00"),

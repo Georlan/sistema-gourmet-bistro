@@ -102,19 +102,22 @@ test('landing does not promise unrelated modules as part of the commercial offer
 });
 
 
-test('Pocket is monthly only while annual discount applies to Pro and Premium', () => {
+test('annual discount applies to fixed price in Pocket, Pro and Premium', () => {
   const pocket = getSubscriptionPricing(39);
   const pro = getSubscriptionPricing(129);
   const premium = getSubscriptionPricing(249);
   assert.equal(pocket.monthly, 39);
+  assert.equal(pocket.annualTotal, 421.2);
+  assert.equal(pocket.annualMonthlyEquivalent, 35.1);
+  assert.equal(pocket.annualSavings, 46.8);
   assert.equal(pro.annualTotal, 1393.2);
   assert.equal(pro.annualMonthlyEquivalent, 116.1);
   assert.equal(premium.annualTotal, 2689.2);
   assert.equal(premium.annualMonthlyEquivalent, 224.1);
 
   const html = renderToStaticMarkup(createElement(Plans));
-  assert.ok(html.includes('Cobrança mensal'));
-  assert.ok(html.includes('sem opção anual'));
+  assert.ok(html.includes('Sem taxa de implantação'));
+  assert.ok(html.includes('1,79%'));
   assert.ok(html.includes('Seu restaurante cresceu. Sua taxa diminui.'));
   assert.ok(html.includes('Mais volume, menor taxa.'));
 });

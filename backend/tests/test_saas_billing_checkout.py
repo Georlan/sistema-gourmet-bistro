@@ -318,6 +318,8 @@ def test_pocket_zero_rejects_paid_billing_setup_before_provider_call(client_and_
     [
         ("pocket", "mensal", "credit_card", 39.0, 1),
         ("pocket", "mensal", "account_money", 39.0, 1),
+        ("pocket", "anual", "credit_card", 421.20, 12),
+        ("pocket", "anual", "account_money", 421.20, 12),
         ("pro", "mensal", "credit_card", 129.0, 1),
         ("pro", "mensal", "account_money", 129.0, 1),
         ("pro", "anual", "credit_card", 1393.20, 12),
@@ -363,6 +365,7 @@ def test_paid_plan_billing_uses_signed_amount_and_cycle(
     ("plan", "cycle", "expected_amount", "expected_cycle"),
     [
         ("pocket", "mensal", 39.0, "monthly"),
+        ("pocket", "anual", 421.20, "annual"),
         ("pro", "mensal", 129.0, "monthly"),
         ("pro", "anual", 1393.20, "annual"),
         ("premium", "mensal", 249.0, "monthly"),

@@ -18,20 +18,17 @@ test('fluxo unificado de contratação usa o checkout de três meios', () => {
   assert.match(planContract, /SUBSCRIPTION_PLANS\.map/);
 });
 
-test('seleção comercial mantém Pocket mensal e anual apenas nos planos pagos', () => {
+test('seleção comercial oferece anual com desconto aos três planos', () => {
   assert.match(planContract, /type BillingCycle = 'mensal' \| 'anual'/);
-  assert.match(planContract, /candidate\.id !== 'pocket'/);
-  assert.match(planContract, /function resolveBillingCycle\(planId: SubscriptionPlanId\)/);
-  assert.match(planContract, /if \(planId === 'pocket'\) return 'mensal'/);
-  assert.match(planContract, /resolveBillingCycle\(initialPlanId\)/);
-  assert.match(planContract, /candidate\.id === 'pocket'\) setBillingCycle\('mensal'\)/);
-  assert.match(planContract, /selectedPlanId === 'pocket' && billingCycle !== 'mensal'/);
-  assert.match(planContract, /setBillingCycle\('mensal'\)/);
+  assert.match(planContract, /function resolveBillingCycle\(\)/);
+  assert.match(planContract, /billingCycle === 'anual'/);
+  assert.doesNotMatch(planContract, /candidate\.id !== 'pocket'/);
+  assert.doesNotMatch(planContract, /selectedPlanId !== 'pocket'/);
   assert.match(planContract, /O desconto anual não altera a taxa percentual/);
   assert.match(planContract, /annualMonthlyEquivalent/);
   assert.match(planContract, /Os 7 dias só começam depois dos 3 passos essenciais/);
-  assert.match(landingPlans, /Pro e Premium: valor mensal equivalente/);
-  assert.match(landingPlans, /Pocket permanece mensal, sem opção anual/);
+  assert.match(landingPlans, /Pocket, Pro e Premium: valor mensal equivalente/);
+  assert.match(landingPlans, /A taxa KÔMA por pedido online não muda/);
   assert.doesNotMatch(planContract, /12 meses \+ 7 dias|dias adicionais de bônus/);
 });
 

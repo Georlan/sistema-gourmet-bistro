@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const annualPlans = [
+  { plan: 'pocket', monthly: 'R$ 39,00', equivalent: 'R$ 35,10', total: 'R$ 421,20', savings: 'R$ 46,80' },
   { plan: 'pro', monthly: 'R$ 129,00', equivalent: 'R$ 116,10', total: 'R$ 1.393,20', savings: 'R$ 154,80' },
   { plan: 'premium', monthly: 'R$ 249,00', equivalent: 'R$ 224,10', total: 'R$ 2.689,20', savings: 'R$ 298,80' },
 ] as const;

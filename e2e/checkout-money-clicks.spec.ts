@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const cases = [
   { plan: 'pocket', cycle: 'mensal', method: 'pix', amount: '39.00', rate: '0.0179', endpoint: 'pix/select' },
+  { plan: 'pocket', cycle: 'anual', method: 'pix', amount: '421.20', rate: '0.0179', endpoint: 'pix/select' },
   { plan: 'pro', cycle: 'anual', method: 'credit_card', amount: '1393.20', rate: '0.0050', endpoint: 'setup' },
   { plan: 'premium', cycle: 'anual', method: 'account_money', amount: '2689.20', rate: '0.0020', endpoint: 'setup' },
 ] as const;
@@ -25,7 +26,7 @@ for (const scenario of cases) {
       const payload = route.request().postDataJSON();
       expect(payload.plan).toBe(scenario.plan);
       expect(payload.billing_cycle).toBe(scenario.cycle);
-      expect(payload.legal_version).toBe('2.8');
+      expect(payload.legal_version).toBe('2.9');
       acceptanceSeen = true;
       await route.fulfill({ status: 201, json: { receipt: {
         protocol,
@@ -36,7 +37,7 @@ for (const scenario of cases) {
           billingAmount: scenario.amount,
           marketplaceRate: scenario.rate,
         },
-        documents: { version: '2.8' },
+        documents: { version: '2.9' },
       } } });
     });
     await page.route('https://api.mercadopago.com/v1/card_tokens**', async route => {
@@ -75,7 +76,7 @@ for (const scenario of cases) {
       await page.getByLabel('CVV').fill('123');
     }
     await page.locator('#legal-acceptance').check();
-    await expect(page.locator('.koma-sub-legal-acceptance')).toContainText(scenario.plan === 'pocket' ? 'R$ 39,00' : scenario.plan === 'pro' ? 'R$ 1.393,20' : 'R$ 2.689,20');
+    await expect(page.locator('.koma-sub-legal-acceptance')).toContainText(scenario.plan === 'pocket' ? (scenario.cycle === 'anual' ? 'R$ 421,20' : 'R$ 39,00') : scenario.plan === 'pro' ? 'R$ 1.393,20' : 'R$ 2.689,20');
     await page.getByRole('button', { name: 'Aceitar e registrar contratação' }).click();
     await expect(page.getByText('Simulação sem cobrança.')).toBeVisible();
     expect(acceptanceSeen).toBe(true);

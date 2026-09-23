@@ -24,10 +24,10 @@ Regras:
 - A taxa KÔMA incide somente sobre pagamentos online aprovados e elegíveis no fluxo integrado.
 - Tarifas do provedor de pagamento são separadas da taxa KÔMA.
 - Uma assinatura por estabelecimento.
-- Pro e Premium podem usar plano anual com 10% de desconto somente no componente fixo.
+- Pocket, Pro e Premium podem usar plano anual com 10% de desconto somente no componente fixo.
 - Novas contratações Pocket, Pro e Premium têm 7 dias de teste do componente fixo após a implantação essencial.
 - A taxa percentual não recebe desconto anual.
-- Pocket está disponível apenas no ciclo mensal. Contratos antigos de R$ 0 não criam recorrência de R$ 0.
+- Contratos antigos Pocket de R$ 0 não criam recorrência de R$ 0.
 - Não existe upgrade automático por GMV.
 - Mudança do catálogo não altera contratos antigos.
 
@@ -67,7 +67,7 @@ O desconto de 10% vale exclusivamente para o componente fixo:
 
 | Plano | Equivalente mensal | Total anual | Economia anual |
 | --- | ---: | ---: | ---: |
-| Pocket | Não aplicável | Não aplicável | Não aplicável |
+| Pocket | R$ 35,10 | R$ 421,20 | R$ 46,80 |
 | Pro | R$ 116,10 | R$ 1.393,20 | R$ 154,80 |
 | Premium | R$ 224,10 | R$ 2.689,20 | R$ 298,80 |
 

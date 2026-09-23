@@ -12,7 +12,7 @@ export interface SubscriptionPlan {
 }
 
 export const ANNUAL_DISCOUNT_RATE = 0.1;
-export const COMMERCIAL_PRICING_VERSION = '2026-09-pocket-3900';
+export const COMMERCIAL_PRICING_VERSION = '2026-09-pocket-annual';
 
 export function getSubscriptionPricing(monthlyPrice: number) {
   const monthlyPriceInCents = Math.round(monthlyPrice * 100);

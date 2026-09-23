@@ -237,11 +237,6 @@ def create_plan_change(
         payload.plan,
         payload.billing_cycle,
     )
-    if payload.plan == "pocket" and _cycle_kind(payload.billing_cycle) != "monthly":
-        raise HTTPException(
-            422,
-            "Pocket não possui componente fixo anual. A mudança deve usar ciclo mensal.",
-        )
     if fixed > 0 and _cycle_kind(payload.billing_cycle) != _cycle_kind(current_terms.billing_cycle):
         raise HTTPException(
             409,

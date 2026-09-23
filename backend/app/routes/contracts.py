@@ -234,12 +234,6 @@ def accept_contract(
     snapshots = _validate_legal_bundle(payload)
     hashes = {key: _document_hash(value) for key, value in snapshots.items()}
 
-    if payload.plan == "pocket" and payload.billing_cycle == "anual":
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Pocket está disponível apenas no ciclo mensal.",
-        )
-
     try:
         provider = get_legal_provider_identity()
     except RuntimeError as exc:

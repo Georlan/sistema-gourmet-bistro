@@ -10,7 +10,7 @@ logger = logging.getLogger("koma.subscription")
 VALID_SUBSCRIPTION_PLANS = {"pocket", "pro", "premium"}
 LEGACY_PREMIUM_PLANS = {"bistro", "delivery", "gold", "platinum"}
 ANNUAL_DISCOUNT_RATE = Decimal("0.10")
-COMMERCIAL_PRICING_VERSION = "2026-09-pocket-3900"
+COMMERCIAL_PRICING_VERSION = "2026-09-pocket-annual"
 
 # Catálogo comercial vigente para NOVAS contratações.
 #
