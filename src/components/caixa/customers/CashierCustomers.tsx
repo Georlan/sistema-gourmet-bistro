@@ -600,7 +600,7 @@ export default function CashierCustomers({
           className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"}
         >
           <div
-            className={"w-full max-w-md bg-koma-card border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8"}
+            className={"cashier-customer-modal w-full max-w-md bg-koma-card border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8"}
           >
             <div className={"flex justify-between items-center pb-2 border-b border-koma-border"}>
               <h3 className={"font-serif text-sm font-bold text-koma-foreground"}>Editar Cliente CRM</h3>
@@ -720,7 +720,7 @@ export default function CashierCustomers({
           className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"}
         >
           <div
-            className={"w-full max-w-md bg-koma-card border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8"}
+            className={"cashier-customer-modal w-full max-w-md bg-koma-card border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8"}
           >
             <div className={"flex justify-between items-center pb-2 border-b border-koma-border"}>
               <h3 className={"font-serif text-sm font-bold text-koma-foreground"}>
