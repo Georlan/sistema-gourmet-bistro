@@ -167,15 +167,18 @@ export default function CardapioAuthModal({
       id="auth-modal-overlay"
     >
       <div
-        className="relative w-full max-w-md rounded-t-[28px] border border-white/10 bg-[#0e1217] p-6 shadow-2xl sm:rounded-[28px] animate-scale-up"
+        className="relative max-h-[calc(100dvh-0.5rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[28px] border border-white/10 bg-[#0e1217] px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-6 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-[28px] animate-scale-up"
         id="auth-modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
         onClick={(event) => event.stopPropagation()}
       >
         {/* Fechar */}
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-gray-400 transition hover:bg-white/10 hover:text-white cursor-pointer"
+          className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/5 text-gray-400 transition hover:bg-white/10 hover:text-white cursor-pointer"
           aria-label="Fechar"
         >
           <X className="h-5 w-5" />
@@ -190,14 +193,14 @@ export default function CardapioAuthModal({
             <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
               Clube de Vantagens
             </span>
-            <h2 className="font-display text-lg font-black tracking-tight text-white">
+            <h2 className="font-display text-lg font-black tracking-tight text-white" id="auth-modal-title">
               {tab === "login" ? "Entrar na Minha Conta" : "Criar Minha Conta"}
             </h2>
           </div>
         </div>
 
         <p className="mt-2.5 text-xs leading-relaxed text-gray-300">
-          Acumule pontos e cashback em cada pedido, acompanhe o status em tempo real e salve seus endereços.
+          Acompanhe seus pedidos e consulte os benefícios disponíveis neste restaurante. Você também pode comprar como visitante.
         </p>
 
         {/* Seletor de Abas (Entrar / Criar Conta) */}
@@ -208,7 +211,7 @@ export default function CardapioAuthModal({
               setTab("login");
               setErrorMessage("");
             }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            className={`min-h-11 flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
               tab === "login"
                 ? "bg-emerald-500 text-white shadow-md"
                 : "text-gray-400 hover:text-white"
@@ -222,7 +225,7 @@ export default function CardapioAuthModal({
               setTab("register");
               setErrorMessage("");
             }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            className={`min-h-11 flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
               tab === "register"
                 ? "bg-emerald-500 text-white shadow-md"
                 : "text-gray-400 hover:text-white"
@@ -250,7 +253,6 @@ export default function CardapioAuthModal({
                 <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   type="email"
-                  autoFocus
                   autoComplete="email"
                   placeholder="exemplo@email.com"
                   value={email}
@@ -258,7 +260,7 @@ export default function CardapioAuthModal({
                     setEmail(e.target.value);
                     if (errorMessage) setErrorMessage("");
                   }}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
                   required
                 />
               </div>
@@ -277,7 +279,7 @@ export default function CardapioAuthModal({
                     setPassword(e.target.value);
                     if (errorMessage) setErrorMessage("");
                   }}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
                   required
                 />
               </div>
@@ -304,7 +306,6 @@ export default function CardapioAuthModal({
                 <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  autoFocus
                   autoComplete="name"
                   placeholder="Como podemos te chamar?"
                   value={name}
@@ -312,7 +313,7 @@ export default function CardapioAuthModal({
                     setName(e.target.value);
                     if (errorMessage) setErrorMessage("");
                   }}
-                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
                   required
                 />
               </div>
@@ -331,7 +332,7 @@ export default function CardapioAuthModal({
                     setEmail(e.target.value);
                     if (errorMessage) setErrorMessage("");
                   }}
-                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
                   required
                 />
               </div>
@@ -351,7 +352,7 @@ export default function CardapioAuthModal({
                     setPhone(formatBrazilianPhone(e.target.value));
                     if (errorMessage) setErrorMessage("");
                   }}
-                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
                   required
                 />
               </div>
@@ -370,7 +371,7 @@ export default function CardapioAuthModal({
                     setPassword(e.target.value);
                     if (errorMessage) setErrorMessage("");
                   }}
-                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
                   required
                 />
               </div>
@@ -382,7 +383,7 @@ export default function CardapioAuthModal({
               <p className="text-sm text-gray-300">Enviamos um código para <strong>{formatBrazilianPhone(phone)}</strong>.</p>
               <label className="block">
                 <span className="mb-1 block text-xs font-bold text-gray-300">Código do WhatsApp</span>
-                <input type="text" inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-center font-mono text-xl tracking-[0.4em] text-white outline-none focus:border-emerald-500" required />
+                <input type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-center font-mono text-xl tracking-[0.4em] text-white outline-none focus:border-emerald-500" required />
               </label>
             </div>}
 
@@ -402,9 +403,9 @@ export default function CardapioAuthModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-xs font-semibold text-gray-400 hover:text-gray-200 transition underline underline-offset-4 cursor-pointer"
+            className="min-h-11 w-full text-xs font-semibold text-gray-400 hover:text-gray-200 transition underline underline-offset-4 cursor-pointer"
           >
-            Continuar sem criar conta (comprar como visitante)
+            Continuar como visitante
           </button>
         </div>
       </div>

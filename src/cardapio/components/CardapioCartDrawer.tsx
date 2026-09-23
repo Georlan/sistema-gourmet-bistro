@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { 
   Product, 
   ProductOption, 
@@ -92,6 +92,7 @@ interface CardapioCartDrawerProps {
   onUpdateQty: (itemId: string, newQty: number) => void;
   onRemoveItem: (itemId: string) => void;
   onAddToCart?: (product: Product, quantity: number, options?: Record<string, ProductOption[]>, notes?: string) => void;
+  initialCouponCode?: string;
   onPlaceOrder: (orderData: CardapioCheckoutRequest) => void;
   user: any;
   onAuthClick?: () => void;
@@ -116,6 +117,7 @@ export default function CardapioCartDrawer({
   onUpdateQty,
   onRemoveItem,
   onAddToCart,
+  initialCouponCode = "",
   onPlaceOrder,
   user,
   onAuthClick,
@@ -191,7 +193,7 @@ export default function CardapioCartDrawer({
   }, [paymentDetail, restaurantId]);
 
   // Coupon state
-  const [couponCode, setCouponCode] = useState("");
+  const [couponCode, setCouponCode] = useState(initialCouponCode);
   const [appliedCoupon, setAppliedCoupon] = useState<{
     codigo: string;
     desconto: number;
@@ -290,6 +292,17 @@ export default function CardapioCartDrawer({
   }, 0), [cart]);
 
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const couponValidationFingerprint = `${subtotal.toFixed(2)}:${normalizeBrazilianPhone(user?.phone || guestPhone)}`;
+  const couponFingerprintRef = useRef(couponValidationFingerprint);
+  const appliedCouponFingerprintRef = useRef<string | null>(null);
+  couponFingerprintRef.current = couponValidationFingerprint;
+
+  useEffect(() => {
+    if (appliedCoupon && appliedCouponFingerprintRef.current !== couponValidationFingerprint) {
+      setAppliedCoupon(null);
+      setCouponError("O pedido ou celular mudou. Confira o cupom novamente.");
+    }
+  }, [appliedCoupon, couponValidationFingerprint]);
 
   const deliveryQuote = getDeliveryQuote(brandConfig, subtotal, selectedBairro);
   const deliveryEnabled = brandConfig?.deliveryEnabled !== false && (!explicitOrderTypes || explicitOrderTypes.includes("delivery"));
@@ -348,9 +361,14 @@ export default function CardapioCartDrawer({
   const handleApplyCoupon = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!couponCode.trim()) return;
+    if (!user && !isCompleteBrazilianPhone(guestPhone)) {
+      reportValidationError("Informe seu celular em Contato para conferir este cupom.", "input-guest-phone");
+      return;
+    }
 
     setValidatingCoupon(true);
     setCouponError("");
+    const requestFingerprint = couponValidationFingerprint;
     try {
       const res = await fetch(`${API_BASE_URL}/cardapio/cupons/validar`, {
         method: "POST",
@@ -359,15 +377,20 @@ export default function CardapioCartDrawer({
           restaurante_id: Number(restaurantId),
           codigo: couponCode.trim().toUpperCase(),
           subtotal,
-          cliente_telefone: user?.phone || guestPhone,
+          telefone: normalizeBrazilianPhone(user?.phone || guestPhone),
         }),
       });
 
       const data = await res.json();
+      if (couponFingerprintRef.current !== requestFingerprint) {
+        setCouponError("O pedido ou celular mudou. Confira o cupom novamente.");
+        return;
+      }
       if (!data.valido) {
         setCouponError(data.mensagem || "Cupom inválido.");
         setAppliedCoupon(null);
       } else {
+        appliedCouponFingerprintRef.current = requestFingerprint;
         setAppliedCoupon({
           codigo: data.codigo,
           desconto: data.desconto_calculado || 0,
@@ -384,6 +407,7 @@ export default function CardapioCartDrawer({
 
   const handleRemoveCoupon = () => {
     setAppliedCoupon(null);
+    appliedCouponFingerprintRef.current = null;
     setCouponCode("");
     setCouponError("");
   };
@@ -391,6 +415,12 @@ export default function CardapioCartDrawer({
   const recognizedExistingCustomer = !user && customerRecognition === "found";
   const customerName = user?.name || (recognizedExistingCustomer ? "Cliente identificado" : guestName);
   const customerPhone = user?.phone || normalizeBrazilianPhone(guestPhone);
+
+  const jumpToSection = (sectionId: string) => {
+    const target = document.getElementById(sectionId);
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    target?.focus({ preventScroll: true });
+  };
 
   const handleCheckout = () => {
     setErrorMessage("");
@@ -511,6 +541,29 @@ export default function CardapioCartDrawer({
           </button>
         </div>
 
+        {cart.length > 0 && (
+          <nav className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-koma-border px-4 py-2 no-scrollbar sm:px-5" aria-label="Partes da sacola">
+            {[
+              ["Itens", "cart-items"],
+              ["Receber", "cart-receive-methods"],
+              ["Cupom", "cart-discounts"],
+              ["Pagamento", "cart-payment-methods"],
+              ["Contato", "cart-identification"],
+            ].map(([label, sectionId]) => (
+              <button key={sectionId} type="button" onClick={() => jumpToSection(sectionId)} className="min-h-10 shrink-0 rounded-xl border border-koma-border bg-koma-card px-3 text-[11px] font-bold text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-400">
+                {label}
+              </button>
+            ))}
+          </nav>
+        )}
+
+        {errorMessage && (
+          <div className="mx-4 mt-2 flex shrink-0 items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs font-semibold text-rose-400 sm:mx-5" role="alert" id="cart-checkout-error">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         {cart.length === 0 ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-start p-6 text-center overflow-y-auto no-scrollbar">
             <div className="mt-4 grid h-16 w-16 place-items-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
@@ -611,7 +664,7 @@ export default function CardapioCartDrawer({
               )}
 
               {/* Section 1: Cart Items */}
-              <section>
+              <section id="cart-items" tabIndex={-1}>
                 <div className="mb-2.5 flex items-center justify-between">
                   <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">1. Seu pedido</h3>
                   <span className="text-xs font-bold text-koma-subtle">{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
@@ -777,7 +830,7 @@ export default function CardapioCartDrawer({
               </section>
 
               {/* Section 3: Cupons & Descontos */}
-              <section className="border-t border-koma-border pt-5">
+              <section className="border-t border-koma-border pt-5" id="cart-discounts" tabIndex={-1}>
                 <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted mb-2.5">3. Descontos & Benefícios</h3>
                 
                 {/* Coupon Box */}
@@ -811,7 +864,8 @@ export default function CardapioCartDrawer({
                           setCouponCode(e.target.value.toUpperCase());
                           setCouponError("");
                         }}
-                        className="w-full pl-9 pr-3 py-2 bg-koma-card border border-koma-border rounded-xl text-xs font-mono font-bold uppercase text-koma-foreground placeholder:normal-case placeholder:font-normal focus:outline-none focus:border-emerald-500 tracking-wider"
+                        aria-label="Código do cupom"
+                        className="min-h-11 w-full pl-9 pr-3 py-2 bg-koma-card border border-koma-border rounded-xl text-base sm:text-xs font-mono font-bold uppercase text-koma-foreground placeholder:normal-case placeholder:font-normal focus:outline-none focus:border-emerald-500 tracking-wider"
                       />
                     </div>
                     <button
@@ -932,7 +986,7 @@ export default function CardapioCartDrawer({
               </section>
 
               {/* Section 5: Identification */}
-              <section className="border-t border-koma-border pt-5">
+              <section className="border-t border-koma-border pt-5" id="cart-identification" tabIndex={-1}>
                 <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">5. Identificação</h3>
                 {user ? (
                   <div className="mt-3 flex items-start gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-3.5">
@@ -977,12 +1031,6 @@ export default function CardapioCartDrawer({
                 )}
               </section>
 
-              {errorMessage && (
-                <div className="flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-[10px] font-semibold text-rose-400" role="alert" id="cart-checkout-error">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{errorMessage}</span>
-                </div>
-              )}
             </div>
 
             {/* Footer Summary & Action */}

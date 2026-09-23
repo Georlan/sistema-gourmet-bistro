@@ -130,6 +130,7 @@ export default function CardapioPage() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isOrdersDrawerOpen, setIsOrdersDrawerOpen] = useState(false);
   const [isBenefitsOpen, setIsBenefitsOpen] = useState(false);
+  const [couponToApply, setCouponToApply] = useState("");
   const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
   const [storedOrders, setStoredOrders] = useState<StoredOrder[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -808,7 +809,7 @@ export default function CardapioPage() {
         activeOrdersCount={activeOrders.length}
       />
 
-      <main className={clsx("mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6", cartCount > 0 && "has-mobile-cart")} id="catalog-section">
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6" id="catalog-section">
         {notice && !isCartOpen && !isCheckoutOpen && (
           <div
             className="fixed top-16 sm:top-20 left-1/2 z-[60] -translate-x-1/2 max-w-[calc(100vw-2rem)] rounded-full border border-emerald-500/30 bg-[#0d1612]/95 backdrop-blur-md px-4 py-2 text-center text-xs font-bold text-emerald-300 shadow-2xl animate-fade-in flex items-center gap-2 pointer-events-auto cursor-pointer"
@@ -1099,7 +1100,7 @@ export default function CardapioPage() {
           <button type="button" onClick={() => setIsBenefitsOpen(true)} aria-label="Abrir benefícios" id="mobile-nav-benefits">
             <Gift aria-hidden="true" /><span>Benefícios</span>
           </button>
-          <button type="button" onClick={openCart} aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`} id="mobile-nav-cart">
+          <button type="button" onClick={openCart} aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`} className={cartCount > 0 ? "has-items" : undefined} id="mobile-nav-cart">
             <ShoppingBag aria-hidden="true" /><span>Sacola</span>
             {cartCount > 0 && <small aria-hidden="true">{cartCount > 9 ? "9+" : cartCount}</small>}
           </button>
@@ -1128,7 +1129,8 @@ export default function CardapioPage() {
           brandConfig={activeBrand}
           allProducts={activeBrand.products}
           onAddToCart={handleAddToCart}
-          onClose={() => setIsCartOpen(false)}
+          initialCouponCode={couponToApply}
+          onClose={() => { setIsCartOpen(false); setCouponToApply(""); }}
           onUpdateQty={(itemId, quantity) => setCart((current) => quantity <= 0 ? current.filter((item) => item.id !== itemId) : current.map((item) => item.id === itemId ? { ...item, quantity } : item))}
           onRemoveItem={(itemId) => setCart((current) => current.filter((item) => item.id !== itemId))}
           onPlaceOrder={(request) => {
@@ -1170,6 +1172,15 @@ export default function CardapioPage() {
           setIsBenefitsOpen(false);
           setIsAuthOpen(true);
         }}
+        onUseCoupon={(code) => {
+          setCouponToApply(code);
+          setIsBenefitsOpen(false);
+          if (cart.length > 0) openCart();
+          else {
+            showNotification("Cupom guardado. Adicione um produto e abra a sacola para aplicar.");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        }}
       />
 
       {isCheckoutOpen && checkoutRequest && (
@@ -1197,6 +1208,7 @@ export default function CardapioPage() {
           }}
           onOrderSuccess={() => {
             setCart([]);
+            setCouponToApply("");
             setIsCartOpen(false);
             setIsCheckoutOpen(false);
             setCheckoutRequest(null);

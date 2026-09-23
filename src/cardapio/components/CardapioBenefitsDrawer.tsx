@@ -51,6 +51,7 @@ interface CardapioBenefitsDrawerProps {
   onClose: () => void;
   user?: BenefitsUser | null;
   onAuthClick: () => void;
+  onUseCoupon: (code: string) => void;
 }
 
 type BenefitsTab = "offers" | "credit" | "points";
@@ -81,6 +82,7 @@ export default function CardapioBenefitsDrawer({
   onClose,
   user,
   onAuthClick,
+  onUseCoupon,
 }: CardapioBenefitsDrawerProps) {
   const [activeTab, setActiveTab] = useState<BenefitsTab>("offers");
   const [data, setData] = useState<BenefitsResponse>({ cupons: [] });
@@ -222,6 +224,7 @@ export default function CardapioBenefitsDrawer({
                   <TicketPercent className="mx-auto h-7 w-7 text-koma-subtle" />
                   <p className="mt-3 text-xs font-black text-koma-foreground">Nenhuma oferta pública ativa agora.</p>
                   <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Quando o restaurante liberar uma condição especial, ela aparece aqui.</p>
+                  <button type="button" onClick={onClose} className="mt-4 min-h-11 w-full rounded-xl bg-emerald-500 px-4 text-xs font-black text-white">Voltar ao cardápio</button>
                 </div>
               ) : data.cupons.map((coupon) => {
                 const expiry = formatDate(coupon.valido_ate);
@@ -250,8 +253,9 @@ export default function CardapioBenefitsDrawer({
                       {coupon.valor_minimo_pedido > 0 && <p>Pedido a partir de <strong className="text-koma-secondary">{formatCurrency(coupon.valor_minimo_pedido)}</strong>.</p>}
                       {coupon.apenas_primeira_compra && <p>Válida para a primeira compra elegível.</p>}
                       {expiry && <p>Disponível até {expiry}.</p>}
-                      <p>Copie o código e aplique na sacola antes de finalizar.</p>
+                      <p>O desconto é conferido na sacola antes de finalizar.</p>
                     </div>
+                    <button type="button" onClick={() => onUseCoupon(coupon.codigo)} className="mt-4 min-h-11 w-full rounded-xl bg-emerald-500 px-4 text-xs font-black text-white">Usar na sacola</button>
                   </article>
                 );
               })}
