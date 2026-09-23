@@ -27,7 +27,7 @@ test("Super Admin Phase 2 usa o endpoint canônico de onboarding", () => {
 test("Super Admin Phase 2 usa o catálogo comercial oficial", () => {
   assert.match(onboardingModal, /SUBSCRIPTION_PLANS/);
   assert.match(tenantsTab, /SUBSCRIPTION_PLANS/);
-  assert.match(subscriptionPlans, /price:\s*39\.9,/);
+  assert.match(subscriptionPlans, /price:\s*39,/);
   assert.match(subscriptionPlans, /price:\s*129/);
   assert.match(subscriptionPlans, /price:\s*249/);
 

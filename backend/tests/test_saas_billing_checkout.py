@@ -18,7 +18,7 @@ from app.crypt import decrypt_field, encrypt_field
 from app.database import get_db
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
-from app.routes import contracts, saas_billing
+from app.routes import contracts, saas_billing, saas_pix
 from app.routes.super_admin_onboarding import restaurant_trials
 from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
 from app.services.billing_service import (
@@ -180,6 +180,7 @@ def client_and_session(monkeypatch):
     app.include_router(contracts.router)
     app.include_router(saas_billing.router)
     app.include_router(saas_billing.webhook_router)
+    app.include_router(saas_pix.contract_router)
 
     def override_get_db():
         db = Session()
@@ -312,54 +313,83 @@ def test_pocket_zero_rejects_paid_billing_setup_before_provider_call(client_and_
         assert db.query(SaaSSubscription).count() == 0
 
 
-def test_paid_plan_billing_uses_signed_vnext_amounts(client_and_session):
+@pytest.mark.parametrize(
+    ("plan", "cycle", "method", "expected_amount", "expected_frequency"),
+    [
+        ("pocket", "mensal", "credit_card", 39.0, 1),
+        ("pocket", "mensal", "account_money", 39.0, 1),
+        ("pocket", "anual", "credit_card", 421.20, 12),
+        ("pocket", "anual", "account_money", 421.20, 12),
+        ("pro", "mensal", "credit_card", 129.0, 1),
+        ("pro", "mensal", "account_money", 129.0, 1),
+        ("pro", "anual", "credit_card", 1393.20, 12),
+        ("pro", "anual", "account_money", 1393.20, 12),
+        ("premium", "mensal", "credit_card", 249.0, 1),
+        ("premium", "mensal", "account_money", 249.0, 1),
+        ("premium", "anual", "credit_card", 2689.20, 12),
+        ("premium", "anual", "account_money", 2689.20, 12),
+    ],
+)
+def test_paid_plan_billing_uses_signed_amount_and_cycle(
+    client_and_session, plan, cycle, method, expected_amount, expected_frequency
+):
     client, Session = client_and_session
     service = saas_billing.default_saas_mp_service
-
-    pocket_protocol = _accept(client, "pocket", "mensal")
-    free_activation = client.post(f"/api/contracts/{pocket_protocol}/billing/activate-free")
-    assert free_activation.status_code == 409
-    pocket = client.post(
-        f"/api/contracts/{pocket_protocol}/billing/setup",
-        json={"payment_method_type": "credit_card", "card_token_id": "tok_pocket"},
-    )
-    assert pocket.status_code == 200, pocket.text
-    assert pocket.json()["trialDays"] == 7
+    protocol = _accept(client, plan, cycle)
     with Session() as db:
-        pocket_setup = get_billing_setup(db, pocket_protocol)
-        assert pocket_setup is not None
-        assert pocket_setup.provider_subscription_id
-        pocket_subscription_id = pocket_setup.provider_subscription_id
-    pocket_mandate = service.get_preapproval(pocket_subscription_id)
-    assert pocket_mandate["auto_recurring"]["transaction_amount"] == 39.9
-
-    pro_protocol = _accept(client, "pro", "mensal")
-    pro = client.post(
-        f"/api/contracts/{pro_protocol}/billing/setup",
-        json={"payment_method_type": "credit_card", "card_token_id": "tok_pro"},
-    )
-    assert pro.status_code == 200, pro.text
+        acceptance = db.query(ContractAcceptance).filter_by(protocol=protocol).one()
+        receipt = json.loads(decrypt_field(acceptance.receipt_snapshot_encrypted))
+        assert float(receipt["commercial"]["billingAmount"]) == expected_amount
+        assert receipt["commercial"]["billingCycle"] == cycle
+    response = client.post(f"/api/contracts/{protocol}/billing/setup", json={
+        "payment_method_type": method,
+        **({"card_token_id": f"tok_{plan}_{cycle}"} if method == "credit_card" else {}),
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()["trialDays"] == 7
+    if method == "account_money":
+        assert response.json()["amountDueToday"] == 0
     with Session() as db:
-        pro_setup = get_billing_setup(db, pro_protocol)
-        assert pro_setup is not None
-        assert pro_setup.provider_subscription_id
-        pro_subscription_id = pro_setup.provider_subscription_id
-    pro_mandate = service.get_preapproval(pro_subscription_id)
-    assert pro_mandate["auto_recurring"]["transaction_amount"] == 129.0
+        setup = get_billing_setup(db, protocol)
+        assert setup is not None and setup.provider_subscription_id
+        mandate = service.get_preapproval(setup.provider_subscription_id)
+    recurring = mandate["auto_recurring"]
+    assert recurring["transaction_amount"] == expected_amount
+    assert recurring["frequency"] == expected_frequency
+    assert recurring["frequency_type"] == "months"
+    assert recurring["currency_id"] == "BRL"
+    assert recurring["free_trial"] == {"frequency": 7, "frequency_type": "days"}
 
-    premium_protocol = _accept(client, "premium", "mensal")
-    premium = client.post(
-        f"/api/contracts/{premium_protocol}/billing/setup",
-        json={"payment_method_type": "credit_card", "card_token_id": "tok_premium"},
-    )
-    assert premium.status_code == 200, premium.text
+
+@pytest.mark.parametrize(
+    ("plan", "cycle", "expected_amount", "expected_cycle"),
+    [
+        ("pocket", "mensal", 39.0, "monthly"),
+        ("pocket", "anual", 421.20, "annual"),
+        ("pro", "mensal", 129.0, "monthly"),
+        ("pro", "anual", 1393.20, "annual"),
+        ("premium", "mensal", 249.0, "monthly"),
+        ("premium", "anual", 2689.20, "annual"),
+    ],
+)
+def test_pix_selection_preserves_signed_amount_without_creating_payment(
+    client_and_session, monkeypatch, plan, cycle, expected_amount, expected_cycle
+):
+    client, Session = client_and_session
+    monkeypatch.setattr(saas_pix, "_pix_available", lambda: (True, {}))
+    protocol = _accept(client, plan, cycle)
+    response = client.post(f"/api/contracts/{protocol}/billing/pix/select")
+    assert response.status_code == 200, response.text
+    assert response.json()["trialDays"] == 7
     with Session() as db:
-        premium_setup = get_billing_setup(db, premium_protocol)
-        assert premium_setup is not None
-        assert premium_setup.provider_subscription_id
-        premium_subscription_id = premium_setup.provider_subscription_id
-    premium_mandate = service.get_preapproval(premium_subscription_id)
-    assert premium_mandate["auto_recurring"]["transaction_amount"] == 249.0
+        acceptance = db.query(ContractAcceptance).filter_by(protocol=protocol).one()
+        receipt = json.loads(decrypt_field(acceptance.receipt_snapshot_encrypted))
+        assert float(receipt["commercial"]["billingAmount"]) == expected_amount
+        setup = get_billing_setup(db, protocol)
+        assert setup is not None
+        assert setup.payment_method_type == "pix"
+        assert setup.billing_cycle == expected_cycle
+        assert setup.provider_subscription_id is None
 
 
 def test_card_authorization_waits_for_essential_setup_before_starting_trial(client_and_session):
@@ -614,3 +644,36 @@ def test_account_money_rejects_mismatched_payment_method(client_and_session, mon
     )
     assert webhook.status_code == 409
     assert "não é Saldo Mercado Pago" in webhook.text
+
+
+@pytest.mark.parametrize("wrong_frequency", [1, 6])
+def test_annual_account_money_rejects_wrong_provider_cycle(client_and_session, monkeypatch, wrong_frequency):
+    client, Session = client_and_session
+    protocol = _accept(client, "pro", "anual")
+    setup_response = client.post(
+        f"/api/contracts/{protocol}/billing/setup",
+        json={"payment_method_type": "account_money"},
+    )
+    assert setup_response.status_code == 200, setup_response.text
+    subscription_id = setup_response.json()["subscriptionId"]
+    service = saas_billing.default_saas_mp_service
+    original_get = service.get_preapproval
+
+    def wrong_cycle(sub_id):
+        mandate = original_get(sub_id)
+        return {
+            **mandate,
+            "auto_recurring": {**mandate["auto_recurring"], "frequency": wrong_frequency},
+        }
+
+    monkeypatch.setattr(service, "get_preapproval", wrong_cycle)
+    webhook = client.post(
+        "/api/integrations/saas-billing/mercado-pago/webhook",
+        json={"type": "subscription_preapproval", "data": {"id": subscription_id}},
+    )
+    assert webhook.status_code == 409
+    assert "ciclo diferente" in webhook.text
+    with Session() as db:
+        setup = get_billing_setup(db, protocol)
+        assert setup is not None and setup.status == "pending"
+        assert db.query(Restaurante).count() == 0

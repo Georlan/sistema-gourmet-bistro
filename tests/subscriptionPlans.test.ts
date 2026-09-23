@@ -13,7 +13,7 @@ import { Plans } from '../src/landing/sections/Plans';
 
 test('plan prices and split fees match the commercial catalog', () => {
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => [plan.id, plan.price, plan.splitFeeRate]), [
-    ['pocket', 39.9, 0.0179],
+    ['pocket', 39, 0.0179],
     ['pro', 129, 0.005],
     ['premium', 249, 0.002],
   ]);
@@ -22,18 +22,18 @@ test('plan prices and split fees match the commercial catalog', () => {
   ]);
 });
 
-test('Pocket has fixed revenue without online payments and crosses Pro near R$ 6.907 online', () => {
+test('Pocket has fixed revenue without online payments and crosses Pro near R$ 6.977 online', () => {
   const [pocket, pro] = SUBSCRIPTION_PLANS;
   const total = (price: number, rate: number, volume: number) => price + rate * volume;
-  assert.equal(total(pocket.price, pocket.splitFeeRate, 0), 39.9);
+  assert.equal(total(pocket.price, pocket.splitFeeRate, 0), 39);
   assert.ok(total(pocket.price, pocket.splitFeeRate, 5_000) < total(pro.price, pro.splitFeeRate, 5_000));
   assert.ok(total(pocket.price, pocket.splitFeeRate, 10_000) > total(pro.price, pro.splitFeeRate, 10_000));
-  assert.equal(Number(((pro.price - pocket.price) / (pocket.splitFeeRate - pro.splitFeeRate)).toFixed(2)), 6906.98);
+  assert.equal(Number(((pro.price - pocket.price) / (pocket.splitFeeRate - pro.splitFeeRate)).toFixed(2)), 6976.74);
 });
 
 test('annual totals and savings apply ten percent only to the fixed subscription', () => {
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => getSubscriptionPricing(plan.price)), [
-    { monthly: 39.9, annualMonthlyEquivalent: 35.91, annualTotal: 430.92, annualSavings: 47.88 },
+    { monthly: 39, annualMonthlyEquivalent: 35.1, annualTotal: 421.2, annualSavings: 46.8 },
     { monthly: 129, annualMonthlyEquivalent: 116.1, annualTotal: 1393.2, annualSavings: 154.8 },
     { monthly: 249, annualMonthlyEquivalent: 224.1, annualTotal: 2689.2, annualSavings: 298.8 },
   ]);
@@ -72,7 +72,7 @@ test('landing starts monthly, has no setup fee or addons, and shows all current 
   assert.ok(html.includes('MENOR TAXA'));
 
   for (const plan of SUBSCRIPTION_PLANS) {
-    assert.ok(html.includes(plan.id === 'pocket' ? '39,90 por mês' : `${plan.price},00 por mês`));
+    assert.ok(html.includes(`${plan.price},00 por mês`));
     assert.ok(html.includes(formatPercentage(plan.splitFeeRate)));
     for (const feature of plan.features) assert.ok(html.includes(feature));
   }
@@ -102,19 +102,22 @@ test('landing does not promise unrelated modules as part of the commercial offer
 });
 
 
-test('Pocket is monthly only while annual discount applies to Pro and Premium', () => {
-  const pocket = getSubscriptionPricing(39.9);
+test('annual discount applies to fixed price in Pocket, Pro and Premium', () => {
+  const pocket = getSubscriptionPricing(39);
   const pro = getSubscriptionPricing(129);
   const premium = getSubscriptionPricing(249);
-  assert.equal(pocket.monthly, 39.9);
+  assert.equal(pocket.monthly, 39);
+  assert.equal(pocket.annualTotal, 421.2);
+  assert.equal(pocket.annualMonthlyEquivalent, 35.1);
+  assert.equal(pocket.annualSavings, 46.8);
   assert.equal(pro.annualTotal, 1393.2);
   assert.equal(pro.annualMonthlyEquivalent, 116.1);
   assert.equal(premium.annualTotal, 2689.2);
   assert.equal(premium.annualMonthlyEquivalent, 224.1);
 
   const html = renderToStaticMarkup(createElement(Plans));
-  assert.ok(html.includes('Cobrança mensal'));
-  assert.ok(html.includes('sem opção anual'));
+  assert.ok(html.includes('Sem taxa de implantação'));
+  assert.ok(html.includes('1,79%'));
   assert.ok(html.includes('Seu restaurante cresceu. Sua taxa diminui.'));
   assert.ok(html.includes('Mais volume, menor taxa.'));
 });

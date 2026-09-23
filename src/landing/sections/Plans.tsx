@@ -86,7 +86,7 @@ export function Plans() {
         </div>
         <p>
           {isYearly
-            ? `Pro e Premium: valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto somente no componente fixo. O Pocket permanece mensal, sem opção anual.`
+            ? `Pocket, Pro e Premium: valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto somente no componente fixo. A taxa KÔMA por pedido online não muda.`
             : 'Pague mês a mês, sem taxa de implantação.'}
         </p>
       </div>
@@ -99,8 +99,7 @@ export function Plans() {
       <div className="koma-plans-grid koma-plans-grid--simple">
         {SUBSCRIPTION_PLANS.map((plan) => {
           const pricing = getSubscriptionPricing(plan.price);
-          const hasAnnualFixedPlan = plan.id !== 'pocket';
-          const displayPrice = isYearly && hasAnnualFixedPlan ? pricing.annualMonthlyEquivalent : pricing.monthly;
+          const displayPrice = isYearly ? pricing.annualMonthlyEquivalent : pricing.monthly;
           const presentation = PLAN_PRESENTATION[plan.id];
           const planLabel = plan.name.replace('Kôma ', '').toUpperCase();
 
@@ -117,24 +116,22 @@ export function Plans() {
               <p className="koma-plan-tagline">{plan.tagline}</p>
               <p className="koma-plan-fit"><b>PARA QUEM É</b>{presentation.fit}</p>
 
-              <div className="koma-plan-price" aria-label={`${formatCurrency(displayPrice)} por mês${isYearly && hasAnnualFixedPlan ? ', equivalente no plano anual' : ''}`}>
+              <div className="koma-plan-price" aria-label={`${formatCurrency(displayPrice)} por mês${isYearly ? ', equivalente no plano anual' : ''}`}>
                 <span>R$</span>
                 <strong>
                   {displayPrice.toLocaleString('pt-BR', {
-                    minimumFractionDigits: isYearly && hasAnnualFixedPlan ? 2 : 0,
+                    minimumFractionDigits: isYearly ? 2 : 0,
                     maximumFractionDigits: 2,
                   })}
                 </strong>
-                <small>{isYearly && hasAnnualFixedPlan ? '/mês equiv.' : '/mês'}</small>
+                <small>{isYearly ? '/mês equiv.' : '/mês'}</small>
               </div>
               <p className="koma-plan-billing-note">
-                {isYearly && hasAnnualFixedPlan
+                {isYearly
                   ? `${formatCurrency(pricing.annualTotal)} por ano · condições de pagamento exibidas na contratação`
-                  : plan.id === 'pocket'
-                    ? 'Cobrança mensal · sem opção anual'
-                    : 'Sem taxa de implantação'}
+                  : 'Sem taxa de implantação'}
               </p>
-              {isYearly && hasAnnualFixedPlan && (
+              {isYearly && (
                 <p className="koma-plan-savings is-active">
                   ECONOMIZE {formatCurrency(pricing.annualSavings)} POR ANO
                 </p>
@@ -175,7 +172,7 @@ export function Plans() {
               </div>
 
               <a
-                href={`/contratar/${plan.id}?cobranca=${plan.id === 'pocket' ? 'mensal' : billing}`}
+                href={`/contratar/${plan.id}?cobranca=${billing}`}
                 className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}
               >
                 CONTRATAR {planLabel}

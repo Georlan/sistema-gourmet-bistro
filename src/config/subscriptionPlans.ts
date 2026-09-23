@@ -12,7 +12,7 @@ export interface SubscriptionPlan {
 }
 
 export const ANNUAL_DISCOUNT_RATE = 0.1;
-export const COMMERCIAL_PRICING_VERSION = '2026-09-pocket-3990';
+export const COMMERCIAL_PRICING_VERSION = '2026-09-pocket-annual';
 
 export function getSubscriptionPricing(monthlyPrice: number) {
   const monthlyPriceInCents = Math.round(monthlyPrice * 100);
@@ -47,9 +47,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'pocket',
     name: 'Kôma Pocket',
-    price: 39.9,
+    price: 39,
     splitFeeRate: 0.0179,
-    tagline: 'Comece com o essencial por R$ 39,90/mês.',
+    tagline: 'Comece com o essencial por R$ 39/mês.',
     features: [
       'Mesas, comandas e balcão',
       'Cardápio digital e QR Code com pedidos no PDV',

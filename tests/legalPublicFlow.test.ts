@@ -7,7 +7,9 @@ const legacyLegalContent = readFileSync('src/legal/legalContentLegacy.ts', 'utf8
 const legalV2 = readFileSync('src/legal/legalContentV2.ts', 'utf8');
 const legalV25 = readFileSync('src/legal/legalContentRecurring.ts', 'utf8');
 const legalV26 = readFileSync('src/legal/legalContentV26.ts', 'utf8');
-const legalContent = readFileSync('src/legal/legalContentV27.ts', 'utf8');
+const legalV27 = readFileSync('src/legal/legalContentV27.ts', 'utf8');
+const legalV28 = readFileSync('src/legal/legalContentV28.ts', 'utf8');
+const legalContent = readFileSync('src/legal/legalContentV29.ts', 'utf8');
 const legalEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const legalPage = readFileSync('src/legal/LegalPage.tsx', 'utf8');
 const planContract = readFileSync('src/legal/PlanContractPageV2.tsx', 'utf8');
@@ -24,7 +26,7 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal preserva snapshots 2.0 e 2.5 e publica fachada vigente 2.7', () => {
+test('central legal preserva snapshots anteriores e publica fachada vigente 2.9', () => {
   for (const slug of ['termos','planos','privacidade','dpa','suboperadores','cookies','cardapio-termos','cardapio-privacidade']) {
     assert.match(legalV2, new RegExp(`slug: '${slug}'`));
   }
@@ -32,17 +34,19 @@ test('central legal preserva snapshots 2.0 e 2.5 e publica fachada vigente 2.7',
   assert.match(legalV25, /LEGAL_VERSION = '2\.5'/);
   assert.match(legalV25, /15\/09\/2026/);
   assert.match(legalV26, /LEGAL_VERSION = '2\.6'/);
-  assert.match(legalContent, /LEGAL_VERSION = '2\.7'/);
+  assert.match(legalV27, /LEGAL_VERSION = '2\.7'/);
+  assert.match(legalV28, /LEGAL_VERSION = '2\.8'/);
+  assert.match(legalContent, /LEGAL_VERSION = '2\.9'/);
   assert.match(legalV26, /18\/09\/2026/);
   assert.match(legalContent, /23\/09\/2026/);
   assert.match(legalContent, /from '\.\/legalContentRecurring'/);
   assert.match(legacyLegalContent, /LEGAL_VERSION = '1\.2'/);
-  assert.match(legalPage, /legalContentV27/);
+  assert.match(legalPage, /legalContentV29/);
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
 });
 
-test('Legal 2.7 documenta Pocket pago e preserva contratos anteriores gratuitos', () => {
-  assert.match(legalContent, /mensalidade fixa de R\$ 39,90/);
+test('Legal 2.9 documenta Pocket pago e preserva contratos anteriores gratuitos', () => {
+  assert.match(legalContent, /mensalidade fixa de R\$ 39,00/);
   assert.match(legalV26, /mensalidade fixa é R\$ 0/);
   assert.match(legalContent, /não criam recorrência de valor zero no provedor/);
   assert.match(legalContent, /cartão de crédito, Pix por QR Code e Pix Copia e Cola interoperável e Saldo Mercado Pago/);
@@ -51,7 +55,7 @@ test('Legal 2.7 documenta Pocket pago e preserva contratos anteriores gratuitos'
   assert.match(legalV2, /O WhatsApp não é requisito/);
 });
 
-test('Legal 2.7 herda a política 18+ da Legal 2.5', () => {
+test('Legal 2.9 herda a política 18+ da Legal 2.5', () => {
   assert.match(legalV25, /cardápio e o checkout online não são canais destinados à oferta de bebidas alcoólicas/);
   assert.match(legalV25, /tag 18\+ ou classificação equivalente/);
   assert.match(legalV25, /gate de publicação e sincronização/);
@@ -93,8 +97,8 @@ test('checkout reconhece cartão Pix universal e Saldo Mercado Pago', () => {
   assert.match(planContract, /payment-methods-v2/);
 });
 
-test('proveniência jurídica fixa commit e blob da Legal 2.7 sem documento fiscal pessoal', () => {
-  assert.match(legalEvidence, /legalContentV27/);
+test('proveniência jurídica fixa commit e blob da Legal 2.9 sem documento fiscal pessoal', () => {
+  assert.match(legalEvidence, /legalContentV29/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /requireDocument\('termos'\)/);
@@ -113,8 +117,8 @@ test('segunda via reproduz o snapshot aceito sem confundir com a versão públic
   assert.doesNotMatch(contractDocumentsPanel, />\{label\}\s*<ExternalLink/);
 });
 
-test('landing não privilegia Pocket e envia cada plano para sua própria contratação', () => {
-  assert.match(plans, /plan\.id === 'pocket' \? 'mensal' : billing/);
+test('landing envia cada plano e ciclo para sua própria contratação', () => {
+  assert.match(plans, /cobranca=\$\{billing\}/);
   assert.match(plans, /CONTRATAR \{planLabel\}/);
   assert.match(header, /href="\/#planos"/);
   assert.doesNotMatch(header, /href="\/landing#planos"/);
@@ -126,8 +130,12 @@ test('landing não privilegia Pocket e envia cada plano para sua própria contra
   assert.match(finalCta, /href="\/legal\/privacidade"/);
 });
 
-test('condições comerciais 2.7 publicam Pocket pago sem apagar o snapshot 2.6', () => {
-  assert.match(legalContent, /Pocket: R\$ 39,90 por mês \+ 1,79%/);
+test('condições comerciais 2.9 publicam Pocket anual sem apagar snapshots anteriores', () => {
+  assert.match(legalContent, /Pocket: R\$ 39,00 por mês \+ 1,79%/);
+  assert.match(legalContent, /Pocket R\$ 421,20 por ano/);
+  assert.match(legalContent, /R\$ 35,10 por mês/);
+  assert.match(legalV28, /apenas no ciclo mensal, sem opção anual/);
+  assert.match(legalV27, /Pocket: R\$ 39,90 por mês \+ 1,79%/);
   assert.match(legalV26, /Pocket: R\$ 0 por mês \+ 1,79%/);
   assert.match(legalContent, /Pro: R\$ 129 por mês \+ 0,50%/);
   assert.match(legalContent, /Premium: R\$ 249 por mês \+ 0,20%/);

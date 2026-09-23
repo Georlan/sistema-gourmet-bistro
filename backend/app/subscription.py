@@ -10,7 +10,7 @@ logger = logging.getLogger("koma.subscription")
 VALID_SUBSCRIPTION_PLANS = {"pocket", "pro", "premium"}
 LEGACY_PREMIUM_PLANS = {"bistro", "delivery", "gold", "platinum"}
 ANNUAL_DISCOUNT_RATE = Decimal("0.10")
-COMMERCIAL_PRICING_VERSION = "2026-09-pocket-3990"
+COMMERCIAL_PRICING_VERSION = "2026-09-pocket-annual"
 
 # Catálogo comercial vigente para NOVAS contratações.
 #
@@ -18,7 +18,7 @@ COMMERCIAL_PRICING_VERSION = "2026-09-pocket-3990"
 # em vigor. Elas nunca devem ser usadas, isoladamente, para recalcular os termos de
 # um tenant que já aceitou um contrato.
 SUBSCRIPTION_MONTHLY_PRICES: dict[str, Decimal] = {
-    "pocket": Decimal("39.90"),
+    "pocket": Decimal("39.00"),
     "pro": Decimal("129.00"),
     "premium": Decimal("249.00"),
 }
