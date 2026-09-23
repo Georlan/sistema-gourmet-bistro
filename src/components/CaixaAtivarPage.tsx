@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Lock, Mail, CheckCircle, AlertCircle, ShieldCheck } from 'lucide-react';
 import clsx from 'clsx';
 import { API_BASE_URL } from '../config/api';
@@ -19,16 +19,7 @@ function bootstrapInvitationToken(tokenProp?: string | null): string {
   const fragmentToken = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('token')?.trim() || '';
   // Compatibilidade temporária para convites emitidos antes da migração para fragment.
   const legacyQueryToken = new URLSearchParams(window.location.search).get('token')?.trim() || '';
-  const token = fragmentToken || tokenProp?.trim() || legacyQueryToken;
-
-  if (fragmentToken || legacyQueryToken) {
-    const query = new URLSearchParams(window.location.search);
-    query.delete('token');
-    const safeQuery = query.toString();
-    const safeUrl = `${window.location.pathname}${safeQuery ? `?${safeQuery}` : ''}`;
-    window.history.replaceState(null, '', safeUrl);
-  }
-  return token;
+  return fragmentToken || tokenProp?.trim() || legacyQueryToken;
 }
 
 function existingManagementSession(): ActivatedSession | null {
@@ -44,6 +35,18 @@ function existingManagementSession(): ActivatedSession | null {
 
 export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
   const [tokenConvite] = useState(() => bootstrapInvitationToken(token));
+  useEffect(() => {
+    // A leitura do token precisa ser pura: React pode inicializar o componente
+    // duas vezes antes dos efeitos, inclusive no primeiro acesso em StrictMode.
+    const hasTokenInUrl = new URLSearchParams(window.location.hash.replace(/^#/, '')).has('token')
+      || new URLSearchParams(window.location.search).has('token');
+    if (!tokenConvite || !hasTokenInUrl) return;
+    const query = new URLSearchParams(window.location.search);
+    query.delete('token');
+    const safeQuery = query.toString();
+    const safeUrl = `${window.location.pathname}${safeQuery ? `?${safeQuery}` : ''}`;
+    window.history.replaceState(null, '', safeUrl);
+  }, [tokenConvite]);
   const [resumeRequested] = useState(() => new URLSearchParams(window.location.search).get('resume') === '1');
   const [resumableSession] = useState<ActivatedSession | null>(() => existingManagementSession());
 

@@ -106,6 +106,10 @@ test('onboarding status request cannot trap first access in infinite loading', (
   assert.match(onboarding, /signal: controller\.signal/);
   assert.match(onboarding, /A implantação demorou para responder/);
   assert.match(onboarding, /clearTimeout\(timeoutId\)/);
+  assert.match(gateHook, /ONBOARDING_GATE_TIMEOUT_MS = 10_000/);
+  assert.match(gateHook, /setTimeout\(\(\) => controller\.abort\(\), ONBOARDING_GATE_TIMEOUT_MS\)/);
+  assert.match(gateHook, /if \(cancelled\) return;\s*setRequiredComplete\(false\);\s*setState\('error'\)/);
+  assert.match(gateHook, /clearTimeout\(timeoutId\)/);
 });
 
 test('onboarding uses canonical server progress, canonical modes and optional Mercado Pago', () => {

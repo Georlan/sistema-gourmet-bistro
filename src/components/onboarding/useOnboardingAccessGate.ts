@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { API_BASE_URL } from '../../config/api';
 
 type GateState = 'idle' | 'loading' | 'ready' | 'error';
+const ONBOARDING_GATE_TIMEOUT_MS = 10_000;
 
 type OnboardingProgressPayload = {
   progress?: {
@@ -32,6 +33,7 @@ export function useOnboardingAccessGate({
 
     const controller = new AbortController();
     let cancelled = false;
+    const timeoutId = window.setTimeout(() => controller.abort(), ONBOARDING_GATE_TIMEOUT_MS);
     setState('loading');
 
     void fetch(`${API_BASE_URL}/api/onboarding/status`, {
@@ -57,13 +59,17 @@ export function useOnboardingAccessGate({
         setState('ready');
       })
       .catch((error) => {
-        if (cancelled || (error instanceof DOMException && error.name === 'AbortError')) return;
+        if (cancelled) return;
         setRequiredComplete(false);
         setState('error');
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
       });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
       controller.abort();
     };
   }, [accessToken, enabled]);

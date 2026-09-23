@@ -104,8 +104,8 @@ export function CashierPrintingSettings({
             <Lock size={24} className="text-amber-400 mx-auto" />
             <h4 className="text-koma-foreground font-bold">Impressão não incluída no Kôma Pocket</h4>
             <p className="text-[11px] text-koma-subtle leading-relaxed">
-              App do Garçom e Taxa de Serviço continuam disponíveis nas abas acima. Migre para o Kôma Pro ou
-              Premium para liberar impressão automática e monitoramento de fila.
+              O Pocket acompanha o preparo pela tela, sem impressora. Migre para o Kôma Pro ou Premium para
+              liberar impressão automática e monitoramento de fila.
             </p>
             <button
               type="button"

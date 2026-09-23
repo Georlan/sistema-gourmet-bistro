@@ -1,16 +1,19 @@
 import { expect, test } from '@playwright/test';
 
-test('primeiro acesso aceita PDF para implantação assistida sem exigir JSON do restaurante', async ({ page }) => {
+test('primeiro acesso Pocket aceita PDF para implantação assistida sem exigir JSON do restaurante', async ({ page }) => {
   let assistance: null | { id: string; filename: string; status: string } = null;
   await page.route('**/auth/ativar', route => route.fulfill({ json: { access_token: 'test-operator', usuario: { id: 'admin', cargo: 'admin', role: 'admin', nome: 'Ana', restaurante_id: 1 } } }));
   await page.route('**/api/subscription', route => route.fulfill({ json: { subscription: null } }));
   await page.route('**/api/onboarding/status', route => route.fulfill({ json: {
-    restaurant: { id: '1', name: 'Bistrô Novo', slug: 'bistro', plan: 'pro' },
+    restaurant: { id: '1', name: 'Bistrô Novo', slug: 'bistro', plan: 'pocket' },
     trial: { status: 'active', startsAt: null, endsAt: null, daysRemaining: 7 }, payments: { mercadoPagoConnected: false },
+    trialCanStart: false,
     counts: { products: 0, orders: 0 },
+    operations: { configured: false, ready: false, legacyPolicy: false, orderTypes: [], tableMapEnabled: false, serviceChargeEnabled: false, serviceChargePercent: 0, blockers: ['order_types'] },
     catalogAssistance: assistance ? { ...assistance, contentType: 'application/pdf', fileSize: 30, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : null,
-    steps: { profile: false, hours: false, catalog: false, mercadoPago: false, firstOrder: false },
-    progress: { completed: 0, total: 3, percent: 0 },
+    steps: { profile: false, hours: false, catalog: false, operations: false, mercadoPago: false, firstOrder: false },
+    progress: { completed: 0, total: 4, percent: 0 },
+    readiness: { configurationComplete: false, trialStarted: true, readyToOperate: false, blockers: ['profile', 'hours', 'catalog', 'operations'] },
   } }));
   await page.route('**/api/onboarding/catalog-assistance', async route => {
     assistance = { id: 'assist-1', filename: 'cardapio.pdf', status: 'pending' };
@@ -34,6 +37,6 @@ test('primeiro acesso aceita PDF para implantação assistida sem exigir JSON do
 
   await expect(page.getByText('Recebido pela equipe KÔMA')).toBeVisible();
   await expect(page.getByText('cardapio.pdf')).toBeVisible();
-  await expect(page.getByText('0 de 3 passos detectados como concluídos')).toBeVisible();
+  await expect(page.getByText('0 de 4 itens essenciais concluídos')).toBeVisible();
   await expect(page.getByText(/passo só fica pronto quando os produtos forem realmente publicados/i)).toBeVisible();
 });
