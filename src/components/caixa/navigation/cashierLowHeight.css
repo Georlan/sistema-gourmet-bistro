@@ -183,7 +183,45 @@
  * targets so they cannot squeeze or overlap the title on narrow phones.
  * Topbar + subnav stay pinned while the operational content scrolls.
  */
+/* cashier-content is a size container and therefore its own stacking context.
+ * Raise it only while a modal is open, so fixed cashier chrome cannot cover
+ * the modal title and fields on phones and touch tablets. */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  .cashier-content:has(.fixed.inset-0) {
+    z-index: 80;
+  }
+}
+
 @media (max-width: 639px) {
+  .cashier-product-modal {
+    overscroll-behavior-y: contain;
+    scroll-padding-top: 5rem;
+  }
+
+  .cashier-product-modal label[for] {
+    font-size: 0.75rem;
+  }
+
+  .cashier-product-modal input:not([type="file"]),
+  .cashier-product-modal select,
+  .cashier-product-modal textarea {
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+
+  .cashier-product-modal select {
+    min-width: 0;
+  }
+
+  .cashier-product-modal p {
+    font-size: 0.6875rem;
+    line-height: 1.4;
+  }
+
+  .cashier-product-modal button[aria-label="Criar nova categoria"] {
+    min-height: 2.75rem;
+  }
+
   .cashier-topbar {
     position: sticky;
     top: 0;

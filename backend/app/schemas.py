@@ -2,6 +2,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from typing import Any, List, Literal, Optional, Union
 from datetime import datetime
 import uuid
+from .services.operational_modes import normalize_active_order_types
 
 # ----------------- AUTHENTICATION -----------------
 class LoginRequest(BaseModel):
@@ -525,10 +526,28 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     mapa_mesas_ativo: bool
     delivery_ativo: bool
     tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
+
+    @field_validator("tipos_pedido_ativos", mode="before")
+    @classmethod
+    def normalize_legacy_order_types(cls, value):
+        return normalize_active_order_types(value)
+
     taxa_servico_ativa: bool
     taxa_servico_padrao: float
+
+    @field_validator("taxa_servico_padrao", mode="before")
+    @classmethod
+    def default_legacy_service_tax(cls, value):
+        return 10.0 if value is None else value
+
     meta_mensal: Optional[float] = 0.0
     unificar_vias_delivery: bool
+
+    @field_validator("unificar_vias_delivery", mode="before")
+    @classmethod
+    def default_legacy_delivery_printing(cls, value):
+        return False if value is None else value
+
     impressao_nome_restaurante: Optional[str] = None
     impressao_nome_posicao: Literal["cabecalho", "rodape", "oculto"] = "cabecalho"
     impressao_mensagem_rodape: Optional[str] = None
@@ -868,6 +887,12 @@ class CardapioPublicRestaurantResponse(BaseModel):
     formas_pagamento_aceitas: Optional[Any] = None
     pagamento_online_ativo: bool = False
     tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
+
+    @field_validator("tipos_pedido_ativos", mode="before")
+    @classmethod
+    def normalize_legacy_order_types(cls, value):
+        return normalize_active_order_types(value)
+
     delivery_ativo: bool = True
     cor_primaria: Optional[str] = "#00b894"
     cor_fundo: Optional[str] = "#090a0f"

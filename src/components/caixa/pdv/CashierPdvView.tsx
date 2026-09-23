@@ -911,7 +911,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               <button
                 type="button"
                 onClick={() => setBalcaoMobileView('carrinho')}
-                className={"xl:hidden fixed bottom-4 left-4 right-4 z-40 py-3 px-5 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] font-bold rounded-2xl shadow-2xl flex items-center justify-between border border-[#4fe0bc]/30 animate-fade-in cursor-pointer"}
+                className={"xl:hidden fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:bottom-4 left-4 right-4 z-40 min-h-12 py-3 px-5 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] font-bold rounded-2xl shadow-2xl flex items-center justify-between border border-[#4fe0bc]/30 animate-fade-in cursor-pointer"}
               >
                 <span className={"text-xs flex items-center gap-2"}>
                   <ShoppingCart size={16} />
