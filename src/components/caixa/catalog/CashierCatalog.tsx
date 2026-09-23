@@ -317,7 +317,7 @@ export default function CashierCatalog({
             role="dialog"
             aria-modal="true"
             aria-labelledby="product-modal-title"
-            className={"w-full h-[100dvh] sm:h-auto max-w-xl max-h-[100dvh] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto bg-koma-card border-0 sm:border border-koma-border rounded-none sm:rounded-3xl px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-0 sm:p-6 space-y-4 text-left shadow-2xl relative animate-scale-in cursor-default"}
+            className={"cashier-product-modal w-full h-[100dvh] sm:h-auto max-w-xl max-h-[100dvh] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto bg-koma-card border-0 sm:border border-koma-border rounded-none sm:rounded-3xl px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-0 sm:p-6 space-y-4 text-left shadow-2xl relative animate-scale-in cursor-default"}
           >
             <div className={"sticky top-0 z-20 -mx-4 flex min-h-16 items-center justify-between border-b border-koma-border bg-koma-card/95 px-4 py-3 backdrop-blur-md sm:static sm:mx-0 sm:min-h-0 sm:bg-transparent sm:px-0 sm:pb-2 sm:pt-0"}>
               <div>
@@ -693,14 +693,14 @@ export default function CashierCatalog({
                 <button
                   type="button"
                   onClick={() => setShowProductModal(false)}
-                  className={"flex-1 py-2 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-foreground rounded-xl font-bold cursor-pointer transition-colors"}
+                  className={"flex-1 min-h-11 py-2 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-foreground rounded-xl font-bold cursor-pointer transition-colors"}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isLoading || apiCategorias.length === 0}
-                  className={"flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors disabled:opacity-50"}
+                  className={"flex-1 min-h-11 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors disabled:opacity-50"}
                 >
                   {isLoading ? 'Salvando…' : editingProduct ? 'Salvar alterações' : 'Criar produto'}
                 </button>

@@ -19,6 +19,8 @@ def normalize_active_order_types(raw: object) -> list[str] | None:
     normalized: list[str] = []
     for value in raw:
         item = str(value or "").strip().lower()
+        if item in {"balcao", "balcão"}:
+            item = "retirada"
         if item in allowed and item not in normalized:
             normalized.append(item)
     return normalized
