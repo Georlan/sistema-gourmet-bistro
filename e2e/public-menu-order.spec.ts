@@ -166,32 +166,37 @@ async function expectNoHorizontalOverflow(page: Page) {
 
 async function openCart(page: Page) {
   if (!(await page.locator('#cart-drawer-container').isVisible().catch(() => false))) {
-    await page.locator('#floating-cart-trigger').click();
+    const mobileCart = page.locator('#mobile-nav-cart');
+    if (await mobileCart.isVisible()) await mobileCart.click();
+    else await page.locator('#floating-cart-trigger').click();
   }
   await expect(page.getByRole('heading', { name: 'Sua sacola', exact: true })).toBeVisible();
 }
 
-test('sacola abre no primeiro toque real mesmo com o atalho de pedidos e chat visível', async ({ page }, testInfo) => {
+test('sacola abre no primeiro toque real pela navegação móvel', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-390', 'Regressão de toque coberta no viewport mobile com touch real.');
 
   await mockPublicMenuBackend(page, []);
   await page.goto('/cardapio?restaurante_id=2');
   await page.locator('#btn-fast-add-101').tap();
 
-  const cartTrigger = page.locator('#floating-cart-trigger');
-  const chatTrigger = page.locator('#floating-order-chat-trigger');
+  const cartTrigger = page.locator('#mobile-nav-cart');
+  const mobileNav = page.locator('#cardapio-mobile-nav');
   await expect(cartTrigger).toBeVisible();
-  await expect(chatTrigger).toBeVisible();
+  await expect(mobileNav).toBeVisible();
+  await expect(page.locator('#floating-cart-trigger')).toBeHidden();
+  await expect(page.locator('#floating-order-chat-trigger')).toBeHidden();
 
   const cartBox = await cartTrigger.boundingBox();
-  const chatBox = await chatTrigger.boundingBox();
+  const navBox = await mobileNav.boundingBox();
   expect(cartBox).not.toBeNull();
-  expect(chatBox).not.toBeNull();
-  expect(chatBox!.y + chatBox!.height).toBeLessThanOrEqual(cartBox!.y - 4);
+  expect(navBox).not.toBeNull();
+  expect(cartBox!.y).toBeGreaterThanOrEqual(navBox!.y);
+  expect(cartBox!.y + cartBox!.height).toBeLessThanOrEqual(navBox!.y + navBox!.height);
 
   const hitTarget = await page.evaluate(({ x, y }) => {
     const node = document.elementFromPoint(x, y);
-    return Boolean(node?.closest('#floating-cart-trigger'));
+    return Boolean(node?.closest('#mobile-nav-cart'));
   }, {
     x: cartBox!.x + cartBox!.width / 2,
     y: cartBox!.y + cartBox!.height / 2,
@@ -591,7 +596,7 @@ test('cliente consegue acompanhar múltiplos pedidos e alternar entre eles', asy
   await expect(page.getByRole('heading', { name: 'Aguardando aceite' })).toBeVisible();
 
   // Abre a gaveta de Meus Pedidos pelo header
-  await page.locator('#btn-my-orders-header').click();
+  await page.locator((page.viewportSize()?.width || 0) <= 640 ? '#mobile-nav-orders' : '#btn-my-orders-header').click();
   await expect(page.locator('#orders-drawer-panel')).toBeVisible();
   await expect(page.getByText('Meus Pedidos', { exact: true })).toBeVisible();
   await expect(page.getByText('Em andamento (2)')).toBeVisible();

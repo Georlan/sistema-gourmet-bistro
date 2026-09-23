@@ -124,6 +124,15 @@ async function expectInsideViewport(page: Page, selector: string) {
   expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width + 1);
 }
 
+async function openOrderChat(page: Page) {
+  if ((page.viewportSize()?.width || 0) <= 640) {
+    await page.locator('#mobile-nav-orders').click();
+    await page.locator('#orders-drawer-panel').getByRole('button', { name: /Abrir mensagem|Chat & Status/ }).first().click();
+  } else {
+    await page.locator('#floating-order-chat-trigger').click();
+  }
+}
+
 for (const viewport of [
   { name: 'desktop', width: 1280, height: 800 },
   { name: 'mobile-390', width: 390, height: 844 },
@@ -136,16 +145,22 @@ for (const viewport of [
 
     await page.goto('/cardapio?restaurante_id=2');
 
-    const trigger = page.locator('#floating-order-chat-trigger');
+    const mobile = viewport.width <= 640;
+    const trigger = page.locator(mobile ? '#mobile-nav-orders' : '#floating-order-chat-trigger');
     await expect(trigger).toBeVisible();
-    await expect(trigger).toContainText('Pedido #4321');
-    await expect(trigger).toContainText('Nova mensagem');
-    await expectInsideViewport(page, '#floating-order-chat-trigger');
+    if (mobile) {
+      await expect(trigger).toContainText('Pedidos');
+      await expect(page.locator('#floating-order-chat-trigger')).toBeHidden();
+    } else {
+      await expect(trigger).toContainText('Pedido #4321');
+      await expect(trigger).toContainText('Nova mensagem');
+    }
+    await expectInsideViewport(page, mobile ? '#mobile-nav-orders' : '#floating-order-chat-trigger');
 
     const pageOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(pageOverflow).toBeLessThanOrEqual(1);
 
-    await trigger.click();
+    await openOrderChat(page);
     const drawer = page.locator('#orders-drawer-panel');
     await expect(drawer).toBeVisible();
     await expectInsideViewport(page, '#orders-drawer-panel');
@@ -237,7 +252,7 @@ test('Pix pendente prioriza pagamento no chat antes do andamento operacional', a
   await expect(page.getByText('Primeiro: confirme o Pix', { exact: true })).toBeVisible();
   await expect(page.getByText('O pedido entrou na operação e está aguardando o aceite do restaurante.', { exact: true })).toHaveCount(0);
 
-  await page.locator('#floating-order-chat-trigger').click();
+  await openOrderChat(page);
   const panel = page.locator('#inline-order-chat-panel');
   await expect(panel.getByText('Status do pagamento', { exact: true })).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Pagar Pix', exact: true })).toBeVisible();
@@ -269,7 +284,7 @@ test('feed preserva evento separado e retry HTTP reutiliza UUID sem duplicar men
     await route.fulfill({ json: feed });
   });
   await page.goto('/cardapio?restaurante_id=2');
-  await page.locator('#floating-order-chat-trigger').click();
+  await openOrderChat(page);
   const panel = page.locator('#inline-order-chat-panel');
   await expect(panel.getByText('Pedido confirmado no feed.')).toBeVisible();
   await panel.getByPlaceholder('Escreva para o restaurante…').fill('Sem cebola, por favor.');

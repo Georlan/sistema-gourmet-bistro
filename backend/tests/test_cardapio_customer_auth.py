@@ -12,6 +12,7 @@ from app.models import (
     Produto,
     PublicRateLimit,
     OtpChallenge,
+    Comanda,
     Restaurante,
     Usuario,
 )
@@ -81,8 +82,16 @@ def setup_db():
             db.add(rest2)
             db.commit()
 
-        # Limpar clientes e rate limits de teste
-        db.query(Cliente).filter(Cliente.restaurante_id.in_([101, 102])).delete(synchronize_session=False)
+        # Preservar clientes ainda ligados a comandas; pedidos públicos criam
+        # identidade sem senha, mas não verificam o telefone.
+        linked_customers = db.query(Comanda.cliente_id).filter(
+            Comanda.restaurante_id.in_([101, 102]),
+            Comanda.cliente_id.isnot(None),
+        )
+        db.query(Cliente).filter(
+            Cliente.restaurante_id.in_([101, 102]),
+            ~Cliente.id.in_(linked_customers),
+        ).delete(synchronize_session=False)
         db.query(PublicRateLimit).filter(PublicRateLimit.restaurante_id.in_([101, 102])).delete(synchronize_session=False)
         db.commit()
     finally:
@@ -431,7 +440,12 @@ def test_guest_checkout_remains_unblocked_without_account():
         assert comanda is not None
         assert comanda.identificador == "Visitante Sem Conta"
         assert comanda.delivery_telefone == "11933332222"
-        assert comanda.cliente_id is None
+        cliente = db.query(Cliente).filter(
+            Cliente.restaurante_id == 101,
+            Cliente.id == comanda.cliente_id,
+        ).one()
+        assert cliente.telefone == "11933332222"
+        assert cliente.telefone_verificado_em is None
     finally:
         current_restaurante_id.reset(token_var)
         db.close()

@@ -33,7 +33,7 @@ const publicMenuPayload = {
   ],
 };
 
-async function mockCardapio(page: Page, benefits: unknown) {
+async function mockCardapio(page: Page, benefits: unknown | (() => unknown)) {
   await page.route(`${API_ORIGIN}/**`, async (route) => {
     const { pathname } = new URL(route.request().url());
 
@@ -59,7 +59,7 @@ async function mockCardapio(page: Page, benefits: unknown) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(benefits),
+        body: JSON.stringify(typeof benefits === 'function' ? benefits() : benefits),
       });
       return;
     }
@@ -72,9 +72,26 @@ async function mockCardapio(page: Page, benefits: unknown) {
   });
 }
 
+test('Benefícios refletem configuração alterada no Caixa ao reabrir o painel', async ({ page }) => {
+  let conversion = 2;
+  await mockCardapio(page, () => ({
+    cupons: [],
+    programa: { ativo: true, tipo_recompensa: 'CASHBACK', taxa_conversao: conversion, valor_ponto_em_dinheiro: 0 },
+  }));
+  await openBenefits(page);
+  await page.getByRole('button', { name: 'Créditos' }).click();
+  await expect(page.locator('#cardapio-benefits-credit')).toContainText('2%');
+  await page.getByRole('button', { name: 'Fechar benefícios' }).click();
+
+  conversion = 4;
+  await page.locator((page.viewportSize()?.width || 0) <= 640 ? '#mobile-nav-benefits' : '#btn-benefits-header').click();
+  await page.getByRole('button', { name: 'Créditos' }).click();
+  await expect(page.locator('#cardapio-benefits-credit')).toContainText('4%');
+});
+
 async function openBenefits(page: Page) {
   await page.goto('/cardapio?restaurante_id=2');
-  await page.locator('#btn-benefits-header').click();
+  await page.locator((page.viewportSize()?.width || 0) <= 640 ? '#mobile-nav-benefits' : '#btn-benefits-header').click();
   await expect(page.locator('#cardapio-benefits-drawer')).toBeVisible();
 }
 

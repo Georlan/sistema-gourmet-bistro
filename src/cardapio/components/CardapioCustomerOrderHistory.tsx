@@ -43,6 +43,13 @@ export interface CustomerHistoryOrder {
   desconto_cupom: number;
   desconto_cashback: number;
   itens: CustomerHistoryItem[];
+  pagamento?: {
+    status: string;
+    qr_code?: string | null;
+    qr_code_base64?: string | null;
+    ticket_url?: string | null;
+    expires_at?: string | null;
+  } | null;
 }
 
 interface HistoryResponse {
@@ -82,6 +89,7 @@ export default function CardapioCustomerOrderHistory({
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [error, setError] = React.useState("");
   const [expandedOrderId, setExpandedOrderId] = React.useState<string | null>(null);
+  const [copiedOrderId, setCopiedOrderId] = React.useState<string | null>(null);
 
   const load = React.useCallback(async (cursor?: string | null, append = false) => {
     if (!customerToken) return;
@@ -221,6 +229,44 @@ export default function CardapioCustomerOrderHistory({
                         {order.taxa_entrega > 0 && <div className="flex justify-between"><span>Entrega</span><span>{formatCurrency(order.taxa_entrega)}</span></div>}
                         {order.desconto_cupom > 0 && <div className="flex justify-between text-emerald-400"><span>Cupom</span><span>− {formatCurrency(order.desconto_cupom)}</span></div>}
                         {order.desconto_cashback > 0 && <div className="flex justify-between text-emerald-400"><span>Cashback</span><span>− {formatCurrency(order.desconto_cashback)}</span></div>}
+                      </div>
+                    )}
+                    {order.pagamento?.status === "pending" && order.pagamento.qr_code && (
+                      <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                        <p className="text-[10px] font-black text-amber-300">Pix aguardando pagamento</p>
+                        <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">Você pode retomar por aqui mesmo se fechar esta aba.</p>
+                        {order.pagamento.qr_code_base64 && (
+                          <img
+                            src={`data:image/png;base64,${order.pagamento.qr_code_base64}`}
+                            alt={`QR Code Pix do pedido ${order.numero_pedido}`}
+                            className="mx-auto my-3 h-40 w-40 rounded-lg bg-white p-2"
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(order.pagamento!.qr_code!).then(() => {
+                              setCopiedOrderId(order.id);
+                              window.setTimeout(() => setCopiedOrderId((current) => current === order.id ? null : current), 2000);
+                            }).catch(() => setError("Não foi possível copiar o Pix. Toque e segure o código para copiar."));
+                          }}
+                          className="w-full rounded-lg bg-primary px-3 py-2.5 text-[10px] font-black text-white"
+                        >
+                          {copiedOrderId === order.id ? "Código Pix copiado" : "Copiar código Pix"}
+                        </button>
+                        {order.pagamento.ticket_url && (
+                          <a
+                            href={order.pagamento.ticket_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 flex min-h-10 items-center justify-center rounded-lg border border-slate-700 text-[10px] font-bold text-koma-foreground"
+                          >
+                            Abrir página de pagamento
+                          </a>
+                        )}
+                        {order.pagamento.expires_at && (
+                          <p className="mt-2 text-center text-[8px] text-koma-subtle">Válido até {formatDate(order.pagamento.expires_at)}</p>
+                        )}
                       </div>
                     )}
                     {terminal && order.itens.length > 0 && onRepeatOrder && (

@@ -545,7 +545,7 @@ export default function CardapioOrdersDrawer({
                 void refreshUnreadCounts();
               }}
               disabled={isRefreshing}
-              className="grid h-9 w-9 place-items-center rounded-xl border border-koma-border bg-koma-panel text-koma-secondary transition hover:text-white disabled:opacity-50"
+              className="grid h-11 w-11 place-items-center rounded-xl border border-koma-border bg-koma-panel text-koma-secondary transition hover:text-white disabled:opacity-50"
               title="Atualizar status"
               aria-label="Atualizar status"
             >
@@ -554,7 +554,7 @@ export default function CardapioOrdersDrawer({
             <button
               type="button"
               onClick={closeDrawer}
-              className="grid h-9 w-9 place-items-center rounded-xl border border-koma-border bg-koma-panel text-koma-secondary transition hover:text-white"
+              className="grid h-11 w-11 place-items-center rounded-xl border border-koma-border bg-koma-panel text-koma-secondary transition hover:text-white"
               title="Fechar"
               aria-label="Fechar"
             >
@@ -573,6 +573,7 @@ export default function CardapioOrdersDrawer({
               <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-koma-muted">
                 Quando você fizer um pedido, poderá acompanhar o status e conversar com o restaurante por aqui. Este atalho continua disponível mesmo sem login.
               </p>
+              <button type="button" onClick={closeDrawer} className="mt-5 min-h-11 w-full max-w-xs rounded-xl bg-emerald-500 px-4 text-xs font-black text-white">Ver cardápio</button>
             </div>
           ) : (
             <>

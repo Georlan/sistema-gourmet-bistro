@@ -1,9 +1,8 @@
 /**
  * Benefícios públicos do cardápio.
  *
- * O conteúdo promocional só é buscado quando o cliente abre o painel. Isso
- * evita adicionar uma requisição a toda visita ao cardápio e mantém o caminho
- * crítico de catálogo enxuto.
+ * O conteúdo promocional é buscado em cada abertura do painel. Isso mantém
+ * as mudanças feitas no Caixa visíveis sem adicionar carga ao catálogo.
  */
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -52,6 +51,7 @@ interface CardapioBenefitsDrawerProps {
   onClose: () => void;
   user?: BenefitsUser | null;
   onAuthClick: () => void;
+  onUseCoupon: (code: string) => void;
 }
 
 type BenefitsTab = "offers" | "credit" | "points";
@@ -82,10 +82,11 @@ export default function CardapioBenefitsDrawer({
   onClose,
   user,
   onAuthClick,
+  onUseCoupon,
 }: CardapioBenefitsDrawerProps) {
   const [activeTab, setActiveTab] = useState<BenefitsTab>("offers");
   const [data, setData] = useState<BenefitsResponse>({ cupons: [] });
-  const [loadedRestaurantId, setLoadedRestaurantId] = useState("");
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [copiedCode, setCopiedCode] = useState("");
@@ -93,23 +94,16 @@ export default function CardapioBenefitsDrawer({
   const restaurantKey = String(restaurantId || "");
 
   useEffect(() => {
-    if (!isOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen || !restaurantKey || loadedRestaurantId === restaurantKey) return;
+    if (!isOpen || !restaurantKey) return;
 
     const controller = new AbortController();
     setIsLoading(true);
     setError("");
+    setData({ cupons: [] });
     const query = new URLSearchParams({ restaurante_id: restaurantKey });
     void fetch(`${API_BASE_URL}/cardapio/cupons/beneficios?${query.toString()}`, {
       signal: controller.signal,
+      cache: "no-store",
     }).then(async (response) => {
       const payload = await response.json().catch(() => null) as BenefitsResponse | { detail?: unknown } | null;
       if (!response.ok) {
@@ -124,7 +118,6 @@ export default function CardapioBenefitsDrawer({
         cupons: Array.isArray(normalized?.cupons) ? normalized.cupons : [],
         programa: normalized?.programa || null,
       });
-      setLoadedRestaurantId(restaurantKey);
     }).catch((loadError) => {
       if ((loadError as Error).name === "AbortError") return;
       setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar os benefícios agora.");
@@ -133,15 +126,7 @@ export default function CardapioBenefitsDrawer({
     });
 
     return () => controller.abort();
-  }, [isOpen, restaurantKey, loadedRestaurantId]);
-
-  useEffect(() => {
-    if (loadedRestaurantId && loadedRestaurantId !== restaurantKey) {
-      setLoadedRestaurantId("");
-      setData({ cupons: [] });
-      setActiveTab("offers");
-    }
-  }, [restaurantKey, loadedRestaurantId]);
+  }, [isOpen, restaurantKey, refreshNonce]);
 
   const program = data.programa;
   const cashbackEnabled = Boolean(program?.ativo && program.tipo_recompensa === "CASHBACK");
@@ -226,7 +211,7 @@ export default function CardapioBenefitsDrawer({
               <p>{error}</p>
               <button
                 type="button"
-                onClick={() => setLoadedRestaurantId("")}
+                onClick={() => setRefreshNonce((current) => current + 1)}
                 className="mt-3 font-black underline"
               >
                 Tentar novamente
@@ -239,6 +224,7 @@ export default function CardapioBenefitsDrawer({
                   <TicketPercent className="mx-auto h-7 w-7 text-koma-subtle" />
                   <p className="mt-3 text-xs font-black text-koma-foreground">Nenhuma oferta pública ativa agora.</p>
                   <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Quando o restaurante liberar uma condição especial, ela aparece aqui.</p>
+                  <button type="button" onClick={onClose} className="mt-4 min-h-11 w-full rounded-xl bg-emerald-500 px-4 text-xs font-black text-white">Voltar ao cardápio</button>
                 </div>
               ) : data.cupons.map((coupon) => {
                 const expiry = formatDate(coupon.valido_ate);
@@ -267,8 +253,9 @@ export default function CardapioBenefitsDrawer({
                       {coupon.valor_minimo_pedido > 0 && <p>Pedido a partir de <strong className="text-koma-secondary">{formatCurrency(coupon.valor_minimo_pedido)}</strong>.</p>}
                       {coupon.apenas_primeira_compra && <p>Válida para a primeira compra elegível.</p>}
                       {expiry && <p>Disponível até {expiry}.</p>}
-                      <p>Copie o código e aplique na sacola antes de finalizar.</p>
+                      <p>O desconto é conferido na sacola antes de finalizar.</p>
                     </div>
+                    <button type="button" onClick={() => onUseCoupon(coupon.codigo)} className="mt-4 min-h-11 w-full rounded-xl bg-emerald-500 px-4 text-xs font-black text-white">Usar na sacola</button>
                   </article>
                 );
               })}

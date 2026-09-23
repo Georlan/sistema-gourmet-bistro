@@ -29,7 +29,7 @@ export class ViaCepPostalCodeLookupProvider implements PostalCodeLookupProvider 
   readonly id = 'viacep';
 
   constructor(
-    private readonly request: typeof fetch = fetch,
+    private readonly request: typeof fetch = (input, init) => fetch(input, init),
     private readonly timeoutMs = 4_000,
   ) {}
 

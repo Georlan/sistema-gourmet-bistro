@@ -35,13 +35,16 @@ export default function CardapioStoreInfoDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-start bg-black/70 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm animate-fade-in sm:items-stretch sm:justify-start"
       id="store-info-overlay"
       onClick={onClose}
     >
       <div
-        className="relative flex h-full w-full max-w-sm flex-col overflow-hidden border-r border-koma-border bg-koma-panel text-koma-foreground shadow-2xl animate-slide-right"
+        className="relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[28px] border border-koma-border bg-koma-panel text-koma-foreground shadow-2xl sm:h-full sm:max-h-none sm:max-w-sm sm:rounded-none sm:border-r animate-slide-right"
         id="store-info-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Informações do restaurante"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="relative min-h-48 shrink-0 overflow-hidden bg-[#090a0f]">
@@ -116,7 +119,7 @@ export default function CardapioStoreInfoDrawer({
                   <CreditCard className="h-4 w-4 text-emerald-500" />
                   <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">Pagamento</h3>
                 </div>
-                <p className="mt-2 text-[10px] leading-relaxed text-koma-muted">Pagamento feito diretamente ao restaurante.</p>
+                <p className="mt-2 text-[10px] leading-relaxed text-koma-muted">Veja o momento e a forma de pagamento ao revisar sua sacola.</p>
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {brand.paymentMethods.map((method) => (
                     <span key={method.type} className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] px-2.5 py-1.5 text-[9px] font-bold text-emerald-500">
@@ -157,7 +160,8 @@ export default function CardapioStoreInfoDrawer({
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-koma-border bg-koma-card/50 p-4">
+        <div className="shrink-0 border-t border-koma-border bg-koma-card/50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+          <button type="button" onClick={onClose} className="mb-3 min-h-11 w-full rounded-xl bg-emerald-500 px-4 text-xs font-black text-white">Voltar ao cardápio</button>
           <div className="flex items-center justify-between gap-3">
             <span className="text-[9px] font-semibold text-koma-subtle">Cardápio e pedidos online por Kôma</span>
             {brand.phone && (

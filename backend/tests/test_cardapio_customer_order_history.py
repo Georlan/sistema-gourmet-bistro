@@ -7,6 +7,7 @@ from app.database import Base, SessionLocal, engine, tenant_session_scope
 from app.main import app
 from app.models import (
     Categoria,
+    CaixaTurno,
     Cliente,
     Comanda,
     GrupoModificador,
@@ -14,6 +15,7 @@ from app.models import (
     ItemModificador,
     Lancamento,
     OpcaoModificador,
+    OnlinePaymentIntent,
     Produto,
     Restaurante,
     Usuario,
@@ -25,7 +27,7 @@ client = TestClient(app)
 
 
 def _cleanup_tenant(db, restaurant_id: int) -> None:
-    for model in (ItemModificador, Item, Lancamento, Comanda, Cliente, Produto, Categoria, Usuario):
+    for model in (OnlinePaymentIntent, CaixaTurno, ItemModificador, Item, Lancamento, Comanda, Cliente, Produto, Categoria, Usuario):
         db.query(model).filter(model.restaurante_id == restaurant_id).delete(
             synchronize_session=False
         )
@@ -171,7 +173,31 @@ def setup_history_data():
                                 opcao_modificador_id="history-option-701",
                                 preco_aplicado=3.0,
                             )
-                        )
+                            )
+            shift = CaixaTurno(
+                restaurante_id=701,
+                aberto_por_id="history-user-701",
+                saldo_inicial=0,
+                status="aberto",
+            )
+            db.add(shift)
+            db.flush()
+            db.add(OnlinePaymentIntent(
+                id="history-pix-intent",
+                restaurante_id=701,
+                comanda_id="history-order-2",
+                turno_id=shift.id,
+                provider="mercado_pago",
+                method="pix",
+                status="pending",
+                amount=46,
+                marketplace_fee=0,
+                idempotency_key="history-pix-key",
+                qr_code="pix-copia-e-cola-demo",
+                qr_code_base64="cXItZGVtbw==",
+                ticket_url="https://example.invalid/pix",
+                expires_at=datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1),
+            ))
             db.commit()
 
         with tenant_session_scope(db, 702):
@@ -254,6 +280,13 @@ def test_customer_history_is_authenticated_paginated_and_grouped():
         }
     ]
     assert newest["total"] == 46.0
+    assert newest["pagamento"] == {
+        "status": "pending",
+        "qr_code": "pix-copia-e-cola-demo",
+        "qr_code_base64": "cXItZGVtbw==",
+        "ticket_url": "https://example.invalid/pix",
+        "expires_at": newest["pagamento"]["expires_at"],
+    }
     assert "idempotency_key" not in newest
     assert "tracking_token" not in newest
 
