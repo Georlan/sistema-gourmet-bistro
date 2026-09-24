@@ -1162,9 +1162,19 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         return;
       }
 
-      // Mantém também o restaurante na sessão canônica do Garçom. Os aliases
-      // legados continuam sendo preenchidos pelo helper, sem virar fonte de tenant.
-      saveOperatorSession(data.access_token, { ...data.usuario, role });
+      if (portal === 'garcom' && role === 'admin') {
+        // Compatibilidade do acesso administrativo ao portal de salão: o helper
+        // canônico classificaria admin como Caixa. Mantemos os aliases do Garçom
+        // neste caso raro sem usá-los como fonte de autorização de tenant.
+        localStorage.setItem("koma_waiter_token", data.access_token);
+        localStorage.setItem("koma_waiter_id", data.usuario.id);
+        localStorage.setItem("koma_waiter_name", data.usuario.nome);
+        localStorage.setItem("koma_user_role", role);
+      } else {
+        // Para garçons reais, a sessão canônica preserva restaurante_id e
+        // continua preenchendo os aliases legados usados pelo App.
+        saveOperatorSession(data.access_token, { ...data.usuario, role });
+      }
 
       setActiveWaiterId(data.usuario.id);
       setActiveWaiterNome(data.usuario.nome);
