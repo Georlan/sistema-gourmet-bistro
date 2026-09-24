@@ -167,9 +167,15 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     }
     return 'garcom';
   });
+  const activeRestaurantId = useMemo(() => {
+    const restaurantId = Number(getOperatorSession(portal)?.user?.restaurante_id || 0);
+    return Number.isInteger(restaurantId) && restaurantId > 0 ? restaurantId : 0;
+  }, [activeWaiterId, isAuthenticated, portal]);
   const operationalScopeKey = useMemo(
-    () => isAuthenticated && activeWaiterId ? `${portal}:${activeRole}:${activeWaiterId}` : '',
-    [activeRole, activeWaiterId, isAuthenticated, portal],
+    () => isAuthenticated && activeWaiterId
+      ? `${portal}:${activeRestaurantId || 'legacy'}:${activeRole}:${activeWaiterId}`
+      : '',
+    [activeRestaurantId, activeRole, activeWaiterId, isAuthenticated, portal],
   );
   const operationalScopeKeyRef = useRef(operationalScopeKey);
   operationalScopeKeyRef.current = operationalScopeKey;
@@ -303,16 +309,35 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   };
 
   const fetchConfig = async () => {
+    const requestScopeKey = operationalScopeKey;
+    if (!requestScopeKey) return;
+
     try {
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
       const token = localStorage.getItem(tokenKey);
       if (!token) return;
 
+      const requestRestaurantId = activeRestaurantId;
       const res = await fetch(`${API_BASE_URL}/caixa/configuracoes`, {
         headers: getAuthHeaders()
       });
       if (res.ok) {
         const data = await res.json();
+        const responseRestaurantId = Number(data?.restaurante_id || 0);
+
+        // A configuração é tenant-scoped no backend, mas ainda protegemos a UI
+        // contra respostas atrasadas de uma sessão/restaurante anterior.
+        if (requestScopeKey !== operationalScopeKeyRef.current) return;
+        if (localStorage.getItem(tokenKey) !== token) return;
+        if (
+          requestRestaurantId > 0
+          && responseRestaurantId > 0
+          && responseRestaurantId !== requestRestaurantId
+        ) {
+          console.error("Configuração descartada por divergência de restaurante.");
+          return;
+        }
+
         setRestauranteConfig(data);
         setIsConfigLoaded(true);
       }
@@ -1142,14 +1167,9 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       const nameKey = portal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
       const roleKey = portal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
 
-      if (portal === 'caixa') {
-        saveOperatorSession(data.access_token, { ...data.usuario, role });
-      } else {
-        localStorage.setItem(tokenKey, data.access_token);
-        localStorage.setItem(idKey, data.usuario.id);
-        localStorage.setItem(nameKey, data.usuario.nome);
-        localStorage.setItem(roleKey, role);
-      }
+      // Mantém também o restaurante na sessão canônica do Garçom. Os aliases
+      // legados continuam sendo preenchidos pelo helper, sem virar fonte de tenant.
+      saveOperatorSession(data.access_token, { ...data.usuario, role });
 
       setActiveWaiterId(data.usuario.id);
       setActiveWaiterNome(data.usuario.nome);
