@@ -11,7 +11,7 @@ const legalV27 = readFileSync('src/legal/legalContentV27.ts', 'utf8');
 const legalV28 = readFileSync('src/legal/legalContentV28.ts', 'utf8');
 const legalV29 = readFileSync('src/legal/legalContentV29.ts', 'utf8');
 const legalV30 = readFileSync('src/legal/legalContentV30.ts', 'utf8');
-const legalV31 = readFileSync('src/legal/legalContentV32.ts', 'utf8');
+const legalV31 = readFileSync('src/legal/legalContentV31.ts', 'utf8');
 const legalContent = readFileSync('src/legal/legalContentV32.ts', 'utf8');
 const legalEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const legalPage = readFileSync('src/legal/LegalPage.tsx', 'utf8');
@@ -48,7 +48,7 @@ test('central legal preserva snapshots anteriores e publica fachada vigente 3.2'
   assert.match(legalContent, /24\/09\/2026/);
   assert.match(legalV30, /from '\.\/legalContentRecurring'/);
   assert.match(legalV31, /from '\.\/legalContentV30'/);
-  assert.match(legalContent, /from '\.\/legalContentV32'/);
+  assert.match(legalContent, /from '\.\/legalContentV31'/);
   assert.match(legacyLegalContent, /LEGAL_VERSION = '1\.2'/);
   assert.match(legalPage, /from '\.\/legalContent'/);
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
