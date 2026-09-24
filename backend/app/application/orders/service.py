@@ -66,6 +66,11 @@ from ...services.clientes import (
 )
 from ...services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
 from ...services.order_numbers import gerar_novo_numero_pedido_atomico
+from ...services.plan_entitlements import (
+    ENTITLEMENT_COUPONS,
+    ENTITLEMENT_LOYALTY,
+    has_plan_entitlement,
+)
 from ...services.delivery_fee_policy import (
     normalize_distance_fee_config,
     normalize_neighborhood,
@@ -357,6 +362,20 @@ class OrderApplicationService:
                     .first()
                 )
                 return cls._to_order_dto(db=db, comanda=existing_comanda, lancamento=lanc)
+
+        if cmd.coupon_code and not has_plan_entitlement(
+            db,
+            cmd.restaurant_id,
+            ENTITLEMENT_COUPONS,
+        ):
+            raise OrderValidationError("Cupom não disponível no plano atual.")
+        wants_cashback = bool(cmd.usar_cashback) or cmd.cashback_discount > Decimal("0.00")
+        if wants_cashback and not has_plan_entitlement(
+            db,
+            cmd.restaurant_id,
+            ENTITLEMENT_LOYALTY,
+        ):
+            raise OrderValidationError("Cashback não disponível no plano atual.")
 
         # 2. Validação Pura e Contexto
         delivery_address_snapshot = cmd.delivery.address_snapshot if cmd.delivery else None
