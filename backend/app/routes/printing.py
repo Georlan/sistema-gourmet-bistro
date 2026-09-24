@@ -20,10 +20,24 @@ from ..domain.printing import PrintItem
 from ..models import PrintJob, Usuario
 from ..security import ensure_permission, get_current_user, require_permission
 from ..services.printing import get_print_preferences
+from ..services.plan_entitlements import (
+    ENTITLEMENT_PRINTING,
+    require_plan_entitlement,
+)
 from ..waiter_permissions import require_waiter_permission
 
 
 router = APIRouter(prefix="/impressao", tags=["Impressão"])
+
+
+def _require_physical_printing(db: Session, restaurante_id: int) -> None:
+    require_plan_entitlement(
+        db,
+        restaurante_id,
+        ENTITLEMENT_PRINTING,
+        detail="A impressão física não está disponível no plano atual.",
+    )
+
 
 
 class UniversalPrintRequest(BaseModel):
@@ -55,6 +69,7 @@ def _execute_print(
 ) -> list:
     _authorize_universal_print(db, current_user, payload.source_type)
     restaurante_id = require_tenant_id()
+    _require_physical_printing(db, restaurante_id)
     try:
         jobs = PrintingApplicationService.request_print(
             db,
@@ -140,6 +155,7 @@ def imprimir_teste_extremo_cardapio(
 ):
     """Enfileira uma comanda extrema sintética sem criar pedido ou movimentação real."""
     restaurante_id = require_tenant_id()
+    _require_physical_printing(db, restaurante_id)
     preferences = get_print_preferences(db, restaurante_id)
     items = [
         PrintItem(
@@ -261,6 +277,7 @@ def imprimir_teste_extremo_garcom(
 ):
     """Enfileira uma comanda extrema sintética do App do Garçom sem criar pedido real."""
     restaurante_id = require_tenant_id()
+    _require_physical_printing(db, restaurante_id)
     preferences = get_print_preferences(db, restaurante_id)
     items = [
         PrintItem(
