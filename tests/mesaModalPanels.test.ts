@@ -38,7 +38,11 @@ const consumptionProps = (
   overrides: Partial<ComponentProps<typeof MesaConsumptionPanel>> = {},
 ): ComponentProps<typeof MesaConsumptionPanel> => ({
   table, orders, currentTime: NOW, activeRole: 'garcom',
-  restauranteConfig: { taxa_servico_ativa: false, perm_garcom_fechar: false },
+  restauranteConfig: {
+    taxa_servico_ativa: false,
+    perm_garcom_fechar: false,
+    entitlements: { printing: true },
+  },
   totalValue: getTableTotal(orders), customerSubtotals: getCustomerSubtotals(orders),
   canTransferTables: true, canTransferItems: true,
   isPrintingDirect: false, directPrintToast: '', confirmClear: false,
