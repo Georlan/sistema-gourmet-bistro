@@ -2,7 +2,7 @@
 
 ## Regra comercial canônica
 
-Plano e ciclo → dados mínimos salvos → aceite jurídico → autorização recorrente → liberação → implantação essencial → 7 dias grátis → primeira cobrança automática → operação normal.
+Plano e ciclo → dados mínimos salvos → aceite jurídico → autorização recorrente → liberação → implantação essencial → início explícito pelo administrador → 7 dias grátis → primeira cobrança automática → operação normal.
 
 A mensalidade fixa do KÔMA segue a mesma regra em qualquer forma de pagamento disponibilizada no checkout:
 
@@ -10,7 +10,7 @@ A mensalidade fixa do KÔMA segue a mesma regra em qualquer forma de pagamento d
 - o cliente apenas autoriza a recorrência antes da liberação;
 - a recorrência fica **pausada durante a implantação inicial**;
 - cadastro, criação de senha, perfil, horários e preparação do primeiro cardápio **não consomem nenhum dia grátis**;
-- os **7 dias grátis começam somente quando os 3 passos essenciais estiverem concluídos**: perfil, horários e ao menos um produto publicado;
+- os **7 dias grátis começam somente após os 4 itens essenciais**: perfil, horários, ao menos um produto ativo publicado e modalidades de operação; o administrador deve então confirmar o início;
 - no início do trial, a primeira cobrança é alinhada para D+7 antes de reativar a recorrência;
 - mensal renova mensalmente e anual renova a cada 12 meses;
 - o anual conserva o desconto de 10% sobre a mensalidade fixa, mas não é cobrado antecipadamente no dia da adesão;
@@ -29,15 +29,15 @@ Métodos recorrentes modelados no backend devem obedecer à mesma regra de autor
 - `payment_method_type=pix` é recusado para novas contratações. Registros históricos podem continuar existindo para reconciliação/migração, mas nunca liberam uma nova assinatura.
 - Quando `KOMA_SAAS_MANUAL_RELEASE_REQUIRED=true`, uma autorização recorrente pronta entra em `awaiting_release`; nenhum tenant é criado antes da ação do SuperAdmin.
 - Assim que uma autorização recorrente fica pronta para o fluxo de onboarding, ela deve permanecer pausada até a conclusão da implantação essencial. Se a pausa não puder ser confirmada, o fluxo falha fechado em vez de arriscar cobrança antecipada.
-- Na liberação, o tenant nasce com assinatura canônica em estado `onboarding`, sem `trial_started_at`, `trial_ends_at` ou período corrente. O cliente recebe o convite e pode configurar o restaurante, mas o gate de onboarding mantém Vendas/Caixa bloqueados até 3/3.
-- O endpoint canônico `/api/onboarding/status` calcula o progresso usando dados reais. Ao detectar 3/3 pela primeira vez, inicia o trial de forma idempotente: define D+7 no provedor, reativa a recorrência, grava `trial_started_at`/`trial_ends_at` e muda a assinatura para `trialing`.
+- Na liberação, o tenant nasce com assinatura canônica em estado `onboarding`, sem `trial_started_at`, `trial_ends_at` ou período corrente. O cliente recebe o convite e pode configurar o restaurante, mas o gate de onboarding mantém Vendas/Caixa bloqueados até os 4 itens essenciais e o início explícito do trial.
+- O endpoint canônico `/api/onboarding/status` calcula o progresso usando dados reais. Após os 4 itens essenciais, `POST /api/onboarding/start-trial` inicia o trial de forma idempotente: define D+7 no provedor, reativa a recorrência, grava `trial_started_at`/`trial_ends_at` e muda a assinatura para `trialing`.
 - Se o alinhamento D+7 ou a reativação do provedor falhar, o backend não inicia o trial localmente e não libera uma cobrança antecipada; a configuração já salva permanece intacta para nova tentativa.
 - Recarregar a implantação depois do início do trial não renova nem empurra a data final.
 - Assinaturas antigas que já estavam `trialing` ou `active` não são reescritas por esta regra.
 - A ativação é idempotente. Repetir webhook ou retomar uma ativação interrompida não cria outro restaurante.
 - Retentativas com resultado incerto procuram a autorização anterior antes de permitir nova recorrência.
 - Confirmação e convite entram em fila persistente. O worker tenta e-mail/WhatsApp, conserva falhas para diagnóstico e permite reagendamento no SuperAdmin.
-- No primeiro acesso, a implantação inicial reutiliza as telas canônicas de configuração. Perfil, horários e cardápio são a mesma fonte de verdade usada depois na operação.
+- No primeiro acesso, a implantação inicial reutiliza as telas canônicas de configuração. Perfil, horários, cardápio e modalidades são a mesma fonte de verdade usada depois na operação.
 - O restaurante pode enviar PDF/foto do cardápio para implantação assistida. O envio não conclui o passo: o catálogo só conta como pronto quando houver produto realmente publicado.
 
 ## Mercado Pago
@@ -87,16 +87,16 @@ Executar no ambiente isolado:
 
 1. cartão autorizado → `awaiting_release` → recorrência pausada → liberação → assinatura `onboarding` → R$ 0 hoje;
 2. permanecer mais de 24 horas em implantação e confirmar que `trial_started_at` continua `NULL` e nenhum dia grátis foi consumido;
-3. concluir perfil + horários + produto → sincronizar primeira cobrança para D+7 → reativar recorrência → assinatura `trialing` com 7 dias completos;
+3. concluir perfil + horários + produto ativo + modalidades e confirmar início → sincronizar primeira cobrança para D+7 → reativar recorrência → assinatura `trialing` com 7 dias completos;
 4. recarregar/reentrar várias vezes e confirmar idempotência: a data final do trial não se move;
 5. cancelar durante `onboarding` → nenhuma primeira cobrança e nenhum dia de trial consumido;
 6. cancelar durante `trialing` → nenhuma primeira cobrança após o cancelamento;
 7. primeira fatura de cartão aprovada/recusada após o trial e replay idempotente;
-8. quando Pix Automático estiver habilitado: autorização → pausa durante implantação → 3/3 → D+7 → `trialing`;
+8. quando Pix Automático estiver habilitado: autorização → pausa durante implantação → 4 itens + início explícito → D+7 → `trialing`;
 9. confirmar que `payment_method_type=pix` é recusado e nunca provisiona tenant;
 10. repetir webhooks/preapprovals e validar idempotência;
 11. validar convite, primeiro acesso, e-mail e WhatsApp;
-12. validar que o gate operacional não permite Vendas/Caixa antes do 3/3.
+12. validar que o gate operacional não permite Vendas/Caixa antes dos 4 itens e do início explícito.
 
 ## Fora do checkout até homologação própria
 

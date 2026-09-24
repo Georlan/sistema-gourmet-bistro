@@ -26,7 +26,7 @@ test('seleção comercial oferece anual com desconto aos três planos', () => {
   assert.doesNotMatch(planContract, /selectedPlanId !== 'pocket'/);
   assert.match(planContract, /O desconto anual não altera a taxa percentual/);
   assert.match(planContract, /annualMonthlyEquivalent/);
-  assert.match(planContract, /Os 7 dias só começam depois dos 3 passos essenciais/);
+  assert.match(planContract, /Os 7 dias começam depois dos 4 itens essenciais/);
   assert.match(landingPlans, /Pocket, Pro e Premium: valor mensal equivalente/);
   assert.match(landingPlans, /A taxa KÔMA por pedido online não muda/);
   assert.doesNotMatch(planContract, /12 meses \+ 7 dias|dias adicionais de bônus/);

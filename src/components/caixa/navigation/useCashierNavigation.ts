@@ -20,7 +20,7 @@ const SETUP_DIRECT_TABS = new Set<CashierTab>(['cardapio', 'cardapio_digital']);
  * A implantação reutiliza as telas canônicas do Caixa, mas só libera os
  * destinos necessários para configurar o restaurante. Integrações técnicas
  * são permitidas apenas na tela dedicada (ex.: Mercado Pago); o restante da
- * operação continua bloqueado até os 3 passos essenciais terminarem.
+ * operação continua bloqueado até os 4 itens essenciais e o início do período grátis.
  */
 function setupAllowsState(tab: CashierTab, subTab: string): boolean {
   return SETUP_DIRECT_TABS.has(tab)
@@ -166,7 +166,7 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
 
     if (getCashierNavigationAction(navigationId) === 'open-counter') {
       if (setupMode) {
-        showToast('O Caixa será liberado quando os 3 passos essenciais estiverem concluídos.', 'info');
+        showToast('O Caixa será liberado depois dos 4 itens essenciais e do início do período grátis.', 'info');
         return;
       }
       window.dispatchEvent(new Event('koma-navigation-open-counter'));

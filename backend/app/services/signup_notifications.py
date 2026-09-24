@@ -67,7 +67,7 @@ def enqueue_acceptance(
         f"Olá, {representative_name}! A inscrição do {restaurant_name} no KÔMA foi recebida. "
         f"Protocolo: {protocol}. Agora escolha o meio de pagamento. A mensalidade fixa é R$ 0 hoje. "
         "Depois da liberação você configura o restaurante com calma; os 7 dias grátis só começam "
-        "quando os 3 passos essenciais da implantação estiverem concluídos."
+        "após os 4 itens essenciais da implantação e a confirmação do início pelo administrador."
     )
     enqueue(
         db,
@@ -117,8 +117,8 @@ def enqueue_activation(
         message=(
             f"Olá, {representative_name}! O {restaurant_name} foi liberado. Crie sua senha para o "
             f"primeiro acesso: {link} . O link é pessoal e válido por 72 horas. Depois do login, "
-            "conclua dados do restaurante, horários e cardápio. Seus 7 dias grátis ainda não estão "
-            "correndo: eles começam automaticamente somente quando esses 3 passos essenciais estiverem prontos."
+            "conclua dados do restaurante, horários, cardápio e modalidades de operação. Seus 7 dias grátis ainda não estão "
+            "correndo: depois dos 4 itens essenciais, confirme o início do período grátis no KÔMA."
         ),
     )
 
@@ -130,7 +130,7 @@ def enqueue_release_required(db, *, protocol, restaurant_name, plan, billing_cyc
         f"Autorização recorrente confirmada para {restaurant_name}. Protocolo: {protocol}. "
         f"Plano: {plan} ({billing_cycle}). Nenhuma mensalidade fixa foi cobrada hoje. "
         "Revise e libere o acesso. A recorrência ficará pausada durante a implantação e os 7 dias "
-        "grátis só começarão depois que os 3 passos essenciais forem concluídos: "
+        "grátis só começarão depois dos 4 itens essenciais e da confirmação do início pelo administrador: "
         f"{settings.KOMA_PUBLIC_APP_URL}/super-admin"
     )
     enqueue(

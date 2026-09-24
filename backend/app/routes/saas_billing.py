@@ -279,7 +279,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
     """
     Configura exclusivamente meios recorrentes com a mesma regra comercial:
     autorização hoje, R$ 0 de mensalidade fixa durante a implantação e início
-    dos 7 dias grátis somente quando os 3 passos essenciais estiverem prontos.
+    dos 7 dias grátis somente após os 4 itens essenciais e o início confirmado pelo administrador.
     """
     if not default_saas_mp_service.checkout_capabilities().get(payload.payment_method_type):
         raise HTTPException(503, "Inscrição salva. Este método recorrente está temporariamente indisponível; tente novamente mais tarde.")
