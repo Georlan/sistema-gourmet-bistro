@@ -72,8 +72,8 @@ export function buildWhatsAppOrderReceipt(
     (rawItems as readonly DigitalReceiptItem[]).forEach((it) => {
       if ((it.status as string) === 'cancelado') return;
       const nome = it.nome || it.name || 'Item';
-      const unit = Number(it.preco_unit || it.preco || it.price || 0);
-      const qtd = Number(it.quantidade || it.qty || 1);
+      const unit = Number(it.preco_unit ?? it.preco ?? it.price ?? 0);
+      const qtd = Number(it.quantidade ?? it.qty ?? 1);
       const existing = itemMap.get(nome);
       if (existing) {
         existing.qtd += qtd;
@@ -99,15 +99,28 @@ export function buildWhatsAppOrderReceipt(
 
   lines.push('────────────────────────');
 
-  const subtotal = parsedItems.reduce((acc, it) => acc + it.totalPreco, 0) || Number(order.total || 0);
+  const itemSubtotal = parsedItems.reduce((acc, it) => acc + it.totalPreco, 0);
+  const canonicalTotal = Number(order.total);
+  const hasCanonicalTotal = order.total != null && Number.isFinite(canonicalTotal);
+  const subtotal = itemSubtotal || (hasCanonicalTotal ? canonicalTotal : 0);
 
   lines.push(`Subtotal: ${formatCurrency(subtotal)}`);
 
   let totalCalculado = subtotal;
-  if (options?.taxaServicoAtiva && options?.serviceTaxRate) {
+  if (!hasCanonicalTotal && options?.taxaServicoAtiva && options?.serviceTaxRate) {
     const taxa = subtotal * (options.serviceTaxRate / 100);
     lines.push(`Taxa de serviço (${options.serviceTaxRate}%): ${formatCurrency(taxa)}`);
     totalCalculado += taxa;
+  }
+
+  // The persisted charge already includes discounts, delivery and service fees.
+  // Item prices are descriptive; never use them to override the amount actually charged.
+  if (hasCanonicalTotal) {
+    const adjustment = canonicalTotal - subtotal;
+    if (Math.abs(adjustment) >= 0.005) {
+      lines.push(`Ajustes da cobrança: ${formatCurrency(adjustment)}`);
+    }
+    totalCalculado = canonicalTotal;
   }
 
   const valorPago = Number(order.valorPago || 0);
