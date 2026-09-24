@@ -153,7 +153,7 @@ test('waiter settings separate actionable permissions from future capabilities a
 
 
 test('Pocket waiter UI removes physical-print actions while preserving the waiter workflow', () => {
-  assert.match(mesaDetails, /const hasPrinting = restauranteConfig\\?\\.entitlements\\?\\.printing === true/);
+  assert.match(mesaDetails, /const hasPrinting = restauranteConfig\?\.entitlements\?\.printing === true/);
   assert.match(mesaDetails, /\{hasPrinting && <MesaPrintDialogs/);
   assert.match(mesaConsumption, /const hasPrinting = restauranteConfig\\?\\.entitlements\\?\\.printing === true/);
   assert.match(mesaConsumption, /\{hasPrinting && <div className="grid grid-cols-2 gap-2">/);
