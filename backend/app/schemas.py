@@ -578,6 +578,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     plano: Optional[str] = "pocket"
     plano_efetivo: Optional[str] = "pocket"
     plano_modo_teste: bool = False
+    entitlements: Optional[dict[str, bool]] = None
 
     model_config = ConfigDict(from_attributes=True)
 
