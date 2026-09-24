@@ -4,7 +4,7 @@ export type SubscriptionFeatureId = 'printing' | 'kds' | 'waiter_app' | 'loyalty
 export type SubscriptionEntitlements = Partial<Record<SubscriptionFeatureId, boolean>>;
 
 const PLAN_FEATURES: Record<SubscriptionPlanId, ReadonlySet<SubscriptionFeatureId>> = {
-  pocket: new Set(),
+  pocket: new Set(['waiter_app']),
   pro: new Set(['printing', 'kds', 'waiter_app']),
   premium: new Set(['printing', 'kds', 'waiter_app', 'loyalty', 'coupons']),
 };
@@ -71,6 +71,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     tagline: 'Comece com o essencial por R$ 39/mês.',
     features: [
       'Mesas, comandas e balcão',
+      'App do Garçom para salão e comandas',
       'Cardápio digital e QR Code com pedidos no PDV',
       'Retirada e delivery no mesmo caixa',
       'Fila de preparo na tela, sem impressora',
@@ -94,7 +95,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       'Tudo do Pocket',
       'KDS e impressão automática',
       'Estoque, fichas técnicas e financeiro',
-      'Garçom web e permissões da equipe',
+      'Gestão de equipe e permissões avançadas',
       'Relatórios completos para acompanhar o negócio',
     ],
     limitations: [
@@ -131,6 +132,7 @@ export const PLAN_COMPARISON_MATRIX: FeatureComparisonRow[] = [
   { category: 'Operação de Salão', feature: 'Retirada e Delivery com Endereço, Taxa e Status', pocket: true, pro: true, premium: true },
   { category: 'Impressão & Cozinha', feature: 'Fila de Preparo na Tela, sem Impressora', pocket: true, pro: true, premium: true },
   { category: 'Impressão & Cozinha', feature: 'KDS Dedicado e Impressão Automática', pocket: false, pro: true, premium: true },
+  { category: 'Gestão & Equipe', feature: 'App do Garçom para Salão e Comandas', pocket: true, pro: true, premium: true },
   { category: 'Gestão & Equipe', feature: 'Gestão de Funcionários e Permissões por Cargo', pocket: false, pro: true, premium: true },
   { category: 'Gestão & Equipe', feature: 'Relatórios Financeiros e DRE de Vendas', pocket: 'Básico', pro: 'Completo', premium: 'Completo' },
   { category: 'Gestão & Equipe', feature: 'Estoque e Fichas Técnicas', pocket: false, pro: true, premium: true },

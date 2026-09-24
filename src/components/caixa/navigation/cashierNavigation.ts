@@ -195,7 +195,7 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
           { id: 'config_aparencia', label: 'Aparência', target: { tab: 'impressao_salao', subTab: 'aparencia' } },
           { id: 'config_impressao', label: 'Impressão', plans: ['pro', 'premium'], requiredFeature: 'printing', target: { tab: 'impressao_salao', subTab: 'impressao' } },
           { id: 'config_mesas', label: 'Mesas', target: { tab: 'impressao_salao', subTab: 'mesas' } },
-          { id: 'config_garcom', label: 'App do Garçom', plans: ['pro', 'premium'], requiredFeature: 'waiter_app', target: { tab: 'impressao_salao', subTab: 'garcom' } },
+          { id: 'config_garcom', label: 'App do Garçom', requiredFeature: 'waiter_app', target: { tab: 'impressao_salao', subTab: 'garcom' } },
           { id: 'config_taxa', label: 'Taxa de Serviço', target: { tab: 'impressao_salao', subTab: 'taxa' } },
           { id: 'config_implantacao', label: 'Implantação inicial', target: { tab: 'impressao_salao', subTab: 'implantacao' } },
           { id: 'config_integracoes', label: 'Integrações', target: { tab: 'impressao_salao', subTab: 'integracoes' } },

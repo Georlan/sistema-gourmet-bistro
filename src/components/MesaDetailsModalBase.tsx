@@ -126,6 +126,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const canAppendOrderItems = activeRole !== 'garcom'
     || orders.length === 0
     || Boolean(restauranteConfig?.perm_garcom_editar);
+  const hasPrinting = restauranteConfig?.entitlements?.printing !== false;
 
   // Lock background scroll when modal is active
   React.useEffect(() => {
@@ -454,7 +455,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
       </div>
 
-      <MesaPrintDialogs
+      {hasPrinting && <MesaPrintDialogs
         table={table}
         orders={orders}
         restaurantName={restaurantName}
@@ -467,7 +468,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
         setSelectedOrderToPrint={setSelectedOrderToPrint}
         onPrintReceipt={onPrintReceipt ? handleReceiptPrint : undefined}
         onPrintKitchenLaunch={onPrintKitchenLaunch ? handleKitchenPrint : undefined}
-      />
+      />}
 
       {editingItem && (
         <div

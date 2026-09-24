@@ -10,6 +10,10 @@ from sqlalchemy.orm import Session
 
 from .database import require_tenant_id
 from .models import ConfiguracaoRestaurante, Usuario
+from .services.plan_entitlements import (
+    ENTITLEMENT_PRINTING,
+    has_plan_entitlement,
+)
 
 
 WAITER_PERMISSION_MESSAGES = {
@@ -41,6 +45,16 @@ def waiter_permission_enabled(
 
     restaurante_id = require_tenant_id()
     if user.restaurante_id != restaurante_id:
+        return False
+
+    # A permissão configurável não pode reativar uma capacidade comercial que
+    # o plano não possui. No Pocket, o App do Garçom continua funcional, mas
+    # qualquer ação de impressão é efetivamente desabilitada.
+    if permission == "perm_garcom_print" and not has_plan_entitlement(
+        db,
+        restaurante_id,
+        ENTITLEMENT_PRINTING,
+    ):
         return False
 
     config = db.query(ConfiguracaoRestaurante).filter(

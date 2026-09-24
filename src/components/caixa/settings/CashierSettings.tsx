@@ -220,6 +220,7 @@ export default function CashierSettings({
 
               <CashierWaiterSettings
                 printingSettingsTab={operationalSettingsTab}
+                hasPrinting={hasPrinting}
                 setConfigSalSubTab={setConfigSalSubTab}
                 configSalSubTab={configSalSubTab}
                 waiterPermissions={waiterPermissions}

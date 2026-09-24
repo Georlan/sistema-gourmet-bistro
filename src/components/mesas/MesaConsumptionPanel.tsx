@@ -17,6 +17,7 @@ interface MesaConsumptionConfig {
   perm_garcom_transferir_mesa?: boolean;
   perm_garcom_editar?: boolean;
   perm_garcom_cancelar_item?: boolean;
+  entitlements?: { printing?: boolean };
 }
 
 interface MesaConsumptionPanelProps {
@@ -65,6 +66,8 @@ export function MesaConsumptionPanel({
   setActiveTab, setTransferType, setSelectedOrderToPrint, setEditingItem,
   onPrintPreview, onPrintValues, onCloseTable, onMergeTables, onUnmergeTable, onDeliverItem, onCancelItem,
 }: MesaConsumptionPanelProps) {
+  const hasPrinting = restauranteConfig?.entitlements?.printing !== false;
+
   return (
     <div className="p-3 sm:p-5 space-y-4 sm:space-y-6">
       {orders.length === 0 ? (
@@ -142,14 +145,14 @@ export function MesaConsumptionPanel({
               })()}
 
               {/* Direct Print Feedback Toast */}
-              {directPrintToast && (
+              {hasPrinting && directPrintToast && (
                 <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-xl text-center text-xs font-bold font-sans animate-fade-in">
                   {directPrintToast}
                 </div>
               )}
 
-              {/* Action Row 1: Conta da Mesa + reimpressão total com impressão direta */}
-              <div className="grid grid-cols-2 gap-2">
+              {/* Action Row 1: impressão só existe quando o plano possui essa capacidade */}
+              {hasPrinting && <div className="grid grid-cols-2 gap-2">
                 <button
                   id="quick-print-values-btn"
                   type="button"
@@ -173,7 +176,7 @@ export function MesaConsumptionPanel({
                   <Printer size={14} className="text-emerald-400 shrink-0" />
                   <span>Reimpressão</span>
                 </button>
-              </div>
+              </div>}
 
               {/* Action Row 2: Adicionar Itens e encerramento da Mesa (Dinâmico sem buracos vazios) */}
               {(() => {
@@ -325,15 +328,17 @@ export function MesaConsumptionPanel({
                         </button>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={() => setSelectedOrderToPrint(order)}
-                        className="px-2 py-0.5 bg-koma-raised hover:bg-emerald-500/15 text-koma-muted hover:text-koma-foreground border border-koma-border hover:border-emerald-500/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
-                        title="Reimprimir este lote de pedidos"
-                      >
-                        <Printer size={11} className="text-emerald-700 dark:text-emerald-400" />
-                        <span>Reimprimir</span>
-                      </button>
+                      {hasPrinting && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedOrderToPrint(order)}
+                          className="px-2 py-0.5 bg-koma-raised hover:bg-emerald-500/15 text-koma-muted hover:text-koma-foreground border border-koma-border hover:border-emerald-500/30 rounded-lg text-[10px] font-sans font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                          title="Reimprimir este lote de pedidos"
+                        >
+                          <Printer size={11} className="text-emerald-700 dark:text-emerald-400" />
+                          <span>Reimprimir</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 

@@ -373,9 +373,13 @@ test('restrições de plano vivem na árvore canônica, não em listas paralelas
     settings?.children?.find((child) => child.id === 'config_impressao')?.plans,
     ['pro', 'premium'],
   );
-  assert.deepEqual(
+  assert.equal(
+    settings?.children?.find((child) => child.id === 'config_garcom')?.requiredFeature,
+    'waiter_app',
+  );
+  assert.equal(
     settings?.children?.find((child) => child.id === 'config_garcom')?.plans,
-    ['pro', 'premium'],
+    undefined,
   );
 
   const source = readFileSync(
@@ -407,12 +411,13 @@ test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redu
   assert.deepEqual(pocketSettings?.children?.map((child) => child.id), [
     'config_aparencia',
     'config_mesas',
+    'config_garcom',
     'config_taxa',
     'config_implantacao',
     'config_integracoes',
   ]);
   assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_impressao'), false);
-  assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_garcom'), false);
+  assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_garcom'), true);
 
   const pocketCardapio = pocketGroups
     .flatMap((group) => group.items)
@@ -438,7 +443,6 @@ test('explicit entitlement overrides can grant or revoke plan navigation capabil
   const pocketWithAddons = getCashierSidebarGroupsForPlan('pocket', {
     printing: true,
     kds: true,
-    waiter_app: true,
   });
   const pocketSettings = pocketWithAddons.flatMap((group) => group.items).find((item) => item.id === 'impressao_salao');
   assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_impressao'), true);
