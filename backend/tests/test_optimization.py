@@ -177,6 +177,78 @@ def test_unified_fidelity_points_and_cashback():
     assert res3["acumulado_nesta_compra"] == 5.0
     assert res3["saldo_atual"] == 5.0
 
+
+def test_pocket_preserva_clientes_mas_bloqueia_fidelidade_e_saldos():
+    client = TestClient(app)
+    db = TestingSessionLocal()
+    try:
+        rest = db.query(Restaurante).filter(Restaurante.id == 1).one()
+        rest.plano = "pocket"
+        db.commit()
+    finally:
+        db.close()
+
+    headers = get_auth_headers(client, "caixa", "123")
+
+    assert client.get("/fidelidade/config", headers=headers).status_code == 403
+    assert client.post(
+        "/fidelidade/config",
+        headers=headers,
+        json={
+            "ativo": True,
+            "tipo_recompensa": "PONTOS",
+            "taxa_conversao": 1.0,
+            "valor_ponto_em_dinheiro": 0.05,
+        },
+    ).status_code == 403
+
+    created = client.post(
+        "/fidelidade/clientes",
+        headers=headers,
+        json={"cliente": "Cliente Pocket", "telefone": "81988887766"},
+    )
+    assert created.status_code == 201
+    customer_id = created.json()["id"]
+
+    listing = client.get("/fidelidade/clientes", headers=headers)
+    assert listing.status_code == 200
+    customer = next(row for row in listing.json() if row["id"] == customer_id)
+    assert customer["pontos"] == 0
+    assert customer["saldoCashback"] == 0.0
+
+    blocked_balance = client.put(
+        f"/fidelidade/clientes/{customer_id}",
+        headers=headers,
+        json={
+            "cliente": "Cliente Pocket",
+            "telefone": "81988887766",
+            "saldo_pontos": 20,
+        },
+    )
+    assert blocked_balance.status_code == 403
+
+    basic_edit = client.put(
+        f"/fidelidade/clientes/{customer_id}",
+        headers=headers,
+        json={
+            "cliente": "Cliente Pocket Editado",
+            "telefone": "81988887755",
+        },
+    )
+    assert basic_edit.status_code == 200
+    assert basic_edit.json()["cliente"] == "Cliente Pocket Editado"
+
+    assert client.post(
+        "/fidelidade/checkout",
+        headers=headers,
+        json={
+            "cliente_id": customer_id,
+            "valor_total": 100.0,
+            "resgatar": False,
+        },
+    ).status_code == 403
+
+
 def test_waiter_commission_report():
     client = TestClient(app)
     headers = get_auth_headers(client, "caixa", "123")
