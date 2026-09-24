@@ -34,7 +34,7 @@ KNOWN_ENTITLEMENTS = frozenset(
 )
 
 _PLAN_ENTITLEMENTS: dict[str, frozenset[str]] = {
-    "pocket": frozenset(),
+    "pocket": frozenset({ENTITLEMENT_WAITER_APP}),
     "pro": frozenset(
         {
             ENTITLEMENT_PRINTING,
