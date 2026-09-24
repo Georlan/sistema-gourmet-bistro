@@ -35,15 +35,27 @@ docker run --detach --name koma-restore-drill \
   postgres:17
 docker exec koma-restore-drill sh -c 'until pg_isready -U postgres; do sleep 1; done'
 docker exec koma-restore-drill createdb -U postgres koma_restore_drill
-docker cp "$KOMA_DRILL_DUMP" koma-restore-drill:/tmp/application.dump
-docker exec koma-restore-drill pg_restore -U postgres \
-  --no-owner --no-acl --exit-on-error \
-  --dbname=koma_restore_drill /tmp/application.dump
+if [[ "$KOMA_DRILL_DUMP" == *.gz ]]; then
+  set -o pipefail
+  gzip -dc "$KOMA_DRILL_DUMP" | docker exec -i koma-restore-drill pg_restore \
+    -F t -U postgres --no-owner --no-acl --exit-on-error \
+    --dbname=koma_restore_drill
+else
+  docker cp "$KOMA_DRILL_DUMP" koma-restore-drill:/tmp/application.dump
+  docker exec koma-restore-drill pg_restore -U postgres \
+    --no-owner --no-acl --exit-on-error \
+    --dbname=koma_restore_drill /tmp/application.dump
+fi
 ```
 
-Não use `--clean` nem reutilize um banco existente. Se o arquivo S3 não for um
-dump em formato `pg_restore`, identifique e documente seu formato antes de
-adaptar o comando; não declare o exercício aprovado por uma tentativa falha.
+Não use `--clean` nem reutilize um banco existente. O serviço `Postgres S3 Backup`
+produz um `pg_dump` em formato tar comprimido com `gzip` (`.gz`). O comando
+acima descomprime e envia o tar diretamente para `pg_restore`. A imagem
+`postgres:17` padrão falhou ao recriar a extensão `supabase_vault` encontrada
+no backup de 24/09/2026; para esse backup, substitua a imagem no comando
+`docker run` por uma que tenha a mesma extensão e versão da origem.
+Não exclua a extensão e não marque um restore parcial como comprovado. Nunca
+execute `pg_restore` contra produção.
 
 ## Conferir integridade e leitura pelo backend
 
@@ -71,7 +83,7 @@ PYTHONPATH=backend python -c \
   'from app.database import SessionLocal; from app.models import Restaurante; db=SessionLocal(); print("restaurantes:", db.query(Restaurante).count()); db.close()'
 ```
 
-Registre data, origem e checksum do backup, versão PostgreSQL, head Alembic,
+Registre data, origem e checksum do backup, versão PostgreSQL, extensões necessárias, head Alembic,
 contagens sem PII, resultado da leitura pelo backend e responsável pelo teste.
 Marque **restore comprovado** somente se todos os passos passarem. Ao terminar,
 remova o container e apague o dump local conforme a política de retenção segura:
