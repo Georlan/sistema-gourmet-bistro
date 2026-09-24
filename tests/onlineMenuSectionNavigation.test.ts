@@ -25,14 +25,14 @@ test('Cardápio online espelha as mesmas funções na navegação responsiva', (
   assert.match(caixa, /onlineMenuSubnavItems = getCashierNavigationItem\('cardapio_digital'\)\?\.children \?\? \[\]/);
   assert.match(caixa, /activeTab === 'cardapio_digital'/);
   assert.match(caixa, /onlineMenuSubnavItems\.map/);
-  assert.match(caixa, /Seção do cardápio online/);
+  assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
   assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
 });
 
 test('Configurações também espelha filhos verticais na subnavegação horizontal', () => {
   const caixa = source('../src/components/CaixaPanel.tsx');
   assert.match(caixa, /settingsSubnavItems = getCashierNavigationItem\('impressao_salao'\)\?\.children \?\? \[\]/);
-  assert.match(caixa, /activeTab === 'impressao_salao' && settingsSubnavItems\.map/);
+  assert.match(caixa, /activeTab === 'impressao_salao' && settingsSubnavItems\.filter/);
 });
 
 test('CashierOnlineMenu routes channel concerns to their canonical owners', () => {

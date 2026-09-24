@@ -29,6 +29,12 @@ from ..schemas import CupomCreate, CupomResponse, CupomValidateRequest, CupomVal
 from ..security import get_current_user, require_permission
 from ..services.billing_service import tenant_marketplace_rate
 from ..services.coupon_eligibility import customer_matches_targeted_coupon
+from ..services.plan_entitlements import (
+    ENTITLEMENT_COUPONS,
+    ENTITLEMENT_LOYALTY,
+    has_plan_entitlement,
+    require_plan_entitlement,
+)
 
 router = APIRouter(
     prefix="/caixa/cupons",
@@ -291,6 +297,12 @@ def listar_cupons(
     current_user: Usuario = Depends(require_permission("fidelidade:operar")),
 ):
     rest_id = require_tenant_id()
+    require_plan_entitlement(
+        db,
+        rest_id,
+        ENTITLEMENT_COUPONS,
+        detail="Cupons estão disponíveis apenas para restaurantes com esse benefício contratado.",
+    )
     return db.query(Cupom).filter(Cupom.restaurante_id == rest_id).order_by(Cupom.criado_em.desc()).all()
 
 
@@ -307,6 +319,12 @@ def recomendar_incentivos(
     sem pedir CMV, ticket ou margem ao dono do restaurante.
     """
     rest_id = require_tenant_id()
+    require_plan_entitlement(
+        db,
+        rest_id,
+        ENTITLEMENT_COUPONS,
+        detail="Cupons estão disponíveis apenas para restaurantes com esse benefício contratado.",
+    )
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
@@ -344,6 +362,12 @@ def criar_cupom(
 ):
     _validate_coupon_configuration(payload)
     rest_id = require_tenant_id()
+    require_plan_entitlement(
+        db,
+        rest_id,
+        ENTITLEMENT_COUPONS,
+        detail="Cupons estão disponíveis apenas para restaurantes com esse benefício contratado.",
+    )
     _validate_targeted_customer(db, restaurante_id=rest_id, cliente_id=payload.cliente_id)
     codigo_clean = payload.codigo.strip().upper()
 
@@ -387,6 +411,12 @@ def atualizar_cupom(
 ):
     _validate_coupon_configuration(payload)
     rest_id = require_tenant_id()
+    require_plan_entitlement(
+        db,
+        rest_id,
+        ENTITLEMENT_COUPONS,
+        detail="Cupons estão disponíveis apenas para restaurantes com esse benefício contratado.",
+    )
     _validate_targeted_customer(db, restaurante_id=rest_id, cliente_id=payload.cliente_id)
     cupom = db.query(Cupom).filter(
         Cupom.restaurante_id == rest_id,
@@ -430,6 +460,12 @@ def deletar_cupom(
 ):
     """Desativa o cupom preservando seu histórico e referências de pedidos."""
     rest_id = require_tenant_id()
+    require_plan_entitlement(
+        db,
+        rest_id,
+        ENTITLEMENT_COUPONS,
+        detail="Cupons estão disponíveis apenas para restaurantes com esse benefício contratado.",
+    )
     cupom = db.query(Cupom).filter(
         Cupom.restaurante_id == rest_id,
         Cupom.id == cupom_id,
@@ -465,22 +501,28 @@ def listar_beneficios_publicos(
     """
     agora_utc_sem_tz = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     with tenant_session_scope(db, restaurante_id):
-        cupons = (
-            db.query(Cupom)
-            .filter(
-                Cupom.restaurante_id == restaurante_id,
-                Cupom.ativo.is_(True),
-                Cupom.cliente_id.is_(None),
-                or_(Cupom.valido_ate.is_(None), Cupom.valido_ate >= agora_utc_sem_tz),
-                or_(Cupom.limite_usos.is_(None), Cupom.usos_atuais < Cupom.limite_usos),
+        coupons_enabled = has_plan_entitlement(db, restaurante_id, ENTITLEMENT_COUPONS)
+        loyalty_enabled = has_plan_entitlement(db, restaurante_id, ENTITLEMENT_LOYALTY)
+        cupons = []
+        if coupons_enabled:
+            cupons = (
+                db.query(Cupom)
+                .filter(
+                    Cupom.restaurante_id == restaurante_id,
+                    Cupom.ativo.is_(True),
+                    Cupom.cliente_id.is_(None),
+                    or_(Cupom.valido_ate.is_(None), Cupom.valido_ate >= agora_utc_sem_tz),
+                    or_(Cupom.limite_usos.is_(None), Cupom.usos_atuais < Cupom.limite_usos),
+                )
+                .order_by(Cupom.criado_em.desc())
+                .limit(12)
+                .all()
             )
-            .order_by(Cupom.criado_em.desc())
-            .limit(12)
-            .all()
-        )
-        programa = db.query(ConfigFidelizacao).filter(
-            ConfigFidelizacao.restaurante_id == restaurante_id,
-        ).first()
+        programa = None
+        if loyalty_enabled:
+            programa = db.query(ConfigFidelizacao).filter(
+                ConfigFidelizacao.restaurante_id == restaurante_id,
+            ).first()
 
         payload = {
             "cupons": [
@@ -513,6 +555,11 @@ def validar_cupom_publico(
 ):
     codigo_clean = payload.codigo.strip().upper()
     with tenant_session_scope(db, payload.restaurante_id):
+        if not has_plan_entitlement(db, payload.restaurante_id, ENTITLEMENT_COUPONS):
+            return CupomValidateResponse(
+                valido=False,
+                mensagem="Cupom inválido ou não encontrado.",
+            )
         cupom = db.query(Cupom).filter(
             Cupom.restaurante_id == payload.restaurante_id,
             Cupom.codigo == codigo_clean,

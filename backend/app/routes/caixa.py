@@ -33,6 +33,7 @@ from ..subscription import (
     get_effective_subscription_plan,
     is_test_premium_restaurant,
 )
+from ..services.plan_entitlements import resolve_plan_entitlements
 from .websocket import manager
 from ..services.clientes import (
     buscar_cliente_por_id,
@@ -1711,7 +1712,7 @@ from ..schemas import ConfiguracaoRestauranteResponse, ConfiguracaoRestauranteUp
 from sqlalchemy.orm import joinedload
 
 
-def _serializar_configuracoes(config: ConfiguracaoRestaurante) -> dict:
+def _serializar_configuracoes(db: Session, config: ConfiguracaoRestaurante) -> dict:
     payload = ConfiguracaoRestauranteResponse.model_validate(config).model_dump()
     payload["delivery_origin_configured"] = bool(
         config.restaurante
@@ -1724,6 +1725,11 @@ def _serializar_configuracoes(config: ConfiguracaoRestaurante) -> dict:
     )
     payload["plano_modo_teste"] = is_test_premium_restaurant(
         config.restaurante_id
+    )
+    payload["entitlements"] = resolve_plan_entitlements(
+        db,
+        config.restaurante_id,
+        stored_plan=config.plano,
     )
     return payload
 
@@ -1744,7 +1750,7 @@ def obter_configuracoes(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Configurações do restaurante ainda não foram provisionadas.",
         )
-    return _serializar_configuracoes(config)
+    return _serializar_configuracoes(db, config)
 
 
 @router.get("/configuracoes/delivery-suggestion")
@@ -1925,7 +1931,7 @@ def atualizar_configuracoes(
     rest_id = require_tenant_id()
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
     background_tasks.add_task(manager.broadcast, {"event": "config_updated"}, rest_id)
-    return _serializar_configuracoes(config)
+    return _serializar_configuracoes(db, config)
 
 
 # ----------------- CONFIGURAÇÕES WHITELABEL DO RESTAURANTE -----------------

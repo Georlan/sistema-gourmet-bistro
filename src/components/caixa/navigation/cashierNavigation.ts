@@ -12,7 +12,12 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { CashierTab } from '../cashierContracts';
-import type { SubscriptionPlanId } from '../../../config/subscriptionPlans';
+import {
+  subscriptionHasFeature,
+  type SubscriptionEntitlements,
+  type SubscriptionFeatureId,
+  type SubscriptionPlanId,
+} from '../../../config/subscriptionPlans';
 
 export type CashierNavigationTarget = {
   tab: CashierTab;
@@ -28,6 +33,7 @@ export type CashierNavigationChild = {
   action?: CashierNavigationAction;
   badge?: 'orders';
   plans?: readonly SubscriptionPlanId[];
+  requiredFeature?: SubscriptionFeatureId;
 };
 
 export type CashierNavigationItem = {
@@ -187,9 +193,9 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         target: { tab: 'impressao_salao', subTab: 'aparencia' },
         children: [
           { id: 'config_aparencia', label: 'Aparência', target: { tab: 'impressao_salao', subTab: 'aparencia' } },
-          { id: 'config_impressao', label: 'Impressão', plans: ['pro', 'premium'], target: { tab: 'impressao_salao', subTab: 'impressao' } },
+          { id: 'config_impressao', label: 'Impressão', plans: ['pro', 'premium'], requiredFeature: 'printing', target: { tab: 'impressao_salao', subTab: 'impressao' } },
           { id: 'config_mesas', label: 'Mesas', target: { tab: 'impressao_salao', subTab: 'mesas' } },
-          { id: 'config_garcom', label: 'App do Garçom', plans: ['pro', 'premium'], target: { tab: 'impressao_salao', subTab: 'garcom' } },
+          { id: 'config_garcom', label: 'App do Garçom', plans: ['pro', 'premium'], requiredFeature: 'waiter_app', target: { tab: 'impressao_salao', subTab: 'garcom' } },
           { id: 'config_taxa', label: 'Taxa de Serviço', target: { tab: 'impressao_salao', subTab: 'taxa' } },
           { id: 'config_implantacao', label: 'Implantação inicial', target: { tab: 'impressao_salao', subTab: 'implantacao' } },
           { id: 'config_integracoes', label: 'Integrações', target: { tab: 'impressao_salao', subTab: 'integracoes' } },
@@ -213,26 +219,36 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
 function isNavigationEntryAvailable(
   plans: readonly SubscriptionPlanId[] | undefined,
   planId: SubscriptionPlanId,
+  requiredFeature?: SubscriptionFeatureId,
+  entitlements?: SubscriptionEntitlements,
 ): boolean {
+  if (requiredFeature) return subscriptionHasFeature(planId, requiredFeature, entitlements);
   return !plans || plans.includes(planId);
 }
 
-export function getCashierSidebarGroupsForPlan(planId: SubscriptionPlanId): readonly CashierNavigationGroup[] {
+export function getCashierSidebarGroupsForPlan(
+  planId: SubscriptionPlanId,
+  entitlements?: SubscriptionEntitlements,
+): readonly CashierNavigationGroup[] {
   return CASHIER_SIDEBAR_GROUPS
     .map((group) => ({
       ...group,
       items: group.items
-        .filter((item) => isNavigationEntryAvailable(item.plans, planId))
+        .filter((item) => isNavigationEntryAvailable(item.plans, planId, undefined, entitlements))
         .map((item) => {
           if (!item.children?.length) return item;
 
           const children = item.children
-            .filter((child) => isNavigationEntryAvailable(child.plans, planId))
-            .map((child) =>
-              child.id === 'cardapio_preparo' && planId === 'pocket'
-                ? { ...child, label: 'Preparo' }
-                : child,
-            );
+            .filter((child) => isNavigationEntryAvailable(child.plans, planId, child.requiredFeature, entitlements))
+            .map((child) => {
+              if (child.id === 'cardapio_preparo' && !subscriptionHasFeature(planId, 'printing', entitlements)) {
+                return { ...child, label: 'Preparo' };
+              }
+              if (child.id === 'vendas_cozinha' && !subscriptionHasFeature(planId, 'kds', entitlements)) {
+                return { ...child, label: 'Preparo', target: { ...child.target, subTab: 'preparo' } };
+              }
+              return child;
+            });
 
           return { ...item, children };
         }),

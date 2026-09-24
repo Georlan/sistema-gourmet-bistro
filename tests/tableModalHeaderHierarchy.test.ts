@@ -15,7 +15,7 @@ test('mesa is the primary visual anchor of the salon modal header', () => {
   assert.ok(contextIndex >= 0, 'operational context should be visible');
   assert.ok(tableIndex > contextIndex, 'table identity should follow the context eyebrow');
   assert.ok(elapsedIndex > tableIndex, 'elapsed time must remain secondary to table identity');
-  assert.match(source, /text-2xl sm:text-4xl[^\n]*font-extrabold/);
+  assert.match(source, /text-2xl[^\n]*font-extrabold[^\n]*sm:text-4xl/);
   assert.match(source, /aria-label="Voltar ao mapa de mesas"/);
   assert.match(source, /aria-label="Fechar detalhes da mesa"/);
   assert.doesNotMatch(source, />Ocupada</);

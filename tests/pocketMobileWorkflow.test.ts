@@ -72,6 +72,19 @@ test('buildWhatsAppShiftReceipt formats shift summary for manager review without
   assert.match(receipt, /Dinheiro Esperado em Gaveta: R\$\s*250,00/);
 });
 
+test('receipt uses the persisted charge for discounts, delivery, partial payments and reopened orders', () => {
+  const items = [{ id: '1', produtoId: '1', nome: 'Pedido', preco: 100, quantidade: 1, observacao: '', clienteNome: '', status: 'pronto' as const }];
+  for (const [total, paid, balance] of [[90, 90, 0], [115, 40, 75], [90, 30, 60]]) {
+    const receipt = buildWhatsAppOrderReceipt(
+      { itens: items, total, valorPago: paid }, null,
+      { taxaServicoAtiva: true, serviceTaxRate: 10 },
+    );
+    assert.match(receipt, new RegExp(`\\*Total: R\\$\\s*${total},00\\*`));
+    assert.match(receipt, new RegExp(`Saldo a pagar: R\\$\\s*${balance},00`));
+    assert.match(receipt, /Subtotal: R\$\s*100,00/);
+  }
+});
+
 test('CheckoutDialog hides physical print button and shows WhatsApp share button when hasPrinting is false', () => {
   const dummyController = {
     isProcessingPayment: false,
@@ -186,18 +199,14 @@ test('mobile operation subnav avoids duplicating actions already pinned to the b
 });
 
 
-test('mobile menu exposes practical owner shortcuts and compact touch-first shell', () => {
+test('mobile menu avoids duplicated owner shortcuts and keeps the compact touch-first shell', () => {
   const mobileSidebar = readFileSync(new URL('../src/components/caixa/navigation/CashierMobileSidebar.tsx', import.meta.url), 'utf8');
   const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
 
-  assert.match(mobileSidebar, /cashier-mobile-quick-actions/);
-  assert.match(mobileSidebar, /label: 'Produtos'/);
-  assert.match(mobileSidebar, /label: 'Clientes'/);
-  assert.match(mobileSidebar, /label: 'Cardápio online'/);
-  assert.match(mobileSidebar, /label: 'Configurações'/);
+  assert.doesNotMatch(mobileSidebar, /cashier-mobile-quick-actions|mobileQuickActions/);
+  assert.match(mobileSidebar, /CashierSidebarSearch/);
+  assert.match(mobileSidebar, /CashierSidebarNavigation/);
   assert.match(cashierCss, /\.cashier-sidebar--mobile/);
-  assert.match(cashierCss, /\.cashier-mobile-quick-action/);
-  assert.match(cashierCss, /min-height: 3\.25rem/);
   assert.match(cashierCss, /\.cashier-sidebar__footer--mobile/);
 });
 
@@ -223,8 +232,12 @@ test('mobile catalog prioritizes create preview and bulk actions', () => {
 
 test('online menu mobile exposes the edit publish customer-preview loop', () => {
   const editor = readFileSync(new URL('../src/components/cardapio/CardapioDigitalSettingsPanel.tsx', import.meta.url), 'utf8');
+  const onlineShell = readFileSync(new URL('../src/components/caixa/online-menu/CashierOnlineMenu.tsx', import.meta.url), 'utf8');
   const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
 
+  assert.match(onlineShell, /Editar → Publicar → Conferir/);
+  assert.match(onlineShell, /Link e QR Code/);
+  assert.match(onlineShell, /3\. Conferir/);
   assert.match(editor, /Ver como cliente/);
   assert.match(editor, /online-menu-editor__publish/);
   assert.match(editor, /Salvar e publicar/);
@@ -240,7 +253,8 @@ test('mobile information architecture avoids duplicated deep navigation', () => 
 
   assert.match(mobileSidebar, /expandActiveChildren=\{false\}/);
   assert.match(sidebarNavigation, /expandActiveChildren = true/);
-  assert.match(caixaPanel, /Seção do cardápio online/);
+  assert.match(caixaPanel, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
+  assert.match(caixaPanel, /if \(sub\.requiredFeature\) return subscriptionHasFeature\(currentPlanId, sub\.requiredFeature, planEntitlements\)/);
   assert.match(caixaPanel, /'Cardápio online'/);
 });
 

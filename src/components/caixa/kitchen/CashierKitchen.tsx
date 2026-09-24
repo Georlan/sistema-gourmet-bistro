@@ -15,6 +15,7 @@ import {
 type BoundaryProps = Pick<ReturnType<typeof useCashierOrders>, 'handleUpdateItemStatus'> & {
   activeSubTab: string;
   activeKitchenItems: KdsKitchenItem[];
+  mode?: 'kds' | 'queue';
 };
 
 const toTimerTimestamp = (value: unknown): string | undefined => {
@@ -36,7 +37,7 @@ const originLabel = (origin: KdsTicket['origemOperacional']) => {
  * Kitchen view over the canonical item statuses owned by the order flow.
  * Caixa and KDS therefore converge on the same preparing/ready/delivered state.
  */
-export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateItemStatus }: BoundaryProps) {
+export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateItemStatus, mode = 'kds' }: BoundaryProps) {
   const [pendingItemIds, setPendingItemIds] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const projection = useMemo(() => projectKdsTickets(activeKitchenItems), [activeKitchenItems]);
@@ -49,7 +50,8 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
     [projection.readyTickets, searchQuery],
   );
 
-  if (activeSubTab !== 'kds') return null;
+  const expectedSubTab = mode === 'kds' ? 'kds' : 'preparo';
+  if (activeSubTab !== expectedSubTab) return null;
 
   const runTransition = async (
     items: readonly KdsKitchenItem[],
@@ -261,6 +263,40 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
       )}
     </section>
   );
+
+  if (mode === 'queue') {
+    return (
+      <div className="space-y-4 rounded-3xl border border-koma-border bg-koma-card/60 p-4 sm:p-5" data-kitchen-mode="queue">
+        <div className="flex flex-col gap-3 border-b border-koma-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-2.5 text-emerald-400">
+              <ChefHat size={20} />
+            </div>
+            <div>
+              <h2 className="font-serif text-base font-bold text-koma-secondary">Fila de preparo</h2>
+              <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+                Acompanhe o que está sendo preparado e marque itens como prontos ou entregues. Esta fila na tela funciona sem impressão física.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
+            <span className="rounded-full bg-amber-500/10 px-2.5 py-1.5 text-amber-400">{projection.preparingItemCount} em preparo</span>
+            <span className="rounded-full bg-emerald-500/15 px-2.5 py-1.5 text-emerald-400">{projection.readyItemCount} prontos</span>
+          </div>
+        </div>
+
+        {projection.tickets.length === 0 ? (
+          <div className="py-20 text-center">
+            <ChefHat size={30} className="mx-auto mb-3 text-koma-muted/40" />
+            <p className="font-serif text-base font-bold text-koma-foreground">Nada para preparar agora</p>
+            <p className="mt-1 text-[10px] text-koma-muted">Novos pedidos aparecem aqui automaticamente.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">{projection.tickets.map(renderTicket)}</div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 rounded-3xl border border-koma-border bg-koma-card/60 p-4 sm:p-5">

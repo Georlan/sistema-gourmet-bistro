@@ -17,9 +17,11 @@ def setup_cupons_test():
     try:
         rest = db.query(Restaurante).filter(Restaurante.id == 999).first()
         if not rest:
-            rest = Restaurante(id=999, nome="Restaurante Teste 999", slug="rest-999")
+            rest = Restaurante(id=999, nome="Restaurante Teste 999", slug="rest-999", plano="premium")
             db.add(rest)
-            db.commit()
+        else:
+            rest.plano = "premium"
+        db.commit()
 
         user = db.query(Usuario).filter(Usuario.id == "usr-admin-cupom").first()
         if not user:
@@ -188,3 +190,68 @@ def test_beneficios_publicos_expoem_apenas_ofertas_seguras_e_programa():
         "taxa_conversao": 3.0,
         "valor_ponto_em_dinheiro": 0.05,
     }
+
+@pytest.mark.parametrize("plan", ["pocket", "pro"])
+def test_cupons_fecham_api_e_exposicao_publica_sem_entitlement(plan):
+    db = SessionLocal()
+    token = current_restaurante_id.set(999)
+    try:
+        rest = db.query(Restaurante).filter(Restaurante.id == 999).one()
+        rest.plano = plan
+        hidden = db.query(Cupom).filter(
+            Cupom.restaurante_id == 999,
+            Cupom.codigo == "OCULTO12",
+        ).first()
+        if hidden is None:
+            hidden = Cupom(
+                id="cup-hidden-by-plan",
+                restaurante_id=999,
+                codigo="OCULTO12",
+                tipo_desconto="porcentagem",
+                valor_desconto=12.0,
+                ativo=True,
+            )
+            db.add(hidden)
+        config = db.query(ConfigFidelizacao).filter(
+            ConfigFidelizacao.restaurante_id == 999
+        ).first()
+        if config is None:
+            config = ConfigFidelizacao(restaurante_id=999)
+            db.add(config)
+        config.ativo = True
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+
+    headers = _auth_headers()
+    assert client.get("/caixa/cupons", headers=headers).status_code == 403
+    assert client.post(
+        "/caixa/cupons",
+        headers=headers,
+        json={
+            "codigo": "NEGADO10",
+            "tipo_desconto": "porcentagem",
+            "valor_desconto": 10.0,
+        },
+    ).status_code == 403
+
+    benefits = client.get(
+        "/cardapio/cupons/beneficios",
+        params={"restaurante_id": 999},
+    )
+    assert benefits.status_code == 200
+    assert benefits.json()["cupons"] == []
+    assert benefits.json()["programa"] is None
+
+    validation = client.post(
+        "/cardapio/cupons/validar",
+        json={
+            "restaurante_id": 999,
+            "codigo": "OCULTO12",
+            "subtotal": 100.0,
+        },
+    )
+    assert validation.status_code == 200
+    assert validation.json()["valido"] is False
+

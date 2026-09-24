@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
 import type { CashierTab } from '../cashierContracts';
+import {
+  subscriptionHasFeature,
+  type SubscriptionEntitlements,
+  type SubscriptionPlanId,
+} from '../../../config/subscriptionPlans';
 import './cashierSetupMode.css';
 import {
   getCashierNavigationAction,
@@ -11,6 +16,8 @@ import {
 
 type BoundaryProps = {
   hasOnlineMenu: boolean;
+  planId: SubscriptionPlanId;
+  entitlements?: SubscriptionEntitlements;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 };
 
@@ -36,13 +43,31 @@ function readSetupMode(): boolean {
 }
 
 /** Owns persisted navigation and mobile drawer lifecycle, independent of operational controllers. */
-export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps) {
+export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, showToast }: BoundaryProps) {
   const [setupMode] = useState(readSetupMode);
+  const normalizePlanTarget = (target: { tab: CashierTab; subTab: string }) => {
+    if (target.tab === 'operacao' && target.subTab === 'kds' && !subscriptionHasFeature(planId, 'kds', entitlements)) {
+      return { ...target, subTab: 'preparo' };
+    }
+    if (target.tab === 'impressao_salao' && target.subTab === 'impressao' && !subscriptionHasFeature(planId, 'printing', entitlements)) {
+      return { tab: 'impressao_salao' as CashierTab, subTab: 'aparencia' };
+    }
+    if (target.tab === 'impressao_salao' && target.subTab === 'garcom' && !subscriptionHasFeature(planId, 'waiter_app', entitlements)) {
+      return { tab: 'impressao_salao' as CashierTab, subTab: 'aparencia' };
+    }
+    if (target.tab === 'clientes' && target.subTab === 'fidelidade' && !subscriptionHasFeature(planId, 'loyalty', entitlements)) {
+      return { tab: 'clientes' as CashierTab, subTab: 'clientes' };
+    }
+    if (target.tab === 'clientes' && target.subTab === 'cupons' && !subscriptionHasFeature(planId, 'coupons', entitlements)) {
+      return { tab: 'clientes' as CashierTab, subTab: 'clientes' };
+    }
+    return target;
+  };
   const [initialNavigation] = useState(() => {
-    const restored = normalizeCashierNavigationState(
+    const restored = normalizePlanTarget(normalizeCashierNavigationState(
       sessionStorage.getItem('koma_active_tab'),
       sessionStorage.getItem('koma_active_subtab'),
-    );
+    ));
     if (setupMode && !setupAllowsState(restored.tab, restored.subTab)) {
       return { tab: 'cardapio_digital' as CashierTab, subTab: 'cardapio_perfil' };
     }
@@ -84,19 +109,20 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
       return;
     }
 
-    const normalized = normalizeCashierNavigationState(activeTab, activeSubTab);
+    const normalized = normalizePlanTarget(normalizeCashierNavigationState(activeTab, activeSubTab));
     if (normalized.tab !== activeTab) setActiveTab(normalized.tab);
     if (normalized.subTab !== activeSubTab) setActiveSubTab(normalized.subTab);
     sessionStorage.setItem('koma_active_tab', normalized.tab);
     sessionStorage.setItem('koma_active_subtab', normalized.subTab);
-  }, [activeSubTab, activeTab, setupMode]);
+  }, [activeSubTab, activeTab, setupMode, planId, entitlements]);
 
   const setupAllowsTarget = (tab: CashierTab, subTab: string) =>
     !setupMode || setupAllowsState(tab, subTab);
 
   const applyNavigationTarget = (navigationId: string) => {
-    const target = getCashierNavigationTarget(navigationId);
-    if (target) {
+    const rawTarget = getCashierNavigationTarget(navigationId);
+    if (rawTarget) {
+      const target = normalizePlanTarget(rawTarget);
       if (!setupAllowsTarget(target.tab, target.subTab)) {
         showToast('Finalize a implantação inicial antes de acessar a operação.', 'info');
         return false;
@@ -129,8 +155,10 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     if (!applyNavigationTarget(tabId)) setActiveTab(tabId as CashierTab);
   };
 
-  const isSidebarTabActive = (tabId: string) =>
-    isCashierNavigationActive(tabId, activeTab, activeSubTab);
+  const isSidebarTabActive = (tabId: string) => {
+    if (tabId === 'vendas_cozinha' && activeTab === 'operacao' && activeSubTab === 'preparo') return true;
+    return isCashierNavigationActive(tabId, activeTab, activeSubTab);
+  };
 
   const handleSidebarNavigation = (navigationId: string, closeMobile = false) => {
     if (closeMobile) setIsMobileSidebarOpen(false);

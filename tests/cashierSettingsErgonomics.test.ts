@@ -22,7 +22,7 @@ test('cashier settings render only the active canonical destination without inte
   assert.match(navigation, /config_implantacao[\s\S]*Implantação inicial[\s\S]*subTab: 'implantacao'/);
   assert.match(navigation, /config_integracoes[\s\S]*Integrações[\s\S]*subTab: 'integracoes'/);
   assert.match(panel, /settingsSubnavItems = getCashierNavigationItem\('impressao_salao'\)\?\.children \?\? \[\]/);
-  assert.match(panel, /activeTab === 'impressao_salao' && settingsSubnavItems\.map/);
+  assert.match(panel, /activeTab === 'impressao_salao' && settingsSubnavItems\.filter/);
 
   assert.doesNotMatch(settings, /cashier-settings-tab|CASHIER_SETTINGS_GROUPS|selectSettingsTab|readInitialCashierSettingsTab/);
   assert.doesNotMatch(settings, /Configurações do Caixa/);

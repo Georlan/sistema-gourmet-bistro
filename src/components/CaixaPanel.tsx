@@ -5,6 +5,8 @@ import {
   getSubscriptionPlan,
   isAddonIncludedInPlan,
   normalizeSubscriptionPlan,
+  subscriptionHasFeature,
+  type SubscriptionEntitlements,
 } from '../config/subscriptionPlans';
 import {
   formatCashierOldestAge as formatOldestAge,
@@ -122,7 +124,11 @@ export function CaixaPanel({
     isRestaurant2Test ? 'premium' : (restauranteConfig?.plano_efetivo ?? restauranteConfig?.plano),
   );
   const currentPlan = getSubscriptionPlan(currentPlanId);
-  const hasPrinting = currentPlanId !== 'pocket';
+  const planEntitlements = (restauranteConfig?.entitlements ?? undefined) as SubscriptionEntitlements | undefined;
+  const hasPrinting = subscriptionHasFeature(currentPlanId, 'printing', planEntitlements);
+  const hasDedicatedKds = subscriptionHasFeature(currentPlanId, 'kds', planEntitlements);
+  const hasLoyalty = subscriptionHasFeature(currentPlanId, 'loyalty', planEntitlements);
+  const hasCoupons = subscriptionHasFeature(currentPlanId, 'coupons', planEntitlements);
   const hasOnlineMenu =
     isAddonIncludedInPlan(currentPlanId, 'online_menu') || restauranteConfig?.cardapio_online_addon === true;
   const pendingPaymentsTotal = useMemo(
@@ -230,7 +236,7 @@ export function CaixaPanel({
     handleTabChange,
     isSidebarTabActive,
     handleSidebarNavigation,
-  } = useCashierNavigation({ hasOnlineMenu, showToast });
+  } = useCashierNavigation({ hasOnlineMenu, planId: currentPlanId, entitlements: planEntitlements, showToast });
 
   const cashierContentRef = useRef<HTMLDivElement>(null);
 
@@ -687,6 +693,7 @@ export function CaixaPanel({
           turnoLoadState={turnoLoadState}
           setShowAbrirModal={setShowAbrirModal}
           planId={currentPlanId}
+          entitlements={planEntitlements}
           hasOnlineMenu={hasOnlineMenu}
           isSidebarTabActive={isSidebarTabActive}
           sidebarOrderCount={sidebarOrderCount}
@@ -704,6 +711,7 @@ export function CaixaPanel({
           turnoLoadState={turnoLoadState}
           setShowAbrirModal={setShowAbrirModal}
           planId={currentPlanId}
+          entitlements={planEntitlements}
           hasOnlineMenu={hasOnlineMenu}
           isSidebarTabActive={isSidebarTabActive}
           sidebarOrderCount={sidebarOrderCount}
@@ -800,36 +808,21 @@ export function CaixaPanel({
                     isSidebarTabActive(sub.id) && 'is-active',
                   )}
                 >
-                  {sub.label}
+                  {sub.id === 'vendas_cozinha' && !hasDedicatedKds ? 'Preparo' : sub.label}
                 </button>
               );
             })}
 
-            {activeTab === 'cardapio_digital' && (
-              <>
-                <label className="cashier-subnav__mobile-select lg:hidden">
-                  <span className="sr-only">Seção do cardápio online</span>
-                  <select
-                    value={onlineMenuSubnavItems.find((sub) => isSidebarTabActive(sub.id))?.id ?? 'online_perfil'}
-                    onChange={(event) => handleSidebarNavigation(event.target.value)}
-                    aria-label="Seção do cardápio online"
-                  >
-                    {onlineMenuSubnavItems.map((sub) => (
-                      <option key={sub.id} value={sub.id}>{sub.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <div className="hidden lg:flex gap-2">
-                  {onlineMenuSubnavItems.map((sub) => (
-                    <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
-                      {sub.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+            {activeTab === 'cardapio_digital' && onlineMenuSubnavItems.map((sub) => (
+              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} aria-current={isSidebarTabActive(sub.id) ? 'page' : undefined} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
+                {sub.label}
+              </button>
+            ))}
 
-            {activeTab === 'impressao_salao' && settingsSubnavItems.map((sub) => (
+            {activeTab === 'impressao_salao' && settingsSubnavItems.filter((sub) => {
+              if (sub.requiredFeature) return subscriptionHasFeature(currentPlanId, sub.requiredFeature, planEntitlements);
+              return !sub.plans || sub.plans.includes(currentPlanId);
+            }).map((sub) => (
               <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
                 {sub.label}
               </button>
@@ -879,8 +872,8 @@ export function CaixaPanel({
 
             {activeTab === 'clientes' && [
               { id: 'clientes', label: 'Clientes' },
-              { id: 'fidelidade', label: 'Programa de Fidelidade' },
-              { id: 'cupons', label: 'Cupons & Promoções' },
+              ...(hasLoyalty ? [{ id: 'fidelidade', label: 'Programa de Fidelidade' }] : []),
+              ...(hasCoupons ? [{ id: 'cupons', label: 'Cupons & Promoções' }] : []),
             ].map((sub) => {
               const isSubActive =
                 (sub.id === 'clientes' && ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab)) ||
@@ -1026,7 +1019,7 @@ export function CaixaPanel({
               sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, deliveryOrders, activeKitchenItems, apiCategorias }}
             />
 
-            <CashierKitchen activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
+            <CashierKitchen mode={hasDedicatedKds ? 'kds' : 'queue'} activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
 
             <CashierPickups
               activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
@@ -1079,7 +1072,7 @@ export function CaixaPanel({
               />
             )}
 
-            <DeferredCashierSection active={activeTab === 'clientes'} label="Clientes" load={loadCashierCustomers} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, loyaltyUsers, refreshLoyaltyUsers }} />
+            <DeferredCashierSection active={activeTab === 'clientes'} label="Clientes" load={loadCashierCustomers} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, loyaltyUsers, refreshLoyaltyUsers, hasLoyalty, hasCoupons }} />
 
             <DeferredCashierSection
               active={activeTab === 'cardapio'}
@@ -1236,7 +1229,7 @@ export function CaixaPanel({
               active={activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital'}
               label="Cardápio online"
               load={loadCashierOnlineMenu}
-              sectionProps={{ apiBaseUrl, authHeaders, activeSubTab, setActiveSubTab, setActiveTab, hasOnlineMenu }}
+              sectionProps={{ apiBaseUrl, authHeaders, activeSubTab, setActiveSubTab, setActiveTab, hasOnlineMenu, hasLoyalty, hasCoupons }}
             />
           </div>
         </main>
@@ -1362,8 +1355,9 @@ export function CaixaPanel({
         />
 
         <CashierMobileBottomBar
-            activeTab={activeTab}
+          activeTab={activeTab}
           activeSubTab={activeSubTab}
+          dedicatedKds={hasDedicatedKds}
           onNavigate={(tab, subTab) => {
             setActiveTab(tab);
             setActiveSubTab(subTab);

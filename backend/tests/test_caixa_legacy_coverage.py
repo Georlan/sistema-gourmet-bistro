@@ -9,7 +9,7 @@ from app.database import Base, get_db, current_restaurante_id
 from app.models import (
     Usuario, Produto, Categoria, Mesa, Comanda, Item, Lancamento,
     CaixaTurno, CaixaMovimentacao, Pagamento, Cliente,
-    ConfigFidelizacao, HistoricoFidelidade,
+    ConfigFidelizacao, HistoricoFidelidade, Restaurante,
 )
 from app.security import get_password_hash
 from app.main import app
@@ -35,6 +35,14 @@ def setup_database():
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
         db = TestingSessionLocal()
+        restaurante = db.query(Restaurante).filter(Restaurante.id == 1).one_or_none()
+        if restaurante is None:
+            restaurante = Restaurante(id=1, nome="Restaurante Teste", plano="premium")
+            db.add(restaurante)
+        else:
+            restaurante.nome = "Restaurante Teste"
+            restaurante.plano = "premium"
+        db.commit()
         
         # Create test users
         db.add(Usuario(id="u-garcom", restaurante_id=1, nome="Garcom Test", usuario="garcom", senha_hash=get_password_hash("123"), role="garcom", status="ativo"))
