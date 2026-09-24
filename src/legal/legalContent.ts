@@ -1,3 +1,3 @@
 // Fachada canônica da versão jurídica vigente.
 // Snapshots anteriores permanecem imutáveis para proveniência histórica.
-export * from './legalContentV31';
+export * from './legalContentV32';

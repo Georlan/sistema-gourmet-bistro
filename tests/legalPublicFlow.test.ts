@@ -11,7 +11,8 @@ const legalV27 = readFileSync('src/legal/legalContentV27.ts', 'utf8');
 const legalV28 = readFileSync('src/legal/legalContentV28.ts', 'utf8');
 const legalV29 = readFileSync('src/legal/legalContentV29.ts', 'utf8');
 const legalV30 = readFileSync('src/legal/legalContentV30.ts', 'utf8');
-const legalContent = readFileSync('src/legal/legalContentV31.ts', 'utf8');
+const legalV31 = readFileSync('src/legal/legalContentV31.ts', 'utf8');
+const legalContent = readFileSync('src/legal/legalContentV32.ts', 'utf8');
 const legalEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const legalPage = readFileSync('src/legal/LegalPage.tsx', 'utf8');
 const planContract = readFileSync('src/legal/PlanContractPageV2.tsx', 'utf8');
@@ -28,7 +29,7 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal preserva snapshots anteriores e publica fachada vigente 3.1', () => {
+test('central legal preserva snapshots anteriores e publica fachada vigente 3.2', () => {
   for (const slug of ['termos','planos','privacidade','dpa','suboperadores','cookies','cardapio-termos','cardapio-privacidade']) {
     assert.match(legalV2, new RegExp(`slug: '${slug}'`));
   }
@@ -40,29 +41,31 @@ test('central legal preserva snapshots anteriores e publica fachada vigente 3.1'
   assert.match(legalV28, /LEGAL_VERSION = '2\.8'/);
   assert.match(legalV29, /LEGAL_VERSION = '2\.9'/);
   assert.match(legalV30, /LEGAL_VERSION = '3\.0'/);
-  assert.match(legalContent, /LEGAL_VERSION = '3\.1'/);
+  assert.match(legalV31, /LEGAL_VERSION = '3\.1'/);
+  assert.match(legalContent, /LEGAL_VERSION = '3\.2'/);
   assert.match(legalV26, /18\/09\/2026/);
   assert.match(legalV29, /23\/09\/2026/);
   assert.match(legalContent, /24\/09\/2026/);
   assert.match(legalV30, /from '\.\/legalContentRecurring'/);
-  assert.match(legalContent, /from '\.\/legalContentV30'/);
+  assert.match(legalV31, /from '\.\/legalContentV30'/);
+  assert.match(legalContent, /from '\.\/legalContentV31'/);
   assert.match(legacyLegalContent, /LEGAL_VERSION = '1\.2'/);
   assert.match(legalPage, /from '\.\/legalContent'/);
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
 });
 
-test('Legal 3.1 preserva preço vigente e contratos anteriores gratuitos', () => {
+test('Legal 3.2 preserva preço vigente e contratos anteriores gratuitos', () => {
   assert.match(legalV30, /mensalidade fixa de R\$ 39,00/);
   assert.match(legalV26, /mensalidade fixa é R\$ 0/);
   assert.match(legalV30, /não criam recorrência de valor zero no provedor/);
   assert.match(legalV30, /cartão de crédito, Pix por QR Code e Pix Copia e Cola interoperável e Saldo Mercado Pago/);
   assert.match(legalV30, /conta Mercado Pago conectada pelo próprio estabelecimento/);
   assert.match(legalV30, /quatro itens/);
-  assert.match(legalContent, /from '\.\/legalContentV30'/);
+  assert.match(legalContent, /from '\.\/legalContentV31'/);
   assert.match(legalV2, /O WhatsApp não é requisito/);
 });
 
-test('Legal 3.1 herda a política 18+ da Legal 2.5', () => {
+test('Legal 3.2 herda a política 18+ da Legal 2.5', () => {
   assert.match(legalV25, /cardápio e o checkout online não são canais destinados à oferta de bebidas alcoólicas/);
   assert.match(legalV25, /tag 18\+ ou classificação equivalente/);
   assert.match(legalV25, /gate de publicação e sincronização/);
@@ -70,13 +73,13 @@ test('Legal 3.1 herda a política 18+ da Legal 2.5', () => {
 });
 
 
-test('Legal 3.1 inclui App do Garçom no Pocket e mantém impressão como diferença operacional', () => {
+test('Legal 3.2 inclui App do Garçom e gestão de equipe no Pocket sem liberar impressão', () => {
   assert.match(legalContent, /App do Garçom para atendimento de mesas e lançamento em comandas/);
+  assert.match(legalContent, /Gestão de equipe com cadastro de pessoas, funções e permissões por cargo/);
   assert.match(legalContent, /Fila de preparo na tela, sem KDS dedicado e sem impressão automática/);
-  assert.match(legalContent, /Inclui todos os recursos do Pocket, inclusive o App do Garçom/);
-  assert.match(legalContent, /Gestão avançada de equipe e permissões/);
-  assert.doesNotMatch(legalContent, /Garçom web e permissões de equipe/);
-  assert.match(legalV2, /Garçom web e permissões de equipe/);
+  assert.match(legalContent, /Inclui todos os recursos do Pocket, inclusive App do Garçom e gestão de equipe/);
+  assert.doesNotMatch(legalContent, /gestão avançada de equipe/);
+  assert.match(legalV31, /gestão avançada de equipe/);
 });
 
 test('contratação registra clickwrap com identidade, evidência e comprovante', () => {
@@ -114,8 +117,8 @@ test('checkout reconhece cartão Pix universal e Saldo Mercado Pago', () => {
   assert.match(planContract, /payment-methods-v2/);
 });
 
-test('proveniência jurídica fixa commit e blob da Legal 3.1 sem documento fiscal pessoal', () => {
-  assert.match(legalEvidence, /legalContentV31/);
+test('proveniência jurídica fixa commit e blob da Legal 3.2 sem documento fiscal pessoal', () => {
+  assert.match(legalEvidence, /legalContentV32/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /requireDocument\('termos'\)/);
@@ -147,7 +150,7 @@ test('landing envia cada plano e ciclo para sua própria contratação', () => {
   assert.match(finalCta, /href="\/legal\/privacidade"/);
 });
 
-test('condições comerciais 3.1 publicam Pocket anual sem apagar snapshots anteriores', () => {
+test('condições comerciais 3.2 preservam Pocket anual sem apagar snapshots anteriores', () => {
   assert.match(legalV30, /Pocket: R\$ 39,00 por mês \+ 1,79%/);
   assert.match(legalV30, /Pocket R\$ 421,20 por ano/);
   assert.match(legalV30, /R\$ 35,10 por mês/);

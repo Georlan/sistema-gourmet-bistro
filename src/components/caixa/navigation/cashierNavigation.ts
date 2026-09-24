@@ -173,7 +173,6 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
       {
         id: 'permissoes_cargos',
         label: 'Equipe',
-        plans: ['pro', 'premium'],
         icon: ShieldCheck,
         target: { tab: 'permissoes_cargos', subTab: 'pessoas' },
         children: [

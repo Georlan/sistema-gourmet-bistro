@@ -21,12 +21,12 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
     stage: 'ENTRADA SIMPLES',
     action: 'COMEÇAR',
     fit: 'Para quem quer vender no salão, balcão e delivery com uma operação enxuta.',
-    note: 'Tudo o que é essencial para começar: cardápio digital, App do Garçom, pedidos, caixa, clientes e fila de preparo na tela.',
+    note: 'Tudo o que é essencial para começar: cardápio digital, App do Garçom, equipe, pedidos, caixa, clientes e fila de preparo na tela.',
   },
   pro: {
     stage: 'MAIS RECOMENDADO',
     action: 'ORGANIZAR',
-    fit: 'Para quem quer conectar equipe, cozinha, estoque e financeiro em uma operação mais profissional.',
+    fit: 'Para quem quer adicionar cozinha dedicada, estoque, financeiro e relatórios a uma operação mais profissional.',
     note: 'É o melhor equilíbrio entre recursos de gestão e uma taxa menor nos pedidos pagos online.',
   },
   premium: {
@@ -61,7 +61,7 @@ export function Plans() {
         </div>
         <div>
           <p><strong>SEM TAXA DE IMPLANTAÇÃO.</strong> Sem add-ons. Você escolhe o plano e já sabe o que está incluído.</p>
-          <small>Quanto mais completo o plano, menor a taxa KÔMA nos pedidos online pagos. Cardápio digital, mesas, App do Garçom e delivery já começam no Pocket.</small>
+          <small>Quanto mais completo o plano, menor a taxa KÔMA nos pedidos online pagos. Cardápio digital, mesas, equipe, App do Garçom e delivery já começam no Pocket.</small>
         </div>
       </div>
 

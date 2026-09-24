@@ -368,7 +368,7 @@ test('restrições de plano vivem na árvore canônica, não em listas paralelas
 
   assert.deepEqual(estoque?.plans, ['pro', 'premium']);
   assert.deepEqual(relatorios?.plans, ['pro', 'premium']);
-  assert.deepEqual(equipe?.plans, ['pro', 'premium']);
+  assert.equal(equipe?.plans, undefined);
   assert.deepEqual(
     settings?.children?.find((child) => child.id === 'config_impressao')?.plans,
     ['pro', 'premium'],
@@ -398,12 +398,20 @@ test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redu
     'cardapio',
     'clientes',
     'cardapio_digital',
+    'permissoes_cargos',
     'impressao_salao',
     'assinatura_pix',
   ]);
   assert.equal(pocketItems.includes('estoque'), false);
   assert.equal(pocketItems.includes('relatorios'), false);
-  assert.equal(pocketItems.includes('permissoes_cargos'), false);
+  assert.equal(pocketItems.includes('permissoes_cargos'), true);
+  const pocketTeam = pocketGroups
+    .flatMap((group) => group.items)
+    .find((item) => item.id === 'permissoes_cargos');
+  assert.deepEqual(pocketTeam?.children?.map((child) => child.id), [
+    'equipe_pessoas',
+    'equipe_funcoes_acessos',
+  ]);
 
   const pocketSettings = pocketGroups
     .flatMap((group) => group.items)
