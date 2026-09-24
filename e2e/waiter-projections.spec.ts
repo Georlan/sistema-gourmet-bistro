@@ -31,6 +31,7 @@ type WaiterScenario = {
   canCloseTable?: boolean;
   canTransferTables?: boolean;
   canTransferItems?: boolean;
+  printingEntitled?: boolean;
   deferPrinting?: boolean;
   printFails?: boolean;
 };
@@ -149,8 +150,10 @@ async function openWaiterScenario(
           };
     } else if (method === 'GET' && path === '/caixa/configuracoes') {
       body = {
+        restaurante_id: 99001,
         taxa_servico_ativa: false,
         taxa_servico_padrao: 0,
+        entitlements: { printing: scenario.printingEntitled ?? true },
         perm_garcom_status: true,
         perm_garcom_print: true,
         perm_garcom_fechar: scenario.canCloseTable ?? false,
@@ -274,6 +277,21 @@ test('modal mantém 24-A e 24-B na mesma Comanda e reimprime por lançamento té
   ]);
   expect(state.check.id).toBe(CHECK_ID);
   expect(state.check.status_comanda).toBeNull();
+  expect(state.unexpectedApiRequests).toEqual([]);
+});
+
+test('Pocket oculta toda impressão sem alterar o restante do App do Garçom', async ({ page }) => {
+  const state = await openWaiterScenario(page, ['preparando', 'pronto'], { printingEntitled: false });
+  await page.locator('#mesa-card-7').click();
+
+  await expect(page.locator('#quick-print-values-btn')).toHaveCount(0);
+  await expect(page.locator('#print-invoice-preview-btn')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Reimprimir', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Imprimir Via Cozinha', exact: true })).toHaveCount(0);
+
+  await expect(page.getByRole('tab', { name: /Cardápio/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Servir', exact: true })).toBeVisible();
+  expect(state.writes).toEqual([]);
   expect(state.unexpectedApiRequests).toEqual([]);
 });
 
