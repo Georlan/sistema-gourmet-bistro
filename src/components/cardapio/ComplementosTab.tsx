@@ -381,7 +381,7 @@ export default function ComplementosTab({
                     <div key={option.id || option.nome} className="flex items-center justify-between text-xs bg-koma-raised/60 px-2.5 py-1.5 rounded-lg">
                       <span className="text-koma-foreground font-medium">{option.nome}</span>
                       <span className="text-koma-muted font-mono font-semibold">
-                        {option.preco_adicional > 0 ? `+ R$ ${Number(option.preco_adicional).toFixed(2)}` : 'Grátis'}
+                        {option.preco_adicional > 0 ? `+ R$ ${Number(option.preco_adicional).toFixed(2).replace('.', ',')}` : 'Grátis'}
                       </span>
                     </div>
                   ))}
