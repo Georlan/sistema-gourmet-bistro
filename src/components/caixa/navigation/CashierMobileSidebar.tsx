@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { ClipboardList, Globe, SlidersHorizontal, Users, X } from 'lucide-react';
+import { SlidersHorizontal, X } from 'lucide-react';
 import React from 'react';
 import { KomaLogo } from '../../KomaLogo';
 import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
@@ -55,13 +55,6 @@ export function CashierMobileSidebar({
       : turnoLoadState === 'error'
         ? 'Estado indisponível'
         : 'Sincronizando caixa';
-
-  const mobileQuickActions = [
-    { id: 'cardapio_produtos', label: 'Produtos', icon: ClipboardList },
-    { id: 'clientes', label: 'Clientes', icon: Users },
-    ...(hasOnlineMenu ? [{ id: 'online_perfil', label: 'Cardápio online', icon: Globe }] : []),
-    { id: 'config_aparencia', label: 'Configurações', icon: SlidersHorizontal },
-  ] as const;
 
   return (
     <>
@@ -136,24 +129,6 @@ export function CashierMobileSidebar({
             </SidebarHeader>
 
             <SidebarContent className="cashier-sidebar__content p-2">
-              {!setupMode && (
-                <div className="cashier-mobile-quick-actions" aria-label="Atalhos rápidos">
-                  {mobileQuickActions.map((action) => {
-                    const Icon = action.icon;
-                    return (
-                      <button
-                        key={action.id}
-                        type="button"
-                        onClick={() => handleSidebarNavigation(action.id, true)}
-                        className="cashier-mobile-quick-action"
-                      >
-                        <Icon size={17} />
-                        <span>{action.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
               <div className="mb-2">
                 {setupMode ? (
                   <CashierOnboardingShortcut mobile />
