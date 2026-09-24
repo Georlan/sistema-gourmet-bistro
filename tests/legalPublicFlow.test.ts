@@ -52,12 +52,13 @@ test('central legal preserva snapshots anteriores e publica fachada vigente 3.1'
 });
 
 test('Legal 3.1 preserva preço vigente e contratos anteriores gratuitos', () => {
-  assert.match(legalContent, /mensalidade fixa de R\$ 39,00/);
+  assert.match(legalV30, /mensalidade fixa de R\$ 39,00/);
   assert.match(legalV26, /mensalidade fixa é R\$ 0/);
-  assert.match(legalContent, /não criam recorrência de valor zero no provedor/);
-  assert.match(legalContent, /cartão de crédito, Pix por QR Code e Pix Copia e Cola interoperável e Saldo Mercado Pago/);
-  assert.match(legalContent, /conta Mercado Pago conectada pelo próprio estabelecimento/);
-  assert.match(legalContent, /quatro itens/);
+  assert.match(legalV30, /não criam recorrência de valor zero no provedor/);
+  assert.match(legalV30, /cartão de crédito, Pix por QR Code e Pix Copia e Cola interoperável e Saldo Mercado Pago/);
+  assert.match(legalV30, /conta Mercado Pago conectada pelo próprio estabelecimento/);
+  assert.match(legalV30, /quatro itens/);
+  assert.match(legalContent, /from '\.\/legalContentV30'/);
   assert.match(legalV2, /O WhatsApp não é requisito/);
 });
 
@@ -147,22 +148,22 @@ test('landing envia cada plano e ciclo para sua própria contratação', () => {
 });
 
 test('condições comerciais 3.1 publicam Pocket anual sem apagar snapshots anteriores', () => {
-  assert.match(legalContent, /Pocket: R\$ 39,00 por mês \+ 1,79%/);
-  assert.match(legalContent, /Pocket R\$ 421,20 por ano/);
-  assert.match(legalContent, /R\$ 35,10 por mês/);
+  assert.match(legalV30, /Pocket: R\$ 39,00 por mês \+ 1,79%/);
+  assert.match(legalV30, /Pocket R\$ 421,20 por ano/);
+  assert.match(legalV30, /R\$ 35,10 por mês/);
   assert.match(legalV28, /apenas no ciclo mensal, sem opção anual/);
   assert.match(legalV27, /Pocket: R\$ 39,90 por mês \+ 1,79%/);
   assert.match(legalV26, /Pocket: R\$ 0 por mês \+ 1,79%/);
-  assert.match(legalContent, /Pro: R\$ 129 por mês \+ 0,50%/);
-  assert.match(legalContent, /Premium: R\$ 249 por mês \+ 0,20%/);
-  assert.match(legalContent, /Pro R\$ 1\.393,20 por ano/);
-  assert.match(legalContent, /R\$ 116,10 por mês/);
-  assert.match(legalContent, /Premium R\$ 2\.689,20 por ano/);
-  assert.match(legalContent, /R\$ 224,10 por mês/);
-  assert.match(legalContent, /10% de desconto exclusivamente ao componente fixo/);
-  assert.match(legalContent, /taxa percentual sobre pagamentos online não recebe desconto anual/);
-  assert.match(legalContent, /não realiza upgrade automático de plano com base em volume de vendas ou GMV/);
-  assert.match(legalContent, /snapshot comercial aceito/);
+  assert.match(legalV30, /Pro: R\$ 129 por mês \+ 0,50%/);
+  assert.match(legalV30, /Premium: R\$ 249 por mês \+ 0,20%/);
+  assert.match(legalV30, /Pro R\$ 1\.393,20 por ano/);
+  assert.match(legalV30, /R\$ 116,10 por mês/);
+  assert.match(legalV30, /Premium R\$ 2\.689,20 por ano/);
+  assert.match(legalV30, /R\$ 224,10 por mês/);
+  assert.match(legalV30, /10% de desconto exclusivamente ao componente fixo/);
+  assert.match(legalV30, /taxa percentual sobre pagamentos online não recebe desconto anual/);
+  assert.match(legalV30, /não realiza upgrade automático de plano com base em volume de vendas ou GMV/);
+  assert.match(legalV30, /snapshot comercial aceito/);
 
   assert.match(legalV25, /LEGAL_VERSION = '2\.5'/);
   assert.match(legalV25, /LEGAL_EFFECTIVE_DATE = '15\/09\/2026'/);
