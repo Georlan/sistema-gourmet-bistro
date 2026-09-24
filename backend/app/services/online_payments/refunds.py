@@ -119,7 +119,8 @@ def _close_refunded_order_in_session(
         comanda.delivery_status = "recusado"
         comanda.fechada = True
         comanda.fechado_em = now_utc
-        intent.status = "cancelled"
+        # Preservar o fato histórico de aprovação da intenção; a reversão
+        # fica registrada no ledger (OnlinePaymentRefund e PagamentoEstorno).
         for item in comanda.itens:
             if item.status != "cancelado":
                 item.status = "cancelado"

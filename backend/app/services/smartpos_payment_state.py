@@ -54,6 +54,17 @@ def transition_intent(
     if len(normalized_key) < 8:
         raise InvalidSmartPosTransition("A chave idempotente da transição deve possuir ao menos 8 caracteres úteis.")
 
+    # Preservar modificações em memória feitas pelo chamador na intenção (ex:
+    # provider_name, provider_operation_key, provider_terminal_id, provider_reference)
+    # para que não sejam sobrescritas com NULL ao recarregar a linha do banco antes da transição.
+    from sqlalchemy import inspect as sa_inspect
+    pending_attrs = {}
+    insp = sa_inspect(intent, raiseerr=False)
+    if insp is not None:
+        for attr in insp.attrs:
+            if attr.key not in {"status", "status_em"} and attr.history.has_changes():
+                pending_attrs[attr.key] = getattr(intent, attr.key)
+
     # A máquina de estados não pode confiar no snapshot carregado pelo caller:
     # outra sessão pode ter avançado a intenção entre a leitura e esta chamada.
     # Recarregar sob lock serializa transições concorrentes no PostgreSQL e
@@ -82,6 +93,9 @@ def transition_intent(
     current = locked_intent.status
     if not can_transition(current, target_status):
         raise InvalidSmartPosTransition(f"Transição inválida: {current} -> {target_status}.")
+
+    for key, val in pending_attrs.items():
+        setattr(locked_intent, key, val)
 
     now = datetime.datetime.now(datetime.timezone.utc)
     event = SmartPosPaymentIntentEvent(

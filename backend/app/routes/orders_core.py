@@ -48,6 +48,10 @@ from ..application.printing import (
 from ..waiter_permissions import (
     require_waiter_permission,
 )
+from ..services.plan_entitlements import (
+    ENTITLEMENT_COURIER_APP,
+    require_plan_entitlement,
+)
 from ..adapters.orders.pos_adapter import PosAdapter
 from ..application.printing import (
     PrintAction,
@@ -902,26 +906,24 @@ def listar_entregas_concluidas_recentes(
 @router.get("/motoboys/lista", response_model=List[MotoboyResponse])
 def listar_motoboys(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
-    Lista todos os motoboys cadastrados.
+    Lista todos os motoboys cadastrados do restaurante atual.
     """
-    return db.query(Motoboy).all()
+    rest_id = require_tenant_id()
+    return db.query(Motoboy).filter(Motoboy.restaurante_id == rest_id).all()
 
 
 @router.post("/motoboys/cadastro", response_model=MotoboyResponse, status_code=status.HTTP_201_CREATED)
 def cadastrar_motoboy(
     motoboy_in: MotoboyCreate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
     """
-    Cadastra um novo motoboy.
+    Cadastra um novo motoboy no restaurante atual.
     """
-    max_id = db.query(func.max(Motoboy.id)).filter(
-        Motoboy.restaurante_id == require_tenant_id()
-    ).scalar() or 0
+    rest_id = require_tenant_id()
     novo_motoboy = Motoboy(
-        id=max_id + 1,
-        restaurante_id=require_tenant_id(),
+        restaurante_id=rest_id,
         nome=motoboy_in.nome,
         telefone=motoboy_in.telefone,
         ativo=motoboy_in.ativo if motoboy_in.ativo is not None else True
@@ -967,13 +969,19 @@ def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int) -> dict:
 def gerar_link_motoboy(
     motoboy_id: int,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
     """
     Gera um link/token de acesso temporário (TTL: 4h) para o PWA do entregador.
     Invalida/revoga automaticamente qualquer token ativo gerado anteriormente para este motoboy.
     """
     rest_id = require_tenant_id()
+    require_plan_entitlement(
+        db,
+        rest_id,
+        ENTITLEMENT_COURIER_APP,
+        detail="App do Entregador disponível apenas no plano Premium ou com add-on ativo.",
+    )
     motoboy = db.query(Motoboy).filter(
         Motoboy.id == motoboy_id,
         Motoboy.restaurante_id == rest_id
@@ -990,12 +998,18 @@ def gerar_link_motoboy(
 def revogar_link_motoboy(
     motoboy_id: int,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
+    current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
     """
     Revoga manualmente todos os links/tokens de acesso ativos para um motoboy.
     """
     rest_id = require_tenant_id()
+    require_plan_entitlement(
+        db,
+        rest_id,
+        ENTITLEMENT_COURIER_APP,
+        detail="App do Entregador disponível apenas no plano Premium ou com add-on ativo.",
+    )
     motoboy = db.query(Motoboy).filter(
         Motoboy.id == motoboy_id,
         Motoboy.restaurante_id == rest_id
@@ -1026,6 +1040,13 @@ def painel_entregador(
     token_data = verify_motoboy_token(token, db)
     motoboy_id = token_data["motoboy_id"]
     rest_id = token_data["restaurante_id"]
+
+    require_plan_entitlement(
+        db,
+        rest_id,
+        ENTITLEMENT_COURIER_APP,
+        detail="App do Entregador disponível apenas no plano Premium ou com add-on ativo.",
+    )
 
     current_restaurante_id.set(rest_id)
 
