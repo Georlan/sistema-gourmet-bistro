@@ -23,9 +23,26 @@ from ..services.staff_login_rate_limit import (
     staff_login_is_blocked,
 )
 from ..services.notificacoes import agendar_convite_equipe_task
+from ..services.plan_entitlements import (
+    ENTITLEMENT_WAITER_APP,
+    require_plan_entitlement,
+)
 from ..websocket_manager import manager
 
 logger = logging.getLogger("koma.auth")
+
+
+def _require_waiter_app_for_user(db: Session, usuario: Usuario) -> None:
+    role = str(usuario.role or usuario.cargo or "").strip().lower()
+    if role != "garcom":
+        return
+    require_plan_entitlement(
+        db,
+        int(usuario.restaurante_id),
+        ENTITLEMENT_WAITER_APP,
+        detail="App do Garçom não disponível no plano atual.",
+    )
+
 
 router = APIRouter(
     prefix="/auth",
@@ -257,6 +274,8 @@ def login(
                 detail="Conta de usuário pendente, inativa ou bloqueada.",
             )
 
+        _require_waiter_app_for_user(db, usuario)
+
         # Materializa o payload antes de limpar o bucket. O cleanup pode encerrar a
         # transação de leitura atual, então não mantemos dependência de atributos ORM
         # depois desse ponto.
@@ -336,6 +355,8 @@ def ativar_conta(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Esta conta já foi ativada previamente."
             )
+
+        _require_waiter_app_for_user(db, usuario)
 
         if usuario.token_expira_em is not None:
             token_exp = usuario.token_expira_em
@@ -454,6 +475,13 @@ def update_usuario_access(
 
     next_role = payload.cargo or target_role
     next_status = payload.status or str(usuario.status or "pendente_ativacao").lower().strip()
+    if str(next_role).lower().strip() == "garcom" and str(next_status).lower().strip() == "ativo":
+        require_plan_entitlement(
+            db,
+            current_user.restaurante_id,
+            ENTITLEMENT_WAITER_APP,
+            detail="App do Garçom não disponível no plano atual.",
+        )
     if usuario.status == "pendente_ativacao" and payload.status == "ativo":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
