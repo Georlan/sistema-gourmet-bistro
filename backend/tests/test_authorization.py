@@ -465,12 +465,10 @@ def test_manager_and_cashier_can_administer_team(username):
     ).status_code == 204
 
     with TestingSessionLocal() as db:
-        assert (
-            db.query(Usuario)
-            .filter(Usuario.nome == "Tentativa Privilegiada")
-            .count()
-            == 0
-        )
+        deactivated = db.query(Usuario).filter(Usuario.id == created["id"]).one()
+        assert deactivated.status == "inativo"
+        assert deactivated.token_convite is None
+        assert deactivated.token_expira_em is None
 
 
 def test_admin_creates_only_pending_invite_in_own_tenant(monkeypatch):

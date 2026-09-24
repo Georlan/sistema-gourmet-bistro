@@ -114,6 +114,11 @@ def test_admin_can_delete_another_admin_when_backup_remains():
 
     assert response.status_code == 204, response.text
     with TestingSessionLocal() as db:
-        assert db.query(Usuario).filter(Usuario.id == "admin-primary").one_or_none() is None
+        deactivated = db.query(Usuario).filter(Usuario.id == "admin-primary").one()
+        assert deactivated.status == "inativo"
         backup = db.query(Usuario).filter(Usuario.id == "admin-backup").one()
         assert backup.status == "ativo"
+    assert client.post(
+        "/auth/login",
+        json={"username": "admin-primary@example.test", "password": "strong-password"},
+    ).status_code == 403
