@@ -677,7 +677,7 @@ export default function PlanContractPageV2() {
                 <button type="button" role="radio" aria-checked={billingCycle === 'mensal'} className={billingCycle === 'mensal' ? 'is-selected' : ''} onClick={() => setBillingCycle('mensal')}><span>Mensal</span><strong>{formatCurrency(pricing.monthly)}/mês</strong><small>Primeira cobrança depois do trial.</small></button>
                 <button type="button" role="radio" aria-checked={billingCycle === 'anual'} className={billingCycle === 'anual' ? 'is-selected' : ''} onClick={() => setBillingCycle('anual')}><span>Anual <em>Economize 10%</em></span><strong>{formatCurrency(pricing.annualMonthlyEquivalent)}/mês equivalente</strong><small>{formatCurrency(pricing.annualTotal)} por ano, cobrado depois do trial. O desconto anual não altera a taxa percentual.</small></button>
               </div>
-              <div className="koma-sub-trial-note"><Gift size={19} /><div><strong>7 dias grátis no componente fixo.</strong><p>Os 7 dias só começam depois dos 3 passos essenciais de implantação.</p></div></div>
+              <div className="koma-sub-trial-note"><Gift size={19} /><div><strong>7 dias grátis no componente fixo.</strong><p>Os 7 dias começam depois dos 4 itens essenciais e do início confirmado pelo administrador.</p></div></div>
             </>
           ) : step === 2 ? (
             <>
