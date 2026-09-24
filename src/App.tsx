@@ -1162,11 +1162,6 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         return;
       }
 
-      const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-      const idKey = portal === 'caixa' ? "koma_caixa_id" : "koma_waiter_id";
-      const nameKey = portal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
-      const roleKey = portal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
-
       // Mantém também o restaurante na sessão canônica do Garçom. Os aliases
       // legados continuam sendo preenchidos pelo helper, sem virar fonte de tenant.
       saveOperatorSession(data.access_token, { ...data.usuario, role });
