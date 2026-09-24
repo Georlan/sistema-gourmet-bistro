@@ -9,12 +9,13 @@ const waiterPermissions = readFileSync('backend/app/waiter_permissions.py', 'utf
 const caixaRoute = readFileSync('backend/app/routes/caixa.py', 'utf8');
 
 test('waiter printing capability is isolated by authenticated restaurant scope', () => {
-  assert.match(app, /const activeRestaurantId = useMemo/);
+  assert.match(app, /const \[activeRestaurantId, setActiveRestaurantId\] = useState<number>/);
   assert.match(app, /\$\{portal\}:\$\{activeRestaurantId \|\| 'legacy'\}:\$\{activeRole\}:\$\{activeWaiterId\}/);
   assert.match(app, /const requestScopeKey = operationalScopeKey/);
   assert.match(app, /requestScopeKey !== operationalScopeKeyRef\.current/);
   assert.match(app, /localStorage\.getItem\(tokenKey\) !== token/);
   assert.match(app, /responseRestaurantId !== requestRestaurantId/);
+  assert.match(app, /setActiveRestaurantId\([\s\S]*loginRestaurantId/);
   assert.match(app, /setRestauranteConfig\(null\);[\s\S]*setIsConfigLoaded\(false\)/);
 });
 
