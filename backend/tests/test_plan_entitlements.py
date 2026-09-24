@@ -58,7 +58,7 @@ def test_plan_matrix_pocket_pro_premium(tenant_db):
         "kds": False,
         "loyalty": False,
         "printing": False,
-        "waiter_app": False,
+        "waiter_app": True,
     }
 
     rest.plano = "pro"
