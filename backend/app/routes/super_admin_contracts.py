@@ -136,7 +136,7 @@ def _admin_inbox_item(row: dict[str, Any]) -> dict[str, Any]:
     activation_eligible = (
         linked_restaurante_id is None
         and plan_change_restaurante_id is None
-        and (not enforcement_enabled or is_ready)
+        and is_ready
     )
     return {
         "acceptanceId": str(row["acceptance_id"]),
@@ -501,7 +501,7 @@ def preview_contract(
             "paymentMethodType": acceptance.get("payment_method_type"),
             "billingEnforcementEnabled": enforcement_enabled,
             "activationEligible": (
-                plan_change_owner is None and (not enforcement_enabled or is_ready)
+                plan_change_owner is None and is_ready
             ),
             "contractPurpose": (
                 "plan_change" if plan_change_owner is not None else "new_subscription"
@@ -561,7 +561,9 @@ def activate_contract(
                 idempotent=True,
             )
 
-        if is_billing_enforcement_enabled() and not is_billing_ready(db, normalized):
+        # A flag global também controla o acesso de tenants legados. Um novo
+        # contrato com componente fixo nunca pode ser ativado sem billing pronto.
+        if contract_fixed_billing_required(db, normalized) and not is_billing_ready(db, normalized):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="A ativação do restaurante exige forma de pagamento configurada e confirmada (billing ready).",

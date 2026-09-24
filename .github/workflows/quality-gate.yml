@@ -54,7 +54,7 @@ jobs:
             exit 0
           fi
           git diff --name-only "$BASE_SHA" HEAD > /tmp/koma-changed-files
-          if grep -Eq '^backend/(app/(routes/(auth|onboarding|saas|signup|super_admin_onboarding)|services/(saas|signup|onboarding|restaurant_provisioning|billing)|security\.py|permissions\.py)|tests/(test_authorization|test_team_admin_delete_authorization|test_critical_auth_flow|test_onboarding_status|test_saas_billing_checkout))' /tmp/koma-changed-files; then
+          if grep -Eq '^backend/(app/(routes/(auth|onboarding|saas|signup|super_admin_onboarding|super_admin_contracts)|services/(saas|signup|onboarding|restaurant_provisioning|billing)|security\.py|permissions\.py)|tests/(test_authorization|test_team_admin_delete_authorization|test_critical_auth_flow|test_onboarding_status|test_saas_billing_checkout|test_super_admin_contract_activation))' /tmp/koma-changed-files; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run=false' >> "$GITHUB_OUTPUT"
@@ -85,3 +85,4 @@ jobs:
           backend/tests/test_team_admin_delete_authorization.py
           backend/tests/test_onboarding_status.py
           backend/tests/test_saas_billing_checkout.py
+          backend/tests/test_super_admin_contract_activation.py

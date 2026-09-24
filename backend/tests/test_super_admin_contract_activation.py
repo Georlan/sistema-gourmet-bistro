@@ -17,7 +17,7 @@ from app.models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog,
 from app.routes import contracts, super_admin_contracts
 from app.routes.super_admin_onboarding import restaurant_trials
 from app.services import restaurant_provisioning
-from app.saas_billing_models import SaaSSubscription
+from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
 from app.signup_models import SignupNotification
 
 
@@ -124,9 +124,42 @@ def _accept_contract(client: TestClient) -> str:
     return accepted.json()["protocol"]
 
 
+def _ready_card_billing(Session, protocol: str) -> None:
+    with Session() as db:
+        SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
+        db.add(SaaSBillingSetup(
+            protocol=protocol,
+            provider="mercado_pago",
+            payment_method_type="credit_card",
+            status="ready",
+            provider_subscription_id="test-card-mandate",
+            billing_cycle="monthly",
+        ))
+        db.commit()
+
+
+def test_paid_contract_cannot_activate_without_billing_when_global_enforcement_is_off(client_and_session):
+    client, Session = client_and_session
+    protocol = _accept_contract(client)
+
+    preview = client.get(f"/api/super-admin/contracts/preview/{protocol}")
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["activationEligible"] is False
+
+    response = client.post(
+        f"/api/super-admin/contracts/{protocol}/activate",
+        json={"reason": "Tentativa sem meio de pagamento"},
+    )
+    assert response.status_code == 409, response.text
+    with Session() as db:
+        assert db.execute(select(Restaurante)).scalars().all() == []
+        assert db.execute(select(Usuario)).scalars().all() == []
+
+
 def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session, monkeypatch):
     client, Session = client_and_session
     protocol = _accept_contract(client)
+    _ready_card_billing(Session, protocol)
 
     activated = client.post(
         f"/api/super-admin/contracts/{protocol}/activate",
@@ -140,7 +173,7 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
     assert body["idempotent"] is False
     assert body["credentialDelivery"] == "outbox_scheduled"
     assert body["admin"]["status"] == "pendente_ativacao"
-    assert body["billingStatus"] == "not_required"
+    assert body["billingStatus"] == "ready"
     assert "trial" not in body
     assert body["subdomain"].endswith(protocol[-12:].lower())
 
@@ -171,9 +204,9 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
 
         subscription = db.execute(select(SaaSSubscription)).scalar_one()
         assert subscription.restaurante_id == tenant_id
-        assert subscription.status == "active"
-        assert subscription.provider_subscription_id is None
-        assert subscription.payment_method_type is None
+        assert subscription.status == "onboarding"
+        assert subscription.provider_subscription_id == "test-card-mandate"
+        assert subscription.payment_method_type == "credit_card"
         assert subscription.trial_started_at is None
         assert subscription.trial_ends_at is None
 
@@ -201,7 +234,7 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
     repeated_body = repeated.json()
     assert repeated_body["idempotent"] is True
     assert repeated_body["restaurantId"] == str(tenant_id)
-    assert repeated_body["billingStatus"] == "not_required"
+    assert repeated_body["billingStatus"] == "ready"
     db = Session()
     try:
         assert len(db.execute(select(Restaurante)).scalars().all()) == 1
@@ -216,6 +249,7 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
 def test_activation_conflict_keeps_tenant_state_empty(client_and_session, monkeypatch):
     client, Session = client_and_session
     protocol = _accept_contract(client)
+    _ready_card_billing(Session, protocol)
     monkeypatch.setattr(restaurant_provisioning, "_slug_owner_id", lambda db, slug: 999)
 
     response = client.post(
