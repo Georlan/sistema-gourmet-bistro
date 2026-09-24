@@ -707,39 +707,43 @@ export default function CashierCustomers({
                 />
               </div>
 
-              {/* EDITABLE FIELDS */}
-              <div className={"grid grid-cols-2 gap-4"}>
-                {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
-                  <div className={"space-y-1 col-span-2"}>
-                    <label
-                      className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
-                    >
-                      Saldo de Pontos (Ajuste):
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      value={crmFormPontos}
-                      onChange={(e) => setCrmFormPontos(Number(e.target.value))}
-                      className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
-                    />
+              {hasLoyalty && (
+                <>
+                      {/* EDITABLE FIELDS */}
+                  <div className={"grid grid-cols-2 gap-4"}>
+                    {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
+                      <div className={"space-y-1 col-span-2"}>
+                        <label
+                          className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
+                        >
+                          Saldo de Pontos (Ajuste):
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          value={crmFormPontos}
+                          onChange={(e) => setCrmFormPontos(Number(e.target.value))}
+                          className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
+                        />
+                      </div>
+                    ) : (
+                      <div className={"space-y-1 col-span-2"}>
+                        <label
+                          className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
+                        >
+                          Saldo Cashback R$ (Ajuste):
+                        </label>
+                        <MoneyInput
+                          required
+                          value={crmFormCashback}
+                          onValueChange={(value) => setCrmFormCashback(Number(value || 0))}
+                          className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
+                        />
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className={"space-y-1 col-span-2"}>
-                    <label
-                      className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
-                    >
-                      Saldo Cashback R$ (Ajuste):
-                    </label>
-                    <MoneyInput
-                      required
-                      value={crmFormCashback}
-                      onValueChange={(value) => setCrmFormCashback(Number(value || 0))}
-                      className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
-                    />
-                  </div>
-                )}
-              </div>
+                </>
+              )}
 
               <div className={"flex gap-2 pt-2"}>
                 <button
@@ -790,7 +794,11 @@ export default function CashierCustomers({
                   alert('Preencha todos os campos!');
                   return;
                 }
-                const created = await handleCreateClient(newCrmNome, newCrmTelefone, Number(newCrmSaldo || 0));
+                const created = await handleCreateClient(
+                  newCrmNome,
+                  newCrmTelefone,
+                  hasLoyalty ? Number(newCrmSaldo || 0) : 0,
+                );
                 if (created) setShowNewCrmModal(false);
               }}
               className="space-y-4"
@@ -828,28 +836,30 @@ export default function CashierCustomers({
                 />
               </div>
 
-              <div className="space-y-1">
-                <label
-                  className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
-                >
-                  {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? 'Pontos Iniciais:' : 'Cashback Inicial R$:'}
-                </label>
-                {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
-                  <input
-                    type="number"
-                    step="1"
-                    value={newCrmSaldo}
-                    onChange={(e) => setNewCrmSaldo(e.target.value === '' ? '' : Number(e.target.value))}
-                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
-                  />
-                ) : (
-                  <MoneyInput
-                    value={newCrmSaldo}
-                    onValueChange={setNewCrmSaldo}
-                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
-                  />
-                )}
-              </div>
+              {hasLoyalty && (
+                <div className="space-y-1">
+                  <label
+                    className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
+                  >
+                    {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? 'Pontos Iniciais:' : 'Cashback Inicial R$:'}
+                  </label>
+                  {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
+                    <input
+                      type="number"
+                      step="1"
+                      value={newCrmSaldo}
+                      onChange={(e) => setNewCrmSaldo(e.target.value === '' ? '' : Number(e.target.value))}
+                      className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
+                    />
+                  ) : (
+                    <MoneyInput
+                      value={newCrmSaldo}
+                      onValueChange={setNewCrmSaldo}
+                      className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
+                    />
+                  )}
+                </div>
+              )}
 
               <div className={"flex gap-2 pt-2"}>
                 <button
