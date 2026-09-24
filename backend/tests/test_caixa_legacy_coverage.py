@@ -35,7 +35,13 @@ def setup_database():
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
         db = TestingSessionLocal()
-        db.add(Restaurante(id=1, nome="Restaurante Teste", plano="premium"))
+        restaurante = db.query(Restaurante).filter(Restaurante.id == 1).one_or_none()
+        if restaurante is None:
+            restaurante = Restaurante(id=1, nome="Restaurante Teste", plano="premium")
+            db.add(restaurante)
+        else:
+            restaurante.nome = "Restaurante Teste"
+            restaurante.plano = "premium"
         db.commit()
         
         # Create test users
