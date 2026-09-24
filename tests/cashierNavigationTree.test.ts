@@ -157,7 +157,7 @@ test('configurações expõe os mesmos destinos canônicos para navegação vert
 
   const caixa = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
   assert.match(caixa, /settingsSubnavItems = getCashierNavigationItem\('impressao_salao'\)\?\.children \?\? \[\]/);
-  assert.match(caixa, /activeTab === 'impressao_salao' && settingsSubnavItems\.map/);
+  assert.match(caixa, /activeTab === 'impressao_salao' && settingsSubnavItems\.filter/);
   assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
   assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
 });
@@ -355,7 +355,7 @@ test('online menu mirrors canonical destinations across responsive section navig
   assert.match(caixa, /onlineMenuSubnavItems = getCashierNavigationItem\('cardapio_digital'\)\?\.children \?\? \[\]/);
   assert.match(caixa, /activeTab === 'cardapio_digital'/);
   assert.match(caixa, /onlineMenuSubnavItems\.map/);
-  assert.match(caixa, /Seção do cardápio online/);
+  assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
   assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
 });
 
