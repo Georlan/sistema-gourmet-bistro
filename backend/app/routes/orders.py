@@ -37,6 +37,11 @@ from ..schemas import ComandaResponse
 from ..security import motoboy_rate_limiter, require_permission, verify_motoboy_token
 from ..services.inventory import alertas_estoque_dos_itens
 from ..services.notificacoes import agendar_notificacao_whatsapp_task
+from ..services.plan_entitlements import (
+    ENTITLEMENT_COURIER_APP,
+    has_plan_entitlement,
+    require_plan_entitlement,
+)
 from ..services.shifts import require_open_cash_shift
 from ..websocket_manager import manager
 from . import orders_core as _orders_core
@@ -436,7 +441,8 @@ def despachar_delivery(
         return comanda
 
     status_anterior = to_legacy_order_status(current_status)
-    acesso_motoboy = _criar_acesso_motoboy(db, motoboy, rid)
+    has_courier_app = has_plan_entitlement(db, rid, ENTITLEMENT_COURIER_APP)
+    acesso_motoboy = _criar_acesso_motoboy(db, motoboy, rid) if has_courier_app else None
 
     _transition_via_application_or_http(
         db,
@@ -485,9 +491,10 @@ def despachar_delivery(
         f"*Cliente:* {comanda.identificador or 'Cliente'}\n"
         f"*Endereço:* {comanda.delivery_endereco or 'Não informado'}\n"
         f"*Telefone do cliente:* {comanda.delivery_telefone or 'Não informado'}\n"
-        f"*Valor a cobrar:* R$ {valor_a_cobrar:.2f}\n\n"
-        f"*Painel do entregador:* {acesso_motoboy['link_publico']}"
+        f"*Valor a cobrar:* R$ {valor_a_cobrar:.2f}"
     )
+    if acesso_motoboy:
+        mensagem_motoboy += f"\n\n*Painel do entregador:* {acesso_motoboy['link_publico']}"
     agendar_notificacao_whatsapp_task(
         background_tasks,
         telefone=motoboy.telefone,
@@ -528,6 +535,12 @@ def confirmar_entrega_motoboy(
     token_data = verify_motoboy_token(token, db)
     motoboy_id = token_data["motoboy_id"]
     rest_id = token_data["restaurante_id"]
+    require_plan_entitlement(
+        db,
+        rest_id,
+        ENTITLEMENT_COURIER_APP,
+        detail="App do Entregador disponível apenas no plano Premium ou com add-on ativo.",
+    )
     tenant_token = current_restaurante_id.set(rest_id)
     try:
         comanda = (

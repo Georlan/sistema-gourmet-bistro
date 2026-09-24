@@ -426,12 +426,13 @@ def test_first_client_split_payment_and_full_refund_simulation(monkeypatch):
         assert len(liquidations) == 1
         assert liquidations[0].metodo_devolucao == "pix"
 
-        # O pagamento original continua aprovado no caixa; a intenção termina
-        # cancelada porque o pedido reembolsado foi encerrado. A reversão vive no ledger.
+        # O pagamento original continua aprovado no caixa e a intenção preserva
+        # o fato histórico de aprovação. O encerramento do pedido fica na comanda
+        # e a devolução vive no ledger (OnlinePaymentRefund e PagamentoEstorno).
         db.refresh(payment)
         db.refresh(settled)
         assert payment.status == "aprovado"
-        assert settled.status == "cancelled"
+        assert settled.status == "approved"
 
         retry = create_refund_guarded(
             db,

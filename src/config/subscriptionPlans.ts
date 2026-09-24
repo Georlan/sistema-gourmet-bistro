@@ -1,12 +1,12 @@
 export type SubscriptionPlanId = 'pocket' | 'pro' | 'premium';
 
-export type SubscriptionFeatureId = 'printing' | 'kds' | 'waiter_app' | 'loyalty' | 'coupons';
+export type SubscriptionFeatureId = 'printing' | 'kds' | 'waiter_app' | 'loyalty' | 'coupons' | 'courier_app';
 export type SubscriptionEntitlements = Partial<Record<SubscriptionFeatureId, boolean>>;
 
 const PLAN_FEATURES: Record<SubscriptionPlanId, ReadonlySet<SubscriptionFeatureId>> = {
   pocket: new Set(['waiter_app']),
   pro: new Set(['printing', 'kds', 'waiter_app']),
-  premium: new Set(['printing', 'kds', 'waiter_app', 'loyalty', 'coupons']),
+  premium: new Set(['printing', 'kds', 'waiter_app', 'loyalty', 'coupons', 'courier_app']),
 };
 
 export function subscriptionHasFeature(

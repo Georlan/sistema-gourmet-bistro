@@ -240,10 +240,50 @@ def test_despachar_enfileira_notificacao_transito(monkeypatch):
     assert len(chamadas) == 2
     assert chamadas[0][0] == "81988880000"
     assert "NOVA ENTREGA" in chamadas[0][1]
-    assert "/entregador#token=" in chamadas[0][1]
-    assert "/entregador?token=" not in chamadas[0][1]
+    # No plano Pocket (sem courier_app), a mensagem não vaza link do PWA do entregador
+    assert "/entregador" not in chamadas[0][1]
     assert chamadas[1][0] == TELEFONE
     assert "entrega" in chamadas[1][1].lower()
+
+    # Com add-on ou plano Premium, o link seguro do PWA é anexado
+    from app.smartpos_models import RestauranteCapability
+    with SessionLocal() as db:
+        cap = RestauranteCapability(
+            restaurante_id=RESTAURANTE_ID,
+            capability="courier_app",
+            enabled=True,
+            source="addon",
+        )
+        db.add(cap)
+        db.commit()
+
+    try:
+        chamadas_prem = []
+        monkeypatch.setattr(
+            whatsapp_service,
+            "enviar_texto_whatsapp_detalhado",
+            lambda telefone, mensagem, contexto="": (
+                chamadas_prem.append((telefone, mensagem))
+                or whatsapp_service.ResultadoEnvioWhatsApp(True, "evolution")
+            ),
+        )
+        comanda_prem_id = _criar_comanda("Entrega", "pronto")
+        resp_prem = client.post(
+            f"/comandas/{comanda_prem_id}/delivery/despachar",
+            headers=_headers(),
+            json={"motoboy_id": MOTOBOY_ID},
+        )
+        assert resp_prem.status_code == 200, resp_prem.text
+        assert len(chamadas_prem) == 2
+        assert "NOVA ENTREGA" in chamadas_prem[0][1]
+        assert "/entregador#token=" in chamadas_prem[0][1]
+        assert "/entregador?token=" not in chamadas_prem[0][1]
+    finally:
+        with SessionLocal() as db:
+            db.query(RestauranteCapability).filter(
+                RestauranteCapability.restaurante_id == RESTAURANTE_ID,
+            ).delete()
+            db.commit()
 
     with SessionLocal() as db:
         registros = db.query(NotificacaoWhatsApp).filter(
