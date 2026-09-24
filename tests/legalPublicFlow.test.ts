@@ -61,7 +61,7 @@ test('Legal 3.2 preserva preço vigente e contratos anteriores gratuitos', () =>
   assert.match(legalV30, /cartão de crédito, Pix por QR Code e Pix Copia e Cola interoperável e Saldo Mercado Pago/);
   assert.match(legalV30, /conta Mercado Pago conectada pelo próprio estabelecimento/);
   assert.match(legalV30, /quatro itens/);
-  assert.match(legalContent, /from '\.\/legalContentV32'/);
+  assert.match(legalContent, /from '\.\/legalContentV31'/);
   assert.match(legalV2, /O WhatsApp não é requisito/);
 });
 
