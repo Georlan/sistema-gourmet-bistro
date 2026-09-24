@@ -167,9 +167,15 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     }
     return 'garcom';
   });
+  const sessionRestaurantId = Number(getOperatorSession(portal)?.user?.restaurante_id || 0);
+  const activeRestaurantId = Number.isInteger(sessionRestaurantId) && sessionRestaurantId > 0
+    ? sessionRestaurantId
+    : 0;
   const operationalScopeKey = useMemo(
-    () => isAuthenticated && activeWaiterId ? `${portal}:${activeRole}:${activeWaiterId}` : '',
-    [activeRole, activeWaiterId, isAuthenticated, portal],
+    () => isAuthenticated && activeWaiterId
+      ? `${portal}:${activeRestaurantId || 'legacy'}:${activeRole}:${activeWaiterId}`
+      : '',
+    [activeRestaurantId, activeRole, activeWaiterId, isAuthenticated, portal],
   );
   const operationalScopeKeyRef = useRef(operationalScopeKey);
   operationalScopeKeyRef.current = operationalScopeKey;
@@ -303,16 +309,35 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   };
 
   const fetchConfig = async () => {
+    const requestScopeKey = operationalScopeKey;
+    if (!requestScopeKey) return;
+
     try {
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
       const token = localStorage.getItem(tokenKey);
       if (!token) return;
 
+      const requestRestaurantId = activeRestaurantId;
       const res = await fetch(`${API_BASE_URL}/caixa/configuracoes`, {
         headers: getAuthHeaders()
       });
       if (res.ok) {
         const data = await res.json();
+        const responseRestaurantId = Number(data?.restaurante_id || 0);
+
+        // A configuração é tenant-scoped no backend, mas ainda protegemos a UI
+        // contra respostas atrasadas de uma sessão/restaurante anterior.
+        if (requestScopeKey !== operationalScopeKeyRef.current) return;
+        if (localStorage.getItem(tokenKey) !== token) return;
+        if (
+          requestRestaurantId > 0
+          && responseRestaurantId > 0
+          && responseRestaurantId !== requestRestaurantId
+        ) {
+          console.error("Configuração descartada por divergência de restaurante.");
+          return;
+        }
+
         setRestauranteConfig(data);
         setIsConfigLoaded(true);
       }
@@ -390,7 +415,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       const roleKey = newPortal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
 
       setIsAuthenticated(!!localStorage.getItem(tokenKey));
-      const operatorSession = newPortal === 'caixa' ? getOperatorSession() : null;
+      const operatorSession = getOperatorSession(newPortal);
       setActiveWaiterId(
         localStorage.getItem(idKey)
         || String(operatorSession?.user?.id || "")
@@ -1137,18 +1162,18 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         return;
       }
 
-      const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-      const idKey = portal === 'caixa' ? "koma_caixa_id" : "koma_waiter_id";
-      const nameKey = portal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
-      const roleKey = portal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
-
-      if (portal === 'caixa') {
-        saveOperatorSession(data.access_token, { ...data.usuario, role });
+      if (portal === 'garcom' && role === 'admin') {
+        // Compatibilidade do acesso administrativo ao portal de salão: o helper
+        // canônico classificaria admin como Caixa. Mantemos os aliases do Garçom
+        // neste caso raro sem usá-los como fonte de autorização de tenant.
+        localStorage.setItem("koma_waiter_token", data.access_token);
+        localStorage.setItem("koma_waiter_id", data.usuario.id);
+        localStorage.setItem("koma_waiter_name", data.usuario.nome);
+        localStorage.setItem("koma_user_role", role);
       } else {
-        localStorage.setItem(tokenKey, data.access_token);
-        localStorage.setItem(idKey, data.usuario.id);
-        localStorage.setItem(nameKey, data.usuario.nome);
-        localStorage.setItem(roleKey, role);
+        // Para garçons reais, a sessão canônica preserva restaurante_id e
+        // continua preenchendo os aliases legados usados pelo App.
+        saveOperatorSession(data.access_token, { ...data.usuario, role });
       }
 
       setActiveWaiterId(data.usuario.id);

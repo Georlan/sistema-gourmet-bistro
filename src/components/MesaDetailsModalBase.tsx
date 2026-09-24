@@ -126,7 +126,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const canAppendOrderItems = activeRole !== 'garcom'
     || orders.length === 0
     || Boolean(restauranteConfig?.perm_garcom_editar);
-  const hasPrinting = restauranteConfig?.entitlements?.printing !== false;
+  const hasPrinting = restauranteConfig?.entitlements?.printing === true;
 
   // Lock background scroll when modal is active
   React.useEffect(() => {

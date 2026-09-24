@@ -66,7 +66,7 @@ export function MesaConsumptionPanel({
   setActiveTab, setTransferType, setSelectedOrderToPrint, setEditingItem,
   onPrintPreview, onPrintValues, onCloseTable, onMergeTables, onUnmergeTable, onDeliverItem, onCancelItem,
 }: MesaConsumptionPanelProps) {
-  const hasPrinting = restauranteConfig?.entitlements?.printing !== false;
+  const hasPrinting = restauranteConfig?.entitlements?.printing === true;
 
   return (
     <div className="p-3 sm:p-5 space-y-4 sm:space-y-6">
