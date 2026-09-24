@@ -32,7 +32,7 @@ def setup_database():
         # Create test restaurant if not exists
         existente = db.query(Restaurante).filter(Restaurante.id == 1).first()
         if not existente:
-            db.add(Restaurante(id=1, nome="Restaurante Teste"))
+            db.add(Restaurante(id=1, nome="Restaurante Teste", plano="premium"))
             db.commit()
         
         # Create test users
