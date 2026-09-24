@@ -167,10 +167,10 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     }
     return 'garcom';
   });
-  const [activeRestaurantId, setActiveRestaurantId] = useState<number>(() => {
-    const restaurantId = Number(getOperatorSession(portal)?.user?.restaurante_id || 0);
-    return Number.isInteger(restaurantId) && restaurantId > 0 ? restaurantId : 0;
-  });
+  const sessionRestaurantId = Number(getOperatorSession(portal)?.user?.restaurante_id || 0);
+  const activeRestaurantId = Number.isInteger(sessionRestaurantId) && sessionRestaurantId > 0
+    ? sessionRestaurantId
+    : 0;
   const operationalScopeKey = useMemo(
     () => isAuthenticated && activeWaiterId
       ? `${portal}:${activeRestaurantId || 'legacy'}:${activeRole}:${activeWaiterId}`
@@ -416,12 +416,6 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
       setIsAuthenticated(!!localStorage.getItem(tokenKey));
       const operatorSession = getOperatorSession(newPortal);
-      const sessionRestaurantId = Number(operatorSession?.user?.restaurante_id || 0);
-      setActiveRestaurantId(
-        Number.isInteger(sessionRestaurantId) && sessionRestaurantId > 0
-          ? sessionRestaurantId
-          : 0
-      );
       setActiveWaiterId(
         localStorage.getItem(idKey)
         || String(operatorSession?.user?.id || "")
@@ -1182,12 +1176,6 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         saveOperatorSession(data.access_token, { ...data.usuario, role });
       }
 
-      const loginRestaurantId = Number(data.usuario?.restaurante_id || 0);
-      setActiveRestaurantId(
-        Number.isInteger(loginRestaurantId) && loginRestaurantId > 0
-          ? loginRestaurantId
-          : 0
-      );
       setActiveWaiterId(data.usuario.id);
       setActiveWaiterNome(data.usuario.nome);
       setActiveRole(role);
