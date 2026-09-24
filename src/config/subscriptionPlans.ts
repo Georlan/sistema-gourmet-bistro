@@ -1,5 +1,24 @@
 export type SubscriptionPlanId = 'pocket' | 'pro' | 'premium';
 
+export type SubscriptionFeatureId = 'printing' | 'kds' | 'waiter_app' | 'loyalty' | 'coupons';
+export type SubscriptionEntitlements = Partial<Record<SubscriptionFeatureId, boolean>>;
+
+const PLAN_FEATURES: Record<SubscriptionPlanId, ReadonlySet<SubscriptionFeatureId>> = {
+  pocket: new Set(),
+  pro: new Set(['printing', 'kds', 'waiter_app']),
+  premium: new Set(['printing', 'kds', 'waiter_app', 'loyalty', 'coupons']),
+};
+
+export function subscriptionHasFeature(
+  planId: SubscriptionPlanId,
+  feature: SubscriptionFeatureId,
+  entitlements?: SubscriptionEntitlements | null,
+): boolean {
+  const explicit = entitlements?.[feature];
+  if (typeof explicit === 'boolean') return explicit;
+  return PLAN_FEATURES[planId].has(feature);
+}
+
 export interface SubscriptionPlan {
   id: SubscriptionPlanId;
   name: string;
