@@ -243,7 +243,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   Consumo no local
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                  <h2 className="font-serif text-2xl sm:text-4xl leading-none font-extrabold tracking-tight text-koma-foreground truncate">
+                  <h2 className="max-w-full break-words font-serif text-2xl leading-tight font-extrabold tracking-tight text-koma-foreground sm:text-4xl sm:leading-none">
                     Mesa {table.id}{originStr}
                   </h2>
                   {(operationalState.occupancy === 'FREE' || operationalState.production.hasReadyItems) && (
