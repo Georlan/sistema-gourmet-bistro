@@ -17,9 +17,11 @@ def setup_cupons_test():
     try:
         rest = db.query(Restaurante).filter(Restaurante.id == 999).first()
         if not rest:
-            rest = Restaurante(id=999, nome="Restaurante Teste 999", slug="rest-999")
+            rest = Restaurante(id=999, nome="Restaurante Teste 999", slug="rest-999", plano="premium")
             db.add(rest)
-            db.commit()
+        else:
+            rest.plano = "premium"
+        db.commit()
 
         user = db.query(Usuario).filter(Usuario.id == "usr-admin-cupom").first()
         if not user:
