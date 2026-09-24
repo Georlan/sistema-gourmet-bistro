@@ -20,6 +20,7 @@ from ..models import (
     HistoricoFidelidade,
     Pagamento,
 )
+from .plan_entitlements import ENTITLEMENT_LOYALTY, has_plan_entitlement
 
 
 CENTAVOS = Decimal("0.01")
@@ -206,6 +207,12 @@ def registrar_fidelidade_compra_quitada(
     O crédito é tenant-scoped e idempotente por ``comanda_id``. Pedidos
     recusados/cancelados e pagamentos sem cliente nunca geram benefício.
     """
+    if not has_plan_entitlement(
+        db,
+        comanda.restaurante_id,
+        ENTITLEMENT_LOYALTY,
+    ):
+        return False
     if (comanda.delivery_status or "").strip().lower() == "recusado":
         return False
     if (comanda.online_payment_status or "").strip().lower() in {
