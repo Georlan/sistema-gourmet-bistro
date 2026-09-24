@@ -39,10 +39,14 @@ test('annual totals and savings apply ten percent only to the fixed subscription
   ]);
 });
 
-test('essential delivery stays in every plan while advanced modules require upgrade', () => {
+test('essential delivery and waiter app stay in every plan while advanced modules require upgrade', () => {
   const delivery = PLAN_COMPARISON_MATRIX.find(row => row.feature === 'Retirada e Delivery com Endereço, Taxa e Status');
   assert.ok(delivery);
   assert.deepEqual([delivery.pocket, delivery.pro, delivery.premium], [true, true, true]);
+
+  const waiterApp = PLAN_COMPARISON_MATRIX.find(row => row.feature === 'App do Garçom para Salão e Comandas');
+  assert.ok(waiterApp);
+  assert.deepEqual([waiterApp.pocket, waiterApp.pro, waiterApp.premium], [true, true, true]);
 
   const courierApp = PLAN_COMPARISON_MATRIX.find(row => row.feature === 'App do Entregador');
   assert.ok(courierApp);
@@ -70,6 +74,8 @@ test('landing starts monthly, has no setup fee or addons, and shows all current 
   assert.ok(html.includes('Sem add-ons'));
   assert.ok(html.includes('MAIS RECOMENDADO'));
   assert.ok(html.includes('MENOR TAXA'));
+  assert.ok(html.includes('Cardápio digital, mesas, App do Garçom e delivery já começam no Pocket.'));
+  assert.ok(SUBSCRIPTION_PLANS.find(plan => plan.id === 'pocket')?.features.includes('App do Garçom para salão e comandas'));
 
   for (const plan of SUBSCRIPTION_PLANS) {
     assert.ok(html.includes(`${plan.price},00 por mês`));
