@@ -33,6 +33,7 @@ export function CashierMobileSidebar({
   turnoLoadState,
   setShowAbrirModal,
   planId,
+  entitlements,
   hasOnlineMenu,
   isSidebarTabActive,
   sidebarOrderCount,
@@ -158,7 +159,7 @@ export function CashierMobileSidebar({
                   <CashierOnboardingShortcut mobile />
                 ) : (
                   <CashierSidebarSearch
-                    groups={getCashierSidebarGroupsForPlan(planId)}
+                    groups={getCashierSidebarGroupsForPlan(planId, entitlements)}
                     hasOnlineMenu={hasOnlineMenu}
                     handleSidebarNavigation={handleSidebarNavigation}
                     closeMobile
@@ -171,7 +172,7 @@ export function CashierMobileSidebar({
                 </div>
               ) : (
                 <CashierSidebarNavigation
-                  groups={getCashierSidebarGroupsForPlan(planId)}
+                  groups={getCashierSidebarGroupsForPlan(planId, entitlements)}
                   closeMobile
                   expandActiveChildren={false}
                   hasOnlineMenu={hasOnlineMenu}
