@@ -2,7 +2,7 @@
 
 ## Decisão
 
-A oferta comercial vigente do KÔMA usa três planos sem taxa de implantação e sem add-ons. O Pocket é a porta de entrada com mensalidade de R$ 39; Pro e Premium reduzem a taxa KÔMA conforme o restaurante cresce.
+A oferta comercial vigente do KÔMA usa três planos sem taxa de implantação e sem add-ons. O Pocket é a porta de entrada com mensalidade de R$ 39 e já inclui o App do Garçom; Pro e Premium adicionam gestão e operação avançadas e reduzem a taxa KÔMA conforme o restaurante cresce.
 
 O catálogo vigente serve para **novas contratações**. Ele não substitui os termos comerciais já aceitos por um tenant. Para contratos existentes, a autoridade financeira é o snapshot comercial vinculado ao restaurante.
 
@@ -36,6 +36,7 @@ Regras:
 ### Pocket
 
 - Mesas, comandas e balcão.
+- App do Garçom para salão e comandas.
 - Cardápio digital e QR Code com pedidos no PDV.
 - Retirada e delivery no mesmo caixa.
 - Fila de preparo na tela, sem impressora.
@@ -48,7 +49,7 @@ Tudo do Pocket, mais:
 
 - KDS e impressão automática.
 - Estoque, fichas técnicas e financeiro.
-- Garçom web e permissões da equipe.
+- Gestão de equipe e permissões avançadas.
 - Relatórios completos.
 
 ### Premium
