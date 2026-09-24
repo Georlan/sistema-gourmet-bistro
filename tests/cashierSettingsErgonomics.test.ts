@@ -9,6 +9,8 @@ const responsiveCss = readFileSync('src/components/caixa/navigation/cashierLowHe
 const waiterSettings = readFileSync('src/components/caixa/settings/CashierWaiterSettings.tsx', 'utf8');
 const waiterPermissions = readFileSync('src/components/caixa/settings/waiterPermissions.ts', 'utf8');
 const tableSettings = readFileSync('src/components/caixa/settings/CashierTableSettings.tsx', 'utf8');
+const mesaDetails = readFileSync('src/components/MesaDetailsModalBase.tsx', 'utf8');
+const mesaConsumption = readFileSync('src/components/mesas/MesaConsumptionPanel.tsx', 'utf8');
 
 test('cashier settings render only the active canonical destination without internal navigation cards', () => {
   const navigation = readFileSync('src/components/caixa/navigation/cashierNavigation.ts', 'utf8');
@@ -135,6 +137,11 @@ test('waiter settings separate actionable permissions from future capabilities a
   assert.doesNotMatch(waiterSettings, /as any/);
   assert.match(waiterSettings, /updateConfiguracoes\(\{ \[item\.key\]: event\.target\.checked \}\)/);
   assert.match(waiterSettings, /ReturnType<typeof useCashierSettings>/);
+  assert.match(settings, /<CashierWaiterSettings[\s\S]*hasPrinting=\{hasPrinting\}/);
+  assert.match(waiterSettings, /item\.key !== 'perm_garcom_print' \|\| hasPrinting/);
+  assert.match(waiterSettings, /Indisponível no plano atual/);
+  assert.match(waiterSettings, /O App do Garçom continua disponível normalmente/);
+  assert.match(waiterSettings, /Requer impressão/);
 
   assert.match(waiterPermissions, /title: 'Criar pedidos de delivery'/);
   assert.match(waiterPermissions, /title: 'Editar pedidos em andamento'/);
@@ -143,6 +150,15 @@ test('waiter settings separate actionable permissions from future capabilities a
   assert.doesNotMatch(waiterPermissions, /title: 'Permitir que/);
 });
 
+
+
+test('Pocket waiter UI removes physical-print actions while preserving the waiter workflow', () => {
+  assert.match(mesaDetails, /const hasPrinting = restauranteConfig\?\.entitlements\?\.printing !== false/);
+  assert.match(mesaDetails, /\{hasPrinting && <MesaPrintDialogs/);
+  assert.match(mesaConsumption, /const hasPrinting = restauranteConfig\?\.entitlements\?\.printing !== false/);
+  assert.match(mesaConsumption, /\{hasPrinting && <div className="grid grid-cols-2 gap-2">/);
+  assert.match(mesaConsumption, /\{hasPrinting && \([\s\S]*Reimprimir/);
+});
 
 test('printing queue explains FIFO order and job origin', () => {
   const monitor = readFileSync('src/components/printing/PrintMonitorPanel.tsx', 'utf8');
