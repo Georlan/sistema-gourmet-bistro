@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const frontendLegal = readFileSync('src/legal/legalContentV30.ts', 'utf8');
+const frontendLegal = readFileSync('src/legal/legalContentV31.ts', 'utf8');
 const frontendEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const backendLegal = readFileSync('backend/app/legal_config.py', 'utf8');
 
