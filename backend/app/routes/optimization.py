@@ -21,6 +21,11 @@ from ..services.clientes import (
     normalizar_telefone_cliente,
     registrar_movimento_fidelidade,
 )
+from ..services.plan_entitlements import (
+    ENTITLEMENT_LOYALTY,
+    has_plan_entitlement,
+    require_plan_entitlement,
+)
 from ..services.customer_relationship import (
     build_customer_relationship_payloads,
     load_customer_relationship_metrics,
@@ -106,6 +111,25 @@ def get_pico_horarios(
 
 # ----------------- PROGRAMA DE FIDELIDADE UNIFICADO -----------------
 
+
+def _require_loyalty_entitlement(db: Session, restaurante_id: int) -> None:
+    require_plan_entitlement(
+        db,
+        restaurante_id,
+        ENTITLEMENT_LOYALTY,
+        detail="Programa de fidelidade não disponível no plano atual.",
+    )
+
+
+def _hide_loyalty_balances(payload: dict) -> dict:
+    safe = dict(payload)
+    safe["pontos"] = 0
+    safe["saldo_pontos"] = 0
+    safe["saldoCashback"] = 0.0
+    safe["saldo_cashback"] = 0.0
+    return safe
+
+
 class ConfigFidelizacaoCreate(BaseModel):
     ativo: bool
     tipo_recompensa: str  # "PONTOS" | "CASHBACK"
@@ -126,6 +150,7 @@ def get_fidelidade_config(
 ):
     """Retorna as configurações do programa de fidelidade do restaurante."""
     restaurante_id = require_tenant_id()
+    _require_loyalty_entitlement(db, restaurante_id)
     config = db.query(ConfigFidelizacao).filter(
         ConfigFidelizacao.restaurante_id == restaurante_id
     ).first()
@@ -157,7 +182,10 @@ def get_loyalty_clients(
         restaurante_id=restaurante_id,
         cliente_ids=[c.id for c in clientes],
     )
-    return build_customer_relationship_payloads(clientes, metrics)
+    payloads = build_customer_relationship_payloads(clientes, metrics)
+    if not has_plan_entitlement(db, restaurante_id, ENTITLEMENT_LOYALTY):
+        return [_hide_loyalty_balances(payload) for payload in payloads]
+    return payloads
 
 
 @router.get("/fidelidade/clientes/lookup")
@@ -177,7 +205,10 @@ def lookup_loyalty_client(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if cliente is None:
         raise HTTPException(status_code=404, detail="Cliente não encontrado.")
-    return cliente_payload(cliente)
+    payload = cliente_payload(cliente)
+    if not has_plan_entitlement(db, restaurante_id, ENTITLEMENT_LOYALTY):
+        return _hide_loyalty_balances(payload)
+    return payload
 
 @router.post("/fidelidade/config", response_model=ConfigFidelizacaoResponse)
 def update_fidelidade_config(
@@ -187,6 +218,7 @@ def update_fidelidade_config(
 ):
     """Atualiza as configurações do programa de fidelidade."""
     restaurante_id = require_tenant_id()
+    _require_loyalty_entitlement(db, restaurante_id)
     config = db.query(ConfigFidelizacao).filter(
         ConfigFidelizacao.restaurante_id == restaurante_id
     ).first()
@@ -216,6 +248,7 @@ def checkout_fidelidade(
     Se for CASHBACK: acumula cashback (X% do total) ou deduz do saldo do cliente.
     """
     restaurante_id = require_tenant_id()
+    _require_loyalty_entitlement(db, restaurante_id)
     config = db.query(ConfigFidelizacao).filter(
         ConfigFidelizacao.restaurante_id == restaurante_id
     ).first()
@@ -436,6 +469,12 @@ def update_loyalty_client(
     tenant-scoped, nunca a chave estrangeira de pedidos ou pontos.
     """
     restaurante_id = require_tenant_id()
+    loyalty_enabled = has_plan_entitlement(db, restaurante_id, ENTITLEMENT_LOYALTY)
+    if not loyalty_enabled and (data.saldo_pontos is not None or data.saldo_cashback is not None):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ajuste de saldo de fidelidade não disponível no plano atual.",
+        )
     try:
         nome_novo = normalizar_nome_cliente(data.cliente)
         telefone_novo = normalizar_telefone_cliente(data.telefone)
@@ -472,9 +511,13 @@ def update_loyalty_client(
             p.cpf_cliente = telefone_novo
             p.nome_cliente = nome_novo
 
-        config = db.query(ConfigFidelizacao).filter(
-            ConfigFidelizacao.restaurante_id == restaurante_id,
-        ).first()
+        config = (
+            db.query(ConfigFidelizacao).filter(
+                ConfigFidelizacao.restaurante_id == restaurante_id,
+            ).first()
+            if loyalty_enabled
+            else None
+        )
         recompensa = (
             config.tipo_recompensa.upper()
             if config is not None
@@ -551,6 +594,14 @@ def create_loyalty_client(
     Cadastra manualmente um novo cliente e lança o saldo inicial se fornecido.
     """
     restaurante_id = require_tenant_id()
+    loyalty_enabled = has_plan_entitlement(db, restaurante_id, ENTITLEMENT_LOYALTY)
+    if not loyalty_enabled and (
+        int(data.saldo_pontos or 0) != 0 or Decimal(str(data.saldo_cashback or 0)) != Decimal("0")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Saldo inicial de fidelidade não disponível no plano atual.",
+        )
     try:
         tel_limpo = normalizar_telefone_cliente(data.telefone)
         nome_limpo = normalizar_nome_cliente(data.cliente)
@@ -571,9 +622,13 @@ def create_loyalty_client(
             telefone=tel_limpo,
             nome=nome_limpo,
         )
-        config = db.query(ConfigFidelizacao).filter(
-            ConfigFidelizacao.restaurante_id == restaurante_id,
-        ).first()
+        config = (
+            db.query(ConfigFidelizacao).filter(
+                ConfigFidelizacao.restaurante_id == restaurante_id,
+            ).first()
+            if loyalty_enabled
+            else None
+        )
         recompensa = (
             config.tipo_recompensa.upper()
             if config is not None
