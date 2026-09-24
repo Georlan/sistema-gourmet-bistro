@@ -39,6 +39,8 @@ interface Props {
   showToast: CashierNotice;
   loyaltyUsers: LoyaltyCustomer[];
   refreshLoyaltyUsers: () => Promise<void>;
+  hasLoyalty: boolean;
+  hasCoupons: boolean;
 }
 
 export default function CashierCustomers({
@@ -50,6 +52,8 @@ export default function CashierCustomers({
   showToast,
   loyaltyUsers,
   refreshLoyaltyUsers,
+  hasLoyalty,
+  hasCoupons,
 }: Props) {
   const [clientesSearch, setClientesSearch] = useState('');
 
@@ -187,7 +191,7 @@ export default function CashierCustomers({
         cliente: newNome.trim(),
         telefone: newPhone.replace(/\D/g, ''),
       };
-      if (newSaldo !== undefined && !isNaN(newSaldo)) {
+      if (hasLoyalty && newSaldo !== undefined && !isNaN(newSaldo)) {
         if (fidelidadeConfig.tipo_recompensa === 'PONTOS') {
           body.saldo_pontos = Math.round(newSaldo);
         } else {
@@ -223,7 +227,7 @@ export default function CashierCustomers({
         cliente: nome.trim(),
         telefone: telefone.replace(/\D/g, ''),
       };
-      if (!isNaN(saldoInicial)) {
+      if (hasLoyalty && !isNaN(saldoInicial)) {
         if (fidelidadeConfig.tipo_recompensa === 'PONTOS') {
           body.saldo_pontos = Math.round(saldoInicial);
         } else {
@@ -254,19 +258,20 @@ export default function CashierCustomers({
   };
   useEffect(() => {
     if (activeTab === 'clientes') {
-      fetch(`${apiBaseUrl}/fidelidade/config`, { headers: authHeaders })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && data.tipo_recompensa) setFidelidadeConfig(data);
-        })
-        .catch((err) => console.error('Error fetching fidelity config:', err));
-
+      if (hasLoyalty) {
+        fetch(`${apiBaseUrl}/fidelidade/config`, { headers: authHeaders })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data && data.tipo_recompensa) setFidelidadeConfig(data);
+          })
+          .catch((err) => console.error('Error fetching fidelity config:', err));
+      }
       void refreshLoyaltyUsers();
     }
-  }, [activeTab, activeSubTab, apiBaseUrl, authHeaders.Authorization]);
+  }, [activeTab, activeSubTab, apiBaseUrl, authHeaders.Authorization, hasLoyalty]);
   return (
     <>
-      {activeTab === 'clientes' && activeSubTab === 'fidelidade' && (
+      {activeTab === 'clientes' && activeSubTab === 'fidelidade' && hasLoyalty && (
         <div className="space-y-4 text-left animate-fade-in">
           <OperationalBanner
             id="loyalty-heading"
@@ -434,7 +439,7 @@ export default function CashierCustomers({
           </div>
         </div>
       )}
-      {activeTab === 'clientes' && ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab) && (
+      {activeTab === 'clientes' && hasCoupons && ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab) && (
         <div className="space-y-4">
           <CuponsTab
             apiBaseUrl={apiBaseUrl}
@@ -450,7 +455,7 @@ export default function CashierCustomers({
             eyebrow="RELACIONAMENTO"
             title="Clientes"
             accent="em uma única lista"
-            description="Encontre contatos rapidamente e acompanhe os benefícios sem repetir cadastros."
+            description={hasLoyalty ? 'Encontre contatos rapidamente e acompanhe os benefícios sem repetir cadastros.' : 'Encontre contatos rapidamente e acompanhe o histórico sem repetir cadastros.'}
             metrics={[
               { label: loyaltyUsers.length === 1 ? 'total' : 'totais', value: loyaltyUsers.length },
               {
@@ -534,7 +539,7 @@ export default function CashierCustomers({
                         Editar
                       </button>
                     </div>
-                    <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-koma-border pt-3 text-xs">
+                    <dl className={`mt-3 grid ${hasLoyalty ? 'grid-cols-3' : 'grid-cols-2'} gap-2 border-t border-koma-border pt-3 text-xs`}>
                       <div className="min-w-0">
                         <dt className="text-[10px] text-koma-muted">Última compra</dt>
                         <dd className="mt-1 font-mono text-koma-foreground">{ultimaCompraLabel(user.dias_sem_comprar)}</dd>
@@ -543,14 +548,16 @@ export default function CashierCustomers({
                         <dt className="text-[10px] text-koma-muted">Pedidos</dt>
                         <dd className="mt-1 font-mono text-koma-foreground">{user.pedidos_concluidos ?? 0}</dd>
                       </div>
-                      <div className="min-w-0">
-                        <dt className="text-[10px] text-koma-muted">Benefício</dt>
-                        <dd className="mt-1 break-words font-mono font-extrabold text-emerald-700 dark:text-emerald-400">
-                          {fidelidadeConfig.tipo_recompensa === 'PONTOS'
-                            ? `${user.pontos} pts`
-                            : `R$ ${user.saldoCashback.toFixed(2)}`}
-                        </dd>
-                      </div>
+                      {hasLoyalty && (
+                        <div className="min-w-0">
+                          <dt className="text-[10px] text-koma-muted">Benefício</dt>
+                          <dd className="mt-1 break-words font-mono font-extrabold text-emerald-700 dark:text-emerald-400">
+                            {fidelidadeConfig.tipo_recompensa === 'PONTOS'
+                              ? `${user.pontos} pts`
+                              : `R$ ${user.saldoCashback.toFixed(2)}`}
+                          </dd>
+                        </div>
+                      )}
                     </dl>
                   </article>
                 ))}
@@ -565,7 +572,7 @@ export default function CashierCustomers({
                       <th className="p-3.5">WhatsApp</th>
                       <th className="p-3.5">Última compra</th>
                       <th className="p-3.5">Pedidos</th>
-                      <th className={"p-3.5 font-mono"}>Benefício atual</th>
+                      {hasLoyalty && <th className={"p-3.5 font-mono"}>Benefício atual</th>}
                       <th className={"p-3.5 text-right"}>Ações</th>
                     </tr>
                   </thead>
@@ -582,13 +589,13 @@ export default function CashierCustomers({
                         <td className={"p-3.5 font-mono text-xs text-koma-foreground"}>
                           {user.pedidos_concluidos ?? 0}
                         </td>
-                        <td
-                          className={"p-3.5 font-mono text-emerald-700 dark:text-emerald-400 font-extrabold text-xs"}
-                        >
-                          {fidelidadeConfig.tipo_recompensa === 'PONTOS'
-                            ? `${user.pontos} pts`
-                            : `R$ ${user.saldoCashback.toFixed(2)}`}
-                        </td>
+                        {hasLoyalty && (
+                          <td className={"p-3.5 font-mono text-emerald-700 dark:text-emerald-400 font-extrabold text-xs"}>
+                            {fidelidadeConfig.tipo_recompensa === 'PONTOS'
+                              ? `${user.pontos} pts`
+                              : `R$ ${user.saldoCashback.toFixed(2)}`}
+                          </td>
+                        )}
                         <td className={"p-3.5 text-right"}>
                           <button
                             onClick={() => startEditingCustomer(user)}
@@ -659,7 +666,9 @@ export default function CashierCustomers({
                   alert('Preencha todos os campos!');
                   return;
                 }
-                const newSaldo = fidelidadeConfig.tipo_recompensa === 'PONTOS' ? crmFormPontos : crmFormCashback;
+                const newSaldo = hasLoyalty
+                  ? (fidelidadeConfig.tipo_recompensa === 'PONTOS' ? crmFormPontos : crmFormCashback)
+                  : undefined;
                 const updated = await handleUpdateClient(editingCrmUser.id, crmFormNome, crmFormTelefone, newSaldo);
                 if (updated) setEditingCrmUser(null);
               }}
