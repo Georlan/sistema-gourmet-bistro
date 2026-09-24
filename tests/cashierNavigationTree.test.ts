@@ -315,7 +315,7 @@ test('desktop and mobile delegate nested rendering to the same component', () =>
   );
   for (const source of [desktop, mobile]) {
     assert.match(source, /CashierSidebarNavigation/);
-    assert.match(source, /groups=\{getCashierSidebarGroupsForPlan\(planId\)\}/);
+    assert.match(source, /groups=\{getCashierSidebarGroupsForPlan\(planId, entitlements\)\}/);
     assert.doesNotMatch(source, /group\.items\.map/);
   }
 });
@@ -422,6 +422,38 @@ test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redu
     'Preparo',
   );
 
+  const pocketOperation = pocketGroups
+    .flatMap((group) => group.items)
+    .find((item) => item.id === 'operacao');
+  const pocketKitchen = pocketOperation?.children?.find((child) => child.id === 'vendas_cozinha');
+  assert.equal(pocketKitchen?.label, 'Preparo');
+  assert.deepEqual(pocketKitchen?.target, { tab: 'operacao', subTab: 'preparo' });
+
   assert.deepEqual(getCashierSidebarGroupsForPlan('pro'), CASHIER_SIDEBAR_GROUPS);
   assert.deepEqual(getCashierSidebarGroupsForPlan('premium'), CASHIER_SIDEBAR_GROUPS);
+});
+
+
+test('explicit entitlement overrides can grant or revoke plan navigation capabilities', () => {
+  const pocketWithAddons = getCashierSidebarGroupsForPlan('pocket', {
+    printing: true,
+    kds: true,
+    waiter_app: true,
+  });
+  const pocketSettings = pocketWithAddons.flatMap((group) => group.items).find((item) => item.id === 'impressao_salao');
+  assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_impressao'), true);
+  assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_garcom'), true);
+  assert.equal(
+    pocketWithAddons.flatMap((group) => group.items).find((item) => item.id === 'operacao')
+      ?.children?.find((child) => child.id === 'vendas_cozinha')?.target.subTab,
+    'kds',
+  );
+
+  const premiumRevoked = getCashierSidebarGroupsForPlan('premium', {
+    printing: false,
+    waiter_app: false,
+  });
+  const premiumSettings = premiumRevoked.flatMap((group) => group.items).find((item) => item.id === 'impressao_salao');
+  assert.equal(premiumSettings?.children?.some((child) => child.id === 'config_impressao'), false);
+  assert.equal(premiumSettings?.children?.some((child) => child.id === 'config_garcom'), false);
 });
