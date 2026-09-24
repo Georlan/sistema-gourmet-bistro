@@ -72,6 +72,19 @@ test('buildWhatsAppShiftReceipt formats shift summary for manager review without
   assert.match(receipt, /Dinheiro Esperado em Gaveta: R\$\s*250,00/);
 });
 
+test('receipt uses the persisted charge for discounts, delivery, partial payments and reopened orders', () => {
+  const items = [{ id: '1', produtoId: '1', nome: 'Pedido', preco: 100, quantidade: 1, observacao: '', clienteNome: '', status: 'pronto' as const }];
+  for (const [total, paid, balance] of [[90, 90, 0], [115, 40, 75], [90, 30, 60]]) {
+    const receipt = buildWhatsAppOrderReceipt(
+      { itens: items, total, valorPago: paid }, null,
+      { taxaServicoAtiva: true, serviceTaxRate: 10 },
+    );
+    assert.match(receipt, new RegExp(`\\*Total: R\\$\\s*${total},00\\*`));
+    assert.match(receipt, new RegExp(`Saldo a pagar: R\\$\\s*${balance},00`));
+    assert.match(receipt, /Subtotal: R\$\s*100,00/);
+  }
+});
+
 test('CheckoutDialog hides physical print button and shows WhatsApp share button when hasPrinting is false', () => {
   const dummyController = {
     isProcessingPayment: false,
@@ -240,7 +253,8 @@ test('mobile information architecture avoids duplicated deep navigation', () => 
 
   assert.match(mobileSidebar, /expandActiveChildren=\{false\}/);
   assert.match(sidebarNavigation, /expandActiveChildren = true/);
-  assert.match(caixaPanel, /Seção do cardápio online/);
+  assert.match(caixaPanel, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
+  assert.match(caixaPanel, /settingsSubnavItems\.filter\(\(sub\) => !sub\.plans \|\| sub\.plans\.includes\(currentPlanId\)\)/);
   assert.match(caixaPanel, /'Cardápio online'/);
 });
 
