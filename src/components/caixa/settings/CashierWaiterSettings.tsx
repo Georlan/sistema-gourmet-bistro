@@ -8,6 +8,7 @@ type WaiterSettingsGroup = 'pedido' | 'fechamento' | 'atendimento';
 
 type BoundaryProps = Pick<ReturnType<typeof useCashierSettings>, 'waiterPermissions' | 'updateConfiguracoes'> & {
   printingSettingsTab: 'impressao' | 'mesas' | 'garcom' | 'taxa';
+  hasPrinting: boolean;
   setConfigSalSubTab: React.Dispatch<React.SetStateAction<WaiterSettingsGroup>>;
   configSalSubTab: WaiterSettingsGroup;
 };
@@ -33,6 +34,7 @@ const WAITER_SETTINGS_GROUPS = [
 /** One list renderer; definitions, values and mutation contracts are shared. */
 export function CashierWaiterSettings({
   printingSettingsTab,
+  hasPrinting,
   waiterPermissions,
   setConfigSalSubTab,
   configSalSubTab,
@@ -42,10 +44,15 @@ export function CashierWaiterSettings({
 
   const currentGroup = WAITER_SETTINGS_GROUPS.find((group) => group.id === configSalSubTab) ?? WAITER_SETTINGS_GROUPS[0];
   const currentPermissions = WAITER_PERMISSIONS.filter((item) => item.group === currentGroup.id);
-  const availablePermissions = currentPermissions.filter((item) => item.available);
+  const isAvailableForPlan = (item: (typeof WAITER_PERMISSIONS)[number]) =>
+    item.available && (item.key !== 'perm_garcom_print' || hasPrinting);
+  const availablePermissions = currentPermissions.filter(isAvailableForPlan);
   const unavailablePermissions = currentPermissions.filter((item) => !item.available);
+  const planUnavailablePermissions = currentPermissions.filter(
+    (item) => item.available && !isAvailableForPlan(item),
+  );
   const activeAvailablePermissions = availablePermissions.filter((item) => waiterPermissions[item.key]).length;
-  const allAvailablePermissions = WAITER_PERMISSIONS.filter((item) => item.available);
+  const allAvailablePermissions = WAITER_PERMISSIONS.filter(isAvailableForPlan);
 
   return (
     <>
@@ -85,7 +92,9 @@ export function CashierWaiterSettings({
         >
           {WAITER_SETTINGS_GROUPS.map((group) => {
             const selected = configSalSubTab === group.id;
-            const groupPermissions = WAITER_PERMISSIONS.filter((item) => item.group === group.id && item.available);
+            const groupPermissions = WAITER_PERMISSIONS.filter(
+              (item) => item.group === group.id && isAvailableForPlan(item),
+            );
             const activeCount = groupPermissions.filter((item) => waiterPermissions[item.key]).length;
 
             return (
@@ -165,6 +174,35 @@ export function CashierWaiterSettings({
               );
             })}
           </div>
+
+          {planUnavailablePermissions.length > 0 && (
+            <section
+              className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4"
+              aria-labelledby="waiter-plan-permissions-heading"
+            >
+              <div className="mb-3">
+                <h4 id="waiter-plan-permissions-heading" className="text-xs font-bold text-koma-secondary">
+                  Indisponível no plano atual
+                </h4>
+                <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">
+                  O App do Garçom continua disponível normalmente. Neste plano, os pedidos seguem para o preparo na tela e não geram impressão automática.
+                </p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {planUnavailablePermissions.map((item) => (
+                  <div key={item.key} className="rounded-xl border border-koma-border bg-koma-panel px-3 py-3 opacity-80">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong className="text-[10px] font-bold text-koma-secondary">{item.title}</strong>
+                      <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                        Requer impressão
+                      </span>
+                    </div>
+                    <p className="mt-1.5 text-[9px] leading-relaxed text-koma-muted">{item.description}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {unavailablePermissions.length > 0 && (
             <section
