@@ -197,6 +197,8 @@ def test_card_network_timeout_recovers_without_creating_second_mandate(client_an
             "auto_recurring": {
                 "transaction_amount": 129,
                 "currency_id": "BRL",
+                "frequency": 1,
+                "frequency_type": "months",
                 "free_trial": {"frequency": 7, "frequency_type": "days"},
             },
         },
