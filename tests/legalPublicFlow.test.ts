@@ -76,7 +76,7 @@ test('Legal 3.1 inclui App do Garçom no Pocket e mantém impressão como difere
   assert.match(legalContent, /Inclui todos os recursos do Pocket, inclusive o App do Garçom/);
   assert.match(legalContent, /Gestão avançada de equipe e permissões/);
   assert.doesNotMatch(legalContent, /Garçom web e permissões de equipe/);
-  assert.match(legalV30, /Garçom web e permissões de equipe/);
+  assert.match(legalV2, /Garçom web e permissões de equipe/);
 });
 
 test('contratação registra clickwrap com identidade, evidência e comprovante', () => {
