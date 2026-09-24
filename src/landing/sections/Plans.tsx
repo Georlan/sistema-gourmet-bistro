@@ -26,7 +26,7 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
   pro: {
     stage: 'MAIS RECOMENDADO',
     action: 'ORGANIZAR',
-    fit: 'Para quem quer conectar equipe, cozinha, estoque e financeiro em uma operação mais profissional.',
+    fit: 'Para quem quer adicionar cozinha dedicada, estoque, financeiro e relatórios a uma operação mais profissional.',
     note: 'É o melhor equilíbrio entre recursos de gestão e uma taxa menor nos pedidos pagos online.',
   },
   premium: {
