@@ -127,7 +127,6 @@ export function CaixaPanel({
   const planEntitlements = (restauranteConfig?.entitlements ?? undefined) as SubscriptionEntitlements | undefined;
   const hasPrinting = subscriptionHasFeature(currentPlanId, 'printing', planEntitlements);
   const hasDedicatedKds = subscriptionHasFeature(currentPlanId, 'kds', planEntitlements);
-  const hasWaiterApp = subscriptionHasFeature(currentPlanId, 'waiter_app', planEntitlements);
   const hasLoyalty = subscriptionHasFeature(currentPlanId, 'loyalty', planEntitlements);
   const hasCoupons = subscriptionHasFeature(currentPlanId, 'coupons', planEntitlements);
   const hasOnlineMenu =
