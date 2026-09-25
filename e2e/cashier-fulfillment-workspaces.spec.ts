@@ -590,7 +590,16 @@ async function mockThreeTerminalFulfillmentBackend(context: BrowserContext) {
     }
 
     if (pathname === '/caixa/configuracoes') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(cashierConfig) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...cashierConfig,
+          plano: 'pro',
+          plano_efetivo: 'pro',
+          entitlements: { printing: true, kds: true },
+        }),
+      });
       return;
     }
 
