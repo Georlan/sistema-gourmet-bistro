@@ -38,7 +38,10 @@ def test_windows_installer_has_persistence_update_and_uninstall():
     assert "[switch]$Update" in installer
     assert "[switch]$Uninstall" in installer
 
-    # Execução silenciosa em background (sem janela)
+    # Execução remota por comando único e silenciosa em background (sem janela)
+    assert "$scriptPath = $MyInvocation.MyCommand.Path" in installer
+    assert "$hasLocalSource = $scriptDir -and" in installer
+    assert "sistema-gourmet-bistro-main\\print-agent" in installer
     assert "pythonw.exe" in installer
     assert 'Set shell = CreateObject("WScript.Shell")' in installer
 
@@ -55,3 +58,15 @@ def test_windows_installer_has_persistence_update_and_uninstall():
     assert '"simulator.py"' in installer
     assert '"endpoints.py"' in installer
     assert '"transports.py"' in installer
+
+
+
+def test_windows_lifecycle_cmd_wrappers_delegate_to_installer():
+    repo_root = ROOT.parent
+    updater = (repo_root / "ATUALIZAR-KOMA-WINDOWS.cmd").read_text(encoding="utf-8")
+    uninstaller = (repo_root / "DESINSTALAR-KOMA-WINDOWS.cmd").read_text(encoding="utf-8")
+
+    assert "install-windows.ps1" in updater
+    assert "-Update" in updater
+    assert "install-windows.ps1" in uninstaller
+    assert "-Uninstall" in uninstaller
