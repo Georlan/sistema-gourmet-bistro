@@ -388,7 +388,10 @@ export function useCashierOrders({
     });
     const itensStr = Object.entries(itemCounts).map(([name, qty]) => `${qty}x ${name}`).join(' + ') || 'Nenhum item';
     const subtotal = activeItems.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
-    const total = subtotal + (c.delivery_taxa || 0);
+    const discounts =
+      (Number(c.valor_desconto_cupom) || 0) +
+      (Number(c.valor_desconto_cashback) || 0);
+    const total = Math.max(0, subtotal + (Number(c.delivery_taxa) || 0) - discounts);
     const amountPaid = Math.max(0, Number(c.valor_pago) || 0);
     const amountDue = Math.max(0, total - amountPaid);
     const parsedTime = formatBackendTime(c.criado_em);
