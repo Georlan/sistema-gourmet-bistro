@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.database import SessionLocal, Base, engine, current_restaurante_id
 from app.main import app
-from app.models import ActivityLog, Usuario, Produto, Categoria, Comanda, DeliveryCourierReassignmentAudit, Motoboy
+from app.models import ActivityLog, Usuario, Produto, Categoria, Comanda, DeliveryCourierReassignmentAudit, Item, Motoboy
 from app.security import get_password_hash
 
 client = TestClient(app)
@@ -363,3 +363,101 @@ def test_delivery_to_pickup_rejects_in_route_and_paid_delivery_fee(setup_db):
     )
     assert blocked_finance.status_code == 409
     assert "ajuste financeiro/estorno" in blocked_finance.json()["detail"]
+
+
+def test_cash_payment_uses_fee_and_discounts_without_finishing_fulfillment(setup_db):
+    headers = _delivery_headers()
+    order_id = "delivery-finance-decoupled"
+
+    db = SessionLocal(restaurante_id=1)
+    try:
+        existing = db.query(Comanda).filter(
+            Comanda.restaurante_id == 1,
+            Comanda.id == order_id,
+        ).first()
+        if existing is not None:
+            db.delete(existing)
+            db.flush()
+
+        comanda = Comanda(
+            id=order_id,
+            restaurante_id=1,
+            mesa_id=None,
+            garcom_id="u-del-01",
+            tipo="Delivery",
+            identificador="Cliente financeiro",
+            numero_pedido=9901,
+            fechada=False,
+            valor_pago=0,
+            delivery_status="pronto",
+            delivery_telefone="81944443333",
+            delivery_endereco="Rua Financeira, 18",
+            delivery_taxa=5,
+            valor_desconto_cupom=2,
+        )
+        item = Item(
+            id="item-delivery-finance-decoupled",
+            restaurante_id=1,
+            comanda_id=order_id,
+            produto_id="p-del",
+            preco_unit=15,
+            observacao="",
+            cliente_nome="Cliente financeiro",
+            status="pronto",
+            pago=False,
+        )
+        db.add_all([comanda, item])
+        db.commit()
+    finally:
+        db.close()
+
+    # Total canônico: 15 itens + 5 frete - 2 desconto = 18.
+    first = client.post(
+        f"/caixa/comandas/{order_id}/pagar",
+        json={
+            "valor": 15,
+            "metodo": "dinheiro",
+            "idempotency_key": "delivery-finance-partial-1",
+        },
+        headers=headers,
+    )
+    assert first.status_code == 201, first.text
+
+    close_with_fee_open = client.put(f"/comandas/{order_id}/fechar", headers=headers)
+    assert close_with_fee_open.status_code == 400
+    assert "Valor devido: R$18.00" in close_with_fee_open.json()["detail"]
+
+    db = SessionLocal(restaurante_id=1)
+    try:
+        partial = db.query(Comanda).filter(Comanda.id == order_id).one()
+        assert float(partial.valor_pago) == 15.0
+        assert partial.fechada is False
+        assert partial.delivery_status == "pronto"
+    finally:
+        db.close()
+
+    second = client.post(
+        f"/caixa/comandas/{order_id}/pagar",
+        json={
+            "valor": 3,
+            "metodo": "dinheiro",
+            "idempotency_key": "delivery-finance-partial-2",
+        },
+        headers=headers,
+    )
+    assert second.status_code == 201, second.text
+
+    db = SessionLocal(restaurante_id=1)
+    try:
+        paid = db.query(Comanda).filter(Comanda.id == order_id).one()
+        assert float(paid.valor_pago) == 18.0
+        assert paid.fechada is False
+        assert paid.delivery_status == "pronto"
+        assert all(item.pago for item in paid.itens)
+    finally:
+        db.close()
+
+    finalized = client.put(f"/comandas/{order_id}/fechar", headers=headers)
+    assert finalized.status_code == 200, finalized.text
+    assert finalized.json()["fechada"] is True
+    assert finalized.json()["delivery_status"] == "finalizado"
