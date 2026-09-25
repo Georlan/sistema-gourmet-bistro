@@ -104,6 +104,7 @@ async function mockFulfillmentBackend(
   let acceptCalls = 0;
   let dispatchCalls = 0;
   let assignmentCalls = 0;
+  let reassignmentCalls = 0;
   let failActiveReads = false;
 
   const activeOrders = () => [pickup, delivery].filter((order) =>
@@ -159,6 +160,18 @@ async function mockFulfillmentBackend(
       return;
     }
 
+    if (pathname.endsWith('/delivery/entregador/reassign') && request.method() === 'POST') {
+      reassignmentCalls += 1;
+      const body = request.postDataJSON() as { motoboy_id?: number | null; motivo?: string };
+      if (!body.motoboy_id || !String(body.motivo || '').trim()) {
+        await route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ detail: 'Motivo obrigatório' }) });
+        return;
+      }
+      delivery = { ...delivery, delivery_status: 'transito', motoboy_id: body.motoboy_id };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(delivery) });
+      return;
+    }
+
     if (pathname.endsWith('/delivery/entregador') && request.method() === 'PUT') {
       assignmentCalls += 1;
       const body = request.postDataJSON() as { motoboy_id?: number | null };
@@ -180,7 +193,10 @@ async function mockFulfillmentBackend(
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify([{ id: 7, nome: 'Pedro Entregador', telefone: '85999990007', ativo: true }]),
+        body: JSON.stringify([
+          { id: 7, nome: 'Pedro Entregador', telefone: '85999990007', ativo: true },
+          { id: 8, nome: 'Lia Entregas', telefone: '85999990008', ativo: true },
+        ]),
       });
       return;
     }
@@ -274,6 +290,7 @@ async function mockFulfillmentBackend(
     getAcceptCalls: () => acceptCalls,
     getDispatchCalls: () => dispatchCalls,
     getAssignmentCalls: () => assignmentCalls,
+    getReassignmentCalls: () => reassignmentCalls,
     setFailActiveReads: (value: boolean) => { failActiveReads = value; },
   };
 }
@@ -395,5 +412,17 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   await expect(inRouteCard).toContainText('EM ROTA');
   await expect(inRouteCard).toContainText('Pedro Entregador');
   await expect(inRouteCard.getByRole('combobox', { name: /Entregador do pedido 5002/i })).toHaveCount(0);
+
+  await inRouteCard.getByRole('button', { name: 'Trocar entregador' }).click();
+  const reassignmentDialog = page.getByRole('dialog', { name: 'Trocar entregador' });
+  await expect(reassignmentDialog).toBeVisible();
+  await expect(reassignmentDialog).toContainText('Pedro Entregador');
+  await reassignmentDialog.getByRole('combobox', { name: 'Novo entregador' }).selectOption('8');
+  await reassignmentDialog.getByRole('textbox', { name: 'Motivo da troca de entregador' }).fill('Entregador selecionado por engano');
+  await reassignmentDialog.getByRole('button', { name: 'Confirmar troca' }).click();
+  await expect.poll(state.getReassignmentCalls).toBe(1);
+  await expect(reassignmentDialog).toBeHidden();
+  await expect(inRouteCard).toContainText('Lia Entregas');
+  await expect(inRouteCard).toContainText('EM ROTA');
   await expectNoHorizontalOverflow(page);
 });
