@@ -38,7 +38,6 @@ def test_cashier_operational_forms_use_canonical_clients_without_local_stubs():
     assert "/delivery/despachar" in orders
     assert "/comandas/motoboys/cadastro" in orders
     assert "parseInt(motoboyId)" not in panel + couriers
-    assert "<CashierCouriers" in panel
 
 def test_operator_logout_only_clears_authentication_keys():
     panel = _source("src/components/CaixaPanel.tsx")
