@@ -118,10 +118,8 @@ export function CaixaPanel({
   onOptimisticAddOrder,
   onRemovePendingPaymentOptimistic,
 }: CaixaPanelProps) {
-  const restId = Number(restauranteConfig?.restaurante_id || restauranteConfig?.id);
-  const isRestaurant2Test = restId === 2;
   const currentPlanId = normalizeSubscriptionPlan(
-    isRestaurant2Test ? 'premium' : (restauranteConfig?.plano_efetivo ?? restauranteConfig?.plano),
+    restauranteConfig?.plano_efetivo ?? restauranteConfig?.plano,
   );
   const currentPlan = getSubscriptionPlan(currentPlanId);
   const planEntitlements = (restauranteConfig?.entitlements ?? undefined) as SubscriptionEntitlements | undefined;
