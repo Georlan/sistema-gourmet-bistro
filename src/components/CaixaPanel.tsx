@@ -42,11 +42,13 @@ import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
 import { CashierCancelConsumptionDialog } from './caixa/orders/CashierCancelConsumptionDialog';
 import { CashierCouriers } from './caixa/orders/CashierCouriers';
 import { CourierReassignmentDialog } from './caixa/orders/CourierReassignmentDialog';
+import { FulfillmentConversionDialog } from './caixa/orders/FulfillmentConversionDialog';
 import { CashierPickups } from './caixa/orders/CashierPickups';
 import type { CashierTableCard } from './caixa/orders/cashierWorkspaceTypes';
 import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
 import { useCashierOrders } from './caixa/orders/useCashierOrders';
 import { useCourierReassignment } from './caixa/orders/useCourierReassignment';
+import { useFulfillmentConversion } from './caixa/orders/useFulfillmentConversion';
 import { useOnlineOrderAutoAcceptPolicy } from './caixa/orders/useOnlineOrderAutoAcceptPolicy';
 import { useCashierPdv } from './caixa/pdv/useCashierPdv';
 import { useCashierAlerts } from './caixa/realtime/useCashierAlerts';
@@ -294,6 +296,7 @@ export function CaixaPanel({
     openDeliveryOrderDetails,
     handleDespacharKanban,
     handleReassignDeliveryCourier,
+    handleConvertDeliveryToPickup,
     handleGerarLinkMotoboy,
     handleRevogarAcessoMotoboy,
     handleFecharDelivery,
@@ -328,6 +331,9 @@ export function CaixaPanel({
     motoboys,
     showToast,
     reassignCourier: handleReassignDeliveryCourier,
+  });
+  const fulfillmentConversion = useFulfillmentConversion({
+    convertToPickup: handleConvertDeliveryToPickup,
   });
 
   const { soundEnabled, toggleSound, playOrderAlert } = useCashierAlerts({
@@ -1240,6 +1246,7 @@ export function CaixaPanel({
               handleAdvanceDigitalOrder={handleAdvanceDigitalOrder}
               openDeliveryOrderDetails={openDeliveryOrderDetails}
               onRequestCourierReassignment={courierReassignment.request}
+              onRequestFulfillmentConversion={fulfillmentConversion.request}
               apiBaseUrl={apiBaseUrl}
               authHeaders={authHeaders}
               now={nowTimestamp}
@@ -1286,6 +1293,13 @@ export function CaixaPanel({
           onSubmit={courierReassignment.submit}
         />
 
+        <FulfillmentConversionDialog
+          target={fulfillmentConversion.target}
+          isSubmitting={fulfillmentConversion.isSubmitting}
+          onClose={fulfillmentConversion.close}
+          onSubmit={fulfillmentConversion.submit}
+        />
+
         {selectedKanbanOrder && (
           <KanbanOrderDetails
             order={selectedKanbanOrder}
@@ -1326,6 +1340,10 @@ export function CaixaPanel({
               printTableValues: handlePrintSelectedKanbanValues,
               transferTable: handleTransferSelectedKanbanTable,
               associateTable: handleAssociateSelectedKanbanTable,
+              convertDeliveryToPickup: () => fulfillmentConversion.request({
+                id: selectedKanbanOrder.id,
+                numeroPedido: selectedKanbanOrder.numeroPedido,
+              }),
               cancelConsumption: handleCancelSelectedKanbanConsumption,
               cancelOrder: handleCancelSelectedKanbanOrder,
             }}
