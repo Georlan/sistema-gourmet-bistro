@@ -10,7 +10,7 @@ import logging
 from ..database import get_db, require_tenant_id
 from ..models import Comanda, Insumo, ConfigFidelizacao, Pagamento, Cliente
 from ..schemas import ConfigFidelizacaoResponse
-from ..security import require_permission
+from ..security import require_entitled_permission, require_permission
 from ..models import Usuario
 from ..services.clientes import (
     buscar_cliente_por_id,
@@ -23,6 +23,8 @@ from ..services.clientes import (
 )
 from ..services.plan_entitlements import (
     ENTITLEMENT_LOYALTY,
+    ENTITLEMENT_INVENTORY,
+    ENTITLEMENT_ADVANCED_REPORTS,
     has_plan_entitlement,
     require_plan_entitlement,
 )
@@ -48,7 +50,11 @@ router = APIRouter(
 @router.get("/estoque/sugestoes")
 def get_sugestoes_compra(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("estoque:consultar"))
+    current_user: Usuario = Depends(require_entitled_permission(
+        "estoque:consultar",
+        ENTITLEMENT_INVENTORY,
+        detail="Estoque, compras e fichas técnicas não estão disponíveis no plano atual.",
+    ))
 ):
     """
     Ponto de Ressuprimento (Estoque Mínimo).
@@ -74,7 +80,11 @@ def get_sugestoes_compra(
 @router.get("/comandas/estatisticas/pico")
 def get_pico_horarios(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("relatorios:consultar"))
+    current_user: Usuario = Depends(require_entitled_permission(
+        "relatorios:consultar",
+        ENTITLEMENT_ADVANCED_REPORTS,
+        detail="Relatórios avançados não estão disponíveis no plano atual.",
+    ))
 ):
     """
     Retorna os horários de pico de comandas do restaurante.
@@ -382,7 +392,11 @@ def get_garcons_relatorio(
     data_inicio: Optional[str] = None,
     data_fim: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("relatorios:consultar"))
+    current_user: Usuario = Depends(require_entitled_permission(
+        "relatorios:consultar",
+        ENTITLEMENT_ADVANCED_REPORTS,
+        detail="Relatórios avançados não estão disponíveis no plano atual.",
+    ))
 ):
     """
     Retorna o relatório simplificado de desempenho dos garçons.
