@@ -59,8 +59,17 @@ export default function CashierTeam({
   }, [activeTab, activeSubTab]);
 
   const handleAddUser = async (payload: { nome: string; telefone: string; cargo: string }) => {
-    await API.cadastrarFuncionario(payload);
+    const res = await fetch(`${apiBaseUrl}/caixa/funcionarios`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Falha ao cadastrar funcionário');
+    }
     await fetchSystemUsers();
+    window.dispatchEvent(new CustomEvent('koma_team_updated'));
     showToast('Pessoa cadastrada e convite agendado automaticamente!');
   };
 
