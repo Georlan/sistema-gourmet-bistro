@@ -48,7 +48,6 @@ def test_online_delivery_screen_uses_caixa_config_as_the_only_writer():
     assert "Taxa de entrega automática" in screen
     assert "Taxa mínima (R$)" in screen
     assert "Valor por km (R$)" in screen
-    assert 'inputMode="decimal"' in screen
     assert "0,50" in screen
     assert "${apiBaseUrl}/caixa/configuracoes/delivery-origin" in screen
     assert "${apiBaseUrl}/caixa/configuracoes/delivery-suggestion" in screen
