@@ -979,6 +979,14 @@ export function CaixaPanel({
                   expandedCardIds,
                   onToggleCard: toggleCardExpansion,
                 }}
+                couriers={{
+                  options: motoboys,
+                  loadState: motoboysLoadState,
+                  selectedByOrderId: selectedMotoboys,
+                  onChange: (orderId, courierId) => {
+                    setSelectedMotoboys((current) => ({ ...current, [orderId]: courierId }));
+                  },
+                }}
                 actions={{
                   confirmCashPayment: handleConfirmPendingCashPayment,
                   rejectCashPayment: handleRejectPendingCashPayment,
@@ -989,6 +997,7 @@ export function CaixaPanel({
                   printConference: handleQuickPrintOrder,
                   markTableItemsReady: handleMarkTableItemsReady,
                   advanceDigitalOrder: handleAdvanceDigitalOrder,
+                  dispatchDelivery: handleDespacharKanban,
                   openTablePayment: handleOpenTablePayment,
                   finalizeDigitalOrder: handleFinalizeDigitalOrder,
                 }}

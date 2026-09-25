@@ -42,9 +42,11 @@ function workspace(orders = [check()]): CaixaOrdersWorkspaceProps {
     search: { query: '', onChange: noop },
     acceptance: { orders: [], automatic: false, drawerOpen: false, onAutomaticChange: noop, onDrawerChange: noop },
     navigation: { stage: 'salon', expandedCardIds: {}, onStageChange: noop, onToggleCard: noop },
+    couriers: { options: [], loadState: 'loaded', selectedByOrderId: {}, onChange: noop },
     actions: { confirmCashPayment: noop, rejectCashPayment: noop, acceptDigitalOrder: noop,
       rejectDigitalOrder: noop, inspectTableOrder: noop, inspectDigitalOrder: noop, printConference: noop,
-      markTableItemsReady: noop, advanceDigitalOrder: noop, openTablePayment: noop, finalizeDigitalOrder: noop },
+      markTableItemsReady: noop, advanceDigitalOrder: noop, dispatchDelivery: noop,
+      openTablePayment: noop, finalizeDigitalOrder: noop },
     isLoading: false, now: NOW,
   };
 }
