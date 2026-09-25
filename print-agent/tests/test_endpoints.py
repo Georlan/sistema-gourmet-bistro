@@ -38,7 +38,11 @@ class TestPrinterEndpointModel:
         assert ep.id.startswith("ep-bluetooth_rfcomm-cozinha")
         assert ep.display_name == "Cozinha"
         assert ep.protocol == "escpos"
-        assert ep.options == {}
+        assert ep.options == {
+            "paper_profile": "thermal-80mm",
+            "paper_width_mm": 80,
+            "columns": 48,
+        }
 
     def test_known_printer_models_receive_paper_profiles(self):
         compact = PrinterEndpoint(
