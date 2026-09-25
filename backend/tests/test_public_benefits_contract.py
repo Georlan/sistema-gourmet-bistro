@@ -26,12 +26,17 @@ def _seed_tenant(
     db = SessionLocal()
     token = current_restaurante_id.set(restaurante_id)
     try:
-        if not db.query(Restaurante).filter(Restaurante.id == restaurante_id).first():
+        restaurant = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
+        if not restaurant:
             db.add(Restaurante(
                 id=restaurante_id,
                 nome=f"Restaurante {restaurante_id}",
                 slug=slug,
+                plano="premium",
             ))
+            db.commit()
+        elif restaurant.plano != "premium":
+            restaurant.plano = "premium"
             db.commit()
 
         db.add(Cupom(

@@ -16,19 +16,25 @@ class _FakeQuery:
     def all(self):
         return self._rows
 
+    def first(self):
+        return self._rows[0] if self._rows else None
+
 
 class _FakeSession:
     def __init__(self, rows):
         self.rows = rows
-        self.query_args = None
+        self.query_calls = []
 
     def query(self, *args):
-        self.query_args = args
-        return _FakeQuery(self.rows)
+        self.query_calls.append(args)
+        # A primeira consulta é a agregação por cargo. Consultas auxiliares
+        # (ex.: existência de perfil Motoboy) não devem reutilizar essas linhas.
+        return _FakeQuery(self.rows if len(args) > 1 else [])
 
 
-def test_role_counts_are_aggregated_without_materializing_users():
+def test_role_counts_are_aggregated_without_materializing_users(monkeypatch):
     """The endpoint must fetch one row per DB role, not one ORM object per employee."""
+    monkeypatch.setattr("app.routes.relatorios.has_capability", lambda *_args, **_kwargs: False)
     db = _FakeSession([
         ("admin", 2),
         ("operador_caixa", 1200),
@@ -44,8 +50,9 @@ def test_role_counts_are_aggregated_without_materializing_users():
 
     # A full-entity query (`db.query(Usuario)`) would scale ORM materialization
     # linearly with headcount. The optimized query selects aggregate expressions.
-    assert db.query_args is not None
-    assert all(arg is not Usuario for arg in db.query_args)
+    assert db.query_calls
+    aggregate_args = db.query_calls[0]
+    assert all(arg is not Usuario for arg in aggregate_args)
 
     by_slug = {row["slug"]: row["total_funcionarios"] for row in payload["cargos"]}
     assert by_slug["admin"] == 2

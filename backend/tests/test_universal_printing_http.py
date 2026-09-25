@@ -197,7 +197,7 @@ def test_universal_route_prints_pickup_even_when_every_item_is_nenhum():
     assert job.destination == "COZINHA"
     assert job.document_type == "producao"
     assert "PEDIDO #901" in job.payload_text
-    assert "CANAL: BALCÃO" in job.payload_text
+    assert "CANAL: BALCÃO" not in job.payload_text
     assert "RETIRADA" in job.payload_text
     assert "ORIGEM: CARDÁPIO ONLINE" in job.payload_text
     assert "ÁGUA DE COCO" in job.payload_text

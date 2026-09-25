@@ -11,7 +11,7 @@ from app.application.orders.commands import (
     OrderItemInput,
 )
 from app.application.orders.service import OrderApplicationService
-from app.database import SessionLocal
+from app.database import SessionLocal, current_restaurante_id
 from app.domain.orders.types import FulfillmentType, OrderChannel
 from app.models import (
     Cliente,
@@ -114,12 +114,15 @@ def test_public_order_links_existing_phone_without_overwriting_profile(char_setu
 
 
 def test_same_phone_in_other_tenant_never_leaks_identity(char_setup):
-    db = SessionLocal()
+    db = SessionLocal(restaurante_id=None)
     phone = "11988881003"
     other_restaurant_id = 7781
+
+    foreign_token = current_restaurante_id.set(None)
     try:
-        db.add(Restaurante(id=other_restaurant_id, nome="Outro Tenant", plano="pocket"))
-        db.flush()
+        if not db.query(Restaurante).filter(Restaurante.id == other_restaurant_id).first():
+            db.add(Restaurante(id=other_restaurant_id, nome="Outro Tenant", plano="pocket"))
+            db.flush()
         db.add(Cliente(
             id="customer-other-tenant",
             restaurante_id=other_restaurant_id,
@@ -129,7 +132,10 @@ def test_same_phone_in_other_tenant_never_leaks_identity(char_setup):
             saldo_cashback=0,
         ))
         db.commit()
+    finally:
+        current_restaurante_id.reset(foreign_token)
 
+    try:
         dto = _web_order(
             db,
             phone=phone,
@@ -151,16 +157,18 @@ def test_same_phone_in_other_tenant_never_leaks_identity(char_setup):
         assert local_customer.nome == "Cliente Tenant Correto"
     finally:
         db.rollback()
-        # O fixture de caracterização não remove tenants extras.
-        db.query(Cliente).filter(Cliente.restaurante_id == other_restaurant_id).delete(
-            synchronize_session=False,
-        )
-        db.query(Restaurante).filter(Restaurante.id == other_restaurant_id).delete(
-            synchronize_session=False,
-        )
-        db.commit()
-        db.close()
-
+        cleanup_token = current_restaurante_id.set(None)
+        try:
+            db.query(Cliente).filter(Cliente.restaurante_id == other_restaurant_id).delete(
+                synchronize_session=False,
+            )
+            db.query(Restaurante).filter(Restaurante.id == other_restaurant_id).delete(
+                synchronize_session=False,
+            )
+            db.commit()
+        finally:
+            current_restaurante_id.reset(cleanup_token)
+            db.close()
 
 def test_online_pix_approval_credits_loyalty_once(char_setup):
     db = SessionLocal()

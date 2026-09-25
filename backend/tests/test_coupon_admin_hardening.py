@@ -25,8 +25,11 @@ def _ensure_users():
     db = SessionLocal()
     token = current_restaurante_id.set(TENANT_ID)
     try:
-        if not db.query(Restaurante).filter(Restaurante.id == TENANT_ID).first():
-            db.add(Restaurante(id=TENANT_ID, nome="Coupon Admin Hardening", slug="coupon-admin-hardening"))
+        restaurant = db.query(Restaurante).filter(Restaurante.id == TENANT_ID).first()
+        if not restaurant:
+            db.add(Restaurante(id=TENANT_ID, nome="Coupon Admin Hardening", slug="coupon-admin-hardening", plano="premium"))
+        elif restaurant.plano != "premium":
+            restaurant.plano = "premium"
         if not db.query(Usuario).filter(Usuario.id == ADMIN_ID).first():
             db.add(Usuario(
                 id=ADMIN_ID,

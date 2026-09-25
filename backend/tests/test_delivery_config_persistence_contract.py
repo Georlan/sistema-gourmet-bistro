@@ -43,16 +43,15 @@ def test_online_delivery_screen_uses_caixa_config_as_the_only_writer():
     assert "/api/cardapio-digital/config" not in screen
     assert "pedido_minimo" in screen
     assert "frete_gratis_valor" in screen
-    assert "tabela_taxas_km" in screen
-    assert "tipo_taxa_entrega: 'distancia'" in screen
-    assert "Taxa de entrega automática" in screen
-    assert "Taxa mínima (R$)" in screen
-    assert "Valor por km (R$)" in screen
-    assert 'inputMode="decimal"' in screen
-    assert "0,50" in screen
-    assert "${apiBaseUrl}/caixa/configuracoes/delivery-origin" in screen
-    assert "${apiBaseUrl}/caixa/configuracoes/delivery-suggestion" in screen
-    assert "Sugestão do KÔMA" in screen
-    assert "Usar sugestão" in screen
-    assert "Taxa única" not in screen
-    assert "Taxa por bairro" not in screen
+
+    # PR #728 simplificou deliberadamente a UI pública para taxa por bairro,
+    # mantendo o suporte backend por distância apenas como compatibilidade.
+    # Os testes dedicados de distância continuam cobrindo esse backend.
+    assert "tabela_taxas_km: []" in screen
+    assert "tipo_taxa_entrega: 'bairro'" in screen
+    assert "Taxas de Entrega por Bairro" in screen
+    assert "Taxa padrão / mínima (R$)" in screen
+    assert "Bairros com taxa diferenciada" in screen
+    assert "Valor por km (R$)" not in screen
+    assert "${apiBaseUrl}/caixa/configuracoes/delivery-origin" not in screen
+    assert "${apiBaseUrl}/caixa/configuracoes/delivery-suggestion" not in screen
