@@ -75,7 +75,7 @@ $requiredFiles = @(
     "koma-print-launcher.ps1", "check-windows.ps1"
 )
 $adapterFiles = @(
-    "__init__.py", "base.py", "escpos.py", "file.py", "linux.py", "windows.py"
+    "__init__.py", "base.py", "escpos.py", "file.py", "linux.py", "windows.py", "transports.py"
 )
 
 foreach ($file in $requiredFiles) {

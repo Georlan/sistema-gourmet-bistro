@@ -42,6 +42,7 @@ adapter_files=(
     file.py
     linux.py
     windows.py
+    transports.py
 )
 
 for source_file in "${required_files[@]}"; do

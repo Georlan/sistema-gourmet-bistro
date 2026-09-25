@@ -12,6 +12,11 @@ from typing import Any, Dict, Optional
 
 from .base import BasePrinterAdapter
 from .escpos import build_escpos_payload
+from .transports import (
+    PrinterTransport,
+    BluetoothRfcommTransport,
+    WindowsSpoolerTransport,
+)
 
 log = logging.getLogger("print-agent.adapter.windows")
 
@@ -596,6 +601,69 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
             "diagnostics": refreshed,
         }
 
+    def test_bluetooth(
+        self,
+        requested_name: str = "",
+        requested_uri: str = "",
+    ) -> Dict[str, Any]:
+        diagnostics = self.get_diagnostics()
+        bluetooth_printers = [
+            printer
+            for printer in diagnostics.get("printers") or []
+            if isinstance(printer, dict) and printer.get("connection") == "bluetooth"
+        ]
+        requested_address = BluetoothRfcommTransport.normalize_address(requested_uri)
+        selected = next(
+            (
+                printer
+                for printer in bluetooth_printers
+                if (requested_uri and str(printer.get("uri") or "") == requested_uri)
+                or (requested_address and str(printer.get("address") or "") == requested_address)
+                or (requested_name and str(printer.get("name") or "") == requested_name)
+            ),
+            None,
+        )
+        if selected is None and len(bluetooth_printers) == 1:
+            selected = bluetooth_printers[0]
+
+        target_address = (
+            selected.get("address")
+            if selected
+            else requested_address
+        )
+        if not target_address:
+            return {
+                "success": False,
+                "code": "bluetooth_not_found",
+                "message": "Nenhuma impressora Bluetooth foi selecionada ou encontrada.",
+                "printer_name": requested_name or None,
+                "diagnostics": diagnostics,
+            }
+
+        selected_name = str((selected or {}).get("name") or requested_name or "Bluetooth")
+        raw_payload = build_escpos_payload(
+            "KÔMA - TESTE BLUETOOTH (WINDOWS)\n"
+            f"Impressora: {selected_name}\n"
+            "Conexão sob demanda RFCOMM validada pelo Kôma Print.\n"
+        )
+        transport = BluetoothRfcommTransport(address=target_address, channel=1)
+        if not transport.send(raw_payload):
+            return {
+                "success": False,
+                "code": "bluetooth_test_failed",
+                "message": "A impressora Bluetooth não respondeu ao teste no Windows.",
+                "printer_name": selected_name,
+                "diagnostics": diagnostics,
+            }
+
+        return {
+            "success": True,
+            "code": "bluetooth_test_sent",
+            "message": "Teste Bluetooth enviado com sucesso no Windows.",
+            "printer_name": selected_name,
+            "diagnostics": self.get_diagnostics(),
+        }
+
     def print_ticket(
         self,
         payload_text: str,
@@ -604,6 +672,35 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
         *,
         skip_ready_check: bool = False,
     ) -> bool:
+        raw_bytes = build_escpos_payload(payload_text, encoding="cp860")
+
+        # 1. Verifica se o destino corresponde a uma impressora Bluetooth RFCOMM
+        bt_address = None
+        target_clean = (printer_name or "").strip()
+        if target_clean.startswith("bluetooth://"):
+            bt_address = BluetoothRfcommTransport.normalize_address(target_clean)
+        elif len(target_clean.replace(":", "")) == 12 and BluetoothRfcommTransport.normalize_address(target_clean) == target_clean:
+            bt_address = target_clean
+        else:
+            diagnostics = self.get_diagnostics()
+            for p in diagnostics.get("printers") or []:
+                name = str(p.get("name") or "")
+                uri = str(p.get("uri") or "")
+                addr = str(p.get("address") or "")
+                if target_clean in {name, uri, addr} and (p.get("connection") == "bluetooth" or addr):
+                    bt_address = addr or BluetoothRfcommTransport.normalize_address(uri)
+                    break
+
+        if bt_address:
+            if not skip_ready_check and not self.is_printer_ready(printer_name):
+                log.error(
+                    "[WINDOWS ADAPTER] A impressora Bluetooth '%s' não está pronta.",
+                    printer_name,
+                )
+                return False
+            transport = BluetoothRfcommTransport(address=bt_address, channel=1)
+            return transport.send(raw_bytes)
+
         if sys.platform != "win32" or not self._win32print:
             log.error(
                 "[WINDOWS ADAPTER] Spooler RAW indisponível; "
@@ -627,7 +724,6 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
             return False
 
         win32print = self._win32print
-        raw_bytes = build_escpos_payload(payload_text, encoding="cp860")
         printer_handle = None
         document_started = False
         page_started = False

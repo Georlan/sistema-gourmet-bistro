@@ -1045,7 +1045,7 @@ def test_agent_executes_bluetooth_test_command():
     adapter.connect_usb.assert_not_called()
 
 
-def test_linux_adapter_sends_bluetooth_test_to_cups_queue(temp_dir):
+def test_linux_adapter_sends_bluetooth_test_via_rfcomm(temp_dir):
     adapter = get_adapter("linux", output_dir=temp_dir)
     diagnostics = {
         "adapter": "linux",
@@ -1060,8 +1060,8 @@ def test_linux_adapter_sends_bluetooth_test_to_cups_queue(temp_dir):
                 "address": "86:67:7A:6B:30:C4",
                 "cups_queue": "Kapbom",
                 "is_default": True,
-                "available": False,
-                "present": False,
+                "available": True,
+                "present": True,
                 "configured": True,
                 "paired": True,
                 "trusted": True,
@@ -1071,16 +1071,8 @@ def test_linux_adapter_sends_bluetooth_test_to_cups_queue(temp_dir):
         ],
     }
     adapter.get_diagnostics = MagicMock(return_value=diagnostics)
-    accepted = MagicMock(
-        returncode=0,
-        stdout=b"request id is Kapbom-42",
-        stderr=b"",
-    )
 
-    with patch(
-        "adapters.linux.subprocess.run",
-        return_value=accepted,
-    ) as run:
+    with patch("adapters.linux.BluetoothRfcommTransport.send", return_value=True) as mock_send:
         result = adapter.test_bluetooth(
             requested_name="KA-1445",
             requested_uri="bluetooth://86:67:7A:6B:30:C4",
@@ -1089,17 +1081,11 @@ def test_linux_adapter_sends_bluetooth_test_to_cups_queue(temp_dir):
     assert result["success"] is True
     assert result["code"] == "bluetooth_test_sent"
     assert result["printer_name"] == "KA-1445"
-    assert run.call_args.args[0] == [
-        "lp",
-        "-d",
-        "Kapbom",
-        "-o",
-        "raw",
-    ]
-    assert run.call_args.kwargs["input"].startswith(b"\x1b@")
+    mock_send.assert_called_once()
+    assert mock_send.call_args.args[0].startswith(b"\x1b@")
 
 
-def test_linux_adapter_requires_cups_queue_for_bluetooth_test(temp_dir):
+def test_linux_adapter_handles_bluetooth_transport_failure(temp_dir):
     adapter = get_adapter("linux", output_dir=temp_dir)
     diagnostics = {
         "adapter": "linux",
@@ -1113,8 +1099,8 @@ def test_linux_adapter_requires_cups_queue_for_bluetooth_test(temp_dir):
                 "uri": "bluetooth://86:67:7A:6B:30:C4",
                 "address": "86:67:7A:6B:30:C4",
                 "is_default": False,
-                "available": False,
-                "present": False,
+                "available": True,
+                "present": True,
                 "configured": True,
                 "paired": True,
                 "trusted": True,
@@ -1125,15 +1111,15 @@ def test_linux_adapter_requires_cups_queue_for_bluetooth_test(temp_dir):
     }
     adapter.get_diagnostics = MagicMock(return_value=diagnostics)
 
-    with patch("adapters.linux.subprocess.run") as run:
+    with patch("adapters.linux.BluetoothRfcommTransport.send", return_value=False) as mock_send:
         result = adapter.test_bluetooth(
             requested_name="KA-1445",
             requested_uri="bluetooth://86:67:7A:6B:30:C4",
         )
 
     assert result["success"] is False
-    assert result["code"] == "bluetooth_queue_missing"
-    run.assert_not_called()
+    assert result["code"] == "bluetooth_test_failed"
+    mock_send.assert_called_once()
 
 
 def test_api_client_completes_usb_command():
@@ -1582,4 +1568,104 @@ def test_base_adapter_is_printer_ready_preserves_usb_offline(temp_dir):
 
     assert adapter.is_printer_ready("G250") is False
     assert adapter.is_printer_ready("Padrão") is False
+
+
+def test_linux_adapter_print_ticket_dispatches_bluetooth_rfcomm(temp_dir):
+    adapter = get_adapter("linux", output_dir=temp_dir)
+    adapter.get_diagnostics = MagicMock(return_value={
+        "adapter": "linux",
+        "platform": "linux",
+        "default_printer": "KA-1445",
+        "error": None,
+        "printers": [
+            {
+                "name": "KA-1445",
+                "connection": "bluetooth",
+                "uri": "bluetooth://86:67:7A:6B:30:C4",
+                "address": "86:67:7A:6B:30:C4",
+                "is_default": True,
+                "available": True,
+                "present": True,
+                "configured": True,
+                "paired": True,
+                "trusted": True,
+                "connected": False,
+                "spp": True,
+            }
+        ],
+    })
+
+    with patch("adapters.linux.BluetoothRfcommTransport.send", return_value=True) as mock_send:
+        success = adapter.print_ticket("Ticket Content", "KA-1445", "PRODUCAO")
+
+    assert success is True
+    mock_send.assert_called_once()
+    assert mock_send.call_args.args[0].startswith(b"\x1b@")
+
+
+def test_windows_adapter_print_ticket_dispatches_bluetooth_rfcomm(temp_dir):
+    adapter = get_adapter("windows", output_dir=temp_dir)
+    adapter.get_diagnostics = MagicMock(return_value={
+        "adapter": "windows",
+        "platform": "windows",
+        "default_printer": "KA-1445",
+        "error": None,
+        "printers": [
+            {
+                "name": "KA-1445",
+                "connection": "bluetooth",
+                "uri": "bluetooth://86:67:7A:6B:30:C4",
+                "address": "86:67:7A:6B:30:C4",
+                "is_default": True,
+                "available": True,
+                "present": True,
+                "configured": True,
+                "paired": True,
+                "trusted": True,
+                "connected": False,
+                "spp": True,
+            }
+        ],
+    })
+
+    with patch("adapters.windows.BluetoothRfcommTransport.send", return_value=True) as mock_send:
+        success = adapter.print_ticket("Ticket Content", "KA-1445", "PRODUCAO")
+
+    assert success is True
+    mock_send.assert_called_once()
+    assert mock_send.call_args.args[0].startswith(b"\x1b@")
+
+
+def test_windows_adapter_test_bluetooth(temp_dir):
+    adapter = get_adapter("windows", output_dir=temp_dir)
+    adapter.get_diagnostics = MagicMock(return_value={
+        "adapter": "windows",
+        "platform": "windows",
+        "default_printer": "KA-1445",
+        "error": None,
+        "printers": [
+            {
+                "name": "KA-1445",
+                "connection": "bluetooth",
+                "uri": "bluetooth://86:67:7A:6B:30:C4",
+                "address": "86:67:7A:6B:30:C4",
+                "is_default": True,
+                "available": True,
+                "present": True,
+                "configured": True,
+                "paired": True,
+                "trusted": True,
+                "connected": False,
+                "spp": True,
+            }
+        ],
+    })
+
+    with patch("adapters.windows.BluetoothRfcommTransport.send", return_value=True) as mock_send:
+        result = adapter.test_bluetooth(requested_name="KA-1445")
+
+    assert result["success"] is True
+    assert result["code"] == "bluetooth_test_sent"
+    mock_send.assert_called_once()
+
 
