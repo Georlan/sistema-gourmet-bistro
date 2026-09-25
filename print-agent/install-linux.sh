@@ -32,10 +32,10 @@ if [[ "$ACTION" == "uninstall" || "$ACTION" == "purge" ]]; then
     systemctl --user disable koma-print-agent.service >/dev/null 2>&1 || true
     rm -f "$UNIT_FILE"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
-    rm -f "$DESKTOP_FILE"
-    if command -v xdg-mime >/dev/null 2>&1; then
+    if command -v xdg-mime >/dev/null 2>&1 && [[ -f "$DESKTOP_FILE" ]]; then
         xdg-mime uninstall "$DESKTOP_FILE" >/dev/null 2>&1 || true
     fi
+    rm -f "$DESKTOP_FILE"
     if [[ "$ACTION" == "purge" ]]; then
         rm -rf "$INSTALL_DIR"
         rm -rf "$CONFIG_HOME/koma-print-agent"
@@ -104,31 +104,9 @@ done
 
 if [[ "$ACTION" == "update" ]]; then
     echo "[KÔMA] Atualizando o Kôma Print Agent..."
-    systemctl --user stop koma-print-agent.service >/dev/null 2>&1 || true
-    mkdir -p "$INSTALL_DIR" "$ADAPTER_DIR" "$UNIT_DIR"
-    for source_file in "${required_files[@]}"; do
-        install -m 0644 "$SCRIPT_DIR/$source_file" "$INSTALL_DIR/$source_file"
-    done
-    for source_file in "${adapter_files[@]}"; do
-        install -m 0644 "$SCRIPT_DIR/adapters/$source_file" "$ADAPTER_DIR/$source_file"
-    done
-    install -m 0755 \
-        "$SCRIPT_DIR/koma-print-launcher.sh" \
-        "$INSTALL_DIR/koma-print-launcher.sh"
-
-    if [[ -x "$VENV_DIR/bin/python" ]]; then
-        "$VENV_DIR/bin/python" -m pip install \
-            --disable-pip-version-check \
-            --quiet \
-            -r "$INSTALL_DIR/requirements.txt"
-    fi
-    systemctl --user daemon-reload
-    systemctl --user restart koma-print-agent.service
-    echo "[OK] Kôma Print Agent atualizado com sucesso."
-    exit 0
+else
+    echo "[KÔMA] Preparando a impressão neste computador..."
 fi
-
-echo "[KÔMA] Preparando a impressão neste computador..."
 systemctl --user stop koma-print-agent.service >/dev/null 2>&1 || true
 mkdir -p "$INSTALL_DIR" "$ADAPTER_DIR" "$UNIT_DIR"
 
@@ -225,7 +203,11 @@ if ! systemctl --user is-active --quiet koma-print-agent.service; then
 fi
 
 echo
-echo "[OK] Impressão configurada e pronta para iniciar automaticamente em segundo plano."
+if [[ "$ACTION" == "update" ]]; then
+    echo "[OK] Kôma Print Agent atualizado e reativado com sucesso."
+else
+    echo "[OK] Impressão configurada e pronta para iniciar automaticamente em segundo plano."
+fi
 echo "[OK] O serviço reiniciará automaticamente e continuará ativo após reinicializações."
 if command -v lpstat >/dev/null 2>&1; then
     echo "[KÔMA] Impressoras CUPS detectadas:"
