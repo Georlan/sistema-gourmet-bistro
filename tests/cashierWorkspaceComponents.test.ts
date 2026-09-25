@@ -264,7 +264,7 @@ test('details groups visible units and delegates print/transfer/cancellation wit
     transfer: { targetId: '8', isTransferring: false, tables: [TABLE, { id: 8 }], onTargetChange: value => calls.push(value) },
     actions: { close: () => calls.push('close'), advanceDigitalOrder: () => calls.push('advance'),
       reprintProduction: () => calls.push('production'), printFullTable: () => calls.push('full'),
-      printTableValues: () => calls.push('values'), transferTable: () => calls.push('transfer'), associateTable: noop,
+      printTableValues: () => calls.push('values'), transferTable: () => calls.push('transfer'), associateTable: noop, convertDeliveryToPickup: noop,
       cancelConsumption: () => calls.push('consumption'), cancelOrder: () => calls.push('order') },
   });
   const view = KanbanOrderDetails(props);
@@ -306,7 +306,7 @@ test('digital detail uses the same controlled advance and order-only cancellatio
     order: { id: 'digital-25', mesaId: 0, numeroPedido: 25, modalidade: 'retirada', deliveryStatus: 'producao', itens: [] },
     transfer: { targetId: '', onTargetChange: noop, isTransferring: false, tables: [] },
     actions: { close: noop, advanceDigitalOrder: () => calls.push('advance'), reprintProduction: noop,
-      printFullTable: noop, printTableValues: noop, transferTable: noop, associateTable: noop, cancelConsumption: noop,
+      printFullTable: noop, printTableValues: noop, transferTable: noop, associateTable: noop, convertDeliveryToPickup: noop, cancelConsumption: noop,
       cancelOrder: () => calls.push('order') },
   };
   const view = KanbanOrderDetails(props);
@@ -371,7 +371,7 @@ test('digital detail shows the payment method and requested cash change', () => 
       paymentMethod: 'dinheiro', changeFor: 100, itens: [] },
     transfer: { targetId: '', onTargetChange: noop, isTransferring: false, tables: [] },
     actions: { close: noop, advanceDigitalOrder: noop, reprintProduction: noop, printFullTable: noop,
-      printTableValues: noop, transferTable: noop, associateTable: noop, cancelConsumption: noop, cancelOrder: noop },
+      printTableValues: noop, transferTable: noop, associateTable: noop, convertDeliveryToPickup: noop, cancelConsumption: noop, cancelOrder: noop },
   };
 
   const markup = renderToStaticMarkup(createElement(KanbanOrderDetails, props));
