@@ -35,7 +35,7 @@ type Props = Pick<
   getSmartPosCardState: (order: Order) => SmartPosCardState | null;
   setSmartPosRecoveryError: (value: string) => void;
   fetchTurno: () => Promise<void>;
-  handleFecharDelivery: (id: string) => Promise<boolean>;
+  closeDigitalOrder: (id: string) => Promise<boolean>;
 };
 
 export function shouldAutoCloseDigitalOrderAfterPayment(order: Order, selectedItemIds: readonly string[]): boolean {
@@ -67,7 +67,7 @@ export function useCheckoutController({
   getSmartPosCardState,
   setSmartPosRecoveryError,
   fetchTurno,
-  handleFecharDelivery,
+  closeDigitalOrder,
 }: Props) {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
@@ -553,7 +553,7 @@ export function useCheckoutController({
   const handleFinalizeDigitalOrder = async (order: DeliveryOrderView) => {
     if (isLoading) return;
     if (order.pago) {
-      await handleFecharDelivery(order.id);
+      await closeDigitalOrder(order.id);
       return;
     }
     const fullOrder = orders.find((o) => o.id === order.id);
