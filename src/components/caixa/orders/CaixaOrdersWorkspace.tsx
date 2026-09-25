@@ -80,6 +80,21 @@ const digitalOrderIcon = (order: DeliveryOrderView) => {
   return <Globe size={15} />;
 };
 
+const getDigitalKitchenProgress = (order: DeliveryOrderView) => {
+  const activeItems = (order.detailItems || []).filter((item) => item.status !== 'cancelado');
+  if (activeItems.length === 0) return null;
+
+  const readyCount = activeItems.filter(
+    (item) => item.status === 'pronto' || item.status === 'entregue',
+  ).length;
+
+  return {
+    readyCount,
+    totalCount: activeItems.length,
+    complete: readyCount === activeItems.length,
+  };
+};
+
 // Renderizador compacto de itens de alta densidade
 const renderCompactItemsList = (
   items: string | readonly { nome?: string }[],
@@ -597,6 +612,7 @@ export function CaixaOrdersWorkspace({
                   const sla = getOrderSlaData(order, nowTimestamp);
                   const isExpanded = !!expandedCardIds[cardId];
                   const isDeliveryOrder = order.modalidade === 'delivery';
+                  const kitchenProgress = getDigitalKitchenProgress(order);
                   const badgeText = deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
                   const buttonText = isDeliveryOrder ? 'Pronto para sair' : order.modalidade === 'dine_in' ? 'Pronto para servir' : 'Pronto para retirada';
                   const tableBlockLabel = getDigitalOrderTableBlockLabel(order);
@@ -675,6 +691,28 @@ export function CaixaOrdersWorkspace({
                         </div>
                       </div>
                       {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
+                      {kitchenProgress && (
+                        <div
+                          data-kitchen-progress={kitchenProgress.complete ? 'complete' : 'partial'}
+                          className={clsx(
+                            'flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-[10px] font-bold',
+                            kitchenProgress.complete
+                              ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-500'
+                              : 'border-koma-border bg-koma-panel/55 text-koma-muted',
+                          )}
+                        >
+                          <span>
+                            {kitchenProgress.complete
+                              ? 'Cozinha concluída'
+                              : `Cozinha ${kitchenProgress.readyCount}/${kitchenProgress.totalCount} prontos`}
+                          </span>
+                          {kitchenProgress.complete && (
+                            <span className="text-[9px] font-semibold text-koma-muted">
+                              Aguarda avanço do pedido
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {isDeliveryOrder && order.endereco && (
                         <span className={"font-normal text-xs text-koma-subtle flex items-center gap-1 truncate"}>
                           <MapPin size={11} className={"shrink-0 text-emerald-600 dark:text-emerald-300/80"} />

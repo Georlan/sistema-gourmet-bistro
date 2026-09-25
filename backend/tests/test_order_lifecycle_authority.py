@@ -9,7 +9,7 @@ from app.application.orders.lifecycle import OrderLifecycleCoordinator
 from app.application.orders.service import OrderApplicationService
 from app.database import SessionLocal
 from app.domain.orders.types import FulfillmentType, OrderChannel, OrderStatus
-from app.models import Comanda, IntegrationOutbox, Lancamento
+from app.models import Comanda, IntegrationOutbox, Item, Lancamento
 from tests.characterization.orders.fixtures import (
     CHAR_RESTAURANT_ID,
     char_client,
@@ -313,6 +313,68 @@ def test_digital_dine_in_uses_active_digital_route_without_delivery_transit(char
     assert completed.json()["tipo"] == "Consumo no Local"
     assert completed.json()["delivery_status"] == "finalizado"
     assert completed.json()["fechada"] is True
+
+
+@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
+@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
+def test_item_ready_is_production_only_until_explicit_order_transition(char_client, char_setup):
+    _clear_outbox()
+    headers = char_setup["headers"]
+    comanda_id = _create_pickup(
+        char_client,
+        phone="11977770011",
+        customer_name="Kitchen State Separation",
+    )
+
+    accepted = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "producao"},
+        headers=headers,
+    )
+    assert accepted.status_code == 200, accepted.text
+
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        item_id = (
+            db.query(Item.id)
+            .filter(
+                Item.restaurante_id == CHAR_RESTAURANT_ID,
+                Item.comanda_id == comanda_id,
+            )
+            .scalar()
+        )
+        assert item_id
+    finally:
+        db.close()
+
+    with patch("app.routes.orders_core._agendar_notificacao_whatsapp_status") as notify_ready:
+        item_ready = char_client.put(
+            f"/comandas/itens/{item_id}/status",
+            params={"status": "pronto"},
+            headers=headers,
+        )
+
+    assert item_ready.status_code == 200, item_ready.text
+    notify_ready.assert_not_called()
+    assert _event_names_for_check(comanda_id) == [
+        "koma.order.created",
+        "koma.order.accepted",
+    ]
+
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        comanda = db.query(Comanda).filter(
+            Comanda.restaurante_id == CHAR_RESTAURANT_ID,
+            Comanda.id == comanda_id,
+        ).one()
+        item = db.query(Item).filter(
+            Item.restaurante_id == CHAR_RESTAURANT_ID,
+            Item.id == item_id,
+        ).one()
+        assert item.status == "pronto"
+        assert comanda.delivery_status == "producao"
+    finally:
+        db.close()
 
 
 @patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)

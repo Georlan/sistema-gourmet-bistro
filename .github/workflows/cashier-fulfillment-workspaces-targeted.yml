@@ -14,6 +14,7 @@ on:
       - "backend/tests/test_courier_app_entitlement_and_security.py"
       - "backend/tests/test_motoboy_pwa_flow.py"
       - "backend/tests/test_delivery_flow.py"
+      - "backend/tests/test_order_lifecycle_authority.py"
       - "tests/cashierFulfillmentWorkspaces.test.ts"
       - "tests/cashierPickupsControl.test.ts"
       - "tests/deliveryDispatchControl.test.ts"
@@ -79,6 +80,7 @@ jobs:
           backend/tests/test_courier_app_entitlement_and_security.py
           backend/tests/test_motoboy_pwa_flow.py
           backend/tests/test_delivery_flow.py
+          backend/tests/test_order_lifecycle_authority.py
 
   browser:
     name: Fulfillment mobile + desktop
