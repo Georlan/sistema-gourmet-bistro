@@ -476,5 +476,10 @@ test('delivery alterado para retirada sai de Entregas e aparece em Retiradas sem
   await expect(pickups).toBeVisible();
   await expect(pickups).toContainText('Bruno Delivery');
   await expect(pickups).toContainText('Em preparo');
+
+  await pickups.getByRole('button', { name: 'Marcar pronto para retirada' }).click();
+  await expect(pickups).toContainText('Pronto para retirada');
+  await pickups.getByRole('button', { name: 'Receber e concluir retirada' }).click();
+  await expect(page.getByText('CHECKOUT / CAIXA')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });

@@ -32,7 +32,7 @@ test('courier delivered action routes the delivery through the canonical checkou
   assert.match(panel, /handleFinalizarPedido=\{handleFinalizeCourierOrder\}/);
   assert.match(courierBridge, /deliveryOrders\.find\(\(order\) => order\.id === orderId\)/);
   assert.match(courierBridge, /await handleFinalizeDigitalOrder\(deliveryOrder\);/);
-  assert.doesNotMatch(courierBridge, /handleFecharDelivery\(/);
+  assert.doesNotMatch(courierBridge, /handleCloseDigitalOrder\(/);
 });
 
 test('canonical digital finalization opens checkout when unpaid and only closes directly when already paid', () => {
@@ -42,7 +42,7 @@ test('canonical digital finalization opens checkout when unpaid and only closes 
     'const handleReceiveSalonTable',
   );
 
-  assert.match(finalizeDigitalOrder, /if \(order\.pago\) \{[\s\S]*?await handleFecharDelivery\(order\.id\);[\s\S]*?return;/);
+  assert.match(finalizeDigitalOrder, /if \(order\.pago\) \{[\s\S]*?await closeDigitalOrder\(order\.id\);[\s\S]*?return;/);
   assert.match(finalizeDigitalOrder, /setSelectedOrder\(mappedOrder\);/);
   assert.match(finalizeDigitalOrder, /setShowCheckoutModal\(true\);/);
   assert.match(finalizeDigitalOrder, /setCheckoutServiceTax\(false\);/);
