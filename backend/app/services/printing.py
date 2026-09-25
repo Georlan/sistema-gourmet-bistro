@@ -20,8 +20,8 @@ from ..models import (
     Usuario,
 )
 from ..printer_service import ESC_BOLD_OFF, ESC_BOLD_ON, align_center, printer_service
-from ..subscription import subscription_has_printing
 from ..timezone_utils import get_operational_now, to_operational_local_time
+from .plan_entitlements import ENTITLEMENT_PRINTING, has_plan_entitlement
 from .atendimentos import (
     AtendimentoError,
     ensure_atendimento_for_comanda,
@@ -544,7 +544,12 @@ def _printing_allowed(db: Session, restaurante_id: int) -> bool:
     restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
     if restaurante is None:
         raise PrintingRequestError("Restaurante não encontrado", status_code=404)
-    return subscription_has_printing(restaurante_id, restaurante.plano)
+    return has_plan_entitlement(
+        db,
+        restaurante_id,
+        ENTITLEMENT_PRINTING,
+        stored_plan=restaurante.plano,
+    )
 
 
 def enqueue_print_job(
