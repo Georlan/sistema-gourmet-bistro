@@ -46,6 +46,16 @@ const commands = tables.slice(0, -1).map((table, index) => ({
 const cashierConfig = {
   plano: 'pro',
   plano_efetivo: 'pro',
+  entitlements: {
+    printing: true,
+    kds: true,
+    waiter_app: true,
+    loyalty: false,
+    coupons: false,
+    courier_app: false,
+    inventory: true,
+    advanced_reports: true,
+  },
   taxa_servico_ativa: true,
   taxa_servico_padrao: 10,
   unificar_vias_delivery: false,
