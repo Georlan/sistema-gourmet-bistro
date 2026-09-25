@@ -5,64 +5,89 @@ impressora térmica. Ele funciona sem depender do navegador permanecer aberto.
 
 ## Instalação no Linux
 
-Pré-requisitos: Python 3.10+, CUPS e a impressora instalada no sistema.
+O agente roda silenciosamente em segundo plano como serviço `systemd --user`.
+A instalação normal não exige que o cliente mantenha terminal aberto e o
+transporte da impressora pode ser USB, Bluetooth SPP/RFCOMM ou uma fila/rede
+suportada pelo sistema.
+
+Na raiz do repositório:
 
 ```bash
 bash print-agent/install-linux.sh
 ```
 
-O instalador:
-
-1. abre o Kôma para autorizar este computador;
-2. guarda a credencial localmente, sem exigir cópia de token;
-3. instala e inicia `koma-print-agent.service` na sessão do usuário;
-4. configura reinício automático;
-5. registra o atalho `koma-print://` para a tela reativar o serviço sem abrir
-   um aplicativo separado.
-
-Para atualizar uma instalação após baixar uma versão nova do repositório,
-execute o instalador novamente. A credencial já pareada é reutilizada.
+Também é possível instalar sem clonar o projeto:
 
 ```bash
-git pull --ff-only origin main
-bash print-agent/install-linux.sh
+curl -fsSL https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-linux.sh | bash
 ```
 
-### Bluetooth SPP no Linux (opcional para apresentação)
+O instalador baixa os arquivos quando necessário, prepara um virtualenv
+dedicado em `~/.local/share/koma-print-agent`, abre o KÔMA uma única vez para
+autorizar o computador, registra `koma-print-agent.service`, habilita restart
+automático e preserva credenciais/configuração em atualizações.
 
-USB/CUPS continua sendo o transporte principal e recomendado para operação de
-restaurante. A versão `2026.09.22.1` adicionou a descoberta de dispositivos
-Bluetooth já conhecidos pelo BlueZ que anunciam Serial Port Profile (SPP).
-
-A versão `2026.09.22.2` acrescenta um **teste Bluetooth explícito** no painel.
-Ele só aparece para dispositivos SPP pareados que também possuem uma fila
-`bluetooth://` no CUPS. O teste envia um cupom ESC/POS curto para essa fila e
-não muda a impressora memorizada pelo Kôma, não cria `/dev/rfcomm*` e não
-libera PrintJobs comuns para Bluetooth.
-
-Para conferir localmente o que o agente enxerga:
+Atualização:
 
 ```bash
-python3 - <<'PY'
-import json
-import sys
-
-sys.path.insert(0, "print-agent")
-from adapters.linux import LinuxPrinterAdapter
-
-print(json.dumps(
-    LinuxPrinterAdapter().get_diagnostics(),
-    ensure_ascii=False,
-    indent=2,
-))
-PY
+curl -fsSL https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-linux.sh | bash -s -- --update
 ```
 
-Uma impressora SPP pareada aparece com `connection: "bluetooth"` e URI no
-formato `bluetooth://AA:BB:CC:DD:EE:FF`. Quando já existe uma fila CUPS para
-o mesmo MAC, o diagnóstico a consolida em uma única impressora e informa
-`cups_queue`. Dispositivos sem SPP são ignorados.
+Desinstalação preservando configuração:
 
+```bash
+curl -fsSL https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-linux.sh | bash -s -- --uninstall
+```
+
+Use `--purge` somente quando também quiser apagar credenciais e dados locais.
+
+### Bluetooth no Linux
+
+Bluetooth Classic SPP é um transporte operacional de primeira classe. Uma
+impressora pareada com SPP pode permanecer desconectada em repouso: o agente
+abre o socket RFCOMM apenas no momento do envio, transmite o payload ESC/POS e
+fecha a conexão ao final. Não há dependência obrigatória de `/dev/rfcomm0`,
+`sudo` ou fila CUPS para esse caminho.
+
+## Instalação no Windows
+
+O agente roda em segundo plano por uma tarefa agendada do Windows usando
+`pythonw.exe`, sem janela permanente. A tarefa inicia no logon do usuário,
+é recriada em atualizações e preserva credenciais e configuração.
+
+Com o projeto extraído, clique duas vezes em:
+
+```text
+INSTALAR-KOMA-WINDOWS.cmd
+```
+
+Ou instale diretamente pelo PowerShell, sem clonar o repositório:
+
+```powershell
+irm https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-windows.ps1 | iex
+```
+
+Se Python 3.10+ não estiver disponível, o instalador tenta instalar Python
+3.12 para o usuário via `winget`.
+
+Atualização remota:
+
+```powershell
+& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-windows.ps1'))) -Update
+```
+
+Desinstalação preservando credenciais/configuração:
+
+```powershell
+& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-windows.ps1'))) -Uninstall
+```
+
+Quando o repositório estiver extraído, `ATUALIZAR-KOMA-WINDOWS.cmd` e
+`DESINSTALAR-KOMA-WINDOWS.cmd` oferecem os mesmos fluxos com duplo clique.
+
+O cliente não precisa escolher CUPS, RFCOMM, Spooler ou URI. Essas informações
+ficam restritas ao diagnóstico técnico; para operação, o KÔMA apresenta a
+impressora pelo nome e estado, com USB/Bluetooth/Rede apenas como detalhe.
 
 A partir da versão `2026.09.20.1`, o agente também instala a ponte local do
 simulador térmico em `127.0.0.1:17654-17664`. Ela só é usada pela bancada
