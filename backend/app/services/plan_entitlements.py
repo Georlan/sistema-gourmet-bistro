@@ -23,6 +23,8 @@ ENTITLEMENT_WAITER_APP = "waiter_app"
 ENTITLEMENT_LOYALTY = "loyalty"
 ENTITLEMENT_COUPONS = "coupons"
 ENTITLEMENT_COURIER_APP = "courier_app"
+ENTITLEMENT_INVENTORY = "inventory"
+ENTITLEMENT_ADVANCED_REPORTS = "advanced_reports"
 
 KNOWN_ENTITLEMENTS = frozenset(
     {
@@ -32,6 +34,8 @@ KNOWN_ENTITLEMENTS = frozenset(
         ENTITLEMENT_LOYALTY,
         ENTITLEMENT_COUPONS,
         ENTITLEMENT_COURIER_APP,
+        ENTITLEMENT_INVENTORY,
+        ENTITLEMENT_ADVANCED_REPORTS,
     }
 )
 
@@ -42,6 +46,8 @@ _PLAN_ENTITLEMENTS: dict[str, frozenset[str]] = {
             ENTITLEMENT_PRINTING,
             ENTITLEMENT_KDS,
             ENTITLEMENT_WAITER_APP,
+            ENTITLEMENT_INVENTORY,
+            ENTITLEMENT_ADVANCED_REPORTS,
         }
     ),
     "premium": KNOWN_ENTITLEMENTS,
