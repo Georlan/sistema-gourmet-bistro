@@ -292,6 +292,7 @@ export function useCashierOrders({
   const [selectedMotoboys, setSelectedMotoboysState] = useState<Record<string, string>>({});
   const selectedMotoboysRef = useRef<Record<string, string>>({});
   const pendingCourierAssignmentRef = useRef<Record<string, PendingCourierAssignment>>({});
+  const pendingCourierReassignmentRef = useRef<Set<string>>(new Set());
   const courierAssignmentSequenceRef = useRef(0);
 
   const applySelectedMotoboysState = (next: Record<string, string>) => {
@@ -686,6 +687,62 @@ export function useCashierOrders({
       return false;
     }
   }
+
+  const handleReassignDeliveryCourier = async (
+    orderId: string,
+    nextMotoboyId: string,
+    reason: string,
+  ): Promise<boolean> => {
+    const orderKey = String(orderId);
+    if (!orderKey || !nextMotoboyId || pendingCourierReassignmentRef.current.has(orderKey)) {
+      return false;
+    }
+
+    pendingCourierReassignmentRef.current.add(orderKey);
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/comandas/${encodeURIComponent(orderKey)}/delivery/entregador/reassign`,
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            motoboy_id: Number(nextMotoboyId),
+            motivo: reason.trim(),
+          }),
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        showToast(data?.detail || 'Não foi possível trocar o entregador.', 'error');
+        return false;
+      }
+
+      const projected = mapComandaToDeliveryView(data);
+      if (projected) {
+        setDeliveryOrders((current) => current.map((order) =>
+          String(order.id) === orderKey
+            ? reconcileDeliveryOrderAfterStatus(order, projected)
+            : order
+        ));
+      }
+      const confirmedSelection = {
+        ...selectedMotoboysRef.current,
+        [orderKey]: data?.motoboy_id ? String(data.motoboy_id) : nextMotoboyId,
+      };
+      applySelectedMotoboysState(confirmedSelection);
+      showToast('Entregador da corrida alterado com motivo registrado.', 'success');
+      void Promise.allSettled([fetchDeliveryOrders(), onRefreshOrders()]);
+      window.dispatchEvent(new Event('koma_orders_updated'));
+      return true;
+    } catch (error) {
+      console.error(error);
+      showToast('Erro de conexão ao trocar o entregador.', 'error');
+      void fetchDeliveryOrders();
+      return false;
+    } finally {
+      pendingCourierReassignmentRef.current.delete(orderKey);
+    }
+  };
 
   const openDeliveryOrderDetails = (order: DeliveryOrderView) => {
     const fullComanda = orders.find((o) => o.id === order.id);
@@ -1198,6 +1255,7 @@ export function useCashierOrders({
     openDeliveryOrderDetails,
     handleUpdateDeliveryStatus,
     handleAssignDeliveryCourier,
+    handleReassignDeliveryCourier,
     handleDespacharKanban,
     handleGerarLinkMotoboy,
     handleRevogarAcessoMotoboy,
