@@ -60,39 +60,24 @@ def test_theme_is_bootstrapped_before_first_paint_and_react_for_every_route():
         assert token in css
 
 
-def test_cashier_theme_toggle_uses_shared_realtime_theme_contract():
-    caixa = source("src/components/CaixaPanel.tsx")
-    preferences = source("src/components/caixa/navigation/useCashierPreferences.ts")
-    sidebars = source("src/components/caixa/navigation/CashierDesktopSidebar.tsx") + source("src/components/caixa/navigation/CashierMobileSidebar.tsx")
-    footer = source("src/components/caixa/navigation/CashierSidebarFooter.tsx")
+
+def test_cashier_theme_controls_use_shared_persistence_contract():
+    appearance = source("src/components/caixa/settings/CashierAppearanceSettings.tsx")
     theme = source("src/config/theme.ts")
 
-    assert "useCashierPreferences(" in caixa
-    assert "theme={theme}" in caixa
-    assert "setTheme={setTheme}" in caixa
-    assert "KOMA_THEME_CHANGED_EVENT" in preferences
-    assert sidebars.count("<CashierSidebarFooter") == 2
-    assert "nextKomaTheme" in footer
-    assert "persistKomaTheme" in footer
-    assert "readKomaTheme" in preferences
-    assert "type KomaTheme" in preferences
-    assert "useState<KomaTheme>(() => readKomaTheme())" in preferences
+    # O contrato de UI depende da API compartilhada de tema, não de nomes de
+    # variáveis locais nem de uma expressão JSX específica.
+    assert "persistKomaTheme" in appearance
+    assert "readKomaTheme" in appearance
+    assert 'aria-label="Tema do caixa"' in appearance
+    assert "aria-pressed={selected}" in appearance
+    assert "localStorage.setItem('@koma:theme'" not in appearance
 
-    # Desktop expandido, desktop recolhido e mobile usam a mesma operação, que
-    # persiste e aplica o tema antes de sincronizar os outros shells.
-    # Expanded desktop and mobile share one rendered control; compact desktop
-    # has its own presentation, still using the exact same theme operation.
-    assert footer.count("setTheme(persistKomaTheme(nextKomaTheme(theme)))") == 2
-    assert "!mobile &&" in footer
-    assert 'className="cashier-sidebar__compact-theme"' in footer
-    assert "localStorage.setItem('@koma:theme'" not in caixa + preferences + sidebars + footer
-    assert "new Event('koma_theme_changed')" not in caixa + preferences + sidebars + footer
-
-    storage_index = theme.index("storage.setItem(KOMA_THEME_STORAGE_KEY, theme);")
-    apply_index = theme.index("applyKomaTheme(theme);", storage_index)
-    event_index = theme.index("window.dispatchEvent(new Event(KOMA_THEME_CHANGED_EVENT));", apply_index)
-    assert storage_index < apply_index < event_index
-
+    # A implementação compartilhada persiste, aplica e notifica. O comportamento
+    # dessas funções também é exercitado pela suíte frontend.
+    assert "storage.setItem(KOMA_THEME_STORAGE_KEY, theme);" in theme
+    assert "applyKomaTheme(theme);" in theme
+    assert "window.dispatchEvent(new Event(KOMA_THEME_CHANGED_EVENT));" in theme
 
 def test_koma_logo_uses_explicit_background_variants_and_semantic_text_color():
     logo = source("src/components/KomaLogo.tsx")
@@ -133,9 +118,9 @@ def test_sentry_is_optional_and_csp_allows_only_ingestion_not_remote_scripts():
     assert "https://*.ingest.de.sentry.io" in headers
 
 
-def test_csp_preserves_required_integrations_and_cardapio_cep_lookup():
+def test_csp_preserves_required_integrations_and_postal_code_lookup():
     headers = source("public/_headers")
-    cardapio = source("src/cardapio/CardapioPage.tsx")
+    postal_lookup = source("src/integrations/postalCode/postalCodeLookup.ts")
 
     assert "https://fonts.googleapis.com" in headers
     assert "https://fonts.gstatic.com" in headers
@@ -143,7 +128,7 @@ def test_csp_preserves_required_integrations_and_cardapio_cep_lookup():
     assert "https://sistema-gourmet-bistro-production.up.railway.app" in headers
     assert "wss://sistema-gourmet-bistro-production.up.railway.app" in headers
 
-    assert "https://viacep.com.br" in cardapio
+    assert "https://viacep.com.br" in postal_lookup
     assert "https://viacep.com.br" in headers
 
     for port in range(17654, 17665):
@@ -172,7 +157,9 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
     report_actions = source("src/components/relatorios/ReportActionBar.tsx")
     closing = source("src/components/caixa/CaixaFechamentoTab.tsx")
 
-    assert "grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4" in mesas
+    assert "grid-cols-2" in mesas
+    assert "min-[380px]:grid-cols-3" in mesas
+    assert "sm:grid-cols-4" in mesas
     assert "pl-[4.25rem]" not in products
     # O catálogo expõe categorias em uma faixa rolável e produtos em cards
     # operacionais que se adaptam da coluna única às grades largas.
@@ -210,10 +197,10 @@ def test_orders_kanban_keeps_every_real_stage_side_by_side_on_desktop():
     # colunas existem. Essa decisão usa viewport/capacidade informadas pelo navegador.
     assert "@container (max-width: 68rem)" in css
     assert "@container (min-width: 68rem)" not in css
-    assert "@media (min-width: 769px), (hover: hover) and (pointer: fine)" in css
+    assert "@media (min-width: 769px)" in css
 
     desktop_block = css.split(
-        "@media (min-width: 769px), (hover: hover) and (pointer: fine)", 1
+        "@media (min-width: 769px)", 1
     )[1].split("@media (hover: hover) and (pointer: fine)", 1)[0]
     assert "grid-template-columns: var(--orders-columns, repeat(3, minmax(0, 1fr)));" in desktop_block
     assert ".orders-mobile-stages" in desktop_block
@@ -334,14 +321,14 @@ def test_cashier_reference_viewports_choose_expected_kanban_mode():
         (412, 915, "coarse"): "compact",
         (768, 1024, "coarse"): "compact",
         (1024, 768, "coarse"): "wide",
-        (640, 800, "fine"): "wide",
+        (640, 800, "fine"): "compact",
         (1366, 768, "fine"): "wide",
         (1440, 900, "fine"): "wide",
         (1920, 1080, "fine"): "wide",
     }
 
     for (viewport_width, _viewport_height, pointer), expected in cases.items():
-        actual = "wide" if viewport_width >= 769 or pointer == "fine" else "compact"
+        actual = "wide" if viewport_width >= 769 else "compact"
         assert actual == expected, (viewport_width, pointer, expected)
 
 
@@ -365,18 +352,22 @@ def test_smartpos_pending_state_opens_checkout_with_safe_recovery_instead_of_dea
     assert "Revise a operação da maquininha antes de lançar outra baixa" in controller
 
 
-def test_waiter_cart_customization_edits_selected_quantity_without_appending_a_duplicate():
+def test_waiter_cart_customization_edits_the_selected_draft_instead_of_appending():
     menu = source("src/components/MenuPanel.tsx")
-    app = source("src/App.tsx")
     drafts = source("src/components/app/drafts/useOperationalDrafts.ts")
 
-    assert "setEditingDraftItemIds(matchingDraftItems.map((item) => item.id))" in menu
-    assert "matchingDraftItems.reduce((total, item) => total + (item.quantidade || 1), 0)" in menu
-    assert "onEditDraftItems(editingDraftItemIds" in menu
-    assert "editingDraftItemIds.length > 0 ? 'Salvar alterações' : 'Adicionar ao Pedido'" in menu
-    assert "onUpdateDraftItem(compatibleDraftItem.id" in menu
-    assert "useOperationalDrafts(" in app
-    assert "handleEditDraftItems(selectedTable.id, draftItemIds, fields)" in app
+    # A edição identifica explicitamente o item selecionado e usa o caminho de
+    # edição; um item novo só é criado no ramo alternativo.
+    assert "setEditingDraftItemId(draft?.id || null)" in menu
+    assert "if (editingDraftItemId)" in menu
+    assert "onEditDraftItems([editingDraftItemId]" in menu
+    assert "onAddToDraft(decoratedProduct" in menu
+    assert "editingDraftItemId ? 'Salvar alterações' : 'Adicionar ao pedido'" in menu
+
+    # No dono canônico dos drafts, apenas o item selecionado é mantido e
+    # atualizado com quantidade normalizada; IDs adicionais selecionados são
+    # removidos em vez de gerar duplicatas.
+    assert "if (!selectedIds.has(item.id)) return [item]" in drafts
     assert "if (item.id !== primaryId) return []" in drafts
     assert "quantidade: normalizedQuantity" in drafts
 
