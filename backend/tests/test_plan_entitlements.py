@@ -7,6 +7,8 @@ from app.models import ConfiguracaoRestaurante, Restaurante
 from app.services.plan_entitlements import (
     ENTITLEMENT_COUPONS,
     ENTITLEMENT_COURIER_APP,
+    ENTITLEMENT_INVENTORY,
+    ENTITLEMENT_ADVANCED_REPORTS,
     ENTITLEMENT_KDS,
     ENTITLEMENT_LOYALTY,
     ENTITLEMENT_PRINTING,
@@ -58,8 +60,10 @@ def test_plan_matrix_pocket_pro_premium(tenant_db):
     rest.plano = "pocket"
     db.commit()
     assert resolve_plan_entitlements(db, TENANT_ID, stored_plan=rest.plano) == {
+        "advanced_reports": False,
         "coupons": False,
         "courier_app": False,
+        "inventory": False,
         "kds": False,
         "loyalty": False,
         "printing": False,
@@ -74,6 +78,8 @@ def test_plan_matrix_pocket_pro_premium(tenant_db):
     assert not has_plan_entitlement(db, TENANT_ID, ENTITLEMENT_LOYALTY, stored_plan=rest.plano)
     assert not has_plan_entitlement(db, TENANT_ID, ENTITLEMENT_COUPONS, stored_plan=rest.plano)
     assert not has_plan_entitlement(db, TENANT_ID, ENTITLEMENT_COURIER_APP, stored_plan=rest.plano)
+    assert has_plan_entitlement(db, TENANT_ID, ENTITLEMENT_INVENTORY, stored_plan=rest.plano)
+    assert has_plan_entitlement(db, TENANT_ID, ENTITLEMENT_ADVANCED_REPORTS, stored_plan=rest.plano)
 
     rest.plano = "premium"
     db.commit()
