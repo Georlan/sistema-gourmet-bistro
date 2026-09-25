@@ -42,10 +42,12 @@ const getDigitalPayableTotal = (order: Order): number => {
   const fallbackSubtotal = order.itens
     .filter((item) => (item.status as string) !== 'cancelado')
     .reduce((sum, item) => sum + Number(item.preco || 0), 0);
+  const canonicalPayableTotal = Number(order.payableTotal);
   return Math.max(
     0,
-    Number(order.payableTotal)
-      || fallbackSubtotal + Number(order.deliveryTax || 0) - Number(order.discountTotal || 0),
+    Number.isFinite(canonicalPayableTotal)
+      ? canonicalPayableTotal
+      : fallbackSubtotal + Number(order.deliveryTax || 0) - Number(order.discountTotal || 0),
   );
 };
 
