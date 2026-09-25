@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
 import type { CashierTab } from '../cashierContracts';
 import {
-  subscriptionHasFeature,
   type SubscriptionEntitlements,
   type SubscriptionPlanId,
 } from '../../../config/subscriptionPlans';
@@ -12,6 +11,7 @@ import {
   getCashierNavigationTarget,
   isCashierNavigationActive,
   normalizeCashierNavigationState,
+  normalizeCashierTargetForEntitlements,
 } from './cashierNavigation';
 
 type BoundaryProps = {
@@ -45,24 +45,8 @@ function readSetupMode(): boolean {
 /** Owns persisted navigation and mobile drawer lifecycle, independent of operational controllers. */
 export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, showToast }: BoundaryProps) {
   const [setupMode] = useState(readSetupMode);
-  const normalizePlanTarget = (target: { tab: CashierTab; subTab: string }) => {
-    if (target.tab === 'operacao' && target.subTab === 'kds' && !subscriptionHasFeature(planId, 'kds', entitlements)) {
-      return { ...target, subTab: 'preparo' };
-    }
-    if (target.tab === 'impressao_salao' && target.subTab === 'impressao' && !subscriptionHasFeature(planId, 'printing', entitlements)) {
-      return { tab: 'impressao_salao' as CashierTab, subTab: 'aparencia' };
-    }
-    if (target.tab === 'impressao_salao' && target.subTab === 'garcom' && !subscriptionHasFeature(planId, 'waiter_app', entitlements)) {
-      return { tab: 'impressao_salao' as CashierTab, subTab: 'aparencia' };
-    }
-    if (target.tab === 'clientes' && target.subTab === 'fidelidade' && !subscriptionHasFeature(planId, 'loyalty', entitlements)) {
-      return { tab: 'clientes' as CashierTab, subTab: 'clientes' };
-    }
-    if (target.tab === 'clientes' && target.subTab === 'cupons' && !subscriptionHasFeature(planId, 'coupons', entitlements)) {
-      return { tab: 'clientes' as CashierTab, subTab: 'clientes' };
-    }
-    return target;
-  };
+  const normalizePlanTarget = (target: { tab: CashierTab; subTab: string }) =>
+    normalizeCashierTargetForEntitlements(target, entitlements);
   const [initialNavigation] = useState(() => {
     const restored = normalizePlanTarget(normalizeCashierNavigationState(
       sessionStorage.getItem('koma_active_tab'),
