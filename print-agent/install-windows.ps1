@@ -6,7 +6,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$scriptPath = $MyInvocation.MyCommand.Path
+$scriptDir = if ($scriptPath) { Split-Path -Parent $scriptPath } else { $null }
 $installDir = Join-Path $env:LOCALAPPDATA "KomaPrintAgent"
 $adapterDir = Join-Path $installDir "adapters"
 $venvDir = Join-Path $installDir ".venv"
@@ -26,13 +27,14 @@ if ($Uninstall) {
         Write-Host "[OK] Koma Print Agent e todas as configuracoes locais foram removidos."
     } else {
         Write-Host "[OK] Koma Print Agent desinstalado com sucesso."
-        Write-Host "[INFO] Tokens e configuracoes locais foram preservados em $installDir."
+        Write-Host "[INFO] Tokens e configuracoes locais foram preservados em $credentialsDir e $installDir."
     }
     return
 }
 
 # Se executado diretamente via download remoto (PowerShell one-liner), baixa os arquivos necessarios
-if (-not (Test-Path (Join-Path $scriptDir "main.py"))) {
+$hasLocalSource = $scriptDir -and (Test-Path (Join-Path $scriptDir "main.py"))
+if (-not $hasLocalSource) {
     Write-Host "[KOMA] Baixando a versao correta do Koma Print Agent..."
     $zipUrl = "https://github.com/Georlan/sistema-gourmet-bistro/archive/refs/heads/main.zip"
     $tempZip = Join-Path $env:TEMP "koma-print-agent.zip"
@@ -121,25 +123,9 @@ $pythonw = Join-Path $venvDir "Scripts\pythonw.exe"
 
 if ($Update) {
     Write-Host "[KOMA] Atualizando o Koma Print Agent..."
-    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    foreach ($file in $requiredFiles) {
-        # Preserva arquivos de configuracao local
-        if ($file -notin @("config.json", "journal.db")) {
-            Copy-Item -Force (Join-Path $scriptDir $file) (Join-Path $installDir $file)
-        }
-    }
-    foreach ($file in $adapterFiles) {
-        Copy-Item -Force (Join-Path $scriptDir "adapters\$file") (Join-Path $adapterDir $file)
-    }
-    if (Test-Path $venvPython) {
-        & $venvPython -m pip install --disable-pip-version-check --quiet -r (Join-Path $installDir "requirements.txt")
-    }
-    Start-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    Write-Host "[OK] Koma Print Agent atualizado com sucesso."
-    return
+} else {
+    Write-Host "[KOMA] Preparando a impressao neste computador..."
 }
-
-Write-Host "[KOMA] Preparando a impressao neste computador..."
 $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($existingTask) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -232,7 +218,11 @@ New-Item -Force $commandKey | Out-Null
 Set-Item -Path $commandKey -Value ("wscript.exe `"{0}`" `"%1`"" -f $protocolLauncher)
 
 Write-Host ""
-Write-Host "[OK] Impressao instalada e configurada para iniciar automaticamente em segundo plano."
+if ($Update) {
+    Write-Host "[OK] Koma Print Agent atualizado e reativado com sucesso."
+} else {
+    Write-Host "[OK] Impressao instalada e configurada para iniciar automaticamente em segundo plano."
+}
 Write-Host "[OK] O servico reiniciara automaticamente e continuara ativo apos reinicializacoes."
 Write-Host "[OK] O Koma nao alterou a impressora padrao usada por outros aplicativos."
 Write-Host ""
