@@ -77,6 +77,13 @@ test('cardapio usa SSE e resumo leve em vez de polling contínuo de pedidos', ()
   assert.match(cardapioPage, /onRealtimeStatus=\{handleRealtimeOrderStatus\}/);
 });
 
+test('mudança de fulfillment acorda o Cardápio sem fingir novo status', () => {
+  assert.match(chatPanel, /addEventListener\("refresh"/);
+  assert.match(drawer, /addEventListener\("refresh"/);
+  assert.match(cardapioPage, /onRealtimeRefresh=\{handleRealtimeOrderRefresh\}/);
+  assert.match(cardapioPage, /checkActiveOrders\(Number\(activeBrand\.id\)\)/);
+});
+
 test('resumo público de tracking evita carregar itens e restaurante no hot path', () => {
   assert.match(trackingRoute, /@router\.get\("\/\{token\}\/summary"/);
   assert.match(trackingRoute, /func\.count\(OrderMessage\.id\)/);
