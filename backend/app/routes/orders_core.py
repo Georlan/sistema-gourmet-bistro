@@ -1,5 +1,6 @@
 import uuid
 import datetime
+import json
 import re
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -72,6 +73,7 @@ router = APIRouter(
 
 from ..services.shifts import require_open_cash_shift
 from ..services.order_numbers import gerar_novo_numero_pedido_atomico as gerar_novo_numero_pedido
+from ..domain.orders.types import OrderStatus, normalize_to_order_status
 
 
 def _agendar_notificacao_whatsapp_status(
@@ -836,6 +838,141 @@ def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario 
         Comanda.fechada == False,
         _operational_online_payment_filter(),
     ).all()
+
+
+@router.post("/{comanda_id}/delivery/converter-retirada", response_model=ComandaResponse)
+def converter_delivery_para_retirada(
+    comanda_id: str,
+    payload: dict,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
+):
+    """Converte excepcionalmente delivery em retirada sem reescrever o lifecycle.
+
+    A modalidade inicial não prende o fechamento do pedido. A conversão é
+    permitida antes do despacho, exige motivo auditável, remove a logística de
+    entrega e preserva o status de preparo/pronto e as instruções de pagamento.
+    Entregas já em rota exigem outro fluxo operacional e são rejeitadas aqui.
+    """
+    rid = require_tenant_id()
+    comanda = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == rid,
+            Comanda.id == comanda_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if not comanda:
+        raise HTTPException(status_code=404, detail="Comanda não encontrada")
+    if str(comanda.tipo or "").strip().casefold() not in {"delivery", "entrega"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Somente pedidos de delivery podem ser convertidos para retirada.",
+        )
+    if comanda.fechada:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Pedido encerrado não pode mudar de modalidade.",
+        )
+
+    current_status = normalize_to_order_status(comanda.delivery_status)
+    if current_status == OrderStatus.DISPATCHED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "O pedido já saiu para entrega. Corrija primeiro a operação logística "
+                "antes de mudar a modalidade."
+            ),
+        )
+    if current_status in {OrderStatus.COMPLETED, OrderStatus.REJECTED, OrderStatus.CANCELLED}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Pedido encerrado ou recusado não pode mudar de modalidade.",
+        )
+
+    reason = str(payload.get("motivo") or payload.get("reason") or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Informe um motivo com pelo menos 3 caracteres.",
+        )
+    if len(reason) > 500:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="O motivo deve ter no máximo 500 caracteres.",
+        )
+
+    previous_fee = float(comanda.delivery_taxa or 0.0)
+    previous_courier_id = comanda.motoboy_id
+    active_subtotal = sum(
+        float(item.preco_unit or 0.0)
+        for item in (comanda.itens or [])
+        if item.status != "cancelado"
+    )
+    discounts = float(comanda.valor_desconto_cupom or 0.0) + float(
+        comanda.valor_desconto_cashback or 0.0
+    )
+    item_total_after_discounts = max(0.0, active_subtotal - discounts)
+    paid_value = float(comanda.valor_pago or 0.0)
+    online_paid = str(comanda.online_payment_status or "").strip().lower() == "approved"
+
+    if previous_fee > 0.0 and (
+        online_paid or paid_value > item_total_after_discounts + 0.01
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "A taxa de entrega já participa de um pagamento confirmado. "
+                "Faça o ajuste financeiro/estorno antes de converter para retirada."
+            ),
+        )
+
+    previous_type = str(comanda.tipo or "Delivery")
+    audit_details = {
+        "comanda_id": comanda.id,
+        "fulfillment_original": previous_type,
+        "fulfillment_atual": "Retirada",
+        "delivery_status_preservado": comanda.delivery_status,
+        "motoboy_id_anterior": previous_courier_id,
+        "delivery_taxa_anterior": previous_fee,
+        "delivery_taxa_atual": 0.0,
+        "motivo": reason,
+    }
+
+    # Endereço e telefone permanecem no registro histórico; a projeção de
+    # retirada não os usa para logística. Pagamento/troco também permanecem,
+    # pois método de pagamento é uma dimensão independente do fulfillment.
+    comanda.tipo = "Retirada"
+    comanda.motoboy_id = None
+    comanda.delivery_taxa = 0.0
+    db.add(
+        ActivityLog(
+            restaurante_id=rid,
+            garcom_id=current_user.id,
+            action="CONVERT_FULFILLMENT",
+            details=json.dumps(audit_details, ensure_ascii=False, sort_keys=True),
+        )
+    )
+    db.commit()
+    db.refresh(comanda)
+
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "tables_updated",
+            "detail": {
+                "type": "fulfillment_changed",
+                "comanda_id": comanda.id,
+                "fulfillment_from": "delivery",
+                "fulfillment_to": "pickup",
+            },
+        },
+        rid,
+    )
+    return comanda
 
 
 @router.get("/delivery/retiradas/concluidas-recentes", response_model=List[ComandaDetail])
