@@ -147,7 +147,7 @@ export const PLAN_COMPARISON_MATRIX: FeatureComparisonRow[] = [
   { category: 'Impressão & Cozinha', feature: 'KDS Dedicado e Impressão Automática', pocket: false, pro: true, premium: true },
   { category: 'Gestão & Equipe', feature: 'App do Garçom para Salão e Comandas', pocket: true, pro: true, premium: true },
   { category: 'Gestão & Equipe', feature: 'Gestão de Funcionários e Permissões por Cargo', pocket: true, pro: true, premium: true },
-  { category: 'Gestão & Equipe', feature: 'Relatórios Financeiros e DRE de Vendas', pocket: 'Básico', pro: 'Completo', premium: 'Completo' },
+  { category: 'Gestão & Equipe', feature: 'Relatórios Financeiros e DRE de Vendas', pocket: false, pro: true, premium: true },
   { category: 'Gestão & Equipe', feature: 'Estoque e Fichas Técnicas', pocket: false, pro: true, premium: true },
   { category: 'Cardápio Digital', feature: 'Cardápio Online & Pedidos via QR Code', pocket: true, pro: true, premium: true },
   { category: 'Cardápio Digital', feature: 'Aceite de Pedidos Digitais no PDV', pocket: true, pro: true, premium: true },

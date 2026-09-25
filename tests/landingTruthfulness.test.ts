@@ -99,7 +99,7 @@ test('final conversion copy makes team release explicit', () => {
 });
 
 test('post-contract flow uses the public tenant domain and does not promise automatic Pix release', () => {
-  const contract = source('src/legal/PlanContractPage.tsx');
+  const contract = source('src/legal/PlanContractPageV2.tsx');
 
   assert.doesNotMatch(contract, /activationResult\.slug\}\.koma\.com\.br/);
   assert.match(contract, /activationResult\.slug\}\.komafood\.com\.br/);

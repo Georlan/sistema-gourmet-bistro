@@ -37,7 +37,7 @@ test('Signups tab mounts readiness before manual release operations', () => {
 
 test('PlanContractPage explains why checkout is paused when test gateway is unconfigured', () => {
   const contractPage = readFileSync(
-    new URL('../src/legal/PlanContractPage.tsx', import.meta.url),
+    new URL('../src/legal/PlanContractPageV2.tsx', import.meta.url),
     'utf8',
   );
   assert.match(contractPage, /KOMA_SAAS_CHECKOUT_ENABLED=false/);
