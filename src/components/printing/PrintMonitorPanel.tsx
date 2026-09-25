@@ -476,8 +476,11 @@ export function PrintMonitorPanel({
   }, [monitorData]);
 
   const isPrinterReady = (printer: DetectedPrinter): boolean => {
-    if (printer.connection === 'bluetooth') {
-      return Boolean(printer.paired && (printer.spp ?? true));
+    if (
+      printer.connection === 'bluetooth'
+      && !(printer.paired && (printer.spp ?? true))
+    ) {
+      return false;
     }
     return Boolean(
       printer.available
@@ -783,7 +786,7 @@ export function PrintMonitorPanel({
       return {
         tone: 'neutral',
         title: 'Verificando a conexão…',
-        detail: 'Aguarde a leitura do computador e da porta USB.'
+        detail: 'Aguarde a leitura das impressoras conectadas a este computador.'
       };
     }
     if (!hasOnlineAgent) {
@@ -810,8 +813,8 @@ export function PrintMonitorPanel({
     if (!hasFreshPrinterDiagnostics) {
       return {
         tone: 'warning',
-        title: 'Verificando a porta USB',
-        detail: 'Use o botão abaixo para procurar a impressora conectada.'
+        title: 'Verificando as impressoras',
+        detail: 'O KÔMA Print está atualizando o estado dos equipamentos conectados.'
       };
     }
     if (!hasReadyPrinter && presentUsbPrinters.length > 0) {
@@ -835,10 +838,9 @@ export function PrintMonitorPanel({
       }
       return {
         tone: 'warning',
-        title: 'Kôma Print conectado; impressora física desconectada',
+        title: 'Kôma Print conectado; nenhuma impressora disponível',
         detail: (
-          'O agente local está online e pode ser diagnosticado. '
-          + 'Conecte o USB somente quando quiser imprimir em papel.'
+          'Ligue ou conecte uma impressora e o estado será atualizado automaticamente.'
         )
       };
     }
@@ -853,7 +855,7 @@ export function PrintMonitorPanel({
       return {
         tone: 'danger',
         title: 'O último envio falhou',
-        detail: latestJob.last_error || 'Reconecte o USB e envie um teste.'
+        detail: latestJob.last_error || 'Verifique a impressora e envie um teste.'
       };
     }
     if (queueTotal > 0) {
@@ -1167,14 +1169,17 @@ export function PrintMonitorPanel({
                 )
               )) || null;
               const paperWidthMm = Number(endpoint?.options?.paper_width_mm || 0);
+              const physicallyPresent = Boolean(
+                printer.present === true || printer.available === true
+              );
               const statusLabel = ready
                 ? 'Pronta para imprimir'
-                : (printer.present || printer.paired || printer.available)
+                : physicallyPresent
                   ? 'Impressora encontrada'
                   : 'Desconectada';
               const statusClass = ready
                 ? 'text-emerald-700 dark:text-emerald-400 font-semibold'
-                : (printer.present || printer.paired || printer.available)
+                : physicallyPresent
                   ? 'text-amber-700 dark:text-amber-400 font-semibold'
                   : 'text-koma-muted font-semibold';
               const Icon = printer.connection === 'bluetooth'
