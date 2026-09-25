@@ -36,3 +36,21 @@ test('monitor handles multi-transport printing uniformly', () => {
   assert.match(monitor, /hasReadyPrinter = \(/);
   assert.match(monitor, /disabled=\{testInProgress \|\| !hasReadyPrinter\}/);
 });
+
+test('monitor presents friendly non-technical UX for users and keeps technical details in diagnostics', () => {
+  // Canonical user-friendly terminology in primary UI
+  assert.match(monitor, /Impressora encontrada/);
+  assert.match(monitor, /Pronta para imprimir/);
+  assert.match(monitor, /Desconectada/);
+  assert.match(monitor, /Procurar impressoras/);
+  assert.match(monitor, /Imprimir teste/);
+  assert.match(monitor, /Impressora principal/);
+
+  // Friendly discrete transport badges
+  assert.match(monitor, /getFriendlyTransportBadge/);
+
+  // Diagnostics and support section for technicians
+  assert.match(monitor, /Diagnóstico técnico e suporte/);
+  assert.match(monitor, /transporte, endpoints, SPP, CUPS, spooler e rede/);
+});
+
