@@ -8,8 +8,17 @@ import {
   PLAN_COMPARISON_MATRIX,
   formatPercentage,
   normalizeSubscriptionPlan,
+  operationalEntitlementEnabled,
 } from '../src/config/subscriptionPlans';
 import { Plans } from '../src/landing/sections/Plans';
+
+test('operational feature gates require an explicit backend entitlement', () => {
+  assert.equal(operationalEntitlementEnabled(undefined, 'inventory'), false);
+  assert.equal(operationalEntitlementEnabled({}, 'advanced_reports'), false);
+  assert.equal(operationalEntitlementEnabled({ inventory: false }, 'inventory'), false);
+  assert.equal(operationalEntitlementEnabled({ inventory: true }, 'inventory'), true);
+  assert.equal(operationalEntitlementEnabled({ advanced_reports: true }, 'advanced_reports'), true);
+});
 
 test('plan prices and split fees match the commercial catalog', () => {
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => [plan.id, plan.price, plan.splitFeeRate]), [
