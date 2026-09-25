@@ -7,6 +7,7 @@ import type { CashierTableCard, DeliveryOrderView } from '../orders/cashierWorks
 import {
   projectApiComandaToDeliveryView,
   projectDeliveryOrdersFromSharedSnapshot,
+  readActiveDeliveryStatus,
   reconcileDeliveryOrderAfterStatus,
 } from './deliveryOrderProjection';
 
