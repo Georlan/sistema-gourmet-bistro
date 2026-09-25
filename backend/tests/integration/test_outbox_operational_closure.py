@@ -25,7 +25,7 @@ import httpx
 import pytest
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal, tenant_session_scope
+from app.database import SessionLocal, current_restaurante_id, tenant_session_scope
 from app.models import (
     Comanda,
     ConfiguracaoRestaurante,
@@ -409,73 +409,78 @@ async def test_outbox_worker_async_lifecycle():
 
 def test_worker_multi_tenant_rls_discovery_and_execution(op_db):
     """Garante que o OutboxWorker descobre dinamicamente os tenants e despacha sob tenant_session_scope."""
-    # 1. Cria segundo restaurante de teste
-    other_tenant_id = 999
-    rest2 = op_db.query(Restaurante).filter(Restaurante.id == other_tenant_id).first()
-    if not rest2:
-        rest2 = Restaurante(id=other_tenant_id, nome="Restaurante Tenant 2", slug="bistro-tenant-2")
-        op_db.add(rest2)
+    scope_token = current_restaurante_id.set(None)
+    try:
+        # 1. Cria segundo restaurante de teste
+        other_tenant_id = 999
+        rest2 = op_db.query(Restaurante).filter(Restaurante.id == other_tenant_id).first()
+        if not rest2:
+            rest2 = Restaurante(id=other_tenant_id, nome="Restaurante Tenant 2", slug="bistro-tenant-2")
+            op_db.add(rest2)
 
-    cfg2 = op_db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == other_tenant_id).first()
-    if not cfg2:
-        cfg2 = ConfiguracaoRestaurante(
-            restaurante_id=other_tenant_id,
-            webhook_url="https://n8n.tenant2.com/webhook",
-            webhook_secret="secret-tenant-2",
-            webhook_ativo=True,
+        cfg2 = op_db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == other_tenant_id).first()
+        if not cfg2:
+            cfg2 = ConfiguracaoRestaurante(
+                restaurante_id=other_tenant_id,
+                webhook_url="https://n8n.tenant2.com/webhook",
+                webhook_secret="secret-tenant-2",
+                webhook_ativo=True,
+            )
+            op_db.add(cfg2)
+        op_db.commit()
+
+        # Descobre restaurantes ativos
+        r_ids = discover_active_restaurant_ids(op_db)
+        assert CHAR_RESTAURANT_ID in r_ids
+        assert other_tenant_id in r_ids
+
+        # Insere um evento para cada restaurante
+        now = datetime.datetime.now(datetime.timezone.utc)
+        ev1 = IntegrationOutbox(
+            id="evt-tenant-1",
+            restaurante_id=CHAR_RESTAURANT_ID,
+            event_id="e-1",
+            event_name="koma.order.created",
+            aggregate_type="order",
+            aggregate_id="ord-t1",
+            payload={"tenant": 1},
+            status="pending",
+            created_at=now,
         )
-        op_db.add(cfg2)
-    op_db.commit()
+        ev2 = IntegrationOutbox(
+            id="evt-tenant-2",
+            restaurante_id=other_tenant_id,
+            event_id="e-2",
+            event_name="koma.order.created",
+            aggregate_type="order",
+            aggregate_id="ord-t2",
+            payload={"tenant": 2},
+            status="pending",
+            created_at=now,
+        )
+        op_db.add_all([ev1, ev2])
+        op_db.commit()
 
-    # Descobre restaurantes ativos
-    r_ids = discover_active_restaurant_ids(op_db)
-    assert CHAR_RESTAURANT_ID in r_ids
-    assert other_tenant_id in r_ids
+        # Executa run_once do worker com mock transport (sem passar tenant específico, exercitando descoberta global)
+        def mock_transport(request: httpx.Request):
+            return httpx.Response(200, json={"status": "ok"})
 
-    # Insere um evento para cada restaurante
-    now = datetime.datetime.now(datetime.timezone.utc)
-    ev1 = IntegrationOutbox(
-        id="evt-tenant-1",
-        restaurante_id=CHAR_RESTAURANT_ID,
-        event_id="e-1",
-        event_name="koma.order.created",
-        aggregate_type="order",
-        aggregate_id="ord-t1",
-        payload={"tenant": 1},
-        status="pending",
-        created_at=now,
-    )
-    ev2 = IntegrationOutbox(
-        id="evt-tenant-2",
-        restaurante_id=other_tenant_id,
-        event_id="e-2",
-        event_name="koma.order.created",
-        aggregate_type="order",
-        aggregate_id="ord-t2",
-        payload={"tenant": 2},
-        status="pending",
-        created_at=now,
-    )
-    op_db.add_all([ev1, ev2])
-    op_db.commit()
+        client = httpx.Client(transport=httpx.MockTransport(mock_transport))
+        worker = OutboxWorker(batch_size=10, worker_id="test-global-worker")
+        stats = worker.run_once(client=client)
 
-    # Executa run_once do worker com mock transport (sem passar tenant específico, exercitando descoberta global)
-    def mock_transport(request: httpx.Request):
-        return httpx.Response(200, json={"status": "ok"})
+        assert stats["claimed"] >= 2
+        assert stats["delivered"] >= 2
 
-    client = httpx.Client(transport=httpx.MockTransport(mock_transport))
-    worker = OutboxWorker(batch_size=10, worker_id="test-global-worker")
-    stats = worker.run_once(client=client)
+        # Verifica que ambos os eventos foram entregues
+        e1_db = op_db.query(IntegrationOutbox).filter(IntegrationOutbox.id == "evt-tenant-1").first()
+        e2_db = op_db.query(IntegrationOutbox).filter(IntegrationOutbox.id == "evt-tenant-2").first()
+        assert e1_db.status == "delivered"
+        assert e2_db.status == "delivered"
 
-    assert stats["claimed"] >= 2
-    assert stats["delivered"] >= 2
 
-    # Verifica que ambos os eventos foram entregues
-    e1_db = op_db.query(IntegrationOutbox).filter(IntegrationOutbox.id == "evt-tenant-1").first()
-    e2_db = op_db.query(IntegrationOutbox).filter(IntegrationOutbox.id == "evt-tenant-2").first()
-    assert e1_db.status == "delivered"
-    assert e2_db.status == "delivered"
-
+    finally:
+        current_restaurante_id.reset(scope_token)
 
 def test_dispatch_order_atomic_rollback_on_outbox_failure(op_db):
     """Garante que se a gravação na Outbox falhar, a transição inteira sofre rollback (status NÃO vira transito)."""
