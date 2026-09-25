@@ -373,15 +373,57 @@ def test_linux_bluetooth_diagnostics_reports_paired_spp_printer():
             "uri": "bluetooth://86:67:7A:6B:30:C4",
             "address": "86:67:7A:6B:30:C4",
             "is_default": False,
-            "available": True,
-            "present": True,
+            "available": False,
+            "present": False,
             "configured": True,
             "paired": True,
             "trusted": True,
             "connected": False,
+            "reachable": False,
             "spp": True,
         }
     ]
+
+
+def test_linux_bluetooth_diagnostics_marks_ready_only_after_live_probe():
+    devices_probe = MagicMock(
+        returncode=0,
+        stdout=b"Device 86:67:7A:6B:30:C4 KA7\n",
+        stderr=b"",
+    )
+    info_probe = MagicMock(
+        returncode=0,
+        stdout=(
+            b"Device 86:67:7A:6B:30:C4 (public)\n"
+            b"\tName: KA-1445\n"
+            b"\tPaired: yes\n"
+            b"\tTrusted: yes\n"
+            b"\tConnected: no\n"
+            b"\tUUID: Serial Port "
+            b"(00001101-0000-1000-8000-00805f9b34fb)\n"
+        ),
+        stderr=b"",
+    )
+    probe = MagicMock(return_value=True)
+
+    with (
+        patch(
+            "adapters.linux.shutil.which",
+            return_value="/usr/bin/bluetoothctl",
+        ),
+        patch(
+            "adapters.linux._run_bluetooth_command",
+            side_effect=[devices_probe, info_probe],
+        ),
+    ):
+        printers = _discover_bluetooth_spp_printers(probe)
+
+    assert printers[0]["paired"] is True
+    assert printers[0]["connected"] is False
+    assert printers[0]["reachable"] is True
+    assert printers[0]["available"] is True
+    assert printers[0]["present"] is True
+    probe.assert_called_once_with("86:67:7A:6B:30:C4")
 
 
 def test_linux_bluetooth_diagnostics_ignores_devices_without_spp():
@@ -1519,6 +1561,26 @@ def test_worker_does_not_claim_jobs_without_physical_printer(temp_dir):
         client.claim_jobs.assert_not_called()
         adapter.print_ticket.assert_not_called()
         sleep_mock.assert_not_called()
+
+
+def test_linux_adapter_bluetooth_probe_cache_tracks_power_state(temp_dir):
+    adapter = get_adapter("linux", output_dir=temp_dir)
+    with patch(
+        "adapters.linux.BluetoothRfcommTransport.probe",
+        side_effect=[True, False],
+    ) as probe:
+        assert adapter._probe_bluetooth_spp("86:67:7A:6B:30:C4") is True
+        # cache evita reconectar dentro da janela curta
+        assert adapter._probe_bluetooth_spp("86:67:7A:6B:30:C4") is True
+        assert probe.call_count == 1
+
+        available, checked_at = adapter._bluetooth_probe_cache["86:67:7A:6B:30:C4"]
+        adapter._bluetooth_probe_cache["86:67:7A:6B:30:C4"] = (
+            available,
+            checked_at - adapter._bluetooth_probe_ttl_seconds - 0.1,
+        )
+        assert adapter._probe_bluetooth_spp("86:67:7A:6B:30:C4") is False
+        assert probe.call_count == 2
 
 
 def test_base_adapter_is_printer_ready_with_bluetooth_spp_on_demand(temp_dir):
