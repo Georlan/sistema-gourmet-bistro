@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import React, { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -8,6 +9,10 @@ import type { DeliveryOrderView } from '../src/components/caixa/orders/cashierWo
 
 const noop = () => {};
 const NOW = Date.UTC(2026, 8, 15, 16, 30);
+const ordersRouteSource = readFileSync(new URL('../backend/app/routes/orders.py', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+const cashierOrdersSource = readFileSync(new URL('../src/components/caixa/orders/useCashierOrders.ts', import.meta.url), 'utf8');
+const cashierPanelSource = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
 
 type ViewElement = React.ReactElement<Record<string, unknown>>;
 function elements(node: ReactNode): ViewElement[] {
@@ -59,6 +64,7 @@ function workspaceProps(): CaixaOrdersWorkspaceProps {
     search: { query: '', onChange: noop },
     acceptance: { orders: [], automatic: false, drawerOpen: false, onAutomaticChange: noop, onDrawerChange: noop },
     navigation: { stage: 'digital', expandedCardIds: {}, onStageChange: noop, onToggleCard: noop },
+    couriers: { options: [], loadState: 'loaded', selectedByOrderId: {}, onChange: noop },
     actions: {
       confirmCashPayment: noop,
       rejectCashPayment: noop,
@@ -69,6 +75,7 @@ function workspaceProps(): CaixaOrdersWorkspaceProps {
       printConference: noop,
       markTableItemsReady: noop,
       advanceDigitalOrder: noop,
+      dispatchDelivery: noop,
       openTablePayment: noop,
       finalizeDigitalOrder: noop,
     },
@@ -90,10 +97,16 @@ test('kanban separa preparo, despacho e finalização de delivery', () => {
       digitalProduction: [production],
       digitalFinalization: [ready, transit],
     },
+    couriers: {
+      options: [{ id: 7, nome: 'Pedro Silva', ativo: true }],
+      loadState: 'loaded',
+      selectedByOrderId: { 'delivery-ready': '7' },
+      onChange: noop,
+    },
     actions: {
       ...base.actions,
       advanceDigitalOrder: order => calls.push(`advance:${order.id}`),
-      inspectDigitalOrder: order => calls.push(`inspect:${order.id}`),
+      dispatchDelivery: (orderId, courierId) => calls.push(`dispatch:${orderId}:${courierId}`),
       finalizeDigitalOrder: order => calls.push(`finalize:${order.id}`),
     },
   });
@@ -104,7 +117,7 @@ test('kanban separa preparo, despacho e finalização de delivery', () => {
 
   assert.deepEqual(calls, [
     'advance:delivery-production',
-    'inspect:delivery-ready',
+    'dispatch:delivery-ready:7',
     'finalize:delivery-transit',
   ]);
 });
@@ -164,4 +177,20 @@ test('modal de despacho exige entregador e confirma saída com a atribuição se
 
   assert.deepEqual(calls, ['courier:7', 'dispatch:7']);
   assert.match(renderToStaticMarkup(createElement(KanbanOrderDetails, selectedProps)), /Pedro Silva/);
+});
+
+
+test('atribuição de entregador invalida Pedidos e Entregas em outros dispositivos pelo bridge realtime canônico', () => {
+  const assignmentRoute = ordersRouteSource
+    .split('@router.put("/{comanda_id}/delivery/entregador"', 2)[1]
+    .split('@router.post("/{comanda_id}/delivery/despachar"', 1)[0];
+
+  assert.match(assignmentRoute, /manager\.broadcast/);
+  assert.match(assignmentRoute, /"event": "tables_updated"/);
+  assert.match(appSource, /eventName === "tables_updated"/);
+  assert.match(appSource, /window\.dispatchEvent\(new Event\('koma_orders_updated'\)\)/);
+  assert.match(cashierOrdersSource, /window\.addEventListener\('koma_orders_updated', handleDeliveryUpdate\)/);
+  assert.match(cashierOrdersSource, /void fetchDeliveryOrders\(\)/);
+  assert.match(cashierPanelSource, /selectedByOrderId: selectedMotoboys/);
+  assert.match(cashierPanelSource, /selectedMotoboys=\{selectedMotoboys\}/);
 });

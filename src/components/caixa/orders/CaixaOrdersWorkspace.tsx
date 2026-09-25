@@ -41,6 +41,16 @@ export interface CaixaOrdersWorkspaceProps {
     readonly expandedCardIds: Readonly<Record<string, boolean>>;
     readonly onToggleCard: (cardId: string, event?: React.MouseEvent) => void;
   };
+  readonly couriers: {
+    readonly options: readonly {
+      readonly id: string | number;
+      readonly nome: string;
+      readonly ativo?: boolean;
+    }[];
+    readonly loadState: 'loading' | 'loaded' | 'error';
+    readonly selectedByOrderId: Readonly<Record<string, string>>;
+    readonly onChange: (orderId: string, courierId: string) => void;
+  };
   readonly actions: {
     readonly confirmCashPayment: (payment: PendingCashPayment) => void;
     readonly rejectCashPayment: (payment: PendingCashPayment) => void;
@@ -51,6 +61,7 @@ export interface CaixaOrdersWorkspaceProps {
     readonly printConference: (order: CashierTableCard['order'] | DeliveryOrderView) => void;
     readonly markTableItemsReady: (order: CashierTableCard['order']) => void;
     readonly advanceDigitalOrder: (order: DeliveryOrderView) => void;
+    readonly dispatchDelivery: (orderId: string, courierId: string) => void;
     readonly openTablePayment: (order: CashierTableCard['order']) => void;
     readonly finalizeDigitalOrder: (order: DeliveryOrderView) => void;
   };
@@ -130,7 +141,7 @@ const renderCompactItemsList = (
 /** Controlled order workspace. Selection, effects and complete business actions stay in CaixaPanel. */
 export function CaixaOrdersWorkspace({
   columns, pendingCashPayments: pagamentosPendentes, insights: operationalOrderInsights,
-  search, acceptance, navigation, actions, isLoading, now: nowTimestamp,
+  search, acceptance, navigation, couriers, actions, isLoading, now: nowTimestamp,
   hasPrinting = true, restaurantConfig, onToast,
 }: CaixaOrdersWorkspaceProps) {
   const { tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
@@ -140,6 +151,59 @@ export function CaixaOrdersWorkspace({
     onAutomaticChange: setAutoAccept, onDrawerChange: setIsDrawerOpen } = acceptance;
   const { stage: mobileOrdersStage, onStageChange: setMobileOrdersStage,
     expandedCardIds, onToggleCard: toggleCardExpansion } = navigation;
+
+  const courierSelection = (order: DeliveryOrderView) =>
+    couriers.selectedByOrderId[String(order.id)]
+      ?? (order.motoboyId ? String(order.motoboyId) : '');
+
+  const courierName = (courierId?: string | number | null) => {
+    if (!courierId) return null;
+    return couriers.options.find((courier) => String(courier.id) === String(courierId))?.nome || null;
+  };
+
+  const renderCourierControl = (order: DeliveryOrderView, orderNumber: string) => {
+    if (order.modalidade !== 'delivery') return null;
+    const selectedCourierId = courierSelection(order);
+    const inTransit = order.status === 'transito';
+
+    return (
+      <div
+        className="rounded-lg border border-koma-border bg-koma-panel/55 px-2.5 py-2"
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <div className="mb-1 flex items-center justify-between gap-2 text-[9px]">
+          <span className="font-bold uppercase tracking-wide text-koma-muted">Entregador</span>
+          {inTransit && <span className="font-bold text-sky-500">Em rota</span>}
+        </div>
+        {inTransit ? (
+          <strong className="block truncate text-[11px] text-koma-foreground">
+            {courierName(order.motoboyId) || (order.motoboyId ? `#${order.motoboyId}` : 'Não identificado')}
+          </strong>
+        ) : (
+          <select
+            aria-label={`Entregador do pedido ${orderNumber}`}
+            value={selectedCourierId}
+            disabled={couriers.loadState !== 'loaded'}
+            onChange={(event) => couriers.onChange(String(order.id), event.target.value)}
+            className="min-h-8 w-full rounded-lg border border-koma-border bg-koma-card px-2 text-[10px] font-bold text-koma-foreground outline-none focus:border-emerald-500/60 disabled:opacity-60"
+          >
+            <option value="">
+              {couriers.loadState === 'loaded' ? 'Selecionar entregador...' : 'Sincronizando entregadores...'}
+            </option>
+            {couriers.options
+              .filter((courier) => courier.ativo !== false || String(courier.id) === selectedCourierId)
+              .map((courier) => (
+                <option key={courier.id} value={courier.id}>
+                  {courier.nome}{courier.ativo === false ? ' (Inativo)' : ''}
+                </option>
+              ))}
+          </select>
+        )}
+      </div>
+    );
+  };
+
   const totalResultadosBusca = filteredCol1.length + filteredDigitalProduction.length + filteredCol2Table.length + filteredDeliveryFinalization.length;
 
   const ordersStages = [
@@ -617,6 +681,7 @@ export function CaixaOrdersWorkspace({
                           <span className="truncate">{order.endereco}</span>
                         </span>
                       )}
+                      {renderCourierControl(order, orderNumber)}
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); actions.advanceDigitalOrder(order); }}
@@ -781,6 +846,7 @@ export function CaixaOrdersWorkspace({
                   const isExpanded = !!expandedCardIds[cardId];
                   const isDeliveryOrder = order.modalidade === 'delivery';
                   const isReadyDelivery = isDeliveryOrder && order.status === 'pronto';
+                  const selectedCourierId = courierSelection(order);
                   const badgeText = order.pago
                     ? 'PAGO'
                     : deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
@@ -866,11 +932,13 @@ export function CaixaOrdersWorkspace({
                           <span className="truncate">{order.endereco}</span>
                         </span>
                       )}
+                      {renderCourierControl(order, orderNumber)}
                       <button
                         type="button"
+                        disabled={isReadyDelivery && (!selectedCourierId || couriers.loadState !== 'loaded')}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (isReadyDelivery) actions.inspectDigitalOrder(order);
+                          if (isReadyDelivery) actions.dispatchDelivery(String(order.id), selectedCourierId);
                           else actions.finalizeDigitalOrder(order);
                         }}
                         className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"}
