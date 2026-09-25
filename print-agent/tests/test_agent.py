@@ -28,6 +28,8 @@ from adapters.windows import (
 )
 from adapters import get_adapter
 from worker import (
+    AgentMaintenance,
+    bind_single_ready_printer,
     bind_single_ready_windows_usb,
     execute_agent_command,
     run_agent_loop,
@@ -1669,3 +1671,129 @@ def test_windows_adapter_test_bluetooth(temp_dir):
     mock_send.assert_called_once()
 
 
+
+
+
+def test_single_ready_bluetooth_replaces_offline_default_routes(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        """{
+  "printers": {
+    "PADRAO": "G250",
+    "COZINHA": "G250",
+    "BAR": "Bar dedicada"
+  }
+}""",
+        encoding="utf-8",
+    )
+    config = AgentConfig.load(str(config_path))
+    diagnostics = {
+        "platform": "linux",
+        "printers": [
+            {
+                "name": "G250",
+                "connection": "usb",
+                "uri": "usb://Gertec/G250",
+                "available": False,
+                "present": False,
+                "configured": True,
+            },
+            {
+                "name": "KA-1445",
+                "connection": "bluetooth",
+                "uri": "bluetooth://86:67:7A:6B:30:C4",
+                "address": "86:67:7A:6B:30:C4",
+                "available": True,
+                "present": True,
+                "configured": True,
+                "paired": True,
+                "spp": True,
+            },
+        ],
+    }
+
+    assert bind_single_ready_printer(config, diagnostics) == "KA-1445"
+
+    reloaded = AgentConfig.load(str(config_path))
+    assert reloaded.printers["PADRAO"] == "KA-1445"
+    assert reloaded.printers["COZINHA"] == "KA-1445"
+    assert reloaded.printers["BAR"] == "Bar dedicada"
+    cozinha = reloaded.resolve_destination("COZINHA")
+    assert cozinha is not None
+    assert cozinha.transport == "bluetooth_rfcomm"
+    assert cozinha.address == "86:67:7A:6B:30:C4"
+
+
+def test_single_ready_printer_does_not_override_current_ready_endpoint(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        """{
+  "printers": {"PADRAO": "KA-1445"},
+  "endpoints": [{
+    "id": "ep-ka",
+    "name": "KA-1445",
+    "display_name": "KA-1445",
+    "transport": "bluetooth_rfcomm",
+    "address": "86:67:7A:6B:30:C4",
+    "protocol": "escpos",
+    "options": {"channel": 1}
+  }],
+  "destinations": {"PADRAO": "ep-ka"}
+}""",
+        encoding="utf-8",
+    )
+    config = AgentConfig.load(str(config_path))
+    diagnostics = {
+        "platform": "linux",
+        "printers": [{
+            "name": "KA-1445",
+            "connection": "bluetooth",
+            "address": "86:67:7A:6B:30:C4",
+            "paired": True,
+            "spp": True,
+            "available": True,
+            "present": True,
+            "configured": True,
+        }],
+    }
+
+    assert bind_single_ready_printer(config, diagnostics) == ""
+    assert config.resolve_destination("PADRAO").id == "ep-ka"
+
+
+def test_maintenance_reports_endpoints_and_destinations_after_reconciliation(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        '{"printers": {"PADRAO": "G250", "COZINHA": "G250"}}',
+        encoding="utf-8",
+    )
+    config = AgentConfig.load(str(config_path))
+    adapter = MagicMock()
+    adapter.get_diagnostics.return_value = {
+        "adapter": "linux",
+        "platform": "linux",
+        "printers": [{
+            "name": "KA-1445",
+            "connection": "bluetooth",
+            "uri": "bluetooth://86:67:7A:6B:30:C4",
+            "address": "86:67:7A:6B:30:C4",
+            "paired": True,
+            "spp": True,
+            "available": True,
+            "present": True,
+            "configured": True,
+        }],
+        "default_printer": "KA-1445",
+        "error": None,
+    }
+
+    maintenance = AgentMaintenance(config, adapter, MagicMock())
+    diagnostics, _checked_at = maintenance.snapshot
+
+    assert diagnostics["destinations"]["PADRAO"] == config.destinations["PADRAO"]
+    assert diagnostics["destinations"]["COZINHA"] == config.destinations["COZINHA"]
+    assert any(
+        endpoint["transport"] == "bluetooth_rfcomm"
+        and endpoint["name"] == "KA-1445"
+        for endpoint in diagnostics["endpoints"]
+    )
