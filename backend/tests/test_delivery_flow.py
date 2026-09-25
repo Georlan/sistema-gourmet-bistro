@@ -470,3 +470,40 @@ def test_cash_payment_uses_fee_and_discounts_without_finishing_fulfillment(setup
     assert finalized.status_code == 200, finalized.text
     assert finalized.json()["fechada"] is True
     assert finalized.json()["delivery_status"] == "finalizado"
+
+
+def test_quick_counter_sale_still_closes_immediately_after_full_payment(setup_db):
+    headers = _delivery_headers()
+    created = client.post(
+        "/comandas/venda-direta",
+        json={
+            "tipo": "Balcão",
+            "idempotency_key": "quick-counter-finance-decoupling",
+            "itens": [{"produto_id": "p-del"}],
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    payload = created.json()
+    assert payload["tipo"] == "Retirada"
+    assert payload["identificador"] == "Balcão"
+
+    paid = client.post(
+        f"/caixa/comandas/{payload['id']}/pagar",
+        json={
+            "valor": 15,
+            "metodo": "dinheiro",
+            "idempotency_key": "quick-counter-finance-payment",
+            "origem": "caixa",
+        },
+        headers=headers,
+    )
+    assert paid.status_code == 201, paid.text
+
+    db = SessionLocal(restaurante_id=1)
+    try:
+        sale = db.query(Comanda).filter(Comanda.id == payload["id"]).one()
+        assert sale.fechada is True
+        assert float(sale.valor_pago) == 15.0
+    finally:
+        db.close()
