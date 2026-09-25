@@ -1058,11 +1058,11 @@ export function useCashierOrders({
     }
   };
 
-  const handleFecharDelivery = async (orderId: string): Promise<boolean> => {
+  const handleCloseDigitalOrder = async (orderId: string): Promise<boolean> => {
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, { method: 'PUT', headers: authHeaders });
       if (res.ok) {
-        showToast('Comanda de delivery encerrada com sucesso!');
+        showToast('Pedido encerrado com sucesso!');
         setSelectedKanbanOrder(null);
         setDeliveryOrders((current) => current.filter((order) => String(order.id) !== String(orderId)));
         void Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
@@ -1080,7 +1080,7 @@ export function useCashierOrders({
   const handleRecusarPedido = async (orderId: string) => {
     await handleUpdateDeliveryStatus(orderId, 'recusado');
   };
-  const handleFinalizarPedido = async (orderId: string) => handleFecharDelivery(orderId);
+  const handleFinalizarPedido = async (orderId: string) => handleCloseDigitalOrder(orderId);
 
   const handleAddMotoboy = async (e: React.FormEvent, newMotoboyNome: string, newMotoboyTelefone: string) => {
     e.preventDefault();
@@ -1305,7 +1305,7 @@ export function useCashierOrders({
     handleDespacharKanban,
     handleGerarLinkMotoboy,
     handleRevogarAcessoMotoboy,
-    handleFecharDelivery,
+    handleCloseDigitalOrder,
     handleRecusarPedido,
     handleFinalizarPedido,
     handleAddMotoboy,
