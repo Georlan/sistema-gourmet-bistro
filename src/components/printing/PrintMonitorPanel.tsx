@@ -324,7 +324,7 @@ export function PrintMonitorPanel({
   const [startingAgent, setStartingAgent] = useState(false);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [showQueue, setShowQueue] = useState(true);
+  const [showQueue, setShowQueue] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const authorization = authHeaders.Authorization || authHeaders.authorization || '';
@@ -917,7 +917,7 @@ export function PrintMonitorPanel({
       ? `${queueTotal} na fila`
       : hasReadyPrinter
         ? 'pronta para imprimir'
-        : 'agente online · USB desconectado';
+        : 'impressora indisponível';
   const queueOrigins = monitorData?.summary.queue_origins;
   const queueOriginSummary = queueOrigins
     ? [
@@ -933,38 +933,32 @@ export function PrintMonitorPanel({
       <OperationalBanner
         id="printing-operation-title"
         eyebrow="IMPRESSÃO"
-        title="Estado da impressão"
+        title="Impressão"
         accent={operationAccent}
-        description="Agente local, impressora física e fila são estados independentes. Veja exatamente onde há atenção."
+        description="Veja se o KÔMA Print está conectado e qual impressora está pronta."
         metrics={[
           {
-            label: 'agente local',
+            label: 'KÔMA Print',
             value: agentState,
             valueClassName: hasOnlineAgent ? 'text-emerald-700 dark:text-emerald-400 font-bold' : 'text-rose-700 dark:text-rose-300 font-bold'
           },
           {
-            label: 'impressora física',
+            label: 'Impressora',
             value: equipmentState,
             valueClassName: hasReadyPrinter ? 'text-emerald-700 dark:text-emerald-400 font-bold' : 'text-amber-800 dark:text-amber-300 font-bold'
-          },
-          {
-            label: 'fila',
-            value: queueState,
-            valueClassName: queueTotal > 0 ? 'text-amber-800 dark:text-amber-300 font-bold' : 'text-emerald-700 dark:text-emerald-400 font-bold'
-          },
-          { label: 'última impressão física', value: latestSentValue }
+          }
         ]}
       />
 
-      <section className="space-y-4 text-left" aria-label="Monitor de impressão USB e fila">
+      <section className="space-y-4 text-left" aria-label="Monitor de impressão">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
               <Printer size={16} className="text-emerald-700 dark:text-emerald-400" />
-              <h4 className="font-serif text-sm font-bold text-koma-foreground">Diagnóstico atual</h4>
+              <h4 className="font-serif text-sm font-bold text-koma-foreground">Status</h4>
             </div>
           <p className="mt-1 text-[10px] text-koma-muted">
-            O agente local pode estar conectado mesmo quando não há impressora física no USB.
+            O KÔMA escolhe automaticamente a única impressora pronta quando houver uma só disponível.
           </p>
         </div>
         <button
@@ -1040,21 +1034,17 @@ export function PrintMonitorPanel({
                   : <Power size={16} />}
                 {startingAgent ? 'Preparando…' : 'Preparar impressão'}
               </button>
-            ) : hasReadyPrinter && !hasUsbCommandAgent ? null : (
+            ) : !hasReadyPrinter ? (
               <button
                 type="button"
-                onClick={() => void requestUsbConnection()}
-                disabled={commandRunning || Boolean(pendingCommandId)}
+                onClick={() => void loadMonitor(true)}
+                disabled={loading}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl koma-btn-success px-5 py-2.5 text-xs font-extrabold transition disabled:cursor-wait disabled:opacity-60 cursor-pointer shadow-xs"
               >
-                {commandRunning || pendingCommandId
-                  ? <RefreshCw size={16} className="animate-spin" />
-                  : <Search size={16} />}
-                {commandRunning || pendingCommandId
-                  ? 'Procurando…'
-                  : 'Procurar impressoras'}
+                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                {loading ? 'Atualizando…' : 'Atualizar impressoras'}
               </button>
-            )}
+            ) : null}
 
             {onTestPrint && (
               <button
@@ -1078,10 +1068,11 @@ export function PrintMonitorPanel({
         </div>
       </div>
 
+      {(queueTotal > 0 || failedJobs.length > 0) && (
       <div className="overflow-hidden rounded-2xl border border-koma-border shadow-xs">
         <button
           type="button"
-          onClick={() => setShowQueue(current => !current)}
+          onClick={() => setShowQueue(current => !current)
           className="flex min-h-12 w-full items-center justify-between gap-3 bg-koma-panel px-4 py-3 text-left transition hover:bg-koma-raised cursor-pointer"
           aria-expanded={showQueue}
         >
@@ -1155,68 +1146,6 @@ export function PrintMonitorPanel({
           </div>
         )}
       </div>
-
-      {Object.keys(configuredDestinations).length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-xs font-bold text-koma-foreground">
-                Destinos de impressão
-              </h3>
-              <p className="mt-0.5 text-[10px] text-koma-muted">
-                Rotas para impressão de pedidos e cupons.
-              </p>
-            </div>
-            <span className="rounded-full border border-koma-border bg-koma-raised px-2.5 py-1 text-[9px] font-semibold text-koma-muted">
-              {Object.keys(configuredDestinations).length} destino(s) configurado(s)
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            {['PADRAO', 'COZINHA', 'BAR'].map(destKey => {
-              const boundTarget = configuredDestinations[destKey] || null;
-              const boundEndpoint = configuredEndpoints.find(
-                ep => ep.id === boundTarget || ep.name === boundTarget
-              ) || null;
-              const badge = boundEndpoint
-                ? getFriendlyTransportBadge(boundEndpoint.transport)
-                : boundTarget
-                  ? getFriendlyTransportBadge(undefined, 'usb')
-                  : null;
-              const destLabel = destKey === 'PADRAO'
-                ? 'Impressora principal'
-                : destKey === 'COZINHA'
-                  ? 'Cozinha'
-                  : 'Bar';
-
-              return (
-                <div
-                  key={destKey}
-                  className="rounded-2xl border border-koma-border bg-koma-panel p-3.5 shadow-xs flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-bold text-koma-muted uppercase tracking-wider">
-                        {destLabel}
-                      </span>
-                      {badge && (
-                        <span className={`rounded-full px-2 py-0.5 text-[8px] font-extrabold ${badge.badgeClass}`}>
-                          {badge.label}
-                        </span>
-                      )}
-                    </div>
-                    <strong className="mt-1.5 block truncate text-xs font-bold text-koma-foreground">
-                      {boundEndpoint?.display_name || boundEndpoint?.name || boundTarget || (destKey === 'PADRAO' ? 'Impressora principal' : 'Não configurado')}
-                    </strong>
-                  </div>
-                  <span className="mt-3 block text-[9px] text-emerald-700 dark:text-emerald-400 font-semibold">
-                    {boundTarget ? 'Pronta para imprimir' : 'Usar impressora principal'}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       )}
 
       <div className="space-y-3">
@@ -1289,46 +1218,10 @@ export function PrintMonitorPanel({
                     </div>
                   </div>
 
-                  <div className="mt-4">
-                    {printer.connection === 'bluetooth' ? (
-                      <button
-                        type="button"
-                        onClick={() => void requestBluetoothTest(printer.agentId, printer)}
-                        disabled={busy || !hasOnlineAgent || !printer.supportsBluetoothTest || !printer.paired}
-                        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 py-2 text-xs font-bold text-koma-foreground transition hover:border-sky-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer shadow-xs"
-                      >
-                        {busy ? <RefreshCw size={14} className="animate-spin" /> : <Printer size={14} />}
-                        {busy ? 'Enviando…' : 'Imprimir teste'}
-                      </button>
-                    ) : printer.connection === 'usb' ? (
-                      <button
-                        type="button"
-                        onClick={() => void requestUsbConnection(printer.agentId, printer)}
-                        disabled={
-                          busy
-                          || !hasOnlineAgent
-                          || !(monitorData?.agents || []).find(
-                            agent => agent.agent_id === printer.agentId
-                          )?.supports_usb_commands
-                        }
-                        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 py-2 text-xs font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer shadow-xs"
-                      >
-                        {busy
-                          ? <RefreshCw size={14} className="animate-spin" />
-                          : ready
-                            ? <Printer size={14} />
-                            : <Search size={14} />}
-                        {busy
-                          ? 'Procurando…'
-                          : ready
-                            ? 'Imprimir teste'
-                            : 'Procurar impressoras'}
-                      </button>
-                    ) : (
-                      <div className="flex items-center justify-center py-2 text-[10px] text-koma-muted font-medium">
-                        {ready ? 'Pronta para imprimir' : 'Impressora encontrada'}
-                      </div>
-                    )}
+                  <div className="mt-3 text-[10px] text-koma-muted">
+                    {ready
+                      ? 'O KÔMA pode usar esta impressora nos pedidos.'
+                      : 'Esta impressora não está disponível agora.'}
                   </div>
                 </div>
               );
@@ -1344,11 +1237,11 @@ export function PrintMonitorPanel({
               </span>
               <button
                 type="button"
-                onClick={() => void requestUsbConnection()}
-                disabled={commandRunning || Boolean(pendingCommandId) || !hasOnlineAgent}
+                onClick={() => void loadMonitor(true)}
+                disabled={loading || !hasOnlineAgent}
                 className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl koma-btn-success px-4 py-2 text-xs font-bold cursor-pointer shadow-xs"
               >
-                <Search size={14} /> Procurar impressoras
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar impressoras
               </button>
             </div>
           )}
@@ -1467,6 +1360,17 @@ export function PrintMonitorPanel({
               <p className="mt-0.5 text-[10px] text-koma-muted">
                 Filas locais gerenciadas pelo CUPS (Linux/macOS) ou Spooler (Windows).
               </p>
+              {hasUsbCommandAgent && (
+                <button
+                  type="button"
+                  onClick={() => void requestUsbConnection()}
+                  disabled={commandRunning || Boolean(pendingCommandId)}
+                  className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg border border-koma-border bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-foreground disabled:opacity-50"
+                >
+                  <Usb size={13} />
+                  Preparar conexão USB
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -1568,11 +1472,6 @@ export function PrintMonitorPanel({
         )}
       </div>
 
-      <p className="text-[8px] leading-relaxed text-gray-600">
-        “Enviado ao sistema” confirma que o CUPS ou o Spooler recebeu o trabalho.
-        Impressoras térmicas comuns não confirmam de forma confiável se o papel saiu,
-        então o Kôma não apresenta essa etapa como confirmação física.
-      </p>
     </section>
     </div>
   );
