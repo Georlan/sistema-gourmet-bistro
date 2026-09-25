@@ -62,3 +62,10 @@ test('daily printing UI does not invoke USB-specific discovery when a printer is
   assert.match(monitor, /Diagnóstico técnico e suporte/);
   assert.doesNotMatch(monitor, /agente online · USB desconectado/);
 });
+
+
+test('monitor shows the physical paper profile without exposing layout internals', () => {
+  assert.match(monitor, /paper_width_mm/);
+  assert.match(monitor, /Papel \{paperWidthMm\} mm/);
+  assert.match(monitor, /options\?\.columns/);
+});
