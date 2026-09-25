@@ -315,7 +315,6 @@ def test_cliente_do_caixa_faz_login_otp_e_pedido_vincula_mesmo_id(monkeypatch):
         json={
             "cliente": "Cliente do Caixa",
             "telefone": telefone,
-            "saldo_pontos": 12,
         },
         headers=staff_headers,
     )
@@ -350,7 +349,7 @@ def test_cliente_do_caixa_faz_login_otp_e_pedido_vincula_mesmo_id(monkeypatch):
     assert login.status_code == 200
     sessao = login.json()
     assert sessao["cliente"]["id"] == cliente_id
-    assert sessao["cliente"]["saldo_pontos"] == 12
+    assert sessao["cliente"]["saldo_pontos"] == 0
     assert sessao["cliente"]["telefone_verificado"] is True
 
     pedido = client.post(
