@@ -34,6 +34,7 @@ type BoundaryProps = Pick<
   hasCourierApp: boolean;
   handleFinalizarPedido: (orderId: string) => Promise<boolean>;
   onRequestCourierReassignment: (order: DeliveryOrderView) => void;
+  onRequestFulfillmentConversion: (order: DeliveryOrderView) => void;
 };
 
 type CompletedDeliveryApiOrder = {
@@ -99,6 +100,7 @@ export function CashierCouriers({
   now,
   hasCourierApp,
   onRequestCourierReassignment,
+  onRequestFulfillmentConversion,
 }: BoundaryProps) {
   const courierBuckets = useMemo(
     () => bucketCourierDeliveryOrders(deliveryOrders),
@@ -280,6 +282,14 @@ export function CashierCouriers({
                     <button type="button" onClick={() => openDeliveryOrderDetails(order)} className="rounded-xl border border-koma-border px-3 py-2 text-[9px] font-bold text-koma-secondary hover:bg-koma-card">
                       Ver pedido
                     </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => onRequestFulfillmentConversion(order)}
+                      className="rounded-xl border border-amber-500/30 px-3 py-2 text-[9px] font-extrabold text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
+                    >
+                      Alterar para retirada
+                    </button>
                     {awaitingAcceptance ? (
                       <>
                         <button
@@ -346,6 +356,14 @@ export function CashierCouriers({
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button type="button" onClick={() => openDeliveryOrderDetails(order)} className="rounded-xl border border-koma-border px-3 py-2 text-[9px] font-bold text-koma-secondary hover:bg-koma-card">
                       Ver pedido
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => onRequestFulfillmentConversion(order)}
+                      className="rounded-xl border border-amber-500/30 px-3 py-2 text-[9px] font-extrabold text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
+                    >
+                      Alterar para retirada
                     </button>
                     <button
                       type="button"
