@@ -459,7 +459,7 @@ export function useCheckoutController({
       }
 
       if (shouldCloseDigitalOrder) {
-        const closed = await handleFecharDelivery(selectedOrder.id);
+        const closed = await closeDigitalOrder(selectedOrder.id);
         if (!closed) {
           showToast(
             'Pagamento recebido, mas o pedido não fechou automaticamente. Finalize o card sem lançar outro pagamento.',
