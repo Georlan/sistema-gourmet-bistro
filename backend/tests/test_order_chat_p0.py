@@ -11,6 +11,7 @@ from app.order_chat_models import OrderConversationEvent, OrderMessage, OrderPus
 from app.services import order_chat_hub as transport
 from app.services.order_chat_service import (
     create_conversation_for_order, list_feed_page, list_recent_messages, post_system_order_event,
+    queue_order_tracking_refresh,
     send_customer_message, send_staff_message,
 )
 from app.services.order_chat_retention import purge_expired_order_chat_content
@@ -117,6 +118,28 @@ def test_status_fanout_reads_committed_order_and_feed(client_and_session):
             transport.order_chat_hub.unsubscribe_conversation(conv.id, sub)
     asyncio.run(scenario())
 
+
+
+def test_refresh_hint_reloads_snapshot_without_creating_status_event(client_and_session):
+    _, db = client_and_session
+    _seed_data(db)
+    conv, _ = create_conversation_for_order(db, 1, "comanda-101")
+    db.commit()
+
+    async def scenario():
+        sub, queue = transport.order_chat_hub.subscribe_conversation(conv.id)
+        try:
+            assert queue_order_tracking_refresh(db, 1, conv.pedido_id) is True
+            assert queue.empty()
+            db.commit()
+            payload = await asyncio.wait_for(queue.get(), 1)
+            assert payload["event"] == "refresh"
+            assert payload["data"]["pedido_id"] == conv.pedido_id
+            assert db.query(OrderConversationEvent).count() == 0
+        finally:
+            transport.order_chat_hub.unsubscribe_conversation(conv.id, sub)
+
+    asyncio.run(scenario())
 
 def test_sqlite_migration_roundtrip_preserves_uuid_and_legacy_event(client_and_session):
     import importlib.util

@@ -255,6 +255,32 @@ def resolve_public_tracking(
     )
 
 
+def queue_order_tracking_refresh(
+    db: Session,
+    restaurante_id: int,
+    pedido_id: str,
+) -> bool:
+    """Acorda o tracking para reler o snapshot sem inventar transição de status."""
+    conv = (
+        db.query(OrderConversation)
+        .filter(
+            OrderConversation.restaurante_id == restaurante_id,
+            OrderConversation.pedido_id == pedido_id,
+        )
+        .first()
+    )
+    if not conv:
+        return False
+    queue_order_chat_event(
+        db,
+        restaurante_id=restaurante_id,
+        conversation_id=conv.id,
+        kind="refresh",
+        data={},
+    )
+    return True
+
+
 def post_system_order_event(
     db: Session,
     restaurante_id: int,

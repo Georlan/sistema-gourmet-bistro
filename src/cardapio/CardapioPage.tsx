@@ -704,6 +704,10 @@ export default function CardapioPage() {
     setNotice("Sua identificação expirou. A sacola foi preservada e você pode continuar como visitante.");
   };
 
+  const handleRealtimeOrderRefresh = useCallback(() => {
+    if (activeBrand?.id) void checkActiveOrders(Number(activeBrand.id));
+  }, [activeBrand?.id, checkActiveOrders]);
+
   const handleRealtimeOrderStatus = useCallback((
     orderId: string,
     status: string,
@@ -1242,6 +1246,7 @@ export default function CardapioPage() {
           }
         }}
         onRealtimeStatus={handleRealtimeOrderStatus}
+        onRealtimeRefresh={handleRealtimeOrderRefresh}
         isRefreshing={isRefreshingOrders}
         hasFloatingCart={cartCount > 0 && !hasOpenOverlay}
       />

@@ -41,6 +41,7 @@ interface CardapioOrdersDrawerProps {
     tipo?: string,
     state?: OrderStateContract,
   ) => void;
+  onRealtimeRefresh?: () => void;
   isRefreshing?: boolean;
   hasFloatingCart?: boolean;
 }
@@ -85,6 +86,7 @@ export default function CardapioOrdersDrawer({
   onRefresh,
   onRemoveOrder,
   onRealtimeStatus,
+  onRealtimeRefresh,
   isRefreshing = false,
   hasFloatingCart = false,
 }: CardapioOrdersDrawerProps) {
@@ -213,6 +215,8 @@ export default function CardapioOrdersDrawer({
       source.onerror = () => markDegraded(order.id);
       source.addEventListener("connected", () => { void refreshUnreadCounts(); });
 
+      source.addEventListener("refresh", () => { onRealtimeRefresh?.(); });
+
       source.addEventListener("message", (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data) as { id?: unknown; sender_type?: unknown };
@@ -273,7 +277,7 @@ export default function CardapioOrdersDrawer({
       stopFallback();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [activeChatOrders, onRealtimeStatus, refreshUnreadCounts]);
+  }, [activeChatOrders, onRealtimeRefresh, onRealtimeStatus, refreshUnreadCounts]);
 
   React.useEffect(() => {
     if (chatOrderId && !orders.some((order) => order.id === chatOrderId)) {

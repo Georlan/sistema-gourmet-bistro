@@ -6,6 +6,8 @@ on:
       - "src/components/CaixaPanel.tsx"
       - "src/components/caixa/orders/CashierPickups.tsx"
       - "src/components/caixa/orders/CashierCouriers.tsx"
+      - "src/components/caixa/orders/FulfillmentConversionDialog.tsx"
+      - "src/components/caixa/orders/useFulfillmentConversion.ts"
       - "src/components/caixa/orders/cashierWorkspaceTypes.ts"
       - "src/components/caixa/orders/deliveryOrderProjection.ts"
       - "src/components/caixa/orders/digitalOrderPresentation.ts"

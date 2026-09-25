@@ -1,9 +1,10 @@
 from unittest.mock import patch
+import json
 import pytest
 from fastapi.testclient import TestClient
 from app.database import SessionLocal, Base, engine, current_restaurante_id
 from app.main import app
-from app.models import Usuario, Produto, Categoria, Comanda, DeliveryCourierReassignmentAudit, Motoboy
+from app.models import ActivityLog, Usuario, Produto, Categoria, Comanda, DeliveryCourierReassignmentAudit, Motoboy
 from app.security import get_password_hash
 
 client = TestClient(app)
@@ -192,3 +193,173 @@ def test_delivery_and_motoboy_flow(setup_db):
         assert audit.reason == "Entregador selecionado por engano"
     finally:
         db.close()
+
+
+def _delivery_headers():
+    login_res = client.post("/auth/login", json={"username": "delagent", "password": "123"})
+    assert login_res.status_code == 200
+    headers = {"Authorization": f"Bearer {login_res.json()['access_token']}"}
+    opened = client.post("/caixa/turno/abrir", json={"saldo_inicial": 0}, headers=headers)
+    assert opened.status_code in {201, 400, 409}
+    return headers
+
+
+def test_delivery_can_become_pickup_before_dispatch_without_losing_history(setup_db):
+    headers = _delivery_headers()
+    courier = client.post(
+        "/comandas/motoboys/cadastro",
+        json={"nome": "Rita Conversão", "telefone": "81 98888-6655"},
+        headers=headers,
+    )
+    assert courier.status_code == 201, courier.text
+    courier_id = courier.json()["id"]
+
+    created = client.post(
+        "/comandas/",
+        json={
+            "mesa_id": None,
+            "garcom_id": "u-del-01",
+            "tipo": "Delivery",
+            "identificador": "Cliente que vem buscar",
+            "delivery_status": "producao",
+            "delivery_telefone": "81 97777-1111",
+            "delivery_endereco": "Rua Original, 10",
+            "delivery_taxa": 8.5,
+            "delivery_forma_pagamento": "dinheiro",
+            "delivery_troco_para": 50,
+            "motoboy_id": courier_id,
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    order_id = created.json()["id"]
+
+    missing_reason = client.post(
+        f"/comandas/{order_id}/delivery/converter-retirada",
+        json={"motivo": ""},
+        headers=headers,
+    )
+    assert missing_reason.status_code == 422
+
+    converted = client.post(
+        f"/comandas/{order_id}/delivery/converter-retirada",
+        json={"motivo": "Cliente decidiu retirar no balcão"},
+        headers=headers,
+    )
+    assert converted.status_code == 200, converted.text
+    payload = converted.json()
+    assert payload["tipo"] == "Retirada"
+    assert payload["delivery_status"] == "producao"
+    assert payload["motoboy_id"] is None
+    assert float(payload["delivery_taxa"]) == 0.0
+    assert payload["delivery_endereco"] == "Rua Original, 10"
+
+    db = SessionLocal(restaurante_id=1)
+    try:
+        log = (
+            db.query(ActivityLog)
+            .filter(
+                ActivityLog.restaurante_id == 1,
+                ActivityLog.garcom_id == "u-del-01",
+                ActivityLog.action == "CONVERT_FULFILLMENT",
+            )
+            .order_by(ActivityLog.id.desc())
+            .first()
+        )
+        assert log is not None
+        details = json.loads(log.details)
+        assert details["comanda_id"] == order_id
+        assert details["fulfillment_original"] == "Delivery"
+        assert details["fulfillment_atual"] == "Retirada"
+        assert details["delivery_status_preservado"] == "producao"
+        assert details["motoboy_id_anterior"] == courier_id
+        assert details["delivery_taxa_anterior"] == 8.5
+        assert details["motivo"] == "Cliente decidiu retirar no balcão"
+    finally:
+        db.close()
+
+    active = client.get("/comandas/delivery/ativos", headers=headers)
+    assert active.status_code == 200
+    projected = next(order for order in active.json() if order["id"] == order_id)
+    assert projected["tipo"] == "Retirada"
+    assert projected["delivery_status"] == "producao"
+
+
+def test_delivery_to_pickup_rejects_in_route_and_paid_delivery_fee(setup_db):
+    headers = _delivery_headers()
+    courier = client.post(
+        "/comandas/motoboys/cadastro",
+        json={"nome": "Nando Conversão", "telefone": "81 98888-6677"},
+        headers=headers,
+    )
+    assert courier.status_code == 201, courier.text
+    courier_id = courier.json()["id"]
+
+    in_route = client.post(
+        "/comandas/",
+        json={
+            "mesa_id": None,
+            "garcom_id": "u-del-01",
+            "tipo": "Delivery",
+            "identificador": "Cliente em rota",
+            "delivery_status": "pronto",
+            "delivery_telefone": "81 96666-1111",
+            "delivery_endereco": "Rua Em Rota, 20",
+            "delivery_taxa": 7,
+            "motoboy_id": courier_id,
+        },
+        headers=headers,
+    )
+    assert in_route.status_code == 201, in_route.text
+    in_route_id = in_route.json()["id"]
+    dispatched = client.post(
+        f"/comandas/{in_route_id}/delivery/despachar",
+        json={"motoboy_id": courier_id},
+        headers=headers,
+    )
+    assert dispatched.status_code == 200, dispatched.text
+
+    blocked_route = client.post(
+        f"/comandas/{in_route_id}/delivery/converter-retirada",
+        json={"motivo": "Cliente apareceu no restaurante"},
+        headers=headers,
+    )
+    assert blocked_route.status_code == 409
+    assert "já saiu para entrega" in blocked_route.json()["detail"]
+
+    paid = client.post(
+        "/comandas/",
+        json={
+            "mesa_id": None,
+            "garcom_id": "u-del-01",
+            "tipo": "Delivery",
+            "identificador": "Cliente taxa paga",
+            "delivery_status": "pronto",
+            "delivery_telefone": "81 95555-1111",
+            "delivery_endereco": "Rua Taxa Paga, 30",
+            "delivery_taxa": 9,
+        },
+        headers=headers,
+    )
+    assert paid.status_code == 201, paid.text
+    paid_id = paid.json()["id"]
+
+    db = SessionLocal(restaurante_id=1)
+    try:
+        paid_order = db.query(Comanda).filter(
+            Comanda.restaurante_id == 1,
+            Comanda.id == paid_id,
+        ).one()
+        paid_order.online_payment_status = "approved"
+        paid_order.valor_pago = 9
+        db.commit()
+    finally:
+        db.close()
+
+    blocked_finance = client.post(
+        f"/comandas/{paid_id}/delivery/converter-retirada",
+        json={"motivo": "Cliente vem retirar"},
+        headers=headers,
+    )
+    assert blocked_finance.status_code == 409
+    assert "ajuste financeiro/estorno" in blocked_finance.json()["detail"]

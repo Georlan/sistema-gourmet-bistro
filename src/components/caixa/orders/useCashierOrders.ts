@@ -293,6 +293,7 @@ export function useCashierOrders({
   const selectedMotoboysRef = useRef<Record<string, string>>({});
   const pendingCourierAssignmentRef = useRef<Record<string, PendingCourierAssignment>>({});
   const pendingCourierReassignmentRef = useRef<Set<string>>(new Set());
+  const pendingFulfillmentConversionRef = useRef<Set<string>>(new Set());
   const courierAssignmentSequenceRef = useRef(0);
 
   const applySelectedMotoboysState = (next: Record<string, string>) => {
@@ -741,6 +742,50 @@ export function useCashierOrders({
       return false;
     } finally {
       pendingCourierReassignmentRef.current.delete(orderKey);
+    }
+  };
+
+  const handleConvertDeliveryToPickup = async (
+    orderId: string,
+    reason: string,
+  ): Promise<boolean> => {
+    const orderKey = String(orderId);
+    if (!orderKey || pendingFulfillmentConversionRef.current.has(orderKey)) return false;
+
+    pendingFulfillmentConversionRef.current.add(orderKey);
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/comandas/${encodeURIComponent(orderKey)}/delivery/converter-retirada`,
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ motivo: reason.trim() }),
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        showToast(data?.detail || 'Não foi possível alterar o pedido para retirada.', 'error');
+        return false;
+      }
+
+      const nextSelections = { ...selectedMotoboysRef.current };
+      delete nextSelections[orderKey];
+      applySelectedMotoboysState(nextSelections);
+      setSelectedKanbanOrder(null);
+
+      // A leitura dedicada é a autoridade para recompor total, taxa e modalidade.
+      // O broadcast do backend faz o mesmo em outros terminais.
+      await Promise.allSettled([fetchDeliveryOrders(), onRefreshOrders()]);
+      window.dispatchEvent(new Event('koma_orders_updated'));
+      showToast('Pedido alterado para retirada. Status de preparo e pagamento foram preservados.', 'success');
+      return true;
+    } catch (error) {
+      console.error(error);
+      showToast('Erro de conexão ao alterar o pedido para retirada.', 'error');
+      void fetchDeliveryOrders();
+      return false;
+    } finally {
+      pendingFulfillmentConversionRef.current.delete(orderKey);
     }
   };
 
@@ -1256,6 +1301,7 @@ export function useCashierOrders({
     handleUpdateDeliveryStatus,
     handleAssignDeliveryCourier,
     handleReassignDeliveryCourier,
+    handleConvertDeliveryToPickup,
     handleDespacharKanban,
     handleGerarLinkMotoboy,
     handleRevogarAcessoMotoboy,
