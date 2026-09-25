@@ -976,7 +976,10 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
             "Conexão sob demanda RFCOMM validada pelo Kôma Print.\n"
         )
         transport = BluetoothRfcommTransport(address=address, channel=1)
-        if not transport.send(raw_payload):
+        with self._bluetooth_io_lock:
+            sent = transport.send(raw_payload)
+        self._remember_bluetooth_availability(address, sent)
+        if not sent:
             return {
                 "success": False,
                 "code": "bluetooth_test_failed",
