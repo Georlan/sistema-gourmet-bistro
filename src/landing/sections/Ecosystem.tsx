@@ -31,7 +31,7 @@ export function Ecosystem() {
 
           <div className="koma-eco-intro">
             <p>
-              Os canais atendidos pelo Kôma alimentam a mesma operação. Recursos avançados de cozinha, equipe e automação variam conforme o plano.
+              Os canais atendidos pelo Kôma alimentam a mesma operação com gestão de equipe na base. Recursos avançados de cozinha, estoque e automação variam conforme o plano.
             </p>
             <button type="button" onClick={() => setLeadModalOpen(true)}>
               Quero começar com o Kôma

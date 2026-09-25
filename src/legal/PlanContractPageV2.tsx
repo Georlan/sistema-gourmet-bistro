@@ -602,10 +602,10 @@ export default function PlanContractPageV2() {
             <span className="koma-sub-eyebrow">{activationResult.status === 'awaiting_release' ? 'CONTRATAÇÃO RECEBIDA' : 'CONTRATAÇÃO CONCLUÍDA'}</span>
             <h1>{activationResult.status === 'awaiting_release' ? 'Recebemos sua contratação.' : 'Seu KÔMA está pronto.'}</h1>
             <p>{activationResult.message || (!fixedBillingRequired
-              ? 'Pocket ativado sem mensalidade fixa e sem assinatura recorrente de R$ 0 no provedor.'
+              ? (receipt ? 'Condição contratual histórica mantida: Pocket sem mensalidade fixa conforme contrato anterior.' : 'Pocket ativado com sucesso.')
               : pixSelected
                 ? 'Nenhum Pix é cobrado hoje. Depois da implantação essencial começam seus 7 dias grátis; o primeiro QR aparece no KÔMA somente no vencimento.'
-                : 'A mensalidade fixa continua R$ 0 hoje e os 7 dias grátis começam após a implantação essencial.')}</p>
+                : 'Cobrança de hoje concluída: R$ 0 (7 dias grátis iniciados após a implantação essencial).')}</p>
             {activationResult.slug && <div className="koma-sub-success-detail"><span>Endereço do estabelecimento</span><strong>https://{activationResult.slug}.komafood.com.br</strong></div>}
             {activationResult.status === 'awaiting_release' ? (
               <div className="koma-sub-success-detail koma-sub-activation-pending"><span>Próximo passo</span><strong>Aguarde o convite para criar sua senha.</strong></div>
@@ -693,7 +693,7 @@ export default function PlanContractPageV2() {
           ) : (
             <>
               <button type="button" className="koma-sub-back" onClick={() => void handleSwitchPlanOrCycle()} disabled={isCheckingBilling}><ArrowLeft size={16} /> {isCheckingBilling ? 'Verificando…' : receipt ? 'Trocar plano ou ciclo' : 'Voltar para plano e cobrança'}</button>
-              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">03 · CONTRATAÇÃO{fixedBillingRequired ? ' E PAGAMENTO' : ''}</span><h1>Ative seu restaurante.</h1><p>{fixedBillingRequired ? 'Escolha cartão, Pix ou Saldo Mercado Pago. Hoje: R$ 0 de mensalidade fixa.' : 'Seu contrato anterior mantém mensalidade fixa de R$ 0 e dispensa meio de pagamento.'}</p></div>
+              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">03 · CONTRATAÇÃO{fixedBillingRequired ? ' E PAGAMENTO' : ''}</span><h1>Ative seu restaurante.</h1><p>{fixedBillingRequired ? 'Escolha cartão, Pix ou Saldo Mercado Pago. Cobrança hoje: R$ 0 (período de 7 dias grátis).' : 'Condição contratual histórica: Seu contrato anterior mantém mensalidade fixa de R$ 0 e dispensa meio de pagamento.'}</p></div>
               {error && <div className="koma-sub-error" role="alert"><Info size={18} /> {error}</div>}
               {contractLocked && <div className="koma-sub-locked-note"><Lock size={17} /> O aceite jurídico já foi registrado para esta tentativa.</div>}
 
@@ -702,7 +702,7 @@ export default function PlanContractPageV2() {
                   <div className="koma-sub-section-title"><span><Building2 size={18} /></span><div><h2>Contratante e restaurante</h2><p>Dados necessários para formalizar a contratação.</p></div></div>
                   <div className="koma-sub-form-grid">
                     <label className="koma-sub-field koma-sub-field-full"><span>Nome completo / Razão social</span><div><User size={16} /><input value={form.contractingPartyName} onChange={event => updateField('contractingPartyName', event.target.value)} disabled={contractLocked} required /></div></label>
-                    <label className="koma-sub-field"><span>CPF / CNPJ</span><div><FileText size={16} /><input value={form.taxId} onChange={event => updateField('taxId', event.target.value)} inputMode="text" disabled={contractLocked} required /></div>{form.taxId.trim() && !contractingTaxKind && <small className="is-error">Informe um CPF ou CNPJ válido.</small>}</label>
+                    <label className="koma-sub-field"><span>CPF / CNPJ</span><div><FileText size={16} /><input value={form.taxId} onChange={event => updateField('taxId', event.target.value)} inputMode="text" autoCapitalize="characters" disabled={contractLocked} required /></div>{form.taxId.trim() && !contractingTaxKind && <small className="is-error">Informe um CPF ou CNPJ válido.</small>}</label>
                     <label className="koma-sub-field"><span>Nome do restaurante</span><div><Store size={16} /><input value={form.restaurantName} onChange={event => updateField('restaurantName', event.target.value)} disabled={contractLocked} required /></div></label>
                     <label className="koma-sub-field"><span>E-mail</span><div><Mail size={16} /><input type="email" value={form.email} onChange={event => updateField('email', event.target.value)} disabled={contractLocked} required /></div></label>
                     <label className="koma-sub-field"><span>Telefone / WhatsApp</span><div><Phone size={16} /><input type="tel" value={form.phone} onChange={event => updateField('phone', event.target.value)} disabled={contractLocked} required /></div></label>
@@ -712,7 +712,7 @@ export default function PlanContractPageV2() {
                       <div className="koma-sub-section-title compact"><span><User size={17} /></span><div><h3>Responsável pelo aceite</h3><p>Identifique a pessoa física com poderes para contratar.</p></div></div>
                       <div className="koma-sub-form-grid">
                         <label className="koma-sub-field koma-sub-field-full"><span>Nome completo do responsável</span><div><User size={16} /><input value={form.responsibleName} onChange={event => updateField('responsibleName', event.target.value)} disabled={contractLocked} required /></div></label>
-                        <label className="koma-sub-field"><span>CPF do responsável</span><div><FileText size={16} /><input value={form.representativeTaxId} onChange={event => updateField('representativeTaxId', event.target.value)} disabled={contractLocked} required /></div>{form.representativeTaxId.trim() && !isValidCpf(form.representativeTaxId) && <small className="is-error">Informe um CPF válido.</small>}</label>
+                        <label className="koma-sub-field"><span>CPF do responsável</span><div><FileText size={16} /><input value={form.representativeTaxId} onChange={event => updateField('representativeTaxId', event.target.value)} inputMode="numeric" disabled={contractLocked} required /></div>{form.representativeTaxId.trim() && !isValidCpf(form.representativeTaxId) && <small className="is-error">Informe um CPF válido.</small>}</label>
                         <label className="koma-sub-field"><span>Cargo / função</span><div><Building2 size={16} /><input value={form.representativeRole} onChange={event => updateField('representativeRole', event.target.value)} disabled={contractLocked} required /></div></label>
                       </div>
                     </div>
@@ -739,11 +739,11 @@ export default function PlanContractPageV2() {
                   )}
                   {billingMethod === 'pix' && capabilities.pix && <div className="koma-sub-locked-note"><QrCode size={17} /> Nenhum Pix é cobrado hoje. {activeBillingCycle === 'anual' ? 'Depois da implantação e dos 7 dias grátis, o KÔMA gerará um único QR Code e Pix Copia e Cola do valor anual, quitando os próximos 12 meses.' : 'Quando a primeira mensalidade vencer, o KÔMA exibirá o QR Code e o Pix Copia e Cola; um novo QR será gerado a cada vencimento mensal.'} Você poderá pagar com qualquer banco ou PSP Pix.</div>}
                   {billingMethod === 'account_money' && capabilities.account_money && <div className="koma-sub-locked-note"><Wallet size={17} /> Ao continuar, você será levado ao Mercado Pago apenas para autorizar o uso do seu saldo. A recorrência começa depois do trial.</div>}
-                  {!capabilities.credit_card && !capabilities.pix && !capabilities.account_money && <p role="status">Sua inscrição fica salva. Os meios de pagamento estão temporariamente indisponíveis.</p>}
+                  {!capabilities.credit_card && !capabilities.pix && !capabilities.account_money && <p role="status">Ambiente de homologação: o checkout recorrente está temporariamente pausado enquanto as credenciais TEST do gateway são concluídas (KOMA_SAAS_CHECKOUT_ENABLED=false). Sua inscrição fica salva.</p>}
                 </section>
                 ) : (
                   <section className="koma-sub-section-card">
-                    <div className="koma-sub-section-title"><span><CheckCircle2 size={18} /></span><div><h2>Sem cobrança fixa</h2><p>O Pocket desta contratação tem mensalidade fixa de R$ 0. Nenhuma assinatura recorrente de R$ 0 será criada no Mercado Pago.</p></div></div>
+                    <div className="koma-sub-section-title"><span><CheckCircle2 size={18} /></span><div><h2>Condição Contratual Histórica</h2><p>Contrato anterior mantido: o Pocket deste contrato possui condição histórica de mensalidade fixa de R$ 0. Nenhuma assinatura recorrente de R$ 0 será criada no Mercado Pago.</p></div></div>
                     <div className="koma-sub-locked-note"><Info size={17} /> Pagamentos online dos seus clientes continuam separados: quando você conectar a conta Mercado Pago do restaurante, aplica-se a taxa KÔMA contratada de {formatPercentage(marketplaceRate)} nos pagamentos elegíveis, além das tarifas do provedor.</div>
                   </section>
                 )}
@@ -753,7 +753,7 @@ export default function PlanContractPageV2() {
                   <label htmlFor="legal-acceptance">
                     Declaro que as informações estão corretas, que <strong>possuo poderes</strong> para contratar e aceito os <a href="/legal/termos" target="_blank" rel="noreferrer">Termos de Contratação</a>, as <a href="/legal/planos" target="_blank" rel="noreferrer">Condições Comerciais</a>, o <a href="/legal/dpa" target="_blank" rel="noreferrer">Anexo de Tratamento de Dados</a> e a <a href="/legal/privacidade" target="_blank" rel="noreferrer">Política de Privacidade</a>, versão {receipt?.documents.version || LEGAL_VERSION}.{' '}
                     {!fixedBillingRequired
-                      ? <strong>Confirmo o Pocket com mensalidade fixa de R$ 0 e taxa KÔMA de {formatPercentage(marketplaceRate)} sobre pagamentos online elegíveis. Não há recorrência fixa a autorizar.</strong>
+                      ? <strong>Confirmo a condição histórica do Pocket com mensalidade fixa de R$ 0 e taxa KÔMA de {formatPercentage(marketplaceRate)} sobre pagamentos online elegíveis conforme contrato anterior. Não há recorrência fixa a autorizar.</strong>
                       : billingMethod === 'pix'
                         ? activeBillingCycle === 'anual'
                           ? <strong>Escolho Pix anual: R$ 0 hoje; depois da implantação e dos 7 dias grátis, será gerado um único QR Code/Pix Copia e Cola de {formatCurrency(nextChargeAmount)}, quitando os próximos 12 meses. Não há débito Pix automático.</strong>
@@ -779,12 +779,12 @@ export default function PlanContractPageV2() {
             <div className="koma-sub-timeline">
               {!fixedBillingRequired ? (
                 <>
-                  <div><span className="is-active"><CheckCircle2 size={16} /></span><div><strong>Hoje</strong><p>Mensalidade fixa do Pocket: R$ 0.</p></div></div>
+                  <div><span className="is-active"><CheckCircle2 size={16} /></span><div><strong>Hoje</strong><p>Condição histórica do contrato anterior: R$ 0.</p></div></div>
                   <div><span><Info size={16} /></span><div><strong>Pagamentos online</strong><p>Taxa KÔMA contratada: {formatPercentage(marketplaceRate)} nos pagamentos elegíveis.</p></div></div>
                 </>
               ) : (
                 <>
-                  <div><span className="is-active"><Gift size={16} /></span><div><strong>Hoje</strong><p>Selecione {billingMethodLabel}. Mensalidade fixa: R$ 0.</p></div></div>
+                  <div><span className="is-active"><Gift size={16} /></span><div><strong>Hoje</strong><p>Cobrança de hoje: R$ 0 (7 dias grátis).</p></div></div>
                   <div><span><Info size={16} /></span><div><strong>Após a implantação</strong><p>Começam 7 dias grátis completos.</p></div></div>
                   <div><span>{billingMethod === 'pix' ? <QrCode size={16} /> : billingMethod === 'account_money' ? <Wallet size={16} /> : <CreditCard size={16} />}</span><div><strong>Depois do trial</strong><p>{billingMethod === 'pix' ? `QR Pix disponível: ${formatCurrency(nextChargeAmount)}.` : `Primeira cobrança automática: ${formatCurrency(nextChargeAmount)}.`}</p></div></div>
                 </>
@@ -792,7 +792,7 @@ export default function PlanContractPageV2() {
             </div>
             <div className="koma-sub-due-row"><span>A pagar hoje</span><strong>{formatCurrency(0)}</strong></div>
             <p className="koma-sub-summary-note">{!fixedBillingRequired
-              ? 'Pocket não cria recorrência de mensalidade fixa. A conta Mercado Pago do restaurante para receber clientes é conectada separadamente.'
+              ? 'Condição histórica do contrato anterior: sem recorrência de mensalidade fixa. A conta Mercado Pago do restaurante para receber clientes é conectada separadamente.'
               : billingMethod === 'pix'
               ? activeBillingCycle === 'anual'
                 ? 'Pix anual não é débito automático: depois do trial, um único QR/Copia e Cola universal quita os próximos 12 meses.'
