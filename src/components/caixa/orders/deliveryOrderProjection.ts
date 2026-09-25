@@ -37,6 +37,96 @@ export function readDigitalOrderFulfillment(
   return null;
 }
 
+
+/**
+ * Normaliza a comanda crua retornada pelas rotas operacionais no mesmo read model
+ * usado por Pedidos, Retiradas e Entregas. Assim modalidade, saldo, origem,
+ * entregador e apresentação não ganham interpretações diferentes por tela.
+ */
+export function projectApiComandaToDeliveryView(c: any): DeliveryOrderView | null {
+  const status = readActiveDeliveryStatus(c?.delivery_status);
+  if (!status) return null;
+
+  const itensArr = Array.isArray(c?.itens) ? c.itens : Array.isArray(c?.items) ? c.items : [];
+  const activeItems = itensArr.filter((item: any) => item?.status !== 'cancelado');
+  const itemCounts: Record<string, number> = {};
+  activeItems.forEach((item: any) => {
+    const name = item?.produto?.nome || item?.nome || 'Item';
+    itemCounts[name] = (itemCounts[name] || 0) + 1;
+  });
+
+  const itens = Object.entries(itemCounts)
+    .map(([name, qty]) => `${qty}x ${name}`)
+    .join(' + ') || 'Nenhum item';
+  const subtotal = activeItems.reduce(
+    (sum: number, item: any) => sum + (Number(item?.preco_unit ?? item?.preco) || 0),
+    0,
+  );
+  const total = subtotal + (Number(c?.delivery_taxa) || 0);
+  const amountPaid = Math.max(0, Number(c?.valor_pago) || 0);
+  const amountDue = Math.max(0, total - amountPaid);
+
+  const origins = (Array.isArray(c?.lancamentos) ? c.lancamentos : []).map((launch: any) =>
+    String(launch?.origem || '').toLowerCase()
+  );
+  const origemOperacional: DeliveryOrderView['origemOperacional'] = origins.includes('smartpos')
+    ? 'smartpos'
+    : origins.includes('cardapio')
+      ? 'cardapio'
+      : origins.includes('caixa')
+        ? 'caixa'
+        : origins.includes('garcom')
+          ? 'garcom'
+          : 'desconhecida';
+
+  let canal: DeliveryOrderView['canal'] = origemOperacional === 'smartpos' ? 'smartpos' : 'site';
+  const identifier = String(c?.identificador || '');
+  const normalizedIdentifier = identifier.toLowerCase();
+  if (normalizedIdentifier.includes('ifood')) canal = 'ifood';
+  else if (normalizedIdentifier.includes('whats')) canal = 'whats';
+
+  const rawAddress = String(c?.delivery_endereco || '').trim();
+  const modalidade = readDigitalOrderFulfillment(c?.tipo, rawAddress);
+  if (!modalidade) return null;
+
+  const isQuickSale =
+    modalidade === 'retirada' &&
+    (
+      origemOperacional === 'smartpos'
+      || (identifier.trim().toLowerCase() === 'balcão' && !String(c?.delivery_telefone || '').trim())
+    );
+
+  const parsedTime = formatBackendTime(c?.criado_em);
+
+  return {
+    id: c.id,
+    cliente: identifier || 'Cliente Sem Nome',
+    telefone: c?.delivery_telefone || '',
+    itens,
+    detailItems: activeItems,
+    total,
+    amountPaid,
+    amountDue,
+    canal,
+    origemOperacional,
+    isQuickSale,
+    quantidadeItens: activeItems.length,
+    modalidade,
+    pago: activeItems.length > 0 && activeItems.every((item: any) => Boolean(item?.pago)),
+    status,
+    endereco: modalidade === 'delivery' ? rawAddress : '',
+    paymentMethod: c?.delivery_forma_pagamento || null,
+    onlinePaymentStatus: c?.online_payment_status || null,
+    changeFor: c?.delivery_troco_para == null ? null : Number(c.delivery_troco_para),
+    motoboyId: c?.motoboy_id ?? null,
+    criadoEm: parsedTime === '—' ? '12:00' : parsedTime,
+    created_at: c?.criado_em,
+    numeroPedido: c?.numero_pedido,
+    mesaId: Number(c?.mesa_id || 0) || null,
+    garcomNome: c?.criada_por?.nome || c?.garcom?.nome || '',
+  };
+}
+
 function readActiveDigitalStatus(order: Order): DeliveryOrderView['status'] | null {
   const fulfillment = readDigitalOrderFulfillment(order.tipo, order.deliveryAddress);
   if (!fulfillment) return null;
