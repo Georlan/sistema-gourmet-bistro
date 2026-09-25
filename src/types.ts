@@ -78,6 +78,8 @@ export interface Order {
   deliveryStatus?: 'pendente' | 'producao' | 'pronto' | 'transito' | 'finalizado' | 'recusado' | null;
   /** Dados de fulfillment preservados no snapshot compartilhado para hidratar o Caixa sem uma segunda leitura bloqueante. */
   deliveryTax?: number;
+  discountTotal?: number;
+  payableTotal?: number;
   deliveryAddress?: string | null;
   paymentMethod?: string | null;
   changeFor?: number | null;
