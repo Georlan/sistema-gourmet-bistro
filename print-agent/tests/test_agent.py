@@ -1509,7 +1509,13 @@ def test_worker_does_not_claim_jobs_without_physical_printer(temp_dir):
 
         run_agent_loop(config, max_loops=1)
 
-        client.heartbeat.assert_called_once_with(diagnostics=diagnostics)
+        client.heartbeat.assert_called_once_with(
+            diagnostics={
+                **diagnostics,
+                "endpoints": [],
+                "destinations": {},
+            }
+        )
         client.claim_jobs.assert_not_called()
         adapter.print_ticket.assert_not_called()
         sleep_mock.assert_not_called()
