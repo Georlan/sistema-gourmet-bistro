@@ -256,6 +256,7 @@ export default function CardapioOrderChatPanel({
       };
       source.onerror = startFallback;
       source.addEventListener("connected", () => { void refresh(); });
+      source.addEventListener("refresh", () => { void refresh(); });
       source.addEventListener("message", (event: MessageEvent) => {
         try {
           const incoming = JSON.parse(event.data) as TrackingMessage;
