@@ -810,19 +810,9 @@ def update_item_status(
     db.commit()
     db.refresh(item)
 
-    if status == "pronto" and item.comanda_id:
-        comanda = db.query(Comanda).filter(Comanda.id == item.comanda_id).first()
-        if comanda:
-            todos_prontos = all(it.status in ("pronto", "entregue", "cancelado") for it in comanda.itens)
-            if todos_prontos:
-                _agendar_notificacao_whatsapp_status(
-                    background_tasks,
-                    db,
-                    comanda,
-                    None,
-                    "pronto"
-                )
-
+    # Item readiness is a production signal only. Customer-facing "ready" status
+    # belongs to the canonical order lifecycle and is emitted only when the
+    # operator explicitly advances the order to `pronto`.
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return item
 
