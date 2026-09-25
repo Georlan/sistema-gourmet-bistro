@@ -5,7 +5,7 @@ import logging
 import os
 import re
 from collections.abc import Mapping
-from typing import Literal, Optional, List
+from typing import Any, Literal, Optional, List
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -361,6 +361,41 @@ def _expire_stale_agent_command(
     return True
 
 
+def _is_printer_ready_entry(printer: Mapping[str, Any]) -> bool:
+    """
+    Verifica se uma impressora está pronta independentemente do transporte.
+    - Bluetooth SPP: pareada + perfil SPP válido tornam o endpoint pronto sob demanda.
+    - USB, Rede, Spooler: available + present + configured.
+    """
+    if not isinstance(printer, Mapping):
+        return False
+
+    connection = str(printer.get("connection") or "unknown").lower()
+    if connection == "bluetooth":
+        is_paired = printer.get("paired") is True
+        has_spp = printer.get("spp") is True
+        is_available = printer.get("available") is True or (is_paired and has_spp)
+        is_configured = printer.get("configured") is True or is_paired
+        is_present = printer.get("present") is True or is_paired
+        return bool(is_paired and has_spp and is_available and is_configured and is_present)
+
+    return bool(
+        printer.get("available") is True
+        and printer.get("present") is True
+        and printer.get("configured") is True
+    )
+
+
+def _is_printer_present_entry(printer: Mapping[str, Any]) -> bool:
+    """Verifica se há dispositivo físico ou endpoint presente."""
+    if not isinstance(printer, Mapping):
+        return False
+    connection = str(printer.get("connection") or "unknown").lower()
+    if connection == "bluetooth":
+        return bool(printer.get("paired") is True and printer.get("spp") is True)
+    return bool(printer.get("present") is True)
+
+
 def _agent_printer_state(
     agent: PrintAgentToken,
     now: datetime.datetime,
@@ -397,21 +432,13 @@ def _agent_printer_state(
     if not isinstance(capabilities, list):
         capabilities = []
     physical_present = any(
-        isinstance(printer, Mapping)
-        and printer.get("connection") == "usb"
-        and printer.get("present") is True
+        _is_printer_present_entry(printer)
         for printer in printers
     )
     ready_printers = [
         printer
         for printer in printers
-        if (
-            isinstance(printer, Mapping)
-            and printer.get("connection") == "usb"
-            and printer.get("available") is True
-            and printer.get("present") is True
-            and printer.get("configured") is True
-        )
+        if _is_printer_ready_entry(printer)
     ]
     return {
         "online": online,

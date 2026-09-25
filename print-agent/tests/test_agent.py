@@ -371,8 +371,8 @@ def test_linux_bluetooth_diagnostics_reports_paired_spp_printer():
             "uri": "bluetooth://86:67:7A:6B:30:C4",
             "address": "86:67:7A:6B:30:C4",
             "is_default": False,
-            "available": False,
-            "present": False,
+            "available": True,
+            "present": True,
             "configured": True,
             "paired": True,
             "trusted": True,
@@ -1525,3 +1525,61 @@ def test_worker_does_not_claim_jobs_without_physical_printer(temp_dir):
         client.claim_jobs.assert_not_called()
         adapter.print_ticket.assert_not_called()
         sleep_mock.assert_not_called()
+
+
+def test_base_adapter_is_printer_ready_with_bluetooth_spp_on_demand(temp_dir):
+    adapter = get_adapter("linux", output_dir=temp_dir)
+    adapter.get_diagnostics = MagicMock(return_value={
+        "adapter": "linux",
+        "platform": "linux",
+        "default_printer": "KA-1445",
+        "error": None,
+        "printers": [
+            {
+                "name": "KA-1445",
+                "connection": "bluetooth",
+                "uri": "bluetooth://86:67:7A:6B:30:C4",
+                "address": "86:67:7A:6B:30:C4",
+                "cups_queue": "Kapbom",
+                "is_default": True,
+                "available": True,
+                "present": True,
+                "configured": True,
+                "paired": True,
+                "trusted": True,
+                "connected": False,
+                "spp": True,
+            }
+        ],
+    })
+
+    assert adapter.is_printer_ready("KA-1445") is True
+    assert adapter.is_printer_ready("Kapbom") is True
+    assert adapter.is_printer_ready("86:67:7A:6B:30:C4") is True
+    assert adapter.is_printer_ready("Padrão") is True
+    assert adapter.is_printer_ready("Outra") is False
+
+
+def test_base_adapter_is_printer_ready_preserves_usb_offline(temp_dir):
+    adapter = get_adapter("linux", output_dir=temp_dir)
+    adapter.get_diagnostics = MagicMock(return_value={
+        "adapter": "linux",
+        "platform": "linux",
+        "default_printer": "G250",
+        "error": None,
+        "printers": [
+            {
+                "name": "G250",
+                "connection": "usb",
+                "uri": "usb://Gertec/G250",
+                "is_default": True,
+                "available": False,
+                "present": False,
+                "configured": True,
+            }
+        ],
+    })
+
+    assert adapter.is_printer_ready("G250") is False
+    assert adapter.is_printer_ready("Padrão") is False
+
