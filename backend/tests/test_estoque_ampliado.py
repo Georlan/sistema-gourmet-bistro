@@ -29,8 +29,8 @@ def setup_database():
     # Seed test tenants and users
     db = sessionmaker(autocommit=False, autoflush=False, bind=engine)()
     
-    rest1 = Restaurante(id=10, nome="Restaurante Alfa", slug="alfa")
-    rest2 = Restaurante(id=20, nome="Restaurante Beta", slug="beta")
+    rest1 = Restaurante(id=10, nome="Restaurante Alfa", slug="alfa", plano="pro")
+    rest2 = Restaurante(id=20, nome="Restaurante Beta", slug="beta", plano="pro")
     db.add_all([rest1, rest2])
     db.commit()
 
