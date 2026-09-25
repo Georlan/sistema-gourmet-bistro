@@ -904,7 +904,10 @@ def listar_entregas_concluidas_recentes(
 
 
 @router.get("/motoboys/lista", response_model=List[MotoboyResponse])
-def listar_motoboys(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+def listar_motoboys(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
+):
     """
     Lista todos os motoboys cadastrados do restaurante atual.
     """
@@ -958,8 +961,8 @@ def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int) -> dict:
     exp = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=4)).isoformat()
     return {
         "token": token,
-        "link": f"/entregador?token={token}",
-        "link_publico": f"{settings.KOMA_PUBLIC_APP_URL}/entregador?token={token}",
+        "link": f"/entregador#token={token}",
+        "link_publico": f"{settings.KOMA_PUBLIC_APP_URL}/entregador#token={token}",
         "expires_at": exp,
         "motoboy_nome": motoboy.nome
     }
@@ -1048,54 +1051,56 @@ def painel_entregador(
         detail="App do Entregador disponível apenas no plano Premium ou com add-on ativo.",
     )
 
-    current_restaurante_id.set(rest_id)
+    tenant_token = current_restaurante_id.set(rest_id)
+    try:
+        motoboy = db.query(Motoboy).filter(
+            Motoboy.id == motoboy_id,
+            Motoboy.restaurante_id == rest_id
+        ).first()
+        if not motoboy:
+            raise HTTPException(status_code=404, detail="Motoboy não encontrado")
 
-    motoboy = db.query(Motoboy).filter(
-        Motoboy.id == motoboy_id,
-        Motoboy.restaurante_id == rest_id
-    ).first()
-    if not motoboy:
-        raise HTTPException(status_code=404, detail="Motoboy não encontrado")
+        comandas = db.query(Comanda).filter(
+            Comanda.restaurante_id == rest_id,
+            Comanda.fechada == False,
+            Comanda.delivery_status.in_(["pronto", "transito"]),
+            (Comanda.motoboy_id == motoboy_id) | (Comanda.motoboy_id == None)
+        ).order_by(Comanda.criado_em.desc()).all()
 
-    comandas = db.query(Comanda).filter(
-        Comanda.restaurante_id == rest_id,
-        Comanda.fechada == False,
-        Comanda.delivery_status.in_(["pronto", "transito"]),
-        (Comanda.motoboy_id == motoboy_id) | (Comanda.motoboy_id == None)
-    ).order_by(Comanda.criado_em.desc()).all()
+        entregas = []
+        for c in comandas:
+            calc_total = sum(i.preco_unit for i in c.itens) if c.itens else 0.0
+            total_entrega = calc_total + (c.delivery_taxa or 0.0)
 
-    entregas = []
-    for c in comandas:
-        calc_total = sum(i.preco_unit for i in c.itens) if c.itens else 0.0
-        total_entrega = calc_total + (c.delivery_taxa or 0.0)
+            prod_counts = {}
+            for i in c.itens:
+                pname = i.produto.nome if i.produto else "Item"
+                prod_counts[pname] = prod_counts.get(pname, 0) + 1
 
-        prod_counts = {}
-        for i in c.itens:
-            pname = i.produto.nome if i.produto else "Item"
-            prod_counts[pname] = prod_counts.get(pname, 0) + 1
+            itens_str = ", ".join([f"{qty}x {pname}" for pname, qty in prod_counts.items()])
 
-        itens_str = ", ".join([f"{qty}x {pname}" for pname, qty in prod_counts.items()])
+            entregas.append({
+                "id": c.id,
+                "numero_pedido": c.numero_pedido,
+                "cliente_nome": c.identificador or "Cliente",
+                "delivery_telefone": c.delivery_telefone,
+                "delivery_endereco": c.delivery_endereco,
+                "delivery_taxa": round(c.delivery_taxa or 0.0, 2),
+                "delivery_status": c.delivery_status,
+                "total": round(total_entrega, 2),
+                "valor_pago": round(c.valor_pago or 0.0, 2),
+                "valor_a_cobrar": max(0.0, round(total_entrega - (c.valor_pago or 0.0), 2)),
+                "itens_resumo": itens_str,
+                "criado_em": c.criado_em.isoformat() if c.criado_em else None
+            })
 
-        entregas.append({
-            "id": c.id,
-            "numero_pedido": c.numero_pedido,
-            "cliente_nome": c.identificador or "Cliente",
-            "delivery_telefone": c.delivery_telefone,
-            "delivery_endereco": c.delivery_endereco,
-            "delivery_taxa": round(c.delivery_taxa or 0.0, 2),
-            "delivery_status": c.delivery_status,
-            "total": round(total_entrega, 2),
-            "valor_pago": round(c.valor_pago or 0.0, 2),
-            "valor_a_cobrar": max(0.0, round(total_entrega - (c.valor_pago or 0.0), 2)),
-            "itens_resumo": itens_str,
-            "criado_em": c.criado_em.isoformat() if c.criado_em else None
-        })
-
-    return {
-        "motoboy": {
-            "id": motoboy.id,
-            "nome": motoboy.nome,
-            "telefone": motoboy.telefone
-        },
-        "entregas": entregas
-    }
+        return {
+            "motoboy": {
+                "id": motoboy.id,
+                "nome": motoboy.nome,
+                "telefone": motoboy.telefone
+            },
+            "entregas": entregas
+        }
+    finally:
+        current_restaurante_id.reset(tenant_token)
