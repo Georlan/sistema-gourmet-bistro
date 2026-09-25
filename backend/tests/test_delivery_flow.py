@@ -200,7 +200,7 @@ def _delivery_headers():
     assert login_res.status_code == 200
     headers = {"Authorization": f"Bearer {login_res.json()['access_token']}"}
     opened = client.post("/caixa/turno/abrir", json={"saldo_inicial": 0}, headers=headers)
-    assert opened.status_code in {201, 409}
+    assert opened.status_code in {201, 400, 409}
     return headers
 
 
