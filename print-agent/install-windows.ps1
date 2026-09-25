@@ -1,11 +1,49 @@
+param(
+    [switch]$Update,
+    [switch]$Uninstall,
+    [switch]$Force
+)
+
 $ErrorActionPreference = "Stop"
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$scriptPath = $MyInvocation.MyCommand.Path
+$scriptDir = if ($scriptPath) { Split-Path -Parent $scriptPath } else { $null }
 $installDir = Join-Path $env:LOCALAPPDATA "KomaPrintAgent"
 $adapterDir = Join-Path $installDir "adapters"
 $venvDir = Join-Path $installDir ".venv"
 $taskName = "KomaPrintAgent"
-$protocolRoot = "HKCU:\\Software\\Classes\\koma-print"
+$protocolRoot = "HKCU:\Software\Classes\koma-print"
+$credentialsDir = Join-Path $env:APPDATA "Koma\PrintAgent"
+$credentialsFile = Join-Path $credentialsDir "credentials.json"
+
+if ($Uninstall) {
+    Write-Host "[KOMA] Desinstalando o Koma Print Agent..."
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+    Remove-Item -Path $protocolRoot -Recurse -Force -ErrorAction SilentlyContinue
+    if ($Force) {
+        Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $credentialsDir -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "[OK] Koma Print Agent e todas as configuracoes locais foram removidos."
+    } else {
+        Write-Host "[OK] Koma Print Agent desinstalado com sucesso."
+        Write-Host "[INFO] Tokens e configuracoes locais foram preservados em $credentialsDir e $installDir."
+    }
+    return
+}
+
+# Se executado diretamente via download remoto (PowerShell one-liner), baixa os arquivos necessarios
+$hasLocalSource = $scriptDir -and (Test-Path (Join-Path $scriptDir "main.py"))
+if (-not $hasLocalSource) {
+    Write-Host "[KOMA] Baixando a versao correta do Koma Print Agent..."
+    $zipUrl = "https://github.com/Georlan/sistema-gourmet-bistro/archive/refs/heads/main.zip"
+    $tempZip = Join-Path $env:TEMP "koma-print-agent.zip"
+    $tempExtract = Join-Path $env:TEMP "koma-print-agent-src"
+    Remove-Item -Path $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
+    Invoke-WebRequest -Uri $zipUrl -OutFile $tempZip -UseBasicParsing
+    Expand-Archive -Path $tempZip -DestinationPath $tempExtract -Force
+    $scriptDir = Join-Path $tempExtract "sistema-gourmet-bistro-main\print-agent"
+}
 
 function Get-KomaPythonPath($command) {
     if ($command.Source) { return $command.Source }
@@ -31,10 +69,6 @@ function Test-KomaPython($command) {
         return $false
     }
 }
-
-# Remove registros antigos antes de reinstalar. Isso impede que um protocolo
-# quebrado continue abrindo o PowerShell em ciclo quando a tarefa nao existe.
-Remove-Item -Path $protocolRoot -Recurse -Force -ErrorAction SilentlyContinue
 
 $pythonCommand = Get-Command py -ErrorAction SilentlyContinue
 if (-not (Test-KomaPython $pythonCommand)) {
@@ -84,16 +118,20 @@ foreach ($file in $requiredFiles) {
     }
 }
 
-Write-Host "[KOMA] Preparando a impressao neste computador..."
+$venvPython = Join-Path $venvDir "Scripts\python.exe"
+$pythonw = Join-Path $venvDir "Scripts\pythonw.exe"
+
+if ($Update) {
+    Write-Host "[KOMA] Atualizando o Koma Print Agent..."
+} else {
+    Write-Host "[KOMA] Preparando a impressao neste computador..."
+}
 $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($existingTask) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 }
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 New-Item -ItemType Directory -Force -Path $adapterDir | Out-Null
-if (-not (Test-Path $installDir) -or -not (Test-Path $adapterDir)) {
-    throw "Nao foi possivel criar a pasta local do Koma Print Agent."
-}
 
 foreach ($file in $requiredFiles) {
     Copy-Item -Force (Join-Path $scriptDir $file) (Join-Path $installDir $file)
@@ -102,7 +140,6 @@ foreach ($file in $adapterFiles) {
     Copy-Item -Force (Join-Path $scriptDir "adapters\$file") (Join-Path $adapterDir $file)
 }
 
-$venvPython = Join-Path $venvDir "Scripts\python.exe"
 if (-not (Test-Path $venvPython)) {
     if ($pythonCommand.Name -eq "py.exe") {
         & $pythonCommand.Source -3 -m venv $venvDir
@@ -119,22 +156,42 @@ if ($LASTEXITCODE -ne 0) {
     throw "Nao foi possivel instalar as dependencias. Verifique a internet e execute novamente."
 }
 
-Write-Host "[KOMA] Conectando este computador ao restaurante..."
-Push-Location $installDir
-try {
-    & $venvPython main.py --pair-only
-    if ($LASTEXITCODE -ne 0) {
-        throw "O computador ainda nao foi conectado. Conclua o pareamento no Koma e execute novamente."
+# Verifica se o agente ja possui credencial local para nao abrir navegador desnecessariamente
+$hasStoredConfig = (Test-Path (Join-Path $installDir "config.json")) -or (Test-Path $credentialsFile)
+if ($hasStoredConfig) {
+    Write-Host "[KOMA] Credencial local detectada; validando conexao..."
+    Push-Location $installDir
+    try {
+        & $venvPython main.py --pair-only
+    } catch {
+        # Prossegue mesmo se validacao inicial falhar temporariamente
+    } finally {
+        Pop-Location
     }
-} finally {
-    Pop-Location
+} else {
+    Write-Host "[KOMA] Conectando este computador ao restaurante..."
+    Push-Location $installDir
+    try {
+        & $venvPython main.py --pair-only
+        if ($LASTEXITCODE -ne 0) {
+            throw "O computador ainda nao foi conectado. Conclua o pareamento no Koma e execute novamente."
+        }
+    } finally {
+        Pop-Location
+    }
 }
 
-$pythonw = Join-Path $venvDir "Scripts\pythonw.exe"
+# Configura execucao automatica em background sem janela (pythonw)
 $action = New-ScheduledTaskAction -Execute $pythonw -Argument ("`"{0}`"" -f (Join-Path $installDir "main.py")) -WorkingDirectory $installDir
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
-$settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+$settings = New-ScheduledTaskSettingsSet `
+    -RestartCount 999 `
+    -RestartInterval (New-TimeSpan -Minutes 1) `
+    -ExecutionTimeLimit ([TimeSpan]::Zero) `
+    -MultipleInstances IgnoreNew `
+    -AllowStartIfOnBatteries `
+    -DontStopIfGoingOnBatteries
 $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
 
@@ -145,9 +202,7 @@ if ($task.State -notin @("Running", "Ready")) {
     throw "O Koma Print nao iniciou. Verifique o Agendador de Tarefas do Windows."
 }
 
-# O protocolo do navegador usa WScript para iniciar a tarefa sem exibir
-# uma janela do PowerShell. A tarefa ignora chamadas repetidas enquanto
-# uma instancia do agente ja estiver ativa.
+# Registra protocolo URL silencioso koma-print:// via WScript
 $protocolLauncher = Join-Path $installDir "koma-print-launcher.vbs"
 $protocolScript = @'
 Set shell = CreateObject("WScript.Shell")
@@ -158,15 +213,20 @@ Set-Content -Path $protocolLauncher -Value $protocolScript -Encoding ASCII -Forc
 New-Item -Force $protocolRoot | Out-Null
 New-ItemProperty -Path $protocolRoot -Name "URL Protocol" -Value "" -PropertyType String -Force | Out-Null
 Set-Item -Path $protocolRoot -Value "URL:Koma Print"
-$commandKey = Join-Path $protocolRoot "shell\\open\\command"
+$commandKey = Join-Path $protocolRoot "shell\open\command"
 New-Item -Force $commandKey | Out-Null
 Set-Item -Path $commandKey -Value ("wscript.exe `"{0}`" `"%1`"" -f $protocolLauncher)
 
 Write-Host ""
-Write-Host "[OK] Impressao instalada e configurada para iniciar com o Windows."
+if ($Update) {
+    Write-Host "[OK] Koma Print Agent atualizado e reativado com sucesso."
+} else {
+    Write-Host "[OK] Impressao instalada e configurada para iniciar automaticamente em segundo plano."
+}
+Write-Host "[OK] O agente reiniciara automaticamente se cair e voltara no proximo logon do Windows."
 Write-Host "[OK] O Koma nao alterou a impressora padrao usada por outros aplicativos."
-Write-Host "[OK] Se houver uma unica fila USB pronta, ela sera vinculada automaticamente."
-Write-Host "[OK] Com mais de uma impressora, escolha a fila no painel do Koma."
 Write-Host ""
-Write-Host "[KOMA] Executando verificacao final..."
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $installDir "check-windows.ps1")
+if (Test-Path (Join-Path $installDir "check-windows.ps1")) {
+    Write-Host "[KOMA] Executando verificacao final..."
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $installDir "check-windows.ps1")
+}
