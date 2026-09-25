@@ -492,8 +492,9 @@ def test_incident_action_requires_reason():
             "reason": "   ",
         },
     )
-    assert blank_resp.status_code == 400
-    assert "motivo" in blank_resp.json()["detail"].lower()
+    assert blank_resp.status_code == 422
+    detail = blank_resp.json()["detail"]
+    assert any(item.get("loc") == ["body", "reason"] for item in detail)
 
 
 def test_incident_center_requires_superadmin():
