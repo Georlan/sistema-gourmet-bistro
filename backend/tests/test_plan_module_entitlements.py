@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.database import SessionLocal, current_restaurante_id
 from app.main import app
-from app.models import Restaurante, Usuario
+from app.models import ConfiguracaoRestaurante, Restaurante, Usuario
 from app.security import create_access_token
 from app.smartpos_models import RestauranteCapability
 
@@ -55,6 +55,12 @@ def plan_tenants():
                 else:
                     restaurante.plano = plano
 
+                config = db.query(ConfiguracaoRestaurante).filter(
+                    ConfiguracaoRestaurante.restaurante_id == restaurante_id,
+                ).first()
+                if config is None:
+                    db.add(ConfiguracaoRestaurante(restaurante_id=restaurante_id))
+
                 for role in ("admin", "garcom"):
                     user_id = f"block2-{restaurante_id}-{role}"
                     user = db.query(Usuario).filter(
@@ -91,6 +97,27 @@ def plan_tenants():
                 db.commit()
         finally:
             current_restaurante_id.reset(tenant_token)
+
+
+@pytest.mark.parametrize(
+    ("restaurante_id", "inventory_enabled", "reports_enabled"),
+    [
+        (POCKET_ID, False, False),
+        (PRO_ID, True, True),
+        (PREMIUM_ID, True, True),
+    ],
+)
+def test_cashier_config_publishes_effective_module_entitlements(
+    restaurante_id: int,
+    inventory_enabled: bool,
+    reports_enabled: bool,
+):
+    response = client.get("/caixa/configuracoes", headers=_headers(restaurante_id))
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["restaurante_id"] == restaurante_id
+    assert payload["entitlements"]["inventory"] is inventory_enabled
+    assert payload["entitlements"]["advanced_reports"] is reports_enabled
 
 
 @pytest.mark.parametrize(
