@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 ORDER_CHAT_CHANNEL = "koma_order_chat"
 _LOCAL_PENDING_KEY = "order_chat_pending_realtime"
-_ALLOWED_KINDS = frozenset({"message", "status", "read"})
+_ALLOWED_KINDS = frozenset({"message", "status", "read", "refresh"})
 
 
 class OrderChatHub:
@@ -197,6 +197,8 @@ class OrderChatHub:
         elif kind == "status":
             self.broadcast_to_conversation(conversation_id, "status", enriched)
             self.broadcast_to_caixa(restaurante_id, "status_changed", enriched)
+        elif kind == "refresh":
+            self.broadcast_to_conversation(conversation_id, "refresh", enriched)
         else:
             self.broadcast_to_conversation(conversation_id, "read_update", enriched)
             self.broadcast_to_caixa(restaurante_id, "read_update", enriched)
@@ -218,6 +220,8 @@ class OrderChatHub:
                     id=hint.get("message_id") or hint.get("id"),
                 ).first()
                 return serialize_message(msg) if msg else None
+            if kind == "refresh":
+                return {"pedido_id": conv.pedido_id}
             if kind == "status":
                 event = db.query(OrderConversationEvent).filter_by(
                     restaurante_id=restaurante_id, conversation_id=conversation_id,
