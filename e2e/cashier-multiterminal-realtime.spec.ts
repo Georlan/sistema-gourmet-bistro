@@ -328,7 +328,7 @@ test('três terminais convergem Cozinha → Pedidos → Entregas pelo WebSocket 
     await expect(pedidosCard).toContainText('Aguarda avanço do pedido');
     await expect(pedidosCard.getByRole('button', { name: 'Pronto para sair' })).toBeVisible();
     await expect(entregasWorkspace).toContainText('Em preparo');
-    await expect(entregasWorkspace).not.toContainText('Em rota');
+    await expect(entregasWorkspace).toContainText('Nenhum pedido em rota no momento.');
 
     const courierSelect = pedidosCard.getByRole('combobox', { name: /Entregador do pedido 6101/i });
     await courierSelect.selectOption('7');
