@@ -2,13 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { deriveProductionState } from '../../../domain/operationalState';
 import { describeTableOrders } from '../../../domain/tableReadModel';
 import type { Order } from '../../../types';
-import { formatBackendTime } from '../../../utils/dateTime';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 import type { CashierTableCard, DeliveryOrderView } from '../orders/cashierWorkspaceTypes';
 import {
+  projectApiComandaToDeliveryView,
   projectDeliveryOrdersFromSharedSnapshot,
-  readActiveDeliveryStatus,
-  readDigitalOrderFulfillment,
   reconcileDeliveryOrderAfterStatus,
 } from './deliveryOrderProjection';
 
@@ -375,78 +373,7 @@ export function useCashierOrders({
     }
   };
 
-  const mapComandaToDeliveryView = (c: any): DeliveryOrderView | null => {
-    const status = readActiveDeliveryStatus(c?.delivery_status);
-    if (!status) return null;
-
-    const itemCounts: { [name: string]: number } = {};
-    const itensArr = Array.isArray(c?.itens) ? c.itens : Array.isArray(c?.items) ? c.items : [];
-    const activeItems = itensArr.filter((it: any) => it.status !== 'cancelado');
-    activeItems.forEach((it: any) => {
-      const name = it.produto?.nome || it.nome || 'Item';
-      itemCounts[name] = (itemCounts[name] || 0) + 1;
-    });
-    const itensStr = Object.entries(itemCounts).map(([name, qty]) => `${qty}x ${name}`).join(' + ') || 'Nenhum item';
-    const subtotal = activeItems.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
-    const total = subtotal + (c.delivery_taxa || 0);
-    const amountPaid = Math.max(0, Number(c.valor_pago) || 0);
-    const amountDue = Math.max(0, total - amountPaid);
-    const parsedTime = formatBackendTime(c.criado_em);
-    const criadoEm = parsedTime === '—' ? '12:00' : parsedTime;
-
-    const origins = (Array.isArray(c?.lancamentos) ? c.lancamentos : []).map((launch: any) =>
-      String(launch?.origem || '').toLowerCase()
-    );
-    const origemOperacional: DeliveryOrderView['origemOperacional'] = origins.includes('smartpos')
-      ? 'smartpos'
-      : origins.includes('cardapio')
-        ? 'cardapio'
-        : origins.includes('caixa')
-          ? 'caixa'
-          : origins.includes('garcom')
-            ? 'garcom'
-            : 'desconhecida';
-
-    let canal: DeliveryOrderView['canal'] = origemOperacional === 'smartpos' ? 'smartpos' : 'site';
-    if (c.identificador && c.identificador.toLowerCase().includes('ifood')) canal = 'ifood';
-    else if (c.identificador && c.identificador.toLowerCase().includes('whats')) canal = 'whats';
-
-    const rawAddress = String(c.delivery_endereco || '').trim();
-    const modalidade = readDigitalOrderFulfillment(c.tipo, rawAddress);
-    if (!modalidade) return null;
-    const isQuickSale =
-      modalidade === 'retirada' &&
-      (origemOperacional === 'smartpos' ||
-        (String(c.identificador || '').trim().toLowerCase() === 'balcão' && !String(c.delivery_telefone || '').trim()));
-
-    return {
-      id: c.id,
-      cliente: c.identificador || 'Cliente Sem Nome',
-      telefone: c.delivery_telefone || '',
-      itens: itensStr,
-      detailItems: activeItems,
-      total,
-      amountPaid,
-      amountDue,
-      canal,
-      origemOperacional,
-      isQuickSale,
-      quantidadeItens: activeItems.length,
-      modalidade,
-      pago: activeItems.length > 0 && activeItems.every((it: any) => Boolean(it.pago)),
-      status,
-      endereco: modalidade === 'delivery' ? rawAddress : '',
-      paymentMethod: c.delivery_forma_pagamento || null,
-      onlinePaymentStatus: c.online_payment_status || null,
-      changeFor: c.delivery_troco_para == null ? null : Number(c.delivery_troco_para),
-      motoboyId: c.motoboy_id ?? null,
-      criadoEm,
-      created_at: c.criado_em,
-      numeroPedido: c.numero_pedido,
-      mesaId: Number(c.mesa_id || 0) || null,
-      garcomNome: c.criada_por?.nome || c.garcom?.nome || '',
-    };
-  };
+  const mapComandaToDeliveryView = projectApiComandaToDeliveryView;
 
   const syncSelectedMotoboysFromServer = (mapped: DeliveryOrderView[]) => {
     const activeIds = new Set(mapped.map((order) => String(order.id)));
