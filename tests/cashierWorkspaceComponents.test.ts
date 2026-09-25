@@ -342,6 +342,7 @@ test('digital dine-in keeps digital identity before and after table association'
       printTableValues: noop,
       transferTable: noop,
       associateTable: () => calls.push('associate'),
+      convertDeliveryToPickup: noop,
       cancelConsumption: noop,
       cancelOrder: noop,
     },
