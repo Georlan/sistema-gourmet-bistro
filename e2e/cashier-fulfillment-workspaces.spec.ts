@@ -363,6 +363,9 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   });
   await page.goto('/?view=caixa');
 
+  await page.getByRole('tab', { name: /Balcão/ }).evaluate((element) => {
+    (element as HTMLButtonElement).click();
+  });
   const productionCard = page.locator('.orders-card--digital').filter({ hasText: 'Bruno Delivery' });
   await expect(productionCard).toBeVisible();
 
@@ -374,6 +377,9 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
 
   await productionCard.getByRole('button', { name: /Pronto para sair/i }).click();
 
+  await page.getByRole('tab', { name: /Concluir/ }).evaluate((element) => {
+    (element as HTMLButtonElement).click();
+  });
   const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
   await expect(readyCard).toBeVisible();
   await expect(readyCard).toContainText('PRONTO PARA ENVIO');
