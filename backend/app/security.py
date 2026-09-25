@@ -418,6 +418,38 @@ def require_permission(permission: str):
     return permission_checker
 
 
+def require_entitled_permission(
+    permission: str,
+    entitlement: str,
+    *,
+    detail: str = "Recurso não disponível no plano atual.",
+):
+    """Exige simultaneamente RBAC do operador e capability efetiva do tenant.
+
+    A permissão responde quem pode operar o recurso. O entitlement responde se
+    o restaurante contratou/recebeu a capability. O backend continua sendo a
+    autoridade para plano + override explícito de RestauranteCapability.
+    """
+    if permission not in PERMISSION_ROLES:
+        raise RuntimeError(f"Permissão desconhecida na matriz RBAC: {permission}")
+
+    def entitled_permission_checker(
+        current_user: Usuario = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> Usuario:
+        authorized = ensure_permission(current_user, permission)
+        from .services.plan_entitlements import require_plan_entitlement
+        require_plan_entitlement(
+            db,
+            int(authorized.restaurante_id),
+            entitlement,
+            detail=detail,
+        )
+        return authorized
+
+    return entitled_permission_checker
+
+
 def require_roles(*allowed_roles: str):
     """
     Dependency factory que verifica se o usuário autenticado é ativo e possui
