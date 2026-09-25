@@ -291,6 +291,7 @@ export function CaixaPanel({
     fetchMotoboys,
     openDeliveryOrderDetails,
     handleDespacharKanban,
+    handleGerarLinkMotoboy,
     handleRevogarAcessoMotoboy,
     handleFecharDelivery,
     handleFinalizarPedido,
@@ -1212,6 +1213,7 @@ export function CaixaPanel({
               motoboysLoadState={motoboysLoadState}
               hasCourierApp={hasCourierApp}
               handleDespacharKanban={handleDespacharKanban}
+              handleGerarLinkMotoboy={handleGerarLinkMotoboy}
               handleRevogarAcessoMotoboy={handleRevogarAcessoMotoboy}
               handleFinalizarPedido={handleFinalizeCourierOrder}
               handleAcceptPendingDeliveryOrder={handleAcceptPendingDeliveryOrder}

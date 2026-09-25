@@ -15,7 +15,7 @@ from ..services.cash_activity import recent_cash_activities as _atividades_recen
 from ..models import (
     Usuario, Comanda, Item, CaixaTurno, CaixaMovimentacao, Pagamento,
     ConfiguracaoRestaurante, ConfigFidelizacao, HistoricoFidelidade, Cliente,
-    Restaurante,
+    Restaurante, Motoboy,
 )
 from ..schemas import (
     CaixaTurnoCreate, CaixaTurnoResponse, CaixaTurnoDetalhe,
@@ -188,6 +188,24 @@ def cadastrar_funcionario(
     )
     
     db.add(novo_usuario)
+    if novo_usuario.cargo == "motoboy":
+        motoboy_existente = db.query(Motoboy).filter(
+            Motoboy.restaurante_id == rest_id,
+            Motoboy.telefone == tel_clean,
+        ).first()
+        if motoboy_existente:
+            motoboy_existente.usuario_id = novo_usuario.id
+            motoboy_existente.nome = novo_usuario.nome
+            motoboy_existente.ativo = True
+        else:
+            novo_motoboy = Motoboy(
+                restaurante_id=rest_id,
+                usuario_id=novo_usuario.id,
+                nome=novo_usuario.nome,
+                telefone=tel_clean,
+                ativo=True,
+            )
+            db.add(novo_motoboy)
     try:
         db.commit()
     except IntegrityError:

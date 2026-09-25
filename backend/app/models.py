@@ -139,6 +139,7 @@ class Usuario(Base):
     # Relationships
     comandas_abertas = relationship("Comanda", back_populates="criada_por")
     lancamentos_feitos = relationship("Lancamento", back_populates="garcom")
+    motoboy_perfil = relationship("Motoboy", back_populates="usuario", uselist=False)
 
 
 class Categoria(Base):
@@ -1355,15 +1356,24 @@ class AvaliacaoCliente(Base):
 
 class Motoboy(Base):
     __tablename__ = "motoboys"
+    __table_args__ = (
+        UniqueConstraint(
+            "restaurante_id",
+            "usuario_id",
+            name="uq_motoboys_restaurante_usuario",
+        ),
+    )
     
     id = Column(Integer, primary_key=True, index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    usuario_id = Column(String, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, index=True)
     nome = Column(String, nullable=False)
     telefone = Column(String, nullable=False)
     ativo = Column(Boolean, default=True)
     
-    # Relationship to comandas
+    # Relationship to comandas and usuario
     comandas = relationship("Comanda", back_populates="motoboy")
+    usuario = relationship("Usuario", back_populates="motoboy_perfil")
 
 
 class MotoboyTokenAtivo(Base):

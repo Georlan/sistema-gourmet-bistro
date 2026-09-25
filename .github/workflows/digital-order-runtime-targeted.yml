@@ -125,10 +125,11 @@ jobs:
         working-directory: backend
         run: |
           test "$(python -m alembic heads | grep -c '(head)')" -eq 1
+          HEAD_REV="$(python -m alembic heads | awk '{print $1}')"
           python -m alembic history
           python -m alembic upgrade head
-          python -m alembic current | grep o4d5e6f7a8b9
+          python -m alembic current | grep "$HEAD_REV"
           python -m alembic downgrade n3c4d5e6f7a8
           python -m alembic current | grep n3c4d5e6f7a8
           python -m alembic upgrade head
-          python -m alembic current | grep o4d5e6f7a8b9
+          python -m alembic current | grep "$HEAD_REV"

@@ -16,6 +16,7 @@ type BoundaryProps = Pick<
   | 'motoboysLoadState'
   | 'handleDespacharKanban'
   | 'handleRevogarAcessoMotoboy'
+  | 'handleGerarLinkMotoboy'
   | 'handleAddMotoboy'
   | 'novoMotoboyNome'
   | 'novoMotoboyTelefone'
@@ -80,6 +81,7 @@ export function CashierCouriers({
   motoboys,
   motoboysLoadState,
   handleDespacharKanban,
+  handleGerarLinkMotoboy,
   handleRevogarAcessoMotoboy,
   handleFinalizarPedido,
   handleAddMotoboy,
@@ -186,9 +188,13 @@ export function CashierCouriers({
           <option value="">
             {motoboysLoadState === 'loaded' ? 'Selecionar entregador...' : 'Sincronizando entregadores...'}
           </option>
-          {motoboys.filter((motoboy) => motoboy.ativo).map((motoboy) => (
-            <option key={motoboy.id} value={motoboy.id}>{motoboy.nome}</option>
-          ))}
+          {motoboys
+            .filter((motoboy) => motoboy.ativo || String(motoboy.id) === selectedId)
+            .map((motoboy) => (
+              <option key={motoboy.id} value={motoboy.id}>
+                {motoboy.nome}{!motoboy.ativo ? ' (Inativo)' : ''}
+              </option>
+            ))}
         </select>
       </label>
     );
@@ -478,13 +484,23 @@ export function CashierCouriers({
                     {motoboy.ativo ? 'Ativo' : 'Inativo'}
                   </span>
                   {hasCourierApp && motoboy.ativo && (
-                    <button
-                      type="button"
-                      onClick={() => handleRevogarAcessoMotoboy(String(motoboy.id))}
-                      className="rounded-lg border border-rose-500/30 px-2 py-1 text-[8px] font-bold uppercase text-rose-500 hover:bg-rose-500/10"
-                    >
-                      Revogar acesso
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleGerarLinkMotoboy?.(String(motoboy.id))}
+                        className="rounded-lg border border-emerald-500/30 px-2 py-1 text-[8px] font-bold uppercase text-emerald-500 hover:bg-emerald-500/10"
+                        title="Copiar link de acesso ao PWA do entregador"
+                      >
+                        Copiar link
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRevogarAcessoMotoboy(String(motoboy.id))}
+                        className="rounded-lg border border-rose-500/30 px-2 py-1 text-[8px] font-bold uppercase text-rose-500 hover:bg-rose-500/10"
+                      >
+                        Revogar acesso
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

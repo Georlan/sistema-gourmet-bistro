@@ -1,5 +1,6 @@
 import uuid
 import datetime
+import re
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import and_, func, or_
@@ -916,24 +917,118 @@ def listar_motoboys(
 
 
 @router.post("/motoboys/cadastro", response_model=MotoboyResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/motoboys", response_model=MotoboyResponse, status_code=status.HTTP_201_CREATED)
 def cadastrar_motoboy(
     motoboy_in: MotoboyCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("equipe:administrar"))
+    current_user: Usuario = Depends(require_permission("equipe:administrar")),
 ):
     """
-    Cadastra um novo motoboy no restaurante atual.
+    Cadastra ou vincula o perfil operacional de motoboy à identidade canônica na Equipe.
     """
     rest_id = require_tenant_id()
+    tel_clean = re.sub(r"\D", "", motoboy_in.telefone or "")
+    if not 10 <= len(tel_clean) <= 15:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Informe um telefone válido com 10 a 15 dígitos.",
+        )
+
+    nome_clean = (motoboy_in.nome or "").strip()
+    if not nome_clean:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nome do entregador é obrigatório.",
+        )
+
+    ativo_req = motoboy_in.ativo if motoboy_in.ativo is not None else True
+
+    # 1. Verifica se já existe Usuario no restaurante com esse telefone
+    usuario_existente = db.query(Usuario).filter(
+        Usuario.restaurante_id == rest_id,
+        Usuario.telefone == tel_clean,
+    ).first()
+
+    if usuario_existente:
+        if usuario_existente.cargo != "motoboy":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Este telefone já está cadastrado para outro membro da equipe com o cargo '{usuario_existente.cargo}'.",
+            )
+        # Se for motoboy, vincula ou reativa
+        motoboy = db.query(Motoboy).filter(
+            Motoboy.restaurante_id == rest_id,
+            Motoboy.usuario_id == usuario_existente.id,
+        ).first()
+        if not motoboy:
+            motoboy = db.query(Motoboy).filter(
+                Motoboy.restaurante_id == rest_id,
+                Motoboy.telefone == tel_clean,
+            ).first()
+
+        if motoboy:
+            motoboy.usuario_id = usuario_existente.id
+            motoboy.nome = nome_clean
+            motoboy.telefone = tel_clean
+            motoboy.ativo = ativo_req
+            if usuario_existente.status == "inativo" and ativo_req:
+                usuario_existente.status = "ativo"
+        else:
+            motoboy = Motoboy(
+                restaurante_id=rest_id,
+                usuario_id=usuario_existente.id,
+                nome=nome_clean,
+                telefone=tel_clean,
+                ativo=ativo_req,
+            )
+            db.add(motoboy)
+
+        db.commit()
+        db.refresh(motoboy)
+        background_tasks.add_task(
+            manager.broadcast,
+            {"event": "team_updated", "detail": {"action": "updated", "user_id": usuario_existente.id}},
+            restaurante_id=rest_id,
+            target_audience="internal",
+        )
+        return motoboy
+
+    # 2. Não existe usuário com esse telefone: cria Usuario na equipe e Motoboy vinculado
+    token_convite = str(uuid.uuid4())
+    token_expira_em = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+    novo_usuario = Usuario(
+        id=str(uuid.uuid4())[:8],
+        nome=nome_clean,
+        telefone=tel_clean,
+        cargo="motoboy",
+        restaurante_id=rest_id,
+        senha_hash=None,
+        token_convite=token_convite,
+        token_expira_em=token_expira_em,
+        status="ativo" if ativo_req else "inativo",
+        created_at=datetime.datetime.now(datetime.timezone.utc),
+    )
+    db.add(novo_usuario)
+    db.flush()
+
     novo_motoboy = Motoboy(
         restaurante_id=rest_id,
-        nome=motoboy_in.nome,
-        telefone=motoboy_in.telefone,
-        ativo=motoboy_in.ativo if motoboy_in.ativo is not None else True
+        usuario_id=novo_usuario.id,
+        nome=nome_clean,
+        telefone=tel_clean,
+        ativo=ativo_req,
     )
     db.add(novo_motoboy)
     db.commit()
     db.refresh(novo_motoboy)
+
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "team_updated", "detail": {"action": "created", "user_id": novo_usuario.id}},
+        restaurante_id=rest_id,
+        target_audience="internal",
+    )
     return novo_motoboy
 
 
@@ -991,6 +1086,8 @@ def gerar_link_motoboy(
     ).first()
     if not motoboy:
         raise HTTPException(status_code=404, detail="Motoboy não encontrado")
+    if not motoboy.ativo:
+        raise HTTPException(status_code=400, detail="Não é possível gerar link para um entregador inativo.")
 
     acesso = _criar_acesso_motoboy(db, motoboy, rest_id)
     db.commit()
@@ -1057,8 +1154,8 @@ def painel_entregador(
             Motoboy.id == motoboy_id,
             Motoboy.restaurante_id == rest_id
         ).first()
-        if not motoboy:
-            raise HTTPException(status_code=404, detail="Motoboy não encontrado")
+        if not motoboy or not motoboy.ativo:
+            raise HTTPException(status_code=403, detail="Entregador inativo ou não encontrado.")
 
         comandas = db.query(Comanda).filter(
             Comanda.restaurante_id == rest_id,

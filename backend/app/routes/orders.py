@@ -424,6 +424,10 @@ def despachar_delivery(
     ).first()
     if not motoboy:
         raise HTTPException(status_code=404, detail="Motoboy ativo não encontrado")
+    if motoboy.usuario_id:
+        u_check = db.query(Usuario).filter(Usuario.id == motoboy.usuario_id, Usuario.restaurante_id == rid).first()
+        if u_check and str(u_check.status or "").lower().strip() == "inativo":
+            raise HTTPException(status_code=404, detail="Motoboy ativo não encontrado")
 
     current_status = normalize_to_order_status(comanda.delivery_status)
     if current_status == OrderStatus.DISPATCHED:
