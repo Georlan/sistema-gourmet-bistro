@@ -33,6 +33,7 @@ type BoundaryProps = Pick<
   now: number;
   hasCourierApp: boolean;
   handleFinalizarPedido: (orderId: string) => Promise<boolean>;
+  onRequestCourierReassignment: (order: DeliveryOrderView) => void;
 };
 
 type CompletedDeliveryApiOrder = {
@@ -97,6 +98,7 @@ export function CashierCouriers({
   authHeaders,
   now,
   hasCourierApp,
+  onRequestCourierReassignment,
 }: BoundaryProps) {
   const courierBuckets = useMemo(
     () => bucketCourierDeliveryOrders(deliveryOrders),
@@ -390,6 +392,14 @@ export function CashierCouriers({
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button type="button" onClick={() => openDeliveryOrderDetails(order)} className="rounded-xl border border-koma-border px-3 py-2 text-[9px] font-bold text-koma-secondary hover:bg-koma-card">
                       Ver pedido
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => onRequestCourierReassignment(order)}
+                      className="rounded-xl border border-amber-500/30 px-3 py-2 text-[9px] font-extrabold text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
+                    >
+                      Trocar entregador
                     </button>
                     <button
                       type="button"

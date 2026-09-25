@@ -1,8 +1,9 @@
+from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from app.database import SessionLocal, Base, engine, current_restaurante_id
 from app.main import app
-from app.models import Usuario, Produto, Categoria, Comanda, Motoboy
+from app.models import Usuario, Produto, Categoria, Comanda, DeliveryCourierReassignmentAudit, Motoboy
 from app.security import get_password_hash
 
 client = TestClient(app)
@@ -126,3 +127,68 @@ def test_delivery_and_motoboy_flow(setup_db):
     dispatch_data = dispatch_res.json()
     assert dispatch_data["delivery_status"] == "transito"
     assert dispatch_data["motoboy_id"] == motoboy_id
+
+    # 9. Em rota, a troca normal permanece bloqueada.
+    second_mb_res = client.post(
+        "/comandas/motoboys/cadastro",
+        json={"nome": "Lia Entregas", "telefone": "81 99999-8888"},
+        headers=headers,
+    )
+    assert second_mb_res.status_code == 201
+    second_motoboy_id = second_mb_res.json()["id"]
+
+    normal_reassign = client.put(
+        f"/comandas/{comanda_id}/delivery/entregador",
+        json={"motoboy_id": second_motoboy_id},
+        headers=headers,
+    )
+    assert normal_reassign.status_code == 409
+
+    missing_reason = client.post(
+        f"/comandas/{comanda_id}/delivery/entregador/reassign",
+        json={"motoboy_id": second_motoboy_id, "motivo": ""},
+        headers=headers,
+    )
+    assert missing_reason.status_code == 422
+
+    same_courier = client.post(
+        f"/comandas/{comanda_id}/delivery/entregador/reassign",
+        json={"motoboy_id": motoboy_id, "motivo": "Correção de teste"},
+        headers=headers,
+    )
+    assert same_courier.status_code == 409
+
+    # 10. A exceção exige motivo, preserva trânsito e não dispara novo despacho.
+    with patch("app.routes.orders._agendar_notificacao_whatsapp_status") as customer_status:
+        reassigned = client.post(
+            f"/comandas/{comanda_id}/delivery/entregador/reassign",
+            json={
+                "motoboy_id": second_motoboy_id,
+                "motivo": "Entregador selecionado por engano",
+            },
+            headers=headers,
+        )
+
+    assert reassigned.status_code == 200, reassigned.text
+    assert reassigned.json()["delivery_status"] == "transito"
+    assert reassigned.json()["motoboy_id"] == second_motoboy_id
+    customer_status.assert_not_called()
+
+    db = SessionLocal(restaurante_id=1)
+    try:
+        audit = (
+            db.query(DeliveryCourierReassignmentAudit)
+            .filter(
+                DeliveryCourierReassignmentAudit.restaurante_id == 1,
+                DeliveryCourierReassignmentAudit.comanda_id == comanda_id,
+            )
+            .one()
+        )
+        assert audit.previous_motoboy_id == motoboy_id
+        assert audit.new_motoboy_id == second_motoboy_id
+        assert audit.previous_motoboy_name == "Sandro Motos"
+        assert audit.new_motoboy_name == "Lia Entregas"
+        assert audit.actor_user_id == "u-del-01"
+        assert audit.reason == "Entregador selecionado por engano"
+    finally:
+        db.close()

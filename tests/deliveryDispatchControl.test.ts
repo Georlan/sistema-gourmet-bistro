@@ -64,7 +64,7 @@ function workspaceProps(): CaixaOrdersWorkspaceProps {
     search: { query: '', onChange: noop },
     acceptance: { orders: [], automatic: false, drawerOpen: false, onAutomaticChange: noop, onDrawerChange: noop },
     navigation: { stage: 'digital', expandedCardIds: {}, onStageChange: noop, onToggleCard: noop },
-    couriers: { options: [], loadState: 'loaded', selectedByOrderId: {}, onChange: noop },
+    couriers: { options: [], loadState: 'loaded', selectedByOrderId: {}, onChange: noop, onRequestReassignment: noop },
     actions: {
       confirmCashPayment: noop,
       rejectCashPayment: noop,
@@ -87,7 +87,7 @@ function workspaceProps(): CaixaOrdersWorkspaceProps {
 test('kanban separa preparo, despacho e finalização de delivery', () => {
   const production = delivery({ id: 'delivery-production', status: 'producao' });
   const ready = delivery({ id: 'delivery-ready', status: 'pronto' });
-  const transit = delivery({ id: 'delivery-transit', status: 'transito' });
+  const transit = delivery({ id: 'delivery-transit', status: 'transito', motoboyId: 7 });
   const calls: string[] = [];
   const base = workspaceProps();
   const view = CaixaOrdersWorkspace({
@@ -102,6 +102,7 @@ test('kanban separa preparo, despacho e finalização de delivery', () => {
       loadState: 'loaded',
       selectedByOrderId: { 'delivery-ready': '7' },
       onChange: noop,
+      onRequestReassignment: order => calls.push(`reassign:${order.id}`),
     },
     actions: {
       ...base.actions,
@@ -113,11 +114,13 @@ test('kanban separa preparo, despacho e finalização de delivery', () => {
 
   invoke(button(view, 'Pronto para sair'), 'onClick', { stopPropagation: noop });
   invoke(button(view, 'Saiu para entrega'), 'onClick', { stopPropagation: noop });
+  invoke(button(view, 'Trocar entregador'), 'onClick', { stopPropagation: noop });
   invoke(button(view, 'Receber e finalizar'), 'onClick', { stopPropagation: noop });
 
   assert.deepEqual(calls, [
     'advance:delivery-production',
     'dispatch:delivery-ready:7',
+    'reassign:delivery-transit',
     'finalize:delivery-transit',
   ]);
 });

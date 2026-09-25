@@ -50,6 +50,7 @@ export interface CaixaOrdersWorkspaceProps {
     readonly loadState: 'loading' | 'loaded' | 'error';
     readonly selectedByOrderId: Readonly<Record<string, string>>;
     readonly onChange: (orderId: string, courierId: string) => void;
+    readonly onRequestReassignment: (order: DeliveryOrderView) => void;
   };
   readonly actions: {
     readonly confirmCashPayment: (payment: PendingCashPayment) => void;
@@ -192,9 +193,18 @@ export function CaixaOrdersWorkspace({
           {inTransit && <span className="font-bold text-sky-500">Em rota</span>}
         </div>
         {inTransit ? (
-          <strong className="block truncate text-[11px] text-koma-foreground">
-            {courierName(order.motoboyId) || (order.motoboyId ? `#${order.motoboyId}` : 'Não identificado')}
-          </strong>
+          <div className="flex items-center justify-between gap-2">
+            <strong className="min-w-0 flex-1 truncate text-[11px] text-koma-foreground">
+              {courierName(order.motoboyId) || (order.motoboyId ? `#${order.motoboyId}` : 'Não identificado')}
+            </strong>
+            <button
+              type="button"
+              onClick={() => couriers.onRequestReassignment(order)}
+              className="shrink-0 rounded-md border border-amber-500/30 px-2 py-1 text-[8px] font-extrabold uppercase text-amber-500 hover:bg-amber-500/10"
+            >
+              Trocar entregador
+            </button>
+          </div>
         ) : (
           <select
             aria-label={`Entregador do pedido ${orderNumber}`}

@@ -1376,6 +1376,63 @@ class Motoboy(Base):
     usuario = relationship("Usuario", back_populates="motoboy_perfil")
 
 
+class DeliveryCourierReassignmentAudit(Base):
+    """Append-only evidence for exceptional courier changes after dispatch."""
+
+    __tablename__ = "delivery_courier_reassignment_audit"
+    __table_args__ = (
+        CheckConstraint(
+            "length(trim(reason)) >= 3",
+            name="ck_delivery_courier_reassignment_reason",
+        ),
+        Index(
+            "ix_delivery_courier_reassignment_tenant_order_created",
+            "restaurante_id",
+            "comanda_id",
+            "created_at",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    comanda_id = Column(
+        String,
+        ForeignKey("comandas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    previous_motoboy_id = Column(
+        Integer,
+        ForeignKey("motoboys.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    new_motoboy_id = Column(
+        Integer,
+        ForeignKey("motoboys.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    previous_motoboy_name = Column(String, nullable=False)
+    new_motoboy_name = Column(String, nullable=False)
+    actor_user_id = Column(
+        String,
+        ForeignKey("usuarios.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    actor_name = Column(String, nullable=False)
+    reason = Column(Text, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+
+
 class MotoboyTokenAtivo(Base):
     __tablename__ = "motoboy_tokens_ativos"
     
