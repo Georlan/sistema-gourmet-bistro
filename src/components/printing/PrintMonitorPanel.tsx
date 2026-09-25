@@ -11,7 +11,6 @@ import {
   Printer,
   RefreshCw,
   RotateCcw,
-  Search,
   Usb,
   Wifi,
   WifiOff,
@@ -905,12 +904,6 @@ export function PrintMonitorPanel({
     : (allDetectedPrinters.length > 0 || presentUsbPrinters.length > 0)
       ? 'Impressora encontrada'
       : 'Desconectada';
-  const queueState = queueTotal > 0
-    ? `${queueTotal} aguardando`
-    : 'Livre';
-  const latestSentValue = monitorData?.latest_spooler_success
-    ? `há ${formatAge(monitorData.latest_spooler_success.age_seconds)}`
-    : 'Nenhuma hoje';
   const operationAccent = !hasOnlineAgent
     ? 'agente offline'
     : queueTotal > 0
@@ -1072,7 +1065,7 @@ export function PrintMonitorPanel({
       <div className="overflow-hidden rounded-2xl border border-koma-border shadow-xs">
         <button
           type="button"
-          onClick={() => setShowQueue(current => !current)
+          onClick={() => setShowQueue(current => !current)}
           className="flex min-h-12 w-full items-center justify-between gap-3 bg-koma-panel px-4 py-3 text-left transition hover:bg-koma-raised cursor-pointer"
           aria-expanded={showQueue}
         >
@@ -1165,7 +1158,6 @@ export function PrintMonitorPanel({
           {allDetectedPrinters.length ? (
             allDetectedPrinters.map((printer, index) => {
               const ready = isPrinterReady(printer);
-              const busy = commandRunning || Boolean(pendingCommandId);
               const badge = getFriendlyTransportBadge(undefined, printer.connection);
               const statusLabel = ready
                 ? 'Pronta para imprimir'
@@ -1274,6 +1266,28 @@ export function PrintMonitorPanel({
               <p className="mt-0.5 text-[10px] text-koma-muted">
                 Rotas lógicas mapeadas para impressoras USB, Bluetooth, rede ou spooler do sistema.
               </p>
+              {Object.keys(configuredDestinations).length > 0 && (
+                <div className="mt-3 rounded-xl border border-koma-border bg-koma-card p-3">
+                  <span className="block text-[9px] font-bold uppercase tracking-wider text-koma-muted">
+                    Rotas ativas
+                  </span>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {Object.entries(configuredDestinations).map(([destination, endpointId]) => {
+                      const endpoint = configuredEndpoints.find(
+                        item => item.id === endpointId || item.name === endpointId
+                      );
+                      return (
+                        <span
+                          key={destination}
+                          className="rounded-lg border border-koma-border px-2 py-1 text-[9px] text-koma-secondary"
+                        >
+                          {destination} → {endpoint?.display_name || endpoint?.name || endpointId}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {configuredEndpoints.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {configuredEndpoints.map(ep => {
@@ -1320,6 +1334,15 @@ export function PrintMonitorPanel({
                         <span>SPP: {printer.spp !== false ? 'sim' : 'não'}</span>
                         {printer.cups_queue && <span>CUPS: {printer.cups_queue}</span>}
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => void requestBluetoothTest(printer.agentId, printer)}
+                        disabled={commandRunning || Boolean(pendingCommandId) || !printer.supportsBluetoothTest || !printer.paired}
+                        className="mt-2 inline-flex min-h-8 items-center gap-2 rounded-lg border border-koma-border px-2.5 py-1 text-[9px] font-bold disabled:opacity-50"
+                      >
+                        <Printer size={11} />
+                        Testar esta impressora
+                      </button>
                     </div>
                   ))}
                 </div>
