@@ -223,7 +223,7 @@ if ($Update) {
 } else {
     Write-Host "[OK] Impressao instalada e configurada para iniciar automaticamente em segundo plano."
 }
-Write-Host "[OK] O servico reiniciara automaticamente e continuara ativo apos reinicializacoes."
+Write-Host "[OK] O agente reiniciara automaticamente se cair e voltara no proximo logon do Windows."
 Write-Host "[OK] O Koma nao alterou a impressora padrao usada por outros aplicativos."
 Write-Host ""
 if (Test-Path (Join-Path $installDir "check-windows.ps1")) {
