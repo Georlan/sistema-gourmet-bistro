@@ -129,6 +129,9 @@ export function CaixaPanel({
   const hasDedicatedKds = subscriptionHasFeature(currentPlanId, 'kds', planEntitlements);
   const hasLoyalty = subscriptionHasFeature(currentPlanId, 'loyalty', planEntitlements);
   const hasCoupons = subscriptionHasFeature(currentPlanId, 'coupons', planEntitlements);
+  // O App do Entregador é uma superfície privilegiada: só aparece depois que o
+  // backend confirmou explicitamente o entitlement do tenant atual.
+  const hasCourierApp = planEntitlements?.courier_app === true;
   const hasOnlineMenu =
     isAddonIncludedInPlan(currentPlanId, 'online_menu') || restauranteConfig?.cardapio_online_addon === true;
   const pendingPaymentsTotal = useMemo(
@@ -1208,6 +1211,7 @@ export function CaixaPanel({
               setSelectedMotoboys={setSelectedMotoboys}
               motoboys={motoboys}
               motoboysLoadState={motoboysLoadState}
+              hasCourierApp={hasCourierApp}
               handleDespacharKanban={handleDespacharKanban}
               handleRevogarAcessoMotoboy={handleRevogarAcessoMotoboy}
               handleFinalizarPedido={handleFinalizeCourierOrder}

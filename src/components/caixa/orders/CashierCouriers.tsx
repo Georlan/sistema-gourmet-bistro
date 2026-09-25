@@ -30,6 +30,7 @@ type BoundaryProps = Pick<
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
   now: number;
+  hasCourierApp: boolean;
   handleFinalizarPedido: (orderId: string) => Promise<boolean>;
 };
 
@@ -93,6 +94,7 @@ export function CashierCouriers({
   apiBaseUrl,
   authHeaders,
   now,
+  hasCourierApp,
 }: BoundaryProps) {
   const courierBuckets = useMemo(
     () => bucketCourierDeliveryOrders(deliveryOrders),
@@ -452,7 +454,9 @@ export function CashierCouriers({
           Gerenciar entregadores
         </summary>
         <p className="mt-2 text-[9px] text-koma-muted">
-          Cadastro e revogação ficam aqui como manutenção secundária; a atribuição diária permanece nos pedidos.
+          {hasCourierApp
+            ? 'Cadastro e acesso ao App do Entregador ficam aqui como manutenção secundária; a atribuição diária permanece nos pedidos.'
+            : 'Cadastre os entregadores da operação; atribuição e despacho continuam disponíveis sem o App do Entregador.'}
         </p>
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -473,7 +477,7 @@ export function CashierCouriers({
                   <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold uppercase ${motoboy.ativo ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
                     {motoboy.ativo ? 'Ativo' : 'Inativo'}
                   </span>
-                  {motoboy.ativo && (
+                  {hasCourierApp && motoboy.ativo && (
                     <button
                       type="button"
                       onClick={() => handleRevogarAcessoMotoboy(String(motoboy.id))}

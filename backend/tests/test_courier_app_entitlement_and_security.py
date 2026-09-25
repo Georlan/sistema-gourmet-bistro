@@ -139,9 +139,15 @@ def test_motoboy_list_tenant_isolation():
     assert resp2.status_code == 201
     mb_other_id = resp2.json()["id"]
 
-    list_pocket = client.get(
+    denied_waiter = client.get(
         "/comandas/motoboys/lista",
         headers=_token_for(POCKET_REST_ID, "garcom"),
+    )
+    assert denied_waiter.status_code == 403
+
+    list_pocket = client.get(
+        "/comandas/motoboys/lista",
+        headers=_token_for(POCKET_REST_ID, "caixa"),
     )
     assert list_pocket.status_code == 200
     pocket_ids = [m["id"] for m in list_pocket.json()]
@@ -150,7 +156,7 @@ def test_motoboy_list_tenant_isolation():
 
     list_other = client.get(
         "/comandas/motoboys/lista",
-        headers=_token_for(OTHER_REST_ID, "garcom"),
+        headers=_token_for(OTHER_REST_ID, "caixa"),
     )
     assert list_other.status_code == 200
     other_ids = [m["id"] for m in list_other.json()]
@@ -445,3 +451,44 @@ def test_delivery_dispatch_operational_flow_preserved_on_pocket():
             assert active_tokens_prem == 1
     finally:
         current_restaurante_id.reset(token_prem)
+
+
+def test_gerar_e_revogar_link_nao_cruzam_tenants():
+    """Admin Premium não consegue emitir nem revogar credencial de motoboy de outro tenant."""
+    foreign = client.post(
+        "/comandas/motoboys/cadastro",
+        json={"nome": "Moto Foreign", "telefone": "81999993301"},
+        headers=_token_for(OTHER_REST_ID, "admin"),
+    )
+    assert foreign.status_code == 201
+    foreign_id = foreign.json()["id"]
+
+    cross_generate = client.post(
+        f"/comandas/motoboys/{foreign_id}/gerar-link",
+        headers=_token_for(PREMIUM_REST_ID, "admin"),
+    )
+    assert cross_generate.status_code == 404
+
+    own_generate = client.post(
+        f"/comandas/motoboys/{foreign_id}/gerar-link",
+        headers=_token_for(OTHER_REST_ID, "admin"),
+    )
+    assert own_generate.status_code == 200
+
+    cross_revoke = client.post(
+        f"/comandas/motoboys/{foreign_id}/revogar-link",
+        headers=_token_for(PREMIUM_REST_ID, "admin"),
+    )
+    assert cross_revoke.status_code == 404
+
+    tenant_token = current_restaurante_id.set(OTHER_REST_ID)
+    try:
+        with SessionLocal() as db:
+            active_tokens = db.query(MotoboyTokenAtivo).filter(
+                MotoboyTokenAtivo.restaurante_id == OTHER_REST_ID,
+                MotoboyTokenAtivo.motoboy_id == foreign_id,
+                MotoboyTokenAtivo.revogado == False,
+            ).count()
+            assert active_tokens == 1
+    finally:
+        current_restaurante_id.reset(tenant_token)

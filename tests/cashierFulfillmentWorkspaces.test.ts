@@ -117,6 +117,7 @@ test('loading e erro mantêm feedback explícito sem exigir conhecimento do Kanb
     setSelectedMotoboys: () => {},
     motoboys: [],
     motoboysLoadState: 'loaded',
+    hasCourierApp: false,
     handleDespacharKanban: async () => {},
     handleRevogarAcessoMotoboy: async () => {},
     handleFinalizarPedido: async () => true,
@@ -135,4 +136,54 @@ test('loading e erro mantêm feedback explícito sem exigir conhecimento do Kanb
   } as any));
   assert.match(courierMarkup, /Mostrando o último estado conhecido/);
   assert.match(courierMarkup, /Gerenciar entregadores/);
+});
+
+
+test('controles do PWA do entregador falham fechados fora de courier_app sem bloquear delivery operacional', () => {
+  const baseProps = {
+    activeSubTab: 'entregadores',
+    deliveryOrders: [],
+    deliveryOrdersLoadState: 'loaded',
+    selectedMotoboys: {},
+    setSelectedMotoboys: () => {},
+    motoboys: [{ id: 77, nome: 'Entregador Teste', telefone: '81999990000', ativo: true }],
+    motoboysLoadState: 'loaded',
+    handleDespacharKanban: async () => {},
+    handleRevogarAcessoMotoboy: async () => {},
+    handleFinalizarPedido: async () => true,
+    handleAddMotoboy: async () => {},
+    novoMotoboyNome: '',
+    novoMotoboyTelefone: '',
+    setNewMotoboyNome: () => {},
+    setNewMotoboyTelefone: () => {},
+    handleAcceptPendingDeliveryOrder: async () => {},
+    handleRejectPendingDeliveryOrder: () => {},
+    handleAdvanceDigitalOrder: async () => {},
+    openDeliveryOrderDetails: () => {},
+    apiBaseUrl: 'http://example.test',
+    authHeaders: {},
+    now: Date.UTC(2026, 8, 24, 12),
+  } as any;
+
+  const pocketMarkup = renderToStaticMarkup(createElement(CashierCouriers, {
+    ...baseProps,
+    hasCourierApp: false,
+  }));
+  assert.match(pocketMarkup, /Gerenciar entregadores/);
+  assert.match(pocketMarkup, /Novo entregador/);
+  assert.match(pocketMarkup, /atribuição e despacho continuam disponíveis sem o App do Entregador/);
+  assert.doesNotMatch(pocketMarkup, /Revogar acesso/);
+
+  const premiumMarkup = renderToStaticMarkup(createElement(CashierCouriers, {
+    ...baseProps,
+    hasCourierApp: true,
+  }));
+  assert.match(premiumMarkup, /Revogar acesso/);
+  assert.match(premiumMarkup, /acesso ao App do Entregador/);
+});
+
+test('Caixa só libera controles do PWA com entitlement courier_app explicitamente true', () => {
+  assert.match(panel, /const hasCourierApp = planEntitlements\?\.courier_app === true;/);
+  assert.match(panel, /hasCourierApp=\{hasCourierApp\}/);
+  assert.match(couriers, /hasCourierApp && motoboy\.ativo/);
 });
