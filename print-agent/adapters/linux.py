@@ -101,6 +101,10 @@ def _discover_bluetooth_spp_printers() -> list[dict[str, Any]]:
             or address
         )
 
+        # Bluetooth SPP pareado é elegível para conexão sob demanda:
+        # available e present são True quando pareado, sem exigir conexão contínua.
+        is_ready = bool(paired)
+
         printers.append(
             {
                 "name": name[:200],
@@ -108,8 +112,8 @@ def _discover_bluetooth_spp_printers() -> list[dict[str, Any]]:
                 "uri": f"bluetooth://{address}",
                 "address": address,
                 "is_default": False,
-                "available": connected and paired,
-                "present": connected,
+                "available": is_ready,
+                "present": is_ready,
                 "configured": paired,
                 "paired": paired,
                 "trusted": trusted,

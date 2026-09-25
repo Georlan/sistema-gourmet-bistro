@@ -684,8 +684,10 @@ def test_heartbeat_accepts_bluetooth_spp_diagnostics_without_marking_usb_ready()
             agent,
             datetime.datetime.now(datetime.timezone.utc),
         )
-        assert state["printer_ready"] is False
-        assert state["physical_printer_present"] is False
+        assert state["printer_ready"] is True
+        assert state["physical_printer_present"] is True
+        assert state["ready_printer_count"] == 1
+        assert state["supports_usb_commands"] is False
     finally:
         db.close()
 
@@ -1351,8 +1353,8 @@ def test_admin_can_request_isolated_bluetooth_test_without_usb_readiness():
         if item["agent_id"] == "desktop-bluetooth-2"
     )
     assert agent["supports_bluetooth_test"] is True
-    assert agent["printer_ready"] is False
-    assert agent["physical_printer_present"] is False
+    assert agent["printer_ready"] is True
+    assert agent["physical_printer_present"] is True
     assert agent["last_command_result"]["success"] is True
 
 
@@ -1837,3 +1839,111 @@ def test_print_simulator_sources_reject_waiter():
         headers=jwt_headers("garcom-2", 2, "garcom"),
     )
     assert response.status_code == 403
+
+
+def test_generic_printer_readiness_across_transports():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    base_agent = PrintAgentToken(
+        id="test-agent-transports",
+        restaurante_id=1,
+        agent_id="agent-transports",
+        ativo=True,
+        last_seen_at=now,
+        diagnostics_updated_at=now,
+    )
+
+    # 1. USB presente e pronto
+    base_agent.printer_diagnostics = {
+        "printers": [
+            {
+                "name": "G250",
+                "connection": "usb",
+                "available": True,
+                "present": True,
+                "configured": True,
+            }
+        ]
+    }
+    state = print_agents_route._agent_printer_state(base_agent, now)
+    assert state["printer_ready"] is True
+    assert state["physical_printer_present"] is True
+    assert state["ready_printer_count"] == 1
+
+    # 2. USB desconectado (present=False)
+    base_agent.printer_diagnostics = {
+        "printers": [
+            {
+                "name": "G250",
+                "connection": "usb",
+                "available": False,
+                "present": False,
+                "configured": True,
+            }
+        ]
+    }
+    state = print_agents_route._agent_printer_state(base_agent, now)
+    assert state["printer_ready"] is False
+    assert state["physical_printer_present"] is False
+    assert state["ready_printer_count"] == 0
+
+    # 3. Bluetooth SPP pareado com connected=False (sob demanda)
+    base_agent.printer_diagnostics = {
+        "printers": [
+            {
+                "name": "KA-1445",
+                "connection": "bluetooth",
+                "address": "86:67:7A:6B:30:C4",
+                "paired": True,
+                "trusted": True,
+                "spp": True,
+                "connected": False,
+                "available": True,
+                "present": True,
+                "configured": True,
+            }
+        ]
+    }
+    state = print_agents_route._agent_printer_state(base_agent, now)
+    assert state["printer_ready"] is True
+    assert state["physical_printer_present"] is True
+    assert state["ready_printer_count"] == 1
+
+    # 4. Bluetooth sem SPP
+    base_agent.printer_diagnostics = {
+        "printers": [
+            {
+                "name": "Fone-BT",
+                "connection": "bluetooth",
+                "address": "AA:BB:CC:DD:EE:FF",
+                "paired": True,
+                "spp": False,
+                "connected": False,
+                "available": False,
+                "present": False,
+                "configured": True,
+            }
+        ]
+    }
+    state = print_agents_route._agent_printer_state(base_agent, now)
+    assert state["printer_ready"] is False
+    assert state["physical_printer_present"] is False
+    assert state["ready_printer_count"] == 0
+
+    # 5. Rede TCP presente
+    base_agent.printer_diagnostics = {
+        "printers": [
+            {
+                "name": "Cozinha-IP",
+                "connection": "network",
+                "uri": "socket://192.168.1.200:9100",
+                "available": True,
+                "present": True,
+                "configured": True,
+            }
+        ]
+    }
+    state = print_agents_route._agent_printer_state(base_agent, now)
+    assert state["printer_ready"] is True
+    assert state["physical_printer_present"] is True
+    assert state["ready_printer_count"] == 1
+

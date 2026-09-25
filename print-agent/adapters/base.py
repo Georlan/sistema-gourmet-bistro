@@ -64,6 +64,8 @@ class BasePrinterAdapter(ABC):
             if target in {
                 str(printer.get("name") or ""),
                 str(printer.get("uri") or ""),
+                str(printer.get("address") or ""),
+                str(printer.get("cups_queue") or ""),
             }:
                 return True
         return False
