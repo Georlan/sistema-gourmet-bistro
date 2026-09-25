@@ -22,6 +22,7 @@ on:
       - "tests/deliveryDispatchControl.test.ts"
       - "tests/cashierCourierCheckoutWiring.test.ts"
       - "e2e/cashier-fulfillment-workspaces.spec.ts"
+      - "e2e/cashier-multiterminal-realtime.spec.ts"
       - ".github/workflows/cashier-fulfillment-workspaces-targeted.yml"
   workflow_dispatch:
 
@@ -110,4 +111,10 @@ jobs:
           npx playwright test
           e2e/cashier-fulfillment-workspaces.spec.ts
           --project=mobile-390
+          --project=desktop-1366
+
+      - name: Run multi-terminal realtime convergence
+        run: >-
+          npx playwright test
+          e2e/cashier-multiterminal-realtime.spec.ts
           --project=desktop-1366
