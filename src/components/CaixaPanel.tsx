@@ -299,7 +299,7 @@ export function CaixaPanel({
     handleConvertDeliveryToPickup,
     handleGerarLinkMotoboy,
     handleRevogarAcessoMotoboy,
-    handleFecharDelivery,
+    handleCloseDigitalOrder,
     handleFinalizarPedido,
     handleAddMotoboy,
     handleUpdateItemStatus,
@@ -392,7 +392,7 @@ export function CaixaPanel({
     getSmartPosCardState,
     setSmartPosRecoveryError,
     fetchTurno,
-    handleFecharDelivery,
+    closeDigitalOrder: handleCloseDigitalOrder,
   });
   const { handleConfirmPendingCashPayment, handleRejectPendingCashPayment } = checkout;
   const {
