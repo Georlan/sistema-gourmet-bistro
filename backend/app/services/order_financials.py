@@ -52,8 +52,18 @@ def open_balance(comanda: Comanda) -> Decimal:
     )
 
 
+def is_quick_counter_sale(comanda: Comanda) -> bool:
+    """Venda rápida de balcão: nasce como retirada técnica, mas não entra na fila de fulfillment."""
+    order_type = str(getattr(comanda, "tipo", "") or "").strip().casefold()
+    identifier = str(getattr(comanda, "identificador", "") or "").strip().casefold()
+    phone = str(getattr(comanda, "delivery_telefone", "") or "").strip()
+    return order_type in {"retirada", "balcao", "balcão"} and identifier in {"balcao", "balcão"} and not phone
+
+
 def has_operational_fulfillment(comanda: Comanda) -> bool:
     """Pedido digital/operacional cuja quitação não deve encerrar o fulfillment sozinha."""
+    if is_quick_counter_sale(comanda):
+        return False
     if getattr(comanda, "delivery_status", None) is not None:
         return True
     return str(getattr(comanda, "tipo", "") or "").strip().casefold() in _DIGITAL_FULFILLMENT_TYPES
