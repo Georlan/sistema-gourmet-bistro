@@ -38,7 +38,46 @@ class TestPrinterEndpointModel:
         assert ep.id.startswith("ep-bluetooth_rfcomm-cozinha")
         assert ep.display_name == "Cozinha"
         assert ep.protocol == "escpos"
-        assert ep.options == {}
+        assert ep.options == {
+            "paper_profile": "thermal-80mm",
+            "paper_width_mm": 80,
+            "columns": 48,
+        }
+
+    def test_known_printer_models_receive_paper_profiles(self):
+        compact = PrinterEndpoint(
+            name="KA-1445",
+            transport="bluetooth_rfcomm",
+            address="86:67:7A:6B:30:C4",
+        )
+        wide = PrinterEndpoint(
+            name="G250",
+            transport="cups",
+            address="G250",
+        )
+
+        assert compact.paper_width_mm == 58
+        assert compact.columns == 32
+        assert compact.paper_profile == "thermal-58mm"
+        assert wide.paper_width_mm == 80
+        assert wide.columns == 48
+        assert wide.paper_profile == "thermal-80mm"
+
+    def test_explicit_paper_profile_overrides_model_suggestion(self):
+        endpoint = PrinterEndpoint(
+            name="KA-1445",
+            transport="bluetooth_rfcomm",
+            address="86:67:7A:6B:30:C4",
+            options={
+                "paper_profile": "custom-80mm",
+                "paper_width_mm": 80,
+                "columns": 48,
+            },
+        )
+
+        assert endpoint.paper_width_mm == 80
+        assert endpoint.columns == 48
+        assert endpoint.paper_profile == "custom-80mm"
 
     def test_endpoint_serialization_roundtrip(self):
         original = PrinterEndpoint(

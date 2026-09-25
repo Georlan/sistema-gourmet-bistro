@@ -27,6 +27,7 @@ def test_linux_installer_has_persistence_update_and_uninstall():
     assert "wake_listener.py" in installer
     assert "simulator.py" in installer
     assert "endpoints.py" in installer
+    assert "printer_profiles.py" in installer
     assert "transports.py" in installer
 
 
@@ -56,6 +57,7 @@ def test_windows_installer_has_persistence_update_and_uninstall():
     assert '"wake_listener.py"' in installer
     assert '"simulator.py"' in installer
     assert '"endpoints.py"' in installer
+    assert '"printer_profiles.py"' in installer
     assert '"transports.py"' in installer
 
 

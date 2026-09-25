@@ -708,7 +708,16 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
         *,
         skip_ready_check: bool = False,
     ) -> bool:
-        raw_bytes = build_escpos_payload(payload_text, encoding="cp860")
+        target_columns = (
+            int(getattr(printer_name, "columns", 0) or 0)
+            if hasattr(printer_name, "columns")
+            else None
+        )
+        raw_bytes = build_escpos_payload(
+            payload_text,
+            encoding="cp860",
+            columns=target_columns,
+        )
 
         # Suporte a PrinterEndpoint estruturado
         if hasattr(printer_name, "build_transport"):

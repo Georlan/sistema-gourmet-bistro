@@ -1159,6 +1159,14 @@ export function PrintMonitorPanel({
             allDetectedPrinters.map((printer, index) => {
               const ready = isPrinterReady(printer);
               const badge = getFriendlyTransportBadge(undefined, printer.connection);
+              const endpoint = configuredEndpoints.find(item => (
+                item.name === printer.name
+                || (
+                  Boolean(printer.address)
+                  && item.address === printer.address
+                )
+              )) || null;
+              const paperWidthMm = Number(endpoint?.options?.paper_width_mm || 0);
               const statusLabel = ready
                 ? 'Pronta para imprimir'
                 : (printer.present || printer.paired || printer.available)
@@ -1202,6 +1210,11 @@ export function PrintMonitorPanel({
                       <span className={`rounded-full px-2 py-0.5 text-[8px] font-extrabold ${badge.badgeClass}`}>
                         {badge.label}
                       </span>
+                      {paperWidthMm > 0 && (
+                        <span className="rounded-full border border-koma-border bg-koma-raised px-2 py-0.5 text-[8px] font-bold text-koma-muted">
+                          Papel {paperWidthMm} mm
+                        </span>
+                      )}
                       {printer.is_default && (
                         <span className="rounded-full koma-badge-success px-2 py-0.5 text-[8px] font-extrabold">
                           Impressora principal
@@ -1300,6 +1313,11 @@ export function PrintMonitorPanel({
                             <span className="ml-2 font-mono text-[10px] text-koma-muted">({ep.address})</span>
                           )}
                           <span className="ml-2 text-[9px] text-koma-subtle font-mono">id: {ep.id}</span>
+                          {Number(ep.options?.paper_width_mm || 0) > 0 && (
+                            <span className="ml-2 text-[9px] text-koma-muted">
+                              {String(ep.options?.paper_width_mm)} mm · {String(ep.options?.columns || '?')} col.
+                            </span>
+                          )}
                         </div>
                         <span className={`rounded-full px-2 py-0.5 text-[8px] font-extrabold ${badge.badgeClass}`}>
                           {badge.label}

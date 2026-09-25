@@ -11,6 +11,7 @@ from adapters.escpos import (
     PARTIAL_CUT,
     PORTUGUESE_CODE_PAGE,
     build_escpos_payload,
+    fit_text_to_columns,
 )
 
 
@@ -28,6 +29,48 @@ class EscPosPayloadTest(unittest.TestCase):
 
     def test_initializes_every_ticket(self):
         self.assertTrue(build_escpos_payload("RECIBO").startswith(b"\x1b@"))
+
+    def test_compact_profile_reflows_48_columns_to_32(self):
+        amount = "R$ 29,90"
+        source = "\n".join(
+            [
+                "=" * 48,
+                "KÔMA DEMO".center(48),
+                "1x BACON PRIME".ljust(48 - len(amount)) + amount,
+                "OBSERVAÇÃO MUITO LONGA PARA UMA BOBINA COMPACTA DE CINQUENTA E OITO MILÍMETROS",
+                "-" * 48,
+            ]
+        )
+
+        fitted = fit_text_to_columns(source, 32)
+        visible_lines = fitted.splitlines()
+
+        self.assertEqual(visible_lines[0], "=" * 32)
+        self.assertEqual(visible_lines[1], "KÔMA DEMO".center(32))
+        self.assertEqual(visible_lines[-1], "-" * 32)
+        self.assertTrue(all(len(line) <= 32 for line in visible_lines))
+        self.assertIn("1x BACON PRIME", fitted)
+        self.assertIn("R$ 29,90", fitted)
+
+    def test_wide_profile_preserves_existing_48_column_layout(self):
+        source = "\n".join(
+            [
+                "=" * 48,
+                "KÔMA DEMO".center(48),
+                "-" * 48,
+            ]
+        )
+        self.assertEqual(fit_text_to_columns(source, 48), source)
+
+    def test_compact_profile_preserves_edge_escpos_controls(self):
+        source = "\x1bE\x01" + ("TOTAL DO PEDIDO:".ljust(40) + "R$ 29,90") + "\x1bE\x00"
+        fitted = fit_text_to_columns(source, 32)
+
+        self.assertTrue(fitted.startswith("\x1bE\x01"))
+        self.assertTrue(fitted.endswith("\x1bE\x00"))
+        for line in fitted.splitlines():
+            visible = line.replace("\x1bE\x01", "").replace("\x1bE\x00", "")
+            self.assertLessEqual(len(visible), 32)
 
 
 if __name__ == "__main__":
