@@ -105,6 +105,7 @@ async function mockFulfillmentBackend(
   let dispatchCalls = 0;
   let assignmentCalls = 0;
   let reassignmentCalls = 0;
+  let conversionCalls = 0;
   let failActiveReads = false;
 
   const activeOrders = () => [pickup, delivery].filter((order) =>
@@ -145,6 +146,23 @@ async function mockFulfillmentBackend(
         identificador: 'Cliente Entregue',
       });
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([completed]) });
+      return;
+    }
+
+    if (pathname.endsWith('/delivery/converter-retirada') && request.method() === 'POST') {
+      conversionCalls += 1;
+      const body = request.postDataJSON() as { motivo?: string };
+      if (!String(body.motivo || '').trim()) {
+        await route.fulfill({ status: 422, contentType: 'application/json', body: JSON.stringify({ detail: 'Motivo obrigatório' }) });
+        return;
+      }
+      delivery = {
+        ...delivery,
+        tipo: 'Retirada',
+        delivery_taxa: 0,
+        motoboy_id: null,
+      };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(delivery) });
       return;
     }
 
@@ -291,6 +309,7 @@ async function mockFulfillmentBackend(
     getDispatchCalls: () => dispatchCalls,
     getAssignmentCalls: () => assignmentCalls,
     getReassignmentCalls: () => reassignmentCalls,
+    getConversionCalls: () => conversionCalls,
     setFailActiveReads: (value: boolean) => { failActiveReads = value; },
   };
 }
@@ -424,5 +443,38 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   await expect(reassignmentDialog).toBeHidden();
   await expect(inRouteCard).toContainText('Lia Entregas');
   await expect(inRouteCard).toContainText('EM ROTA');
+  await expectNoHorizontalOverflow(page);
+});
+
+
+test('delivery alterado para retirada sai de Entregas e aparece em Retiradas sem refresh', async ({ page }) => {
+  await seedCashierSession(page, 'entregadores');
+  const state = await mockFulfillmentBackend(page, {
+    pickupStatus: 'finalizado',
+    deliveryStatus: 'producao',
+  });
+  await page.goto('/?view=caixa');
+
+  const deliveries = page.locator('#cashier-deliveries-workspace');
+  await expect(deliveries).toBeVisible();
+  await expect(deliveries).toContainText('Bruno Delivery');
+
+  await deliveries.getByRole('button', { name: 'Alterar para retirada' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Alterar para retirada' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('textbox', { name: 'Motivo da alteração para retirada' })
+    .fill('Cliente avisou que passará para buscar');
+  await dialog.getByRole('button', { name: 'Confirmar retirada' }).click();
+
+  await expect.poll(state.getConversionCalls).toBe(1);
+  await expect(dialog).toBeHidden();
+  await expect(deliveries).not.toContainText('Bruno Delivery');
+
+  const pickupsTab = page.locator('.cashier-subnav__button', { hasText: 'Retiradas' });
+  await pickupsTab.click();
+  const pickups = page.locator('#cashier-pickups-workspace');
+  await expect(pickups).toBeVisible();
+  await expect(pickups).toContainText('Bruno Delivery');
+  await expect(pickups).toContainText('Em preparo');
   await expectNoHorizontalOverflow(page);
 });
