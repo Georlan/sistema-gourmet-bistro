@@ -34,6 +34,13 @@ class PrinterTransport(ABC):
         pass
 
 
+# Constantes de protocolo Bluetooth caso o CPython tenha sido compilado sem cabeçalhos BlueZ
+AF_BLUETOOTH_LINUX = getattr(socket, "AF_BLUETOOTH", 31)
+BTPROTO_RFCOMM_LINUX = getattr(socket, "BTPROTO_RFCOMM", 3)
+AF_BTH_WINDOWS = 32
+BTHPROTO_RFCOMM_WINDOWS = 3
+
+
 class BluetoothRfcommTransport(PrinterTransport):
     """
     Transporte Bluetooth Classic SPP via RFCOMM.
@@ -78,12 +85,7 @@ class BluetoothRfcommTransport(PrinterTransport):
         """Verifica se o endereço é válido e o transporte é suportado na plataforma."""
         if not self.address or len(self.address.replace(":", "")) != 12:
             return False
-        if sys.platform.startswith("linux"):
-            return bool(
-                hasattr(socket, "AF_BLUETOOTH")
-                and hasattr(socket, "BTPROTO_RFCOMM")
-            )
-        if sys.platform == "win32":
+        if sys.platform.startswith("linux") or sys.platform == "win32":
             return True
         return False
 
@@ -105,9 +107,7 @@ class BluetoothRfcommTransport(PrinterTransport):
     def _create_socket(self):
         if self._socket_factory:
             return self._socket_factory()
-        if not hasattr(socket, "AF_BLUETOOTH") or not hasattr(socket, "BTPROTO_RFCOMM"):
-            raise OSError("AF_BLUETOOTH ou BTPROTO_RFCOMM não disponível neste sistema")
-        return socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+        return socket.socket(AF_BLUETOOTH_LINUX, socket.SOCK_STREAM, BTPROTO_RFCOMM_LINUX)
 
     def _send_rfcomm_socket(self, data: bytes) -> bool:
         sock = None

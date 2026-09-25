@@ -33,6 +33,15 @@ class TestBluetoothRfcommTransport:
         invalid = BluetoothRfcommTransport("invalid-mac")
         assert invalid.is_available() is False
 
+        with patch("sys.platform", "darwin"):
+            assert valid.is_available() is False
+
+        with patch("sys.platform", "win32"):
+            assert valid.is_available() is True
+
+        with patch("sys.platform", "linux"):
+            assert valid.is_available() is True
+
     def test_send_success_in_chunks_with_socket_closed(self):
         mock_sock = MagicMock()
         transport = BluetoothRfcommTransport(
