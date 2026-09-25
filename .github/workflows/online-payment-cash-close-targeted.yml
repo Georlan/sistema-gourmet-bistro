@@ -11,6 +11,7 @@ on:
       - 'backend/app/services/online_payments/**'
       - 'backend/tests/test_online_payment_cash_close.py'
       - 'backend/tests/test_online_payment_gate.py'
+      - 'backend/tests/test_online_payment_refunds.py'
   workflow_dispatch:
 
 permissions:
@@ -55,10 +56,12 @@ jobs:
           python -m py_compile backend/app/services/online_payments/mercado_pago.py
           python -m py_compile backend/app/services/online_payments/service.py
           python -m py_compile backend/tests/test_online_payment_cash_close.py
+          python -m py_compile backend/tests/test_online_payment_refunds.py
 
       - name: Run targeted Pix cash-close tests
         working-directory: backend
         run: |
           python -m pytest -q -x \
             tests/test_online_payment_cash_close.py \
-            tests/test_online_payment_gate.py
+            tests/test_online_payment_gate.py \
+            tests/test_online_payment_refunds.py
