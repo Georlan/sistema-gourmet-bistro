@@ -118,6 +118,7 @@ export function CaixaPanel({
   onOptimisticAddOrder,
   onRemovePendingPaymentOptimistic,
 }: CaixaPanelProps) {
+  const restId = Number(restauranteConfig?.restaurante_id || restauranteConfig?.id);
   const currentPlanId = normalizeSubscriptionPlan(
     restauranteConfig?.plano_efetivo ?? restauranteConfig?.plano,
   );
@@ -821,7 +822,7 @@ export function CaixaPanel({
             ))}
 
             {activeTab === 'impressao_salao' && settingsSubnavItems.filter((sub) => {
-              if (sub.requiredFeature) return subscriptionHasFeature(currentPlanId, sub.requiredFeature, planEntitlements);
+              if (sub.requiredFeature) return operationalEntitlementEnabled(planEntitlements, sub.requiredFeature);
               return !sub.plans || sub.plans.includes(currentPlanId);
             }).map((sub) => (
               <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
@@ -1068,7 +1069,7 @@ export function CaixaPanel({
                 hasOnlineMenu={hasOnlineMenu}
                 activeSubTab={activeSubTab}
                 setActiveSubTab={setActiveSubTab}
-                isTestPlan={restauranteConfig?.plano_modo_teste === true || isRestaurant2Test}
+                isTestPlan={restauranteConfig?.plano_modo_teste === true}
                 bannerNotice={planNoticeBanner}
               />
             )}
