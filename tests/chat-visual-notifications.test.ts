@@ -78,7 +78,7 @@ test('cardapio usa SSE e resumo leve em vez de polling contínuo de pedidos', ()
 });
 
 test('mudança de fulfillment acorda o Cardápio sem fingir novo status', () => {
-  assert.match(chatPanel, /addEventListener\("refresh"/);
+  assert.match(clientPanel, /addEventListener\("refresh"/);
   assert.match(drawer, /addEventListener\("refresh"/);
   assert.match(cardapioPage, /onRealtimeRefresh=\{handleRealtimeOrderRefresh\}/);
   assert.match(cardapioPage, /checkActiveOrders\(Number\(activeBrand\.id\)\)/);
