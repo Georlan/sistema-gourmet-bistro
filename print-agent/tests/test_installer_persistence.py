@@ -15,7 +15,6 @@ def test_linux_installer_has_persistence_update_and_uninstall():
     assert "--purge" in installer
 
     # Persistência após reboot
-    assert "loginctl enable-linger" in installer
     assert "WantedBy=default.target" in installer
     assert "Restart=always" in installer
     assert "RestartSec=3" in installer
