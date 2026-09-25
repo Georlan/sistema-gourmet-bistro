@@ -99,8 +99,12 @@ class AgentMaintenance:
 def _is_ready_printer_entry(printer: dict) -> bool:
     if not isinstance(printer, dict):
         return False
-    if str(printer.get("connection") or "").casefold() == "bluetooth":
-        return bool(printer.get("paired") is True and printer.get("spp") is True)
+    connection = str(printer.get("connection") or "").casefold()
+    if connection == "bluetooth" and not (
+        printer.get("paired") is True
+        and printer.get("spp") is True
+    ):
+        return False
     return bool(
         printer.get("available") is True
         and printer.get("present") is True
