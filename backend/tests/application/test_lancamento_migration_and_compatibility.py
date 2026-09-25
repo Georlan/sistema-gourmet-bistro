@@ -14,7 +14,7 @@ from app.application.orders.commands import (
     RejectOrderCommand,
 )
 from app.application.orders.service import OrderApplicationService
-from app.database import SessionLocal, engine
+from app.database import SessionLocal, current_restaurante_id, engine
 from app.domain.orders.errors import InvalidOrderTransitionError
 from app.domain.orders.types import FulfillmentType, OrderChannel, OrderStatus
 from app.models import Comanda, Item, Lancamento, Motoboy, Restaurante, Usuario
@@ -94,29 +94,32 @@ class TestLancamentoMigrationAndCompatibility:
             db.close()
 
     def test_multi_tenant_scoping_in_delivery_dispatch(self, char_setup):
-        """Garante que motoboy de outro restaurante não pode ser vinculado a entrega de tenant diferente."""
-        from fastapi import HTTPException
+        """Motoboy de outro tenant nunca pode ser vinculado a uma entrega local."""
+        from fastapi import BackgroundTasks, HTTPException
         from app.routes.orders import despachar_delivery
-        from fastapi import BackgroundTasks
 
-        db: Session = SessionLocal()
+        db: Session = SessionLocal(restaurante_id=None)
         other_rid = 888
+        foreign_token = current_restaurante_id.set(None)
         try:
-            # Cria outro restaurante e motoboy para ele
-            other_rest = Restaurante(id=other_rid, nome="Outro Restaurante", plano="bistro")
-            db.add(other_rest)
-            db.flush()
+            other_rest = db.query(Restaurante).filter(Restaurante.id == other_rid).first()
+            if not other_rest:
+                db.add(Restaurante(id=other_rid, nome="Outro Restaurante", plano="bistro"))
+                db.flush()
+            motoboy_outro = db.query(Motoboy).filter(Motoboy.id == 9988).first()
+            if not motoboy_outro:
+                db.add(Motoboy(
+                    id=9988,
+                    restaurante_id=other_rid,
+                    nome="Motoboy Invasor",
+                    telefone="11999998888",
+                    ativo=True,
+                ))
+            db.commit()
+        finally:
+            current_restaurante_id.reset(foreign_token)
 
-            motoboy_outro = Motoboy(
-                id=9988,
-                restaurante_id=other_rid,
-                nome="Motoboy Invasor",
-                telefone="11999998888",
-                ativo=True,
-            )
-            db.add(motoboy_outro)
-
-            # Cria comanda no restaurante do teste
+        try:
             comanda_valida = Comanda(
                 id=f"c-{uuid.uuid4().hex[:8]}",
                 restaurante_id=CHAR_RESTAURANT_ID,
@@ -129,21 +132,28 @@ class TestLancamentoMigrationAndCompatibility:
             db.add(comanda_valida)
             db.commit()
 
-            # Tenta despachar usando motoboy do outro restaurante (deve lançar 404 por falta de tenant matching)
-            from app.database import current_restaurante_id
-            token = current_restaurante_id.set(CHAR_RESTAURANT_ID)
-            try:
-                with pytest.raises(HTTPException) as exc_info:
-                    despachar_delivery(
-                        comanda_id=comanda_valida.id,
-                        payload={"motoboy_id": 9988},
-                        background_tasks=BackgroundTasks(),
-                        db=db,
-                        current_user=None,
-                    )
-                assert exc_info.value.status_code == 404
-                assert "Motoboy ativo não encontrado" in exc_info.value.detail
-            finally:
-                current_restaurante_id.reset(token)
+            with pytest.raises(HTTPException) as exc_info:
+                despachar_delivery(
+                    comanda_id=comanda_valida.id,
+                    payload={"motoboy_id": 9988},
+                    background_tasks=BackgroundTasks(),
+                    db=db,
+                    current_user=None,
+                )
+            assert exc_info.value.status_code == 404
+            assert "Motoboy ativo não encontrado" in exc_info.value.detail
         finally:
-            db.close()
+            db.rollback()
+            cleanup_token = current_restaurante_id.set(None)
+            try:
+                db.query(Motoboy).filter(
+                    Motoboy.restaurante_id == other_rid,
+                    Motoboy.id == 9988,
+                ).delete(synchronize_session=False)
+                db.query(Restaurante).filter(Restaurante.id == other_rid).delete(
+                    synchronize_session=False
+                )
+                db.commit()
+            finally:
+                current_restaurante_id.reset(cleanup_token)
+                db.close()

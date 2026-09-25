@@ -14,6 +14,7 @@ class TestLegacyOrderLifecycle:
         pendente -> producao -> pronto -> transito (via despacho com motoboy) -> finalizado.
         """
         headers = char_setup["headers"]
+        motoboy_id = char_setup["motoboy_id"]
         payload = {
             "restaurante_id": CHAR_RESTAURANT_ID,
             "cliente_nome": "Life User 1",
@@ -47,12 +48,12 @@ class TestLegacyOrderLifecycle:
         # 3. Pronto -> Transito (Despachar com motoboy vinculado)
         r3 = char_client.post(
             f"/comandas/{comanda_id}/delivery/despachar",
-            json={"motoboy_id": 1},
+            json={"motoboy_id": motoboy_id},
             headers=headers,
         )
         assert r3.status_code == 200
         assert r3.json()["delivery_status"] == "transito"
-        assert r3.json()["motoboy_id"] == 1
+        assert r3.json()["motoboy_id"] == motoboy_id
 
         # 4. Transito -> Finalizado
         r4 = char_client.put(

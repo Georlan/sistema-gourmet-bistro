@@ -17,8 +17,17 @@ def _seed_targeted_coupon():
     db = SessionLocal()
     token = current_restaurante_id.set(TENANT_ID)
     try:
-        if not db.query(Restaurante).filter(Restaurante.id == TENANT_ID).first():
-            db.add(Restaurante(id=TENANT_ID, nome="Targeted Coupon Test", slug="targeted-coupon-test"))
+        restaurant = db.query(Restaurante).filter(Restaurante.id == TENANT_ID).first()
+        if not restaurant:
+            db.add(Restaurante(
+                id=TENANT_ID,
+                nome="Targeted Coupon Test",
+                slug="targeted-coupon-test",
+                plano="premium",
+            ))
+            db.commit()
+        elif restaurant.plano != "premium":
+            restaurant.plano = "premium"
             db.commit()
 
         target = cadastrar_ou_atualizar_cliente(

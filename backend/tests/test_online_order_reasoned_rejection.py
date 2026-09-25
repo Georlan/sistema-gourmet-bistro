@@ -6,7 +6,12 @@ from app.database import Base, SessionLocal, current_restaurante_id, engine, ten
 from app.main import app
 from app.models import Comanda, Restaurante, Usuario
 from app.online_order_control_models import OnlineOrderCustomerBlock, OnlineOrderOperationalAudit
-from app.order_chat_models import OrderConversationEvent
+from app.order_chat_models import (
+    OrderConversation,
+    OrderConversationEvent,
+    OrderMessage,
+    OrderPushSubscription,
+)
 from app.routes.auth import create_access_token
 from app.services.order_chat_service import create_conversation_for_order
 
@@ -31,24 +36,35 @@ def _reset():
         db.query(OnlineOrderCustomerBlock).filter(
             OnlineOrderCustomerBlock.restaurante_id == RID
         ).delete(synchronize_session=False)
-        db.query(Comanda).filter(Comanda.restaurante_id == RID).delete(synchronize_session=False)
-        db.query(Usuario).filter(Usuario.restaurante_id == RID).delete(synchronize_session=False)
-        db.query(Restaurante).filter(Restaurante.id == RID).delete(synchronize_session=False)
-        db.commit()
-        db.add(
-            Restaurante(id=RID, nome="Reject Safety", plano="pro", slug="reject-safety")
-        )
-        db.add(
-            Usuario(
-                id=ADMIN_ID,
-                restaurante_id=RID,
-                nome="Admin Reject",
-                email="reject-admin@koma.test",
-                cargo="admin",
-                role="admin",
-                status="ativo",
+        for model in (OrderConversationEvent, OrderMessage, OrderPushSubscription):
+            db.query(model).filter(model.restaurante_id == RID).delete(
+                synchronize_session=False
             )
-        )
+        db.query(OrderConversation).filter(
+            OrderConversation.restaurante_id == RID
+        ).delete(synchronize_session=False)
+        db.query(Comanda).filter(
+            Comanda.restaurante_id == RID
+        ).delete(synchronize_session=False)
+
+        restaurant = db.query(Restaurante).filter(Restaurante.id == RID).first()
+        if restaurant is None:
+            db.add(
+                Restaurante(id=RID, nome="Reject Safety", plano="pro", slug="reject-safety")
+            )
+        user = db.query(Usuario).filter(Usuario.id == ADMIN_ID).first()
+        if user is None:
+            db.add(
+                Usuario(
+                    id=ADMIN_ID,
+                    restaurante_id=RID,
+                    nome="Admin Reject",
+                    email="reject-admin@koma.test",
+                    cargo="admin",
+                    role="admin",
+                    status="ativo",
+                )
+            )
         db.commit()
     finally:
         current_restaurante_id.reset(marker)

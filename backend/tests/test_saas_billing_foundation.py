@@ -302,7 +302,10 @@ def test_billing_enforcement_treats_free_pocket_as_not_required(client_and_sessi
         assert entitlement.billing_status == "active"
 
 
-def test_backward_compatibility_when_enforcement_disabled(client_and_session, monkeypatch):
+def test_enforcement_flag_does_not_bypass_fixed_billing_for_new_contracts(
+    client_and_session,
+    monkeypatch,
+):
     client, Session = client_and_session
     monkeypatch.setattr(
         super_admin_contracts,
@@ -314,52 +317,60 @@ def test_backward_compatibility_when_enforcement_disabled(client_and_session, mo
         lambda: False,
     )
 
-    protocol = _accept_contract(client, "Bistrô Legado")
+    protocol = _accept_contract(client, "Bistrô com cobrança fixa")
 
-    # Ativação deve suceder mesmo sem setup de billing prévio quando enforcement estiver False
+    # Desde a verdade comercial atual, toda contratação nova possui componente
+    # fixo. A flag de enforcement pode governar tenants existentes, mas nunca
+    # autoriza provisionar um contrato pago sem billing ready.
     response = client.post(
         f"/api/super-admin/contracts/{protocol}/activate",
-        json={"reason": "Ativação em ambiente com enforcement desativado"},
+        json={"reason": "Tentativa sem billing pronto"},
     )
-    assert response.status_code == 200, response.text
-    restaurant_id = int(response.json()["restaurantId"])
+    assert response.status_code == 409
+    assert "billing ready" in response.json()["detail"].lower()
 
     with Session() as db:
-        # Tenant foi criado com billing_mode='subscription'
-        restaurante = db.query(Restaurante).filter_by(id=restaurant_id).one()
-        assert restaurante.saas_status == "active"
-        assert restaurante.billing_mode == "subscription"
+        transitional = Restaurante(
+            id=998,
+            nome="Transicional",
+            slug="transicional",
+            plano="pro",
+            saas_status="active",
+            billing_mode="subscription",
+        )
+        legacy = Restaurante(
+            id=999,
+            nome="Legado",
+            slug="legado",
+            plano="pro",
+            saas_status="active",
+            billing_mode="legacy",
+        )
+        db.add_all([transitional, legacy])
+        db.commit()
 
-        # Eliminação de assinatura fake: SEM billing pronto, nenhuma SaaSSubscription é criada
-        sub = db.query(SaaSSubscription).filter_by(restaurante_id=restaurant_id).one_or_none()
-        assert sub is None
-
-        # Entitlement resolve como transicional quando enforcement está desligado
-        entitlement = resolve_tenant_entitlement(db, restaurant_id)
+        entitlement = resolve_tenant_entitlement(db, 998)
         assert entitlement.allowed is True
         assert entitlement.reason == "enforcement_disabled_transitional"
 
-    # Agora simula ativação do enforcement: restaurante novo sem assinatura deve falhar closed
+        legacy_entitlement = resolve_tenant_entitlement(db, 999)
+        assert legacy_entitlement.allowed is True
+        assert legacy_entitlement.reason == "legacy_grandfathered"
+
     monkeypatch.setattr(
         "app.services.billing_service.is_billing_enforcement_enabled",
         lambda: True,
     )
     with Session() as db:
-        entitlement_blocked = resolve_tenant_entitlement(db, restaurant_id)
-        assert entitlement_blocked.allowed is False
-        assert entitlement_blocked.reason == "subscription_required"
-        assert entitlement_blocked.billing_status == "subscription_required"
-
-        # Já restaurantes legados continuam permitidos mesmo com enforcement True
-        r_legacy = Restaurante(id=999, nome="Legado", slug="legado", plano="pro", saas_status="active", billing_mode="legacy")
-        db.add(r_legacy)
-        db.commit()
+        blocked = resolve_tenant_entitlement(db, 998)
+        assert blocked.allowed is False
+        assert blocked.reason == "subscription_required"
+        assert blocked.billing_status == "subscription_required"
 
         legacy_entitlement = resolve_tenant_entitlement(db, 999)
         assert legacy_entitlement.allowed is True
         assert legacy_entitlement.reason == "legacy_grandfathered"
         assert legacy_entitlement.billing_status == "active"
-
 
 def test_super_admin_inbox_and_preview_expose_billing_metadata(client_and_session):
     client, Session = client_and_session
