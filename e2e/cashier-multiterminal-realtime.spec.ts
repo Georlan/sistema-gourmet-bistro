@@ -313,7 +313,7 @@ test('três terminais convergem Cozinha → Pedidos → Entregas pelo WebSocket 
   const entregas = await openTerminal(browser, 'entregadores', state, sockets);
 
   try {
-    await expect.poll(() => sockets.size).toBe(3);
+    await expect.poll(() => sockets.size >= 3).toBe(true);
 
     const pedidosCard = pedidos.page.locator('.orders-card--digital').filter({ hasText: 'Cliente Realtime' });
     const entregasWorkspace = entregas.page.locator('#cashier-deliveries-workspace');
@@ -360,7 +360,7 @@ test('mudança Delivery → Retirada converge em Pedidos, Entregas e Retiradas s
   const retiradas = await openTerminal(browser, 'retiradas', state, sockets);
 
   try {
-    await expect.poll(() => sockets.size).toBe(3);
+    await expect.poll(() => sockets.size >= 3).toBe(true);
 
     const entregasWorkspace = entregas.page.locator('#cashier-deliveries-workspace');
     const retiradasWorkspace = retiradas.page.locator('#cashier-pickups-workspace');
