@@ -17,9 +17,8 @@ test('monitor handles multi-transport printing uniformly', () => {
   assert.match(monitor, /configuredEndpoints/);
   assert.match(monitor, /configuredDestinations/);
   assert.match(monitor, /Destinos e rotas de impressão/);
-  assert.match(monitor, /PADRAO/);
-  assert.match(monitor, /COZINHA/);
-  assert.match(monitor, /BAR/);
+  assert.match(monitor, /Rotas ativas/);
+  assert.match(monitor, /Object\.entries\(configuredDestinations\)/);
 
   // Bluetooth SPP on-demand readiness without requiring CUPS queue
   assert.match(monitor, /isPrinterReady/);
@@ -42,7 +41,7 @@ test('monitor presents friendly non-technical UX for users and keeps technical d
   assert.match(monitor, /Impressora encontrada/);
   assert.match(monitor, /Pronta para imprimir/);
   assert.match(monitor, /Desconectada/);
-  assert.match(monitor, /Procurar impressoras/);
+  assert.match(monitor, /Atualizar impressoras/);
   assert.match(monitor, /Imprimir teste/);
   assert.match(monitor, /Impressora principal/);
 
@@ -54,3 +53,12 @@ test('monitor presents friendly non-technical UX for users and keeps technical d
   assert.match(monitor, /transporte, endpoints, SPP, CUPS, spooler e rede/);
 });
 
+
+
+test('daily printing UI does not invoke USB-specific discovery when a printer is already usable', () => {
+  assert.match(monitor, /!hasReadyPrinter \? \(/);
+  assert.match(monitor, /onClick=\{\(\) => void loadMonitor\(true\)\}/);
+  assert.match(monitor, /Preparar conexão USB/);
+  assert.match(monitor, /Diagnóstico técnico e suporte/);
+  assert.doesNotMatch(monitor, /agente online · USB desconectado/);
+});
