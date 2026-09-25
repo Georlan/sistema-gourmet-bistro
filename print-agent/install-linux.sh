@@ -49,6 +49,12 @@ fi
 
 # Se executado via curl em comando único direto, baixa o pacote automaticamente
 if [[ ! -f "$SCRIPT_DIR/main.py" ]]; then
+    for bootstrap_command in curl tar; do
+        if ! command -v "$bootstrap_command" >/dev/null 2>&1; then
+            echo "[ERRO] Comando obrigatório para instalação remota não encontrado: $bootstrap_command" >&2
+            exit 1
+        fi
+    done
     echo "[KÔMA] Baixando a versão correta do Kôma Print Agent..."
     DOWNLOAD_TMP="$(mktemp -d)"
     trap 'rm -rf "$DOWNLOAD_TMP"' EXIT
@@ -174,9 +180,6 @@ chmod 0644 "$UNIT_FILE"
 systemctl --user daemon-reload
 systemctl --user enable --now koma-print-agent.service
 
-# Garante persistência após reboot mesmo sem sessão gráfica aberta
-loginctl enable-linger "$USER" >/dev/null 2>&1 || true
-
 mkdir -p "$APPLICATION_DIR"
 {
     printf '%s\n' \
@@ -208,7 +211,7 @@ if [[ "$ACTION" == "update" ]]; then
 else
     echo "[OK] Impressão configurada e pronta para iniciar automaticamente em segundo plano."
 fi
-echo "[OK] O serviço reiniciará automaticamente e continuará ativo após reinicializações."
+echo "[OK] O serviço reiniciará automaticamente se cair e voltará no próximo login após reinicializações."
 if command -v lpstat >/dev/null 2>&1; then
     echo "[KÔMA] Impressoras CUPS detectadas:"
     lpstat -e 2>/dev/null || echo "  nenhuma fila CUPS encontrada"
