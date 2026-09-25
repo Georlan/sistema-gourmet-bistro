@@ -4,8 +4,9 @@ from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
-from ..models import Usuario, ConfiguracaoRestaurante
+from ..models import Usuario, ConfiguracaoRestaurante, Motoboy
 from ..security import require_entitled_permission, require_permission
+from ..services.capabilities import has_capability
 
 router = APIRouter(prefix="/relatorios", tags=["relatorios"])
 
@@ -46,6 +47,7 @@ CARGO_PERMISSIONS: Dict[str, Dict[str, Any]] = {
     "gerente": {"label": "Gerente", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": False},
     "caixa": {"label": "Operador de caixa", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": False},
     "garcom": {"label": "Gar\u00e7om", "pedidos": True, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
+    "motoboy": {"label": "Entregador", "pedidos": False, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
 }
 ROLE_ALIASES = {"operador_caixa": "caixa"}
 
@@ -80,23 +82,29 @@ def get_cargos_permissoes(
         role = ROLE_ALIASES.get(normalized, normalized)
         counts_by_role[role] = counts_by_role.get(role, 0) + int(total or 0)
 
+    has_courier = (
+        counts_by_role.get("motoboy", 0) > 0
+        or has_capability(db, rest_id, "courier_app")
+        or db.query(Motoboy.id).filter(Motoboy.restaurante_id == rest_id).first() is not None
+    )
+    target_roles = ["admin", "gerente", "caixa", "garcom"] + (["motoboy"] if has_courier else [])
+
     cargos = []
-    for role_key in ["admin", "gerente", "caixa", "garcom"]:
+    for role_key in target_roles:
         perm = CARGO_PERMISSIONS.get(role_key, {"label": role_key.capitalize(), "pedidos": False, "caixa": False, "relatorios": False, "equipe": False, "admin": False})
         total = counts_by_role.get(role_key, 0)
-        if total > 0 or role_key in CARGO_PERMISSIONS:
-            cargos.append({
-                "slug": role_key,
-                "label": perm["label"],
-                "total_funcionarios": total,
-                "permissoes": {
-                    "pedidos": perm["pedidos"],
-                    "caixa": perm["caixa"],
-                    "relatorios": perm["relatorios"],
-                    "equipe": perm["equipe"],
-                    "admin": perm["admin"],
-                }
-            })
+        cargos.append({
+            "slug": role_key,
+            "label": perm["label"],
+            "total_funcionarios": total,
+            "permissoes": {
+                "pedidos": perm["pedidos"],
+                "caixa": perm["caixa"],
+                "relatorios": perm["relatorios"],
+                "equipe": perm["equipe"],
+                "admin": perm["admin"],
+            }
+        })
 
     # Also include any unknown roles actually present in the tenant
     for role_key, count in counts_by_role.items():

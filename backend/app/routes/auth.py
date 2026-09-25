@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 from typing import List
 import uuid
 import logging
+import re
 
 from ..database import bind_session_to_tenant, get_db, current_restaurante_id
-from ..models import ActivityLog, Restaurante, Usuario
+from ..models import ActivityLog, Restaurante, Usuario, Motoboy, MotoboyTokenAtivo
 from ..schemas import LoginRequest, LoginResponse, UsuarioAccessUpdate, UsuarioResponse, AtivarContaRequest
 from ..security import (
     create_access_token,
@@ -529,6 +530,55 @@ def update_usuario_access(
     if before_role == after_role and before_status == after_status:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Nenhuma alteração efetiva foi informada.")
 
+    # Sincronização canônica do perfil operacional de entregador
+    if after_role == "motoboy":
+        motoboy = db.query(Motoboy).filter(
+            Motoboy.restaurante_id == current_user.restaurante_id,
+            Motoboy.usuario_id == usuario.id,
+        ).first()
+        if motoboy:
+            motoboy.ativo = (after_status != "inativo")
+            motoboy.nome = usuario.nome
+            if usuario.telefone:
+                motoboy.telefone = usuario.telefone
+            if after_status == "inativo":
+                db.query(MotoboyTokenAtivo).filter(
+                    MotoboyTokenAtivo.motoboy_id == motoboy.id,
+                    MotoboyTokenAtivo.restaurante_id == current_user.restaurante_id,
+                    MotoboyTokenAtivo.revogado == False,
+                ).update({MotoboyTokenAtivo.revogado: True})
+        else:
+            tel_clean = re.sub(r"\D", "", usuario.telefone or "")
+            motoboy_tel = db.query(Motoboy).filter(
+                Motoboy.restaurante_id == current_user.restaurante_id,
+                Motoboy.telefone == tel_clean,
+            ).first() if tel_clean else None
+            if motoboy_tel and (motoboy_tel.usuario_id is None or motoboy_tel.usuario_id == usuario.id):
+                motoboy_tel.usuario_id = usuario.id
+                motoboy_tel.nome = usuario.nome
+                motoboy_tel.ativo = (after_status != "inativo")
+            else:
+                novo_mb = Motoboy(
+                    restaurante_id=current_user.restaurante_id,
+                    usuario_id=usuario.id,
+                    nome=usuario.nome,
+                    telefone=tel_clean or usuario.telefone or "",
+                    ativo=(after_status != "inativo"),
+                )
+                db.add(novo_mb)
+    else:
+        motoboy = db.query(Motoboy).filter(
+            Motoboy.restaurante_id == current_user.restaurante_id,
+            Motoboy.usuario_id == usuario.id,
+        ).first()
+        if motoboy:
+            motoboy.ativo = False
+            db.query(MotoboyTokenAtivo).filter(
+                MotoboyTokenAtivo.motoboy_id == motoboy.id,
+                MotoboyTokenAtivo.restaurante_id == current_user.restaurante_id,
+                MotoboyTokenAtivo.revogado == False,
+            ).update({MotoboyTokenAtivo.revogado: True})
+
     db.add(ActivityLog(
         restaurante_id=current_user.restaurante_id,
         garcom_id=current_user.id,
@@ -605,6 +655,19 @@ def delete_usuario(
                 user_id=usuario.id,
                 restaurante_id=current_user.restaurante_id,
             )
+        # Desativar perfil operacional de motoboy e revogar tokens de entrega
+        motoboy = db.query(Motoboy).filter(
+            Motoboy.restaurante_id == current_user.restaurante_id,
+            Motoboy.usuario_id == usuario.id,
+        ).first()
+        if motoboy:
+            motoboy.ativo = False
+            db.query(MotoboyTokenAtivo).filter(
+                MotoboyTokenAtivo.motoboy_id == motoboy.id,
+                MotoboyTokenAtivo.restaurante_id == current_user.restaurante_id,
+                MotoboyTokenAtivo.revogado == False,
+            ).update({MotoboyTokenAtivo.revogado: True})
+
         db.add(ActivityLog(
             restaurante_id=current_user.restaurante_id,
             garcom_id=current_user.id,

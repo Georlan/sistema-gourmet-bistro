@@ -541,7 +541,7 @@ def verify_motoboy_token(token: str, db: Optional[Any] = None) -> dict:
 
         # Checar revogação no banco de dados se a sessão db for fornecida e jti existir
         if db is not None and jti:
-            from .models import MotoboyTokenAtivo
+            from .models import Motoboy, MotoboyTokenAtivo
             token_db = db.query(MotoboyTokenAtivo).filter(
                 MotoboyTokenAtivo.jti == jti,
                 MotoboyTokenAtivo.motoboy_id == int(motoboy_id),
@@ -551,6 +551,15 @@ def verify_motoboy_token(token: str, db: Optional[Any] = None) -> dict:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Link do entregador foi revogado ou é inválido. Solicite um novo link no Caixa."
+                )
+            motoboy_rec = db.query(Motoboy).filter(
+                Motoboy.id == int(motoboy_id),
+                Motoboy.restaurante_id == int(restaurante_id),
+            ).first()
+            if not motoboy_rec or not motoboy_rec.ativo:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Entregador inativo ou não encontrado. Solicite novo acesso no Caixa."
                 )
 
         return {"motoboy_id": int(motoboy_id), "restaurante_id": int(restaurante_id), "jti": jti}

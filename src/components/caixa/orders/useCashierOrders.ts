@@ -572,11 +572,22 @@ export function useCashierOrders({
   };
 
   useEffect(() => {
+    void fetchMotoboys();
+  }, [apiBaseUrl]);
+
+  useEffect(() => {
     const handleDeliveryUpdate = () => {
       void fetchDeliveryOrders();
     };
+    const handleTeamUpdate = () => {
+      void fetchMotoboys();
+    };
     window.addEventListener('koma_orders_updated', handleDeliveryUpdate);
-    return () => window.removeEventListener('koma_orders_updated', handleDeliveryUpdate);
+    window.addEventListener('koma_team_updated', handleTeamUpdate);
+    return () => {
+      window.removeEventListener('koma_orders_updated', handleDeliveryUpdate);
+      window.removeEventListener('koma_team_updated', handleTeamUpdate);
+    };
   }, [apiBaseUrl]);
 
   async function handleAssignDeliveryCourier(orderId: string, nextMotoboyId: string, previousMotoboyId: string) {
@@ -891,6 +902,37 @@ export function useCashierOrders({
     }
   };
 
+  const handleGerarLinkMotoboy = async (selectedMotoboyId: string) => {
+    if (!selectedMotoboyId) {
+      showToast('Selecione um entregador para gerar o link!', 'info');
+      return;
+    }
+    const mb = motoboys.find((m) => String(m.id) === String(selectedMotoboyId));
+    if (!mb) {
+      showToast('Entregador não encontrado.', 'error');
+      return;
+    }
+    try {
+      const res = await fetch(`${apiBaseUrl}/comandas/motoboys/${selectedMotoboyId}/gerar-link`, {
+        method: 'POST',
+        headers: authHeaders,
+      });
+      const data = await res.json().catch(() => ({}));
+      const linkToCopy = data?.link_publico || data?.link;
+      if (res.ok && linkToCopy) {
+        if (navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(linkToCopy).catch(() => {});
+        }
+        showToast(`Link de acesso de '${mb.nome}' copiado!`, 'success');
+      } else {
+        showToast(data?.detail || 'Não foi possível gerar o link de acesso.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Erro ao gerar link de acesso.', 'error');
+    }
+  };
+
   const handleRevogarAcessoMotoboy = async (selectedMotoboyId: string) => {
     if (!selectedMotoboyId) {
       showToast('Selecione um entregador para revogar o acesso!', 'info');
@@ -942,17 +984,21 @@ export function useCashierOrders({
     e.preventDefault();
     if (!newMotoboyNome.trim() || !newMotoboyTelefone.trim()) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/motoboys`, {
+      const res = await fetch(`${apiBaseUrl}/comandas/motoboys/cadastro`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: newMotoboyNome, telefone: newMotoboyTelefone, ativo: true }),
+        body: JSON.stringify({ nome: newMotoboyNome.trim(), telefone: newMotoboyTelefone.trim(), ativo: true }),
       });
       if (res.ok) {
-        showToast('Entregador cadastrado com sucesso!');
+        showToast('Entregador cadastrado e integrado à equipe com sucesso!');
         await fetchMotoboys();
+        window.dispatchEvent(new CustomEvent('koma_team_updated'));
         setNewMotoboyNome('');
         setNewMotoboyTelefone('');
-      } else showToast('Erro ao cadastrar entregador.', 'error');
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(errorData.detail || 'Erro ao cadastrar entregador.', 'error');
+      }
     } catch (err) {
       console.error(err);
       showToast('Erro de conexão ao cadastrar entregador.', 'error');
@@ -1153,6 +1199,7 @@ export function useCashierOrders({
     handleUpdateDeliveryStatus,
     handleAssignDeliveryCourier,
     handleDespacharKanban,
+    handleGerarLinkMotoboy,
     handleRevogarAcessoMotoboy,
     handleFecharDelivery,
     handleRecusarPedido,
