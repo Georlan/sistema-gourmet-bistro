@@ -66,6 +66,8 @@ test('Entregas resolve aceite, preparo, logística, cobrança e conclusão com a
   assert.match(couriers, /pendingIdsRef\.current\.has\(orderId\)/);
   assert.match(couriers, /Gerenciar entregadores/);
   assert.match(couriers, /Entregas concluídas hoje/);
+  assert.match(couriers, /Alterar para retirada/);
+  assert.match(couriers, /onRequestFulfillmentConversion/);
   assert.doesNotMatch(couriers, /delivery\/status\?status_novo/);
   assert.doesNotMatch(couriers, /\/comandas\/\$\{[^}]+\}\/fechar/);
 });
@@ -78,6 +80,7 @@ test('workspaces recebem as mesmas ações do controller e expõem falha de sinc
   assert.match(panel, /openDeliveryOrderDetails=\{openDeliveryOrderDetails\}/);
   assert.match(orders, /setDeliveryOrdersLoadState\('error'\)/);
   assert.match(orders, /setDeliveryOrdersLoadState\('loaded'\)/);
+  assert.match(orders, /delivery\/converter-retirada/);
   assert.match(pickup, /Mostrando o último estado conhecido/);
   assert.match(couriers, /Mostrando o último estado conhecido/);
 });
@@ -131,6 +134,7 @@ test('loading e erro mantêm feedback explícito sem exigir conhecimento do Kanb
     handleAdvanceDigitalOrder: async () => {},
     openDeliveryOrderDetails: () => {},
     onRequestCourierReassignment: () => {},
+    onRequestFulfillmentConversion: () => {},
     apiBaseUrl: 'http://example.test',
     authHeaders: {},
     now: Date.UTC(2026, 8, 20, 12),
@@ -162,6 +166,7 @@ test('controles do PWA do entregador falham fechados fora de courier_app sem blo
     handleAdvanceDigitalOrder: async () => {},
     openDeliveryOrderDetails: () => {},
     onRequestCourierReassignment: () => {},
+    onRequestFulfillmentConversion: () => {},
     apiBaseUrl: 'http://example.test',
     authHeaders: {},
     now: Date.UTC(2026, 8, 24, 12),
