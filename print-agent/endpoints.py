@@ -8,6 +8,8 @@ import re
 from typing import Any, Dict, List, Optional
 import uuid
 
+from printer_profiles import enrich_endpoint_options
+
 from adapters.transports import (
     PrinterTransport,
     BluetoothRfcommTransport,
@@ -106,6 +108,25 @@ class PrinterEndpoint:
 
         if not self.protocol:
             self.protocol = "escpos"
+
+        self.options = enrich_endpoint_options(
+            self.name,
+            display_name=self.display_name,
+            transport=self.transport,
+            options=self.options,
+        )
+
+    @property
+    def paper_width_mm(self) -> int:
+        return int(self.options.get("paper_width_mm") or 80)
+
+    @property
+    def columns(self) -> int:
+        return int(self.options.get("columns") or 48)
+
+    @property
+    def paper_profile(self) -> str:
+        return str(self.options.get("paper_profile") or "thermal-80mm")
 
     def to_dict(self) -> Dict[str, Any]:
         return {
