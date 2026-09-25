@@ -88,11 +88,9 @@ test('CNPJ exige representante pessoa física e CPF usa o próprio titular', () 
 });
 
 test('campo de CPF / CNPJ da contratação aceita CNPJ alfanumérico e não restringe teclado a numérico', () => {
-  const v1 = readFileSync('src/legal/PlanContractPage.tsx', 'utf8');
-  assert.doesNotMatch(v1, /<input[^<]*?value=\{form\.taxId\}[^<]*?inputMode="numeric"/);
-  assert.match(v1, /<input[^<]*?value=\{form\.taxId\}[^<]*?autoCapitalize="characters"/);
-  assert.match(v1, /<input[^<]*?value=\{form\.representativeTaxId\}[^<]*?inputMode="numeric"/);
   assert.doesNotMatch(planContract, /<input[^<]*?value=\{form\.taxId\}[^<]*?inputMode="numeric"/);
+  assert.match(planContract, /<input[^<]*?value=\{form\.taxId\}[^<]*?autoCapitalize="characters"/);
+  assert.match(planContract, /<input[^<]*?value=\{form\.representativeTaxId\}[^<]*?inputMode="numeric"/);
   assert.equal(taxIdKind('00.000.000/E08G-12'), 'cnpj');
   assert.equal(isValidCnpj('00.000.000/E08G-12'), true);
 });

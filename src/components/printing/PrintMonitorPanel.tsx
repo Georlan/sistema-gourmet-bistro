@@ -398,6 +398,34 @@ export function PrintMonitorPanel({
     );
   }, [monitorData]);
 
+  const isPrinterReady = (printer: DetectedPrinter): boolean => {
+    if (printer.connection === 'bluetooth') {
+      return Boolean(printer.paired && (printer.spp ?? true));
+    }
+    return Boolean(
+      printer.available
+      && printer.present === true
+      && printer.configured === true
+    );
+  };
+
+  const allDetectedPrinters = useMemo(() => (
+    (monitorData?.agents || [])
+      .filter(agent => agentHasFreshDiagnostics(agent))
+      .flatMap((agent, agentIndex) => (
+        (agent.printer_diagnostics?.printers || []).map(printer => ({
+          ...printer,
+          agentIndex,
+          agentId: agent.agent_id,
+          supportsBluetoothTest: agent.supports_bluetooth_test === true
+        }))
+      ))
+  ), [agentHasFreshDiagnostics, monitorData]);
+
+  const readyPrinters = useMemo(() => (
+    allDetectedPrinters.filter(isPrinterReady)
+  ), [allDetectedPrinters]);
+
   const usbPrinters = useMemo(() => (
     (monitorData?.agents || [])
       .filter(agent => agentHasFreshDiagnostics(agent))
@@ -426,6 +454,35 @@ export function PrintMonitorPanel({
       ))
   ), [agentHasFreshDiagnostics, monitorData]);
 
+  const networkPrinters = useMemo(() => (
+    (monitorData?.agents || [])
+      .filter(agent => agentHasFreshDiagnostics(agent))
+      .flatMap(agent => (
+        (agent.printer_diagnostics?.printers || [])
+          .filter(printer => printer.connection === 'network')
+          .map(printer => ({
+            ...printer,
+            agentId: agent.agent_id
+          }))
+      ))
+  ), [agentHasFreshDiagnostics, monitorData]);
+
+  const configuredEndpoints = useMemo(() => (
+    (monitorData?.agents || [])
+      .filter(agent => agentHasFreshDiagnostics(agent))
+      .flatMap(agent => agent.printer_diagnostics?.endpoints || [])
+  ), [agentHasFreshDiagnostics, monitorData]);
+
+  const configuredDestinations = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const agent of monitorData?.agents || []) {
+      if (agentHasFreshDiagnostics(agent) && agent.printer_diagnostics?.destinations) {
+        Object.assign(map, agent.printer_diagnostics.destinations);
+      }
+    }
+    return map;
+  }, [agentHasFreshDiagnostics, monitorData]);
+
   const readyUsbPrinters = usbPrinters.filter(
     printer => (
       printer.available
@@ -449,7 +506,12 @@ export function PrintMonitorPanel({
   const hasUsbCommandAgent = onlineAgents.some(
     agent => agent.supports_usb_commands
   );
-  const hasReadyPrinter = readyUsbPrinters.length > 0;
+  const hasReadyPrinter = (
+    readyPrinters.length > 0
+    || readyUsbPrinters.length > 0
+    || (monitorData?.summary?.printer_ready ?? false)
+    || (monitorData?.agents || []).some(agent => agent.printer_ready)
+  );
   const hasFreshPrinterDiagnostics = Boolean(
     (monitorData?.agents || []).some(agent => agentHasFreshDiagnostics(agent))
   );
@@ -724,7 +786,16 @@ export function PrintMonitorPanel({
         detail: `${queueTotal} trabalho(s) sendo processado(s).`
       };
     }
-    if (!hasUsbCommandAgent) {
+    const firstReady = readyPrinters[0] || readyUsbPrinters[0] || null;
+    const readyName = friendlyPrinterName(firstReady?.name || null);
+    const readyTransport = firstReady?.connection === 'bluetooth'
+      ? 'Bluetooth'
+      : firstReady?.connection === 'network'
+        ? 'de rede'
+        : 'USB';
+    const readyTitle = `Impressora ${readyTransport} pronta`;
+
+    if (!hasUsbCommandAgent && (!firstReady || firstReady.connection === 'usb')) {
       return {
         tone: 'success',
         title: 'Impressora USB pronta',
@@ -736,21 +807,26 @@ export function PrintMonitorPanel({
     }
     return {
       tone: 'success',
-      title: 'Impressora USB pronta',
-      detail: `${friendlyPrinterName(readyUsbPrinters[0]?.name || null)} está conectada e disponível.`
+      title: readyTitle,
+      detail: (
+        firstReady?.connection === 'bluetooth'
+          ? `${readyName} está pareada e pronta para envio Bluetooth sob demanda.`
+          : `${readyName} está conectada e disponível.`
+      )
     };
   }, [
     commandRunning,
     hasFreshPrinterDiagnostics,
     hasOnlineAgent,
-    hasUsbCommandAgent,
     hasReadyPrinter,
+    hasUsbCommandAgent,
     latestJob,
     monitorData,
     pendingCommandAction,
     pendingCommandId,
     presentUsbPrinters.length,
     queueTotal,
+    readyPrinters,
     readyUsbPrinters
   ]);
 
@@ -935,8 +1011,8 @@ export function PrintMonitorPanel({
                 disabled={testInProgress || !hasReadyPrinter}
                 title={
                   hasReadyPrinter
-                    ? 'Enviar um cupom real para a impressora USB'
-                    : 'Conecte a impressora USB primeiro'
+                    ? 'Enviar um cupom real para a impressora pronta'
+                    : 'Conecte ou pareie uma impressora primeiro'
                 }
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-panel px-5 py-2.5 text-xs font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer shadow-xs"
               >
