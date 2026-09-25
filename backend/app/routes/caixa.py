@@ -12,6 +12,7 @@ from ..database import get_db, require_tenant_id
 from ..services.restaurant_profile import apply_restaurant_profile_update
 from ..services.cash_reconciliation import cash_shift_totals, count_open_commands as _comandas_abertas_count
 from ..services.cash_activity import recent_cash_activities as _atividades_recentes_turno
+from ..services.order_financials import has_operational_fulfillment, open_balance, payable_total
 from ..models import (
     Usuario, Comanda, Item, CaixaTurno, CaixaMovimentacao, Pagamento,
     ConfiguracaoRestaurante, ConfigFidelizacao, HistoricoFidelidade, Cliente,
@@ -662,6 +663,29 @@ def _subtotal_ativo(comanda: Comanda) -> Decimal:
         for item in comanda.itens
         if item.status != "cancelado"
     ))
+
+def _apply_fully_paid_state(comanda: Comanda) -> tuple[bool, bool]:
+    """Marca quitação financeira sem encerrar fulfillment digital implicitamente.
+
+    Retorna (quitada, fechada_agora). Pedidos digitais permanecem operacionais
+    até a ação explícita de conclusão; comandas tradicionais preservam o
+    fechamento automático histórico após quitação.
+    """
+    total_devido = payable_total(comanda)
+    quitada = _valor_monetario(comanda.valor_pago) + _CENTAVO >= total_devido
+    if not quitada:
+        return False, False
+
+    for item in comanda.itens:
+        if item.status != "cancelado":
+            item.pago = True
+
+    if has_operational_fulfillment(comanda):
+        return True, False
+
+    comanda.fechada = True
+    comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+    return True, True
 
 
 def _percentual_taxa_servico(
@@ -1380,10 +1404,7 @@ def registrar_pagamento_comanda(
                 detail="O valor deve corresponder exatamente aos itens selecionados.",
             )
 
-    saldo_aberto = max(
-        Decimal("0.00"),
-        _subtotal_ativo(comanda) - _valor_monetario(comanda.valor_pago),
-    )
+    saldo_aberto = open_balance(comanda)
     if valor_solicitado > saldo_aberto:
         if itens_selecionados:
             raise HTTPException(
@@ -1439,48 +1460,29 @@ def registrar_pagamento_comanda(
             _valor_monetario(comanda.valor_pago) + _valor_monetario(pag_in.valor)
         ))
         
-        # 4. A quitação é monetária; marcar itens individualmente nunca fecha
-        # uma comanda se o valor total ainda não foi recebido.
-        subtotal_total = float(_subtotal_ativo(comanda))
-        
-        if comanda.valor_pago >= subtotal_total:
-            # Mark all active items as paid just in case
-            for i in comanda.itens:
-                if i.status != 'cancelado':
-                    i.pago = True
-            # Close comanda
-            status_ant = comanda.delivery_status
-            comanda.fechada = True
-            comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
-            if comanda.delivery_status is not None or comanda.tipo in {"Delivery", "Entrega", "Retirada", "Viagem", "balcao", "balcão"}:
-                if comanda.delivery_status != "recusado":
-                    comanda.delivery_status = "finalizado"
-                    if status_ant != "finalizado":
-                        from .orders_core import _agendar_notificacao_whatsapp_status
-                        _agendar_notificacao_whatsapp_status(
-                            background_tasks,
-                            db,
-                            comanda,
-                            status_ant,
-                            "finalizado",
-                        )
-            if comanda.mesa_id:
-                other_open = db.query(Comanda).filter(
-                    Comanda.restaurante_id == rest_id,
-                    Comanda.mesa_id == comanda.mesa_id,
-                    Comanda.fechada == False,
-                    Comanda.id != comanda.id
-                ).first()
-                if not other_open:
-                    background_tasks.add_task(manager.broadcast, {
-                        "event": "MESA_ATUALIZADA",
-                        "data": {
-                            "mesa_id": comanda.mesa_id,
-                            "status": "livre",
-                            "comanda_id": None
-                        }
-                    }, rest_id)
-            
+        # Quitação financeira e conclusão operacional são dimensões separadas.
+        # Um delivery/retirada pago continua visível até a ação explícita de
+        # concluir o fulfillment. Comandas tradicionais mantêm o fechamento
+        # automático após quitação.
+        quitada, fechada_agora = _apply_fully_paid_state(comanda)
+        if fechada_agora and comanda.mesa_id:
+            other_open = db.query(Comanda).filter(
+                Comanda.restaurante_id == rest_id,
+                Comanda.mesa_id == comanda.mesa_id,
+                Comanda.fechada == False,
+                Comanda.id != comanda.id
+            ).first()
+            if not other_open:
+                background_tasks.add_task(manager.broadcast, {
+                    "event": "MESA_ATUALIZADA",
+                    "data": {
+                        "mesa_id": comanda.mesa_id,
+                        "status": "livre",
+                        "comanda_id": None
+                    }
+                }, rest_id)
+
+        if quitada:
             _registrar_fidelidade_quitacao(db, comanda, cliente_pagamento)
                     
     try:
@@ -1623,10 +1625,7 @@ def aprovar_pagamento(
                 detail=_ITEM_SELECTION_CHANGED_DETAIL,
             )
 
-    saldo_aberto = max(
-        Decimal("0.00"),
-        _subtotal_ativo(comanda) - _valor_monetario(comanda.valor_pago),
-    )
+    saldo_aberto = open_balance(comanda)
     if comanda.fechada or _valor_monetario(pagamento.valor) > saldo_aberto:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -1647,33 +1646,27 @@ def aprovar_pagamento(
     for item in itens_selecionados:
         item.pago = True
 
-    # A quitação continua monetária; o escopo persistido impede que uma aprovação
-    # por itens seja reinterpretada como pagamento livre.
-    subtotal_total = float(_subtotal_ativo(comanda))
-    
-    if comanda.valor_pago >= subtotal_total:
-        for i in comanda.itens:
-            if i.status != 'cancelado':
-                i.pago = True
-        comanda.fechada = True
-        comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
-        if comanda.mesa_id:
-            other_open = db.query(Comanda).filter(
-                Comanda.restaurante_id == rest_id,
-                Comanda.mesa_id == comanda.mesa_id,
-                Comanda.fechada == False,
-                Comanda.id != comanda.id
-            ).first()
-            if not other_open:
-                background_tasks.add_task(manager.broadcast, {
-                    "event": "MESA_ATUALIZADA",
-                    "data": {
-                        "mesa_id": comanda.mesa_id,
-                        "status": "livre",
-                        "comanda_id": None
-                    }
-                }, rest_id)
+    # Aprovar dinheiro pendente também respeita a separação entre pagamento
+    # e conclusão operacional.
+    quitada, fechada_agora = _apply_fully_paid_state(comanda)
+    if fechada_agora and comanda.mesa_id:
+        other_open = db.query(Comanda).filter(
+            Comanda.restaurante_id == rest_id,
+            Comanda.mesa_id == comanda.mesa_id,
+            Comanda.fechada == False,
+            Comanda.id != comanda.id
+        ).first()
+        if not other_open:
+            background_tasks.add_task(manager.broadcast, {
+                "event": "MESA_ATUALIZADA",
+                "data": {
+                    "mesa_id": comanda.mesa_id,
+                    "status": "livre",
+                    "comanda_id": None
+                }
+            }, rest_id)
 
+    if quitada:
         cliente_pagamento = None
         if pagamento.cliente_id:
             cliente_pagamento = buscar_cliente_por_id(
