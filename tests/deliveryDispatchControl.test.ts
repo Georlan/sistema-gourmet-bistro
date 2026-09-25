@@ -10,6 +10,7 @@ import type { DeliveryOrderView } from '../src/components/caixa/orders/cashierWo
 const noop = () => {};
 const NOW = Date.UTC(2026, 8, 15, 16, 30);
 const ordersRouteSource = readFileSync(new URL('../backend/app/routes/orders.py', import.meta.url), 'utf8');
+const ordersCoreSource = readFileSync(new URL('../backend/app/routes/orders_core.py', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const cashierOrdersSource = readFileSync(new URL('../src/components/caixa/orders/useCashierOrders.ts', import.meta.url), 'utf8');
 const cashierPanelSource = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
@@ -180,6 +181,67 @@ test('modal de despacho exige entregador e confirma saída com a atribuição se
 
   assert.deepEqual(calls, ['courier:7', 'dispatch:7']);
   assert.match(renderToStaticMarkup(createElement(KanbanOrderDetails, selectedProps)), /Pedro Silva/);
+});
+
+
+
+test('delivery pode virar retirada antes da rota e mantém exceção fora do fluxo normal', () => {
+  const calls: string[] = [];
+  const props: KanbanOrderDetailsProps = {
+    order: {
+      id: 'delivery-convert',
+      mesaId: 0,
+      numeroPedido: 44,
+      modalidade: 'delivery',
+      deliveryStatus: 'producao',
+      identificador: 'Cliente mudou de ideia',
+      total: 40,
+      itens: [{ nome: 'Pizza', status: 'preparando' }],
+      courierAssignment: {
+        value: 7,
+        options: [{ id: 7, nome: 'Pedro Silva' }],
+        loading: false,
+        onChange: noop,
+      },
+    },
+    transfer: { targetId: '', onTargetChange: noop, isTransferring: false, tables: [] },
+    actions: {
+      close: noop,
+      advanceDigitalOrder: noop,
+      reprintProduction: noop,
+      printFullTable: noop,
+      printTableValues: noop,
+      transferTable: noop,
+      associateTable: noop,
+      convertDeliveryToPickup: () => calls.push('convert'),
+      cancelConsumption: noop,
+      cancelOrder: noop,
+    },
+  };
+
+  const preparingView = KanbanOrderDetails(props);
+  invoke(button(preparingView, 'Alterar para retirada'), 'onClick');
+  assert.deepEqual(calls, ['convert']);
+
+  const transitView = KanbanOrderDetails({
+    ...props,
+    order: { ...props.order, deliveryStatus: 'transito' },
+  });
+  assert.equal(
+    elements(transitView).filter(element => element.type === 'button'
+      && textOf(element).replace(/\s+/g, ' ').trim() === 'Alterar para retirada').length,
+    0,
+  );
+
+  const conversionRoute = ordersCoreSource
+    .split('@router.post("/{comanda_id}/delivery/converter-retirada"', 2)[1]
+    .split('@router.get("/delivery/retiradas/concluidas-recentes"', 1)[0];
+  assert.match(conversionRoute, /comanda\.tipo = "Retirada"/);
+  assert.match(conversionRoute, /comanda\.motoboy_id = None/);
+  assert.match(conversionRoute, /comanda\.delivery_taxa = 0\.0/);
+  assert.match(conversionRoute, /action="CONVERT_FULFILLMENT"/);
+  assert.match(conversionRoute, /"type": "fulfillment_changed"/);
+  assert.doesNotMatch(conversionRoute, /_agendar_notificacao_whatsapp_status/);
 });
 
 
