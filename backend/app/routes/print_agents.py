@@ -362,22 +362,16 @@ def _expire_stale_agent_command(
 
 
 def _is_printer_ready_entry(printer: Mapping[str, Any]) -> bool:
-    """
-    Verifica se uma impressora está pronta independentemente do transporte.
-    - Bluetooth SPP: pareada + perfil SPP válido tornam o endpoint pronto sob demanda.
-    - USB, Rede, Spooler: available + present + configured.
-    """
+    """Verifica prontidão a partir do estado físico atual reportado pelo agente."""
     if not isinstance(printer, Mapping):
         return False
 
     connection = str(printer.get("connection") or "unknown").lower()
-    if connection == "bluetooth":
-        is_paired = printer.get("paired") is True
-        has_spp = printer.get("spp") is True
-        is_available = printer.get("available") is True or (is_paired and has_spp)
-        is_configured = printer.get("configured") is True or is_paired
-        is_present = printer.get("present") is True or is_paired
-        return bool(is_paired and has_spp and is_available and is_configured and is_present)
+    if connection == "bluetooth" and not (
+        printer.get("paired") is True
+        and printer.get("spp") is True
+    ):
+        return False
 
     return bool(
         printer.get("available") is True
@@ -387,12 +381,9 @@ def _is_printer_ready_entry(printer: Mapping[str, Any]) -> bool:
 
 
 def _is_printer_present_entry(printer: Mapping[str, Any]) -> bool:
-    """Verifica se há dispositivo físico ou endpoint presente."""
+    """Verifica presença física atual, não mera configuração persistida."""
     if not isinstance(printer, Mapping):
         return False
-    connection = str(printer.get("connection") or "unknown").lower()
-    if connection == "bluetooth":
-        return bool(printer.get("paired") is True and printer.get("spp") is True)
     return bool(printer.get("present") is True)
 
 
