@@ -32,7 +32,7 @@ from ..domain.orders.types import (
     normalize_to_order_status,
     to_legacy_order_status,
 )
-from ..models import Comanda, Lancamento, Motoboy, Restaurante, Usuario
+from ..models import Comanda, DeliveryCourierReassignmentAudit, Lancamento, Motoboy, Restaurante, Usuario
 from ..schemas import ComandaResponse
 from ..security import motoboy_rate_limiter, require_permission, verify_motoboy_token
 from ..services.inventory import alertas_estoque_dos_itens
@@ -378,6 +378,120 @@ def atribuir_entregador_delivery(
     comanda.motoboy_id = motoboy_id
     db.commit()
     db.refresh(comanda)
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "tables_updated"},
+        rid,
+    )
+    return comanda
+
+
+@router.post("/{comanda_id}/delivery/entregador/reassign", response_model=ComandaResponse)
+def reatribuir_entregador_em_rota(
+    comanda_id: str,
+    payload: dict,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
+):
+    """Troca excepcional do entregador sem alterar o estado da corrida.
+
+    A operação é permitida somente quando a entrega já está em trânsito, exige
+    motivo explícito e grava evidência append-only. Não reaplica transição,
+    impressão, estoque nem notificação customer-facing de despacho.
+    """
+    rid = require_tenant_id()
+    comanda = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == rid,
+            Comanda.id == comanda_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if not comanda:
+        raise HTTPException(status_code=404, detail="Comanda não encontrada")
+    if not _is_delivery(comanda):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Somente pedidos de delivery aceitam troca de entregador.",
+        )
+
+    current_status = normalize_to_order_status(comanda.delivery_status)
+    if current_status != OrderStatus.DISPATCHED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A troca excepcional de entregador só é permitida para entrega em rota.",
+        )
+    if not comanda.motoboy_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Entrega em rota sem entregador atual deve ser corrigida pelo fluxo de despacho.",
+        )
+
+    reason = str(payload.get("motivo") or payload.get("reason") or "").strip()
+    if len(reason) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Informe um motivo com pelo menos 3 caracteres.",
+        )
+    if len(reason) > 500:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="O motivo deve ter no máximo 500 caracteres.",
+        )
+
+    raw_motoboy_id = payload.get("motoboy_id")
+    try:
+        new_motoboy_id = int(raw_motoboy_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="motoboy_id inválido") from exc
+    if new_motoboy_id <= 0:
+        raise HTTPException(status_code=400, detail="motoboy_id inválido")
+    if new_motoboy_id == comanda.motoboy_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Selecione um entregador diferente do atual.",
+        )
+
+    previous_motoboy = db.query(Motoboy).filter(
+        Motoboy.restaurante_id == rid,
+        Motoboy.id == comanda.motoboy_id,
+    ).first()
+    new_motoboy = db.query(Motoboy).filter(
+        Motoboy.restaurante_id == rid,
+        Motoboy.id == new_motoboy_id,
+        Motoboy.ativo.is_(True),
+    ).first()
+    if not new_motoboy:
+        raise HTTPException(status_code=404, detail="Entregador ativo não encontrado")
+    if new_motoboy.usuario_id:
+        linked_user = db.query(Usuario).filter(
+            Usuario.restaurante_id == rid,
+            Usuario.id == new_motoboy.usuario_id,
+        ).first()
+        if linked_user and str(linked_user.status or "").lower().strip() == "inativo":
+            raise HTTPException(status_code=404, detail="Entregador ativo não encontrado")
+
+    audit = DeliveryCourierReassignmentAudit(
+        restaurante_id=rid,
+        comanda_id=comanda.id,
+        previous_motoboy_id=comanda.motoboy_id,
+        new_motoboy_id=new_motoboy.id,
+        previous_motoboy_name=(
+            previous_motoboy.nome if previous_motoboy else f"#{comanda.motoboy_id}"
+        ),
+        new_motoboy_name=new_motoboy.nome,
+        actor_user_id=getattr(current_user, "id", None),
+        actor_name=str(getattr(current_user, "nome", None) or "Operador"),
+        reason=reason,
+    )
+    db.add(audit)
+    comanda.motoboy_id = new_motoboy.id
+    db.commit()
+    db.refresh(comanda)
+
     background_tasks.add_task(
         manager.broadcast,
         {"event": "tables_updated"},

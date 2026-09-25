@@ -41,10 +41,12 @@ import { useCashierPreferences } from './caixa/navigation/useCashierPreferences'
 import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
 import { CashierCancelConsumptionDialog } from './caixa/orders/CashierCancelConsumptionDialog';
 import { CashierCouriers } from './caixa/orders/CashierCouriers';
+import { CourierReassignmentDialog } from './caixa/orders/CourierReassignmentDialog';
 import { CashierPickups } from './caixa/orders/CashierPickups';
 import type { CashierTableCard } from './caixa/orders/cashierWorkspaceTypes';
 import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
 import { useCashierOrders } from './caixa/orders/useCashierOrders';
+import { useCourierReassignment } from './caixa/orders/useCourierReassignment';
 import { useOnlineOrderAutoAcceptPolicy } from './caixa/orders/useOnlineOrderAutoAcceptPolicy';
 import { useCashierPdv } from './caixa/pdv/useCashierPdv';
 import { useCashierAlerts } from './caixa/realtime/useCashierAlerts';
@@ -291,6 +293,7 @@ export function CaixaPanel({
     fetchMotoboys,
     openDeliveryOrderDetails,
     handleDespacharKanban,
+    handleReassignDeliveryCourier,
     handleGerarLinkMotoboy,
     handleRevogarAcessoMotoboy,
     handleFecharDelivery,
@@ -321,6 +324,12 @@ export function CaixaPanel({
     isLoading,
     setIsLoading,
   });
+  const courierReassignment = useCourierReassignment({
+    motoboys,
+    showToast,
+    reassignCourier: handleReassignDeliveryCourier,
+  });
+
   const { soundEnabled, toggleSound, playOrderAlert } = useCashierAlerts({
     orders,
     deliveryOrders,
@@ -986,6 +995,7 @@ export function CaixaPanel({
                   onChange: (orderId, courierId) => {
                     setSelectedMotoboys((current) => ({ ...current, [orderId]: courierId }));
                   },
+                  onRequestReassignment: courierReassignment.request,
                 }}
                 actions={{
                   confirmCashPayment: handleConfirmPendingCashPayment,
@@ -1229,6 +1239,7 @@ export function CaixaPanel({
               handleRejectPendingDeliveryOrder={handleRejectPendingDeliveryOrder}
               handleAdvanceDigitalOrder={handleAdvanceDigitalOrder}
               openDeliveryOrderDetails={openDeliveryOrderDetails}
+              onRequestCourierReassignment={courierReassignment.request}
               apiBaseUrl={apiBaseUrl}
               authHeaders={authHeaders}
               now={nowTimestamp}
@@ -1265,6 +1276,14 @@ export function CaixaPanel({
           serviceTaxRate={serviceTaxRate}
           hasPrinting={hasPrinting}
           restaurantInfo={restauranteConfig as any}
+        />
+
+        <CourierReassignmentDialog
+          target={courierReassignment.target}
+          couriers={motoboys}
+          isSubmitting={courierReassignment.isSubmitting}
+          onClose={courierReassignment.close}
+          onSubmit={courierReassignment.submit}
         />
 
         {selectedKanbanOrder && (
