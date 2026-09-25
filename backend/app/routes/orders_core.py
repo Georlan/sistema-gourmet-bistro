@@ -956,6 +956,10 @@ def converter_delivery_para_retirada(
             details=json.dumps(audit_details, ensure_ascii=False, sort_keys=True),
         )
     )
+    # O cliente precisa reler também a modalidade, mas isso não é uma transição
+    # de lifecycle. Envie apenas um hint commit-safe de refresh do snapshot.
+    from ..services.order_chat_service import queue_order_tracking_refresh
+    queue_order_tracking_refresh(db, rid, comanda.id)
     db.commit()
     db.refresh(comanda)
 
