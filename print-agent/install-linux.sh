@@ -34,6 +34,7 @@ required_files=(
     requirements.txt
     requirements.lock
     agent_runtime.py
+    endpoints.py
 )
 adapter_files=(
     __init__.py
