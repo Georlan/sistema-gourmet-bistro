@@ -70,7 +70,7 @@ if (-not (Test-KomaPython $pythonCommand)) {
 }
 
 $requiredFiles = @(
-    "main.py", "config.py", "pairing.py", "worker.py", "wake_listener.py", "simulator.py", "dispatcher.py", "agent_runtime.py",
+    "main.py", "config.py", "endpoints.py", "pairing.py", "worker.py", "wake_listener.py", "simulator.py", "dispatcher.py", "agent_runtime.py",
     "api_client.py", "journal.py", "requirements.txt", "requirements.lock",
     "koma-print-launcher.ps1", "check-windows.ps1"
 )

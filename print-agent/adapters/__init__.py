@@ -13,6 +13,7 @@ from .transports import (
     UsbDirectTransport,
     CupsTransport,
     WindowsSpoolerTransport,
+    TcpTransport,
 )
 
 

@@ -360,7 +360,7 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                             claim_ms = round((time.perf_counter() - started) * 1000)
                             if jobs:
                                 with hardware_lock:
-                                    outcomes = dispatch_claimed_jobs(adapter, journal, jobs, dict(config.printers), config.max_parallel_printers)
+                                    outcomes = dispatch_claimed_jobs(adapter, journal, jobs, config, config.max_parallel_printers)
                                 failures = [item for item in outcomes if item["state"] == "failed"]
                                 releases = [item["job"]["id"] for item in outcomes if item["state"] == "release"]
                                 for item in outcomes:

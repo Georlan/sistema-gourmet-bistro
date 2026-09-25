@@ -869,6 +869,16 @@ class DetectedPrinterReport(BaseModel):
     spp: bool = False
 
 
+class PrinterEndpointReport(BaseModel):
+    id: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=200)
+    display_name: Optional[str] = Field(default=None, max_length=200)
+    transport: str = Field(default="unknown", max_length=50)
+    address: Optional[str] = Field(default=None, max_length=300)
+    protocol: Optional[str] = Field(default="escpos", max_length=50)
+    options: Optional[dict] = Field(default_factory=dict)
+
+
 class PrinterDiagnosticsReport(BaseModel):
     agent_version: Optional[str] = Field(default=None, max_length=40)
     adapter: str = Field(default="unknown", max_length=80)
@@ -877,6 +887,11 @@ class PrinterDiagnosticsReport(BaseModel):
         default_factory=list,
         max_length=10,
     )
+    endpoints: List[PrinterEndpointReport] = Field(
+        default_factory=list,
+        max_length=20,
+    )
+    destinations: Optional[dict] = Field(default_factory=dict)
     default_printer: Optional[str] = Field(default=None, max_length=200)
     error: Optional[str] = Field(default=None, max_length=300)
     capabilities: List[Literal["connect_usb", "test_bluetooth"]] = Field(

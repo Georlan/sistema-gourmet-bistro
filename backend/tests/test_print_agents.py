@@ -1947,3 +1947,49 @@ def test_generic_printer_readiness_across_transports():
     assert state["physical_printer_present"] is True
     assert state["ready_printer_count"] == 1
 
+
+def test_heartbeat_accepts_structured_endpoints_and_destinations():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    base_agent = SimpleNamespace(
+        last_seen_at=now,
+        diagnostics_updated_at=now,
+        printer_diagnostics={
+            "endpoints": [
+                {
+                    "id": "ep-g250-usb",
+                    "name": "G250",
+                    "display_name": "G250 Balcão",
+                    "transport": "usb_direct",
+                    "address": "/dev/usb/lp0",
+                    "protocol": "escpos",
+                },
+                {
+                    "id": "ep-ka1445-bt",
+                    "name": "KA-1445",
+                    "display_name": "KA-1445 Cozinha",
+                    "transport": "bluetooth_rfcomm",
+                    "address": "86:67:7A:6B:30:C4",
+                    "protocol": "escpos",
+                },
+            ],
+            "destinations": {
+                "PADRAO": "ep-g250-usb",
+                "COZINHA": "ep-ka1445-bt",
+            },
+            "printers": [
+                {
+                    "name": "G250",
+                    "connection": "usb",
+                    "available": True,
+                    "present": True,
+                    "configured": True,
+                }
+            ],
+        },
+    )
+    state = print_agents_route._agent_printer_state(base_agent, now)
+    assert state["printer_ready"] is True
+    assert len(base_agent.printer_diagnostics["endpoints"]) == 2
+    assert base_agent.printer_diagnostics["destinations"]["COZINHA"] == "ep-ka1445-bt"
+
+
