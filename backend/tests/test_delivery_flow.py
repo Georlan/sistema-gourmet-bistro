@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.database import SessionLocal, Base, engine, current_restaurante_id
 from app.main import app
-from app.models import ActivityLog, Usuario, Produto, Categoria, Comanda, DeliveryCourierReassignmentAudit, Item, Motoboy
+from app.models import ActivityLog, Usuario, Produto, Categoria, Comanda, DeliveryCourierReassignmentAudit, Item, Lancamento, Motoboy
 from app.security import get_password_hash
 
 client = TestClient(app)
@@ -395,10 +395,19 @@ def test_cash_payment_uses_fee_and_discounts_without_finishing_fulfillment(setup
             delivery_taxa=5,
             valor_desconto_cupom=2,
         )
+        launch = Lancamento(
+            id="launch-delivery-finance-decoupled",
+            restaurante_id=1,
+            comanda_id=order_id,
+            garcom_id="u-del-01",
+            origem="caixa",
+            status="pronto",
+        )
         item = Item(
             id="item-delivery-finance-decoupled",
             restaurante_id=1,
             comanda_id=order_id,
+            lancamento_id=launch.id,
             produto_id="p-del",
             preco_unit=15,
             observacao="",
@@ -406,7 +415,7 @@ def test_cash_payment_uses_fee_and_discounts_without_finishing_fulfillment(setup
             status="pronto",
             pago=False,
         )
-        db.add_all([comanda, item])
+        db.add_all([comanda, launch, item])
         db.commit()
     finally:
         db.close()
