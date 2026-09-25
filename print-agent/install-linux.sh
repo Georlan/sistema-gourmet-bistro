@@ -13,6 +13,55 @@ UNIT_FILE="$UNIT_DIR/koma-print-agent.service"
 APPLICATION_DIR="$DATA_HOME/applications"
 DESKTOP_FILE="$APPLICATION_DIR/koma-print-agent.desktop"
 
+ACTION="install"
+for arg in "$@"; do
+    case "$arg" in
+        --update) ACTION="update" ;;
+        --uninstall) ACTION="uninstall" ;;
+        --purge) ACTION="purge" ;;
+        -h|--help)
+            echo "Uso: $0 [--update | --uninstall | --purge]"
+            exit 0
+            ;;
+    esac
+done
+
+if [[ "$ACTION" == "uninstall" || "$ACTION" == "purge" ]]; then
+    echo "[KÔMA] Desinstalando o Kôma Print Agent..."
+    systemctl --user stop koma-print-agent.service >/dev/null 2>&1 || true
+    systemctl --user disable koma-print-agent.service >/dev/null 2>&1 || true
+    rm -f "$UNIT_FILE"
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
+    if command -v xdg-mime >/dev/null 2>&1 && [[ -f "$DESKTOP_FILE" ]]; then
+        xdg-mime uninstall "$DESKTOP_FILE" >/dev/null 2>&1 || true
+    fi
+    rm -f "$DESKTOP_FILE"
+    if [[ "$ACTION" == "purge" ]]; then
+        rm -rf "$INSTALL_DIR"
+        rm -rf "$CONFIG_HOME/koma-print-agent"
+        echo "[OK] Kôma Print Agent e todas as configurações foram removidos."
+    else
+        echo "[OK] Kôma Print Agent desinstalado com sucesso."
+        echo "[INFO] Tokens e configurações preservados em $CONFIG_HOME/koma-print-agent e $INSTALL_DIR."
+    fi
+    exit 0
+fi
+
+# Se executado via curl em comando único direto, baixa o pacote automaticamente
+if [[ ! -f "$SCRIPT_DIR/main.py" ]]; then
+    for bootstrap_command in curl tar; do
+        if ! command -v "$bootstrap_command" >/dev/null 2>&1; then
+            echo "[ERRO] Comando obrigatório para instalação remota não encontrado: $bootstrap_command" >&2
+            exit 1
+        fi
+    done
+    echo "[KÔMA] Baixando a versão correta do Kôma Print Agent..."
+    DOWNLOAD_TMP="$(mktemp -d)"
+    trap 'rm -rf "$DOWNLOAD_TMP"' EXIT
+    curl -fsSL "https://github.com/Georlan/sistema-gourmet-bistro/tarball/main" | tar -xz -C "$DOWNLOAD_TMP" --strip-components=1
+    SCRIPT_DIR="$DOWNLOAD_TMP/print-agent"
+fi
+
 required_commands=("$PYTHON_BIN" systemctl install)
 for command_name in "${required_commands[@]}"; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -59,7 +108,11 @@ for source_file in "${adapter_files[@]}"; do
     fi
 done
 
-echo "[KÔMA] Preparando a impressão neste computador..."
+if [[ "$ACTION" == "update" ]]; then
+    echo "[KÔMA] Atualizando o Kôma Print Agent..."
+else
+    echo "[KÔMA] Preparando a impressão neste computador..."
+fi
 systemctl --user stop koma-print-agent.service >/dev/null 2>&1 || true
 mkdir -p "$INSTALL_DIR" "$ADAPTER_DIR" "$UNIT_DIR"
 
@@ -81,16 +134,26 @@ fi
     --quiet \
     -r "$INSTALL_DIR/requirements.txt"
 
-echo "[KÔMA] Conectando este computador ao restaurante..."
-(
-    cd "$INSTALL_DIR"
-    "$VENV_DIR/bin/python" main.py --pair-only
-)
+# Preserva credencial existente se já estiver pareado
+CREDENTIALS_FILE="$CONFIG_HOME/koma-print-agent/credentials.json"
+if [[ -f "$INSTALL_DIR/config.json" ]] || [[ -f "$CREDENTIALS_FILE" ]]; then
+    echo "[KÔMA] Credencial local detectada; validando conexão..."
+    (
+        cd "$INSTALL_DIR"
+        "$VENV_DIR/bin/python" main.py --pair-only || true
+    )
+else
+    echo "[KÔMA] Conectando este computador ao restaurante..."
+    (
+        cd "$INSTALL_DIR"
+        "$VENV_DIR/bin/python" main.py --pair-only
+    )
+fi
 
 {
     printf '%s\n' \
         '[Unit]' \
-        'Description=Integração de impressão do Kôma' \
+        'Description=Integração de impressão do Kôma (Kôma Print Agent)' \
         'Wants=network-online.target' \
         'After=network-online.target' \
         '' \
@@ -103,7 +166,7 @@ echo "[KÔMA] Conectando este computador ao restaurante..."
         'Environment=PATH=/usr/local/bin:/usr/bin:/bin' \
         "ExecStart=$VENV_DIR/bin/python $INSTALL_DIR/main.py" \
         'Restart=always' \
-        'RestartSec=5' \
+        'RestartSec=3' \
         'TimeoutStopSec=15' \
         'NoNewPrivileges=true' \
         'PrivateTmp=true' \
@@ -122,7 +185,7 @@ mkdir -p "$APPLICATION_DIR"
     printf '%s\n' \
         '[Desktop Entry]' \
         'Name=Kôma Impressão' \
-        'Comment=Prepara a impressão USB do Kôma' \
+        'Comment=Prepara a impressão do Kôma' \
         'Type=Application' \
         'NoDisplay=true' \
         "Exec=\"$INSTALL_DIR/koma-print-launcher.sh\" %u" \
@@ -143,8 +206,12 @@ if ! systemctl --user is-active --quiet koma-print-agent.service; then
 fi
 
 echo
-echo "[OK] Impressão configurada e pronta para iniciar automaticamente."
-echo "[OK] Agora conecte a impressora USB e use o botão de busca no Kôma."
+if [[ "$ACTION" == "update" ]]; then
+    echo "[OK] Kôma Print Agent atualizado e reativado com sucesso."
+else
+    echo "[OK] Impressão configurada e pronta para iniciar automaticamente em segundo plano."
+fi
+echo "[OK] O serviço reiniciará automaticamente se cair e voltará no próximo login após reinicializações."
 if command -v lpstat >/dev/null 2>&1; then
     echo "[KÔMA] Impressoras CUPS detectadas:"
     lpstat -e 2>/dev/null || echo "  nenhuma fila CUPS encontrada"

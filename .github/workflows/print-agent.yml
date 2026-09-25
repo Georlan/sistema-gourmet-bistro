@@ -6,6 +6,8 @@ on:
       - 'backend/app/routes/print_agents.py'
       - 'backend/tests/test_print_agents.py'
       - 'INSTALAR-KOMA-WINDOWS.cmd'
+      - 'ATUALIZAR-KOMA-WINDOWS.cmd'
+      - 'DESINSTALAR-KOMA-WINDOWS.cmd'
       - 'VERIFICAR-KOMA-WINDOWS.cmd'
       - '.github/workflows/print-agent.yml'
   workflow_dispatch:
