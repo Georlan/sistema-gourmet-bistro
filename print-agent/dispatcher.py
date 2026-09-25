@@ -6,13 +6,19 @@ import time
 from typing import Any, Dict, Iterable, List
 
 
-def _target_printer(job: Dict[str, Any], printers: Dict[str, str]) -> str:
+def _target_printer(job: Dict[str, Any], printers: Any) -> Any:
     destination = str(job.get("destination") or "COZINHA").upper()
-    return (
-        printers.get(destination)
-        or printers.get("PADRAO")
-        or "Padrão"
-    )
+    if hasattr(printers, "resolve_destination"):
+        resolved = printers.resolve_destination(destination)
+        if resolved is not None:
+            return resolved
+    if isinstance(printers, dict):
+        return (
+            printers.get(destination)
+            or printers.get("PADRAO")
+            or "Padrão"
+        )
+    return "Padrão"
 
 
 def _dispatch_lane(adapter, journal, lane: List[Dict[str, Any]]):
@@ -23,6 +29,7 @@ def _dispatch_lane(adapter, journal, lane: List[Dict[str, Any]]):
         job_id = str(job["id"])
         idempotency_key = str(job.get("idempotency_key") or job_id)
         printer_name = item["printer_name"]
+        target = item.get("target") or printer_name
 
         if journal.is_printed(job_id, idempotency_key):
             outcomes.append({**item, "state": "accepted", "submit_ms": 0})
@@ -31,7 +38,7 @@ def _dispatch_lane(adapter, journal, lane: List[Dict[str, Any]]):
         started = time.perf_counter()
         success = adapter.print_ticket(
             str(job.get("payload_text") or ""),
-            printer_name,
+            target,
             str(job.get("document_type") or "producao").upper(),
             skip_ready_check=True,
         )
@@ -75,12 +82,15 @@ def dispatch_claimed_jobs(
     """
     lanes: "OrderedDict[str, list[dict[str, Any]]]" = OrderedDict()
     for position, job in enumerate(claimed_jobs):
-        printer_name = _target_printer(job, printers)
-        lanes.setdefault(printer_name, []).append(
+        target = _target_printer(job, printers)
+        lane_key = getattr(target, "id", None) or str(getattr(target, "name", None) or target)
+        display_name = getattr(target, "name", None) or str(target)
+        lanes.setdefault(lane_key, []).append(
             {
                 "position": position,
                 "job": job,
-                "printer_name": printer_name,
+                "printer_name": display_name,
+                "target": target,
             }
         )
 

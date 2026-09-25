@@ -950,9 +950,18 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
             "diagnostics": self.get_diagnostics(),
         }
 
-    def resolve_transport(self, target_printer: str) -> Optional[PrinterTransport]:
+    def resolve_transport(self, target_printer: Any) -> Optional[PrinterTransport]:
         """Resolve o transporte de impressão apropriado para o destino informado."""
-        target = (target_printer or "").strip()
+        if hasattr(target_printer, "build_transport"):
+            built = target_printer.build_transport()
+            if built is not None:
+                return built
+
+        target = (
+            getattr(target_printer, "address", None)
+            or getattr(target_printer, "name", None)
+            or str(target_printer or "")
+        ).strip()
         if not target:
             return None
 
@@ -994,7 +1003,7 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
     def print_ticket(
         self,
         payload_text: str,
-        printer_name: str,
+        printer_name: Any,
         doc_type: str,
         *,
         skip_ready_check: bool = False,
@@ -1002,6 +1011,24 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
         raw_payload = build_escpos_payload(payload_text, encoding="cp860")
 
         target_printer = printer_name
+        if hasattr(target_printer, "build_transport"):
+            if not skip_ready_check and not self.is_printer_ready(target_printer):
+                log.error(
+                    "[LINUX ADAPTER] O endpoint '%s' está configurado, mas o "
+                    "equipamento físico não foi detectado.",
+                    getattr(target_printer, "display_name", None)
+                    or getattr(target_printer, "name", "desconhecido"),
+                )
+                return False
+            transport = self.resolve_transport(target_printer)
+            if not transport:
+                log.error(
+                    "[LINUX ADAPTER ERROR] Nenhum transporte disponível para o endpoint '%s'.",
+                    getattr(target_printer, "id", "desconhecido"),
+                )
+                return False
+            return transport.send(raw_payload)
+
         if not target_printer or target_printer in ("Padrão", "auto"):
             diagnostics = self.get_diagnostics()
             target_printer = str(diagnostics.get("default_printer") or "").strip()

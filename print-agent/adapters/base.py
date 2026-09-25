@@ -34,7 +34,39 @@ class BasePrinterAdapter(ABC):
         """
         diagnostics = self.get_diagnostics()
         printers = diagnostics.get("printers") or []
-        target = (requested_name or "").strip()
+
+        # Suporte a PrinterEndpoint estruturado
+        if hasattr(requested_name, "transport"):
+            endpoint_transport = str(getattr(requested_name, "transport", "")).lower()
+            endpoint_addr = str(getattr(requested_name, "address", "") or "")
+            endpoint_name = str(getattr(requested_name, "name", "") or "")
+
+            if endpoint_transport == "usb_direct":
+                import os
+                return bool(endpoint_addr and os.path.exists(endpoint_addr) and os.access(endpoint_addr, os.W_OK))
+            if endpoint_transport == "tcp":
+                return bool(endpoint_addr)
+
+            target_values = {endpoint_name, endpoint_addr}
+            for printer in printers:
+                ready = bool(
+                    printer.get("available")
+                    and printer.get("present")
+                    and printer.get("configured")
+                )
+                if not ready:
+                    continue
+                printer_props = {
+                    str(printer.get("name") or ""),
+                    str(printer.get("uri") or ""),
+                    str(printer.get("address") or ""),
+                    str(printer.get("cups_queue") or ""),
+                }
+                if target_values & printer_props:
+                    return True
+            return False
+
+        target = (str(requested_name or "")).strip()
         automatic = not target or target.casefold() in {
             "padrão",
             "padrao",

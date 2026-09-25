@@ -304,3 +304,47 @@ class WindowsSpoolerTransport(PrinterTransport):
                     win32print.ClosePrinter(handle)
                 except Exception:
                     pass
+
+
+class TcpTransport(PrinterTransport):
+    """Transporte para impressoras de rede via socket TCP direto (ex: porta 9100)."""
+
+    def __init__(self, host: str, port: int = 9100, timeout: float = 10.0):
+        self.host = host
+        self.port = int(port)
+        self.timeout = float(timeout)
+
+    def is_available(self) -> bool:
+        return bool(self.host)
+
+    def send(self, data: bytes) -> bool:
+        if not data:
+            return True
+        sock = None
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(self.timeout)
+            sock.connect((self.host, self.port))
+            sock.sendall(data)
+            log.info(
+                "[TCP TRANSPORT] %d bytes enviados com sucesso para %s:%d",
+                len(data),
+                self.host,
+                self.port,
+            )
+            return True
+        except Exception as exc:
+            log.error(
+                "[TCP TRANSPORT ERROR] Falha ao enviar para %s:%d: %s",
+                self.host,
+                self.port,
+                exc,
+            )
+            return False
+        finally:
+            if sock:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+

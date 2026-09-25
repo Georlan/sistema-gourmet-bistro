@@ -664,19 +664,73 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
             "diagnostics": self.get_diagnostics(),
         }
 
+    def resolve_transport(self, target_printer: Any) -> Optional[PrinterTransport]:
+        """Resolve o transporte de impressão no Windows."""
+        if hasattr(target_printer, "build_transport"):
+            built = target_printer.build_transport()
+            if built is not None:
+                return built
+
+        target = (
+            getattr(target_printer, "address", None)
+            or getattr(target_printer, "name", None)
+            or str(target_printer or "")
+        ).strip()
+        if not target:
+            return None
+
+        # 1. Bluetooth RFCOMM direto
+        if target.startswith("bluetooth://"):
+            addr = BluetoothRfcommTransport.normalize_address(target)
+            if addr:
+                return BluetoothRfcommTransport(address=addr, channel=1)
+        if len(target.replace(":", "")) == 12 and BluetoothRfcommTransport.normalize_address(target) == target:
+            return BluetoothRfcommTransport(address=target, channel=1)
+
+        diagnostics = self.get_diagnostics()
+        for p in diagnostics.get("printers") or []:
+            name = str(p.get("name") or "")
+            uri = str(p.get("uri") or "")
+            addr = str(p.get("address") or "")
+            if target in {name, uri, addr} and (p.get("connection") == "bluetooth" or addr):
+                bt_addr = addr or BluetoothRfcommTransport.normalize_address(uri)
+                if bt_addr:
+                    return BluetoothRfcommTransport(address=bt_addr, channel=1)
+
+        # 2. Spooler RAW
+        return WindowsSpoolerTransport(printer_name=target)
+
     def print_ticket(
         self,
         payload_text: str,
-        printer_name: str,
+        printer_name: Any,
         doc_type: str,
         *,
         skip_ready_check: bool = False,
     ) -> bool:
         raw_bytes = build_escpos_payload(payload_text, encoding="cp860")
 
+        # Suporte a PrinterEndpoint estruturado
+        if hasattr(printer_name, "build_transport"):
+            if not skip_ready_check and not self.is_printer_ready(printer_name):
+                log.error(
+                    "[WINDOWS ADAPTER] O endpoint '%s' não está pronto.",
+                    getattr(printer_name, "display_name", None)
+                    or getattr(printer_name, "name", "desconhecido"),
+                )
+                return False
+            transport = self.resolve_transport(printer_name)
+            if not transport:
+                log.error(
+                    "[WINDOWS ADAPTER ERROR] Nenhum transporte disponível para o endpoint '%s'.",
+                    getattr(printer_name, "id", "desconhecido"),
+                )
+                return False
+            return transport.send(raw_bytes)
+
         # 1. Verifica se o destino corresponde a uma impressora Bluetooth RFCOMM
         bt_address = None
-        target_clean = (printer_name or "").strip()
+        target_clean = (str(printer_name or "")).strip()
         if target_clean.startswith("bluetooth://"):
             bt_address = BluetoothRfcommTransport.normalize_address(target_clean)
         elif len(target_clean.replace(":", "")) == 12 and BluetoothRfcommTransport.normalize_address(target_clean) == target_clean:
