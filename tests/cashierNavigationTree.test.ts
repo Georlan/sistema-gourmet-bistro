@@ -10,10 +10,44 @@ import {
   getCashierNavigationTarget,
   isCashierNavigationActive,
   normalizeCashierNavigationState,
+  normalizeCashierTargetForEntitlements,
 } from '../src/components/caixa/navigation/cashierNavigation';
 
 const parents = () => CASHIER_SIDEBAR_GROUPS.flatMap((group) => group.items);
 const children = () => parents().flatMap((parent) => parent.children ?? []);
+
+const pocketEntitlements = {
+  printing: false,
+  kds: false,
+  waiter_app: true,
+  loyalty: false,
+  coupons: false,
+  courier_app: false,
+  inventory: false,
+  advanced_reports: false,
+} as const;
+
+const proEntitlements = {
+  printing: true,
+  kds: true,
+  waiter_app: true,
+  loyalty: false,
+  coupons: false,
+  courier_app: false,
+  inventory: true,
+  advanced_reports: true,
+} as const;
+
+const premiumEntitlements = {
+  printing: true,
+  kds: true,
+  waiter_app: true,
+  loyalty: true,
+  coupons: true,
+  courier_app: true,
+  inventory: true,
+  advanced_reports: true,
+} as const;
 
 test('navigation tree v2 has the intended product information architecture', () => {
   assert.deepEqual(
@@ -366,12 +400,18 @@ test('restrições de plano vivem na árvore canônica, não em listas paralelas
   const equipe = parents().find((item) => item.id === 'permissoes_cargos');
   const settings = parents().find((item) => item.id === 'impressao_salao');
 
-  assert.deepEqual(estoque?.plans, ['pro', 'premium']);
-  assert.deepEqual(relatorios?.plans, ['pro', 'premium']);
+  assert.equal(estoque?.plans, undefined);
+  assert.equal(estoque?.requiredFeature, 'inventory');
+  assert.equal(relatorios?.plans, undefined);
+  assert.equal(relatorios?.requiredFeature, 'advanced_reports');
   assert.equal(equipe?.plans, undefined);
-  assert.deepEqual(
+  assert.equal(
+    settings?.children?.find((child) => child.id === 'config_impressao')?.requiredFeature,
+    'printing',
+  );
+  assert.equal(
     settings?.children?.find((child) => child.id === 'config_impressao')?.plans,
-    ['pro', 'premium'],
+    undefined,
   );
   assert.equal(
     settings?.children?.find((child) => child.id === 'config_garcom')?.requiredFeature,
@@ -389,7 +429,7 @@ test('restrições de plano vivem na árvore canônica, não em listas paralelas
 });
 
 test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redução', () => {
-  const pocketGroups = getCashierSidebarGroupsForPlan('pocket');
+  const pocketGroups = getCashierSidebarGroupsForPlan('pocket', pocketEntitlements);
   const pocketItems = pocketGroups.flatMap((group) => group.items.map((item) => item.id));
 
   assert.deepEqual(pocketItems, [
@@ -442,15 +482,18 @@ test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redu
   assert.equal(pocketKitchen?.label, 'Preparo');
   assert.deepEqual(pocketKitchen?.target, { tab: 'operacao', subTab: 'preparo' });
 
-  assert.deepEqual(getCashierSidebarGroupsForPlan('pro'), CASHIER_SIDEBAR_GROUPS);
-  assert.deepEqual(getCashierSidebarGroupsForPlan('premium'), CASHIER_SIDEBAR_GROUPS);
+  assert.deepEqual(getCashierSidebarGroupsForPlan('pro', proEntitlements), CASHIER_SIDEBAR_GROUPS);
+  assert.deepEqual(getCashierSidebarGroupsForPlan('premium', premiumEntitlements), CASHIER_SIDEBAR_GROUPS);
 });
 
 
 test('explicit entitlement overrides can grant or revoke plan navigation capabilities', () => {
   const pocketWithAddons = getCashierSidebarGroupsForPlan('pocket', {
+    ...pocketEntitlements,
     printing: true,
     kds: true,
+    inventory: true,
+    advanced_reports: true,
   });
   const pocketSettings = pocketWithAddons.flatMap((group) => group.items).find((item) => item.id === 'impressao_salao');
   assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_impressao'), true);
@@ -462,10 +505,47 @@ test('explicit entitlement overrides can grant or revoke plan navigation capabil
   );
 
   const premiumRevoked = getCashierSidebarGroupsForPlan('premium', {
+    ...premiumEntitlements,
     printing: false,
     waiter_app: false,
+    inventory: false,
+    advanced_reports: false,
   });
-  const premiumSettings = premiumRevoked.flatMap((group) => group.items).find((item) => item.id === 'impressao_salao');
+  const premiumItems = premiumRevoked.flatMap((group) => group.items);
+  const premiumSettings = premiumItems.find((item) => item.id === 'impressao_salao');
   assert.equal(premiumSettings?.children?.some((child) => child.id === 'config_impressao'), false);
   assert.equal(premiumSettings?.children?.some((child) => child.id === 'config_garcom'), false);
+  assert.equal(premiumItems.some((item) => item.id === 'estoque'), false);
+  assert.equal(premiumItems.some((item) => item.id === 'relatorios'), false);
+});
+
+test('privileged navigation fails closed without the backend entitlement snapshot', () => {
+  const groups = getCashierSidebarGroupsForPlan('premium');
+  const ids = groups.flatMap((group) => group.items.map((item) => item.id));
+  assert.equal(ids.includes('estoque'), false);
+  assert.equal(ids.includes('relatorios'), false);
+
+  assert.deepEqual(
+    normalizeCashierTargetForEntitlements({ tab: 'estoque', subTab: 'insumos' }, undefined),
+    { tab: 'operacao', subTab: 'pedidos' },
+  );
+  assert.deepEqual(
+    normalizeCashierTargetForEntitlements({ tab: 'relatorios', subTab: 'financeiro' }, undefined),
+    { tab: 'operacao', subTab: 'pedidos' },
+  );
+});
+
+test('backend entitlements, not the plan slug, govern inventory and advanced reports navigation', () => {
+  assert.deepEqual(
+    normalizeCashierTargetForEntitlements({ tab: 'estoque', subTab: 'insumos' }, proEntitlements),
+    { tab: 'estoque', subTab: 'insumos' },
+  );
+  assert.deepEqual(
+    normalizeCashierTargetForEntitlements({ tab: 'relatorios', subTab: 'visao_geral' }, proEntitlements),
+    { tab: 'relatorios', subTab: 'visao_geral' },
+  );
+  assert.deepEqual(
+    normalizeCashierTargetForEntitlements({ tab: 'estoque', subTab: 'insumos' }, pocketEntitlements),
+    { tab: 'operacao', subTab: 'pedidos' },
+  );
 });

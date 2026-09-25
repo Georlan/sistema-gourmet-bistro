@@ -1,12 +1,12 @@
 export type SubscriptionPlanId = 'pocket' | 'pro' | 'premium';
 
-export type SubscriptionFeatureId = 'printing' | 'kds' | 'waiter_app' | 'loyalty' | 'coupons' | 'courier_app';
+export type SubscriptionFeatureId = 'printing' | 'kds' | 'waiter_app' | 'loyalty' | 'coupons' | 'courier_app' | 'inventory' | 'advanced_reports';
 export type SubscriptionEntitlements = Partial<Record<SubscriptionFeatureId, boolean>>;
 
 const PLAN_FEATURES: Record<SubscriptionPlanId, ReadonlySet<SubscriptionFeatureId>> = {
   pocket: new Set(['waiter_app']),
-  pro: new Set(['printing', 'kds', 'waiter_app']),
-  premium: new Set(['printing', 'kds', 'waiter_app', 'loyalty', 'coupons', 'courier_app']),
+  pro: new Set(['printing', 'kds', 'waiter_app', 'inventory', 'advanced_reports']),
+  premium: new Set(['printing', 'kds', 'waiter_app', 'loyalty', 'coupons', 'courier_app', 'inventory', 'advanced_reports']),
 };
 
 export function subscriptionHasFeature(
@@ -17,6 +17,19 @@ export function subscriptionHasFeature(
   const explicit = entitlements?.[feature];
   if (typeof explicit === 'boolean') return explicit;
   return PLAN_FEATURES[planId].has(feature);
+}
+
+/**
+ * Operational surfaces never infer access from the plan slug. The backend
+ * resolves plan + explicit RestauranteCapability overrides and returns the
+ * effective entitlement set for the authenticated tenant. Missing state is
+ * therefore denied until that authoritative response arrives.
+ */
+export function operationalEntitlementEnabled(
+  entitlements: SubscriptionEntitlements | null | undefined,
+  feature: SubscriptionFeatureId,
+): boolean {
+  return entitlements?.[feature] === true;
 }
 
 export interface SubscriptionPlan {

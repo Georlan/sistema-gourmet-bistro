@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import type { CashierTab } from '../cashierContracts';
 import {
-  subscriptionHasFeature,
+  operationalEntitlementEnabled,
   type SubscriptionEntitlements,
   type SubscriptionFeatureId,
   type SubscriptionPlanId,
@@ -43,6 +43,7 @@ export type CashierNavigationItem = {
   target: CashierNavigationTarget;
   capability?: 'online-menu';
   plans?: readonly SubscriptionPlanId[];
+  requiredFeature?: SubscriptionFeatureId;
   children?: readonly CashierNavigationChild[];
 };
 
@@ -115,7 +116,7 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
       {
         id: 'estoque',
         label: 'Estoque & compras',
-        plans: ['pro', 'premium'],
+        requiredFeature: 'inventory',
         icon: Package,
         target: { tab: 'estoque', subTab: 'insumos' },
         children: [
@@ -160,7 +161,7 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
       {
         id: 'relatorios',
         label: 'Relatórios',
-        plans: ['pro', 'premium'],
+        requiredFeature: 'advanced_reports',
         icon: TrendingUp,
         target: { tab: 'relatorios', subTab: 'visao_geral' },
         children: [
@@ -192,7 +193,7 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         target: { tab: 'impressao_salao', subTab: 'aparencia' },
         children: [
           { id: 'config_aparencia', label: 'Aparência', target: { tab: 'impressao_salao', subTab: 'aparencia' } },
-          { id: 'config_impressao', label: 'Impressão', plans: ['pro', 'premium'], requiredFeature: 'printing', target: { tab: 'impressao_salao', subTab: 'impressao' } },
+          { id: 'config_impressao', label: 'Impressão', requiredFeature: 'printing', target: { tab: 'impressao_salao', subTab: 'impressao' } },
           { id: 'config_mesas', label: 'Mesas', target: { tab: 'impressao_salao', subTab: 'mesas' } },
           { id: 'config_garcom', label: 'App do Garçom', requiredFeature: 'waiter_app', target: { tab: 'impressao_salao', subTab: 'garcom' } },
           { id: 'config_taxa', label: 'Taxa de Serviço', target: { tab: 'impressao_salao', subTab: 'taxa' } },
@@ -221,7 +222,7 @@ function isNavigationEntryAvailable(
   requiredFeature?: SubscriptionFeatureId,
   entitlements?: SubscriptionEntitlements,
 ): boolean {
-  if (requiredFeature) return subscriptionHasFeature(planId, requiredFeature, entitlements);
+  if (requiredFeature) return operationalEntitlementEnabled(entitlements, requiredFeature);
   return !plans || plans.includes(planId);
 }
 
@@ -233,17 +234,17 @@ export function getCashierSidebarGroupsForPlan(
     .map((group) => ({
       ...group,
       items: group.items
-        .filter((item) => isNavigationEntryAvailable(item.plans, planId, undefined, entitlements))
+        .filter((item) => isNavigationEntryAvailable(item.plans, planId, item.requiredFeature, entitlements))
         .map((item) => {
           if (!item.children?.length) return item;
 
           const children = item.children
             .filter((child) => isNavigationEntryAvailable(child.plans, planId, child.requiredFeature, entitlements))
             .map((child) => {
-              if (child.id === 'cardapio_preparo' && !subscriptionHasFeature(planId, 'printing', entitlements)) {
+              if (child.id === 'cardapio_preparo' && !operationalEntitlementEnabled(entitlements, 'printing')) {
                 return { ...child, label: 'Preparo' };
               }
-              if (child.id === 'vendas_cozinha' && !subscriptionHasFeature(planId, 'kds', entitlements)) {
+              if (child.id === 'vendas_cozinha' && !operationalEntitlementEnabled(entitlements, 'kds')) {
                 return { ...child, label: 'Preparo', target: { ...child.target, subTab: 'preparo' } };
               }
               return child;
@@ -427,6 +428,42 @@ export function normalizeCashierNavigationState(
   }
 
   return { tab, subTab: normalizedSubTab };
+}
+
+/**
+ * Applies the effective backend capability set to any persisted/programmatic
+ * destination. This is the fail-closed barrier for stale sessionStorage, legacy
+ * aliases and direct navigation attempts before a privileged workspace mounts.
+ */
+export function normalizeCashierTargetForEntitlements(
+  target: CashierNavigationTarget,
+  entitlements?: SubscriptionEntitlements,
+): CashierNavigationTarget {
+  if (target.tab === 'estoque' && !operationalEntitlementEnabled(entitlements, 'inventory')) {
+    return { tab: 'operacao', subTab: 'pedidos' };
+  }
+  if (
+    (target.tab === 'relatorios' || target.tab === 'dashboard')
+    && !operationalEntitlementEnabled(entitlements, 'advanced_reports')
+  ) {
+    return { tab: 'operacao', subTab: 'pedidos' };
+  }
+  if (target.tab === 'operacao' && target.subTab === 'kds' && !operationalEntitlementEnabled(entitlements, 'kds')) {
+    return { ...target, subTab: 'preparo' };
+  }
+  if (target.tab === 'impressao_salao' && target.subTab === 'impressao' && !operationalEntitlementEnabled(entitlements, 'printing')) {
+    return { tab: 'impressao_salao', subTab: 'aparencia' };
+  }
+  if (target.tab === 'impressao_salao' && target.subTab === 'garcom' && !operationalEntitlementEnabled(entitlements, 'waiter_app')) {
+    return { tab: 'impressao_salao', subTab: 'aparencia' };
+  }
+  if (target.tab === 'clientes' && target.subTab === 'fidelidade' && !operationalEntitlementEnabled(entitlements, 'loyalty')) {
+    return { tab: 'clientes', subTab: 'clientes' };
+  }
+  if (target.tab === 'clientes' && target.subTab === 'cupons' && !operationalEntitlementEnabled(entitlements, 'coupons')) {
+    return { tab: 'clientes', subTab: 'clientes' };
+  }
+  return target;
 }
 
 export function isCashierNavigationActive(

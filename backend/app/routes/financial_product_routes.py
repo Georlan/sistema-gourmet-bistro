@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db, require_tenant_id
 from ..models import Categoria, Item as ComandaItem, Produto, ProdutoInsumo, Usuario
-from ..security import require_permission
+from ..security import require_entitled_permission
 from ..services.financeiro import money
 from ..services.financial_read import load_financial_snapshot
 
@@ -20,7 +20,11 @@ def get_relatorio_produtos_operacional(
     busca: Optional[str] = Query(None),
     categoria_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("relatorios:consultar")),
+    current_user: Usuario = Depends(require_entitled_permission(
+        "relatorios:consultar",
+        "advanced_reports",
+        detail="Relatórios avançados não estão disponíveis no plano atual.",
+    )),
 ):
     """Métrica operacional de produtos, deliberadamente separada de receita."""
     rest_id = require_tenant_id()

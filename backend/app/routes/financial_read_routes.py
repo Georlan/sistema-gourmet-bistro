@@ -19,7 +19,7 @@ from ..models import (
     Usuario,
 )
 from ..operational_models import AtendimentoMesa
-from ..security import require_permission
+from ..security import require_entitled_permission
 from ..services.financeiro import money
 from ..services.financial_read import (
     current_operational_day,
@@ -119,7 +119,11 @@ def get_relatorio_visao_geral_financeiro(
     data_inicio: Optional[str] = Query(None),
     data_fim: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("relatorios:consultar")),
+    current_user: Usuario = Depends(require_entitled_permission(
+        "relatorios:consultar",
+        "advanced_reports",
+        detail="Relatórios avançados não estão disponíveis no plano atual.",
+    )),
 ):
     rest_id = require_tenant_id()
     snapshot = _snapshot_or_400(db, rest_id, data_inicio, data_fim)
@@ -203,7 +207,11 @@ def get_vendas_detalhes_financeiro(
     data_inicio: Optional[str] = Query(None),
     data_fim: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("relatorios:consultar")),
+    current_user: Usuario = Depends(require_entitled_permission(
+        "relatorios:consultar",
+        "advanced_reports",
+        detail="Relatórios avançados não estão disponíveis no plano atual.",
+    )),
 ):
     rest_id = require_tenant_id()
     snapshot = _snapshot_or_400(db, rest_id, data_inicio, data_fim)
@@ -264,7 +272,11 @@ def get_dashboard_financeiro(
     data_inicio: Optional[str] = None,
     data_fim: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("relatorios:consultar")),
+    current_user: Usuario = Depends(require_entitled_permission(
+        "relatorios:consultar",
+        "advanced_reports",
+        detail="Relatórios avançados não estão disponíveis no plano atual.",
+    )),
 ):
     rest_id = require_tenant_id()
     snapshot = _snapshot_or_400(db, rest_id, data_inicio, data_fim)
@@ -402,7 +414,11 @@ def get_equipe_desempenho_financeiro(
     data_fim: Optional[str] = Query(None),
     cargo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("relatorios:consultar")),
+    current_user: Usuario = Depends(require_entitled_permission(
+        "relatorios:consultar",
+        "advanced_reports",
+        detail="Relatórios avançados não estão disponíveis no plano atual.",
+    )),
 ):
     """Atribui o valor recebido pela equipe a partir do mesmo ledger dos demais relatórios."""
     rest_id = require_tenant_id()

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
 from ..models import Usuario, ConfiguracaoRestaurante
-from ..security import require_permission
+from ..security import require_entitled_permission, require_permission
 
 router = APIRouter(prefix="/relatorios", tags=["relatorios"])
 
@@ -14,7 +14,11 @@ router = APIRouter(prefix="/relatorios", tags=["relatorios"])
 def set_meta_mensal(
     payload: Dict[str, float],
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("relatorios:administrar"))
+    current_user: Usuario = Depends(require_entitled_permission(
+        "relatorios:administrar",
+        "advanced_reports",
+        detail="Relatórios avançados não estão disponíveis no plano atual.",
+    ))
 ):
     rest_id = require_tenant_id()
     meta_val = float(payload.get("meta_mensal", 0.0))

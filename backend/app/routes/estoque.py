@@ -22,14 +22,22 @@ from ..schemas import (
 )
 from ..security import ensure_permission, get_current_garcom_optional
 from ..services.inventory_count import apply_inventory_count
+from ..services.plan_entitlements import ENTITLEMENT_INVENTORY, require_plan_entitlement
 
 router = APIRouter(
     prefix="/estoque",
     tags=["Estoque e Insumos"]
 )
 
-def check_caixa_permission(user: Usuario):
-    return ensure_permission(user, "estoque:administrar")
+def check_caixa_permission(user: Usuario, db: Session):
+    authorized = ensure_permission(user, "estoque:administrar")
+    require_plan_entitlement(
+        db,
+        int(authorized.restaurante_id),
+        ENTITLEMENT_INVENTORY,
+        detail="Estoque, compras e fichas técnicas não estão disponíveis no plano atual.",
+    )
+    return authorized
 
 def slugify(value: str) -> str:
     value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
@@ -42,7 +50,7 @@ async def importar_xml(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
 
     try:
@@ -292,7 +300,7 @@ def get_insumos(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     return db.query(Insumo).all()
 
 @router.get("/distribuidores", response_model=List[DistribuidorResponse])
@@ -300,7 +308,7 @@ def get_distribuidores(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     return db.query(Distribuidor).all()
 
 @router.get("/notas", response_model=List[NotaEntradaResponse])
@@ -308,7 +316,7 @@ def get_notas(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     return db.query(NotaEntrada).options(
         joinedload(NotaEntrada.distribuidor),
         joinedload(NotaEntrada.itens).joinedload(ItemNotaEntrada.insumo)
@@ -393,7 +401,7 @@ def get_fichas_tecnicas(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional),
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
     produtos = (
         db.query(Produto)
@@ -415,7 +423,7 @@ def update_ficha_tecnica(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional),
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
     produto = (
         db.query(Produto)
@@ -474,7 +482,7 @@ def create_insumo(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
 
     insumo_id = (data.id or "").strip() or f"ins-{rest_id}-{slugify(data.nome)}"
@@ -504,7 +512,7 @@ def update_insumo(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
     insumo = db.query(Insumo).filter_by(id=insumo_id, restaurante_id=rest_id).first()
     if not insumo:
@@ -523,7 +531,7 @@ def delete_insumo(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
     insumo = db.query(Insumo).filter_by(id=insumo_id, restaurante_id=rest_id).first()
     if not insumo:
@@ -540,7 +548,7 @@ def ajustar_insumo(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
     insumo = (
         db.query(Insumo)
@@ -599,7 +607,7 @@ def create_distribuidor(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
 
     dist_id = (data.id or "").strip() or f"dist-{rest_id}-{slugify(data.nome_fantasia)}"
@@ -627,7 +635,7 @@ def update_distribuidor(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
     distribuidor = db.query(Distribuidor).filter_by(id=dist_id, restaurante_id=rest_id).first()
     if not distribuidor:
@@ -652,7 +660,7 @@ def create_entrada_manual(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
 
     if not data.itens:
@@ -789,7 +797,7 @@ def get_entradas(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
     return db.query(EntradaEstoque).filter_by(restaurante_id=rest_id).options(
         joinedload(EntradaEstoque.distribuidor),
@@ -808,7 +816,7 @@ def get_movimentacoes(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
 
     query = db.query(MovimentacaoEstoque).filter_by(restaurante_id=rest_id).options(
@@ -843,7 +851,7 @@ def create_movimentacao(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
 
     if data.tipo not in ["perda", "ajuste_positivo", "ajuste_negativo"]:
@@ -902,7 +910,7 @@ def delete_distribuidor(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
     dist = db.query(Distribuidor).filter(
         Distribuidor.id == dist_id,
@@ -921,7 +929,7 @@ def create_sessao_contagem(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
 
     if data.status not in ["rascunho", "confirmada"]:
@@ -975,7 +983,7 @@ def get_sessoes_contagem(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
 
     return db.query(SessaoContagemEstoque).filter_by(restaurante_id=rest_id).options(
@@ -989,7 +997,7 @@ def get_sessao_contagem(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
 
     sessao = db.query(SessaoContagemEstoque).filter_by(id=contagem_id, restaurante_id=rest_id).options(
@@ -1008,7 +1016,7 @@ def update_sessao_contagem(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
 
     sessao = db.query(SessaoContagemEstoque).filter_by(id=contagem_id, restaurante_id=rest_id).first()
@@ -1064,7 +1072,7 @@ def confirmar_sessao_contagem(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_garcom_optional)
 ):
-    check_caixa_permission(current_user)
+    check_caixa_permission(current_user, db)
     rest_id = require_tenant_id()
 
     sessao = db.query(SessaoContagemEstoque).filter_by(id=contagem_id, restaurante_id=rest_id).options(

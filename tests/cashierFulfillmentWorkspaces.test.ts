@@ -183,7 +183,14 @@ test('controles do PWA do entregador falham fechados fora de courier_app sem blo
 });
 
 test('Caixa só libera controles do PWA com entitlement courier_app explicitamente true', () => {
-  assert.match(panel, /const hasCourierApp = planEntitlements\?\.courier_app === true;/);
+  assert.match(panel, /const hasCourierApp = operationalEntitlementEnabled\(planEntitlements, 'courier_app'\);/);
   assert.match(panel, /hasCourierApp=\{hasCourierApp\}/);
   assert.match(couriers, /hasCourierApp && motoboy\.ativo/);
+});
+
+test('Caixa só monta estoque e relatórios quando o backend confirmou as capabilities', () => {
+  assert.match(panel, /const hasInventory = operationalEntitlementEnabled\(planEntitlements, 'inventory'\);/);
+  assert.match(panel, /const hasAdvancedReports = operationalEntitlementEnabled\(planEntitlements, 'advanced_reports'\);/);
+  assert.match(panel, /active=\{hasInventory && activeTab === 'estoque'\}/);
+  assert.match(panel, /active=\{hasAdvancedReports && \(activeTab === 'relatorios'/);
 });
