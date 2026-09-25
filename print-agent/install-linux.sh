@@ -84,6 +84,7 @@ required_files=(
     requirements.lock
     agent_runtime.py
     endpoints.py
+    printer_profiles.py
 )
 adapter_files=(
     __init__.py
