@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import React, { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -8,6 +9,10 @@ import type { DeliveryOrderView } from '../src/components/caixa/orders/cashierWo
 
 const noop = () => {};
 const NOW = Date.UTC(2026, 8, 15, 16, 30);
+const ordersRouteSource = readFileSync(new URL('../backend/app/routes/orders.py', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+const cashierOrdersSource = readFileSync(new URL('../src/components/caixa/orders/useCashierOrders.ts', import.meta.url), 'utf8');
+const cashierPanelSource = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
 
 type ViewElement = React.ReactElement<Record<string, unknown>>;
 function elements(node: ReactNode): ViewElement[] {
@@ -172,4 +177,20 @@ test('modal de despacho exige entregador e confirma saída com a atribuição se
 
   assert.deepEqual(calls, ['courier:7', 'dispatch:7']);
   assert.match(renderToStaticMarkup(createElement(KanbanOrderDetails, selectedProps)), /Pedro Silva/);
+});
+
+
+test('atribuição de entregador invalida Pedidos e Entregas em outros dispositivos pelo bridge realtime canônico', () => {
+  const assignmentRoute = ordersRouteSource
+    .split('@router.put("/{comanda_id}/delivery/entregador"', 2)[1]
+    .split('@router.post("/{comanda_id}/delivery/despachar"', 1)[0];
+
+  assert.match(assignmentRoute, /manager\.broadcast/);
+  assert.match(assignmentRoute, /"event": "tables_updated"/);
+  assert.match(appSource, /eventName === "tables_updated"/);
+  assert.match(appSource, /window\.dispatchEvent\(new Event\('koma_orders_updated'\)\)/);
+  assert.match(cashierOrdersSource, /window\.addEventListener\('koma_orders_updated', handleDeliveryUpdate\)/);
+  assert.match(cashierOrdersSource, /void fetchDeliveryOrders\(\)/);
+  assert.match(cashierPanelSource, /selectedByOrderId: selectedMotoboys/);
+  assert.match(cashierPanelSource, /selectedMotoboys=\{selectedMotoboys\}/);
 });
