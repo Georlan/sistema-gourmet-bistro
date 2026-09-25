@@ -16,7 +16,9 @@ def _ensure_admin_and_headers():
     try:
         rest = db.query(Restaurante).filter(Restaurante.id == 997).first()
         if not rest:
-            db.add(Restaurante(id=997, nome="Restaurante Coupon Deactivation", slug="rest-997"))
+            db.add(Restaurante(id=997, nome="Restaurante Coupon Deactivation", slug="rest-997", plano="premium"))
+        elif rest.plano != "premium":
+            rest.plano = "premium"
         user = db.query(Usuario).filter(Usuario.id == "usr-coupon-deactivation").first()
         if not user:
             db.add(Usuario(
