@@ -494,7 +494,6 @@ def test_quick_counter_sale_still_closes_immediately_after_full_payment(setup_db
             "valor": 15,
             "metodo": "dinheiro",
             "idempotency_key": "quick-counter-finance-payment",
-            "origem": "caixa",
         },
         headers=headers,
     )
