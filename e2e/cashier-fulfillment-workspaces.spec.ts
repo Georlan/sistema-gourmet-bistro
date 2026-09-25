@@ -69,16 +69,16 @@ function makeOrder(
   };
 }
 
-async function seedCashierSession(page: Page) {
-  await page.addInitScript(() => {
+async function seedCashierSession(page: Page, subTab = 'retiradas') {
+  await page.addInitScript((initialSubTab) => {
     localStorage.setItem('koma_caixa_token', 'playwright-e2e-token');
     localStorage.setItem('koma_caixa_id', 'caixa-e2e');
     localStorage.setItem('koma_caixa_name', 'Caixa E2E');
     localStorage.setItem('koma_caixa_role', 'caixa');
     localStorage.setItem('token', 'playwright-e2e-token');
     sessionStorage.setItem('koma_active_tab', 'operacao');
-    sessionStorage.setItem('koma_active_subtab', 'retiradas');
-  });
+    sessionStorage.setItem('koma_active_subtab', initialSubTab);
+  }, subTab);
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -91,9 +91,16 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(sizes.bodyWidth).toBeLessThanOrEqual(sizes.viewport + 1);
 }
 
-async function mockFulfillmentBackend(page: Page) {
-  let pickup = makeOrder('pickup-workspace-e2e', 5001, 'Retirada', 48);
-  let delivery = makeOrder('delivery-workspace-e2e', 5002, 'Delivery', 55);
+async function mockFulfillmentBackend(
+  page: Page,
+  initial: { pickupStatus?: string; deliveryStatus?: string } = {},
+) {
+  let pickup = makeOrder('pickup-workspace-e2e', 5001, 'Retirada', 48, {
+    delivery_status: initial.pickupStatus || 'pendente',
+  });
+  let delivery = makeOrder('delivery-workspace-e2e', 5002, 'Delivery', 55, {
+    delivery_status: initial.deliveryStatus || 'pendente',
+  });
   let acceptCalls = 0;
   let dispatchCalls = 0;
   let assignmentCalls = 0;
@@ -344,5 +351,43 @@ test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Ka
   await expect(deliveryCheckout).toBeVisible();
   await deliveryCheckout.click();
   await expect(page.getByText('CHECKOUT / CAIXA')).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+
+test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes', async ({ page }) => {
+  await seedCashierSession(page, 'pedidos');
+  const state = await mockFulfillmentBackend(page, {
+    pickupStatus: 'finalizado',
+    deliveryStatus: 'producao',
+  });
+  await page.goto('/?view=caixa');
+
+  const productionCard = page.locator('.orders-card--digital').filter({ hasText: 'Bruno Delivery' });
+  await expect(productionCard).toBeVisible();
+
+  const courierSelect = productionCard.getByRole('combobox', { name: /Entregador do pedido 5002/i });
+  await expect(courierSelect).toBeVisible();
+  await courierSelect.selectOption('7');
+  await expect.poll(state.getAssignmentCalls).toBe(1);
+  await expect(courierSelect).toHaveValue('7');
+
+  await productionCard.getByRole('button', { name: /Pronto para sair/i }).click();
+
+  const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
+  await expect(readyCard).toBeVisible();
+  await expect(readyCard).toContainText('PRONTO PARA ENVIO');
+  const readyCourierSelect = readyCard.getByRole('combobox', { name: /Entregador do pedido 5002/i });
+  await expect(readyCourierSelect).toHaveValue('7');
+
+  const dispatch = readyCard.getByRole('button', { name: 'Saiu para entrega' });
+  await expect(dispatch).toBeEnabled();
+  await dispatch.click();
+  await expect.poll(state.getDispatchCalls).toBe(1);
+
+  const inRouteCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
+  await expect(inRouteCard).toContainText('EM ROTA');
+  await expect(inRouteCard).toContainText('Pedro Entregador');
+  await expect(inRouteCard.getByRole('combobox', { name: /Entregador do pedido 5002/i })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 });
