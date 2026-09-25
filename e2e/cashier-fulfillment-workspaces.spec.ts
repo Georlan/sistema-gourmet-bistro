@@ -1,4 +1,4 @@
-import { expect, Page, test } from '@playwright/test';
+import { BrowserContext, expect, Page, test } from '@playwright/test';
 
 const API_ORIGIN = 'http://127.0.0.1:8000';
 const now = new Date().toISOString();
@@ -482,4 +482,232 @@ test('delivery alterado para retirada sai de Entregas e aparece em Retiradas sem
   await pickups.getByRole('button', { name: 'Receber e concluir retirada' }).click();
   await expect(page.getByText('CHECKOUT / CAIXA')).toBeVisible();
   await expectNoHorizontalOverflow(page);
+});
+
+
+async function mockThreeTerminalFulfillmentBackend(context: BrowserContext) {
+  let delivery = makeOrder('delivery-multiterminal-e2e', 5100, 'Delivery', 55, {
+    delivery_status: 'producao',
+    identificador: 'Cliente Multi Terminal',
+    delivery_telefone: '85999995100',
+    motoboy_id: null,
+  });
+
+  const fanoutOrdersUpdated = async () => {
+    await Promise.all(context.pages().map(async (terminal) => {
+      if (!terminal.url().includes('?view=caixa')) return;
+      await terminal.evaluate(() => window.dispatchEvent(new Event('koma_orders_updated'))).catch(() => {});
+    }));
+  };
+
+  await context.route(`${API_ORIGIN}/**`, async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const { pathname } = url;
+
+    if (pathname === '/comandas/delivery/ativos' || pathname === '/comandas/detalhes/todos') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([delivery]) });
+      return;
+    }
+
+    if (
+      pathname === '/comandas/delivery/retiradas/concluidas-recentes'
+      || pathname === '/comandas/delivery/entregas/concluidas-recentes'
+    ) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+
+    if (pathname.endsWith('/delivery/entregador') && request.method() === 'PUT') {
+      const body = request.postDataJSON() as { motoboy_id?: number | null };
+      delivery = { ...delivery, motoboy_id: body.motoboy_id ?? null };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(delivery) });
+      await fanoutOrdersUpdated();
+      return;
+    }
+
+    if (pathname.endsWith('/delivery/status') && request.method() === 'PUT') {
+      delivery = { ...delivery, delivery_status: url.searchParams.get('status_novo') || delivery.delivery_status };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(delivery) });
+      await fanoutOrdersUpdated();
+      return;
+    }
+
+    if (pathname.endsWith('/delivery/despachar') && request.method() === 'POST') {
+      const body = request.postDataJSON() as { motoboy_id?: number | null };
+      delivery = {
+        ...delivery,
+        delivery_status: 'transito',
+        motoboy_id: body.motoboy_id ?? delivery.motoboy_id,
+      };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(delivery) });
+      await fanoutOrdersUpdated();
+      return;
+    }
+
+    if (pathname.includes('/comandas/itens/') && pathname.endsWith('/status') && request.method() === 'PUT') {
+      const itemId = pathname.split('/')[3];
+      const nextStatus = url.searchParams.get('status') || 'preparando';
+      delivery = {
+        ...delivery,
+        itens: delivery.itens.map((item: any) =>
+          String(item.id) === itemId ? { ...item, status: nextStatus } : item
+        ),
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(delivery.itens.find((item: any) => String(item.id) === itemId) || {}),
+      });
+      await fanoutOrdersUpdated();
+      return;
+    }
+
+    if (pathname === '/comandas/motoboys/lista') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 7, nome: 'Pedro Entregador', telefone: '85999990007', ativo: true }]),
+      });
+      return;
+    }
+
+    if (pathname === '/mesas/') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+
+    if (pathname === '/produtos/catalogo') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          categorias: [{ id: 'cat-pizza', nome: 'Pizzas', destino_impressao: 'COZINHA' }],
+          produtos: [{ id: '102', nome: 'Pizza Delivery', preco: 55, categoria_id: 'cat-pizza', ativo: true }],
+        }),
+      });
+      return;
+    }
+
+    if (pathname === '/caixa/configuracoes') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(cashierConfig) });
+      return;
+    }
+
+    if (pathname === '/caixa/turno/atual') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 501,
+          aberto_por_id: 'caixa-e2e',
+          aberto_em: now,
+          saldo_inicial: 100,
+          status: 'aberto',
+          movimentacoes: [],
+          pagamentos: [],
+        }),
+      });
+      return;
+    }
+
+    if (pathname === '/caixa/turno-atual/resumo') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          turno_id: 501,
+          status: 'aberto',
+          operador_id: 'caixa-e2e',
+          operador_nome: 'Caixa E2E',
+          aberto_em: now,
+          tempo_aberto_minutos: 5,
+          saldo_inicial: 100,
+          total_vendas: 0,
+          total_dinheiro: 0,
+          total_pix: 0,
+          total_cartao: 0,
+          total_sangrias: 0,
+          total_suprimentos: 0,
+          saldo_esperado_dinheiro: 100,
+          total_pedidos_pagos: 0,
+          atividades_recentes: [],
+        }),
+      });
+      return;
+    }
+
+    if (
+      pathname === '/caixa/pagamentos/pendentes'
+      || pathname === '/auth/usuarios'
+      || pathname === '/chat/caixa/conversas'
+    ) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+
+    if (pathname === '/auth/smartpos/caixa/operacao') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      return;
+    }
+
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+}
+
+test('Pedidos, Cozinha e Entregas convergem entre três terminais sem refresh manual', async ({ context }) => {
+  await mockThreeTerminalFulfillmentBackend(context);
+
+  const ordersPage = await context.newPage();
+  const kitchenPage = await context.newPage();
+  const deliveriesPage = await context.newPage();
+
+  await seedCashierSession(ordersPage, 'pedidos');
+  await seedCashierSession(kitchenPage, 'kds');
+  await seedCashierSession(deliveriesPage, 'entregadores');
+
+  await Promise.all([
+    ordersPage.goto('/?view=caixa'),
+    kitchenPage.goto('/?view=caixa'),
+    deliveriesPage.goto('/?view=caixa'),
+  ]);
+
+  await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Balcão' }).evaluate((element) => {
+    (element as HTMLButtonElement).click();
+  });
+
+  const ordersCard = ordersPage.locator('.orders-card--digital').filter({ hasText: 'Cliente Multi Terminal' });
+  const deliveries = deliveriesPage.locator('#cashier-deliveries-workspace');
+
+  await expect(ordersCard).toBeVisible();
+  await expect(deliveries).toContainText('Cliente Multi Terminal');
+  await expect(kitchenPage.getByRole('button', { name: /Marcar como pronto: Pizza Delivery/i })).toBeVisible();
+
+  const deliveryCourier = deliveries.getByRole('combobox', { name: /Entregador do pedido 5100/i });
+  await deliveryCourier.selectOption('7');
+  await expect(
+    ordersCard.getByRole('combobox', { name: /Entregador do pedido 5100/i }),
+  ).toHaveValue('7');
+
+  await kitchenPage.getByRole('button', { name: /Marcar como pronto: Pizza Delivery/i }).click();
+  await expect(ordersCard).toContainText('Cozinha concluída');
+  await expect(ordersCard).toContainText('Aguarda avanço do pedido');
+  await expect(deliveries).toContainText('Em preparo');
+
+  await ordersCard.getByRole('button', { name: /Pronto para sair/i }).click();
+  await expect(deliveries).toContainText('Pronto');
+  await expect(deliveries.getByRole('button', { name: 'Saiu para entrega' })).toBeEnabled();
+
+  await deliveries.getByRole('button', { name: 'Saiu para entrega' }).click();
+  await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Concluir' }).evaluate((element) => {
+    (element as HTMLButtonElement).click();
+  });
+
+  const routeCard = ordersPage.locator('.orders-card--closing').filter({ hasText: 'Cliente Multi Terminal' });
+  await expect(routeCard).toContainText('EM ROTA');
+  await expect(routeCard).toContainText('Pedro Entregador');
+  await expect(deliveries).toContainText('Em rota');
+  await expectNoHorizontalOverflow(ordersPage);
+  await expectNoHorizontalOverflow(kitchenPage);
+  await expectNoHorizontalOverflow(deliveriesPage);
 });
