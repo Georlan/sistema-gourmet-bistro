@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Event, Lock
 from pathlib import Path
 from config import AgentConfig, is_automatic_printer_name
+from endpoints import PrinterEndpoint
 from api_client import AgentAuthenticationError, KomaApiClient
 from journal import PrintJournal
 from adapters import get_adapter
@@ -49,11 +50,16 @@ class AgentMaintenance:
         except Exception:
             log.exception("[DIAGNÓSTICO] Não foi possível verificar as impressoras.")
             diagnostics = {"printers": [], "error": "diagnostics_failed"}
-        self.snapshot = (diagnostics, time.monotonic())
         try:
-            bind_single_ready_windows_usb(self.config, diagnostics)
+            bind_single_ready_printer(self.config, diagnostics)
         except (OSError, ValueError):
-            log.exception("[IMPRESSORA] Não foi possível memorizar a fila USB.")
+            log.exception("[IMPRESSORA] Não foi possível atualizar a impressora principal.")
+        diagnostics = {
+            **diagnostics,
+            "endpoints": [endpoint.to_dict() for endpoint in self.config.endpoints],
+            "destinations": dict(self.config.destinations),
+        }
+        self.snapshot = (diagnostics, time.monotonic())
         log.info("[LATÊNCIA] diagnostico_hardware_ms=%s", round((time.monotonic() - started) * 1000))
 
     def tick(self):
@@ -88,6 +94,142 @@ class AgentMaintenance:
                     self.snapshot = (result["diagnostics"], time.monotonic())
         if self.client.complete_command(command_id, self.last_command_result):
             self.last_command_id, self.last_command_result = "", None
+
+
+def _is_ready_printer_entry(printer: dict) -> bool:
+    if not isinstance(printer, dict):
+        return False
+    if str(printer.get("connection") or "").casefold() == "bluetooth":
+        return bool(printer.get("paired") is True and printer.get("spp") is True)
+    return bool(
+        printer.get("available") is True
+        and printer.get("present") is True
+        and printer.get("configured") is True
+    )
+
+
+def _printer_identifiers(printer: dict) -> set[str]:
+    return {
+        str(printer.get(key) or "").strip().casefold()
+        for key in ("name", "uri", "address", "cups_queue")
+        if str(printer.get(key) or "").strip()
+    }
+
+
+def _endpoint_matches_printer(endpoint: PrinterEndpoint, printer: dict) -> bool:
+    endpoint_values = {
+        str(endpoint.name or "").strip().casefold(),
+        str(endpoint.address or "").strip().casefold(),
+    }
+    endpoint_values.discard("")
+    return bool(endpoint_values & _printer_identifiers(printer))
+
+
+def _endpoint_from_detected_printer(
+    printer: dict,
+    platform: str,
+) -> PrinterEndpoint:
+    name = str(printer.get("name") or "Impressora").strip() or "Impressora"
+    connection = str(printer.get("connection") or "unknown").casefold()
+    uri = str(printer.get("uri") or "").strip()
+    address = str(printer.get("address") or "").strip()
+    cups_queue = str(printer.get("cups_queue") or "").strip()
+
+    if connection == "bluetooth":
+        return PrinterEndpoint(
+            name=name,
+            display_name=name,
+            transport="bluetooth_rfcomm",
+            address=address or uri,
+            options={"channel": 1},
+        )
+    if connection == "usb":
+        if uri.startswith("/dev/"):
+            return PrinterEndpoint(
+                name=name,
+                display_name=name,
+                transport="usb_direct",
+                address=uri,
+            )
+        return PrinterEndpoint(
+            name=name,
+            display_name=name,
+            transport=(
+                "windows_spooler"
+                if platform.casefold() == "windows"
+                else "cups"
+            ),
+            address=name if platform.casefold() == "windows" else (cups_queue or name),
+        )
+    if connection == "network" and (
+        uri.startswith("socket://") or uri.startswith("tcp://")
+    ):
+        return PrinterEndpoint(
+            name=name,
+            display_name=name,
+            transport="tcp",
+            address=uri.split("://", 1)[1],
+        )
+    return PrinterEndpoint(
+        name=name,
+        display_name=name,
+        transport=(
+            "windows_spooler"
+            if platform.casefold() == "windows"
+            else "cups"
+        ),
+        address=cups_queue or name,
+    )
+
+
+def bind_single_ready_printer(
+    config: AgentConfig,
+    diagnostics: dict,
+) -> str:
+    """
+    Mantém o destino padrão alinhado ao único equipamento realmente utilizável.
+
+    Isso cobre upgrades em que a configuração antiga ainda aponta para uma USB
+    desconectada, mas o agente já detecta uma única impressora funcional por
+    Bluetooth, USB ou rede. Rotas que compartilhavam o padrão antigo acompanham
+    a troca; rotas dedicadas a outra impressora continuam intactas.
+    """
+    ready_printers = [
+        printer
+        for printer in diagnostics.get("printers") or []
+        if (
+            isinstance(printer, dict)
+            and _is_ready_printer_entry(printer)
+            and str(printer.get("name") or "").strip()
+        )
+    ]
+    if len(ready_printers) != 1:
+        return ""
+
+    selected = ready_printers[0]
+    current_endpoint = config.resolve_destination("PADRAO")
+    if current_endpoint is not None and _endpoint_matches_printer(
+        current_endpoint,
+        selected,
+    ):
+        return ""
+
+    endpoint = _endpoint_from_detected_printer(
+        selected,
+        str(diagnostics.get("platform") or ""),
+    )
+    config.remember_printer(
+        endpoint.name,
+        endpoint=endpoint,
+        replace_existing_default_routes=True,
+    )
+    log.info(
+        "[IMPRESSORA] '%s' virou a impressora principal porque é o único "
+        "equipamento pronto detectado (%s).",
+        endpoint.name,
+        endpoint.transport,
+    )
+    return endpoint.name
 
 
 def bind_single_ready_windows_usb(
@@ -126,12 +268,9 @@ def bind_single_ready_windows_usb(
 
 
 def _diagnostics_have_ready_printer(diagnostics: dict) -> bool:
-    printers = diagnostics.get("printers") or []
     return any(
-        printer.get("available") is True
-        and printer.get("present") is True
-        and printer.get("configured") is True
-        for printer in printers
+        _is_ready_printer_entry(printer)
+        for printer in diagnostics.get("printers") or []
         if isinstance(printer, dict)
     )
 

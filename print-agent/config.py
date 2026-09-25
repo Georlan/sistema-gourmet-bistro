@@ -291,6 +291,8 @@ class AgentConfig:
         self,
         printer_name: str,
         endpoint: Optional[PrinterEndpoint] = None,
+        *,
+        replace_existing_default_routes: bool = False,
     ) -> None:
         """
         Memoriza a impressora padrão do Kôma, atualizando destinos e endpoints
@@ -352,6 +354,22 @@ class AgentConfig:
         stored_printers = data.get("printers")
         if not isinstance(stored_printers, dict):
             stored_printers = {}
+
+        previous_default_id = str(stored_destinations.get("PADRAO") or "").strip()
+        previous_default_name = str(stored_printers.get("PADRAO") or "").strip()
+
+        if replace_existing_default_routes:
+            for destination, target_id in list(stored_destinations.items()):
+                if previous_default_id and str(target_id).strip() == previous_default_id:
+                    stored_destinations[destination] = new_ep.id
+            for destination, current_name in list(stored_printers.items()):
+                if (
+                    previous_default_name
+                    and str(current_name).strip().casefold()
+                    == previous_default_name.casefold()
+                ):
+                    stored_printers[destination] = new_ep.name
+                    stored_destinations[destination] = new_ep.id
 
         for destination, current_name in list(stored_printers.items()):
             if is_automatic_printer_name(str(current_name)):
