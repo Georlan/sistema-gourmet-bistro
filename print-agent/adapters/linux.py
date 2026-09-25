@@ -14,6 +14,12 @@ from typing import Any, Dict, Optional
 
 from .base import BasePrinterAdapter
 from .escpos import build_escpos_payload
+from .transports import (
+    PrinterTransport,
+    BluetoothRfcommTransport,
+    UsbDirectTransport,
+    CupsTransport,
+)
 
 log = logging.getLogger("print-agent.adapter.linux")
 
@@ -903,14 +909,13 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
                 "diagnostics": diagnostics,
             }
 
-        cups_queue = str(selected.get("cups_queue") or "").strip()
-        if not cups_queue:
+        address = str(selected.get("address") or _normalize_bluetooth_address(str(selected.get("uri") or ""))).strip()
+        if not address:
             return {
                 "success": False,
-                "code": "bluetooth_queue_missing",
+                "code": "bluetooth_address_missing",
                 "message": (
-                    "A impressora está pareada, mas ainda não possui uma fila "
-                    "Bluetooth do CUPS neste computador."
+                    "A impressora Bluetooth está sem endereço MAC configurado."
                 ),
                 "printer_name": selected_name,
                 "diagnostics": diagnostics,
@@ -919,50 +924,16 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
         raw_payload = build_escpos_payload(
             "KÔMA - TESTE BLUETOOTH\n"
             f"Impressora: {selected_name}\n"
-            "Conexão local validada pelo Kôma Print.\n"
+            "Conexão sob demanda RFCOMM validada pelo Kôma Print.\n"
         )
-        try:
-            proc = subprocess.run(
-                ["lp", "-d", cups_queue, "-o", "raw"],
-                input=raw_payload,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=15,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            log.error(
-                "[LINUX ADAPTER] Falha ao testar Bluetooth '%s': %s",
-                selected_name,
-                exc,
-            )
+        transport = BluetoothRfcommTransport(address=address, channel=1)
+        if not transport.send(raw_payload):
             return {
                 "success": False,
                 "code": "bluetooth_test_failed",
                 "message": (
-                    "O Kôma encontrou a impressora Bluetooth, mas não "
-                    "conseguiu enviar o teste ao serviço de impressão."
-                ),
-                "printer_name": selected_name,
-                "diagnostics": diagnostics,
-            }
-
-        if proc.returncode != 0:
-            error = proc.stderr.decode(
-                "utf-8",
-                errors="replace",
-            ).strip()
-            log.error(
-                "[LINUX ADAPTER] CUPS recusou teste Bluetooth '%s': %s",
-                selected_name,
-                error or "erro desconhecido",
-            )
-            return {
-                "success": False,
-                "code": "bluetooth_test_failed",
-                "message": (
-                    "A fila Bluetooth recusou o teste. Ligue a impressora "
-                    "e tente novamente."
+                    "A impressora Bluetooth não respondeu ao teste. "
+                    "Ligue a impressora e tente novamente."
                 ),
                 "printer_name": selected_name,
                 "diagnostics": diagnostics,
@@ -972,12 +943,53 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
             "success": True,
             "code": "bluetooth_test_sent",
             "message": (
-                "Teste Bluetooth enviado ao sistema de impressão. "
+                "Teste Bluetooth enviado com sucesso. "
                 "Confirme se o papel saiu na impressora."
             ),
             "printer_name": selected_name,
             "diagnostics": self.get_diagnostics(),
         }
+
+    def resolve_transport(self, target_printer: str) -> Optional[PrinterTransport]:
+        """Resolve o transporte de impressão apropriado para o destino informado."""
+        target = (target_printer or "").strip()
+        if not target:
+            return None
+
+        # 1. Porta USB direta (/dev/usb/lp*)
+        if target.startswith("/dev/"):
+            return UsbDirectTransport(device_path=target)
+
+        # 2. URI ou MAC Bluetooth direto
+        normalized_mac = _normalize_bluetooth_address(target)
+        if normalized_mac:
+            return BluetoothRfcommTransport(address=normalized_mac, channel=1)
+        if target.startswith("bluetooth://"):
+            addr = _normalize_bluetooth_address(target)
+            if addr:
+                return BluetoothRfcommTransport(address=addr, channel=1)
+
+        # 3. Busca nas impressoras diagnosticadas
+        diagnostics = self.get_diagnostics()
+        for p in diagnostics.get("printers") or []:
+            name = str(p.get("name") or "")
+            uri = str(p.get("uri") or "")
+            address = str(p.get("address") or "")
+            queue = str(p.get("cups_queue") or "")
+            if target in {name, uri, address, queue}:
+                if p.get("connection") == "bluetooth" or address:
+                    addr = address or _normalize_bluetooth_address(uri)
+                    if addr:
+                        return BluetoothRfcommTransport(address=addr, channel=1)
+                if uri.startswith("/dev/"):
+                    return UsbDirectTransport(device_path=uri)
+                if uri.startswith("bluetooth://"):
+                    addr = _normalize_bluetooth_address(uri)
+                    if addr:
+                        return BluetoothRfcommTransport(address=addr, channel=1)
+
+        # 4. Fallback padrão: fila do CUPS
+        return CupsTransport(queue_name=target)
 
     def print_ticket(
         self,
@@ -991,8 +1003,11 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
 
         target_printer = printer_name
         if not target_printer or target_printer in ("Padrão", "auto"):
-            target_printer = _resolve_automatic_cups_printer()
-            if target_printer is None:
+            diagnostics = self.get_diagnostics()
+            target_printer = str(diagnostics.get("default_printer") or "").strip()
+            if not target_printer:
+                target_printer = _resolve_automatic_cups_printer() or ""
+            if not target_printer:
                 log.error(
                     "[LINUX ADAPTER] Nenhuma impressora física pronta pôde ser selecionada."
                 )
@@ -1006,60 +1021,12 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
             )
             return False
 
-        # 1. Porta física USB direta (/dev/usb/lp*).
-        if target_printer and target_printer.startswith("/dev/"):
-            if not os.path.exists(target_printer):
-                log.error(
-                    "[LINUX ADAPTER ERROR] Porta USB '%s' não encontrada.",
-                    target_printer,
-                )
-                return False
-            try:
-                with open(target_printer, "wb") as printer:
-                    printer.write(raw_payload)
-                    printer.flush()
-                log.info(
-                    "[LINUX ADAPTER] Impresso com corte ESC/POS na porta USB '%s'",
-                    target_printer,
-                )
-                return True
-            except OSError as exc:
-                log.error(
-                    "[LINUX ADAPTER ERROR] Erro ao gravar na porta USB '%s': %s",
-                    target_printer,
-                    exc,
-                )
-                return False
-
-        # 2. CUPS em modo RAW para preservar fonte, negrito e guilhotina.
-        cmd = ["lp"]
-        if target_printer:
-            cmd.extend(["-d", target_printer])
-        cmd.extend(["-o", "raw"])
-
-        try:
-            proc = subprocess.run(
-                cmd,
-                input=raw_payload,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=10,
-                check=False,
+        transport = self.resolve_transport(target_printer)
+        if not transport:
+            log.error(
+                "[LINUX ADAPTER ERROR] Nenhum transporte disponível para '%s'.",
+                target_printer,
             )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            log.error("[LINUX ADAPTER ERROR] Falha ao invocar lp/CUPS: %s", exc)
             return False
 
-        if proc.returncode != 0:
-            error = proc.stderr.decode("utf-8", errors="replace").strip()
-            log.error("[LINUX ADAPTER CUPS ERROR] %s", error or "erro desconhecido")
-            return False
-
-        job = proc.stdout.decode("utf-8", errors="replace").strip()
-        selected = target_printer or "padrão do sistema"
-        log.info(
-            "[LINUX ADAPTER] Trabalho enviado via CUPS RAW para '%s'%s",
-            selected,
-            f": {job}" if job else "",
-        )
-        return True
+        return transport.send(raw_payload)

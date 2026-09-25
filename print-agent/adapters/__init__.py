@@ -7,6 +7,13 @@ from .base import BasePrinterAdapter
 from .file import FilePrinterAdapter
 from .linux import LinuxPrinterAdapter
 from .windows import WindowsPrinterAdapter
+from .transports import (
+    PrinterTransport,
+    BluetoothRfcommTransport,
+    UsbDirectTransport,
+    CupsTransport,
+    WindowsSpoolerTransport,
+)
 
 
 def get_adapter(adapter_name: str = "auto", output_dir: str = "print_output") -> BasePrinterAdapter:
