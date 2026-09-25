@@ -59,6 +59,7 @@ function workspaceProps(): CaixaOrdersWorkspaceProps {
     search: { query: '', onChange: noop },
     acceptance: { orders: [], automatic: false, drawerOpen: false, onAutomaticChange: noop, onDrawerChange: noop },
     navigation: { stage: 'digital', expandedCardIds: {}, onStageChange: noop, onToggleCard: noop },
+    couriers: { options: [], loadState: 'loaded', selectedByOrderId: {}, onChange: noop },
     actions: {
       confirmCashPayment: noop,
       rejectCashPayment: noop,
@@ -69,6 +70,7 @@ function workspaceProps(): CaixaOrdersWorkspaceProps {
       printConference: noop,
       markTableItemsReady: noop,
       advanceDigitalOrder: noop,
+      dispatchDelivery: noop,
       openTablePayment: noop,
       finalizeDigitalOrder: noop,
     },
@@ -90,10 +92,16 @@ test('kanban separa preparo, despacho e finalização de delivery', () => {
       digitalProduction: [production],
       digitalFinalization: [ready, transit],
     },
+    couriers: {
+      options: [{ id: 7, nome: 'Pedro Silva', ativo: true }],
+      loadState: 'loaded',
+      selectedByOrderId: { 'delivery-ready': '7' },
+      onChange: noop,
+    },
     actions: {
       ...base.actions,
       advanceDigitalOrder: order => calls.push(`advance:${order.id}`),
-      inspectDigitalOrder: order => calls.push(`inspect:${order.id}`),
+      dispatchDelivery: (orderId, courierId) => calls.push(`dispatch:${orderId}:${courierId}`),
       finalizeDigitalOrder: order => calls.push(`finalize:${order.id}`),
     },
   });
@@ -104,7 +112,7 @@ test('kanban separa preparo, despacho e finalização de delivery', () => {
 
   assert.deepEqual(calls, [
     'advance:delivery-production',
-    'inspect:delivery-ready',
+    'dispatch:delivery-ready:7',
     'finalize:delivery-transit',
   ]);
 });
