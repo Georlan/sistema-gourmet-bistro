@@ -231,6 +231,32 @@ function friendlyPrinterName(value: string | null): string {
   return value;
 }
 
+function getFriendlyTransportBadge(transport?: string, connection?: string): { label: string; badgeClass: string } {
+  const key = (transport || connection || '').toLowerCase();
+  if (key === 'bluetooth_rfcomm' || key === 'bluetooth' || key === 'bt') {
+    return {
+      label: 'Bluetooth',
+      badgeClass: 'koma-badge-info border border-sky-400/40 text-sky-700 dark:text-sky-300'
+    };
+  }
+  if (key === 'tcp' || key === 'network') {
+    return {
+      label: 'Rede',
+      badgeClass: 'koma-badge-info border border-teal-400/40 text-teal-700 dark:text-teal-300'
+    };
+  }
+  if (key === 'usb_direct' || key === 'usb') {
+    return {
+      label: 'USB',
+      badgeClass: 'koma-badge-success border border-emerald-400/40 text-emerald-700 dark:text-emerald-300'
+    };
+  }
+  return {
+    label: 'Impressora',
+    badgeClass: 'koma-badge-neutral border border-zinc-400/30'
+  };
+}
+
 function getTransportBadge(transport?: string, connection?: string): { label: string; badgeClass: string } {
   const key = (transport || connection || '').toLowerCase();
   if (key === 'bluetooth_rfcomm' || key === 'bluetooth') {
@@ -299,6 +325,7 @@ export function PrintMonitorPanel({
   const [reprintingId, setReprintingId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showQueue, setShowQueue] = useState(true);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const authorization = authHeaders.Authorization || authHeaders.authorization || '';
 
@@ -839,43 +866,21 @@ export function PrintMonitorPanel({
     }
     const firstReady = readyPrinters[0] || readyUsbPrinters[0] || null;
     const readyName = friendlyPrinterName(firstReady?.name || null);
-    const readyTransport = firstReady?.connection === 'bluetooth'
-      ? 'Bluetooth'
-      : firstReady?.connection === 'network'
-        ? 'de rede'
-        : 'USB';
-    const readyTitle = `Impressora ${readyTransport} pronta`;
 
-    if (!hasUsbCommandAgent && (!firstReady || firstReady.connection === 'usb')) {
-      return {
-        tone: 'success',
-        title: 'Impressora USB pronta',
-        detail: (
-          `${friendlyPrinterName(readyUsbPrinters[0]?.name || null)} está disponível. `
-          + 'Atualize o Kôma Print quando quiser habilitar a reconexão remota.'
-        )
-      };
-    }
     return {
       tone: 'success',
-      title: readyTitle,
-      detail: (
-        firstReady?.connection === 'bluetooth'
-          ? `${readyName} está pareada e pronta para envio Bluetooth sob demanda.`
-          : `${readyName} está conectada e disponível.`
-      )
+      title: 'Pronta para imprimir',
+      detail: `${readyName} está pronta para imprimir.`
     };
   }, [
     commandRunning,
     hasFreshPrinterDiagnostics,
     hasOnlineAgent,
     hasReadyPrinter,
-    hasUsbCommandAgent,
     latestJob,
     monitorData,
     pendingCommandAction,
     pendingCommandId,
-    presentUsbPrinters.length,
     queueTotal,
     readyPrinters,
     readyUsbPrinters
@@ -896,10 +901,10 @@ export function PrintMonitorPanel({
 
   const agentState = hasOnlineAgent ? 'Conectado' : 'Offline';
   const equipmentState = hasReadyPrinter
-    ? 'Pronta'
-    : presentUsbPrinters.length
-      ? 'Detectada'
-      : 'Não conectada';
+    ? 'Pronta para imprimir'
+    : (allDetectedPrinters.length > 0 || presentUsbPrinters.length > 0)
+      ? 'Impressora encontrada'
+      : 'Desconectada';
   const queueState = queueTotal > 0
     ? `${queueTotal} aguardando`
     : 'Livre';
@@ -1044,14 +1049,10 @@ export function PrintMonitorPanel({
               >
                 {commandRunning || pendingCommandId
                   ? <RefreshCw size={16} className="animate-spin" />
-                  : hasReadyPrinter
-                    ? <Wrench size={16} />
-                    : <Search size={16} />}
+                  : <Search size={16} />}
                 {commandRunning || pendingCommandId
-                  ? 'Conectando…'
-                  : hasReadyPrinter
-                    ? 'Reconectar USB'
-                    : 'Procurar e conectar USB'}
+                  ? 'Procurando…'
+                  : 'Procurar impressoras'}
               </button>
             )}
 
@@ -1155,15 +1156,15 @@ export function PrintMonitorPanel({
         )}
       </div>
 
-      {(Object.keys(configuredDestinations).length > 0 || configuredEndpoints.length > 0) && (
+      {Object.keys(configuredDestinations).length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h3 className="text-xs font-bold text-koma-foreground">
-                Destinos e rotas de impressão
+                Destinos de impressão
               </h3>
               <p className="mt-0.5 text-[10px] text-koma-muted">
-                Rotas lógicas mapeadas para impressoras USB, Bluetooth, rede ou spooler do sistema.
+                Rotas para impressão de pedidos e cupons.
               </p>
             </div>
             <span className="rounded-full border border-koma-border bg-koma-raised px-2.5 py-1 text-[9px] font-semibold text-koma-muted">
@@ -1178,15 +1179,15 @@ export function PrintMonitorPanel({
                 ep => ep.id === boundTarget || ep.name === boundTarget
               ) || null;
               const badge = boundEndpoint
-                ? getTransportBadge(boundEndpoint.transport)
+                ? getFriendlyTransportBadge(boundEndpoint.transport)
                 : boundTarget
-                  ? getTransportBadge('cups')
+                  ? getFriendlyTransportBadge(undefined, 'usb')
                   : null;
               const destLabel = destKey === 'PADRAO'
-                ? 'Padrão (Caixa)'
+                ? 'Impressora principal'
                 : destKey === 'COZINHA'
                   ? 'Cozinha'
-                  : 'Bar / Bebidas';
+                  : 'Bar';
 
               return (
                 <div
@@ -1205,16 +1206,11 @@ export function PrintMonitorPanel({
                       )}
                     </div>
                     <strong className="mt-1.5 block truncate text-xs font-bold text-koma-foreground">
-                      {boundEndpoint?.display_name || boundEndpoint?.name || boundTarget || 'Não configurado'}
+                      {boundEndpoint?.display_name || boundEndpoint?.name || boundTarget || (destKey === 'PADRAO' ? 'Impressora principal' : 'Não configurado')}
                     </strong>
-                    {boundEndpoint?.address && (
-                      <span className="mt-0.5 block truncate text-[9px] text-koma-muted font-mono">
-                        {boundEndpoint.address}
-                      </span>
-                    )}
                   </div>
-                  <span className="mt-3 block text-[9px] text-koma-subtle font-medium">
-                    {boundTarget ? 'Rota ativa' : 'Usa impressora padrão'}
+                  <span className="mt-3 block text-[9px] text-emerald-700 dark:text-emerald-400 font-semibold">
+                    {boundTarget ? 'Pronta para imprimir' : 'Usar impressora principal'}
                   </span>
                 </div>
               );
@@ -1226,127 +1222,38 @@ export function PrintMonitorPanel({
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-xs font-bold text-koma-foreground">Detalhes do equipamento físico</h3>
+            <h3 className="text-xs font-bold text-koma-foreground">Impressoras</h3>
             <p className="mt-0.5 text-[10px] text-koma-muted">
-              Use esta área somente para conectar, reconectar ou conferir a impressora USB.
+              Equipamentos disponíveis para emissão de pedidos e cupons.
             </p>
           </div>
           <span className="rounded-full border border-koma-border bg-koma-raised px-2.5 py-1 text-[9px] font-semibold text-koma-muted">
-            {presentUsbPrinters.length} conectada(s)
+            {allDetectedPrinters.length} encontrada(s)
           </span>
         </div>
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {presentUsbPrinters.length ? presentUsbPrinters.map((printer, index) => {
-            const ready = (
-              printer.available
-              && printer.present === true
-              && printer.configured === true
-            );
-            const busy = commandRunning || Boolean(pendingCommandId);
-
-            return (
-              <div
-                key={`${printer.agentId}-${printer.name}-${index}`}
-                className="rounded-2xl border border-koma-border bg-koma-panel p-4 shadow-xs"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                      ready
-                        ? 'koma-badge-success'
-                        : 'bg-koma-raised text-koma-muted'
-                    }`}>
-                      <Usb size={16} />
-                    </div>
-                    <div className="min-w-0">
-                      <strong className="block truncate text-xs font-bold text-koma-foreground">
-                        {printer.name}
-                      </strong>
-                      <span className={`mt-0.5 inline-block text-[9px] font-semibold ${
-                        ready ? 'text-emerald-700 dark:text-emerald-400' : 'text-koma-muted'
-                      }`}>
-                        {ready
-                          ? 'Conectada e pronta'
-                          : 'USB presente · configuração pendente'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="rounded-full px-2 py-0.5 text-[8px] font-extrabold koma-badge-success border border-emerald-400/40 text-emerald-700 dark:text-emerald-300">
-                      USB
-                    </span>
-                    {printer.is_default && (
-                      <span className="rounded-full koma-badge-success px-2 py-0.5 text-[8px] font-extrabold">
-                        PRINCIPAL
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => void requestUsbConnection(printer.agentId, printer)}
-                  disabled={
-                    busy
-                    || !hasOnlineAgent
-                    || !(monitorData?.agents || []).find(
-                      agent => agent.agent_id === printer.agentId
-                    )?.supports_usb_commands
-                  }
-                  className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 py-2 text-xs font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer shadow-xs"
-                >
-                  {busy
-                    ? <RefreshCw size={14} className="animate-spin" />
-                    : ready
-                      ? <Wrench size={14} />
-                      : <Power size={14} />}
-                  {busy
-                    ? 'Conectando…'
-                    : ready
-                      ? 'Reconectar esta impressora'
-                      : 'Conectar esta impressora'}
-                </button>
-              </div>
-            );
-          }) : (
-            <div className="md:col-span-2 rounded-2xl border-2 border-dashed border-koma-border bg-koma-raised/40 px-5 py-8 text-center">
-              <Usb size={24} className="mx-auto text-koma-muted" />
-              <strong className="mt-3 block text-xs font-bold text-koma-foreground">
-                Nenhuma impressora USB detectada
-              </strong>
-              <span className="mt-1 block text-[10px] text-koma-muted">
-                O agente local continua online; conecte o USB apenas quando quiser imprimir em papel.
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {bluetoothPrinters.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-xs font-bold text-koma-foreground">
-                Impressoras Bluetooth (SPP)
-              </h3>
-              <p className="mt-0.5 text-[10px] text-koma-muted">
-                Conexão sem fio direta via RFCOMM sob demanda, sem necessidade de fila CUPS no sistema.
-              </p>
-            </div>
-            <span className="rounded-full border border-koma-border bg-koma-raised px-2.5 py-1 text-[9px] font-semibold text-koma-muted">
-              {bluetoothPrinters.length} pareada(s)
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {bluetoothPrinters.map((printer, index) => {
-              const canTest = (
-                printer.paired === true
-                && (printer.spp !== false || Boolean(printer.cups_queue))
-                && printer.supportsBluetoothTest
-              );
+          {allDetectedPrinters.length ? (
+            allDetectedPrinters.map((printer, index) => {
+              const ready = isPrinterReady(printer);
               const busy = commandRunning || Boolean(pendingCommandId);
+              const badge = getFriendlyTransportBadge(undefined, printer.connection);
+              const statusLabel = ready
+                ? 'Pronta para imprimir'
+                : (printer.present || printer.paired || printer.available)
+                  ? 'Impressora encontrada'
+                  : 'Desconectada';
+              const statusClass = ready
+                ? 'text-emerald-700 dark:text-emerald-400 font-semibold'
+                : (printer.present || printer.paired || printer.available)
+                  ? 'text-amber-700 dark:text-amber-400 font-semibold'
+                  : 'text-koma-muted font-semibold';
+              const Icon = printer.connection === 'bluetooth'
+                ? Bluetooth
+                : printer.connection === 'network'
+                  ? Wifi
+                  : Usb;
+
               return (
                 <div
                   key={`${printer.agentId}-${printer.uri || printer.name}-${index}`}
@@ -1354,105 +1261,216 @@ export function PrintMonitorPanel({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-koma-raised text-sky-600 dark:text-sky-400">
-                        <Bluetooth size={16} />
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                        ready
+                          ? 'koma-badge-success'
+                          : 'bg-koma-raised text-koma-muted'
+                      }`}>
+                        <Icon size={16} />
                       </div>
                       <div className="min-w-0">
                         <strong className="block truncate text-xs font-bold text-koma-foreground">
-                          {printer.name}
+                          {friendlyPrinterName(printer.name)}
                         </strong>
-                        <span className="mt-0.5 block text-[9px] font-semibold text-koma-muted">
-                          {printer.paired
-                            ? (printer.spp || printer.cups_queue)
-                              ? 'Pareada · pronta para impressão sob demanda'
-                              : 'Pareada · perfil SPP detectado'
-                            : 'Bluetooth ainda não pareado'}
+                        <span className={`mt-0.5 block text-[9px] ${statusClass}`}>
+                          {statusLabel}
                         </span>
-                        {printer.address && (
-                          <span className="mt-0.5 block text-[8px] font-mono text-koma-subtle">
-                            {printer.address}
-                          </span>
-                        )}
                       </div>
                     </div>
-                    <span className="shrink-0 rounded-full px-2 py-0.5 text-[8px] font-extrabold koma-badge-info border border-sky-400/40 text-sky-700 dark:text-sky-300">
-                      Bluetooth SPP
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => void requestBluetoothTest(printer.agentId, printer)}
-                    disabled={busy || !hasOnlineAgent || !canTest}
-                    title={
-                      canTest
-                        ? 'Enviar um cupom curto diretamente para esta impressora Bluetooth'
-                        : 'A impressora precisa estar pareada com perfil SPP no computador'
-                    }
-                    className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 py-2 text-xs font-bold text-koma-foreground transition hover:border-sky-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer shadow-xs"
-                  >
-                    {busy
-                      ? <RefreshCw size={14} className="animate-spin" />
-                      : <Bluetooth size={14} />}
-                    {busy ? 'Testando…' : 'Imprimir teste Bluetooth'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {networkPrinters.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-xs font-bold text-koma-foreground">
-                Impressoras de rede (TCP / IP)
-              </h3>
-              <p className="mt-0.5 text-[10px] text-koma-muted">
-                Impressoras conectadas via cabo de rede Ethernet ou Wi-Fi por socket direto.
-              </p>
-            </div>
-            <span className="rounded-full border border-koma-border bg-koma-raised px-2.5 py-1 text-[9px] font-semibold text-koma-muted">
-              {networkPrinters.length} detectada(s)
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {networkPrinters.map((printer, index) => (
-              <div
-                key={`${printer.agentId}-${printer.uri || printer.name}-${index}`}
-                className="rounded-2xl border border-koma-border bg-koma-panel p-4 shadow-xs"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-koma-raised text-teal-600 dark:text-teal-400">
-                      <Wifi size={16} />
-                    </div>
-                    <div className="min-w-0">
-                      <strong className="block truncate text-xs font-bold text-koma-foreground">
-                        {printer.name}
-                      </strong>
-                      <span className="mt-0.5 block text-[9px] font-semibold text-emerald-700 dark:text-emerald-400">
-                        {printer.available ? 'Disponível na rede' : 'Endereço configurado'}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={`rounded-full px-2 py-0.5 text-[8px] font-extrabold ${badge.badgeClass}`}>
+                        {badge.label}
                       </span>
-                      {printer.address && (
-                        <span className="mt-0.5 block text-[8px] font-mono text-koma-subtle">
-                          {printer.address}
+                      {printer.is_default && (
+                        <span className="rounded-full koma-badge-success px-2 py-0.5 text-[8px] font-extrabold">
+                          Impressora principal
                         </span>
                       )}
                     </div>
                   </div>
-                  <span className="shrink-0 rounded-full px-2 py-0.5 text-[8px] font-extrabold koma-badge-info border border-teal-400/40 text-teal-700 dark:text-teal-300">
-                    Rede TCP
-                  </span>
+
+                  <div className="mt-4">
+                    {printer.connection === 'bluetooth' ? (
+                      <button
+                        type="button"
+                        onClick={() => void requestBluetoothTest(printer.agentId, printer)}
+                        disabled={busy || !hasOnlineAgent || !printer.supportsBluetoothTest || !printer.paired}
+                        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 py-2 text-xs font-bold text-koma-foreground transition hover:border-sky-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer shadow-xs"
+                      >
+                        {busy ? <RefreshCw size={14} className="animate-spin" /> : <Printer size={14} />}
+                        {busy ? 'Enviando…' : 'Imprimir teste'}
+                      </button>
+                    ) : printer.connection === 'usb' ? (
+                      <button
+                        type="button"
+                        onClick={() => void requestUsbConnection(printer.agentId, printer)}
+                        disabled={
+                          busy
+                          || !hasOnlineAgent
+                          || !(monitorData?.agents || []).find(
+                            agent => agent.agent_id === printer.agentId
+                          )?.supports_usb_commands
+                        }
+                        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 py-2 text-xs font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer shadow-xs"
+                      >
+                        {busy
+                          ? <RefreshCw size={14} className="animate-spin" />
+                          : ready
+                            ? <Printer size={14} />
+                            : <Search size={14} />}
+                        {busy
+                          ? 'Procurando…'
+                          : ready
+                            ? 'Imprimir teste'
+                            : 'Procurar impressoras'}
+                      </button>
+                    ) : (
+                      <div className="flex items-center justify-center py-2 text-[10px] text-koma-muted font-medium">
+                        {ready ? 'Pronta para imprimir' : 'Impressora encontrada'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="md:col-span-2 rounded-2xl border-2 border-dashed border-koma-border bg-koma-raised/40 px-5 py-8 text-center">
+              <Printer size={24} className="mx-auto text-koma-muted" />
+              <strong className="mt-3 block text-xs font-bold text-koma-foreground">
+                Desconectada
+              </strong>
+              <span className="mt-1 block text-[10px] text-koma-muted">
+                Nenhuma impressora encontrada neste computador.
+              </span>
+              <button
+                type="button"
+                onClick={() => void requestUsbConnection()}
+                disabled={commandRunning || Boolean(pendingCommandId) || !hasOnlineAgent}
+                className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl koma-btn-success px-4 py-2 text-xs font-bold cursor-pointer shadow-xs"
+              >
+                <Search size={14} /> Procurar impressoras
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-koma-border shadow-xs">
+        <button
+          type="button"
+          onClick={() => setShowDiagnostics(current => !current)}
+          className="flex min-h-11 w-full items-center justify-between gap-2 bg-koma-card px-4 py-2.5 text-[10px] font-bold text-koma-secondary transition hover:bg-koma-raised cursor-pointer"
+          aria-expanded={showDiagnostics}
+        >
+          <span className="flex items-center gap-2">
+            <Wrench size={14} />
+            Diagnóstico técnico e suporte
+            <span className="text-[9px] font-normal text-koma-muted">
+              transporte, endpoints, SPP, CUPS, spooler e rede
+            </span>
+          </span>
+          {showDiagnostics ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+
+        {showDiagnostics && (
+          <div className="space-y-4 border-t border-koma-border bg-koma-panel p-4 text-left">
+            <div>
+              <h4 className="text-xs font-bold text-koma-foreground">
+                Destinos e rotas de impressão
+              </h4>
+              <p className="mt-0.5 text-[10px] text-koma-muted">
+                Rotas lógicas mapeadas para impressoras USB, Bluetooth, rede ou spooler do sistema.
+              </p>
+              {configuredEndpoints.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {configuredEndpoints.map(ep => {
+                    const badge = getTransportBadge(ep.transport);
+                    return (
+                      <div key={ep.id} className="flex items-center justify-between rounded-xl border border-koma-border bg-koma-card p-2 text-xs">
+                        <div>
+                          <span className="font-bold text-koma-foreground">{ep.name}</span>
+                          {ep.address && (
+                            <span className="ml-2 font-mono text-[10px] text-koma-muted">({ep.address})</span>
+                          )}
+                          <span className="ml-2 text-[9px] text-koma-subtle font-mono">id: {ep.id}</span>
+                        </div>
+                        <span className={`rounded-full px-2 py-0.5 text-[8px] font-extrabold ${badge.badgeClass}`}>
+                          {badge.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {bluetoothPrinters.length > 0 && (
+              <div>
+                <h4 className="text-xs font-bold text-koma-foreground">
+                  Impressoras Bluetooth (SPP)
+                </h4>
+                <p className="mt-0.5 text-[10px] text-koma-muted">
+                  Conexão sem fio direta via RFCOMM sob demanda, sem necessidade de fila CUPS no sistema.
+                </p>
+                <div className="mt-2 space-y-2">
+                  {bluetoothPrinters.map((printer, i) => (
+                    <div key={`bt-diag-${i}`} className="rounded-xl border border-koma-border bg-koma-card p-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold">{printer.name}</span>
+                        <span className="rounded-full px-2 py-0.5 text-[8px] font-extrabold koma-badge-info">
+                          Bluetooth SPP
+                        </span>
+                      </div>
+                      <div className="mt-1 font-mono text-[9px] text-koma-muted space-x-2">
+                        {printer.address && <span>MAC: {printer.address}</span>}
+                        <span>Pareada: {printer.paired ? 'sim' : 'não'}</span>
+                        <span>SPP: {printer.spp !== false ? 'sim' : 'não'}</span>
+                        {printer.cups_queue && <span>CUPS: {printer.cups_queue}</span>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
+
+            {networkPrinters.length > 0 && (
+              <div>
+                <h4 className="text-xs font-bold text-koma-foreground">
+                  Impressoras de rede (TCP / IP)
+                </h4>
+                <p className="mt-0.5 text-[10px] text-koma-muted">
+                  Impressoras conectadas via cabo de rede Ethernet ou Wi-Fi por socket direto.
+                </p>
+                <div className="mt-2 space-y-2">
+                  {networkPrinters.map((printer, i) => (
+                    <div key={`net-diag-${i}`} className="rounded-xl border border-koma-border bg-koma-card p-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold">{printer.name}</span>
+                        <span className="rounded-full px-2 py-0.5 text-[8px] font-extrabold koma-badge-info">
+                          Rede TCP
+                        </span>
+                      </div>
+                      <div className="mt-1 font-mono text-[9px] text-koma-muted space-x-2">
+                        {printer.address && <span>Endereço: {printer.address}</span>}
+                        <span>Disponível: {printer.available ? 'sim' : 'não'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <h4 className="text-xs font-bold text-koma-foreground">
+                Spooler e CUPS do sistema operacional
+              </h4>
+              <p className="mt-0.5 text-[10px] text-koma-muted">
+                Filas locais gerenciadas pelo CUPS (Linux/macOS) ou Spooler (Windows).
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="overflow-hidden rounded-2xl border border-[#29292e]">
         <button
