@@ -5,7 +5,7 @@ import {
   getSubscriptionPlan,
   isAddonIncludedInPlan,
   normalizeSubscriptionPlan,
-  subscriptionHasFeature,
+  operationalEntitlementEnabled,
   type SubscriptionEntitlements,
 } from '../config/subscriptionPlans';
 import {
@@ -125,13 +125,13 @@ export function CaixaPanel({
   );
   const currentPlan = getSubscriptionPlan(currentPlanId);
   const planEntitlements = (restauranteConfig?.entitlements ?? undefined) as SubscriptionEntitlements | undefined;
-  const hasPrinting = subscriptionHasFeature(currentPlanId, 'printing', planEntitlements);
-  const hasDedicatedKds = subscriptionHasFeature(currentPlanId, 'kds', planEntitlements);
-  const hasLoyalty = subscriptionHasFeature(currentPlanId, 'loyalty', planEntitlements);
-  const hasCoupons = subscriptionHasFeature(currentPlanId, 'coupons', planEntitlements);
-  // O App do Entregador é uma superfície privilegiada: só aparece depois que o
-  // backend confirmou explicitamente o entitlement do tenant atual.
-  const hasCourierApp = planEntitlements?.courier_app === true;
+  const hasPrinting = operationalEntitlementEnabled(planEntitlements, 'printing');
+  const hasDedicatedKds = operationalEntitlementEnabled(planEntitlements, 'kds');
+  const hasLoyalty = operationalEntitlementEnabled(planEntitlements, 'loyalty');
+  const hasCoupons = operationalEntitlementEnabled(planEntitlements, 'coupons');
+  const hasCourierApp = operationalEntitlementEnabled(planEntitlements, 'courier_app');
+  const hasInventory = operationalEntitlementEnabled(planEntitlements, 'inventory');
+  const hasAdvancedReports = operationalEntitlementEnabled(planEntitlements, 'advanced_reports');
   const hasOnlineMenu =
     isAddonIncludedInPlan(currentPlanId, 'online_menu') || restauranteConfig?.cardapio_online_addon === true;
   const pendingPaymentsTotal = useMemo(
@@ -1016,7 +1016,7 @@ export function CaixaPanel({
             )}
 
             <DeferredCashierSection
-              active={activeTab === 'relatorios' || activeTab === 'dashboard' || activeSubTab === 'desempenho'}
+              active={hasAdvancedReports && (activeTab === 'relatorios' || activeTab === 'dashboard' || activeSubTab === 'desempenho')}
               label="Relatórios"
               load={loadCashierReports}
               sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, deliveryOrders, activeKitchenItems, apiCategorias }}
@@ -1084,7 +1084,7 @@ export function CaixaPanel({
               sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, apiProdutos, apiCategorias, suggestedProductCode, hasOnlineMenu, hasPrinting, fetchProdutos, fetchCategorias, catalogReady, restauranteConfig, onRefreshCategorias }}
             />
 
-            <DeferredCashierSection active={activeTab === 'estoque'} label="Estoque" load={loadCashierInventory} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, apiProdutos, isLoading }} />
+            <DeferredCashierSection active={hasInventory && activeTab === 'estoque'} label="Estoque" load={loadCashierInventory} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, apiProdutos, isLoading }} />
 
             {activeTab === 'financeiro' && (activeSubTab === 'turno_atual' || activeSubTab === 'fluxo') && (
               <div className={"orders-workspace space-y-4"}>
