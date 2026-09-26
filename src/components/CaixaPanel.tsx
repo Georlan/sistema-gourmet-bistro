@@ -1427,10 +1427,7 @@ export function CaixaPanel({
           activeTab={activeTab}
           activeSubTab={activeSubTab}
           dedicatedKds={hasDedicatedKds}
-          onNavigate={(tab, subTab) => {
-            setActiveTab(tab);
-            setActiveSubTab(subTab);
-          }}
+          onNavigate={(navigationId) => handleSidebarNavigation(navigationId)}
           onOpenMenu={() => setIsMobileSidebarOpen(true)}
           orderCount={sidebarOrderCount}
           kitchenCount={activeKitchenItems.length}
