@@ -163,18 +163,11 @@ def _compact_customer_subtotals(lines: list[str]) -> list[str]:
     while index < len(lines):
         current = lines[index]
         nxt = _visible(lines[index + 1]) if index + 1 < len(lines) else ""
-        after = lines[index + 2] if index + 2 < len(lines) else ""
-
-        if (
-            _is_separator(current)
-            and nxt.startswith("SUBTOTAL ")
-            and _is_separator(after)
-        ):
-            # O subtotal já separa semanticamente o grupo. Mantemos somente o
-            # separador posterior para delimitar o próximo cliente.
-            result.append(lines[index + 1])
-            result.append(after)
-            index += 3
+        if _is_separator(current) and nxt.startswith("SUBTOTAL "):
+            # O próprio rótulo SUBTOTAL delimita o fim do cliente. O separador
+            # anterior é redundante em bobina estreita; qualquer separador
+            # posterior continua sendo preservado normalmente.
+            index += 1
             continue
 
         result.append(current)
