@@ -19,6 +19,8 @@ class PrinterPaperProfile:
     supports_cut: bool = True
     feed_lines: int = 3
     allow_double_height: bool = True
+    charset_policy: str = "native_cp860"
+    semantic_layout: str = "standard"
 
 
 DEFAULT_PROFILE = PrinterPaperProfile(
@@ -29,6 +31,8 @@ DEFAULT_PROFILE = PrinterPaperProfile(
     supports_cut=True,
     feed_lines=3,
     allow_double_height=True,
+    charset_policy="native_cp860",
+    semantic_layout="standard",
 )
 
 KNOWN_PROFILES: tuple[tuple[re.Pattern[str], PrinterPaperProfile], ...] = (
@@ -42,6 +46,8 @@ KNOWN_PROFILES: tuple[tuple[re.Pattern[str], PrinterPaperProfile], ...] = (
             supports_cut=False,
             feed_lines=2,
             allow_double_height=False,
+            charset_policy="ascii_safe",
+            semantic_layout="compact_58",
         ),
     ),
     (
@@ -92,6 +98,12 @@ def infer_printer_paper_profile(
             allow_double_height=bool(
                 opts.get("allow_double_height", base.allow_double_height)
             ),
+            charset_policy=str(
+                opts.get("charset_policy") or base.charset_policy
+            ).strip().lower(),
+            semantic_layout=str(
+                opts.get("semantic_layout") or base.semantic_layout
+            ).strip().lower(),
         )
 
     identity = " ".join(
@@ -124,6 +136,12 @@ def infer_printer_paper_profile(
                         profile.allow_double_height,
                     )
                 ),
+                charset_policy=str(
+                    opts.get("charset_policy") or profile.charset_policy
+                ).strip().lower(),
+                semantic_layout=str(
+                    opts.get("semantic_layout") or profile.semantic_layout
+                ).strip().lower(),
             )
 
     # Não inferimos tamanho por USB/Bluetooth/rede: qualquer transporte pode
@@ -148,6 +166,12 @@ def infer_printer_paper_profile(
                 DEFAULT_PROFILE.allow_double_height,
             )
         ),
+        charset_policy=str(
+            opts.get("charset_policy") or DEFAULT_PROFILE.charset_policy
+        ).strip().lower(),
+        semantic_layout=str(
+            opts.get("semantic_layout") or DEFAULT_PROFILE.semantic_layout
+        ).strip().lower(),
     )
 
 
@@ -173,4 +197,6 @@ def enrich_endpoint_options(
     result.setdefault("supports_cut", profile.supports_cut)
     result.setdefault("feed_lines", profile.feed_lines)
     result.setdefault("allow_double_height", profile.allow_double_height)
+    result.setdefault("charset_policy", profile.charset_policy)
+    result.setdefault("semantic_layout", profile.semantic_layout)
     return result
