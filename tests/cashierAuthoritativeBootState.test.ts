@@ -11,7 +11,8 @@ test('delivery stages are never invented while hydrating or reconciling the cash
   assert.match(projection, /readActiveDeliveryStatus/);
   assert.doesNotMatch(projection, /deliveryStatus\s*\|\|\s*['"]pendente['"]/);
   assert.doesNotMatch(owner, /delivery_status\s*\|\|\s*['"]pendente['"]/);
-  assert.match(owner, /mapComandaToDeliveryView = \(c: any\): DeliveryOrderView \| null/);
+  assert.match(projection, /export function projectApiComandaToDeliveryView\(c: any\): DeliveryOrderView \| null/);
+  assert.match(owner, /mapComandaToDeliveryView = projectApiComandaToDeliveryView/);
 });
 
 test('digital orders have a single identity-based sound owner and reload only establishes baseline', () => {

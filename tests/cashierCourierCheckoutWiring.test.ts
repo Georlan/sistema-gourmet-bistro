@@ -11,6 +11,10 @@ const checkoutController = readFileSync(
   new URL('../src/components/caixa/checkout/useCheckoutController.ts', import.meta.url),
   'utf8',
 );
+const ordersCore = readFileSync(
+  new URL('../backend/app/routes/orders_core.py', import.meta.url),
+  'utf8',
+);
 
 function functionSlice(source: string, startMarker: string, endMarker: string): string {
   const start = source.indexOf(startMarker);
@@ -52,4 +56,19 @@ test('canonical digital finalization opens checkout when unpaid and only closes 
   assert.match(finalizeDigitalOrder, /dados financeiros deste pedido ainda estão sincronizando/);
   assert.match(finalizeDigitalOrder, /await onRefreshOrders\(\);/);
   assert.doesNotMatch(finalizeDigitalOrder, /handleFinalizarPedido\(order\.id\)/);
+  assert.doesNotMatch(finalizeDigitalOrder, /order\.modalidade|order\.tipo/);
+});
+
+test('fechamento digital valida saldo sem condicionar pagamento à modalidade original', () => {
+  const closeOrder = functionSlice(
+    ordersCore,
+    'def fechar_comanda(',
+    '# ----------------- ITEM CANCELLATION ENDPOINT',
+  );
+  const balanceGate = closeOrder.slice(0, closeOrder.indexOf('status_anterior = comanda.delivery_status'));
+
+  assert.match(balanceGate, /total_devido = float\(payable_total\(comanda\)\)/);
+  assert.match(balanceGate, /valor_pago = float\(comanda\.valor_pago or 0\.0\)/);
+  assert.match(balanceGate, /if valor_pago \+ 0\.01 < total_devido:/);
+  assert.doesNotMatch(balanceGate, /comanda\.tipo|Delivery|Retirada/);
 });

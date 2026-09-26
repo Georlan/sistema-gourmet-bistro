@@ -3,6 +3,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 from app.database import SessionLocal, Base, engine, current_restaurante_id
+from app.application.orders.service import OrderApplicationService
 from app.main import app
 from app.models import ActivityLog, Usuario, Produto, Categoria, Comanda, DeliveryCourierReassignmentAudit, Item, Lancamento, Motoboy
 from app.security import get_password_hash
@@ -275,6 +276,16 @@ def test_delivery_can_become_pickup_before_dispatch_without_losing_history(setup
         assert details["motoboy_id_anterior"] == courier_id
         assert details["delivery_taxa_anterior"] == 8.5
         assert details["motivo"] == "Cliente decidiu retirar no balcão"
+
+        converted_order = db.query(Comanda).filter(
+            Comanda.restaurante_id == 1,
+            Comanda.id == order_id,
+        ).one()
+        canonical = OrderApplicationService._to_order_dto(db, converted_order)
+        assert canonical.fulfillment == "retirada"
+        assert canonical.delivery is None
+        assert canonical.customer is not None
+        assert canonical.customer.address == "Rua Original, 10"
     finally:
         db.close()
 

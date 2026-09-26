@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { CaixaOrdersWorkspace, type CaixaOrdersWorkspaceProps } from '../src/components/caixa/orders/CaixaOrdersWorkspace';
 import { KanbanOrderDetails, type KanbanOrderDetailsProps } from '../src/components/caixa/orders/KanbanOrderDetails';
 import type { DeliveryOrderView } from '../src/components/caixa/orders/cashierWorkspaceTypes';
+import { projectApiComandaToDeliveryView } from '../src/components/caixa/orders/deliveryOrderProjection';
 
 const noop = () => {};
 const NOW = Date.UTC(2026, 8, 15, 16, 30);
@@ -84,6 +85,49 @@ function workspaceProps(): CaixaOrdersWorkspaceProps {
     now: NOW,
   };
 }
+
+
+
+test('projeção digital canônica acompanha fulfillment atual sem acoplar pagamento ou histórico logístico', () => {
+  const projected = projectApiComandaToDeliveryView({
+    id: 'converted-1',
+    numero_pedido: 91,
+    tipo: 'Retirada',
+    identificador: 'Cliente convertido',
+    delivery_status: 'producao',
+    delivery_endereco: 'Rua histórica, 10',
+    delivery_telefone: '85999999999',
+    delivery_taxa: 0,
+    delivery_forma_pagamento: 'dinheiro',
+    delivery_troco_para: 100,
+    motoboy_id: null,
+    valor_pago: 0,
+    criado_em: '2026-09-25T18:00:00Z',
+    lancamentos: [{ origem: 'cardapio' }],
+    itens: [{
+      id: 'item-1',
+      status: 'preparando',
+      pago: false,
+      preco_unit: 33,
+      produto: { nome: 'Hambúrguer' },
+    }],
+  });
+
+  assert.ok(projected);
+  assert.equal(projected.modalidade, 'retirada');
+  assert.equal(projected.status, 'producao');
+  assert.equal(projected.paymentMethod, 'dinheiro');
+  assert.equal(projected.changeFor, 100);
+  assert.equal(projected.motoboyId, null);
+  assert.equal(projected.endereco, '');
+  assert.equal(projected.total, 33);
+  assert.equal(projected.amountDue, 33);
+});
+
+test('useCashierOrders delega a leitura de comanda para a projeção compartilhada', () => {
+  assert.match(cashierOrdersSource, /const mapComandaToDeliveryView = projectApiComandaToDeliveryView;/);
+  assert.doesNotMatch(cashierOrdersSource, /const mapComandaToDeliveryView = \(c: any\)/);
+});
 
 test('kanban separa preparo, despacho e finalização de delivery', () => {
   const production = delivery({ id: 'delivery-production', status: 'producao' });

@@ -264,6 +264,52 @@ test('tracking seguro prefere state do backend e token opaco', async () => {
   }
 });
 
+
+
+test('tracking troca delivery por retirada sem inventar despacho ou manter cinco etapas', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    id: 'order-converted',
+    status: 'pronto',
+    tipo: 'Retirada',
+    state: {
+      status: 'ready',
+      phase: 'ready',
+      label: 'Pronto',
+      fulfillment: 'pickup',
+      terminal: false,
+      rejected: false,
+      can_chat: true,
+      can_cancel: false,
+      progress_step: 3,
+      progress_total: 4,
+    },
+  }), { status: 200 })) as typeof fetch;
+
+  try {
+    const updated = await fetchOrderLiveStatus({
+      id: 'order-converted',
+      numero_pedido: 88,
+      timestamp: Date.now(),
+      restaurante_id: 1,
+      tipo: 'Delivery',
+      total: 55,
+      idempotency_key: '',
+      status: 'pronto',
+      tracking_token: 'converted-token',
+    }, 'https://example.test');
+
+    assert.equal(updated?.tipo, 'Retirada');
+    assert.equal(updated?.state?.fulfillment, 'pickup');
+    assert.equal(updated?.state?.phase, 'ready');
+    assert.equal(updated?.state?.progress_step, 3);
+    assert.equal(updated?.state?.progress_total, 4);
+    assert.notEqual(updated?.state?.label, 'Saiu para entrega');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('fulfillment label distinguishes dine-in from pickup', () => {
   assert.equal(orderFulfillmentLabel('delivery'), 'Delivery');
   assert.equal(orderFulfillmentLabel('pickup'), 'Retirada');
