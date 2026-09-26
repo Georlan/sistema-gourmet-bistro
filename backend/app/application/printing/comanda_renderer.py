@@ -44,6 +44,8 @@ class ComandaVariant:
     cashback_discount: float = 0.0
     online_payment_status: Optional[str] = None
     amount_paid: float = 0.0
+    amount_due: float = 0.0
+    payment_required: bool = False
     show_financial_breakdown: bool = False
 
 
@@ -431,30 +433,47 @@ def _insert_payment_block(
         online_status=variant.online_payment_status,
     )
     paid_online = str(variant.online_payment_status or "").strip().casefold() == "approved"
+    amount_paid = max(float(variant.amount_paid or 0.0), 0.0)
+    amount_due = max(float(variant.amount_due or 0.0), 0.0)
+    fully_paid = bool(variant.payment_required and amount_paid > 0 and amount_due < 0.01)
     has_change = variant.change_for is not None and float(variant.change_for or 0.0) > 0
-    if not payment_label and not paid_online and not has_change:
+    if not variant.payment_required and not payment_label and not paid_online and not has_change:
         return
 
     block: list[str] = ["-" * width, ESC_BOLD_ON + "PAGAMENTO" + ESC_BOLD_OFF]
     if payment_label:
         block.append(ESC_BOLD_ON + f"FORMA: {payment_label}" + ESC_BOLD_OFF)
+    elif variant.payment_required:
+        # Pedidos legados não podem esconder a ausência do dado operacional.
+        block.append(ESC_BOLD_ON + "FORMA: NÃO INFORMADA" + ESC_BOLD_OFF)
     if has_change:
         block.append(f"TROCO PARA: {_format_brl(float(variant.change_for or 0.0))}")
 
-    if paid_online:
-        if float(variant.amount_paid or 0.0) > 0:
-            block.append(f"VALOR PAGO: {_format_brl(float(variant.amount_paid or 0.0))}")
+    if paid_online or fully_paid:
+        if amount_paid > 0:
+            block.append(f"VALOR PAGO: {_format_brl(amount_paid)}")
+        status_label = "PAGO ONLINE" if paid_online else "PAGO"
         block.extend(
             [
                 "=" * width,
                 (
                     ESC_DOUBLE_HEIGHT_ON
                     + ESC_BOLD_ON
-                    + align_center("PAGO ONLINE", width)
+                    + align_center(status_label, width)
                     + ESC_BOLD_OFF
                     + ESC_NORMAL_SIZE
                 ),
                 ESC_BOLD_ON + align_center("NÃO COBRAR DO CLIENTE", width) + ESC_BOLD_OFF,
+                "=" * width,
+            ]
+        )
+    elif variant.payment_required:
+        block.extend(
+            [
+                "=" * width,
+                ESC_BOLD_ON
+                + align_center(f"A COBRAR: {_format_brl(amount_due)}", width)
+                + ESC_BOLD_OFF,
                 "=" * width,
             ]
         )
