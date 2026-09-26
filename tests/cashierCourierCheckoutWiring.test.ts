@@ -67,7 +67,8 @@ test('fechamento digital valida saldo sem condicionar pagamento à modalidade or
   );
   const balanceGate = closeOrder.slice(0, closeOrder.indexOf('status_anterior = comanda.delivery_status'));
 
-  assert.match(balanceGate, /valor_pago = comanda\.valor_pago or 0\.0/);
-  assert.match(balanceGate, /if valor_pago < subtotal and valor_pago < total_com_taxa:/);
+  assert.match(balanceGate, /total_devido = float\(payable_total\(comanda\)\)/);
+  assert.match(balanceGate, /valor_pago = float\(comanda\.valor_pago or 0\.0\)/);
+  assert.match(balanceGate, /if valor_pago \+ 0\.01 < total_devido:/);
   assert.doesNotMatch(balanceGate, /comanda\.tipo|Delivery|Retirada/);
 });
