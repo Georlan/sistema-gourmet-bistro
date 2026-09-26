@@ -54,7 +54,7 @@ jobs:
             exit 0
           fi
           git diff --name-only "$BASE_SHA" HEAD > /tmp/koma-changed-files
-          if grep -Eq '^backend/(app/(routes/(auth|onboarding|saas|signup|super_admin_onboarding|super_admin_contracts|estoque|relatorios|financial_read_routes|financial_product_routes|optimization)|services/(saas|signup|onboarding|restaurant_provisioning|billing|plan_entitlements)|security\.py|permissions\.py)|tests/(test_authorization|test_team_admin_delete_authorization|test_critical_auth_flow|test_onboarding_status|test_saas_billing_checkout|test_super_admin_contract_activation|test_plan_entitlements|test_plan_module_entitlements))' /tmp/koma-changed-files; then
+          if grep -Eq '(product-contract\.json|^backend/(app/(routes/(auth|onboarding|saas|signup|super_admin_onboarding|super_admin_contracts|estoque|relatorios|financial_read_routes|financial_product_routes|optimization)|services/(saas|signup|onboarding|restaurant_provisioning|billing|plan_entitlements|product_contract)|security\.py|permissions\.py)|tests/(test_authorization|test_team_admin_delete_authorization|test_critical_auth_flow|test_onboarding_status|test_saas_billing_checkout|test_super_admin_contract_activation|test_plan_entitlements|test_plan_module_entitlements|test_product_contract_gate)))' /tmp/koma-changed-files; then
             echo 'run=true' >> "$GITHUB_OUTPUT"
           else
             echo 'run=false' >> "$GITHUB_OUTPUT"
@@ -88,3 +88,4 @@ jobs:
           backend/tests/test_super_admin_contract_activation.py
           backend/tests/test_plan_entitlements.py
           backend/tests/test_plan_module_entitlements.py
+          backend/tests/test_product_contract_gate.py
