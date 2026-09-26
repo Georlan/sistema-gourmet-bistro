@@ -89,24 +89,34 @@ def has_plan_entitlement(
     Isso permite revogar um recurso de um plano ou concedê-lo como add-on sem
     alterar o slug comercial do restaurante.
     """
+    from ..database import _effective_tenant_id, tenant_session_scope
 
     normalized = _normalize_entitlement(entitlement)
-    explicit = (
-        db.query(RestauranteCapability)
-        .filter(
-            RestauranteCapability.restaurante_id == restaurante_id,
-            RestauranteCapability.capability == normalized,
-        )
-        .first()
-    )
-    if explicit is not None:
-        return bool(explicit.enabled)
 
-    effective_plan = get_effective_subscription_plan(
-        restaurante_id,
-        _stored_plan(db, restaurante_id, stored_plan),
-    )
-    return normalized in _PLAN_ENTITLEMENTS[effective_plan]
+    def _resolve():
+        explicit = (
+            db.query(RestauranteCapability)
+            .filter(
+                RestauranteCapability.restaurante_id == restaurante_id,
+                RestauranteCapability.capability == normalized,
+            )
+            .first()
+        )
+        if explicit is not None:
+            return bool(explicit.enabled)
+
+        effective_plan = get_effective_subscription_plan(
+            restaurante_id,
+            _stored_plan(db, restaurante_id, stored_plan),
+        )
+        return normalized in _PLAN_ENTITLEMENTS[effective_plan]
+
+    current_eff = _effective_tenant_id(db)
+    if current_eff == int(restaurante_id):
+        return _resolve()
+
+    with tenant_session_scope(db, int(restaurante_id)):
+        return _resolve()
 
 
 def resolve_plan_entitlements(

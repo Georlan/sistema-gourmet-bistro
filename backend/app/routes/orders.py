@@ -653,13 +653,13 @@ def confirmar_entrega_motoboy(
     token_data = verify_motoboy_token(token, db)
     motoboy_id = token_data["motoboy_id"]
     rest_id = token_data["restaurante_id"]
-    require_plan_entitlement(
-        db,
-        rest_id,
-        ENTITLEMENT_COURIER_APP,
-        detail="App do Entregador disponível apenas no plano Premium ou com add-on ativo.",
-    )
     with tenant_session_scope(db, rest_id):
+        require_plan_entitlement(
+            db,
+            rest_id,
+            ENTITLEMENT_COURIER_APP,
+            detail="App do Entregador disponível apenas no plano Premium ou com add-on ativo.",
+        )
         comanda = (
             db.query(Comanda)
             .filter(

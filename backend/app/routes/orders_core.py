@@ -1275,14 +1275,14 @@ def painel_entregador(
     motoboy_id = token_data["motoboy_id"]
     rest_id = token_data["restaurante_id"]
 
-    require_plan_entitlement(
-        db,
-        rest_id,
-        ENTITLEMENT_COURIER_APP,
-        detail="App do Entregador disponível apenas no plano Premium ou com add-on ativo.",
-    )
-
     with tenant_session_scope(db, rest_id):
+        require_plan_entitlement(
+            db,
+            rest_id,
+            ENTITLEMENT_COURIER_APP,
+            detail="App do Entregador disponível apenas no plano Premium ou com add-on ativo.",
+        )
+
         motoboy = db.query(Motoboy).filter(
             Motoboy.id == motoboy_id,
             Motoboy.restaurante_id == rest_id
