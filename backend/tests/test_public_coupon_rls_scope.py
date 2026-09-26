@@ -24,10 +24,14 @@ def _seed_public_benefits() -> str:
                     id=TENANT_ID,
                     nome="Restaurante RLS Público",
                     slug=f"public-rls-{TENANT_ID}",
+                    plano="premium",
                 ))
                 # Garante a FK do tenant antes de inserir configuração/cupom no
                 # SQLite do gate. Em produção, o mesmo escopo continua valendo
                 # para a nova transação via TenantSession.
+                db.commit()
+            elif restaurante.plano != "premium":
+                restaurante.plano = "premium"
                 db.commit()
 
             programa = db.query(ConfigFidelizacao).filter(

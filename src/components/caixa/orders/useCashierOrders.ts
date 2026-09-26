@@ -376,6 +376,7 @@ export function useCashierOrders({
 
   const mapComandaToDeliveryView = projectApiComandaToDeliveryView;
 
+
   const syncSelectedMotoboysFromServer = (mapped: DeliveryOrderView[]) => {
     const activeIds = new Set(mapped.map((order) => String(order.id)));
     const next = { ...selectedMotoboysRef.current };

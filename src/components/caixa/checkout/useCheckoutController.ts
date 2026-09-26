@@ -38,8 +38,31 @@ type Props = Pick<
   closeDigitalOrder: (id: string) => Promise<boolean>;
 };
 
-export function shouldAutoCloseDigitalOrderAfterPayment(order: Order, selectedItemIds: readonly string[]): boolean {
+const getDigitalPayableTotal = (order: Order): number => {
+  const fallbackSubtotal = order.itens
+    .filter((item) => (item.status as string) !== 'cancelado')
+    .reduce((sum, item) => sum + Number(item.preco || 0), 0);
+  const canonicalPayableTotal = Number(order.payableTotal);
+  return Math.max(
+    0,
+    Number.isFinite(canonicalPayableTotal)
+      ? canonicalPayableTotal
+      : fallbackSubtotal + Number(order.deliveryTax || 0) - Number(order.discountTotal || 0),
+  );
+};
+
+export function shouldAutoCloseDigitalOrderAfterPayment(
+  order: Order,
+  selectedItemIds: readonly string[],
+  paymentAmount: number,
+): boolean {
   if (isTableCheckoutOrder(order)) return false;
+
+  const balance = Math.max(0, getDigitalPayableTotal(order) - Number(order.valorPago || 0));
+  if (balance <= 0 || paymentAmount + 0.01 < balance) return false;
+
+  if (selectedItemIds.length === 0) return true;
+
   const activeUnpaidItemIds = order.itens
     .filter((item) => !item.pago && (item.status as string) !== 'cancelado')
     .map((item) => item.id);
@@ -323,7 +346,11 @@ export function useCheckoutController({
 
       const comandaIds: string[] = (selectedOrder as any).comandaIds || [selectedOrder.id];
       const isMesaPayment = isTableCheckoutOrder(selectedOrder);
-      const shouldCloseDigitalOrder = shouldAutoCloseDigitalOrderAfterPayment(selectedOrder, selectedItemIds);
+      const shouldCloseDigitalOrder = shouldAutoCloseDigitalOrderAfterPayment(
+        selectedOrder,
+        selectedItemIds,
+        valorPagamento,
+      );
       const effectiveIdempotencyKey = idempotencyKey || createSecureIdempotencyKey('idem');
       if (!idempotencyKey) setIdempotencyKey(effectiveIdempotencyKey);
 
@@ -429,11 +456,15 @@ export function useCheckoutController({
           const comUnpaidItems = selectedOrder.itens.filter(
             (i) => i.comandaId === cid && !i.pago && i.status !== ('cancelado' as any)
           );
-          if (comUnpaidItems.length === 0) continue;
+          if (comUnpaidItems.length === 0 && isMesaPayment) continue;
 
           const comSubtotal = comUnpaidItems.reduce((sum, item) => sum + item.preco, 0);
-          const comTaxa = taxaServicoAtiva && checkoutServiceTax ? comSubtotal * (serviceTaxRate / 100) : 0;
-          const comTotal = comSubtotal + comTaxa;
+          const comTaxa = isMesaPayment && taxaServicoAtiva && checkoutServiceTax
+            ? comSubtotal * (serviceTaxRate / 100)
+            : 0;
+          const comTotal = isMesaPayment
+            ? comSubtotal + comTaxa
+            : getCheckoutBalance(selectedOrder);
 
           const valToPay = Math.min(remainingVal, comTotal);
 
@@ -501,13 +532,20 @@ export function useCheckoutController({
   };
 
   const getCheckoutTotals = (order: Order, includeServiceTax = checkoutServiceTax) => {
-    const chargeableItems = isTableCheckoutOrder(order)
+    const tableOrder = isTableCheckoutOrder(order);
+    const chargeableItems = tableOrder
       ? order.itens.filter((i) => (i.status as string) !== 'cancelado')
       : order.itens.filter((i) => !i.pago && (i.status as string) !== 'cancelado');
     const subtotal = chargeableItems.reduce((sum, item) => sum + item.preco, 0);
-    const taxa = taxaServicoAtiva && includeServiceTax ? subtotal * (serviceTaxRate / 100) : 0;
-    const total = subtotal + taxa;
-    return { subtotal, taxa, total, chargeableItems };
+    const taxa = tableOrder && taxaServicoAtiva && includeServiceTax
+      ? subtotal * (serviceTaxRate / 100)
+      : 0;
+    const deliveryFee = tableOrder ? 0 : Number(order.deliveryTax || 0);
+    const discounts = tableOrder ? 0 : Number(order.discountTotal || 0);
+    const total = tableOrder
+      ? subtotal + taxa
+      : getDigitalPayableTotal(order);
+    return { subtotal, taxa, deliveryFee, discounts, total, chargeableItems };
   };
 
   const getCheckoutBalance = (order: Order, includeServiceTax = checkoutServiceTax) => {
@@ -575,18 +613,19 @@ export function useCheckoutController({
           pago: item.pago,
         })),
       };
-      const activeUnpaidItemIds = mappedOrder.itens
-        .filter((item: any) => !item.pago && (item.status as string) !== 'cancelado')
-        .map((item: any) => item.id);
       setSelectedOrder(mappedOrder);
       setShowCheckoutModal(true);
       setCheckoutServiceTax(false);
       setSplitPeople('1');
-      setSelectedItemIds(activeUnpaidItemIds);
-      const sub = mappedOrder.itens
-        .filter((item: any) => !item.pago && (item.status as string) !== 'cancelado')
-        .reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-      setPaymentValor(sub);
+      // Finalização digital trabalha sobre o saldo do pedido inteiro. Não
+      // transforma frete/descontos em itens fictícios nem prende pagamento à
+      // modalidade original.
+      setSelectedItemIds([]);
+      const balance = order.amountDue ?? Math.max(
+        0,
+        getDigitalPayableTotal(mappedOrder) - Number(mappedOrder.valorPago || 0),
+      );
+      setPaymentValor(balance);
     } else {
       showToast(
         'Os dados financeiros deste pedido ainda estão sincronizando. Atualizamos a lista; tente receber novamente.',

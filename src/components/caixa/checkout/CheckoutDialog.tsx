@@ -338,7 +338,7 @@ export function CheckoutDialog({
               </div>
 
               {(() => {
-                const { subtotal, taxa } = getCheckoutTotals(selectedOrder);
+                const { subtotal, taxa, deliveryFee, discounts } = getCheckoutTotals(selectedOrder);
                 const currentBalance = getCheckoutBalance(selectedOrder);
                 const selectedTotal =
                   selectedItemIds.length > 0 ? getSelectedItemsTotal(selectedOrder, selectedItemIds) : 0;
@@ -357,6 +357,18 @@ export function CheckoutDialog({
                       <div className={"flex justify-between"}>
                         <span className={"font-sans text-koma-subtle"}>Taxa Serviço ({serviceTaxRate}%):</span>
                         <span className="text-koma-secondary">R$ {taxa.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {!isTableCheckoutOrder(selectedOrder) && deliveryFee > 0 && (
+                      <div className={"flex justify-between"}>
+                        <span className={"font-sans text-koma-subtle"}>Taxa de entrega:</span>
+                        <span className="text-koma-secondary">R$ {deliveryFee.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {!isTableCheckoutOrder(selectedOrder) && discounts > 0 && (
+                      <div className={"flex justify-between"}>
+                        <span className={"font-sans text-koma-subtle"}>Descontos:</span>
+                        <span className="text-emerald-600 dark:text-emerald-300">- R$ {discounts.toFixed(2)}</span>
                       </div>
                     )}
                     {selectedItemIds.length > 0 && (

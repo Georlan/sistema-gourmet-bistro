@@ -354,20 +354,25 @@ export function PrintMonitorPanel({
 
   useEffect(() => {
     void loadMonitor(true);
-    const intervalId = window.setInterval(() => {
+
+    // O heartbeat do agente publica print_monitor_updated pelo WebSocket.
+    // Este evento é a fonte primária de atualização da tela; o intervalo
+    // abaixo é apenas uma reconciliação de segurança caso o socket caia.
+    const refreshFromRealtime = () => void loadMonitor(false);
+    const fallbackIntervalId = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         void loadMonitor(false);
       }
-    }, 10_000);
-    const refreshFromPrintTest = () => void loadMonitor(false);
+    }, 30_000);
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') void loadMonitor(false);
     };
-    window.addEventListener('koma_print_monitor_refresh', refreshFromPrintTest);
+
+    window.addEventListener('koma_print_monitor_refresh', refreshFromRealtime);
     document.addEventListener('visibilitychange', refreshWhenVisible);
     return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener('koma_print_monitor_refresh', refreshFromPrintTest);
+      window.clearInterval(fallbackIntervalId);
+      window.removeEventListener('koma_print_monitor_refresh', refreshFromRealtime);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, [loadMonitor]);
@@ -956,15 +961,10 @@ export function PrintMonitorPanel({
             O KÔMA escolhe automaticamente a única impressora pronta quando houver uma só disponível.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void loadMonitor(true)}
-          disabled={loading}
-          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 py-2 text-[10px] font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer shadow-xs"
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Atualizar status
-        </button>
+        <span className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 py-2 text-[10px] font-bold text-koma-muted shadow-xs">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+          Atualização automática
+        </span>
       </div>
 
       {error && (
@@ -1028,16 +1028,6 @@ export function PrintMonitorPanel({
                   ? <RefreshCw size={16} className="animate-spin" />
                   : <Power size={16} />}
                 {startingAgent ? 'Preparando…' : 'Preparar impressão'}
-              </button>
-            ) : !hasReadyPrinter ? (
-              <button
-                type="button"
-                onClick={() => void loadMonitor(true)}
-                disabled={loading}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl koma-btn-success px-5 py-2.5 text-xs font-extrabold transition disabled:cursor-wait disabled:opacity-60 cursor-pointer shadow-xs"
-              >
-                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                {loading ? 'Atualizando…' : 'Atualizar impressoras'}
               </button>
             ) : null}
 
@@ -1245,14 +1235,10 @@ export function PrintMonitorPanel({
               <span className="mt-1 block text-[10px] text-koma-muted">
                 Nenhuma impressora encontrada neste computador.
               </span>
-              <button
-                type="button"
-                onClick={() => void loadMonitor(true)}
-                disabled={loading || !hasOnlineAgent}
-                className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl koma-btn-success px-4 py-2 text-xs font-bold cursor-pointer shadow-xs"
-              >
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar impressoras
-              </button>
+              <span className="mt-4 inline-flex items-center gap-2 text-[10px] font-semibold text-koma-muted">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                Aguardando uma impressora · atualização automática
+              </span>
             </div>
           )}
         </div>

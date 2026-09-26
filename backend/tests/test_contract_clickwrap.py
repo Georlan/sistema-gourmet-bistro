@@ -549,7 +549,7 @@ def test_superadmin_inbox_lists_pending_acceptance_without_exposing_full_tax_ids
     assert item["fixedMonthlyPrice"] == "39.00"
     assert item["billingAmount"] == "39.00"
     assert item["billingStatus"] == "pending"
-    assert item["activationEligible"] is True
+    assert item["activationEligible"] is False
     assert item["contractingPartyTaxIdLast4"] == VALID_CNPJ[-4:]
     assert item["representativeTaxIdLast4"] == VALID_CPF[-4:]
     serialized = json.dumps(item)

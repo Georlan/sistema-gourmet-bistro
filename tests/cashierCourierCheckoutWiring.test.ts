@@ -50,7 +50,9 @@ test('canonical digital finalization opens checkout when unpaid and only closes 
   assert.match(finalizeDigitalOrder, /setSelectedOrder\(mappedOrder\);/);
   assert.match(finalizeDigitalOrder, /setShowCheckoutModal\(true\);/);
   assert.match(finalizeDigitalOrder, /setCheckoutServiceTax\(false\);/);
-  assert.match(finalizeDigitalOrder, /setSelectedItemIds\(activeUnpaidItemIds\);/);
+  assert.match(finalizeDigitalOrder, /setSelectedItemIds\(\[\]\);/);
+  assert.match(finalizeDigitalOrder, /const balance = order\.amountDue \?\?/);
+  assert.match(finalizeDigitalOrder, /setPaymentValor\(balance\);/);
   assert.match(finalizeDigitalOrder, /dados financeiros deste pedido ainda estão sincronizando/);
   assert.match(finalizeDigitalOrder, /await onRefreshOrders\(\);/);
   assert.doesNotMatch(finalizeDigitalOrder, /handleFinalizarPedido\(order\.id\)/);

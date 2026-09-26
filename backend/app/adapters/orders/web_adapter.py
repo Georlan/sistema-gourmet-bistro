@@ -53,6 +53,7 @@ from ...models import (
 )
 from ...schemas import CardapioPedidoCreate
 from ...services.clientes import normalizar_telefone_cliente
+from ...services.order_financials import payable_total
 from ...services.online_order_policy import evaluate_online_order_policy
 from ...services.operational_modes import mode_is_allowed
 from ...services.online_payments import (
@@ -97,11 +98,7 @@ PAYMENT_METHOD_ALIASES = {
 
 
 def _order_total(comanda: Comanda) -> float:
-    itens_total = sum(float(item.preco_unit or 0) for item in comanda.itens if item.status != "cancelado")
-    taxa = float(comanda.delivery_taxa or 0)
-    desconto_cupom = float(getattr(comanda, "valor_desconto_cupom", 0) or 0)
-    desconto_cashback = float(getattr(comanda, "valor_desconto_cashback", 0) or 0)
-    return round(max(0.0, itens_total + taxa - desconto_cupom - desconto_cashback), 2)
+    return float(payable_total(comanda))
 
 
 def _existing_order_response(db: Session, comanda: Comanda, tracking_token: str | None = None) -> dict[str, Any]:

@@ -62,7 +62,10 @@ export function projectApiComandaToDeliveryView(c: any): DeliveryOrderView | nul
     (sum: number, item: any) => sum + (Number(item?.preco_unit ?? item?.preco) || 0),
     0,
   );
-  const total = subtotal + (Number(c?.delivery_taxa) || 0);
+  const discounts =
+    (Number(c?.valor_desconto_cupom) || 0) +
+    (Number(c?.valor_desconto_cashback) || 0);
+  const total = Math.max(0, subtotal + (Number(c?.delivery_taxa) || 0) - discounts);
   const amountPaid = Math.max(0, Number(c?.valor_pago) || 0);
   const amountDue = Math.max(0, total - amountPaid);
 
@@ -283,7 +286,13 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       .map(([name, qty]) => `${qty}x ${name}`)
       .join(' + ') || 'Nenhum item';
     const subtotal = activeItems.reduce((sum, item) => sum + (Number(item.preco) || 0), 0);
-    const total = subtotal + (Number(order.deliveryTax) || 0);
+    const canonicalPayableTotal = Number(order.payableTotal);
+    const total = Math.max(
+      0,
+      Number.isFinite(canonicalPayableTotal)
+        ? canonicalPayableTotal
+        : subtotal + (Number(order.deliveryTax) || 0) - (Number(order.discountTotal) || 0),
+    );
     const amountPaid = Math.max(0, Number(order.valorPago) || 0);
     const amountDue = Math.max(0, total - amountPaid);
     const rawAddress = String(order.deliveryAddress || '').trim();

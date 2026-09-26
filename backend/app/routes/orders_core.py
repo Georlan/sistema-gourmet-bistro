@@ -36,6 +36,7 @@ from ..security import (
 )
 from ..websocket_manager import manager
 from ..services.order_read_projection import project_check_details
+from ..services.order_financials import payable_total
 from ..services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
 from ..services.atendimentos import (
     ensure_atendimento_for_comanda,
@@ -535,10 +536,9 @@ def fechar_comanda(
     if comanda.fechada:
         return comanda
 
-    # Calcula o total devido
-    subtotal = sum(i.preco_unit for i in comanda.itens if i.status != 'cancelado')
-    total_com_taxa = round(subtotal * 1.10, 2)
-    valor_pago = comanda.valor_pago or 0.0
+    # Calcula o total devido pela mesma regra usada em criação, tracking e Caixa.
+    total_devido = float(payable_total(comanda))
+    valor_pago = float(comanda.valor_pago or 0.0)
 
     # Verifica se há saldo devedor
     if force:
@@ -551,10 +551,13 @@ def fechar_comanda(
                 "as comandas abertas da mesa com auditoria."
             ),
         )
-    if valor_pago < subtotal and valor_pago < total_com_taxa:
+    if valor_pago + 0.01 < total_devido:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Não é possível fechar uma comanda com saldo em aberto. Valor devido: R${subtotal:.2f} (ou R${total_com_taxa:.2f} com taxa). Valor pago: R${valor_pago:.2f}"
+            detail=(
+                "Não é possível fechar uma comanda com saldo em aberto. "
+                f"Valor devido: R${total_devido:.2f}. Valor pago: R${valor_pago:.2f}"
+            ),
         )
 
     status_anterior = comanda.delivery_status

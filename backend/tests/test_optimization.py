@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import datetime
 
+from app.config import settings
 from app.database import Base, get_db, current_restaurante_id
 from app.models import Usuario, Produto, Categoria, Mesa, Comanda, Item, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog, Restaurante, Lancamento, Cliente
 from app.security import get_password_hash
@@ -178,7 +179,8 @@ def test_unified_fidelity_points_and_cashback():
     assert res3["saldo_atual"] == 5.0
 
 
-def test_pocket_preserva_clientes_mas_bloqueia_fidelidade_e_saldos():
+def test_pocket_preserva_clientes_mas_bloqueia_fidelidade_e_saldos(monkeypatch):
+    monkeypatch.setattr(settings, "KOMA_TEST_PREMIUM_RESTAURANTE_IDS", "")
     client = TestClient(app)
     db = TestingSessionLocal()
     try:

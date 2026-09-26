@@ -8,6 +8,7 @@ from ..database import get_db, current_restaurante_id, tenant_session_scope
 from ..models import Comanda, OnlinePaymentIntent
 from ..schemas import CardapioPedidoCreate
 from ..services.order_state_contract import build_order_state_contract
+from ..services.order_financials import payable_total
 from ..services.public_orders import (
     MAX_PUBLIC_ORDERS_PER_IP,
     MAX_PUBLIC_ORDERS_PER_PHONE,
@@ -40,11 +41,7 @@ class CardapioPedidoAgendavelCreate(CardapioPedidoCreate):
 
 
 def _order_total(comanda: Comanda) -> float:
-    itens_total = sum(float(item.preco_unit or 0) for item in comanda.itens if item.status != "cancelado")
-    taxa = float(comanda.delivery_taxa or 0)
-    desconto_cupom = float(getattr(comanda, "valor_desconto_cupom", 0) or 0)
-    desconto_cashback = float(getattr(comanda, "valor_desconto_cashback", 0) or 0)
-    return round(max(0.0, itens_total + taxa - desconto_cupom - desconto_cashback), 2)
+    return float(payable_total(comanda))
 
 
 def _existing_order_response(comanda: Comanda) -> dict:
