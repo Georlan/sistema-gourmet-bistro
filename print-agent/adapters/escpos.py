@@ -308,6 +308,13 @@ def _project_compact_semantics(payload_text: str, columns: int) -> str:
         for line in lines
         if _visible_text(line).strip().casefold() != "gerenciado por kôma".casefold()
     ]
+    for idx, line in enumerate(lines):
+        if _visible_text(line).strip().casefold() == "documento não fiscal".casefold():
+            lines[idx] = _preserve_controls(
+                line,
+                "DOCUMENTO NAO FISCAL".center(max(_source_columns(payload_text), columns)),
+            )
+            break
 
     return "\n".join(lines)
 
