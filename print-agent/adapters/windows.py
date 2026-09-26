@@ -713,10 +713,16 @@ class WindowsPrinterAdapter(BasePrinterAdapter):
             if hasattr(printer_name, "columns")
             else None
         )
+        target_profile = (
+            dict(getattr(printer_name, "options", {}) or {})
+            if hasattr(printer_name, "options")
+            else None
+        )
         raw_bytes = build_escpos_payload(
             payload_text,
             encoding="cp860",
             columns=target_columns,
+            profile_options=target_profile,
         )
 
         # Suporte a PrinterEndpoint estruturado
