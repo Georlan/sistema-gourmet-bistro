@@ -2,7 +2,7 @@
 
 import re
 import textwrap
-from typing import Final
+from typing import Any, Final, Mapping
 
 
 INITIALIZE: Final[bytes] = b"\x1b@"
@@ -11,6 +11,8 @@ PORTUGUESE_CODE_PAGE: Final[bytes] = b"\x1bt\x03"
 PAPER_FEED: Final[bytes] = b"\n\n\n"
 PARTIAL_CUT: Final[bytes] = b"\x1d\x56\x42\x00"
 SIMULATED_CUT_MARKER: Final[str] = "[CUT]"
+DOUBLE_HEIGHT_ON: Final[str] = "\x1b!\x10"
+NORMAL_SIZE: Final[str] = "\x1b!\x00"
 
 _EDGE_CONTROL_RE: Final[re.Pattern[str]] = re.compile(
     r"(?:\x1b(?:M|E|!|3).)"
@@ -157,11 +159,48 @@ def fit_text_to_columns(payload_text: str, columns: int | None) -> str:
     return "\n".join(output)
 
 
+def _compact_text_layout(
+    payload_text: str,
+    *,
+    allow_double_height: bool,
+) -> str:
+    """Compacta somente a estrutura textual, sem introduzir comandos novos.
+
+    Em bobinas estreitas removemos linhas vazias decorativas e, quando o perfil
+    não comporta títulos altos com eficiência, trocamos apenas o comando
+    double-height já existente pelo comando normal já homologado.
+    """
+    compacted = payload_text
+    if not allow_double_height:
+        compacted = compacted.replace(DOUBLE_HEIGHT_ON, NORMAL_SIZE)
+
+    lines: list[str] = []
+    for line in compacted.split("\n"):
+        visible = _visible_text(line)
+        has_control = bool(_ANY_CONTROL_RE.search(line))
+        if not visible.strip() and not has_control:
+            continue
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _profile_value(
+    profile_options: Mapping[str, Any] | None,
+    key: str,
+    default: Any,
+) -> Any:
+    if not profile_options:
+        return default
+    value = profile_options.get(key)
+    return default if value is None else value
+
+
 def build_escpos_payload(
     payload_text: str,
     encoding: str = "cp860",
     *,
     columns: int | None = None,
+    profile_options: Mapping[str, Any] | None = None,
 ) -> bytes:
     """
     Prepara um trabalho RAW independente do sistema operacional.
@@ -170,17 +209,36 @@ def build_escpos_payload(
     esses bytes como a sequência literal ``\\x00`` e o agente os restaura aqui.
     O marcador visual ``[CUT]`` nunca deve chegar ao papel.
     """
-    fitted = fit_text_to_columns(payload_text or "", columns)
-    normalized = (
-        fitted
-        .replace(SIMULATED_CUT_MARKER, "")
-        .replace("\\x00", "\x00")
+    resolved_columns = int(
+        _profile_value(profile_options, "columns", columns or 0) or 0
+    ) or columns
+    compact_layout = bool(
+        _profile_value(profile_options, "compact_layout", False)
     )
+    supports_cut = bool(
+        _profile_value(profile_options, "supports_cut", True)
+    )
+    allow_double_height = bool(
+        _profile_value(profile_options, "allow_double_height", True)
+    )
+    feed_lines = int(
+        _profile_value(profile_options, "feed_lines", 3) or 3
+    )
+    feed_lines = max(1, min(feed_lines, 6))
+
+    # Ordem importante: restaura o NUL antes de interpretar os controles
+    # ESC/POS. Isso elimina o texto literal "x00" sem alterar o protocolo.
+    restored = (payload_text or "").replace("\\x00", "\x00")
+    fitted = fit_text_to_columns(restored, resolved_columns)
+    if compact_layout:
+        fitted = _compact_text_layout(
+            fitted,
+            allow_double_height=allow_double_height,
+        )
+
+    normalized = fitted.replace(SIMULATED_CUT_MARKER, "")
     body = normalized.encode(encoding, errors="replace")
-    return (
-        INITIALIZE
-        + PORTUGUESE_CODE_PAGE
-        + body
-        + PAPER_FEED
-        + PARTIAL_CUT
+    trailer = (b"\n" * feed_lines) + (
+        PARTIAL_CUT if supports_cut else b""
     )
+    return INITIALIZE + PORTUGUESE_CODE_PAGE + body + trailer
