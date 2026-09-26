@@ -307,8 +307,12 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
             .first()
         )
         assert closing_job is not None
+        assert "FECHAMENTO DA MESA" in closing_job.payload_text
         assert f"CONTA: #{base46}" in closing_job.payload_text
-        assert "IMPRESSO POR: OPERADOR HTTP" in closing_job.payload_text
+        assert "ABERTA:" in closing_job.payload_text
+        assert "IMPRESSA:" in closing_job.payload_text
+        assert "OPERADOR: OPERADOR HTTP" in closing_job.payload_text
+        assert "IMPRESSO POR:" not in closing_job.payload_text
     finally:
         db.close()
 
