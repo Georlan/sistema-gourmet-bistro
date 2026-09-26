@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..models import Comanda, Item
 from ..order_chat_models import OrderConversation, OrderConversationEvent, OrderMessage
 from .order_chat_hub import queue_order_chat_event
+from .order_financials import payable_total
 
 CANONICAL_STATUS_MESSAGES = {
     "pendente": "Seu pedido foi recebido pelo restaurante.",
@@ -49,18 +50,8 @@ def _allocate_feed_seq(db: Session, conversation_id: str) -> int:
 
 
 def compute_comanda_total(comanda: Comanda | None) -> float:
-    """Calcula com precisão o valor total do pedido a partir dos itens e taxas."""
-    if not comanda:
-        return 0.0
-    itens_total = sum(
-        float(getattr(it, "preco_unit", getattr(it, "preco_unitario", 0.0)) or 0.0)
-        for it in (comanda.itens or [])
-    )
-    taxa = float(getattr(comanda, "delivery_taxa", 0.0) or 0.0)
-    desconto = float(getattr(comanda, "valor_desconto_cupom", 0.0) or 0.0) + float(
-        getattr(comanda, "valor_desconto_cashback", 0.0) or 0.0
-    )
-    return round(max(0.0, itens_total + taxa - desconto), 2)
+    """Calcula o valor total pela mesma fonte financeira usada no Caixa."""
+    return float(payable_total(comanda)) if comanda else 0.0
 
 
 def hash_token(raw_token: str) -> str:

@@ -232,6 +232,8 @@ class ComandaResponse(BaseModel):
     criado_em: datetime
     fechado_em: Optional[datetime] = None
     valor_pago: float
+    valor_desconto_cupom: float = 0.0
+    valor_desconto_cashback: float = 0.0
     
     # Delivery attributes
     delivery_status: Optional[str] = None

@@ -193,7 +193,13 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       .map(([name, qty]) => `${qty}x ${name}`)
       .join(' + ') || 'Nenhum item';
     const subtotal = activeItems.reduce((sum, item) => sum + (Number(item.preco) || 0), 0);
-    const total = subtotal + (Number(order.deliveryTax) || 0);
+    const canonicalPayableTotal = Number(order.payableTotal);
+    const total = Math.max(
+      0,
+      Number.isFinite(canonicalPayableTotal)
+        ? canonicalPayableTotal
+        : subtotal + (Number(order.deliveryTax) || 0) - (Number(order.discountTotal) || 0),
+    );
     const amountPaid = Math.max(0, Number(order.valorPago) || 0);
     const amountDue = Math.max(0, total - amountPaid);
     const rawAddress = String(order.deliveryAddress || '').trim();

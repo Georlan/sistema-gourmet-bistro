@@ -12,6 +12,7 @@ from ..models import Comanda, Lancamento
 from ..scheduled_models import ScheduledOrder
 from .capabilities import has_capability
 from .outbox import enqueue_outbox_event_in_session
+from .order_financials import payable_total
 
 
 SCHEDULED_ORDERS_CAPABILITY = "scheduled_orders"
@@ -94,18 +95,7 @@ def schedule_order_in_session(
 
 
 def _order_total(comanda: Comanda) -> Decimal:
-    items_total = sum(
-        Decimal(str(item.preco_unit or 0))
-        for item in comanda.itens
-        if item.status != "cancelado"
-    )
-    return max(
-        Decimal("0.00"),
-        items_total
-        + Decimal(str(comanda.delivery_taxa or 0))
-        - Decimal(str(comanda.valor_desconto_cupom or 0))
-        - Decimal(str(comanda.valor_desconto_cashback or 0)),
-    )
+    return payable_total(comanda)
 
 
 def _publish_created_event(db: Session, comanda: Comanda) -> None:

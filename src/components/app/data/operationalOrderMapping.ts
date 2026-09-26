@@ -85,6 +85,18 @@ export function mapBackendComandaToOperationalOrder({
     statusComanda: comanda.status_comanda || null,
     deliveryStatus: comanda.delivery_status || null,
     deliveryTax: Number(comanda.delivery_taxa) || 0,
+    discountTotal:
+      (Number(comanda.valor_desconto_cupom) || 0) +
+      (Number(comanda.valor_desconto_cashback) || 0),
+    payableTotal: Math.max(
+      0,
+      (comanda.itens || [])
+        .filter((item: any) => item.status !== 'cancelado')
+        .reduce((sum: number, item: any) => sum + (Number(item.preco_unit) || 0), 0)
+        + (Number(comanda.delivery_taxa) || 0)
+        - (Number(comanda.valor_desconto_cupom) || 0)
+        - (Number(comanda.valor_desconto_cashback) || 0),
+    ),
     deliveryAddress: comanda.delivery_endereco || null,
     paymentMethod: comanda.delivery_forma_pagamento || null,
     changeFor: comanda.delivery_troco_para == null ? null : Number(comanda.delivery_troco_para),
