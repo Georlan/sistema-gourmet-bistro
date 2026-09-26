@@ -210,23 +210,23 @@ export function CashierCouriers({
         <div className="flex flex-col gap-4 border-b border-koma-border pb-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-500">Controle de entregas</span>
-            <h2 className="mt-1 font-serif text-base font-bold text-koma-foreground">Delivery próprio</h2>
+            <h2 className="mt-1 font-serif text-base font-bold text-koma-foreground">Entregas próprias</h2>
             <p className="mt-1 max-w-3xl text-[10px] leading-relaxed text-koma-muted">
-              Aceite, acompanhe, organize o entregador, despache, receba e conclua deliveries sem trocar de tela.
+              Aceite, acompanhe, organize o entregador, despache, receba e conclua entregas sem trocar de tela.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-xl border border-koma-border bg-koma-panel px-3 py-2">
+          <div className="grid min-w-0 grid-cols-3 gap-1.5 sm:gap-2">
+            <div className="min-w-0 rounded-xl border border-koma-border bg-koma-panel px-2 py-2 sm:px-3">
               <strong className="block font-mono text-sm text-koma-foreground">{courierBuckets.preparing.length}</strong>
-              <span className="text-[8px] font-bold uppercase text-koma-muted">aguardando/preparo</span>
+              <span className="block break-words text-[7px] font-bold uppercase leading-tight text-koma-muted sm:text-[8px]">aguardando / preparo</span>
             </div>
-            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-3 py-2">
+            <div className="min-w-0 rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-2 py-2 sm:px-3">
               <strong className="block font-mono text-sm text-emerald-400">{courierBuckets.ready.length}</strong>
-              <span className="text-[8px] font-bold uppercase text-koma-muted">prontas</span>
+              <span className="block text-[7px] font-bold uppercase leading-tight text-koma-muted sm:text-[8px]">prontas</span>
             </div>
-            <div className="rounded-xl border border-sky-500/25 bg-sky-500/5 px-3 py-2">
+            <div className="min-w-0 rounded-xl border border-sky-500/25 bg-sky-500/5 px-2 py-2 sm:px-3">
               <strong className="block font-mono text-sm text-sky-400">{courierBuckets.inTransit.length}</strong>
-              <span className="text-[8px] font-bold uppercase text-koma-muted">em rota</span>
+              <span className="block text-[7px] font-bold uppercase leading-tight text-koma-muted sm:text-[8px]">em rota</span>
             </div>
           </div>
         </div>

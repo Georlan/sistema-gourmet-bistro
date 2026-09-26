@@ -831,11 +831,29 @@ export function CaixaPanel({
               );
             })}
 
-            {activeTab === 'cardapio_digital' && onlineMenuSubnavItems.map((sub) => (
-              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} aria-current={isSidebarTabActive(sub.id) ? 'page' : undefined} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
-                {sub.label}
-              </button>
-            ))}
+            {activeTab === 'cardapio_digital' && (
+              <>
+                <label className="cashier-subnav__mobile-select lg:hidden">
+                  <span className="sr-only">Seção do cardápio online</span>
+                  <select
+                    value={onlineMenuSubnavItems.find((sub) => isSidebarTabActive(sub.id))?.id ?? 'online_perfil'}
+                    onChange={(event) => handleSidebarNavigation(event.target.value)}
+                    aria-label="Seção do cardápio online"
+                  >
+                    {onlineMenuSubnavItems.map((sub) => (
+                      <option key={sub.id} value={sub.id}>{sub.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="hidden lg:flex gap-2">
+                  {onlineMenuSubnavItems.map((sub) => (
+                    <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} aria-current={isSidebarTabActive(sub.id) ? 'page' : undefined} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
+                      {sub.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
 
             {activeTab === 'impressao_salao' && settingsSubnavItems.filter((sub) => {
               if (sub.requiredFeature) return operationalEntitlementEnabled(planEntitlements, sub.requiredFeature);
@@ -1409,10 +1427,7 @@ export function CaixaPanel({
           activeTab={activeTab}
           activeSubTab={activeSubTab}
           dedicatedKds={hasDedicatedKds}
-          onNavigate={(tab, subTab) => {
-            setActiveTab(tab);
-            setActiveSubTab(subTab);
-          }}
+          onNavigate={(navigationId) => handleSidebarNavigation(navigationId)}
           onOpenMenu={() => setIsMobileSidebarOpen(true)}
           orderCount={sidebarOrderCount}
           kitchenCount={activeKitchenItems.length}

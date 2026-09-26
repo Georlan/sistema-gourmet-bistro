@@ -57,23 +57,13 @@ export function OnlineMenuQrLinks({ publicMenuUrl }: Props) {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <header className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <header className="rounded-2xl border border-koma-border bg-koma-panel px-4 py-4 sm:px-5">
         <div className="min-w-0">
           <h2 className="text-base font-black text-koma-foreground">Link e QR Code</h2>
           <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
             Use o mesmo endereço do cardápio em todos os canais.
           </p>
         </div>
-        {publicUrl && (
-          <a
-            href={publicUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3 text-[10px] font-black text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-600"
-          >
-            <ExternalLink size={13} /> Abrir cardápio
-          </a>
-        )}
       </header>
 
       {!publicUrl ? (

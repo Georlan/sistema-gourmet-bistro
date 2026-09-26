@@ -25,7 +25,9 @@ test('Cardápio online espelha as mesmas funções na navegação responsiva', (
   assert.match(caixa, /onlineMenuSubnavItems = getCashierNavigationItem\('cardapio_digital'\)\?\.children \?\? \[\]/);
   assert.match(caixa, /activeTab === 'cardapio_digital'/);
   assert.match(caixa, /onlineMenuSubnavItems\.map/);
-  assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
+  assert.match(caixa, /Seção do cardápio online/);
+  assert.match(caixa, /cashier-subnav__mobile-select lg:hidden/);
+  assert.match(caixa, /hidden lg:flex gap-2/);
   assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
 });
 

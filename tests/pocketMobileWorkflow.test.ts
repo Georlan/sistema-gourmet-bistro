@@ -160,7 +160,7 @@ test('CashierMobileBottomBar renders 5 standard tabs with operational status', (
   const view = createElement(CashierMobileBottomBar, {
     activeTab: 'operacao',
     activeSubTab: 'pedidos',
-    onNavigate: (tab, subTab) => calls.push(`${tab}/${subTab}`),
+    onNavigate: (navigationId) => calls.push(navigationId),
     onOpenMenu: () => { menuOpened = true; },
     orderCount: 3,
     kitchenCount: 2,
@@ -177,6 +177,18 @@ test('CashierMobileBottomBar renders 5 standard tabs with operational status', (
   assert.match(markup, />2<\/span>/); // Badge de cozinha
 });
 
+
+test('mobile bottom bar delegates pinned actions to canonical navigation ids', () => {
+  const mobileBottomBar = readFileSync(new URL('../src/components/caixa/navigation/CashierMobileBottomBar.tsx', import.meta.url), 'utf8');
+  const caixaPanel = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
+
+  assert.match(mobileBottomBar, /onNavigate\('vendas_pedidos'\)/);
+  assert.match(mobileBottomBar, /onNavigate\('vendas_novo_pedido'\)/);
+  assert.match(mobileBottomBar, /onNavigate\('vendas_cozinha'\)/);
+  assert.match(mobileBottomBar, /onNavigate\('caixa_turno_atual'\)/);
+  assert.doesNotMatch(mobileBottomBar, /onNavigate\('operacao',/);
+  assert.match(caixaPanel, /onNavigate=\{\(navigationId\) => handleSidebarNavigation\(navigationId\)\}/);
+});
 
 test('all plans share the mobile shell while Pocket keeps its plan-specific refinements', () => {
   const caixaPanel = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
@@ -210,6 +222,13 @@ test('mobile menu avoids duplicated owner shortcuts and keeps the compact touch-
   assert.match(cashierCss, /\.cashier-sidebar__footer--mobile/);
 });
 
+test('mobile order stage names match the columns they actually project', () => {
+  const ordersWorkspace = readFileSync(new URL('../src/components/caixa/orders/CaixaOrdersWorkspace.tsx', import.meta.url), 'utf8');
+
+  assert.match(ordersWorkspace, /id: 'digital' as const, label: 'Digitais'/);
+  assert.doesNotMatch(ordersWorkspace, /id: 'digital' as const, label: 'Balcão'/);
+});
+
 test('mobile orders prioritize actionable controls above the fold', () => {
   const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
 
@@ -230,17 +249,18 @@ test('mobile catalog prioritizes create preview and bulk actions', () => {
   assert.match(cashierCss, /grid-column: 1 \/ -1/);
 });
 
-test('online menu mobile exposes the edit publish customer-preview loop', () => {
+test('online menu keeps edit and publish actions in their canonical editor without a duplicated shortcut card', () => {
   const editor = readFileSync(new URL('../src/components/cardapio/CardapioDigitalSettingsPanel.tsx', import.meta.url), 'utf8');
   const onlineShell = readFileSync(new URL('../src/components/caixa/online-menu/CashierOnlineMenu.tsx', import.meta.url), 'utf8');
+  const qrLinks = readFileSync(new URL('../src/components/caixa/online-menu/OnlineMenuQrLinks.tsx', import.meta.url), 'utf8');
   const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
 
-  assert.match(onlineShell, /Editar → Publicar → Conferir/);
-  assert.match(onlineShell, /Link e QR Code/);
-  assert.match(onlineShell, /3\. Conferir/);
+  assert.doesNotMatch(onlineShell, /Editar → Publicar → Conferir/);
+  assert.doesNotMatch(onlineShell, />\s*1\. Editar|>\s*2\. Publicar|>\s*3\. Conferir/);
   assert.match(editor, /Ver como cliente/);
   assert.match(editor, /online-menu-editor__publish/);
   assert.match(editor, /Salvar e publicar/);
+  assert.equal((qrLinks.match(/Abrir cardápio/g) ?? []).length, 1);
   assert.match(cashierCss, /\.online-menu-editor__publish/);
   assert.match(cashierCss, /position: sticky/);
 });
@@ -253,7 +273,8 @@ test('mobile information architecture avoids duplicated deep navigation', () => 
 
   assert.match(mobileSidebar, /expandActiveChildren=\{false\}/);
   assert.match(sidebarNavigation, /expandActiveChildren = true/);
-  assert.match(caixaPanel, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
+  assert.match(caixaPanel, /Seção do cardápio online/);
+  assert.match(caixaPanel, /cashier-subnav__mobile-select lg:hidden/);
   assert.match(caixaPanel, /if \(sub\.requiredFeature\) return operationalEntitlementEnabled\(planEntitlements, sub\.requiredFeature\)/);
   assert.match(caixaPanel, /'Cardápio online'/);
 });

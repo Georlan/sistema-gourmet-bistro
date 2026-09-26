@@ -399,7 +399,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   });
   await page.goto('/?view=caixa');
 
-  await page.locator('.orders-mobile-stages__button').filter({ hasText: 'Balcão' }).evaluate((element) => {
+  await page.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
   const productionCard = page.locator('.orders-card--digital').filter({ hasText: 'Bruno Delivery' });
@@ -681,7 +681,7 @@ test('Pedidos, Cozinha e Entregas convergem entre três terminais sem refresh ma
     deliveriesPage.goto('/?view=caixa'),
   ]);
 
-  await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Balcão' }).evaluate((element) => {
+  await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
 
@@ -899,7 +899,7 @@ test('Pedidos e Retiradas convergem em tempo real para um pedido de retirada nor
   await pickups.getByRole('button', { name: 'Aceitar pedido' }).click();
   await expect(pickups).toContainText('Em preparo');
 
-  const ordersBalcaoTab = ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Balcão' });
+  const ordersBalcaoTab = ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' });
   await ordersBalcaoTab.waitFor({ state: 'attached' });
   await ordersBalcaoTab.evaluate((element) => { (element as HTMLButtonElement).click(); });
 
@@ -962,7 +962,7 @@ test('sessão recupera estado atualizado de pedidos após reconexão de WebSocke
   await seedCashierSession(page, 'pedidos');
   await page.goto('/?view=caixa');
 
-  const balcaoTab = page.locator('.orders-mobile-stages__button').filter({ hasText: 'Balcão' });
+  const balcaoTab = page.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' });
   await balcaoTab.waitFor({ state: 'attached' });
   await balcaoTab.evaluate((element) => { (element as HTMLButtonElement).click(); });
 
