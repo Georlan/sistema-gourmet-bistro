@@ -1985,7 +1985,7 @@ def test_idle_paired_bluetooth_can_claim_without_being_reported_connected():
     tenant_token = current_restaurante_id.set(1)
     db = TestingSessionLocal()
     try:
-        agent = db.query(PrintAgentToken).filter_by(agent_id="agent-1").one()
+        agent = db.query(PrintAgentToken).filter_by(id="a1").one()
         agent.last_seen_at = now
         agent.diagnostics_updated_at = now
         agent.printer_diagnostics = {
