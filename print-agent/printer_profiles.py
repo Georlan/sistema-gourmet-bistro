@@ -86,6 +86,14 @@ def _positive_int(value: Any) -> int | None:
     return parsed if parsed > 0 else None
 
 
+def _nonnegative_int(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
+
+
 def _known_profile(name: str, display_name: str = "") -> PrinterPaperProfile | None:
     identity = " ".join(
         part
@@ -128,25 +136,42 @@ def infer_printer_paper_profile(
 
     base = known or DEFAULT_PROFILE
     if explicit_width and explicit_columns:
+        physical_base = (
+            COMPACT_58MM_PROFILE
+            if explicit_width <= 60
+            else DEFAULT_PROFILE
+            if explicit_width >= 70
+            else base
+        )
+        code_page = _nonnegative_int(opts.get("code_page"))
         return PrinterPaperProfile(
             key=explicit_key or f"thermal-{explicit_width}mm",
             paper_width_mm=explicit_width,
             columns=explicit_columns,
-            font_mode=str(opts.get("font_mode") or base.font_mode).upper(),
-            encoding=str(opts.get("encoding") or base.encoding),
-            code_page=_positive_int(opts.get("code_page")) or base.code_page,
+            font_mode=str(
+                opts.get("font_mode") or physical_base.font_mode
+            ).upper(),
+            encoding=str(opts.get("encoding") or physical_base.encoding),
+            code_page=(
+                code_page
+                if code_page is not None
+                else physical_base.code_page
+            ),
             line_spacing_dots=(
                 _positive_int(opts.get("line_spacing_dots"))
                 if opts.get("line_spacing_dots") is not None
-                else base.line_spacing_dots
+                else physical_base.line_spacing_dots
             ),
-            feed_lines=_positive_int(opts.get("feed_lines")) or base.feed_lines,
+            feed_lines=(
+                _positive_int(opts.get("feed_lines"))
+                or physical_base.feed_lines
+            ),
             compact_layout=bool(
-                opts.get("compact_layout", base.compact_layout)
+                opts.get("compact_layout", physical_base.compact_layout)
             ),
             print_width_dots=(
                 _positive_int(opts.get("print_width_dots"))
-                or base.print_width_dots
+                or physical_base.print_width_dots
             ),
         )
 
@@ -156,7 +181,11 @@ def infer_printer_paper_profile(
         columns=explicit_columns or base.columns,
         font_mode=str(opts.get("font_mode") or base.font_mode).upper(),
         encoding=str(opts.get("encoding") or base.encoding),
-        code_page=_positive_int(opts.get("code_page")) or base.code_page,
+        code_page=(
+            _nonnegative_int(opts.get("code_page"))
+            if _nonnegative_int(opts.get("code_page")) is not None
+            else base.code_page
+        ),
         line_spacing_dots=(
             _positive_int(opts.get("line_spacing_dots"))
             if opts.get("line_spacing_dots") is not None
