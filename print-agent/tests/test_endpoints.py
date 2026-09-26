@@ -42,6 +42,13 @@ class TestPrinterEndpointModel:
             "paper_profile": "thermal-80mm",
             "paper_width_mm": 80,
             "columns": 48,
+            "font_mode": "a",
+            "line_spacing_dots": None,
+            "feed_lines": 3,
+            "encoding": "cp860",
+            "code_page": 3,
+            "compact_whitespace": False,
+            "profile_version": 2,
         }
 
     def test_known_printer_models_receive_paper_profiles(self):
@@ -57,8 +64,14 @@ class TestPrinterEndpointModel:
         )
 
         assert compact.paper_width_mm == 58
-        assert compact.columns == 32
+        assert compact.columns == 42
         assert compact.paper_profile == "thermal-58mm"
+        assert compact.font_mode == "b"
+        assert compact.encoding == "cp850"
+        assert compact.code_page == 2
+        assert compact.line_spacing_dots == 24
+        assert compact.feed_lines == 2
+        assert compact.compact_whitespace is True
         assert wide.paper_width_mm == 80
         assert wide.columns == 48
         assert wide.paper_profile == "thermal-80mm"
@@ -78,6 +91,22 @@ class TestPrinterEndpointModel:
         assert endpoint.paper_width_mm == 80
         assert endpoint.columns == 48
         assert endpoint.paper_profile == "custom-80mm"
+
+    def test_legacy_58mm_auto_profile_migrates_from_32_to_42_columns(self):
+        endpoint = PrinterEndpoint(
+            name="KA-1445",
+            transport="bluetooth_rfcomm",
+            address="86:67:7A:6B:30:C4",
+            options={
+                "paper_profile": "thermal-58mm",
+                "paper_width_mm": 58,
+                "columns": 32,
+            },
+        )
+
+        assert endpoint.columns == 42
+        assert endpoint.options["profile_version"] == 2
+        assert endpoint.font_mode == "b"
 
     def test_endpoint_serialization_roundtrip(self):
         original = PrinterEndpoint(
