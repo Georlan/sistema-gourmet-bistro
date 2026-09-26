@@ -54,9 +54,9 @@ class EscPosPayloadTest(unittest.TestCase):
 
     def test_compact_58mm_removes_blank_lines_and_double_height_without_cut(self):
         source = (
-            "\\x1b!\\x10"
+            "\x1b!\x10"
             + "DELIVERY".center(48)
-            + "\\x1b!\\x00"
+            + "\x1b!\\x00"
             + "\n\n"
             + ("PEDIDO #65".center(48))
             + "\n\n"
@@ -64,8 +64,6 @@ class EscPosPayloadTest(unittest.TestCase):
             + "R$ 10,99"
             + "\n\n"
         )
-        # O backend persiste NUL como texto escapado; reproduz o contrato real.
-        source = source.replace("\\x1b", "\x1b")
 
         payload = build_escpos_payload(
             source,
