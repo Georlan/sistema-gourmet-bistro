@@ -23,7 +23,7 @@ from ..application.printing import (
     UniversalPrintingError,
 )
 from ..config import settings
-from ..database import current_restaurante_id, get_db, require_tenant_id
+from ..database import current_restaurante_id, get_db, require_tenant_id, tenant_session_scope
 from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
 from ..domain.orders.types import (
     FulfillmentType,
@@ -659,8 +659,7 @@ def confirmar_entrega_motoboy(
         ENTITLEMENT_COURIER_APP,
         detail="App do Entregador disponível apenas no plano Premium ou com add-on ativo.",
     )
-    tenant_token = current_restaurante_id.set(rest_id)
-    try:
+    with tenant_session_scope(db, rest_id):
         comanda = (
             db.query(Comanda)
             .filter(
@@ -712,5 +711,3 @@ def confirmar_entrega_motoboy(
             rest_id,
         )
         return {"status": "sucesso", "mensagem": "Entrega confirmada com sucesso!"}
-    finally:
-        current_restaurante_id.reset(tenant_token)

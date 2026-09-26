@@ -54,10 +54,15 @@ def test_gerar_link_motoboy_flow():
 
     token = data["token"]
 
-    # 2. Testar verify_motoboy_token
+    # 2. Testar verify_motoboy_token sem db e com db desvinculado de tenant
     payload = verify_motoboy_token(token)
     assert payload["motoboy_id"] == 10
     assert payload["restaurante_id"] == 1
+
+    with SessionLocal() as unattached_db:
+        payload_with_db = verify_motoboy_token(token, unattached_db)
+        assert payload_with_db["motoboy_id"] == 10
+        assert payload_with_db["restaurante_id"] == 1
 
     cmd_id = f"cmd-mb-{uuid.uuid4().hex[:6]}"
     lanc_id = f"lanc-mb-{uuid.uuid4().hex[:6]}"
