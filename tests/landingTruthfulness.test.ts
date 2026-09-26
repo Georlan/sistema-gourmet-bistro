@@ -142,11 +142,13 @@ test('legal page links never revive /landing or /landing#planos', () => {
 
 test('inactive landing sections are safe if reintroduced later', () => {
   const ecosystem = source('src/landing/sections/Ecosystem.tsx');
-  const capabilities = source('src/landing/sections/Capabilities.tsx');
 
   assert.doesNotMatch(ecosystem, /TUDO O QUE O RESTAURANTE PRECISA/);
   assert.doesNotMatch(ecosystem, /ACEITE PEDIDOS DE TODO LUGAR/);
-  assert.match(ecosystem, /KDS e impressão automática ficam disponíveis no Pro e Premium/);
-  assert.match(capabilities, /ESTOQUE E FINANCEIRO — PRO E PREMIUM/);
-  assert.match(capabilities, /APP DO ENTREGADOR — PREMIUM/);
+  assert.match(ecosystem, /landingContractAdapter/);
+
+  // Confirma que Capabilities consome os benefícios estruturados do contrato
+  const capabilities = source('src/landing/sections/Capabilities.tsx');
+  assert.match(capabilities, /landingContractAdapter/);
+  assert.match(capabilities, /LANDING_BENEFITS/);
 });

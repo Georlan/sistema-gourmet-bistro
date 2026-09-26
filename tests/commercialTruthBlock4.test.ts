@@ -6,6 +6,10 @@ import {
   PLAN_COMPARISON_MATRIX,
   getSubscriptionPlan,
 } from '../src/config/subscriptionPlans';
+import {
+  LANDING_BENEFITS,
+  resolveBenefitItemLabel,
+} from '../src/landing/sections/Capabilities';
 
 const source = (path: string) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
@@ -47,9 +51,11 @@ test('landing Capabilities não agrupa Equipe com Impressão nem restringe Equip
 
   assert.doesNotMatch(capabilities, /EQUIPE E IMPRESSÃO — PRO E PREMIUM/);
   assert.doesNotMatch(capabilities, /Equipe com permissões e impressão automática entram no Pro e Premium/);
-  assert.match(capabilities, /EQUIPE E DELIVERY — TODOS OS PLANOS/);
-  assert.match(capabilities, /IMPRESSÃO E KDS — PRO E PREMIUM/);
-  assert.match(capabilities, /APP DO ENTREGADOR — PREMIUM/);
+
+  const labels = LANDING_BENEFITS.flatMap((b) => b.items.map(resolveBenefitItemLabel));
+  assert.ok(labels.includes('EQUIPE E DELIVERY — TODOS OS PLANOS'));
+  assert.ok(labels.includes('IMPRESSÃO E KDS — PRO E PREMIUM'));
+  assert.ok(labels.includes('APP DO ENTREGADOR — PREMIUM'));
 });
 
 test('landing Ecosystem afirma equipe na base e não como recurso que varia conforme plano', () => {
