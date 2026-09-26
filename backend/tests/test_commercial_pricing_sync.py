@@ -1,4 +1,4 @@
-import re
+import json
 from decimal import Decimal
 from pathlib import Path
 
@@ -11,12 +11,13 @@ from app.subscription import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+CONTRACT_PATH = REPO_ROOT / "product-contract.json"
 FRONTEND_CATALOG = REPO_ROOT / "src" / "config" / "subscriptionPlans.ts"
 
 EXPECTED_PRICES = {
     "pocket": Decimal("39.00"),
-    "pro": 129,
-    "premium": 249,
+    "pro": Decimal("129.00"),
+    "premium": Decimal("249.00"),
 }
 
 EXPECTED_RATES = {
@@ -32,34 +33,35 @@ LEGACY_RATES = {
 }
 
 
-def _frontend_plan(source: str, plan_id: str) -> tuple[Decimal, Decimal]:
-    match = re.search(
-        rf"id:\s*'{plan_id}'.*?price:\s*([0-9.]+).*?splitFeeRate:\s*([0-9.]+)",
-        source,
-        flags=re.DOTALL,
-    )
-    assert match is not None, f"Plano {plan_id} não encontrado no catálogo frontend"
-    return Decimal(match.group(1)), Decimal(match.group(2))
-
-
 def test_commercial_catalog_is_synced_across_frontend_and_payment_backend():
-    source = FRONTEND_CATALOG.read_text(encoding="utf-8")
+    with open(CONTRACT_PATH, "r", encoding="utf-8") as f:
+        contract = json.load(f)
 
+    # O frontend consome diretamente o contrato canônico
+    source = FRONTEND_CATALOG.read_text(encoding="utf-8")
     assert "export const ANNUAL_DISCOUNT_RATE = 0.1;" in source
+    assert "product-contract.json" in source
 
     for plan_id in ("pocket", "pro", "premium"):
-        frontend_price, frontend_rate = _frontend_plan(source, plan_id)
-        assert frontend_price == EXPECTED_PRICES[plan_id]
-        assert frontend_rate == EXPECTED_RATES[plan_id]
-        assert SUBSCRIPTION_MONTHLY_PRICES[plan_id] == Decimal(str(EXPECTED_PRICES[plan_id])).quantize(Decimal("0.01"))
-        assert SUBSCRIPTION_MARKETPLACE_RATES[plan_id] == EXPECTED_RATES[plan_id]
+        contract_plan = contract["plans"][plan_id]
+        plan_price = Decimal(str(contract_plan["price"])).quantize(Decimal("0.01"))
+        plan_rate = Decimal(str(contract_plan["split_fee_rate"]))
+
+        assert plan_price == EXPECTED_PRICES[plan_id]
+        assert plan_rate == EXPECTED_RATES[plan_id]
+        assert SUBSCRIPTION_MONTHLY_PRICES[plan_id] == plan_price
+        assert SUBSCRIPTION_MARKETPLACE_RATES[plan_id] == plan_rate
 
 
 def test_frontend_comparison_labels_match_financial_rates():
-    source = FRONTEND_CATALOG.read_text(encoding="utf-8")
-    assert "pocket: '1,79%'" in source
-    assert "pro: '0,50%'" in source
-    assert "premium: '0,20%'" in source
+    with open(CONTRACT_PATH, "r", encoding="utf-8") as f:
+        contract = json.load(f)
+
+    matrix = contract.get("comparison_matrix", [])
+    taxa_row = next(r for r in matrix if "Taxa KÔMA" in r["feature"])
+    assert taxa_row["pocket"] == "1,79%"
+    assert taxa_row["pro"] == "0,50%"
+    assert taxa_row["premium"] == "0,20%"
 
 
 def test_legacy_v25_fallback_stays_frozen_when_current_catalog_changes():

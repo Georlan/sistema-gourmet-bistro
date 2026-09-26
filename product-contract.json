@@ -140,27 +140,56 @@
       "cupons": "coupons"
     }
   },
-  "endpoint_rules": {
-    "inventory": [
-      "/estoque/insumos",
-      "/estoque/movimentacoes",
-      "/estoque/inventario"
-    ],
-    "advanced_reports": [
-      "/relatorios/visao-geral",
-      "/relatorios/financeiro",
-      "/relatorios/produtos"
-    ],
-    "courier_app": [
-      "/comandas/motoboys/{motoboy_id}/gerar-link"
-    ],
-    "coupons": [
-      "/cupons"
-    ],
-    "printing": [
-      "/impressao/teste-extremo-garcom"
-    ]
-  },
+  "endpoint_rules": [
+    {
+      "capability": "inventory",
+      "endpoint": "/estoque/insumos",
+      "method": "GET",
+      "description": "Lista de insumos de estoque"
+    },
+    {
+      "capability": "advanced_reports",
+      "endpoint": "/relatorios/visao-geral",
+      "method": "GET",
+      "description": "Visão geral de relatórios financeiros e analíticos"
+    },
+    {
+      "capability": "courier_app",
+      "endpoint": "/comandas/motoboys/{motoboy_id}/gerar-link",
+      "method": "POST",
+      "description": "Gera token de autenticação e link para o PWA do entregador"
+    },
+    {
+      "capability": "coupons",
+      "endpoint": "/caixa/cupons",
+      "method": "GET",
+      "description": "Lista cupons de desconto e campanhas promocionais"
+    },
+    {
+      "capability": "printing",
+      "endpoint": "/impressao/teste-extremo-garcom",
+      "method": "POST",
+      "description": "Enfileira teste sintético de impressão de comanda do garçom"
+    }
+  ],
+  "comparison_matrix": [
+    { "category": "Operação de Salão", "feature": "Kanban de Mesas, Comandas e Balcão", "pocket": true, "pro": true, "premium": true },
+    { "category": "Operação de Salão", "feature": "Caixa e Fechamento de Turno", "pocket": true, "pro": true, "premium": true },
+    { "category": "Operação de Salão", "feature": "Retirada e Delivery com Endereço, Taxa e Status", "pocket": true, "pro": true, "premium": true },
+    { "category": "Impressão & Cozinha", "feature": "Fila de Preparo na Tela, sem Impressora", "pocket": true, "pro": true, "premium": true },
+    { "category": "Impressão & Cozinha", "feature": "KDS Dedicado e Impressão Automática", "pocket": false, "pro": true, "premium": true },
+    { "category": "Gestão & Equipe", "feature": "App do Garçom para Salão e Comandas", "pocket": true, "pro": true, "premium": true },
+    { "category": "Gestão & Equipe", "feature": "Gestão de Funcionários e Permissões por Cargo", "pocket": true, "pro": true, "premium": true },
+    { "category": "Gestão & Equipe", "feature": "Relatórios Financeiros e DRE de Vendas", "pocket": false, "pro": true, "premium": true },
+    { "category": "Gestão & Equipe", "feature": "Estoque e Fichas Técnicas", "pocket": false, "pro": true, "premium": true },
+    { "category": "Cardápio Digital", "feature": "Cardápio Online & Pedidos via QR Code", "pocket": true, "pro": true, "premium": true },
+    { "category": "Cardápio Digital", "feature": "Aceite de Pedidos Digitais no PDV", "pocket": true, "pro": true, "premium": true },
+    { "category": "Pagamento Online", "feature": "Taxa KÔMA por pedido online pago", "pocket": "1,79%", "pro": "0,50%", "premium": "0,20%" },
+    { "category": "Entrega", "feature": "App do Entregador", "pocket": false, "pro": false, "premium": true },
+    { "category": "Clientes", "feature": "Cadastro e Histórico de Clientes", "pocket": true, "pro": true, "premium": true },
+    { "category": "Clientes", "feature": "Pontos, Cashback e Cupons", "pocket": false, "pro": false, "premium": true },
+    { "category": "Suporte", "feature": "Atendimento Prioritário", "pocket": false, "pro": false, "premium": true }
+  ],
   "commercial_comparison_rules": [
     {
       "category": "Impressão & Cozinha",

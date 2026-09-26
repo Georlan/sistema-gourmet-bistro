@@ -1,12 +1,14 @@
+import productContract from '../../product-contract.json';
+
 export type SubscriptionPlanId = 'pocket' | 'pro' | 'premium';
 
 export type SubscriptionFeatureId = 'printing' | 'kds' | 'waiter_app' | 'loyalty' | 'coupons' | 'courier_app' | 'inventory' | 'advanced_reports';
 export type SubscriptionEntitlements = Partial<Record<SubscriptionFeatureId, boolean>>;
 
 const PLAN_FEATURES: Record<SubscriptionPlanId, ReadonlySet<SubscriptionFeatureId>> = {
-  pocket: new Set(['waiter_app']),
-  pro: new Set(['printing', 'kds', 'waiter_app', 'inventory', 'advanced_reports']),
-  premium: new Set(['printing', 'kds', 'waiter_app', 'loyalty', 'coupons', 'courier_app', 'inventory', 'advanced_reports']),
+  pocket: new Set(productContract.plans.pocket.capabilities as SubscriptionFeatureId[]),
+  pro: new Set(productContract.plans.pro.capabilities as SubscriptionFeatureId[]),
+  premium: new Set(productContract.plans.premium.capabilities as SubscriptionFeatureId[]),
 };
 
 export function subscriptionHasFeature(
@@ -78,57 +80,32 @@ export function formatPercentage(rate: number) {
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'pocket',
-    name: 'Kôma Pocket',
-    price: 39,
-    splitFeeRate: 0.0179,
-    tagline: 'Comece com o essencial por R$ 39/mês.',
-    features: [
-      'Mesas, comandas e balcão',
-      'App do Garçom para salão e comandas',
-      'Equipe, funções e permissões por cargo',
-      'Cardápio digital e QR Code com pedidos no PDV',
-      'Retirada e delivery no mesmo caixa',
-      'Fila de preparo na tela, sem impressora',
-      'Caixa, fechamento e resumo de vendas',
-      'Clientes e histórico de pedidos',
-    ],
-    limitations: [
-      'Sem KDS e impressão automática',
-      'Sem estoque, fichas técnicas e financeiro completo',
-      'Sem app do entregador e fidelidade',
-    ]
+    name: productContract.plans.pocket.name,
+    price: productContract.plans.pocket.price,
+    splitFeeRate: productContract.plans.pocket.split_fee_rate,
+    tagline: productContract.plans.pocket.tagline,
+    features: [...productContract.plans.pocket.features],
+    limitations: [...productContract.plans.pocket.limitations],
   },
   {
     id: 'pro',
-    name: 'Kôma Pro',
-    price: 129,
-    splitFeeRate: 0.005,
-    tagline: 'Seu restaurante cresceu. Sua taxa diminui.',
-    recommended: true,
-    features: [
-      'Tudo do Pocket',
-      'KDS e impressão automática',
-      'Estoque, fichas técnicas e financeiro',
-      'Relatórios completos para acompanhar o negócio',
-    ],
-    limitations: [
-      'Sem app do entregador e fidelidade',
-    ]
+    name: productContract.plans.pro.name,
+    price: productContract.plans.pro.price,
+    splitFeeRate: productContract.plans.pro.split_fee_rate,
+    tagline: productContract.plans.pro.tagline,
+    recommended: productContract.plans.pro.recommended,
+    features: [...productContract.plans.pro.features],
+    limitations: [...productContract.plans.pro.limitations],
   },
   {
     id: 'premium',
-    name: 'Kôma Premium',
-    price: 249,
-    splitFeeRate: 0.002,
-    tagline: 'Mais volume, menor taxa.',
-    features: [
-      'Tudo do Pro',
-      'App do entregador incluído',
-      'Pontos, cashback e cupons incluídos',
-      'Suporte prioritário',
-    ],
-    limitations: []
-  }
+    name: productContract.plans.premium.name,
+    price: productContract.plans.premium.price,
+    splitFeeRate: productContract.plans.premium.split_fee_rate,
+    tagline: productContract.plans.premium.tagline,
+    features: [...productContract.plans.premium.features],
+    limitations: [...productContract.plans.premium.limitations],
+  },
 ];
 
 export interface FeatureComparisonRow {
@@ -139,24 +116,7 @@ export interface FeatureComparisonRow {
   premium: boolean | string;
 }
 
-export const PLAN_COMPARISON_MATRIX: FeatureComparisonRow[] = [
-  { category: 'Operação de Salão', feature: 'Kanban de Mesas, Comandas e Balcão', pocket: true, pro: true, premium: true },
-  { category: 'Operação de Salão', feature: 'Caixa e Fechamento de Turno', pocket: true, pro: true, premium: true },
-  { category: 'Operação de Salão', feature: 'Retirada e Delivery com Endereço, Taxa e Status', pocket: true, pro: true, premium: true },
-  { category: 'Impressão & Cozinha', feature: 'Fila de Preparo na Tela, sem Impressora', pocket: true, pro: true, premium: true },
-  { category: 'Impressão & Cozinha', feature: 'KDS Dedicado e Impressão Automática', pocket: false, pro: true, premium: true },
-  { category: 'Gestão & Equipe', feature: 'App do Garçom para Salão e Comandas', pocket: true, pro: true, premium: true },
-  { category: 'Gestão & Equipe', feature: 'Gestão de Funcionários e Permissões por Cargo', pocket: true, pro: true, premium: true },
-  { category: 'Gestão & Equipe', feature: 'Relatórios Financeiros e DRE de Vendas', pocket: false, pro: true, premium: true },
-  { category: 'Gestão & Equipe', feature: 'Estoque e Fichas Técnicas', pocket: false, pro: true, premium: true },
-  { category: 'Cardápio Digital', feature: 'Cardápio Online & Pedidos via QR Code', pocket: true, pro: true, premium: true },
-  { category: 'Cardápio Digital', feature: 'Aceite de Pedidos Digitais no PDV', pocket: true, pro: true, premium: true },
-  { category: 'Pagamento Online', feature: 'Taxa KÔMA por pedido online pago', pocket: '1,79%', pro: '0,50%', premium: '0,20%' },
-  { category: 'Entrega', feature: 'App do Entregador', pocket: false, pro: false, premium: true },
-  { category: 'Clientes', feature: 'Cadastro e Histórico de Clientes', pocket: true, pro: true, premium: true },
-  { category: 'Clientes', feature: 'Pontos, Cashback e Cupons', pocket: false, pro: false, premium: true },
-  { category: 'Suporte', feature: 'Atendimento Prioritário', pocket: false, pro: false, premium: true },
-];
+export const PLAN_COMPARISON_MATRIX: FeatureComparisonRow[] = productContract.comparison_matrix as FeatureComparisonRow[];
 
 export function normalizeSubscriptionPlan(plan?: string | null): SubscriptionPlanId {
   const normalized = plan?.trim().toLowerCase();
