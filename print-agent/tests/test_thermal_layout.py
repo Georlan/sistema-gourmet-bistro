@@ -145,6 +145,8 @@ class ThermalLayoutProfileTest(unittest.TestCase):
         self.assertIn("SUBTOTAL PAULO", compact)
         self.assertIn("SUBTOTAL ANA", compact)
         self.assertIn("TOTAL DA MESA:", compact)
+        self.assertNotIn("-" * 48 + "\nSUBTOTAL PAULO", compact)
+        self.assertNotIn("-" * 48 + "\nSUBTOTAL ANA", compact)
         self.assertLess(len(compact.splitlines()), len(source.splitlines()))
 
 
