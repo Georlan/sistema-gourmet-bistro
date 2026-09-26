@@ -52,6 +52,67 @@ class EscPosPayloadTest(unittest.TestCase):
         self.assertIn("1x BACON PRIME", fitted)
         self.assertIn("R$ 29,90", fitted)
 
+    def test_compact_58mm_removes_blank_lines_and_double_height_without_cut(self):
+        source = (
+            "\x1b!\x10"
+            + "DELIVERY".center(48)
+            + "\x1b!\\x00"
+            + "\n\n"
+            + ("PEDIDO #65".center(48))
+            + "\n\n"
+            + "1x PUDIM DA CASA".ljust(48 - len("R$ 10,99"))
+            + "R$ 10,99"
+            + "\n\n"
+        )
+
+        payload = build_escpos_payload(
+            source,
+            profile_options={
+                "columns": 32,
+                "compact_layout": True,
+                "supports_cut": False,
+                "feed_lines": 2,
+                "allow_double_height": False,
+            },
+        )
+
+        self.assertNotIn(b"x00", payload)
+        self.assertNotIn(b"\x1b!\x10", payload)
+        self.assertIn(b"\x1b!\x00", payload)
+        self.assertNotIn(b"\n\nDELIVERY", payload)
+        self.assertFalse(payload.endswith(PARTIAL_CUT))
+        self.assertTrue(payload.endswith(b"\n\n"))
+
+    def test_restores_escaped_nul_before_reflow(self):
+        source = "\x1bM\\x00" + ("KÔMA DEMO".center(48))
+        payload = build_escpos_payload(
+            source,
+            profile_options={
+                "columns": 32,
+                "compact_layout": True,
+                "supports_cut": False,
+                "feed_lines": 2,
+                "allow_double_height": False,
+            },
+        )
+        self.assertIn(b"\x1bM\x00", payload)
+        self.assertNotIn(b"x00", payload)
+
+    def test_80mm_profile_keeps_cut_double_height_and_three_line_feed(self):
+        source = "\x1b!\x10TITULO\x1b!\x00"
+        payload = build_escpos_payload(
+            source,
+            profile_options={
+                "columns": 48,
+                "compact_layout": False,
+                "supports_cut": True,
+                "feed_lines": 3,
+                "allow_double_height": True,
+            },
+        )
+        self.assertIn(b"\x1b!\x10", payload)
+        self.assertTrue(payload.endswith(b"\n\n\n" + PARTIAL_CUT))
+
     def test_wide_profile_preserves_existing_48_column_layout(self):
         source = "\n".join(
             [

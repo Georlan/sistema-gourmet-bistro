@@ -42,6 +42,10 @@ class TestPrinterEndpointModel:
             "paper_profile": "thermal-80mm",
             "paper_width_mm": 80,
             "columns": 48,
+            "compact_layout": False,
+            "supports_cut": True,
+            "feed_lines": 3,
+            "allow_double_height": True,
         }
 
     def test_known_printer_models_receive_paper_profiles(self):
@@ -59,6 +63,10 @@ class TestPrinterEndpointModel:
         assert compact.paper_width_mm == 58
         assert compact.columns == 32
         assert compact.paper_profile == "thermal-58mm"
+        assert compact.options["compact_layout"] is True
+        assert compact.options["supports_cut"] is False
+        assert compact.options["feed_lines"] == 2
+        assert compact.options["allow_double_height"] is False
         assert wide.paper_width_mm == 80
         assert wide.columns == 48
         assert wide.paper_profile == "thermal-80mm"
@@ -78,6 +86,8 @@ class TestPrinterEndpointModel:
         assert endpoint.paper_width_mm == 80
         assert endpoint.columns == 48
         assert endpoint.paper_profile == "custom-80mm"
+        assert endpoint.options["compact_layout"] is False
+        assert endpoint.options["supports_cut"] is True
 
     def test_endpoint_serialization_roundtrip(self):
         original = PrinterEndpoint(
