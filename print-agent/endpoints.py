@@ -128,6 +128,42 @@ class PrinterEndpoint:
     def paper_profile(self) -> str:
         return str(self.options.get("paper_profile") or "thermal-80mm")
 
+    @property
+    def encoding(self) -> str:
+        return str(self.options.get("encoding") or "cp860")
+
+    @property
+    def code_page(self) -> int:
+        return int(self.options.get("code_page") or 3)
+
+    @property
+    def font_mode(self) -> str:
+        return str(self.options.get("font_mode") or "a")
+
+    @property
+    def line_spacing_dots(self) -> int | None:
+        value = self.options.get("line_spacing_dots")
+        return int(value) if value not in (None, "") else None
+
+    @property
+    def feed_lines(self) -> int:
+        return int(self.options.get("feed_lines") or 3)
+
+    @property
+    def compact_whitespace(self) -> bool:
+        return bool(self.options.get("compact_whitespace", False))
+
+    def escpos_profile_kwargs(self) -> Dict[str, Any]:
+        return {
+            "columns": self.columns,
+            "encoding": self.encoding,
+            "code_page": self.code_page,
+            "font_mode": self.font_mode,
+            "line_spacing_dots": self.line_spacing_dots,
+            "feed_lines": self.feed_lines,
+            "compact_whitespace": self.compact_whitespace,
+        }
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
