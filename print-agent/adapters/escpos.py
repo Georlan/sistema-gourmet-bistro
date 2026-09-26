@@ -1,11 +1,12 @@
-"""Conversão segura e adaptativa de cupons de texto para ESC/POS."""
+"""Conversão segura de cupons de texto para bytes ESC/POS."""
 
 import re
 import textwrap
-from typing import Any, Final, Mapping
+from typing import Final
 
 
 INITIALIZE: Final[bytes] = b"\x1b@"
+# ESC t 3 seleciona PC860, a tabela portuguesa documentada pelo ESC/POS.
 PORTUGUESE_CODE_PAGE: Final[bytes] = b"\x1bt\x03"
 PAPER_FEED: Final[bytes] = b"\n\n\n"
 PARTIAL_CUT: Final[bytes] = b"\x1d\x56\x42\x00"
@@ -73,12 +74,14 @@ def _wrap_visible_line(visible: str, columns: int, source_columns: int) -> list[
     if not stripped:
         return [""]
 
+    # Separadores devem sempre ocupar exatamente a largura física disponível.
     if len(set(stripped)) == 1 and stripped[0] in "-=":
         return [stripped[0] * columns]
 
     left_padding = len(visible) - len(visible.lstrip(" "))
     right_padding = len(visible) - len(visible.rstrip(" "))
 
+    # Linhas centralizadas pelo backend são recentralizadas no novo papel.
     if (
         left_padding > 0
         and right_padding > 0
@@ -87,6 +90,8 @@ def _wrap_visible_line(visible: str, columns: int, source_columns: int) -> list[
     ):
         return [stripped.center(columns)]
 
+    # Linhas justificadas (item + valor, data + hora, etc.) preservam as duas
+    # pontas quando couberem. O backend costuma criar um vão largo entre elas.
     inner = visible.strip()
     gaps = list(re.finditer(r" {2,}", inner))
     if gaps:
@@ -152,104 +157,30 @@ def fit_text_to_columns(payload_text: str, columns: int | None) -> str:
     return "\n".join(output)
 
 
-def _rewrite_font_commands(payload_text: str, font_mode: str | None) -> str:
-    """Força a fonte do perfil preservando bold, altura e largura."""
-    mode = str(font_mode or "").strip().upper()
-    if mode not in {"A", "B"}:
-        return payload_text
-
-    font_b = mode == "B"
-    replacement = "\x01" if font_b else "\x00"
-    result = re.sub(r"\x1bM.", "\x1bM" + replacement, payload_text)
-
-    def rewrite_print_mode(match: re.Match[str]) -> str:
-        value = ord(match.group(1))
-        if font_b:
-            value |= 0x01
-        else:
-            value &= ~0x01
-        return "\x1b!" + chr(value)
-
-    return re.sub(r"\x1b!(.)", rewrite_print_mode, result)
-
-
-def _rewrite_line_spacing(payload_text: str, dots: int | None) -> str:
-    if not dots:
-        return payload_text
-    safe_dots = max(1, min(int(dots), 255))
-    command = "\x1b3" + chr(safe_dots)
-    if "\x1b3" in payload_text:
-        return re.sub(r"\x1b3.", command, payload_text)
-    return command + payload_text
-
-
-def _compact_vertical_whitespace(payload_text: str) -> str:
-    """Remove linhas vazias decorativas sem eliminar linhas de comando."""
-    output: list[str] = []
-    for line in (payload_text or "").split("\n"):
-        visible = _visible_text(line)
-        has_control = bool(_ANY_CONTROL_RE.search(line))
-        if not visible.strip() and not has_control:
-            continue
-        output.append(line)
-    return "\n".join(output)
-
-
-def _profile_value(
-    profile_options: Mapping[str, Any] | None,
-    key: str,
-    default: Any,
-) -> Any:
-    if not profile_options:
-        return default
-    value = profile_options.get(key)
-    return default if value is None else value
-
-
 def build_escpos_payload(
     payload_text: str,
     encoding: str = "cp860",
     *,
     columns: int | None = None,
-    profile_options: Mapping[str, Any] | None = None,
 ) -> bytes:
-    """Prepara RAW conforme as capabilities físicas do endpoint.
-
-    O backend persiste bytes NUL como a sequência literal barra-x00. O agente
-    restaura esses controles antes do reflow; restaurar depois fazia o parser
-    consumir a barra como argumento ESC e imprimir o texto residual x00.
     """
-    resolved_columns = int(
-        _profile_value(profile_options, "columns", columns or 0) or 0
-    ) or columns
-    resolved_encoding = str(
-        _profile_value(profile_options, "encoding", encoding) or encoding
-    )
-    code_page = int(_profile_value(profile_options, "code_page", 3) or 3)
-    code_page = max(0, min(code_page, 255))
-    font_mode = str(_profile_value(profile_options, "font_mode", "") or "")
-    line_spacing = _profile_value(profile_options, "line_spacing_dots", None)
-    compact_layout = bool(
-        _profile_value(profile_options, "compact_layout", False)
-    )
-    feed_lines = int(_profile_value(profile_options, "feed_lines", 3) or 3)
-    feed_lines = max(1, min(feed_lines, 8))
+    Prepara um trabalho RAW independente do sistema operacional.
 
-    restored = (payload_text or "").replace("\\x00", "\x00")
-    fitted = fit_text_to_columns(restored, resolved_columns)
-    fitted = _rewrite_font_commands(fitted, font_mode)
-    fitted = _rewrite_line_spacing(fitted, line_spacing)
-    if compact_layout:
-        fitted = _compact_vertical_whitespace(fitted)
-
-    normalized = fitted.replace(SIMULATED_CUT_MARKER, "")
-    body = normalized.encode(resolved_encoding, errors="replace")
-    code_page_command = b"\x1bt" + bytes([code_page])
-    paper_feed = b"\n" * feed_lines
+    O PostgreSQL não aceita bytes NUL em colunas TEXT. O backend transporta
+    esses bytes como a sequência literal ``\\x00`` e o agente os restaura aqui.
+    O marcador visual ``[CUT]`` nunca deve chegar ao papel.
+    """
+    fitted = fit_text_to_columns(payload_text or "", columns)
+    normalized = (
+        fitted
+        .replace(SIMULATED_CUT_MARKER, "")
+        .replace("\\x00", "\x00")
+    )
+    body = normalized.encode(encoding, errors="replace")
     return (
         INITIALIZE
-        + code_page_command
+        + PORTUGUESE_CODE_PAGE
         + body
-        + paper_feed
+        + PAPER_FEED
         + PARTIAL_CUT
     )
