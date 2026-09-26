@@ -1,13 +1,40 @@
 import React from 'react';
 import { ArrowDownRight, Clock3, RotateCcw, WalletCards } from 'lucide-react';
+import {
+  formatPlanBadge,
+  formatPlanScopeText,
+  getFeatureAvailability,
+} from '../landingContractAdapter';
+import type { SubscriptionFeatureId } from '../../config/subscriptionPlans';
 
-const BENEFITS = [
+export interface BenefitItem {
+  text: string;
+  badge?: string;
+  feature?: SubscriptionFeatureId;
+}
+
+export interface Benefit {
+  num: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  items: BenefitItem[];
+  result: string;
+  icon: typeof WalletCards;
+  tone: 'dark' | 'light' | 'green';
+}
+
+export const LANDING_BENEFITS: Benefit[] = [
   {
     num: '01',
     eyebrow: 'MAIS CONTROLE',
     title: 'SAIBA ONDE O DINHEIRO VAI.',
-    description: 'Caixa e histórico começam no Pocket. Estoque, financeiro e relatórios completos entram no Pro e Premium.',
-    items: ['CAIXA E HISTÓRICO — TODOS OS PLANOS', 'ESTOQUE E FINANCEIRO — PRO E PREMIUM', 'RELATÓRIOS COMPLETOS — PRO E PREMIUM'],
+    description: `Caixa e histórico começam no Pocket. Estoque, financeiro e relatórios completos entram no ${formatPlanScopeText(getFeatureAvailability('inventory'))}.`,
+    items: [
+      { text: 'CAIXA E HISTÓRICO', badge: 'TODOS OS PLANOS' },
+      { text: 'ESTOQUE E FINANCEIRO', feature: 'inventory' },
+      { text: 'RELATÓRIOS COMPLETOS', feature: 'advanced_reports' },
+    ],
     result: 'DECIDA COM NÚMEROS, NÃO COM ACHISMO.',
     icon: WalletCards,
     tone: 'dark',
@@ -16,8 +43,12 @@ const BENEFITS = [
     num: '02',
     eyebrow: 'MAIS RETORNO',
     title: 'DÊ MOTIVOS PARA O CLIENTE VOLTAR.',
-    description: 'Histórico de clientes faz parte da base. Pontos, cashback e cupons são recursos do Premium.',
-    items: ['HISTÓRICO DO CLIENTE — TODOS OS PLANOS', 'PONTOS E CASHBACK — PREMIUM', 'CUPONS — PREMIUM'],
+    description: `Histórico de clientes faz parte da base. Pontos, cashback e cupons são recursos do ${formatPlanScopeText(getFeatureAvailability('loyalty'))}.`,
+    items: [
+      { text: 'HISTÓRICO DO CLIENTE', badge: 'TODOS OS PLANOS' },
+      { text: 'PONTOS E CASHBACK', feature: 'loyalty' },
+      { text: 'CUPONS', feature: 'coupons' },
+    ],
     result: 'A VENDA TERMINA. O RELACIONAMENTO CONTINUA.',
     icon: RotateCcw,
     tone: 'light',
@@ -26,13 +57,22 @@ const BENEFITS = [
     num: '03',
     eyebrow: 'MAIS TEMPO',
     title: 'DEIXE O SISTEMA FAZER O REPETITIVO.',
-    description: 'Equipe com permissões e delivery estão na base. Impressão automática e KDS entram no Pro e Premium; app do entregador é Premium.',
-    items: ['EQUIPE E DELIVERY — TODOS OS PLANOS', 'IMPRESSÃO E KDS — PRO E PREMIUM', 'APP DO ENTREGADOR — PREMIUM'],
+    description: `Equipe com permissões e delivery estão na base. Impressão automática e KDS entram no ${formatPlanScopeText(getFeatureAvailability('printing'))}; app do entregador é ${formatPlanScopeText(getFeatureAvailability('courier_app'))}.`,
+    items: [
+      { text: 'EQUIPE E DELIVERY', badge: 'TODOS OS PLANOS' },
+      { text: 'IMPRESSÃO E KDS', feature: 'printing' },
+      { text: 'APP DO ENTREGADOR', feature: 'courier_app' },
+    ],
     result: 'MENOS CORRERIA. MAIS TEMPO PARA ATENDER.',
     icon: Clock3,
     tone: 'green',
   },
-] as const;
+];
+
+export function resolveBenefitItemLabel(item: BenefitItem): string {
+  const badge = item.badge ?? (item.feature ? formatPlanBadge(getFeatureAvailability(item.feature)) : '');
+  return badge ? `${item.text} — ${badge}` : item.text;
+}
 
 export function Capabilities() {
   return (
@@ -49,7 +89,7 @@ export function Capabilities() {
       </div>
 
       <div className="koma-benefits-grid">
-        {BENEFITS.map((benefit) => {
+        {LANDING_BENEFITS.map((benefit) => {
           const Icon = benefit.icon;
 
           return (
@@ -61,7 +101,9 @@ export function Capabilities() {
               <h3>{benefit.title}</h3>
               <p>{benefit.description}</p>
               <ul>
-                {benefit.items.map((item) => <li key={item}>{item}</li>)}
+                {benefit.items.map((item) => (
+                  <li key={item.text}>{resolveBenefitItemLabel(item)}</li>
+                ))}
               </ul>
               <strong>{benefit.result}</strong>
             </article>

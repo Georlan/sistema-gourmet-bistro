@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { KOMA_WORDMARK_ON_LIGHT_SRC } from '../../brand/komaBrand';
 import { LeadCaptureModal } from '../components/LeadCaptureModal';
+import { formatPlanScopeText, getFeatureAvailability } from '../landingContractAdapter';
 
 const CHANNELS = ['Retirada', 'Delivery', 'Garçom', 'Cardápio digital'];
 
@@ -115,7 +116,7 @@ export function Ecosystem() {
             </div>
             <div className="koma-eco-card-copy">
               <h3>ORGANIZE O PREPARO.</h3>
-              <p>A fila de preparo existe em todos os planos. KDS e impressão automática ficam disponíveis no Pro e Premium.</p>
+              <p>A fila de preparo existe em todos os planos. KDS e impressão automática ficam disponíveis no {formatPlanScopeText(getFeatureAvailability('printing'))}.</p>
             </div>
             <strong className="koma-eco-result">PRIORIDADE VISÍVEL. PREPARO ORGANIZADO.</strong>
           </article>
@@ -135,7 +136,7 @@ export function Ecosystem() {
                 <span><CircleDollarSign />Caixa</span>
                 <span><Store />Garçom</span>
                 <span><QrCode />Cardápio</span>
-                <span><Printer />Impressão Pro+</span>
+                <span><Printer />Impressão {getFeatureAvailability('printing').pocket ? 'Base' : 'Pro+'}</span>
               </div>
             </div>
             <div className="koma-eco-card-copy">

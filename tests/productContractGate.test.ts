@@ -17,6 +17,15 @@ import {
   getCashierSidebarGroupsForPlan,
   normalizeCashierTargetForEntitlements,
 } from '../src/components/caixa/navigation/cashierNavigation';
+import {
+  LANDING_BENEFITS,
+  resolveBenefitItemLabel,
+} from '../src/landing/sections/Capabilities';
+import {
+  formatPlanBadge,
+  formatPlanScopeText,
+  getFeatureAvailability,
+} from '../src/landing/landingContractAdapter';
 
 const planIds: SubscriptionPlanId[] = ['pocket', 'pro', 'premium'];
 const knownCapabilities = Object.keys(contract.capabilities) as SubscriptionFeatureId[];
@@ -218,23 +227,48 @@ test('Product Contract Gate — endpoint_rules é um catálogo executável abran
   }
 });
 
-test('Product Contract Gate — seções da landing (Capabilities e Ecosystem) preservam a verdade comercial', () => {
-  const capabilitiesSrc = readFileSync(new URL('../src/landing/sections/Capabilities.tsx', import.meta.url), 'utf-8');
-  const ecosystemSrc = readFileSync(new URL('../src/landing/sections/Ecosystem.tsx', import.meta.url), 'utf-8');
+test('Product Contract Gate — landing deriva disponibilidade de capabilities estruturadas do contrato', () => {
+  // Valida que os dados estruturados consumidos pela landing refletem estritamente o contrato canônico
+  // Sem fazer regex sobre frases literais
+  const featureItems = LANDING_BENEFITS.flatMap((b: any) => b.items.filter((i: any) => i.feature));
+  assert.ok(featureItems.length >= 6, 'Deve haver ao menos 6 itens vinculados a capabilities na landing');
 
-  // Capabilities.tsx:
-  // 1. Estoque e financeiro apenas no Pro e Premium (não no Pocket)
-  assert.match(capabilitiesSrc, /ESTOQUE E FINANCEIRO — PRO E PREMIUM/);
-  // 2. Pontos, cashback e cupons apenas no Premium
-  assert.match(capabilitiesSrc, /PONTOS E CASHBACK — PREMIUM/);
-  assert.match(capabilitiesSrc, /CUPONS — PREMIUM/);
-  // 3. Impressão e KDS apenas no Pro e Premium
-  assert.match(capabilitiesSrc, /IMPRESSÃO E KDS — PRO E PREMIUM/);
-  // 4. App do entregador apenas no Premium
-  assert.match(capabilitiesSrc, /APP DO ENTREGADOR — PREMIUM/);
+  for (const item of featureItems) {
+    const availability = getFeatureAvailability(item.feature);
+    const expectedPocket = contract.plans.pocket.capabilities.includes(item.feature);
+    const expectedPro = contract.plans.pro.capabilities.includes(item.feature);
+    const expectedPremium = contract.plans.premium.capabilities.includes(item.feature);
 
-  // Ecosystem.tsx:
-  // 1. Fila de preparo na tela para todos, mas KDS e impressão automática apenas Pro e Premium
-  assert.match(ecosystemSrc, /A fila de preparo existe em todos os planos\. KDS e impressão automática ficam disponíveis no Pro e Premium\./);
-  assert.match(ecosystemSrc, /Impressão Pro\+/);
+    assert.equal(availability.pocket, expectedPocket, `Disponibilidade Pocket incorreta para '${item.feature}'`);
+    assert.equal(availability.pro, expectedPro, `Disponibilidade Pro incorreta para '${item.feature}'`);
+    assert.equal(availability.premium, expectedPremium, `Disponibilidade Premium incorreta para '${item.feature}'`);
+
+    const label = resolveBenefitItemLabel(item);
+    const expectedBadge = formatPlanBadge(availability);
+    assert.ok(label.endsWith(expectedBadge), `Badge incorreto para item '${item.text}': obtido '${label}', esperado sufixo '${expectedBadge}'`);
+  }
+
+  // 2. Valida regras de negócio de alto nível comunicadas nas seções
+  // - Estoque e relatórios disponíveis apenas a partir do Pro
+  const invAvail = getFeatureAvailability('inventory');
+  assert.equal(invAvail.pocket, false);
+  assert.equal(invAvail.pro, true);
+  assert.equal(invAvail.premium, true);
+  assert.equal(formatPlanScopeText(invAvail), 'Pro e Premium');
+
+  // - Cupons, fidelidade e courier_app exclusivos do Premium
+  for (const premOnly of ['loyalty', 'coupons', 'courier_app'] as const) {
+    const avail = getFeatureAvailability(premOnly);
+    assert.equal(avail.pocket, false);
+    assert.equal(avail.pro, false);
+    assert.equal(avail.premium, true);
+    assert.equal(formatPlanScopeText(avail), 'Premium');
+  }
+
+  // - Impressão e KDS a partir do Pro
+  const printAvail = getFeatureAvailability('printing');
+  assert.equal(printAvail.pocket, false);
+  assert.equal(printAvail.pro, true);
+  assert.equal(printAvail.premium, true);
+  assert.equal(formatPlanScopeText(printAvail), 'Pro e Premium');
 });
