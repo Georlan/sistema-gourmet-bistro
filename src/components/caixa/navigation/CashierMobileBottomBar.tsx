@@ -26,7 +26,6 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
 }) => {
   const isPedidosActive = activeTab === 'operacao' && (activeSubTab === 'pedidos' || activeSubTab === 'mesas');
   const isPdvActive = activeTab === 'operacao' && activeSubTab === 'balcao';
-  const kitchenSubTab = dedicatedKds ? 'kds' : 'preparo';
   const isCozinhaActive = activeTab === 'operacao' && (activeSubTab === 'kds' || activeSubTab === 'preparo');
   const isCaixaActive = activeTab === 'financeiro';
 
