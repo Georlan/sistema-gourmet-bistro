@@ -197,6 +197,21 @@ class PosAdapter:
                     detail="Informe o telefone do cliente para a retirada.",
                 )
 
+        if tipo_pedido in {"Entrega", "Retirada"} and not is_counter_sale:
+            if not venda_in.delivery_forma_pagamento:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Informe a forma de pagamento para entrega ou retirada.",
+                )
+            if (
+                venda_in.delivery_troco_para is not None
+                and venda_in.delivery_forma_pagamento != "dinheiro"
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Troco só pode ser informado para pagamento em dinheiro.",
+                )
+
         effective_identifier = "Balcão" if is_counter_sale else venda_in.identificador
         telefone_cliente = None
         if venda_in.delivery_telefone:
@@ -236,6 +251,12 @@ class PosAdapter:
                 or existing_sale.tipo != tipo_pedido
                 or existing_items != requested_items
                 or (tipo_pedido == "Entrega" and existing_address != requested_address)
+                or (
+                    tipo_pedido in {"Entrega", "Retirada"}
+                    and not is_counter_sale
+                    and existing_sale.delivery_forma_pagamento
+                    != venda_in.delivery_forma_pagamento
+                )
             ):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
@@ -315,6 +336,16 @@ class PosAdapter:
                 customer_id=venda_in.cliente_id,
             ),
             delivery=delivery_input,
+            payment_method=(
+                venda_in.delivery_forma_pagamento
+                if tipo_pedido in {"Entrega", "Retirada"} and not is_counter_sale
+                else None
+            ),
+            change_for=(
+                str(venda_in.delivery_troco_para)
+                if venda_in.delivery_troco_para is not None
+                else None
+            ),
             idempotency_key=normalized_idempotency_key,
             operator_user_id=garcom_id,
             onboarding_test=bool(venda_in.onboarding_test),
