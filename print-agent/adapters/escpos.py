@@ -187,9 +187,16 @@ def build_escpos_payload(
     resolved_columns = int(
         _profile_value(profile_options, "columns", columns or 0) or 0
     ) or columns
+    legacy_compact = bool(
+        _profile_value(profile_options, "compact_layout", False)
+    )
     layout_mode = str(
-        _profile_value(profile_options, "layout_mode", "standard")
-        or "standard"
+        _profile_value(
+            profile_options,
+            "layout_mode",
+            "compact" if legacy_compact else "standard",
+        )
+        or ("compact" if legacy_compact else "standard")
     )
     charset_mode = str(
         _profile_value(profile_options, "charset_mode", "native")
