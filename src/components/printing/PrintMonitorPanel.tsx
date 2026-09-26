@@ -476,8 +476,11 @@ export function PrintMonitorPanel({
   }, [monitorData]);
 
   const isPrinterReady = (printer: DetectedPrinter): boolean => {
-    if (printer.connection === 'bluetooth') {
-      return Boolean(printer.paired && (printer.spp ?? true));
+    if (
+      printer.connection === 'bluetooth'
+      && !(printer.paired && (printer.spp ?? true))
+    ) {
+      return false;
     }
     return Boolean(
       printer.available
@@ -783,7 +786,7 @@ export function PrintMonitorPanel({
       return {
         tone: 'neutral',
         title: 'Verificando a conexão…',
-        detail: 'Aguarde a leitura do computador e da porta USB.'
+        detail: 'Aguarde a leitura das impressoras conectadas a este computador.'
       };
     }
     if (!hasOnlineAgent) {
@@ -810,8 +813,8 @@ export function PrintMonitorPanel({
     if (!hasFreshPrinterDiagnostics) {
       return {
         tone: 'warning',
-        title: 'Verificando a porta USB',
-        detail: 'Use o botão abaixo para procurar a impressora conectada.'
+        title: 'Verificando as impressoras',
+        detail: 'O KÔMA Print está atualizando o estado dos equipamentos conectados.'
       };
     }
     if (!hasReadyPrinter && presentUsbPrinters.length > 0) {
@@ -835,10 +838,9 @@ export function PrintMonitorPanel({
       }
       return {
         tone: 'warning',
-        title: 'Kôma Print conectado; impressora física desconectada',
+        title: 'Kôma Print conectado; nenhuma impressora disponível',
         detail: (
-          'O agente local está online e pode ser diagnosticado. '
-          + 'Conecte o USB somente quando quiser imprimir em papel.'
+          'Ligue ou conecte uma impressora e o estado será atualizado automaticamente.'
         )
       };
     }
@@ -853,7 +855,7 @@ export function PrintMonitorPanel({
       return {
         tone: 'danger',
         title: 'O último envio falhou',
-        detail: latestJob.last_error || 'Reconecte o USB e envie um teste.'
+        detail: latestJob.last_error || 'Verifique a impressora e envie um teste.'
       };
     }
     if (queueTotal > 0) {
@@ -1159,14 +1161,25 @@ export function PrintMonitorPanel({
             allDetectedPrinters.map((printer, index) => {
               const ready = isPrinterReady(printer);
               const badge = getFriendlyTransportBadge(undefined, printer.connection);
+              const endpoint = configuredEndpoints.find(item => (
+                item.name === printer.name
+                || (
+                  Boolean(printer.address)
+                  && item.address === printer.address
+                )
+              )) || null;
+              const paperWidthMm = Number(endpoint?.options?.paper_width_mm || 0);
+              const physicallyPresent = Boolean(
+                printer.present === true || printer.available === true
+              );
               const statusLabel = ready
                 ? 'Pronta para imprimir'
-                : (printer.present || printer.paired || printer.available)
+                : physicallyPresent
                   ? 'Impressora encontrada'
                   : 'Desconectada';
               const statusClass = ready
                 ? 'text-emerald-700 dark:text-emerald-400 font-semibold'
-                : (printer.present || printer.paired || printer.available)
+                : physicallyPresent
                   ? 'text-amber-700 dark:text-amber-400 font-semibold'
                   : 'text-koma-muted font-semibold';
               const Icon = printer.connection === 'bluetooth'
@@ -1202,6 +1215,11 @@ export function PrintMonitorPanel({
                       <span className={`rounded-full px-2 py-0.5 text-[8px] font-extrabold ${badge.badgeClass}`}>
                         {badge.label}
                       </span>
+                      {paperWidthMm > 0 && (
+                        <span className="rounded-full border border-koma-border bg-koma-raised px-2 py-0.5 text-[8px] font-bold text-koma-muted">
+                          Papel {paperWidthMm} mm
+                        </span>
+                      )}
                       {printer.is_default && (
                         <span className="rounded-full koma-badge-success px-2 py-0.5 text-[8px] font-extrabold">
                           Impressora principal
@@ -1300,6 +1318,11 @@ export function PrintMonitorPanel({
                             <span className="ml-2 font-mono text-[10px] text-koma-muted">({ep.address})</span>
                           )}
                           <span className="ml-2 text-[9px] text-koma-subtle font-mono">id: {ep.id}</span>
+                          {Number(ep.options?.paper_width_mm || 0) > 0 && (
+                            <span className="ml-2 text-[9px] text-koma-muted">
+                              {String(ep.options?.paper_width_mm)} mm · {String(ep.options?.columns || '?')} col.
+                            </span>
+                          )}
                         </div>
                         <span className={`rounded-full px-2 py-0.5 text-[8px] font-extrabold ${badge.badgeClass}`}>
                           {badge.label}

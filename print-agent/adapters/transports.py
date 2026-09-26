@@ -89,6 +89,45 @@ class BluetoothRfcommTransport(PrinterTransport):
             return True
         return False
 
+    def probe(self, timeout: float = 0.75) -> bool:
+        """Abre e fecha o canal RFCOMM sem enviar bytes.
+
+        Usado somente para confirmar presença física de impressoras SPP que
+        operam sob demanda e por isso ficam com Connected=no quando ociosas.
+        """
+        if not self.address:
+            return False
+        if not (
+            sys.platform.startswith("linux")
+            or sys.platform == "win32"
+            or self._socket_factory is not None
+        ):
+            return False
+
+        sock = None
+        try:
+            if sys.platform == "win32" and self._socket_factory is None and not (
+                hasattr(socket, "AF_BLUETOOTH") and hasattr(socket, "BTPROTO_RFCOMM")
+            ):
+                sock = socket.socket(
+                    AF_BTH_WINDOWS,
+                    socket.SOCK_STREAM,
+                    BTHPROTO_RFCOMM_WINDOWS,
+                )
+            else:
+                sock = self._create_socket()
+            sock.settimeout(max(0.1, float(timeout)))
+            sock.connect((self.address, self.channel))
+            return True
+        except (OSError, TimeoutError, socket.timeout, ValueError):
+            return False
+        finally:
+            if sock is not None:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+
     def send(self, data: bytes) -> bool:
         if not data:
             return True

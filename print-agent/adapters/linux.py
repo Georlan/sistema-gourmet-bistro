@@ -9,8 +9,10 @@ import re
 import shutil
 import socket
 import subprocess
+import time
 from urllib.parse import unquote, urlsplit
-from typing import Any, Dict, Optional
+from threading import Lock
+from typing import Any, Callable, Dict, Optional
 
 from .base import BasePrinterAdapter
 from .escpos import build_escpos_payload
@@ -55,12 +57,15 @@ def _bluetooth_info_fields(output: str) -> dict[str, str]:
     return fields
 
 
-def _discover_bluetooth_spp_printers() -> list[dict[str, Any]]:
+def _discover_bluetooth_spp_printers(
+    availability_probe: Optional[Callable[[str], bool]] = None,
+) -> list[dict[str, Any]]:
     """
     Lista dispositivos Bluetooth já conhecidos pelo BlueZ que oferecem SPP.
 
-    Esta etapa é somente diagnóstico. Não inicia scan, não conecta dispositivos
-    e não cria /dev/rfcomm*. USB/CUPS continua sendo o transporte principal.
+    Não inicia scan nem cria /dev/rfcomm*. Quando recebe availability_probe,
+    confirma presença física abrindo e fechando um socket RFCOMM sem enviar
+    bytes. Isso distingue "pareado/configurado" de "ligado e alcançável".
     """
     if shutil.which("bluetoothctl") is None:
         return []
@@ -107,9 +112,12 @@ def _discover_bluetooth_spp_printers() -> list[dict[str, Any]]:
             or address
         )
 
-        # Bluetooth SPP pareado é elegível para conexão sob demanda:
-        # available e present são True quando pareado, sem exigir conexão contínua.
-        is_ready = bool(paired)
+        reachable = bool(connected)
+        if paired and not reachable and availability_probe is not None:
+            try:
+                reachable = bool(availability_probe(address))
+            except Exception:
+                reachable = False
 
         printers.append(
             {
@@ -118,12 +126,13 @@ def _discover_bluetooth_spp_printers() -> list[dict[str, Any]]:
                 "uri": f"bluetooth://{address}",
                 "address": address,
                 "is_default": False,
-                "available": is_ready,
-                "present": is_ready,
+                "available": reachable,
+                "present": reachable,
                 "configured": paired,
                 "paired": paired,
                 "trusted": trusted,
                 "connected": connected,
+                "reachable": reachable,
                 "spp": True,
             }
         )
@@ -392,6 +401,44 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
     def __init__(self, output_dir: str = "print_output"):
         # Mantido na assinatura por compatibilidade com a factory.
         self.output_dir = output_dir
+        self._bluetooth_probe_cache: dict[str, tuple[bool, float]] = {}
+        self._bluetooth_probe_ttl_seconds = 5.0
+        self._bluetooth_io_lock = Lock()
+
+    def _remember_bluetooth_availability(
+        self,
+        address: str,
+        available: bool,
+    ) -> None:
+        normalized = _normalize_bluetooth_address(address)
+        if normalized:
+            self._bluetooth_probe_cache[normalized] = (
+                bool(available),
+                time.monotonic(),
+            )
+
+    def _probe_bluetooth_spp(self, address: str) -> bool:
+        normalized = _normalize_bluetooth_address(address)
+        if not normalized:
+            return False
+
+        now = time.monotonic()
+        cached = self._bluetooth_probe_cache.get(normalized)
+        if (
+            cached is not None
+            and now - cached[1] < self._bluetooth_probe_ttl_seconds
+        ):
+            return cached[0]
+
+        transport = BluetoothRfcommTransport(
+            address=normalized,
+            channel=1,
+            timeout=0.75,
+        )
+        with self._bluetooth_io_lock:
+            available = transport.probe(timeout=0.75)
+        self._remember_bluetooth_availability(normalized, available)
+        return available
 
     def get_diagnostics(self) -> Dict[str, Any]:
         """
@@ -532,7 +579,9 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
         # Bluetooth entra somente como diagnóstico nesta fase. Filas CUPS
         # bluetooth:// e a descoberta BlueZ são duas visões do mesmo hardware;
         # consolide por endereço para o painel não mostrar duplicatas.
-        discovered_bluetooth = _discover_bluetooth_spp_printers()
+        discovered_bluetooth = _discover_bluetooth_spp_printers(
+            self._probe_bluetooth_spp
+        )
         bluetooth_by_address = {
             str(item.get("address") or ""): item
             for item in discovered_bluetooth
@@ -927,7 +976,10 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
             "Conexão sob demanda RFCOMM validada pelo Kôma Print.\n"
         )
         transport = BluetoothRfcommTransport(address=address, channel=1)
-        if not transport.send(raw_payload):
+        with self._bluetooth_io_lock:
+            sent = transport.send(raw_payload)
+        self._remember_bluetooth_availability(address, sent)
+        if not sent:
             return {
                 "success": False,
                 "code": "bluetooth_test_failed",
@@ -1008,9 +1060,17 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
         *,
         skip_ready_check: bool = False,
     ) -> bool:
-        raw_payload = build_escpos_payload(payload_text, encoding="cp860")
-
         target_printer = printer_name
+        target_columns = (
+            int(getattr(target_printer, "columns", 0) or 0)
+            if hasattr(target_printer, "columns")
+            else None
+        )
+        raw_payload = build_escpos_payload(
+            payload_text,
+            encoding="cp860",
+            columns=target_columns,
+        )
         if hasattr(target_printer, "build_transport"):
             if not skip_ready_check and not self.is_printer_ready(target_printer):
                 log.error(
@@ -1027,6 +1087,14 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
                     getattr(target_printer, "id", "desconhecido"),
                 )
                 return False
+            if isinstance(transport, BluetoothRfcommTransport):
+                with self._bluetooth_io_lock:
+                    success = transport.send(raw_payload)
+                self._remember_bluetooth_availability(
+                    transport.address,
+                    success,
+                )
+                return success
             return transport.send(raw_payload)
 
         if not target_printer or target_printer in ("Padrão", "auto"):
@@ -1056,4 +1124,12 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
             )
             return False
 
+        if isinstance(transport, BluetoothRfcommTransport):
+            with self._bluetooth_io_lock:
+                success = transport.send(raw_payload)
+            self._remember_bluetooth_availability(
+                transport.address,
+                success,
+            )
+            return success
         return transport.send(raw_payload)

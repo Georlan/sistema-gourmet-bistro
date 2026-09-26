@@ -20,9 +20,11 @@ test('monitor handles multi-transport printing uniformly', () => {
   assert.match(monitor, /Rotas ativas/);
   assert.match(monitor, /Object\.entries\(configuredDestinations\)/);
 
-  // Bluetooth SPP on-demand readiness without requiring CUPS queue
+  // Bluetooth SPP continua sob demanda, mas readiness exige presença física atual
   assert.match(monitor, /isPrinterReady/);
   assert.match(monitor, /printer\.connection === 'bluetooth'/);
+  assert.match(monitor, /printer\.present === true/);
+  assert.match(monitor, /printer\.available/);
   assert.match(monitor, /Impressoras Bluetooth \(SPP\)/);
   assert.match(monitor, /RFCOMM sob demanda/);
   assert.doesNotMatch(monitor, /canTest = \([\s\S]*&& Boolean\(printer\.cups_queue\)[\s\S]*printer\.supportsBluetoothTest\)/);
@@ -61,4 +63,19 @@ test('daily printing UI does not invoke USB-specific discovery when a printer is
   assert.match(monitor, /Preparar conexão USB/);
   assert.match(monitor, /Diagnóstico técnico e suporte/);
   assert.doesNotMatch(monitor, /agente online · USB desconectado/);
+});
+
+
+test('monitor shows the physical paper profile without exposing layout internals', () => {
+  assert.match(monitor, /paper_width_mm/);
+  assert.match(monitor, /Papel \{paperWidthMm\} mm/);
+  assert.match(monitor, /options\?\.columns/);
+});
+
+
+test('paired bluetooth alone never appears as connected or ready', () => {
+  assert.match(monitor, /const physicallyPresent = Boolean\(/);
+  assert.doesNotMatch(monitor, /printer\.present \|\| printer\.paired \|\| printer\.available/);
+  assert.match(monitor, /nenhuma impressora disponível/);
+  assert.match(monitor, /Ligue ou conecte uma impressora/);
 });

@@ -43,7 +43,7 @@ def char_client():
     return TestClient(app)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def char_setup(char_client):
     """Configura dados reais no banco isolado de teste para a matriz de caracterização."""
     token_var = current_restaurante_id.set(CHAR_RESTAURANT_ID)
@@ -57,10 +57,22 @@ def char_setup(char_client):
                 id=CHAR_RESTAURANT_ID,
                 nome="Bistrô Characterization",
                 slug=CHAR_RESTAURANT_SLUG,
-                plano="pro",
+                plano="premium",
             )
             db.add(rest)
             db.commit()
+        elif rest.plano != "premium":
+            rest.plano = "premium"
+            db.commit()
+
+        # Cada teste de caracterização começa sem comandas abertas. O banco de
+        # teste é compartilhado por muitos módulos; reutilizar uma comanda de
+        # outro teste fazia mesa/fulfillment contaminarem o cenário seguinte.
+        db.query(Comanda).filter(
+            Comanda.restaurante_id == CHAR_RESTAURANT_ID,
+            Comanda.fechada == False,
+        ).update({Comanda.fechada: True}, synchronize_session=False)
+        db.commit()
 
         config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == CHAR_RESTAURANT_ID).first()
         if not config:
@@ -314,20 +326,22 @@ def char_setup(char_client):
             )
             db.add(cupom_fixo15)
 
-        # 10. Motoboy
+        # 10. Motoboy. O ID é global e autoincremental; não fixe "1", pois a
+        # suíte completa compartilha o mesmo banco de teste entre módulos.
         motoboy = db.query(Motoboy).filter(
             Motoboy.restaurante_id == CHAR_RESTAURANT_ID,
-            Motoboy.id == 1,
+            Motoboy.telefone == "11999998888",
         ).first()
         if not motoboy:
             motoboy = Motoboy(
-                id=1,
                 restaurante_id=CHAR_RESTAURANT_ID,
                 nome="Motoboy Char 1",
                 telefone="11999998888",
                 ativo=True,
             )
             db.add(motoboy)
+            db.flush()
+        motoboy_id = motoboy.id
 
         db.commit()
     finally:
@@ -352,6 +366,7 @@ def char_setup(char_client):
         "restaurant_id": CHAR_RESTAURANT_ID,
         "slug": CHAR_RESTAURANT_SLUG,
         "headers": headers,
+        "motoboy_id": motoboy_id,
     }
 
     current_restaurante_id.reset(token_var)

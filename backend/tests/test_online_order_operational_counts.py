@@ -23,22 +23,24 @@ def setup_operational_count_db():
             synchronize_session=False
         )
         db.query(Comanda).filter(Comanda.restaurante_id == RID).delete(synchronize_session=False)
-        db.query(Usuario).filter(Usuario.restaurante_id == RID).delete(synchronize_session=False)
-        db.query(Restaurante).filter(Restaurante.id == RID).delete(synchronize_session=False)
-        db.commit()
 
-        db.add(Restaurante(id=RID, nome="KOMA Count", plano="pro", slug="koma-count"))
-        db.add(
-            Usuario(
-                id=ADMIN_ID,
-                restaurante_id=RID,
-                nome="Gerente Count",
-                email="count-admin@koma.test",
-                cargo="admin",
-                role="admin",
-                status="ativo",
+        # Restaurante e operador são dados estruturais da fixture. Reutilizá-los
+        # torna o teste idempotente e evita apagar pais que podem ter relações
+        # legítimas criadas por outras coberturas na mesma suíte SQLite.
+        if not db.query(Restaurante).filter(Restaurante.id == RID).first():
+            db.add(Restaurante(id=RID, nome="KOMA Count", plano="pro", slug="koma-count"))
+        if not db.query(Usuario).filter(Usuario.id == ADMIN_ID).first():
+            db.add(
+                Usuario(
+                    id=ADMIN_ID,
+                    restaurante_id=RID,
+                    nome="Gerente Count",
+                    email="count-admin@koma.test",
+                    cargo="admin",
+                    role="admin",
+                    status="ativo",
+                )
             )
-        )
         db.commit()
         yield
     finally:

@@ -42,6 +42,32 @@ class TestBluetoothRfcommTransport:
         with patch("sys.platform", "linux"):
             assert valid.is_available() is True
 
+    def test_probe_connects_without_sending_and_closes_socket(self):
+        mock_sock = MagicMock()
+        transport = BluetoothRfcommTransport(
+            address="86:67:7A:6B:30:C4",
+            channel=1,
+            socket_factory=lambda: mock_sock,
+        )
+
+        assert transport.probe(timeout=0.5) is True
+        mock_sock.settimeout.assert_called_once_with(0.5)
+        mock_sock.connect.assert_called_once_with(("86:67:7A:6B:30:C4", 1))
+        mock_sock.sendall.assert_not_called()
+        mock_sock.close.assert_called_once()
+
+    def test_probe_returns_false_when_printer_is_powered_off(self):
+        mock_sock = MagicMock()
+        mock_sock.connect.side_effect = OSError("Host is down")
+        transport = BluetoothRfcommTransport(
+            address="86:67:7A:6B:30:C4",
+            socket_factory=lambda: mock_sock,
+        )
+
+        assert transport.probe(timeout=0.25) is False
+        mock_sock.sendall.assert_not_called()
+        mock_sock.close.assert_called_once()
+
     def test_send_success_in_chunks_with_socket_closed(self):
         mock_sock = MagicMock()
         transport = BluetoothRfcommTransport(

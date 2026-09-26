@@ -684,9 +684,9 @@ def test_heartbeat_accepts_bluetooth_spp_diagnostics_without_marking_usb_ready()
             agent,
             datetime.datetime.now(datetime.timezone.utc),
         )
-        assert state["printer_ready"] is True
-        assert state["physical_printer_present"] is True
-        assert state["ready_printer_count"] == 1
+        assert state["printer_ready"] is False
+        assert state["physical_printer_present"] is False
+        assert state["ready_printer_count"] == 0
         assert state["supports_usb_commands"] is False
     finally:
         db.close()
@@ -1263,12 +1263,13 @@ def test_admin_can_request_isolated_bluetooth_test_without_usb_readiness():
                         "address": "86:67:7A:6B:30:C4",
                         "cups_queue": "Kapbom",
                         "is_default": True,
-                        "available": False,
-                        "present": False,
+                        "available": True,
+                        "present": True,
                         "configured": True,
                         "paired": True,
                         "trusted": True,
                         "connected": False,
+                        "reachable": True,
                         "spp": True,
                     }
                 ],
@@ -1327,12 +1328,13 @@ def test_admin_can_request_isolated_bluetooth_test_without_usb_readiness():
                         "address": "86:67:7A:6B:30:C4",
                         "cups_queue": "Kapbom",
                         "is_default": True,
-                        "available": False,
-                        "present": False,
+                        "available": True,
+                        "present": True,
                         "configured": True,
                         "paired": True,
                         "trusted": True,
                         "connected": False,
+                        "reachable": True,
                         "spp": True,
                     }
                 ],
@@ -1908,7 +1910,30 @@ def test_generic_printer_readiness_across_transports():
     assert state["physical_printer_present"] is True
     assert state["ready_printer_count"] == 1
 
-    # 4. Bluetooth sem SPP
+    # 4. Bluetooth pareado, mas desligado/inacessível
+    base_agent.printer_diagnostics = {
+        "printers": [
+            {
+                "name": "KA-1445",
+                "connection": "bluetooth",
+                "address": "86:67:7A:6B:30:C4",
+                "paired": True,
+                "trusted": True,
+                "spp": True,
+                "connected": False,
+                "reachable": False,
+                "available": False,
+                "present": False,
+                "configured": True,
+            }
+        ]
+    }
+    state = print_agents_route._agent_printer_state(base_agent, now)
+    assert state["printer_ready"] is False
+    assert state["physical_printer_present"] is False
+    assert state["ready_printer_count"] == 0
+
+    # 5. Bluetooth sem SPP
     base_agent.printer_diagnostics = {
         "printers": [
             {

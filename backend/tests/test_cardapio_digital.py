@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
 from app.routes.auth import create_access_token
-from app.models import Restaurante, Usuario
+from app.models import ConfiguracaoRestaurante, Restaurante, Usuario
 
 client = TestClient(app)
 
@@ -41,6 +41,30 @@ def test_setup():
             rest.slug = "sistema-gourmet-bistro"
             db.commit()
 
+        # A suíte completa compartilha SQLite entre módulos. Torne explícita a
+        # configuração necessária aos pedidos públicos para que outro teste não
+        # deixe pedido mínimo/política de entrega incompatíveis neste tenant.
+        config = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == 999
+        ).first()
+        if config is None:
+            config = ConfiguracaoRestaurante(
+                restaurante_id=999,
+                delivery_ativo=True,
+                tipos_pedido_ativos=["consumo_local", "retirada", "delivery"],
+                pedido_minimo=0.0,
+                tipo_taxa_entrega="fixa",
+                taxa_entrega_fixa=5.0,
+            )
+            db.add(config)
+        else:
+            config.delivery_ativo = True
+            config.tipos_pedido_ativos = ["consumo_local", "retirada", "delivery"]
+            config.pedido_minimo = 0.0
+            config.tipo_taxa_entrega = "fixa"
+            config.taxa_entrega_fixa = 5.0
+        db.commit()
+
         other_rest = db.query(Restaurante).filter(Restaurante.id == 998).first()
         if not other_rest:
             other_rest = Restaurante(
@@ -75,7 +99,7 @@ def test_setup():
         auth_token = create_access_token(subject=user.id, restaurante_id=999, role="admin")
         yield {"user": user, "token": auth_token, "rest_id": 999}
     finally:
-        current_restaurante_id.set(None)
+        current_restaurante_id.reset(token_var)
         db.close()
 
 
