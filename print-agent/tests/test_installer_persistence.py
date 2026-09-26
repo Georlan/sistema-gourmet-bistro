@@ -28,6 +28,7 @@ def test_linux_installer_has_persistence_update_and_uninstall():
     assert "simulator.py" in installer
     assert "endpoints.py" in installer
     assert "printer_profiles.py" in installer
+    assert "thermal_layout.py" in installer
     assert "transports.py" in installer
 
 
@@ -58,6 +59,7 @@ def test_windows_installer_has_persistence_update_and_uninstall():
     assert '"simulator.py"' in installer
     assert '"endpoints.py"' in installer
     assert '"printer_profiles.py"' in installer
+    assert '"thermal_layout.py"' in installer
     assert '"transports.py"' in installer
 
 
