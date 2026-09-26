@@ -151,6 +151,37 @@ def _shorten_compact_labels(lines: list[str], *, width: int) -> list[str]:
     return result
 
 
+def _is_separator(line: str) -> bool:
+    clean = _visible(line)
+    return bool(clean) and len(set(clean)) == 1 and clean[0] in "-="
+
+
+def _compact_customer_subtotals(lines: list[str]) -> list[str]:
+    """Economiza uma linha por cliente sem remover subtotal individual."""
+    result: list[str] = []
+    index = 0
+    while index < len(lines):
+        current = lines[index]
+        nxt = _visible(lines[index + 1]) if index + 1 < len(lines) else ""
+        after = lines[index + 2] if index + 2 < len(lines) else ""
+
+        if (
+            _is_separator(current)
+            and nxt.startswith("SUBTOTAL ")
+            and _is_separator(after)
+        ):
+            # O subtotal já separa semanticamente o grupo. Mantemos somente o
+            # separador posterior para delimitar o próximo cliente.
+            result.append(lines[index + 1])
+            result.append(after)
+            index += 3
+            continue
+
+        result.append(current)
+        index += 1
+    return result
+
+
 def _drop_decorative_blank_lines(lines: list[str]) -> list[str]:
     result: list[str] = []
     for line in lines:
@@ -182,6 +213,7 @@ def apply_layout_profile(
     if compact:
         lines = _compact_order_metadata(lines, width=width)
         lines = _shorten_compact_labels(lines, width=width)
+        lines = _compact_customer_subtotals(lines)
         lines = _drop_decorative_blank_lines(lines)
 
     rendered = "\n".join(lines)
