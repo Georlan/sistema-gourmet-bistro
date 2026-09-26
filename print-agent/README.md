@@ -94,6 +94,26 @@ O cliente não precisa escolher CUPS, RFCOMM, Spooler ou URI. Essas informaçõe
 ficam restritas ao diagnóstico técnico; para operação, o KÔMA apresenta a
 impressora pelo nome e estado, com USB/Bluetooth/Rede apenas como detalhe.
 
+### Fonte canônica e projeções por impressora
+
+O backend gera **um único documento canônico** para pedido, reimpressão, Conta
+da Mesa e demais vias. O agente não mantém um formatter por modelo de
+impressora. Em vez disso, cada `PrinterEndpoint` declara capabilities físicas
+e de apresentação, e o mesmo documento é projetado para o equipamento:
+
+- largura de papel e colunas seguras;
+- layout normal ou compacto;
+- suporte a corte e quantidade de feed;
+- uso ou não de double-height;
+- política de caracteres (`native_cp860` ou `ascii_safe`);
+- projeção semântica (`standard` ou `compact_58`).
+
+Assim, uma G250/80 mm preserva o documento rico já homologado, enquanto uma
+térmica compacta pode economizar papel, remover redundâncias e usar labels mais
+claros sem criar uma segunda implementação de negócio. Presets de modelos
+conhecidos apenas fornecem defaults; endpoints futuros podem informar suas
+capabilities sem alterar o renderer canônico.
+
 A partir da versão `2026.09.20.1`, o agente também instala a ponte local do
 simulador térmico em `127.0.0.1:17654-17664`. Ela só é usada pela bancada
 interna de engenharia e nunca envia bytes ao CUPS/USB durante a simulação.
