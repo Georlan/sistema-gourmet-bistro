@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "2026-09-block6",
+  "description": "Contrato canônico de produto, planos comerciais e capabilities do KÔMA.",
+  "plans": {
+    "pocket": {
+      "id": "pocket",
+      "name": "Kôma Pocket",
+      "price": 39.0,
+      "split_fee_rate": 0.0179,
+      "tagline": "Comece com o essencial por R$ 39/mês.",
+      "capabilities": [
+        "waiter_app"
+      ],
+      "features": [
+        "Mesas, comandas e balcão",
+        "App do Garçom para salão e comandas",
+        "Equipe, funções e permissões por cargo",
+        "Cardápio digital e QR Code com pedidos no PDV",
+        "Retirada e delivery no mesmo caixa",
+        "Fila de preparo na tela, sem impressora",
+        "Caixa, fechamento e resumo de vendas",
+        "Clientes e histórico de pedidos"
+      ],
+      "limitations": [
+        "Sem KDS e impressão automática",
+        "Sem estoque, fichas técnicas e financeiro completo",
+        "Sem app do entregador e fidelidade"
+      ]
+    },
+    "pro": {
+      "id": "pro",
+      "name": "Kôma Pro",
+      "price": 129.0,
+      "split_fee_rate": 0.005,
+      "tagline": "Seu restaurante cresceu. Sua taxa diminui.",
+      "recommended": true,
+      "capabilities": [
+        "advanced_reports",
+        "inventory",
+        "kds",
+        "printing",
+        "waiter_app"
+      ],
+      "features": [
+        "Tudo do Pocket",
+        "KDS e impressão automática",
+        "Estoque, fichas técnicas e financeiro",
+        "Relatórios completos para acompanhar o negócio"
+      ],
+      "limitations": [
+        "Sem app do entregador e fidelidade"
+      ]
+    },
+    "premium": {
+      "id": "premium",
+      "name": "Kôma Premium",
+      "price": 249.0,
+      "split_fee_rate": 0.002,
+      "tagline": "Mais volume, menor taxa.",
+      "capabilities": [
+        "advanced_reports",
+        "coupons",
+        "courier_app",
+        "inventory",
+        "kds",
+        "loyalty",
+        "printing",
+        "waiter_app"
+      ],
+      "features": [
+        "Tudo do Pro",
+        "App do entregador incluído",
+        "Pontos, cashback e cupons incluídos",
+        "Suporte prioritário"
+      ],
+      "limitations": []
+    }
+  },
+  "capabilities": {
+    "printing": {
+      "id": "printing",
+      "name": "Impressão e preparo físico",
+      "category": "impressao",
+      "description": "Roteamento e impressão térmica automática para cozinha e balcão."
+    },
+    "kds": {
+      "id": "kds",
+      "name": "KDS dedicado",
+      "category": "cozinha",
+      "description": "Tela de preparo de pedidos dedicada com fila e tempos."
+    },
+    "waiter_app": {
+      "id": "waiter_app",
+      "name": "App do Garçom",
+      "category": "salao",
+      "description": "Acesso operacional móvel do garçom para mesas e comandas."
+    },
+    "loyalty": {
+      "id": "loyalty",
+      "name": "Fidelidade e cashback",
+      "category": "clientes",
+      "description": "Programa de pontos, saldo de cashback e fidelização de clientes."
+    },
+    "coupons": {
+      "id": "coupons",
+      "name": "Cupons e promoções",
+      "category": "clientes",
+      "description": "Criação, ativação e validação de cupons promocionais."
+    },
+    "courier_app": {
+      "id": "courier_app",
+      "name": "App do Entregador (PWA)",
+      "category": "entrega",
+      "description": "PWA para entregadores visualizarem rotas, atualizarem status e confirmarem entregas."
+    },
+    "inventory": {
+      "id": "inventory",
+      "name": "Estoque & compras",
+      "category": "gestao",
+      "description": "Gestão de insumos, contagem de inventário e ficha técnica de produtos."
+    },
+    "advanced_reports": {
+      "id": "advanced_reports",
+      "name": "Relatórios avançados",
+      "category": "gestao",
+      "description": "DRE de vendas, indicadores operacionais e relatórios analíticos completos."
+    }
+  },
+  "navigation_rules": {
+    "protected_tabs": {
+      "estoque": "inventory",
+      "relatorios": "advanced_reports"
+    },
+    "protected_subtabs": {
+      "kds": "kds",
+      "impressao": "printing",
+      "garcom": "waiter_app",
+      "fidelidade": "loyalty",
+      "cupons": "coupons"
+    }
+  },
+  "endpoint_rules": {
+    "inventory": [
+      "/estoque/insumos",
+      "/estoque/movimentacoes",
+      "/estoque/inventario"
+    ],
+    "advanced_reports": [
+      "/relatorios/visao-geral",
+      "/relatorios/financeiro",
+      "/relatorios/produtos"
+    ],
+    "courier_app": [
+      "/comandas/motoboys/{motoboy_id}/gerar-link"
+    ],
+    "coupons": [
+      "/cupons"
+    ],
+    "printing": [
+      "/impressao/teste-extremo-garcom"
+    ]
+  },
+  "commercial_comparison_rules": [
+    {
+      "category": "Impressão & Cozinha",
+      "feature": "KDS Dedicado e Impressão Automática",
+      "capability_tie": "kds",
+      "expected_by_plan": {
+        "pocket": false,
+        "pro": true,
+        "premium": true
+      }
+    },
+    {
+      "category": "Gestão & Equipe",
+      "feature": "App do Garçom para Salão e Comandas",
+      "capability_tie": "waiter_app",
+      "expected_by_plan": {
+        "pocket": true,
+        "pro": true,
+        "premium": true
+      }
+    },
+    {
+      "category": "Gestão & Equipe",
+      "feature": "Relatórios Financeiros e DRE de Vendas",
+      "capability_tie": "advanced_reports",
+      "expected_by_plan": {
+        "pocket": false,
+        "pro": true,
+        "premium": true
+      }
+    },
+    {
+      "category": "Gestão & Equipe",
+      "feature": "Estoque e Fichas Técnicas",
+      "capability_tie": "inventory",
+      "expected_by_plan": {
+        "pocket": false,
+        "pro": true,
+        "premium": true
+      }
+    },
+    {
+      "category": "Entrega",
+      "feature": "App do Entregador",
+      "capability_tie": "courier_app",
+      "expected_by_plan": {
+        "pocket": false,
+        "pro": false,
+        "premium": true
+      }
+    },
+    {
+      "category": "Clientes",
+      "feature": "Pontos, Cashback e Cupons",
+      "capability_tie": "loyalty",
+      "expected_by_plan": {
+        "pocket": false,
+        "pro": false,
+        "premium": true
+      }
+    }
+  ]
+}

@@ -1402,8 +1402,10 @@ class OrderApplicationService:
                 address=comanda.delivery_endereco,
             )
 
+        fulfillment = normalize_to_fulfillment(comanda.tipo)
+
         delivery_dto = None
-        if comanda.delivery_endereco or comanda.tipo in {"Delivery", "Entrega"}:
+        if fulfillment == FulfillmentType.DELIVERY:
             delivery_dto = DeliveryDTO(
                 address=comanda.delivery_endereco,
                 fee=delivery_fee,
@@ -1413,7 +1415,7 @@ class OrderApplicationService:
         order_id_val = lancamento.id if lancamento else comanda.id
         status_val = (
             comanda.delivery_status
-            if comanda.tipo in {"Delivery", "Entrega"} and comanda.delivery_status in {"transito", "saiu_entrega"}
+            if fulfillment == FulfillmentType.DELIVERY and comanda.delivery_status in {"transito", "saiu_entrega"}
             else (lancamento.status if lancamento and lancamento.status else (comanda.delivery_status or "pendente"))
         )
 
@@ -1430,7 +1432,7 @@ class OrderApplicationService:
             sequence=sequence,
             comanda_id=comanda.id,
             channel=channel_val,
-            fulfillment=to_legacy_fulfillment(normalize_to_fulfillment(comanda.tipo)),
+            fulfillment=to_legacy_fulfillment(fulfillment),
             status=status_val,
             total=quote.total if quote else total_calc,
             subtotal=quote.subtotal if quote else subtotal_calc,
