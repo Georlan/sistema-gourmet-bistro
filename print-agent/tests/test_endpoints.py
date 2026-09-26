@@ -46,6 +46,8 @@ class TestPrinterEndpointModel:
             "supports_cut": True,
             "feed_lines": 3,
             "allow_double_height": True,
+            "layout_mode": "standard",
+            "charset_mode": "native",
         }
 
     def test_known_printer_models_receive_paper_profiles(self):
@@ -67,6 +69,8 @@ class TestPrinterEndpointModel:
         assert compact.options["supports_cut"] is False
         assert compact.options["feed_lines"] == 2
         assert compact.options["allow_double_height"] is False
+        assert compact.options["layout_mode"] == "compact"
+        assert compact.options["charset_mode"] == "ascii_safe"
         assert wide.paper_width_mm == 80
         assert wide.columns == 48
         assert wide.paper_profile == "thermal-80mm"
@@ -88,6 +92,26 @@ class TestPrinterEndpointModel:
         assert endpoint.paper_profile == "custom-80mm"
         assert endpoint.options["compact_layout"] is False
         assert endpoint.options["supports_cut"] is True
+        assert endpoint.options["layout_mode"] == "standard"
+        assert endpoint.options["charset_mode"] == "native"
+
+    def test_generic_58mm_endpoint_uses_compact_capabilities_without_model_hardcode(self):
+        endpoint = PrinterEndpoint(
+            name="Thermal Generic",
+            transport="tcp",
+            address="192.168.1.50:9100",
+            options={
+                "paper_width_mm": 58,
+                "columns": 32,
+            },
+        )
+
+        assert endpoint.paper_width_mm == 58
+        assert endpoint.columns == 32
+        assert endpoint.options["layout_mode"] == "compact"
+        assert endpoint.options["charset_mode"] == "ascii_safe"
+        assert endpoint.options["supports_cut"] is False
+        assert endpoint.options["allow_double_height"] is False
 
     def test_endpoint_serialization_roundtrip(self):
         original = PrinterEndpoint(
