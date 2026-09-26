@@ -11,7 +11,7 @@ on:
       - 'backend/tests/test_product_contract_gate.py'
       - 'src/config/subscriptionPlans.ts'
       - 'src/components/caixa/navigation/**'
-      - 'src/landing/sections/Plans.tsx'
+      - 'src/landing/sections/**'
       - 'src/legal/**'
       - 'tests/productContractGate.test.ts'
       - '.github/workflows/product-contract-gate.yml'

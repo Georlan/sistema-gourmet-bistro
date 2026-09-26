@@ -196,3 +196,45 @@ test('Product Contract Gate — filtra a árvore de navegação da sidebar de ac
   assert.equal(proItemIds.includes('estoque'), true);
   assert.equal(proItemIds.includes('relatorios'), true);
 });
+
+test('Product Contract Gate — endpoint_rules é um catálogo executável abrangendo as capabilities essenciais', () => {
+  const rules = contract.endpoint_rules;
+  assert.ok(Array.isArray(rules) && rules.length >= 5, 'endpoint_rules deve ser uma lista com pelo menos 5 regras');
+
+  const requiredCapabilities = ['inventory', 'advanced_reports', 'courier_app', 'coupons', 'printing'];
+  const coveredCapabilities = new Set(rules.map((r: { capability: string }) => r.capability));
+
+  for (const cap of requiredCapabilities) {
+    assert.ok(
+      coveredCapabilities.has(cap),
+      `endpoint_rules está faltando cobertura para a capability '${cap}'`
+    );
+  }
+
+  for (const rule of rules) {
+    assert.ok(rule.endpoint && rule.endpoint.startsWith('/'), `Endpoint inválido na regra: ${JSON.stringify(rule)}`);
+    assert.ok(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].includes(rule.method), `Método inválido na regra: ${JSON.stringify(rule)}`);
+    assert.ok(rule.capability in contract.capabilities, `Capability não canônica na regra: ${rule.capability}`);
+  }
+});
+
+test('Product Contract Gate — seções da landing (Capabilities e Ecosystem) preservam a verdade comercial', () => {
+  const capabilitiesSrc = readFileSync(new URL('../src/landing/sections/Capabilities.tsx', import.meta.url), 'utf-8');
+  const ecosystemSrc = readFileSync(new URL('../src/landing/sections/Ecosystem.tsx', import.meta.url), 'utf-8');
+
+  // Capabilities.tsx:
+  // 1. Estoque e financeiro apenas no Pro e Premium (não no Pocket)
+  assert.match(capabilitiesSrc, /ESTOQUE E FINANCEIRO — PRO E PREMIUM/);
+  // 2. Pontos, cashback e cupons apenas no Premium
+  assert.match(capabilitiesSrc, /PONTOS E CASHBACK — PREMIUM/);
+  assert.match(capabilitiesSrc, /CUPONS — PREMIUM/);
+  // 3. Impressão e KDS apenas no Pro e Premium
+  assert.match(capabilitiesSrc, /IMPRESSÃO E KDS — PRO E PREMIUM/);
+  // 4. App do entregador apenas no Premium
+  assert.match(capabilitiesSrc, /APP DO ENTREGADOR — PREMIUM/);
+
+  // Ecosystem.tsx:
+  // 1. Fila de preparo na tela para todos, mas KDS e impressão automática apenas Pro e Premium
+  assert.match(ecosystemSrc, /A fila de preparo existe em todos os planos\. KDS e impressão automática ficam disponíveis no Pro e Premium\./);
+  assert.match(ecosystemSrc, /Impressão Pro\+/);
+});

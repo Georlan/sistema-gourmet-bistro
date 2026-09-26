@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+import { SUBSCRIPTION_PLANS } from "../src/config/subscriptionPlans";
+
 const tenantsTab = readFileSync("src/super-admin/SuperAdminTenantsTab.tsx", "utf8");
 const onboardingModal = readFileSync("src/super-admin/SuperAdminNewTenantModal.tsx", "utf8");
-const subscriptionPlans = readFileSync("src/config/subscriptionPlans.ts", "utf8");
 
 test("Super Admin Phase 2 usa o endpoint canônico de onboarding", () => {
   assert.match(
@@ -27,9 +28,9 @@ test("Super Admin Phase 2 usa o endpoint canônico de onboarding", () => {
 test("Super Admin Phase 2 usa o catálogo comercial oficial", () => {
   assert.match(onboardingModal, /SUBSCRIPTION_PLANS/);
   assert.match(tenantsTab, /SUBSCRIPTION_PLANS/);
-  assert.match(subscriptionPlans, /price:\s*39,/);
-  assert.match(subscriptionPlans, /price:\s*129/);
-  assert.match(subscriptionPlans, /price:\s*249/);
+  assert.equal(SUBSCRIPTION_PLANS.find(p => p.id === "pocket")?.price, 39);
+  assert.equal(SUBSCRIPTION_PLANS.find(p => p.id === "pro")?.price, 129);
+  assert.equal(SUBSCRIPTION_PLANS.find(p => p.id === "premium")?.price, 249);
 
   assert.doesNotMatch(onboardingModal, /formatCurrency\(item\.price\)/);
   assert.doesNotMatch(onboardingModal, /formatPercentage\(item\.splitFeeRate\)/);

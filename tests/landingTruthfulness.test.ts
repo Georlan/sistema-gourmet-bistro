@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
+import { SUBSCRIPTION_PLANS } from '../src/config/subscriptionPlans';
+
 const source = (path: string) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
 test('landing hero does not advertise plan-specific features as universal', () => {
@@ -40,7 +42,7 @@ test('landing SEO uses the public root and qualifies advanced features', () => {
 
 test('plan cards expose limitations and a canonical feature comparison without duplicating commercial truth', () => {
   const plans = source('src/landing/sections/Plans.tsx');
-  const catalog = source('src/config/subscriptionPlans.ts');
+  const pocket = SUBSCRIPTION_PLANS.find((p) => p.id === 'pocket');
 
   assert.match(plans, /PLAN_COMPARISON_MATRIX/);
   assert.match(plans, /NÃO INCLUI NESTE PLANO/);
@@ -49,8 +51,8 @@ test('plan cards expose limitations and a canonical feature comparison without d
   assert.match(plans, /Nos planos Pocket, Pro e Premium elegíveis/);
   assert.match(plans, /isenta somente o componente fixo/);
   assert.match(plans, /taxa KÔMA continua aplicável quando houver pagamento online elegível/);
-  assert.match(catalog, /Sem KDS e impressão automática/);
-  assert.match(catalog, /Sem app do entregador e fidelidade/);
+  assert.ok(pocket?.limitations.includes('Sem KDS e impressão automática'));
+  assert.ok(pocket?.limitations.includes('Sem app do entregador e fidelidade'));
 });
 
 test('plan comparison stays collapsed and exposes a keyboard-friendly horizontal viewport', () => {

@@ -11,6 +11,7 @@ from app.services.product_contract import (
     load_product_contract,
     run_full_contract_validation,
     validate_backend_entitlements,
+    validate_endpoint_rules,
     validate_frontend_against_contract,
     validate_navigation_rules,
 )
@@ -134,6 +135,11 @@ def test_navigation_rules_reference_known_capabilities():
     validate_navigation_rules()
 
 
+def test_endpoint_rules_reference_known_capabilities():
+    """Valida que o catálogo executável de endpoint_rules está íntegro."""
+    validate_endpoint_rules()
+
+
 def test_contract_violation_produces_clear_human_readable_error():
     """Valida que desvios hipotéticos de contrato resultam em mensagens claras e acionáveis."""
     contract = load_product_contract()
@@ -154,48 +160,88 @@ def test_contract_violation_produces_clear_human_readable_error():
 
 
 def test_endpoints_enforce_plan_capabilities_fail_closed():
-    """Valida que os endpoints protegidos por capabilities do contrato rejeitam 403 no Pocket e aceitam no Pro/Premium."""
-    pocket_headers = _auth_headers(POCKET_TENANT_ID)
-    pro_headers = _auth_headers(PRO_TENANT_ID)
-    premium_headers = _auth_headers(PREMIUM_TENANT_ID)
+    """Valida que todos os endpoints do catálogo endpoint_rules rejeitam 403 fail-closed para planos sem capability e aceitam para planos com capability."""
+    contract = load_product_contract()
+    rules = contract.get("endpoint_rules", [])
+    assert len(rules) > 0, "endpoint_rules deve conter regras executáveis"
 
-    # 1. Estoque (requer 'inventory' - ausente no Pocket, presente no Pro/Premium)
-    assert client.get("/estoque/insumos", headers=pocket_headers).status_code == 403
-    assert client.get("/estoque/insumos", headers=pro_headers).status_code == 200
-    assert client.get("/estoque/insumos", headers=premium_headers).status_code == 200
-
-    # 2. Relatórios avançados (requer 'advanced_reports' - ausente no Pocket, presente no Pro/Premium)
-    assert client.get("/relatorios/visao-geral", headers=pocket_headers).status_code == 403
-    assert client.get("/relatorios/visao-geral", headers=pro_headers).status_code == 200
-    assert client.get("/relatorios/visao-geral", headers=premium_headers).status_code == 200
-
-    # 3. Courier App / Link PWA (requer 'courier_app' - exclusivo do Premium)
-    # Pocket e Pro operam entregas internamente mas NÃO têm courier_app (403)
-    # Premium possui courier_app (200)
     with SessionLocal() as db:
-        mb_pocket = db.query(Motoboy).filter(Motoboy.restaurante_id == POCKET_TENANT_ID).first()
-        mb_pro = db.query(Motoboy).filter(Motoboy.restaurante_id == PRO_TENANT_ID).first()
-        mb_premium = db.query(Motoboy).filter(Motoboy.restaurante_id == PREMIUM_TENANT_ID).first()
+        mb_ids = {
+            POCKET_TENANT_ID: db.query(Motoboy).filter(Motoboy.restaurante_id == POCKET_TENANT_ID).first().id,
+            PRO_TENANT_ID: db.query(Motoboy).filter(Motoboy.restaurante_id == PRO_TENANT_ID).first().id,
+            PREMIUM_TENANT_ID: db.query(Motoboy).filter(Motoboy.restaurante_id == PREMIUM_TENANT_ID).first().id,
+        }
 
-    pocket_link = client.post(f"/comandas/motoboys/{mb_pocket.id}/gerar-link", headers=pocket_headers)
-    assert pocket_link.status_code == 403
+    tenant_map = {
+        "pocket": (POCKET_TENANT_ID, _auth_headers(POCKET_TENANT_ID, role="admin")),
+        "pro": (PRO_TENANT_ID, _auth_headers(PRO_TENANT_ID, role="admin")),
+        "premium": (PREMIUM_TENANT_ID, _auth_headers(PREMIUM_TENANT_ID, role="admin")),
+    }
 
-    pro_link = client.post(f"/comandas/motoboys/{mb_pro.id}/gerar-link", headers=pro_headers)
-    assert pro_link.status_code == 403
+    def _exec(method: str, path: str, headers: dict[str, str], payload: dict | None = None):
+        if method == "GET":
+            return client.get(path, headers=headers)
+        elif method == "POST":
+            return client.post(path, headers=headers, json=payload or {})
+        elif method == "PUT":
+            return client.put(path, headers=headers, json=payload or {})
+        elif method == "DELETE":
+            return client.delete(path, headers=headers)
+        raise ValueError(f"Método não suportado: {method}")
 
-    prem_link = client.post(f"/comandas/motoboys/{mb_premium.id}/gerar-link", headers=premium_headers)
-    assert prem_link.status_code == 200
-    assert "token" in prem_link.json()
+    for rule in rules:
+        cap = rule["capability"]
+        method = rule["method"]
+        endpoint_template = rule["endpoint"]
+        payload = rule.get("payload")
+
+        for plan_id, (tenant_id, headers) in tenant_map.items():
+            path = endpoint_template.replace("{motoboy_id}", str(mb_ids[tenant_id]))
+            resp = _exec(method, path, headers, payload)
+
+            plan_caps = contract["plans"][plan_id]["capabilities"]
+            if cap in plan_caps:
+                assert resp.status_code in (200, 201), (
+                    f"Plano '{plan_id}' deveria ter acesso à capability '{cap}' no endpoint {method} {path}, "
+                    f"mas retornou {resp.status_code}: {resp.text}"
+                )
+            else:
+                assert resp.status_code == 403, (
+                    f"Plano '{plan_id}' NÃO possui capability '{cap}' e deveria falhar 403 fail-closed em {method} {path}, "
+                    f"mas retornou {resp.status_code}: {resp.text}"
+                )
 
 
 def test_rbac_and_plan_capability_remain_distinct_and_orthogonal():
     """Valida que ter capability no plano NÃO concede acesso se o usuário não tiver permissão de cargo (RBAC)."""
-    # Pro tem capability 'inventory', mas garçom não tem permissão RBAC para gerir estoque
-    pro_waiter_headers = _auth_headers(PRO_TENANT_ID, role="garcom")
-    assert client.get("/estoque/insumos", headers=pro_waiter_headers).status_code == 403
+    contract = load_product_contract()
+    rules = contract.get("endpoint_rules", [])
 
-    # Pro tem capability 'advanced_reports', mas garçom não pode ver relatórios
-    assert client.get("/relatorios/visao-geral", headers=pro_waiter_headers).status_code == 403
+    with SessionLocal() as db:
+        mb_premium = db.query(Motoboy).filter(Motoboy.restaurante_id == PREMIUM_TENANT_ID).first().id
+
+    waiter_headers_premium = _auth_headers(PREMIUM_TENANT_ID, role="garcom")
+
+    # Garçom no Premium possui todas as capabilities de plano do restaurante,
+    # mas NÃO possui privilégios administrativos de cargo. Cada endpoint restrito
+    # deve rejeitar 403 por falta de permissão RBAC.
+    for rule in rules:
+        cap = rule["capability"]
+        method = rule["method"]
+        path = rule["endpoint"].replace("{motoboy_id}", str(mb_premium))
+        payload = rule.get("payload")
+
+        if method == "GET":
+            resp = client.get(path, headers=waiter_headers_premium)
+        elif method == "POST":
+            resp = client.post(path, headers=waiter_headers_premium, json=payload or {})
+        else:
+            continue
+
+        assert resp.status_code == 403, (
+            f"Usuário 'garcom' em tenant Premium deveria ter 403 (RBAC) em {method} {path} "
+            f"(capability '{cap}'), mas retornou {resp.status_code}: {resp.text}"
+        )
 
 
 def test_tenant_specific_capability_overrides_do_not_break_contract():

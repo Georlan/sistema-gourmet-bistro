@@ -127,164 +127,58 @@ def validate_backend_entitlements(contract_data: dict[str, Any] | None = None) -
             )
 
 
-def parse_frontend_plan_features(source: str) -> dict[str, frozenset[str]]:
-    """Extrai PLAN_FEATURES de src/config/subscriptionPlans.ts."""
-    pattern = r"const\s+PLAN_FEATURES\s*:[^=]+=\s*\{([\s\S]*?)\n\};"
-    match = re.search(pattern, source)
-    if not match:
-        raise ProductContractViolation("Não foi possível localizar 'const PLAN_FEATURES' em subscriptionPlans.ts")
-
-    block = match.group(1)
-    plan_features: dict[str, frozenset[str]] = {}
-
-    for line in block.strip().split("\n"):
-        line = line.strip().rstrip(",")
-        if not line or ":" not in line:
-            continue
-        p_name, p_set = line.split(":", 1)
-        p_name = p_name.strip()
-        items = re.findall(r"'([^']+)'", p_set)
-        plan_features[p_name] = frozenset(items)
-
-    return plan_features
-
-
-def parse_frontend_subscription_plans(source: str) -> dict[str, dict[str, Any]]:
-    """Extrai SUBSCRIPTION_PLANS de src/config/subscriptionPlans.ts."""
-    pattern = r"export\s+const\s+SUBSCRIPTION_PLANS:\s*SubscriptionPlan\[\]\s*=\s*\[(.*?)\n\];"
-    match = re.search(pattern, source, re.DOTALL)
-    if not match:
-        raise ProductContractViolation("Não foi possível localizar 'SUBSCRIPTION_PLANS' em subscriptionPlans.ts")
-
-    plans_block = match.group(1)
-    plan_chunks = re.findall(r"\{\s*id:\s*'([^']+)'(.*?)\}", plans_block, re.DOTALL)
-    result = {}
-    for plan_id, chunk in plan_chunks:
-        price_match = re.search(r"price:\s*([0-9.]+)", chunk)
-        rate_match = re.search(r"splitFeeRate:\s*([0-9.]+)", chunk)
-        if not price_match or not rate_match:
-            continue
-        result[plan_id] = {
-            "price": Decimal(price_match.group(1)),
-            "splitFeeRate": Decimal(rate_match.group(1)),
-        }
-    return result
-
-
-def parse_frontend_comparison_matrix(source: str) -> list[dict[str, Any]]:
-    """Extrai PLAN_COMPARISON_MATRIX de src/config/subscriptionPlans.ts."""
-    pattern = r"export\s+const\s+PLAN_COMPARISON_MATRIX:\s*FeatureComparisonRow\[\]\s*=\s*\[(.*?)\n\];"
-    match = re.search(pattern, source, re.DOTALL)
-    if not match:
-        raise ProductContractViolation("Não foi possível localizar 'PLAN_COMPARISON_MATRIX' em subscriptionPlans.ts")
-
-    block = match.group(1)
-    rows = []
-    row_pattern = r"\{\s*category:\s*'([^']+)',\s*feature:\s*'([^']+)',\s*pocket:\s*([^,]+),\s*pro:\s*([^,]+),\s*premium:\s*([^ }]+)"
-    for m in re.finditer(row_pattern, block):
-        category, feature, pocket, pro, premium = m.groups()
-        def parse_val(v: str) -> Any:
-            v = v.strip().strip("'\"")
-            if v == "true":
-                return True
-            if v == "false":
-                return False
-            return v
-
-        rows.append({
-            "category": category,
-            "feature": feature,
-            "pocket": parse_val(pocket),
-            "pro": parse_val(pro),
-            "premium": parse_val(premium),
-        })
-    return rows
-
-
 def validate_frontend_against_contract(contract_data: dict[str, Any] | None = None) -> None:
-    """Valida o catálogo estático frontend (subscriptionPlans.ts) contra o contrato canônico."""
+    """Valida o catálogo frontend e a matriz canônica contra o contrato de produto."""
     if not FRONTEND_CATALOG_PATH.exists():
         raise FileNotFoundError(f"Arquivo frontend não encontrado: {FRONTEND_CATALOG_PATH}")
 
     source = FRONTEND_CATALOG_PATH.read_text(encoding="utf-8")
+    if "product-contract.json" not in source:
+        raise ProductContractViolation(
+            "src/config/subscriptionPlans.ts deve importar product-contract.json como fonte única de verdade."
+        )
+
     contract = contract_data or load_product_contract()
-    contract_plans = get_contract_plans(contract)
+    matrix = contract.get("comparison_matrix", [])
+    if not isinstance(matrix, list) or len(matrix) == 0:
+        raise ProductContractViolation(
+            "product-contract.json deve conter 'comparison_matrix' estruturada e não vazia."
+        )
 
-    # 1. PLAN_FEATURES
-    frontend_features = parse_frontend_plan_features(source)
-    for plan_id, plan in contract_plans.items():
-        if plan_id not in frontend_features:
-            raise ProductContractViolation(
-                f"Frontend PLAN_FEATURES não contém o plano '{plan_id}' definido no contrato"
-            )
-        f_caps = frontend_features[plan_id]
-        expected_caps = plan.capabilities
-
-        missing = expected_caps - f_caps
-        if missing:
-            raise ProductContractViolation(
-                f"Frontend PLAN_FEATURES['{plan_id}'] está faltando capabilities: {sorted(missing)}"
-            )
-
-        unexpected = f_caps - expected_caps
-        if unexpected:
-            raise ProductContractViolation(
-                f"Frontend PLAN_FEATURES['{plan_id}'] possui capabilities inesperadas: {sorted(unexpected)}"
-            )
-
-    # 2. SUBSCRIPTION_PLANS preços e splitFeeRate
-    frontend_plans = parse_frontend_subscription_plans(source)
-    for plan_id, plan in contract_plans.items():
-        if plan_id not in frontend_plans:
-            raise ProductContractViolation(
-                f"Frontend SUBSCRIPTION_PLANS não contém o plano '{plan_id}'"
-            )
-        f_plan = frontend_plans[plan_id]
-        if f_plan["price"] != plan.price:
-            raise ProductContractViolation(
-                f"Frontend SUBSCRIPTION_PLANS['{plan_id}'] divergiu no preço: "
-                f"frontend={f_plan['price']}, contrato={plan.price}"
-            )
-        if f_plan["splitFeeRate"] != plan.split_fee_rate:
-            raise ProductContractViolation(
-                f"Frontend SUBSCRIPTION_PLANS['{plan_id}'] divergiu no splitFeeRate: "
-                f"frontend={f_plan['splitFeeRate']}, contrato={plan.split_fee_rate}"
-            )
-
-    # 3. PLAN_COMPARISON_MATRIX vs commercial_comparison_rules
-    matrix = parse_frontend_comparison_matrix(source)
+    # Valida integridade da comparison_matrix contra as regras canônicas de capability
     comparison_rules = contract.get("commercial_comparison_rules", [])
-
     for rule in comparison_rules:
         feature_name = rule["feature"]
-        matching_rows = [r for r in matrix if r["feature"] == feature_name]
+        matching_rows = [r for r in matrix if r.get("feature") == feature_name]
         if not matching_rows:
             raise ProductContractViolation(
-                f"Feature comercial '{feature_name}' exigida pelo contrato não foi encontrada em PLAN_COMPARISON_MATRIX"
+                f"Feature comercial '{feature_name}' exigida pelo contrato não foi encontrada em comparison_matrix"
             )
         row = matching_rows[0]
         expected = rule["expected_by_plan"]
         for p in ("pocket", "pro", "premium"):
-            if row[p] != expected[p]:
+            if row.get(p) != expected[p]:
                 raise ProductContractViolation(
-                    f"PLAN_COMPARISON_MATRIX divergiu para feature '{feature_name}' no plano '{p}': "
-                    f"declarado={row[p]}, contrato={expected[p]}"
+                    f"comparison_matrix divergiu para feature '{feature_name}' no plano '{p}': "
+                    f"declarado={row.get(p)}, contrato={expected[p]}"
                 )
 
 
 def validate_navigation_rules(contract_data: dict[str, Any] | None = None) -> None:
-    """Valida que todas as regras de navegação utilizam capabilities conhecidas."""
+    """Valida bidirecionalmente as regras de navegação contra capabilities conhecidas."""
     contract = contract_data or load_product_contract()
     known_caps = frozenset(contract.get("capabilities", {}).keys())
     nav_rules = contract.get("navigation_rules", {})
 
-    for tab, cap in nav_rules.get("protected_tabs", {}).items():
+    protected_tabs = nav_rules.get("protected_tabs", {})
+    for tab, cap in protected_tabs.items():
         if cap not in known_caps:
             raise ProductContractViolation(
                 f"Regra de navegação da tab '{tab}' referencia capability desconhecida: '{cap}'"
             )
 
-    for subtab, cap in nav_rules.get("protected_subtabs", {}).items():
+    protected_subtabs = nav_rules.get("protected_subtabs", {})
+    for subtab, cap in protected_subtabs.items():
         if cap not in known_caps:
             raise ProductContractViolation(
                 f"Regra de navegação da subtab '{subtab}' referencia capability desconhecida: '{cap}'"
@@ -299,6 +193,41 @@ def validate_navigation_rules(contract_data: dict[str, Any] | None = None) -> No
                 f"cashierNavigation.ts possui requiredFeature não registrada no contrato: {sorted(invalid_features)}"
             )
 
+        # Validação bidirecional: cada tab protegida no contrato deve estar referenciada em cashierNavigation.ts
+        for tab in protected_tabs:
+            if f"tab: '{tab}'" not in nav_source and f"id: '{tab}'" not in nav_source:
+                raise ProductContractViolation(
+                    f"Tab protegida no contrato '{tab}' não foi encontrada em cashierNavigation.ts"
+                )
+
+
+def validate_endpoint_rules(contract_data: dict[str, Any] | None = None) -> None:
+    """Valida que o catálogo executável de endpoint_rules está íntegro e aponta para capabilities canônicas."""
+    contract = contract_data or load_product_contract()
+    known_caps = frozenset(contract.get("capabilities", {}).keys())
+    rules = contract.get("endpoint_rules", [])
+
+    if not isinstance(rules, list) or len(rules) == 0:
+        raise ProductContractViolation("endpoint_rules deve ser uma lista não vazia de regras executáveis.")
+
+    for i, rule in enumerate(rules):
+        cap = rule.get("capability")
+        endpoint = rule.get("endpoint")
+        method = rule.get("method")
+
+        if not cap or cap not in known_caps:
+            raise ProductContractViolation(
+                f"Regra de endpoint #{i} referencia capability inválida ou ausente: '{cap}'"
+            )
+        if not endpoint or not endpoint.startswith("/"):
+            raise ProductContractViolation(
+                f"Regra de endpoint #{i} possui caminho inválido: '{endpoint}'"
+            )
+        if method not in ("GET", "POST", "PUT", "DELETE", "PATCH"):
+            raise ProductContractViolation(
+                f"Regra de endpoint #{i} possui método HTTP inválido: '{method}'"
+            )
+
 
 def run_full_contract_validation() -> None:
     """Executa a validação completa de todas as superfícies contra o contrato canônico."""
@@ -306,3 +235,5 @@ def run_full_contract_validation() -> None:
     validate_backend_entitlements(contract)
     validate_frontend_against_contract(contract)
     validate_navigation_rules(contract)
+    validate_endpoint_rules(contract)
+
