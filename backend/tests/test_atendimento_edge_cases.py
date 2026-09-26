@@ -400,16 +400,16 @@ def test_partial_full_and_table_account_prints_use_the_new_identity_semantics():
             apenas_valores=True,
             printed_by="Operador Edge",
         )
-        assert "CONTA DA MESA" in table_account
-        assert "FECHAMENTO" not in table_account
+        assert "FECHAMENTO DA MESA" in table_account
         # Sem ConfiguracaoRestaurante no fixture, o cabeçalho canônico usa o fallback Kôma.
         assert "KÔMA GOURMET BISTRÔ" in table_account
         assert "CONTA: #46" in table_account
         assert "MESA: 1" in table_account
-        assert "ABERTURA:" in table_account
-        assert "DATA:" in table_account
-        assert "HORA:" in table_account
-        assert "IMPRESSO POR: OPERADOR EDGE" in table_account
+        assert "ABERTA:" in table_account
+        assert "IMPRESSA:" in table_account
+        assert "OPERADOR: OPERADOR EDGE" in table_account
+        assert "ABERTURA:" not in table_account
+        assert "IMPRESSO POR:" not in table_account
         assert "PEDIDO: #" not in table_account
         db.commit()
     finally:
@@ -434,11 +434,11 @@ def test_merged_table_account_lists_both_account_families_without_listing_launch
             apenas_valores=True,
             printed_by="Operador Edge",
         )
-        assert "CONTA DA MESA" in table_account
+        assert "FECHAMENTO DA MESA" in table_account
         assert "CONTAS: #46 + #47" in table_account or "CONTAS: #47 + #46" in table_account
         assert "PEDIDO: #46-A" not in table_account
         assert "PEDIDO: #47-A" not in table_account
-        assert "IMPRESSO POR: OPERADOR EDGE" in table_account
+        assert "OPERADOR: OPERADOR EDGE" in table_account
         db.commit()
     finally:
         db.close()
