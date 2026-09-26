@@ -431,7 +431,7 @@ class PrintingApplicationService:
                 delivery_neighborhood=(comanda.delivery_bairro if is_delivery and is_primary else None),
                 payment_method=(
                     comanda.delivery_forma_pagamento
-                    if payment_required
+                    if is_primary and (payment_required or is_online_order)
                     else None
                 ),
                 change_for=(
@@ -455,11 +455,13 @@ class PrintingApplicationService:
                     else 0.0
                 ),
                 online_payment_status=(
-                    comanda.online_payment_status if is_primary else None
+                    comanda.online_payment_status
+                    if is_primary and (payment_required or is_online_order)
+                    else None
                 ),
                 amount_paid=(
                     float(comanda.valor_pago or 0.0)
-                    if payment_required
+                    if is_primary and (payment_required or is_online_order)
                     else 0.0
                 ),
                 amount_due=(
