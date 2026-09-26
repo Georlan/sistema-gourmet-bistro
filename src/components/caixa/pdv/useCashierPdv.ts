@@ -357,6 +357,7 @@ export function useCashierPdv({
           : 'producao' as const,
         deliveryAddress: orderType === 'delivery' ? deliveryAddress : null,
         deliveryTax: orderType === 'delivery' ? Number(deliveryTaxa || 0) : 0,
+        paymentMethod: orderType === 'dine_in' ? null : paymentMethod,
         origemOperacional: 'caixa' as const,
         mesaOrigemId: null,
         mesaTransferidaDe: null,
