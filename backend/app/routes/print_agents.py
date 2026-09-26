@@ -387,6 +387,21 @@ def _is_printer_present_entry(printer: Mapping[str, Any]) -> bool:
     return bool(printer.get("present") is True)
 
 
+def _is_printer_dispatchable_entry(printer: Mapping[str, Any]) -> bool:
+    """Indica que o agente consegue tentar o transporte sem fingir conexão."""
+    if not isinstance(printer, Mapping):
+        return False
+    connection = str(printer.get("connection") or "unknown").lower()
+    if connection == "bluetooth":
+        return bool(
+            printer.get("configured") is True
+            and printer.get("paired") is True
+            and printer.get("spp") is True
+            and printer.get("dispatchable", True) is True
+        )
+    return _is_printer_ready_entry(printer)
+
+
 def _agent_printer_state(
     agent: PrintAgentToken,
     now: datetime.datetime,
@@ -431,6 +446,11 @@ def _agent_printer_state(
         for printer in printers
         if _is_printer_ready_entry(printer)
     ]
+    dispatchable_printers = [
+        printer
+        for printer in printers
+        if _is_printer_dispatchable_entry(printer)
+    ]
     return {
         "online": online,
         "heartbeat_age_seconds": heartbeat_age,
@@ -444,6 +464,12 @@ def _agent_printer_state(
         ),
         "ready_printer_count": (
             len(ready_printers) if diagnostics_fresh else 0
+        ),
+        "printer_dispatchable": (
+            diagnostics_fresh and bool(dispatchable_printers)
+        ),
+        "dispatchable_printer_count": (
+            len(dispatchable_printers) if diagnostics_fresh else 0
         ),
         "supports_usb_commands": (
             diagnostics_fresh and "connect_usb" in capabilities
@@ -465,6 +491,21 @@ def _restaurant_has_ready_printer(
     ).all()
     return any(
         _agent_printer_state(agent, now)["printer_ready"]
+        for agent in agents
+    )
+
+
+def _restaurant_has_dispatchable_printer(
+    db: Session,
+    restaurante_id: int,
+    now: datetime.datetime,
+) -> bool:
+    agents = db.query(PrintAgentToken).filter(
+        PrintAgentToken.restaurante_id == restaurante_id,
+        PrintAgentToken.ativo == True,
+    ).all()
+    return any(
+        _agent_printer_state(agent, now)["printer_dispatchable"]
         for agent in agents
     )
 
@@ -858,6 +899,7 @@ class DetectedPrinterReport(BaseModel):
     trusted: bool = False
     connected: bool = False
     spp: bool = False
+    dispatchable: bool = False
 
 
 class PrinterEndpointReport(BaseModel):
@@ -1742,7 +1784,7 @@ def inject_print_job(
         req.source_type.strip().casefold().startswith("teste")
         or "TESTE REAL DO KÔMA PRINT" in req.payload_text.upper()
     )
-    if is_test_print and not _restaurant_has_ready_printer(
+    if is_test_print and not _restaurant_has_dispatchable_printer(
         db,
         rest_id,
         datetime.datetime.now(datetime.timezone.utc),
@@ -1953,7 +1995,7 @@ def get_next_job(
     Libera automaticamente jobs travados em 'claimed' há mais de 5 minutos.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
-    if not _agent_printer_state(agent, now)["printer_ready"]:
+    if not _agent_printer_state(agent, now)["printer_dispatchable"]:
         return None
 
     # Compatibilidade com agentes antigos. Agentes novos usam /jobs/claim-next,
@@ -2002,7 +2044,7 @@ def claim_next_job(
     disponível para instalações que ainda não atualizaram o agente.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
-    if not _agent_printer_state(agent, now)["printer_ready"]:
+    if not _agent_printer_state(agent, now)["printer_dispatchable"]:
         return None
 
     claimed_jobs = _claim_pending_jobs(db, agent, now, limit=1)
@@ -2022,7 +2064,7 @@ def claim_job_batch(
     ordem da impressora; o lote elimina apenas a espera de rede entre eles.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
-    if not _agent_printer_state(agent, now)["printer_ready"]:
+    if not _agent_printer_state(agent, now)["printer_dispatchable"]:
         return []
     return _claim_pending_jobs(db, agent, now, limit=limit)
 
@@ -2038,7 +2080,7 @@ def claim_job(
     Garante que dois agentes concorrentes NUNCA assumam o mesmo job.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
-    if not _agent_printer_state(agent, now)["printer_ready"]:
+    if not _agent_printer_state(agent, now)["printer_dispatchable"]:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
