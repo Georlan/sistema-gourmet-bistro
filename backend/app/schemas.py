@@ -342,6 +342,10 @@ class VendaDiretaCreate(BaseModel):
     delivery_endereco: Optional[str] = None
     address_snapshot: Optional[DeliveryAddressSnapshotSchema] = None
     delivery_taxa: float = 0.0
+    delivery_forma_pagamento: Optional[
+        Literal["pix", "dinheiro", "cartao_credito", "cartao_debito"]
+    ] = None
+    delivery_troco_para: Optional[float] = Field(default=None, ge=0)
     origem: Optional[Literal["smartpos"]] = None
     idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=128)
     onboarding_test: bool = False

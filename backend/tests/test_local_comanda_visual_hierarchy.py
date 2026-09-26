@@ -143,7 +143,10 @@ def test_online_remote_engine_owns_customer_payment_financial_and_loyalty_contex
     assert 'is_online_order = origin_label == "CARDÁPIO ONLINE"' in remote_engine
     assert 'operator_label=(None if is_online_order else "OPERADOR")' in remote_engine
     assert "customer_phone=(comanda.delivery_telefone if is_primary else None)" in remote_engine
-    assert "payment_method=(comanda.delivery_forma_pagamento if is_primary else None)" in remote_engine
+    assert "payment_required = bool(is_primary and (is_delivery or is_pickup))" in remote_engine
+    assert "comanda.delivery_forma_pagamento" in remote_engine
+    assert "payment_required=payment_required" in remote_engine
+    assert "float(open_balance(comanda))" in remote_engine
     assert "coupon_discount=(" in remote_engine
     assert "cashback_discount=(" in remote_engine
     assert "online_payment_status=(" in remote_engine
