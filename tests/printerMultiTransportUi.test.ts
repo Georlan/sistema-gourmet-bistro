@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const monitor = readFileSync('src/components/printing/PrintMonitorPanel.tsx', 'utf8');
+const app = readFileSync('src/App.tsx', 'utf8');
 
 test('monitor handles multi-transport printing uniformly', () => {
   // Transport badges
@@ -43,7 +44,7 @@ test('monitor presents friendly non-technical UX for users and keeps technical d
   assert.match(monitor, /Impressora encontrada/);
   assert.match(monitor, /Pronta para imprimir/);
   assert.match(monitor, /Desconectada/);
-  assert.match(monitor, /Atualizar impressoras/);
+  assert.match(monitor, /Atualização automática/);
   assert.match(monitor, /Imprimir teste/);
   assert.match(monitor, /Impressora principal/);
 
@@ -57,9 +58,14 @@ test('monitor presents friendly non-technical UX for users and keeps technical d
 
 
 
-test('daily printing UI does not invoke USB-specific discovery when a printer is already usable', () => {
-  assert.match(monitor, /!hasReadyPrinter \? \(/);
-  assert.match(monitor, /onClick=\{\(\) => void loadMonitor\(true\)\}/);
+test('daily printing status refresh is automatic and websocket-driven', () => {
+  assert.match(app, /eventName === "print_monitor_updated"/);
+  assert.match(app, /new Event\('koma_print_monitor_refresh'\)/);
+  assert.match(monitor, /addEventListener\('koma_print_monitor_refresh', refreshFromRealtime\)/);
+  assert.match(monitor, /30_000/);
+  assert.match(monitor, /Atualização automática/);
+  assert.doesNotMatch(monitor, />\s*Atualizar status\s*</);
+  assert.doesNotMatch(monitor, />\s*Atualizar impressoras\s*</);
   assert.match(monitor, /Preparar conexão USB/);
   assert.match(monitor, /Diagnóstico técnico e suporte/);
   assert.doesNotMatch(monitor, /agente online · USB desconectado/);
