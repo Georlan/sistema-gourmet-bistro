@@ -160,7 +160,7 @@ test('CashierMobileBottomBar renders 5 standard tabs with operational status', (
   const view = createElement(CashierMobileBottomBar, {
     activeTab: 'operacao',
     activeSubTab: 'pedidos',
-    onNavigate: (tab, subTab) => calls.push(`${tab}/${subTab}`),
+    onNavigate: (navigationId) => calls.push(navigationId),
     onOpenMenu: () => { menuOpened = true; },
     orderCount: 3,
     kitchenCount: 2,
@@ -177,6 +177,18 @@ test('CashierMobileBottomBar renders 5 standard tabs with operational status', (
   assert.match(markup, />2<\/span>/); // Badge de cozinha
 });
 
+
+test('mobile bottom bar delegates pinned actions to canonical navigation ids', () => {
+  const mobileBottomBar = readFileSync(new URL('../src/components/caixa/navigation/CashierMobileBottomBar.tsx', import.meta.url), 'utf8');
+  const caixaPanel = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
+
+  assert.match(mobileBottomBar, /onNavigate\('vendas_pedidos'\)/);
+  assert.match(mobileBottomBar, /onNavigate\('vendas_novo_pedido'\)/);
+  assert.match(mobileBottomBar, /onNavigate\('vendas_cozinha'\)/);
+  assert.match(mobileBottomBar, /onNavigate\('caixa_turno_atual'\)/);
+  assert.doesNotMatch(mobileBottomBar, /onNavigate\('operacao',/);
+  assert.match(caixaPanel, /onNavigate=\{\(navigationId\) => handleSidebarNavigation\(navigationId\)\}/);
+});
 
 test('all plans share the mobile shell while Pocket keeps its plan-specific refinements', () => {
   const caixaPanel = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
