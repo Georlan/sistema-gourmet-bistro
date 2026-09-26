@@ -98,6 +98,130 @@ class EscPosPayloadTest(unittest.TestCase):
         self.assertIn(b"\x1bM\x00", payload)
         self.assertNotIn(b"x00", payload)
 
+    def test_compact_58mm_projects_closing_semantics_and_ascii_safely(self):
+        source = "\n".join(
+            [
+                "=" * 48,
+                "\x1bE\x01" + "KÔMA DEMO".center(48) + "\x1bE\x00",
+                "=" * 48,
+                "\x1bE\x01" + "CONTA DA MESA".center(48) + "\x1bE\x00",
+                "=" * 48,
+                "\x1bE\x01"
+                + "MESA: 6".ljust(30)
+                + "ABERTURA: 13:52"
+                + "\x1bE\x00",
+                "CONTA: #51",
+                "DATA: 26/09/2026".ljust(31) + "HORA: 13:41",
+                "IMPRESSO POR: CAIXA DEMO",
+                "-" * 48,
+                "\x1bE\x01ITENS\x1bE\x00",
+                "1x BACON PRIME".ljust(48 - len("R$ 29,90")) + "R$ 29,90",
+                "=" * 48,
+                "Gerenciado por Kôma".center(48),
+                "Documento não fiscal".center(48),
+            ]
+        )
+        payload = build_escpos_payload(
+            source,
+            profile_options={
+                "columns": 32,
+                "compact_layout": True,
+                "supports_cut": False,
+                "feed_lines": 2,
+                "allow_double_height": False,
+                "charset_policy": "ascii_safe",
+                "semantic_layout": "compact_58",
+            },
+        )
+        body = payload[
+            len(INITIALIZE) + len(PORTUGUESE_CODE_PAGE):
+        ].decode("ascii", errors="ignore")
+
+        self.assertIn("KOMA DEMO", body)
+        self.assertIn("FECHAMENTO DA MESA", body)
+        self.assertIn("MESA: 6", body)
+        self.assertIn("CONTA: #51", body)
+        self.assertIn("ABERTA: 13:52", body)
+        self.assertIn("IMPRESSA: 13:41", body)
+        self.assertIn("DATA: 26/09/2026", body)
+        self.assertIn("OPERADOR: CAIXA DEMO", body)
+        self.assertIn("DOCUMENTO NAO FISCAL", body)
+        self.assertNotIn("CONTA DA MESA", body)
+        self.assertNotIn("ABERTURA:", body)
+        self.assertNotIn("HORA:", body)
+        self.assertNotIn("IMPRESSO POR:", body)
+        self.assertNotIn("Gerenciado por", body)
+        self.assertNotIn("Ô", body)
+        self.assertNotIn("ã", body)
+
+    def test_compact_58mm_removes_redundant_full_table_label_and_combines_simple_identity(self):
+        source = "\n".join(
+            [
+                "\x1bE\x01" + "CONSUMO NO LOCAL".center(48) + "\x1bE\x00",
+                "\x1bE\x01" + "REIMPRESSÃO".center(48) + "\x1bE\x00",
+                "\x1bE\x01" + "VIA COMPLETA DA MESA".center(48) + "\x1bE\x00",
+                "\x1b!\x10\x1bE\x01" + "MESA: 6".center(48) + "\x1bE\x00\x1b!\\x00",
+                "\x1b!\x10\x1bE\x01" + "PEDIDO #51".center(48) + "\x1bE\x00\x1b!\\x00",
+                "DATA: 26/09/2026".ljust(31) + "HORA: 13:41",
+                "GARÇOM: Caixa Demo",
+            ]
+        )
+        payload = build_escpos_payload(
+            source,
+            profile_options={
+                "columns": 32,
+                "compact_layout": True,
+                "supports_cut": False,
+                "feed_lines": 2,
+                "allow_double_height": False,
+                "charset_policy": "ascii_safe",
+                "semantic_layout": "compact_58",
+            },
+        )
+        body = payload[
+            len(INITIALIZE) + len(PORTUGUESE_CODE_PAGE):
+        ].decode("ascii", errors="ignore")
+        self.assertIn("REIMPRESSAO", body)
+        self.assertNotIn("VIA COMPLETA DA MESA", body)
+        self.assertIn("MESA: 6", body)
+        self.assertIn("PEDIDO #51", body)
+
+    def test_standard_80mm_preserves_canonical_labels_accents_and_controls(self):
+        source = "\n".join(
+            [
+                "\x1b!\x10CONTA DA MESA\x1b!\\x00",
+                "MESA: 6".ljust(30) + "ABERTURA: 13:52",
+                "CONTA: #51",
+                "DATA: 26/09/2026".ljust(31) + "HORA: 13:41",
+                "IMPRESSO POR: CAIXA DEMO",
+                "KÔMA · NÃO FISCAL",
+            ]
+        )
+        payload = build_escpos_payload(
+            source,
+            profile_options={
+                "columns": 48,
+                "compact_layout": False,
+                "supports_cut": True,
+                "feed_lines": 3,
+                "allow_double_height": True,
+                "charset_policy": "native_cp860",
+                "semantic_layout": "standard",
+            },
+        )
+        body = payload[
+            len(INITIALIZE) + len(PORTUGUESE_CODE_PAGE):
+            -len(b"\n\n\n" + PARTIAL_CUT)
+        ]
+        decoded = body.decode("cp860")
+        self.assertIn("CONTA DA MESA", decoded)
+        self.assertIn("ABERTURA: 13:52", decoded)
+        self.assertIn("HORA: 13:41", decoded)
+        self.assertIn("IMPRESSO POR: CAIXA DEMO", decoded)
+        self.assertIn("KÔMA · NÃO FISCAL", decoded)
+        self.assertIn(b"\x1b!\x10", body)
+        self.assertTrue(payload.endswith(b"\n\n\n" + PARTIAL_CUT))
+
     def test_80mm_profile_keeps_cut_double_height_and_three_line_feed(self):
         source = "\x1b!\x10TITULO\x1b!\x00"
         payload = build_escpos_payload(
