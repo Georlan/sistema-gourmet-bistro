@@ -376,6 +376,7 @@ def test_linux_bluetooth_diagnostics_reports_paired_spp_printer():
             "available": False,
             "present": False,
             "configured": True,
+            "dispatchable": True,
             "paired": True,
             "trusted": True,
             "connected": False,
@@ -385,7 +386,7 @@ def test_linux_bluetooth_diagnostics_reports_paired_spp_printer():
     ]
 
 
-def test_linux_bluetooth_diagnostics_marks_ready_only_after_live_probe():
+def test_linux_bluetooth_diagnostics_never_opens_rfcomm_socket():
     devices_probe = MagicMock(
         returncode=0,
         stdout=b"Device 86:67:7A:6B:30:C4 KA7\n",
@@ -404,7 +405,6 @@ def test_linux_bluetooth_diagnostics_marks_ready_only_after_live_probe():
         ),
         stderr=b"",
     )
-    probe = MagicMock(return_value=True)
 
     with (
         patch(
@@ -415,15 +415,17 @@ def test_linux_bluetooth_diagnostics_marks_ready_only_after_live_probe():
             "adapters.linux._run_bluetooth_command",
             side_effect=[devices_probe, info_probe],
         ),
+        patch("adapters.linux.BluetoothRfcommTransport.probe") as probe,
     ):
-        printers = _discover_bluetooth_spp_printers(probe)
+        printers = _discover_bluetooth_spp_printers()
 
     assert printers[0]["paired"] is True
     assert printers[0]["connected"] is False
-    assert printers[0]["reachable"] is True
-    assert printers[0]["available"] is True
-    assert printers[0]["present"] is True
-    probe.assert_called_once_with("86:67:7A:6B:30:C4")
+    assert printers[0]["dispatchable"] is True
+    assert printers[0]["reachable"] is False
+    assert printers[0]["available"] is False
+    assert printers[0]["present"] is False
+    probe.assert_not_called()
 
 
 def test_linux_bluetooth_diagnostics_ignores_devices_without_spp():
@@ -490,6 +492,7 @@ def test_linux_adapter_deduplicates_cups_bluetooth_queue_with_bluez_device(
         "available": False,
         "present": False,
         "configured": True,
+        "dispatchable": True,
         "paired": True,
         "trusted": True,
         "connected": False,
@@ -1561,26 +1564,6 @@ def test_worker_does_not_claim_jobs_without_physical_printer(temp_dir):
         client.claim_jobs.assert_not_called()
         adapter.print_ticket.assert_not_called()
         sleep_mock.assert_not_called()
-
-
-def test_linux_adapter_bluetooth_probe_cache_tracks_power_state(temp_dir):
-    adapter = get_adapter("linux", output_dir=temp_dir)
-    with patch(
-        "adapters.linux.BluetoothRfcommTransport.probe",
-        side_effect=[True, False],
-    ) as probe:
-        assert adapter._probe_bluetooth_spp("86:67:7A:6B:30:C4") is True
-        # cache evita reconectar dentro da janela curta
-        assert adapter._probe_bluetooth_spp("86:67:7A:6B:30:C4") is True
-        assert probe.call_count == 1
-
-        available, checked_at = adapter._bluetooth_probe_cache["86:67:7A:6B:30:C4"]
-        adapter._bluetooth_probe_cache["86:67:7A:6B:30:C4"] = (
-            available,
-            checked_at - adapter._bluetooth_probe_ttl_seconds - 0.1,
-        )
-        assert adapter._probe_bluetooth_spp("86:67:7A:6B:30:C4") is False
-        assert probe.call_count == 2
 
 
 def test_base_adapter_is_printer_ready_with_bluetooth_spp_on_demand(temp_dir):
