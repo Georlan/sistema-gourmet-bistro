@@ -1024,10 +1024,16 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
             if hasattr(target_printer, "columns")
             else None
         )
+        target_profile = (
+            dict(getattr(target_printer, "options", {}) or {})
+            if hasattr(target_printer, "options")
+            else None
+        )
         raw_payload = build_escpos_payload(
             payload_text,
             encoding="cp860",
             columns=target_columns,
+            profile_options=target_profile,
         )
         if hasattr(target_printer, "build_transport"):
             if not skip_ready_check and not self.is_printer_ready(target_printer):
