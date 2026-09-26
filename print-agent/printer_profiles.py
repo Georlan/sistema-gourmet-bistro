@@ -15,12 +15,20 @@ class PrinterPaperProfile:
     key: str
     paper_width_mm: int
     columns: int
+    compact_layout: bool = False
+    supports_cut: bool = True
+    feed_lines: int = 3
+    allow_double_height: bool = True
 
 
 DEFAULT_PROFILE = PrinterPaperProfile(
     key="thermal-80mm",
     paper_width_mm=80,
     columns=48,
+    compact_layout=False,
+    supports_cut=True,
+    feed_lines=3,
+    allow_double_height=True,
 )
 
 KNOWN_PROFILES: tuple[tuple[re.Pattern[str], PrinterPaperProfile], ...] = (
@@ -30,6 +38,10 @@ KNOWN_PROFILES: tuple[tuple[re.Pattern[str], PrinterPaperProfile], ...] = (
             key="thermal-58mm",
             paper_width_mm=58,
             columns=32,
+            compact_layout=True,
+            supports_cut=False,
+            feed_lines=2,
+            allow_double_height=False,
         ),
     ),
     (
@@ -65,10 +77,21 @@ def infer_printer_paper_profile(
     explicit_key = str(opts.get("paper_profile") or "").strip()
 
     if explicit_width and explicit_columns:
+        base = (
+            KNOWN_PROFILES[0][1]
+            if explicit_width <= 60
+            else DEFAULT_PROFILE
+        )
         return PrinterPaperProfile(
             key=explicit_key or f"thermal-{explicit_width}mm",
             paper_width_mm=explicit_width,
             columns=explicit_columns,
+            compact_layout=bool(opts.get("compact_layout", base.compact_layout)),
+            supports_cut=bool(opts.get("supports_cut", base.supports_cut)),
+            feed_lines=_positive_int(opts.get("feed_lines")) or base.feed_lines,
+            allow_double_height=bool(
+                opts.get("allow_double_height", base.allow_double_height)
+            ),
         )
 
     identity = " ".join(
@@ -85,6 +108,22 @@ def infer_printer_paper_profile(
                 key=explicit_key or profile.key,
                 paper_width_mm=explicit_width or profile.paper_width_mm,
                 columns=explicit_columns or profile.columns,
+                compact_layout=bool(
+                    opts.get("compact_layout", profile.compact_layout)
+                ),
+                supports_cut=bool(
+                    opts.get("supports_cut", profile.supports_cut)
+                ),
+                feed_lines=(
+                    _positive_int(opts.get("feed_lines"))
+                    or profile.feed_lines
+                ),
+                allow_double_height=bool(
+                    opts.get(
+                        "allow_double_height",
+                        profile.allow_double_height,
+                    )
+                ),
             )
 
     # Não inferimos tamanho por USB/Bluetooth/rede: qualquer transporte pode
@@ -93,6 +132,22 @@ def infer_printer_paper_profile(
         key=explicit_key or DEFAULT_PROFILE.key,
         paper_width_mm=explicit_width or DEFAULT_PROFILE.paper_width_mm,
         columns=explicit_columns or DEFAULT_PROFILE.columns,
+        compact_layout=bool(
+            opts.get("compact_layout", DEFAULT_PROFILE.compact_layout)
+        ),
+        supports_cut=bool(
+            opts.get("supports_cut", DEFAULT_PROFILE.supports_cut)
+        ),
+        feed_lines=(
+            _positive_int(opts.get("feed_lines"))
+            or DEFAULT_PROFILE.feed_lines
+        ),
+        allow_double_height=bool(
+            opts.get(
+                "allow_double_height",
+                DEFAULT_PROFILE.allow_double_height,
+            )
+        ),
     )
 
 
@@ -114,4 +169,8 @@ def enrich_endpoint_options(
     result.setdefault("paper_profile", profile.key)
     result.setdefault("paper_width_mm", profile.paper_width_mm)
     result.setdefault("columns", profile.columns)
+    result.setdefault("compact_layout", profile.compact_layout)
+    result.setdefault("supports_cut", profile.supports_cut)
+    result.setdefault("feed_lines", profile.feed_lines)
+    result.setdefault("allow_double_height", profile.allow_double_height)
     return result
