@@ -192,6 +192,70 @@ def test_cashback_without_registered_loyalty_keeps_basic_customer_block_only():
     assert "DESCONTO CASHBACK:" in ticket
 
 
+def test_pickup_payment_block_is_structural_even_for_legacy_order_without_method():
+    ticket = _render(
+        [PrintItem(codigo="001", nome="PUDIM DA CASA", preco_unit=10.90)],
+        ComandaVariant(
+            origin_label="CAIXA / PDV",
+            location_label="BALCÃO",
+            operator_label="OPERADOR",
+            customer_name="CLIENTE",
+            payment_required=True,
+            amount_due=10.90,
+            show_financial_breakdown=True,
+        ),
+        order_type="Retirada",
+    )
+
+    assert "PAGAMENTO" in ticket
+    assert "FORMA: NÃO INFORMADA" in ticket
+    assert "A COBRAR: R$ 10,90" in ticket
+    assert "NÃO COBRAR DO CLIENTE" not in ticket
+
+
+def test_paid_fulfillment_never_instructs_operator_to_charge_again():
+    ticket = _render(
+        [PrintItem(codigo="001", nome="PUDIM DA CASA", preco_unit=10.90)],
+        ComandaVariant(
+            origin_label="CAIXA / PDV",
+            location_label="ENTREGA",
+            operator_label="OPERADOR",
+            customer_name="CLIENTE",
+            payment_method="cartao_debito",
+            payment_required=True,
+            amount_paid=15.90,
+            amount_due=0.0,
+            delivery_fee=5.0,
+            show_financial_breakdown=True,
+        ),
+        order_type="Delivery",
+    )
+
+    assert "FORMA: CARTÃO DE DÉBITO" in ticket
+    assert "VALOR PAGO: R$ 15,90" in ticket
+    assert "PAGO" in ticket
+    assert "NÃO COBRAR DO CLIENTE" in ticket
+    assert "A COBRAR:" not in ticket
+
+
+def test_waiter_dine_in_does_not_gain_payment_block_by_default():
+    ticket = _render(
+        [PrintItem(codigo="001", nome="BACON PRIME", preco_unit=29.90)],
+        ComandaVariant(
+            origin_label=None,
+            location_label=None,
+            operator_label="GARÇOM",
+            table_id=6,
+            preserve_item_customers=True,
+        ),
+        order_type="Consumo no Local",
+    )
+
+    assert "PAGAMENTO" not in ticket
+    assert "FORMA:" not in ticket
+    assert "A COBRAR:" not in ticket
+
+
 def test_secondary_sector_still_uses_same_visual_base():
     ticket = _render(
         [PrintItem(codigo="B01", nome="DRINK DA CASA", preco_unit=18.0)],
