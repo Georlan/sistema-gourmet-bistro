@@ -6,7 +6,7 @@ import type { CashierTab } from '../cashierContracts';
 interface CashierMobileBottomBarProps {
   activeTab: CashierTab;
   activeSubTab: string;
-  onNavigate: (tab: CashierTab, subTab: string) => void;
+  onNavigate: (navigationId: string) => void;
   onOpenMenu: () => void;
   dedicatedKds?: boolean;
   orderCount?: number;
@@ -27,7 +27,7 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
   const isPedidosActive = activeTab === 'operacao' && (activeSubTab === 'pedidos' || activeSubTab === 'mesas');
   const isPdvActive = activeTab === 'operacao' && activeSubTab === 'balcao';
   const kitchenSubTab = dedicatedKds ? 'kds' : 'preparo';
-  const isCozinhaActive = activeTab === 'operacao' && activeSubTab === kitchenSubTab;
+  const isCozinhaActive = activeTab === 'operacao' && (activeSubTab === 'kds' || activeSubTab === 'preparo');
   const isCaixaActive = activeTab === 'financeiro';
 
   return (
@@ -39,7 +39,7 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
         {/* 1. Vendas / Pedidos */}
         <button
           type="button"
-          onClick={() => onNavigate('operacao', 'pedidos')}
+          onClick={() => onNavigate('vendas_pedidos')}
           className={clsx(
             'flex flex-col items-center justify-center py-1 relative transition-all min-h-[44px]',
             isPedidosActive ? 'text-emerald-500 font-bold' : 'text-koma-muted hover:text-koma-foreground'
@@ -60,7 +60,7 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
         {/* 2. Novo Pedido (PDV Balcão) */}
         <button
           type="button"
-          onClick={() => onNavigate('operacao', 'balcao')}
+          onClick={() => onNavigate('vendas_novo_pedido')}
           className={clsx(
             'flex flex-col items-center justify-center py-1 relative transition-all min-h-[44px]',
             isPdvActive ? 'text-emerald-500 font-bold' : 'text-koma-muted hover:text-koma-foreground'
@@ -74,7 +74,7 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
         {/* 3. Cozinha (Fila na Tela) */}
         <button
           type="button"
-          onClick={() => onNavigate('operacao', kitchenSubTab)}
+          onClick={() => onNavigate('vendas_cozinha')}
           className={clsx(
             'flex flex-col items-center justify-center py-1 relative transition-all min-h-[44px]',
             isCozinhaActive ? 'text-emerald-500 font-bold' : 'text-koma-muted hover:text-koma-foreground'
@@ -95,7 +95,7 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
         {/* 4. Caixa / Turno */}
         <button
           type="button"
-          onClick={() => onNavigate('financeiro', 'turno_atual')}
+          onClick={() => onNavigate('caixa_turno_atual')}
           className={clsx(
             'flex flex-col items-center justify-center py-1 relative transition-all min-h-[44px]',
             isCaixaActive ? 'text-emerald-500 font-bold' : 'text-koma-muted hover:text-koma-foreground'
