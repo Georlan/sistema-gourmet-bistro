@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import type { PaymentMethod } from '../../../cardapio/paymentMethods';
 import type { CatalogCategory } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import {
@@ -94,6 +95,8 @@ export function useCashierPdv({
   const [pdvCustomerCPF, setPdvCustomerCPF] = useState('');
 
   const [pdvOrderType, setPdvOrderType] = useState<'pickup' | 'delivery' | 'dine_in'>('pickup');
+
+  const [pdvPaymentMethod, setPdvPaymentMethod] = useState<PaymentMethod | null>(null);
 
   // Legacy text remains only as a projection/backward-compatible payload. The
   // editable source of truth for new delivery orders is the structured draft.
@@ -267,6 +270,10 @@ export function useCashierPdv({
       showToast('Seu carrinho de vendas está vazio.', 'info');
       return;
     }
+    if (pdvOrderType !== 'dine_in' && !pdvPaymentMethod) {
+      showToast('Escolha a forma de pagamento da entrega ou retirada.', 'info');
+      return;
+    }
     const normalizedCustomerPhone = pdvCustomerPhone.replace(/\D/g, '');
     if (pdvOrderType !== 'dine_in' && ![10, 11].includes(normalizedCustomerPhone.length)) {
       showToast('Informe um celular válido com DDD.', 'info');
@@ -295,6 +302,7 @@ export function useCashierPdv({
     const customerName = pdvCustomerName;
     const mesaId = pdvTargetMesaId;
     const orderType = pdvOrderType;
+    const paymentMethod = pdvPaymentMethod;
     const customerPhone = pdvCustomerPhone;
     const customerId = pdvCustomerId;
     const deliveryAddressDraft = { ...pdvDeliveryAddressDraft };
@@ -363,6 +371,7 @@ export function useCashierPdv({
     setPdvCustomerId(null);
     setPdvCustomerLookup('idle');
     setPdvCustomerCPF('');
+    setPdvPaymentMethod(null);
     setPdvDeliveryAddress('');
     setPdvDeliveryAddressDraft(emptyDeliveryAddress());
     setPdvDeliveryAddressLegacyHint('');
@@ -394,6 +403,7 @@ export function useCashierPdv({
         delivery_endereco: orderType === 'delivery' ? deliveryAddress : undefined,
         address_snapshot: orderType === 'delivery' ? deliverySnapshot || undefined : undefined,
         delivery_taxa: orderType === 'delivery' ? Number(deliveryTaxa || 0) : 0.0,
+        delivery_forma_pagamento: orderType === 'dine_in' ? undefined : paymentMethod || undefined,
         onboarding_test: onboardingTest,
         itens: itemsList,
       };
@@ -447,6 +457,7 @@ export function useCashierPdv({
         setPdvCustomerName(customerName);
         setPdvCustomerPhone(customerPhone);
         setPdvCustomerId(customerId);
+        setPdvPaymentMethod(paymentMethod);
         setPdvDeliveryAddress(deliveryAddress);
         setPdvDeliveryAddressDraft(deliveryAddressDraft);
         setPdvDeliveryAddressLegacyHint(deliveryAddressLegacyHint);
@@ -460,6 +471,7 @@ export function useCashierPdv({
       setPdvCustomerName(customerName);
       setPdvCustomerPhone(customerPhone);
       setPdvCustomerId(customerId);
+      setPdvPaymentMethod(paymentMethod);
       setPdvDeliveryAddress(deliveryAddress);
       setPdvDeliveryAddressDraft(deliveryAddressDraft);
       setPdvDeliveryAddressLegacyHint(deliveryAddressLegacyHint);
@@ -527,6 +539,7 @@ export function useCashierPdv({
   const openCounter = () => {
     if (pdvCart.length === 0 && !isPdvSubmittingRef.current && !pdvPendingOperationRef.current) {
       setPdvOrderType('pickup');
+      setPdvPaymentMethod(null);
       setPdvTargetMesaId(0);
     }
     setBalcaoMobileView('produtos');
@@ -562,6 +575,8 @@ export function useCashierPdv({
     pdvCustomerLookup,
     pdvOrderType,
     setPdvOrderType,
+    pdvPaymentMethod,
+    setPdvPaymentMethod,
     pdvDeliveryAddress,
     pdvDeliveryAddressDraft,
     pdvDeliveryAddressLegacyHint,
