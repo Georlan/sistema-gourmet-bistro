@@ -113,6 +113,34 @@ class EscPosPayloadTest(unittest.TestCase):
         self.assertIn(b"\x1b!\x10", payload)
         self.assertTrue(payload.endswith(b"\n\n\n" + PARTIAL_CUT))
 
+    def test_standard_80mm_keeps_portuguese_charset_and_legacy_commands(self):
+        source = (
+            "\x1b!\x10"
+            + "KÔMA DEMO".center(48)
+            + "\x1b!\\x00"
+            + "\nAÇÃO · CARTÃO · NÃO"
+        )
+
+        payload = build_escpos_payload(
+            source,
+            profile_options={
+                "columns": 48,
+                "compact_layout": False,
+                "supports_cut": True,
+                "feed_lines": 3,
+                "allow_double_height": True,
+                "layout_mode": "standard",
+                "charset_mode": "native",
+            },
+        )
+
+        self.assertIn("KÔMA DEMO".encode("cp860"), payload)
+        self.assertIn("AÇÃO".encode("cp860"), payload)
+        self.assertIn("CARTÃO".encode("cp860"), payload)
+        self.assertIn("NÃO".encode("cp860"), payload)
+        self.assertIn(b"\x1b!\x10", payload)
+        self.assertTrue(payload.endswith(b"\n\n\n" + PARTIAL_CUT))
+
     def test_wide_profile_preserves_existing_48_column_layout(self):
         source = "\n".join(
             [

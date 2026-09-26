@@ -344,28 +344,57 @@ def _inject_table_account_metadata(
     *,
     printed_by: Optional[str],
 ) -> str:
-    """Acrescenta auditoria humana à Conta da Mesa sem criar outro formatter."""
+    """Materializa metadados semânticos, neutros de largura de papel.
+
+    O agente local decide como empacotar essas linhas em 58/80 mm. Assim a
+    fonte do documento continua única e nenhum cliente/modelo ganha formatter
+    próprio no backend.
+    """
     lines = receipt.split("\n")
-    width = int(getattr(printer_service, "width", 40) or 40)
     now = get_operational_now()
     account_prefix = "CONTAS" if len(snapshot.account_numbers) > 1 else "CONTA"
-    account_text = _family_number_text(snapshot.account_numbers) if snapshot.account_numbers else snapshot.numero_pedido
-    metadata = [f"{account_prefix}: #{account_text}"[:width]]
-    left = f"DATA: {now.strftime('%d/%m/%Y')}"
-    right = f"HORA: {now.strftime('%H:%M')}"
-    gap = max(width - len(left) - len(right), 1)
-    metadata.append((left + (" " * gap) + right)[:width])
-    metadata.append(f"IMPRESSO POR: {(printed_by or 'OPERADOR').strip().upper()}"[:width])
+    account_text = (
+        _family_number_text(snapshot.account_numbers)
+        if snapshot.account_numbers
+        else snapshot.numero_pedido
+    )
+    opening = snapshot.opened_at
+    opening_text = (
+        opening.strftime("%H:%M")
+        if isinstance(opening, (datetime.datetime, datetime.date))
+        else "--:--"
+    )
+    metadata = [
+        f"MESA: {snapshot.mesa_id}",
+        f"{account_prefix}: #{account_text}",
+        f"ABERTA: {opening_text}",
+        f"IMPRESSA: {now.strftime('%d/%m/%Y %H:%M')}",
+        f"OPERADOR: {(printed_by or 'OPERADOR').strip().upper()}",
+    ]
 
-    insert_at = next(
-        (index + 1 for index, line in enumerate(lines) if "ABERTURA:" in line and "MESA:" in line),
+    # O renderer legado produz MESA + ABERTURA na mesma linha. Substituímos
+    # essa linha pela representação semântica canônica, em vez de duplicar
+    # conta/data/hora logo abaixo.
+    metadata_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if "ABERTURA:" in line and "MESA:" in line
+        ),
         None,
     )
-    if insert_at is None:
-        insert_at = next(
-            (index + 1 for index, line in enumerate(lines) if "CONTA DA MESA" in line or "FECHAMENTO" in line),
-            1,
-        )
+    if metadata_index is not None:
+        lines[metadata_index:metadata_index + 1] = metadata
+        return "\n".join(lines)
+
+    insert_at = next(
+        (
+            index + 1
+            for index, line in enumerate(lines)
+            if "FECHAMENTO DA MESA" in line or "FECHAMENTO" in line
+        ),
+        1,
+    )
     lines[insert_at:insert_at] = metadata
     return "\n".join(lines)
 
@@ -376,8 +405,8 @@ def _format_table_account_document(
     restaurant_name: str,
     restaurant_name_position: str,
 ) -> str:
-    """Aplica o nome público Conta da Mesa e preserva a identidade do restaurante."""
-    lines = receipt.replace("FECHAMENTO", "CONTA DA MESA", 1).split("\n")
+    """Aplica o título semântico do documento e preserva a marca do restaurante."""
+    lines = receipt.replace("FECHAMENTO", "FECHAMENTO DA MESA", 1).split("\n")
     width = int(getattr(printer_service, "width", 40) or 40)
     position = (
         restaurant_name_position
@@ -391,7 +420,7 @@ def _format_table_account_document(
     brand_line = ESC_BOLD_ON + align_center(brand.upper(), width) + ESC_BOLD_OFF
     if position == "cabecalho":
         title_index = next(
-            (index for index, line in enumerate(lines) if "CONTA DA MESA" in line),
+            (index for index, line in enumerate(lines) if "FECHAMENTO DA MESA" in line),
             None,
         )
         if title_index is not None:
@@ -490,7 +519,7 @@ def render_table_receipt(
         receipt = _inject_table_account_metadata(receipt, snapshot, printed_by=printed_by)
         return apply_operational_visual_hierarchy(
             receipt,
-            document_title="CONTA DA MESA",
+            document_title="FECHAMENTO DA MESA",
         )
 
     identity_label = "PEDIDOS" if len(snapshot.account_numbers) > 1 else "PEDIDO"

@@ -4,6 +4,8 @@ import re
 import textwrap
 from typing import Any, Final, Mapping
 
+from thermal_layout import apply_layout_profile
+
 
 INITIALIZE: Final[bytes] = b"\x1b@"
 # ESC t 3 seleciona PC860, a tabela portuguesa documentada pelo ESC/POS.
@@ -11,8 +13,6 @@ PORTUGUESE_CODE_PAGE: Final[bytes] = b"\x1bt\x03"
 PAPER_FEED: Final[bytes] = b"\n\n\n"
 PARTIAL_CUT: Final[bytes] = b"\x1d\x56\x42\x00"
 SIMULATED_CUT_MARKER: Final[str] = "[CUT]"
-DOUBLE_HEIGHT_ON: Final[str] = "\x1b!\x10"
-NORMAL_SIZE: Final[str] = "\x1b!\x00"
 
 _EDGE_CONTROL_RE: Final[re.Pattern[str]] = re.compile(
     r"(?:\x1b(?:M|E|!|3).)"
@@ -159,31 +159,6 @@ def fit_text_to_columns(payload_text: str, columns: int | None) -> str:
     return "\n".join(output)
 
 
-def _compact_text_layout(
-    payload_text: str,
-    *,
-    allow_double_height: bool,
-) -> str:
-    """Compacta somente a estrutura textual, sem introduzir comandos novos.
-
-    Em bobinas estreitas removemos linhas vazias decorativas e, quando o perfil
-    não comporta títulos altos com eficiência, trocamos apenas o comando
-    double-height já existente pelo comando normal já homologado.
-    """
-    compacted = payload_text
-    if not allow_double_height:
-        compacted = compacted.replace(DOUBLE_HEIGHT_ON, NORMAL_SIZE)
-
-    lines: list[str] = []
-    for line in compacted.split("\n"):
-        visible = _visible_text(line)
-        has_control = bool(_ANY_CONTROL_RE.search(line))
-        if not visible.strip() and not has_control:
-            continue
-        lines.append(line)
-    return "\n".join(lines)
-
-
 def _profile_value(
     profile_options: Mapping[str, Any] | None,
     key: str,
@@ -212,8 +187,20 @@ def build_escpos_payload(
     resolved_columns = int(
         _profile_value(profile_options, "columns", columns or 0) or 0
     ) or columns
-    compact_layout = bool(
+    legacy_compact = bool(
         _profile_value(profile_options, "compact_layout", False)
+    )
+    layout_mode = str(
+        _profile_value(
+            profile_options,
+            "layout_mode",
+            "compact" if legacy_compact else "standard",
+        )
+        or ("compact" if legacy_compact else "standard")
+    )
+    charset_mode = str(
+        _profile_value(profile_options, "charset_mode", "native")
+        or "native"
     )
     supports_cut = bool(
         _profile_value(profile_options, "supports_cut", True)
@@ -229,12 +216,14 @@ def build_escpos_payload(
     # Ordem importante: restaura o NUL antes de interpretar os controles
     # ESC/POS. Isso elimina o texto literal "x00" sem alterar o protocolo.
     restored = (payload_text or "").replace("\\x00", "\x00")
-    fitted = fit_text_to_columns(restored, resolved_columns)
-    if compact_layout:
-        fitted = _compact_text_layout(
-            fitted,
-            allow_double_height=allow_double_height,
-        )
+    profiled = apply_layout_profile(
+        restored,
+        columns=int(resolved_columns or 48),
+        layout_mode=layout_mode,
+        charset_mode=charset_mode,
+        allow_double_height=allow_double_height,
+    )
+    fitted = fit_text_to_columns(profiled, resolved_columns)
 
     normalized = fitted.replace(SIMULATED_CUT_MARKER, "")
     body = normalized.encode(encoding, errors="replace")

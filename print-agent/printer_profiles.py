@@ -19,6 +19,8 @@ class PrinterPaperProfile:
     supports_cut: bool = True
     feed_lines: int = 3
     allow_double_height: bool = True
+    layout_mode: str = "standard"
+    charset_mode: str = "native"
 
 
 DEFAULT_PROFILE = PrinterPaperProfile(
@@ -29,6 +31,8 @@ DEFAULT_PROFILE = PrinterPaperProfile(
     supports_cut=True,
     feed_lines=3,
     allow_double_height=True,
+    layout_mode="standard",
+    charset_mode="native",
 )
 
 KNOWN_PROFILES: tuple[tuple[re.Pattern[str], PrinterPaperProfile], ...] = (
@@ -42,6 +46,8 @@ KNOWN_PROFILES: tuple[tuple[re.Pattern[str], PrinterPaperProfile], ...] = (
             supports_cut=False,
             feed_lines=2,
             allow_double_height=False,
+            layout_mode="compact",
+            charset_mode="ascii_safe",
         ),
     ),
     (
@@ -92,6 +98,12 @@ def infer_printer_paper_profile(
             allow_double_height=bool(
                 opts.get("allow_double_height", base.allow_double_height)
             ),
+            layout_mode=str(
+                opts.get("layout_mode") or base.layout_mode
+            ).strip().lower() or base.layout_mode,
+            charset_mode=str(
+                opts.get("charset_mode") or base.charset_mode
+            ).strip().lower() or base.charset_mode,
         )
 
     identity = " ".join(
@@ -124,6 +136,12 @@ def infer_printer_paper_profile(
                         profile.allow_double_height,
                     )
                 ),
+                layout_mode=str(
+                    opts.get("layout_mode") or profile.layout_mode
+                ).strip().lower() or profile.layout_mode,
+                charset_mode=str(
+                    opts.get("charset_mode") or profile.charset_mode
+                ).strip().lower() or profile.charset_mode,
             )
 
     # Não inferimos tamanho por USB/Bluetooth/rede: qualquer transporte pode
@@ -148,6 +166,12 @@ def infer_printer_paper_profile(
                 DEFAULT_PROFILE.allow_double_height,
             )
         ),
+        layout_mode=str(
+            opts.get("layout_mode") or DEFAULT_PROFILE.layout_mode
+        ).strip().lower() or DEFAULT_PROFILE.layout_mode,
+        charset_mode=str(
+            opts.get("charset_mode") or DEFAULT_PROFILE.charset_mode
+        ).strip().lower() or DEFAULT_PROFILE.charset_mode,
     )
 
 
@@ -173,4 +197,6 @@ def enrich_endpoint_options(
     result.setdefault("supports_cut", profile.supports_cut)
     result.setdefault("feed_lines", profile.feed_lines)
     result.setdefault("allow_double_height", profile.allow_double_height)
+    result.setdefault("layout_mode", profile.layout_mode)
+    result.setdefault("charset_mode", profile.charset_mode)
     return result
