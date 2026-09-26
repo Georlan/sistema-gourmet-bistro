@@ -165,6 +165,8 @@ interface PrintMonitorPanelProps {
   authHeaders: Record<string, string>;
   onTestPrint?: () => void | Promise<void>;
   testInProgress?: boolean;
+  children?: React.ReactNode | ((context: { activePaperWidthMm?: number }) => React.ReactNode);
+  advancedTestsSlot?: React.ReactNode;
 }
 
 type DiagnosticTone = 'success' | 'warning' | 'danger' | 'neutral';
@@ -312,7 +314,9 @@ export function PrintMonitorPanel({
   apiBaseUrl,
   authHeaders,
   onTestPrint,
-  testInProgress = false
+  testInProgress = false,
+  children,
+  advancedTestsSlot
 }: PrintMonitorPanelProps) {
   const [monitorData, setMonitorData] = useState<PrintMonitorResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -928,8 +932,24 @@ export function PrintMonitorPanel({
       ].filter(Boolean).join(' · ')
     : '';
 
+  const firstReady = readyPrinters[0] || readyUsbPrinters[0] || null;
+  const activePrinter = firstReady || allDetectedPrinters[0] || null;
+  const activeEndpoint = activePrinter
+    ? (configuredEndpoints.find(item => (
+        item.name === activePrinter.name
+        || (Boolean(activePrinter.address) && item.address === activePrinter.address)
+      )) || null)
+    : null;
+  const activePaperWidthMm = Number(activeEndpoint?.options?.paper_width_mm || 0) || undefined;
+  const activePrinterBadge = activePrinter
+    ? getFriendlyTransportBadge(activeEndpoint?.transport, activePrinter.connection)
+    : null;
+  const delayedJobsCount = monitorData?.summary?.delayed || 0;
+  const attentionJobsCount = failedJobs.length + delayedJobsCount;
+  const hasPrintingProblems = attentionJobsCount > 0 || (queueTotal > 0 && Boolean(latestJob?.status === 'failed'));
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <OperationalBanner
         id="printing-operation-title"
         eyebrow="IMPRESSÃO"
@@ -950,190 +970,125 @@ export function PrintMonitorPanel({
         ]}
       />
 
-      <section className="space-y-4 text-left" aria-label="Monitor de impressão">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <Printer size={16} className="text-emerald-700 dark:text-emerald-400" />
-              <h4 className="font-serif text-sm font-bold text-koma-foreground">Status</h4>
-            </div>
-          <p className="mt-1 text-[10px] text-koma-muted">
-            O KÔMA escolhe automaticamente a única impressora pronta quando houver uma só disponível.
-          </p>
+      {/* 1. Estado atual */}
+      <section className="space-y-3 text-left" aria-label="Monitor de impressão">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <Printer size={16} className="text-emerald-700 dark:text-emerald-400" />
+            <h4 className="font-serif text-sm font-bold text-koma-foreground">Estado atual</h4>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-1.5 text-[10px] font-bold text-koma-muted shadow-xs">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            Atualização automática
+          </span>
         </div>
-        <span className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 py-2 text-[10px] font-bold text-koma-muted shadow-xs">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
-          Atualização automática
-        </span>
-      </div>
 
-      {error && (
-        <div role="alert" className="rounded-2xl koma-badge-danger px-4 py-3 text-xs">
-          {error}
-        </div>
-      )}
+        {error && (
+          <div role="alert" className="rounded-2xl koma-badge-danger px-4 py-3 text-xs">
+            {error}
+          </div>
+        )}
 
-      <div className={`rounded-2xl border p-4 sm:p-5 ${diagnosticStyle[diagnostic.tone]}`}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${diagnosticIconStyle[diagnostic.tone]}`}>
-              {diagnostic.tone === 'success'
-                ? <CheckCircle2 size={20} />
-                : diagnostic.tone === 'danger'
-                  ? <WifiOff size={20} />
-                  : diagnostic.tone === 'warning'
-                    ? <AlertTriangle size={20} />
-                    : <RefreshCw size={20} className={commandRunning ? 'animate-spin' : ''} />}
+        <div className={`rounded-2xl border p-4 sm:p-5 shadow-xs transition ${diagnosticStyle[diagnostic.tone]}`}>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-start gap-3.5">
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${diagnosticIconStyle[diagnostic.tone]}`}>
+                {diagnostic.tone === 'success'
+                  ? <CheckCircle2 size={22} />
+                  : diagnostic.tone === 'danger'
+                    ? <WifiOff size={22} />
+                    : diagnostic.tone === 'warning'
+                      ? <AlertTriangle size={22} />
+                      : <RefreshCw size={22} className={commandRunning ? 'animate-spin' : ''} />}
+              </div>
+
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold ${
+                    hasOnlineAgent ? 'koma-badge-success' : 'koma-badge-danger'
+                  }`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${hasOnlineAgent ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                    {hasOnlineAgent ? 'KÔMA Print conectado' : 'KÔMA Print desconectado'}
+                  </span>
+                  {activePrinterBadge && (
+                    <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold ${activePrinterBadge.badgeClass}`}>
+                      {activePrinterBadge.label}
+                    </span>
+                  )}
+                  {activePaperWidthMm && activePaperWidthMm > 0 ? (
+                    <span className="rounded-full border border-koma-border bg-koma-card/80 px-2 py-0.5 text-[9px] font-bold text-koma-muted">
+                      Papel {activePaperWidthMm} mm
+                    </span>
+                  ) : null}
+                </div>
+
+                <strong className="block text-sm sm:text-base font-bold text-koma-foreground truncate">
+                  {hasReadyPrinter && firstReady
+                    ? `${friendlyPrinterName(firstReady.name)} — Pronta para imprimir`
+                    : diagnostic.title}
+                </strong>
+
+                <p className="text-[11px] leading-relaxed text-koma-foreground/80 font-medium">
+                  {diagnostic.detail}
+                </p>
+
+                {actionMessage && (
+                  <span className={`mt-2 block text-[11px] font-bold ${
+                    actionSuccessful === false
+                      ? 'text-rose-700 dark:text-rose-300'
+                      : actionSuccessful === true
+                        ? 'text-emerald-700 dark:text-emerald-300'
+                        : 'text-sky-700 dark:text-sky-300'
+                  }`}>
+                    {actionMessage}
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="min-w-0">
-              <strong className="block text-sm font-bold text-koma-foreground">{diagnostic.title}</strong>
-              <span className="mt-1 block text-[10px] leading-relaxed text-koma-foreground/80 font-medium">
-                {diagnostic.detail}
-              </span>
-              {actionMessage && (
-                <span className={`mt-2 block text-[10px] font-bold ${
-                  actionSuccessful === false
-                    ? 'text-rose-700 dark:text-rose-300'
-                    : actionSuccessful === true
-                      ? 'text-emerald-700 dark:text-emerald-300'
-                      : 'text-sky-700 dark:text-sky-300'
-                }`}>
-                  {actionMessage}
-                </span>
-              )}
-              {failedJobs.length > 0 && (
+
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+              {!hasOnlineAgent ? (
                 <button
                   type="button"
-                  onClick={() => void handleRetryFailedJobs()}
-                  disabled={Boolean(reprintingId)}
-                  className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl koma-btn-danger px-3.5 py-2 text-xs font-bold transition cursor-pointer disabled:opacity-50"
-                  id="btn-retry-failed-print-jobs"
+                  onClick={startLocalAgent}
+                  disabled={startingAgent}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl koma-btn-success px-5 py-2.5 text-xs font-extrabold transition disabled:cursor-wait disabled:opacity-60 cursor-pointer shadow-xs"
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  <span>Recuperar {failedJobs.length} impressão(ões) com falha</span>
+                  {startingAgent
+                    ? <RefreshCw size={16} className="animate-spin" />
+                    : <Power size={16} />}
+                  {startingAgent ? 'Preparando…' : 'Preparar impressão'}
+                </button>
+              ) : null}
+
+              {onTestPrint && (
+                <button
+                  type="button"
+                  onClick={() => void onTestPrint()}
+                  disabled={testInProgress || !hasReadyPrinter}
+                  title={
+                    hasReadyPrinter
+                      ? 'Enviar um cupom real para a impressora pronta'
+                      : 'Conecte ou pareie uma impressora primeiro'
+                  }
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-panel px-5 py-2.5 text-xs font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer shadow-xs"
+                >
+                  {testInProgress
+                    ? <RefreshCw size={16} className="animate-spin" />
+                    : <Printer size={16} />}
+                  {testInProgress ? 'Enviando teste…' : 'Imprimir teste'}
                 </button>
               )}
             </div>
           </div>
-
-          <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:w-auto">
-            {!hasOnlineAgent ? (
-              <button
-                type="button"
-                onClick={startLocalAgent}
-                disabled={startingAgent}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl koma-btn-success px-5 py-2.5 text-xs font-extrabold transition disabled:cursor-wait disabled:opacity-60 cursor-pointer shadow-xs"
-              >
-                {startingAgent
-                  ? <RefreshCw size={16} className="animate-spin" />
-                  : <Power size={16} />}
-                {startingAgent ? 'Preparando…' : 'Preparar impressão'}
-              </button>
-            ) : null}
-
-            {onTestPrint && (
-              <button
-                type="button"
-                onClick={() => void onTestPrint()}
-                disabled={testInProgress || !hasReadyPrinter}
-                title={
-                  hasReadyPrinter
-                    ? 'Enviar um cupom real para a impressora pronta'
-                    : 'Conecte ou pareie uma impressora primeiro'
-                }
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-panel px-5 py-2.5 text-xs font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer shadow-xs"
-              >
-                {testInProgress
-                  ? <RefreshCw size={16} className="animate-spin" />
-                  : <Printer size={16} />}
-                {testInProgress ? 'Enviando teste…' : 'Imprimir teste'}
-              </button>
-            )}
-          </div>
         </div>
-      </div>
+      </section>
 
-      {(queueTotal > 0 || failedJobs.length > 0) && (
-      <div className="overflow-hidden rounded-2xl border border-koma-border shadow-xs">
-        <button
-          type="button"
-          onClick={() => setShowQueue(current => !current)}
-          className="flex min-h-12 w-full items-center justify-between gap-3 bg-koma-panel px-4 py-3 text-left transition hover:bg-koma-raised cursor-pointer"
-          aria-expanded={showQueue}
-        >
-          <span className="flex min-w-0 items-center gap-3">
-            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
-              queueTotal || failedJobs.length
-                ? 'koma-badge-warning'
-                : 'koma-badge-success'
-            }`}>
-              <Clock3 size={15} />
-            </span>
-            <span>
-              <strong className="block text-xs font-bold text-koma-foreground">Fila e recuperação</strong>
-              <span className="block text-[10px] font-normal text-koma-muted">
-                {queueTotal > 0
-                  ? `${queueTotal} aguardando · mais antiga ${formatAge(monitorData?.summary.oldest_unresolved_seconds ?? null)} · mais antiga primeiro`
-                  : 'Nenhum trabalho aguardando'}
-                {queueOriginSummary ? ` · ${queueOriginSummary}` : ''}
-                {' · '}{failedJobs.length} com falha
-              </span>
-            </span>
-          </span>
-          {showQueue ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </button>
-
-        {showQueue && (
-          <div className="max-h-72 overflow-auto border-t border-koma-border bg-koma-panel">
-            {monitorData?.queue_jobs?.length ? (
-              <div className="divide-y divide-koma-border">
-                {monitorData.queue_jobs.map(job => {
-                  const displayStatus = job.display_status || job.status;
-                  return (
-                    <div key={job.id} className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 sm:grid-cols-[1fr_auto_auto]">
-                      <div className="min-w-0">
-                        <strong className="block truncate text-xs font-bold text-koma-foreground">
-                          {job.reference || friendlyDocumentType(job.document_type)}
-                        </strong>
-                        <span className="text-[10px] text-koma-muted font-medium">
-                          {friendlyQueueOrigin(job)} · {friendlyDocumentType(job.document_type)} · {job.destination} · aguardando {formatAge(job.age_seconds)}
-                        </span>
-                        {job.last_error && (
-                          <span className="mt-1 block truncate text-[9px] text-rose-600 dark:text-rose-300 font-medium" title={job.last_error}>
-                            {job.last_error}
-                          </span>
-                        )}
-                      </div>
-                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[9px] font-bold ${STATUS_STYLES[displayStatus] || STATUS_STYLES.cancelled}`}>
-                        {STATUS_LABELS[displayStatus] || displayStatus}
-                      </span>
-                      {job.status === 'failed' ? (
-                        <button
-                          type="button"
-                          onClick={() => void handleRetryFailedJobs()}
-                          disabled={Boolean(reprintingId)}
-                          className="col-span-2 inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg koma-badge-danger px-2.5 py-1 text-[9px] font-bold transition disabled:opacity-50 sm:col-span-1 cursor-pointer"
-                        >
-                          <RotateCcw size={10} /> Recuperar
-                        </button>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="px-4 py-6 text-center">
-                <CheckCircle2 size={20} className="mx-auto text-emerald-700 dark:text-emerald-400" />
-                <strong className="mt-2 block text-xs font-bold text-koma-foreground">Fila vazia</strong>
-                <span className="text-[10px] text-koma-muted">Nenhuma impressão precisa ser recuperada.</span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      )}
-
-      <div className="space-y-3">
+      {/* 2. Impressoras */}
+      <section className="space-y-3 text-left" aria-label="Impressoras disponíveis">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-xs font-bold text-koma-foreground">Impressoras</h3>
@@ -1242,8 +1197,234 @@ export function PrintMonitorPanel({
             </div>
           )}
         </div>
+      </section>
+
+      {/* 3 & 4. Cupom e Delivery (injetados via children) */}
+      {typeof children === 'function' ? children({ activePaperWidthMm }) : children}
+
+      {/* 5. Problemas de impressão (somente se houver) */}
+      {(hasPrintingProblems || queueTotal > 0) && (
+        <section className="space-y-3 text-left" aria-label="Problemas de impressão">
+          {hasPrintingProblems && (
+            <div className="rounded-2xl border border-rose-400/80 bg-rose-50 dark:bg-rose-950/25 p-4 sm:p-5 text-rose-950 dark:text-rose-200 shadow-xs">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-900 dark:text-rose-300">
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div>
+                    <strong className="block text-sm font-bold text-koma-foreground">
+                      {attentionJobsCount} {attentionJobsCount === 1 ? 'impressão precisa' : 'impressões precisam'} de atenção
+                    </strong>
+                    <span className="block text-[11px] text-koma-foreground/80 font-medium">
+                      {failedJobs.length > 0 && `${failedJobs.length} com falha no envio`}
+                      {failedJobs.length > 0 && delayedJobsCount > 0 && ' · '}
+                      {delayedJobsCount > 0 && `${delayedJobsCount} aguardando há mais de 2 minutos`}
+                    </span>
+                  </div>
+                </div>
+
+                {failedJobs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRetryFailedJobs()}
+                    disabled={Boolean(reprintingId)}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl koma-btn-danger px-4 py-2 text-xs font-bold transition cursor-pointer disabled:opacity-50 shadow-xs"
+                    id="btn-retry-failed-print-jobs"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    <span>Recuperar impressões</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="overflow-hidden rounded-2xl border border-koma-border shadow-xs">
+            <button
+              type="button"
+              onClick={() => setShowQueue(current => !current)}
+              className="flex min-h-12 w-full items-center justify-between gap-3 bg-koma-panel px-4 py-3 text-left transition hover:bg-koma-raised cursor-pointer"
+              aria-expanded={showQueue}
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                  attentionJobsCount > 0
+                    ? 'koma-badge-danger'
+                    : queueTotal > 0
+                      ? 'koma-badge-warning'
+                      : 'koma-badge-success'
+                }`}>
+                  <Clock3 size={15} />
+                </span>
+                <span>
+                  <strong className="block text-xs font-bold text-koma-foreground">
+                    Fila de impressão {queueTotal > 0 ? `(${queueTotal})` : ''}
+                  </strong>
+                  <span className="block text-[10px] font-normal text-koma-muted">
+                    {queueTotal > 0
+                      ? `${queueTotal} aguardando · mais antiga ${formatAge(monitorData?.summary.oldest_unresolved_seconds ?? null)} · mais antiga primeiro`
+                      : 'Nenhum trabalho aguardando'}
+                    {queueOriginSummary ? ` · ${queueOriginSummary}` : ''}
+                    {failedJobs.length > 0 ? ` · ${failedJobs.length} com falha` : ''}
+                  </span>
+                </span>
+              </span>
+              {showQueue ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+
+            {showQueue && (
+              <div className="max-h-72 overflow-auto border-t border-koma-border bg-koma-panel">
+                {monitorData?.queue_jobs?.length ? (
+                  <div className="divide-y divide-koma-border">
+                    {monitorData.queue_jobs.map(job => {
+                      const displayStatus = job.display_status || job.status;
+                      return (
+                        <div key={job.id} className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 sm:grid-cols-[1fr_auto_auto]">
+                          <div className="min-w-0">
+                            <strong className="block truncate text-xs font-bold text-koma-foreground">
+                              {job.reference || friendlyDocumentType(job.document_type)}
+                            </strong>
+                            <span className="text-[10px] text-koma-muted font-medium">
+                              {friendlyQueueOrigin(job)} · {friendlyDocumentType(job.document_type)} · {job.destination} · aguardando {formatAge(job.age_seconds)}
+                            </span>
+                            {job.last_error && (
+                              <span className="mt-1 block truncate text-[9px] text-rose-600 dark:text-rose-300 font-medium" title={job.last_error}>
+                                {job.last_error}
+                              </span>
+                            )}
+                          </div>
+                          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[9px] font-bold ${STATUS_STYLES[displayStatus] || STATUS_STYLES.cancelled}`}>
+                            {STATUS_LABELS[displayStatus] || displayStatus}
+                          </span>
+                          {job.status === 'failed' ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleRetryFailedJobs()}
+                              disabled={Boolean(reprintingId)}
+                              className="col-span-2 inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg koma-badge-danger px-2.5 py-1 text-[9px] font-bold transition disabled:opacity-50 sm:col-span-1 cursor-pointer"
+                            >
+                              <RotateCcw size={10} /> Recuperar
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="px-4 py-6 text-center">
+                    <CheckCircle2 size={20} className="mx-auto text-emerald-700 dark:text-emerald-400" />
+                    <strong className="mt-2 block text-xs font-bold text-koma-foreground">Fila vazia</strong>
+                    <span className="text-[10px] text-koma-muted">Nenhuma impressão precisa ser recuperada.</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* 6. Histórico recente [recolhido por padrão] */}
+      <div className="overflow-hidden rounded-2xl border border-koma-border shadow-xs">
+        <button
+          type="button"
+          onClick={() => setShowHistory(current => !current)}
+          className="flex min-h-11 w-full items-center justify-between gap-2 bg-koma-card px-4 py-2.5 text-[10px] font-bold text-koma-secondary transition hover:bg-koma-raised cursor-pointer"
+          aria-expanded={showHistory}
+        >
+          <span className="flex items-center gap-2">
+            <History size={14} />
+            Histórico recente
+            <span className="text-[9px] font-normal text-koma-muted">
+              hoje · {monitorData?.history_jobs?.length || 0}/{monitorData?.history_limit || 20}
+            </span>
+          </span>
+          {showHistory ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+
+        {showHistory && (
+          <div className="max-h-80 overflow-auto">
+            {monitorData?.history_jobs?.length ? (
+              <table className="w-full text-left">
+                <thead className="sticky top-0 bg-koma-card text-[8px] uppercase tracking-wider text-koma-muted">
+                  <tr>
+                    <th className="px-3 py-2">Referência</th>
+                    <th className="px-3 py-2">Estado</th>
+                    <th className="hidden px-3 py-2 md:table-cell">Impressora</th>
+                    <th className="px-3 py-2">Horário</th>
+                    <th className="px-3 py-2 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-koma-border">
+                  {monitorData.history_jobs.map(job => {
+                    const displayStatus = job.display_status || job.status;
+                    return (
+                      <tr key={job.id} className={job.delayed ? 'bg-amber-500/5' : ''}>
+                        <td className="px-3 py-2">
+                          <strong className="block text-[9px] text-koma-secondary">
+                            {job.reference || friendlyDocumentType(job.document_type)}
+                            {job.is_reprint ? ' · Reimpressão' : ''}
+                          </strong>
+                          <span className="text-[8px] text-koma-muted">
+                            {friendlyDocumentType(job.document_type)} · {job.destination}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-flex rounded-full border px-2 py-1 text-[8px] font-bold ${STATUS_STYLES[displayStatus] || STATUS_STYLES.cancelled}`}>
+                            {STATUS_LABELS[displayStatus] || displayStatus}
+                          </span>
+                          {job.last_error && (
+                            <span title={job.last_error} className="mt-1 block max-w-40 truncate text-[7px] text-red-300">
+                              {job.last_error}
+                            </span>
+                          )}
+                        </td>
+                        <td className="hidden px-3 py-2 text-[8px] text-koma-subtle md:table-cell">
+                          {friendlyPrinterName(job.printer_name)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-[8px] text-koma-subtle">
+                          {formatDate(job.printed_at || job.created_at)}
+                          {job.delayed && (
+                            <span className="block text-amber-600 dark:text-amber-300">
+                              esperando {formatAge(job.age_seconds)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {job.can_reprint ? (
+                            <button
+                              type="button"
+                              onClick={() => void requestReprint(job)}
+                              disabled={reprintingId === job.id}
+                              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#35353a] px-2.5 py-1 text-[8px] font-bold text-koma-secondary transition hover:border-gray-500 disabled:opacity-50 cursor-pointer"
+                            >
+                              {reprintingId === job.id
+                                ? <RefreshCw size={10} className="animate-spin" />
+                                : <RotateCcw size={10} />}
+                              Reimprimir
+                            </button>
+                          ) : job.accepted_by_spooler ? (
+                            <CheckCircle2 size={13} className="ml-auto text-emerald-400" />
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <div className="px-4 py-6 text-center text-[9px] text-koma-muted">
+                Nenhum trabalho de impressão registrado hoje.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
+      {/* 7. Testes avançados [recolhido por padrão] */}
+      {advancedTestsSlot}
+
+      {/* 8. Diagnóstico técnico e suporte [recolhido por padrão] */}
       <div className="overflow-hidden rounded-2xl border border-koma-border shadow-xs">
         <button
           type="button"
@@ -1407,104 +1588,6 @@ export function PrintMonitorPanel({
           </div>
         )}
       </div>
-
-      <div className="overflow-hidden rounded-2xl border border-[#29292e]">
-        <button
-          type="button"
-          onClick={() => setShowHistory(current => !current)}
-          className="flex min-h-11 w-full items-center justify-between gap-2 bg-koma-card px-4 py-2.5 text-[10px] font-bold text-koma-secondary transition hover:bg-koma-raised cursor-pointer"
-          aria-expanded={showHistory}
-        >
-          <span className="flex items-center gap-2">
-            <History size={14} />
-            Histórico recente
-            <span className="text-[9px] font-normal text-koma-muted">
-              hoje · {monitorData?.history_jobs?.length || 0}/{monitorData?.history_limit || 20}
-            </span>
-          </span>
-          {showHistory ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </button>
-
-        {showHistory && (
-          <div className="max-h-80 overflow-auto">
-            {monitorData?.history_jobs?.length ? (
-              <table className="w-full text-left">
-                <thead className="sticky top-0 bg-koma-card text-[8px] uppercase tracking-wider text-koma-muted">
-                  <tr>
-                    <th className="px-3 py-2">Referência</th>
-                    <th className="px-3 py-2">Estado</th>
-                    <th className="hidden px-3 py-2 md:table-cell">Impressora</th>
-                    <th className="px-3 py-2">Horário</th>
-                    <th className="px-3 py-2 text-right">Ação</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-koma-border">
-                  {monitorData.history_jobs.map(job => {
-                    const displayStatus = job.display_status || job.status;
-                    return (
-                      <tr key={job.id} className={job.delayed ? 'bg-amber-500/5' : ''}>
-                        <td className="px-3 py-2">
-                          <strong className="block text-[9px] text-koma-secondary">
-                            {job.reference || friendlyDocumentType(job.document_type)}
-                            {job.is_reprint ? ' · Reimpressão' : ''}
-                          </strong>
-                          <span className="text-[8px] text-koma-muted">
-                            {friendlyDocumentType(job.document_type)} · {job.destination}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className={`inline-flex rounded-full border px-2 py-1 text-[8px] font-bold ${STATUS_STYLES[displayStatus] || STATUS_STYLES.cancelled}`}>
-                            {STATUS_LABELS[displayStatus] || displayStatus}
-                          </span>
-                          {job.last_error && (
-                            <span title={job.last_error} className="mt-1 block max-w-40 truncate text-[7px] text-red-300">
-                              {job.last_error}
-                            </span>
-                          )}
-                        </td>
-                        <td className="hidden px-3 py-2 text-[8px] text-koma-subtle md:table-cell">
-                          {friendlyPrinterName(job.printer_name)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2 text-[8px] text-koma-subtle">
-                          {formatDate(job.printed_at || job.created_at)}
-                          {job.delayed && (
-                            <span className="block text-amber-600 dark:text-amber-300">
-                              esperando {formatAge(job.age_seconds)}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          {job.can_reprint ? (
-                            <button
-                              type="button"
-                              onClick={() => void requestReprint(job)}
-                              disabled={reprintingId === job.id}
-                              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#35353a] px-2.5 py-1 text-[8px] font-bold text-koma-secondary transition hover:border-gray-500 disabled:opacity-50 cursor-pointer"
-                            >
-                              {reprintingId === job.id
-                                ? <RefreshCw size={10} className="animate-spin" />
-                                : <RotateCcw size={10} />}
-                              Reimprimir
-                            </button>
-                          ) : job.accepted_by_spooler ? (
-                            <CheckCircle2 size={13} className="ml-auto text-emerald-400" />
-                          ) : null}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              <div className="px-4 py-6 text-center text-[9px] text-koma-muted">
-                Nenhum trabalho de impressão registrado hoje.
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-    </section>
     </div>
   );
 }
