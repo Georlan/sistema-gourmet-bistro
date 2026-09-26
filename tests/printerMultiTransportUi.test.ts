@@ -34,9 +34,10 @@ test('monitor handles multi-transport printing uniformly', () => {
   assert.match(monitor, /networkPrinters/);
   assert.match(monitor, /Impressoras de rede \(TCP \/ IP\)/);
 
-  // Generic readiness enables test print
+  // Physical readiness and on-demand dispatch are intentionally separate.
   assert.match(monitor, /hasReadyPrinter = \(/);
-  assert.match(monitor, /disabled=\{testInProgress \|\| !hasReadyPrinter\}/);
+  assert.match(monitor, /hasDispatchablePrinter/);
+  assert.match(monitor, /disabled=\{testInProgress \|\| !hasDispatchablePrinter\}/);
 });
 
 test('monitor presents friendly non-technical UX for users and keeps technical details in diagnostics', () => {
@@ -79,9 +80,10 @@ test('monitor shows the physical paper profile without exposing layout internals
 });
 
 
-test('paired bluetooth alone never appears as connected or ready', () => {
+test('paired bluetooth stays dispatchable without pretending to be connected', () => {
   assert.match(monitor, /const physicallyPresent = Boolean\(/);
   assert.doesNotMatch(monitor, /printer\.present \|\| printer\.paired \|\| printer\.available/);
-  assert.match(monitor, /nenhuma impressora disponível/);
-  assert.match(monitor, /Ligue ou conecte uma impressora/);
+  assert.match(monitor, /isPrinterDispatchable/);
+  assert.match(monitor, /configurada; desconectada agora/);
+  assert.match(monitor, /Bluetooth fica ocioso sem conexão persistente/);
 });
