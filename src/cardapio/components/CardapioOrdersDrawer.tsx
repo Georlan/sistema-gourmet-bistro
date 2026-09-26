@@ -210,7 +210,10 @@ export default function CardapioOrdersDrawer({
         const isReconnect = openedOrders.has(order.id);
         openedOrders.add(order.id);
         markHealthy(order.id);
-        if (isReconnect) void refreshUnreadCounts();
+        if (isReconnect) {
+          void refreshUnreadCounts();
+          onRealtimeRefresh?.();
+        }
       };
       source.onerror = () => markDegraded(order.id);
       source.addEventListener("connected", () => { void refreshUnreadCounts(); });
