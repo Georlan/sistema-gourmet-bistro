@@ -397,7 +397,7 @@ def _is_printer_dispatchable_entry(printer: Mapping[str, Any]) -> bool:
             printer.get("configured") is True
             and printer.get("paired") is True
             and printer.get("spp") is True
-            and printer.get("dispatchable", True) is True
+            and printer.get("dispatchable") is not False
         )
     return _is_printer_ready_entry(printer)
 
@@ -899,7 +899,7 @@ class DetectedPrinterReport(BaseModel):
     trusted: bool = False
     connected: bool = False
     spp: bool = False
-    dispatchable: bool = False
+    dispatchable: Optional[bool] = None
 
 
 class PrinterEndpointReport(BaseModel):
