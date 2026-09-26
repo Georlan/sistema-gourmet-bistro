@@ -100,7 +100,7 @@ def _compact_order_metadata(lines: list[str], *, width: int) -> list[str]:
             nxt.startswith("PEDIDO ") or nxt.startswith("PEDIDOS ")
         ):
             mesa = current.split(":", 1)[1].strip()
-            identity = nxt.replace("PEDIDO #", "PEDIDO ", 1).replace("PEDIDOS #", "PEDIDOS ", 1)
+            identity = nxt
             output.append(
                 ESC_BOLD_ON
                 + _split_justified(f"MESA {mesa}", identity, width)
