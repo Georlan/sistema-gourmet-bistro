@@ -373,6 +373,7 @@ const SUBTAB_ALIASES: Readonly<Partial<Record<CashierTab, Readonly<Record<string
 const VALID_TABS = new Set<CashierTab>(CASHIER_PARENT_ITEMS.map((item) => item.target.tab));
 
 const CHILD_DETAIL_SUBTABS: Readonly<Record<string, readonly string[]>> = {
+  vendas_cozinha: ['kds', 'preparo'],
   relatorios_visao_geral: ['visao_geral', 'metas', 'vendas', 'indicadores', 'relatorio_geral', 'consolidado_vendas'],
   relatorios_financeiro: ['financeiro', 'dre', 'demonstrativo_dre', 'fluxo_caixa'],
   relatorios_produtos: ['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'],
@@ -450,6 +451,9 @@ export function normalizeCashierTargetForEntitlements(
   }
   if (target.tab === 'operacao' && target.subTab === 'kds' && !operationalEntitlementEnabled(entitlements, 'kds')) {
     return { ...target, subTab: 'preparo' };
+  }
+  if (target.tab === 'operacao' && target.subTab === 'preparo' && operationalEntitlementEnabled(entitlements, 'kds')) {
+    return { ...target, subTab: 'kds' };
   }
   if (target.tab === 'impressao_salao' && target.subTab === 'impressao' && !operationalEntitlementEnabled(entitlements, 'printing')) {
     return { tab: 'impressao_salao', subTab: 'aparencia' };
