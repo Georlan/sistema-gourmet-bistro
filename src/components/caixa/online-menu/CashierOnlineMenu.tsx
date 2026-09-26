@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, ExternalLink, Gift, Lock, Pencil, QrCode, Save } from 'lucide-react';
+import { ChevronDown, Gift, Lock } from 'lucide-react';
 import { CardapioDigitalSettingsPanel } from '../../cardapio/CardapioDigitalSettingsPanel';
 import type { CashierTab } from '../cashierContracts';
 import { getTenantPublicMenuUrl, resolveKomaHost } from '../../../domain/komaHost';
@@ -172,45 +172,5 @@ export default function CashierOnlineMenu({
     );
   }
 
-  const openEditor = () => setActiveSubTab('cardapio_perfil');
-  const publishFromEditor = () => {
-    if (activeSection !== 'perfil') {
-      openEditor();
-      window.setTimeout(() => document.querySelector<HTMLElement>('.online-menu-editor__publish')?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 0);
-      return;
-    }
-    const publishButton = document.querySelector<HTMLButtonElement>('.online-menu-editor__publish button[type="button"], .online-menu-editor__publish button[type="submit"]');
-    if (publishButton && !publishButton.disabled) publishButton.click();
-  };
-
-  return (
-    <div className="space-y-4">
-      <section className="rounded-2xl border border-koma-border bg-koma-panel p-3 sm:p-4" aria-label="Fluxo de publicação do cardápio online">
-        <div className="mb-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">
-          <CheckCircle2 size={14} className="text-emerald-500" aria-hidden="true" /> Editar → Publicar → Conferir
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <button type="button" onClick={openEditor} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 text-[10px] font-bold text-koma-foreground">
-            <Pencil size={14} aria-hidden="true" /> 1. Editar
-          </button>
-          <button type="button" onClick={publishFromEditor} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
-            <Save size={14} aria-hidden="true" /> 2. Publicar
-          </button>
-          {publicMenuUrl ? (
-            <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 text-[10px] font-bold text-koma-foreground">
-              <ExternalLink size={14} aria-hidden="true" /> 3. Conferir
-            </a>
-          ) : (
-            <button type="button" disabled className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 text-[10px] font-bold text-koma-muted opacity-60">
-              <ExternalLink size={14} aria-hidden="true" /> 3. Conferir
-            </button>
-          )}
-          <button type="button" onClick={() => setActiveSubTab('cardapio_qr_links')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 text-[10px] font-bold text-koma-foreground">
-            <QrCode size={14} aria-hidden="true" /> Link e QR Code
-          </button>
-        </div>
-      </section>
-      {content}
-    </div>
-  );
+  return <div className="space-y-4">{content}</div>;
 }
