@@ -1019,15 +1019,14 @@ class LinuxPrinterAdapter(BasePrinterAdapter):
         skip_ready_check: bool = False,
     ) -> bool:
         target_printer = printer_name
-        target_columns = (
-            int(getattr(target_printer, "columns", 0) or 0)
-            if hasattr(target_printer, "columns")
-            else None
+        profile_kwargs = (
+            target_printer.escpos_profile_kwargs()
+            if hasattr(target_printer, "escpos_profile_kwargs")
+            else {}
         )
         raw_payload = build_escpos_payload(
             payload_text,
-            encoding="cp860",
-            columns=target_columns,
+            **profile_kwargs,
         )
         if hasattr(target_printer, "build_transport"):
             if not skip_ready_check and not self.is_printer_ready(target_printer):
