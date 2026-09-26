@@ -85,6 +85,7 @@ required_files=(
     agent_runtime.py
     endpoints.py
     printer_profiles.py
+    thermal_layout.py
 )
 adapter_files=(
     __init__.py
