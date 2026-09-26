@@ -60,11 +60,12 @@ def test_table_closing_uses_same_title_and_items_visual_system():
     try:
         legacy = "\n".join(
             [
-                ESC_BOLD_ON + "CONTA DA MESA".center(40) + ESC_BOLD_OFF,
-                ESC_BOLD_ON + "MESA: 5".ljust(27) + "ABERTURA: 19:20" + ESC_BOLD_OFF,
+                ESC_BOLD_ON + "FECHAMENTO DA MESA".center(40) + ESC_BOLD_OFF,
+                "MESA: 5",
                 "CONTA: #2",
-                "DATA: 04/09/2026".ljust(29) + "HORA: 20:23",
-                "IMPRESSO POR: GEORLAN",
+                "ABERTA: 19:20",
+                "IMPRESSA: 04/09/2026 20:23",
+                "OPERADOR: GEORLAN",
                 "-" * 40,
                 ESC_BOLD_ON + "ITENS" + ESC_BOLD_OFF,
             ]
@@ -72,7 +73,7 @@ def test_table_closing_uses_same_title_and_items_visual_system():
 
         ticket = apply_operational_visual_hierarchy(
             legacy,
-            document_title="CONTA DA MESA",
+            document_title="FECHAMENTO DA MESA",
         )
     finally:
         printer_service.width = old_width
@@ -80,7 +81,7 @@ def test_table_closing_uses_same_title_and_items_visual_system():
     assert (
         ESC_DOUBLE_HEIGHT_ON
         + ESC_BOLD_ON
-        + "CONTA DA MESA".center(40)
+        + "FECHAMENTO DA MESA".center(40)
         + ESC_BOLD_OFF
         + ESC_NORMAL_SIZE
     ) in ticket
@@ -89,7 +90,7 @@ def test_table_closing_uses_same_title_and_items_visual_system():
     assert "CONTA: #2" in ticket
     assert "PEDIDO #2" not in ticket
     assert "REIMPRESSÃO" not in ticket
-    assert "IMPRESSO POR: GEORLAN" in ticket
+    assert "OPERADOR: GEORLAN" in ticket
 
 
 def test_shared_hierarchy_normalizes_naive_utc_event_before_printing_time():
@@ -148,5 +149,5 @@ def test_table_receipt_renderer_delegates_visuals_to_shared_hierarchy():
 
     assert "apply_operational_visual_hierarchy(" in renderer
     assert 'identity_label=identity_label' in renderer
-    assert 'document_title="CONTA DA MESA"' in renderer
+    assert 'document_title="FECHAMENTO DA MESA"' in renderer
     assert "_format_full_table_reprint" in renderer
