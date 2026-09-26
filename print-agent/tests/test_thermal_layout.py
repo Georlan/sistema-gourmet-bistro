@@ -104,7 +104,7 @@ class ThermalLayoutProfileTest(unittest.TestCase):
         )
 
         self.assertIn("MESA 6", compact)
-        self.assertIn("PEDIDO 51", compact)
+        self.assertIn("PEDIDO #51", compact)
         self.assertIn("REIMPRESSAO | VIA COMPLETA", compact)
         self.assertIn("26/09/26 13:41", compact)
         self.assertIn("OPERADOR: Caixa Demo".upper(), compact.upper())
