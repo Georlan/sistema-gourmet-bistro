@@ -30,6 +30,66 @@ class EscPosPayloadTest(unittest.TestCase):
     def test_initializes_every_ticket(self):
         self.assertTrue(build_escpos_payload("RECIBO").startswith(b"\x1b@"))
 
+    def test_restores_escaped_nul_before_layout_reflow(self):
+        source = (
+            "\x1bM\\x00"
+            + ("KÔMA DEMO".center(48))
+            + "\x1bE\\x00\n"
+            + ("TOTAL DO PEDIDO:".ljust(35) + "R$ 29,90")
+        )
+        payload = build_escpos_payload(source, columns=42)
+
+        self.assertNotIn(b"x00", payload)
+        self.assertIn(b"\x1bM\x00", payload)
+        self.assertIn(b"\x1bE\x00", payload)
+
+    def test_compact_58mm_profile_uses_font_b_tighter_spacing_and_cp850(self):
+        source = (
+            "\x1b3\x20"
+            "\x1bM\\x00"
+            + ("KÔMA DEMO".center(48))
+            + "\n\n"
+            + ("1x BACON PRIME".ljust(38) + "R$ 29,90")
+            + "\n"
+        )
+        payload = build_escpos_payload(
+            source,
+            columns=42,
+            encoding="cp850",
+            code_page=2,
+            font_mode="b",
+            line_spacing_dots=24,
+            feed_lines=2,
+            compact_whitespace=True,
+        )
+
+        self.assertTrue(payload.startswith(INITIALIZE + b"\x1bt\x02"))
+        self.assertIn(b"\x1bM\x01", payload)
+        self.assertNotIn(b"\x1bM\x00", payload)
+        self.assertIn(b"\x1b3\x18", payload)
+        self.assertIn("KÔMA DEMO".encode("cp850"), payload)
+        self.assertNotIn(b"x00", payload)
+        self.assertTrue(payload.endswith(b"\n\n" + PARTIAL_CUT))
+
+    def test_wide_80mm_profile_keeps_legacy_font_and_spacing(self):
+        source = "\x1b3\x20\x1bM\\x00" + ("KÔMA DEMO".center(48))
+        payload = build_escpos_payload(
+            source,
+            columns=48,
+            encoding="cp860",
+            code_page=3,
+            font_mode="a",
+            line_spacing_dots=None,
+            feed_lines=3,
+            compact_whitespace=False,
+        )
+
+        self.assertTrue(payload.startswith(INITIALIZE + PORTUGUESE_CODE_PAGE))
+        self.assertIn(b"\x1b3\x20", payload)
+        self.assertIn(b"\x1bM\x00", payload)
+        self.assertTrue(payload.endswith(b"\n\n\n" + PARTIAL_CUT))
+
+
     def test_compact_profile_reflows_48_columns_to_32(self):
         amount = "R$ 29,90"
         source = "\n".join(
