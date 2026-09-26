@@ -117,7 +117,17 @@ def infer_printer_paper_profile(
             known_profile = profile
             break
 
-    base = known_profile or _base_profile_for_width(explicit_width)
+    base = (
+        known_profile
+        if (
+            known_profile is not None
+            and (
+                explicit_width is None
+                or explicit_width == known_profile.paper_width_mm
+            )
+        )
+        else _base_profile_for_width(explicit_width)
+    )
     resolved_width = explicit_width or base.paper_width_mm
 
     # Perfis antigos de 58 mm eram gerados automaticamente em 32 colunas com
