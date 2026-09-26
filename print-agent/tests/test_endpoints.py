@@ -46,6 +46,8 @@ class TestPrinterEndpointModel:
             "supports_cut": True,
             "feed_lines": 3,
             "allow_double_height": True,
+            "charset_policy": "native_cp860",
+            "semantic_layout": "standard",
         }
 
     def test_known_printer_models_receive_paper_profiles(self):
@@ -67,9 +69,13 @@ class TestPrinterEndpointModel:
         assert compact.options["supports_cut"] is False
         assert compact.options["feed_lines"] == 2
         assert compact.options["allow_double_height"] is False
+        assert compact.options["charset_policy"] == "ascii_safe"
+        assert compact.options["semantic_layout"] == "compact_58"
         assert wide.paper_width_mm == 80
         assert wide.columns == 48
         assert wide.paper_profile == "thermal-80mm"
+        assert wide.options["charset_policy"] == "native_cp860"
+        assert wide.options["semantic_layout"] == "standard"
 
     def test_explicit_paper_profile_overrides_model_suggestion(self):
         endpoint = PrinterEndpoint(
@@ -88,6 +94,8 @@ class TestPrinterEndpointModel:
         assert endpoint.paper_profile == "custom-80mm"
         assert endpoint.options["compact_layout"] is False
         assert endpoint.options["supports_cut"] is True
+        assert endpoint.options["charset_policy"] == "native_cp860"
+        assert endpoint.options["semantic_layout"] == "standard"
 
     def test_endpoint_serialization_roundtrip(self):
         original = PrinterEndpoint(
