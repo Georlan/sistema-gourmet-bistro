@@ -197,20 +197,16 @@ class PosAdapter:
                     detail="Informe o telefone do cliente para a retirada.",
                 )
 
-        if tipo_pedido in {"Entrega", "Retirada"} and not is_counter_sale:
-            if not venda_in.delivery_forma_pagamento:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="Informe a forma de pagamento para entrega ou retirada.",
-                )
-            if (
-                venda_in.delivery_troco_para is not None
-                and venda_in.delivery_forma_pagamento != "dinheiro"
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="Troco só pode ser informado para pagamento em dinheiro.",
-                )
+        if (
+            tipo_pedido in {"Entrega", "Retirada"}
+            and not is_counter_sale
+            and venda_in.delivery_troco_para is not None
+            and venda_in.delivery_forma_pagamento != "dinheiro"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Troco só pode ser informado para pagamento em dinheiro.",
+            )
 
         effective_identifier = "Balcão" if is_counter_sale else venda_in.identificador
         telefone_cliente = None
