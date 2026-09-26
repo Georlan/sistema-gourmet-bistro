@@ -33,6 +33,7 @@ interface DetectedPrinter {
   trusted?: boolean;
   connected?: boolean;
   spp?: boolean;
+  dispatchable?: boolean;
 }
 
 interface PrinterEndpointReport {
@@ -498,6 +499,18 @@ export function PrintMonitorPanel({
     );
   };
 
+  const isPrinterDispatchable = (printer: DetectedPrinter): boolean => {
+    if (printer.connection === 'bluetooth') {
+      return Boolean(
+        printer.configured
+        && printer.paired
+        && (printer.spp ?? true)
+        && (printer.dispatchable ?? true)
+      );
+    }
+    return isPrinterReady(printer);
+  };
+
   const allDetectedPrinters = useMemo(() => (
     (monitorData?.agents || [])
       .filter(agent => agentHasFreshDiagnostics(agent))
@@ -513,6 +526,10 @@ export function PrintMonitorPanel({
 
   const readyPrinters = useMemo(() => (
     allDetectedPrinters.filter(isPrinterReady)
+  ), [allDetectedPrinters]);
+
+  const dispatchablePrinters = useMemo(() => (
+    allDetectedPrinters.filter(isPrinterDispatchable)
   ), [allDetectedPrinters]);
 
   const usbPrinters = useMemo(() => (
@@ -601,6 +618,7 @@ export function PrintMonitorPanel({
     || (monitorData?.summary?.printer_ready ?? false)
     || (monitorData?.agents || []).some(agent => agent.printer_ready)
   );
+  const hasDispatchablePrinter = dispatchablePrinters.length > 0;
   const hasFreshPrinterDiagnostics = Boolean(
     (monitorData?.agents || []).some(agent => agentHasFreshDiagnostics(agent))
   );
@@ -833,6 +851,17 @@ export function PrintMonitorPanel({
         detail: 'O Kôma pode configurar e ativar essa impressora automaticamente.'
       };
     }
+    if (!hasReadyPrinter && hasDispatchablePrinter) {
+      const candidate = dispatchablePrinters[0];
+      return {
+        tone: 'neutral',
+        title: `${friendlyPrinterName(candidate?.name || null)} configurada; desconectada agora`,
+        detail: (
+          'O Bluetooth fica ocioso sem conexão persistente. '
+          + 'O KÔMA conecta automaticamente somente quando houver uma impressão.'
+        )
+      };
+    }
     if (!hasReadyPrinter) {
       if (monitorData.summary.delayed > 0) {
         return {
@@ -887,11 +916,13 @@ export function PrintMonitorPanel({
     hasFreshPrinterDiagnostics,
     hasOnlineAgent,
     hasReadyPrinter,
+    hasDispatchablePrinter,
     latestJob,
     monitorData,
     pendingCommandAction,
     pendingCommandId,
     queueTotal,
+    dispatchablePrinters,
     readyPrinters,
     readyUsbPrinters
   ]);
@@ -912,16 +943,20 @@ export function PrintMonitorPanel({
   const agentState = hasOnlineAgent ? 'Conectado' : 'Offline';
   const equipmentState = hasReadyPrinter
     ? 'Pronta para imprimir'
-    : (allDetectedPrinters.length > 0 || presentUsbPrinters.length > 0)
-      ? 'Impressora encontrada'
-      : 'Desconectada';
+    : hasDispatchablePrinter
+      ? 'Configurada'
+      : (allDetectedPrinters.length > 0 || presentUsbPrinters.length > 0)
+        ? 'Impressora encontrada'
+        : 'Desconectada';
   const operationAccent = !hasOnlineAgent
     ? 'agente offline'
     : queueTotal > 0
       ? `${queueTotal} na fila`
       : hasReadyPrinter
         ? 'pronta para imprimir'
-        : 'impressora indisponível';
+        : hasDispatchablePrinter
+          ? 'impressora configurada'
+          : 'impressora indisponível';
   const queueOrigins = monitorData?.summary.queue_origins;
   const queueOriginSummary = queueOrigins
     ? [
@@ -933,7 +968,8 @@ export function PrintMonitorPanel({
     : '';
 
   const firstReady = readyPrinters[0] || readyUsbPrinters[0] || null;
-  const activePrinter = firstReady || allDetectedPrinters[0] || null;
+  const firstDispatchable = dispatchablePrinters[0] || null;
+  const activePrinter = firstReady || firstDispatchable || allDetectedPrinters[0] || null;
   const activeEndpoint = activePrinter
     ? (configuredEndpoints.find(item => (
         item.name === activePrinter.name
@@ -1068,11 +1104,13 @@ export function PrintMonitorPanel({
                 <button
                   type="button"
                   onClick={() => void onTestPrint()}
-                  disabled={testInProgress || !hasReadyPrinter}
+                  disabled={testInProgress || !hasDispatchablePrinter}
                   title={
                     hasReadyPrinter
                       ? 'Enviar um cupom real para a impressora pronta'
-                      : 'Conecte ou pareie uma impressora primeiro'
+                      : hasDispatchablePrinter
+                        ? 'A impressora Bluetooth será conectada somente durante o envio'
+                        : 'Conecte ou configure uma impressora primeiro'
                   }
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-panel px-5 py-2.5 text-xs font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer shadow-xs"
                 >
@@ -1176,7 +1214,9 @@ export function PrintMonitorPanel({
                   <div className="mt-3 text-[10px] text-koma-muted">
                     {ready
                       ? 'O KÔMA pode usar esta impressora nos pedidos.'
-                      : 'Esta impressora não está disponível agora.'}
+                      : isPrinterDispatchable(printer)
+                        ? 'Configurada. O Bluetooth conecta somente durante a impressão.'
+                        : 'Esta impressora não está disponível agora.'}
                   </div>
                 </div>
               );

@@ -44,13 +44,15 @@ Use `--purge` somente quando também quiser apagar credenciais e dados locais.
 ### Bluetooth no Linux
 
 Bluetooth Classic SPP é um transporte operacional de primeira classe. Uma
-impressora pareada com SPP pode permanecer com `Connected=no` no BlueZ quando
-ociosa, mas isso não significa que ela esteja fisicamente disponível. O agente
-faz um probe RFCOMM curto, sem enviar bytes, para distinguir "pareada" de
-"ligada e alcançável". Só a segunda condição aparece como pronta e libera a
-fila. No envio real, o socket RFCOMM é aberto sob demanda, transmite o payload
-ESC/POS e fecha ao final. Não há dependência obrigatória de `/dev/rfcomm0`,
-`sudo` ou fila CUPS para esse caminho.
+impressora pareada com SPP normalmente permanece com `Connected=no` no BlueZ
+quando ociosa. O diagnóstico periódico respeita esse estado e **não** abre
+sockets RFCOMM apenas para testar presença, evitando notificações repetidas de
+"conectado/desconectado" no desktop. Pareamento + SPP significam que o endpoint
+está configurado para uma tentativa sob demanda; presença física e conexão
+atual continuam sendo estados separados. Quando existe uma impressão real, o
+socket RFCOMM é aberto, transmite o payload ESC/POS e fecha ao final. Não há
+dependência obrigatória de `/dev/rfcomm0`, `sudo` ou fila CUPS para esse
+caminho.
 
 ## Instalação no Windows
 

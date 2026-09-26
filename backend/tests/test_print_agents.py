@@ -1888,7 +1888,7 @@ def test_generic_printer_readiness_across_transports():
     assert state["physical_printer_present"] is False
     assert state["ready_printer_count"] == 0
 
-    # 3. Bluetooth SPP pareado com connected=False (sob demanda)
+    # 3. Bluetooth SPP fisicamente conectado
     base_agent.printer_diagnostics = {
         "printers": [
             {
@@ -1898,10 +1898,11 @@ def test_generic_printer_readiness_across_transports():
                 "paired": True,
                 "trusted": True,
                 "spp": True,
-                "connected": False,
+                "connected": True,
                 "available": True,
                 "present": True,
                 "configured": True,
+                "dispatchable": True,
             }
         ]
     }
@@ -1909,6 +1910,7 @@ def test_generic_printer_readiness_across_transports():
     assert state["printer_ready"] is True
     assert state["physical_printer_present"] is True
     assert state["ready_printer_count"] == 1
+    assert state["printer_dispatchable"] is True
 
     # 4. Bluetooth pareado, mas desligado/inacessível
     base_agent.printer_diagnostics = {
@@ -1925,6 +1927,7 @@ def test_generic_printer_readiness_across_transports():
                 "available": False,
                 "present": False,
                 "configured": True,
+                "dispatchable": True,
             }
         ]
     }
@@ -1932,6 +1935,8 @@ def test_generic_printer_readiness_across_transports():
     assert state["printer_ready"] is False
     assert state["physical_printer_present"] is False
     assert state["ready_printer_count"] == 0
+    assert state["printer_dispatchable"] is True
+    assert state["dispatchable_printer_count"] == 1
 
     # 5. Bluetooth sem SPP
     base_agent.printer_diagnostics = {
@@ -1953,8 +1958,9 @@ def test_generic_printer_readiness_across_transports():
     assert state["printer_ready"] is False
     assert state["physical_printer_present"] is False
     assert state["ready_printer_count"] == 0
+    assert state["printer_dispatchable"] is False
 
-    # 5. Rede TCP presente
+    # 6. Rede TCP presente
     base_agent.printer_diagnostics = {
         "printers": [
             {
@@ -1971,6 +1977,52 @@ def test_generic_printer_readiness_across_transports():
     assert state["printer_ready"] is True
     assert state["physical_printer_present"] is True
     assert state["ready_printer_count"] == 1
+    assert state["printer_dispatchable"] is True
+
+
+def test_idle_paired_bluetooth_can_claim_without_being_reported_connected():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    tenant_token = current_restaurante_id.set(1)
+    db = TestingSessionLocal()
+    try:
+        agent = db.query(PrintAgentToken).filter_by(id="a1").one()
+        agent.last_seen_at = now
+        agent.diagnostics_updated_at = now
+        agent.printer_diagnostics = {
+            "adapter": "linux",
+            "platform": "linux",
+            "printers": [
+                {
+                    "name": "KA-1445",
+                    "connection": "bluetooth",
+                    "uri": "bluetooth://86:67:7A:6B:30:C4",
+                    "address": "86:67:7A:6B:30:C4",
+                    "available": False,
+                    "present": False,
+                    "configured": True,
+                    "dispatchable": True,
+                    "paired": True,
+                    "trusted": True,
+                    "connected": False,
+                    "spp": True,
+                }
+            ],
+        }
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(tenant_token)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/print-agents/jobs/claim-next",
+        headers={"X-Agent-Token": "token_agent_1"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload is not None
+    assert payload["id"] == "job-1001"
 
 
 def test_heartbeat_accepts_structured_endpoints_and_destinations():

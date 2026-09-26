@@ -112,6 +112,21 @@ def _is_ready_printer_entry(printer: dict) -> bool:
     )
 
 
+def _is_dispatchable_printer_entry(printer: dict) -> bool:
+    """Pode receber tentativa de impressão sem fingir presença física."""
+    if not isinstance(printer, dict):
+        return False
+    connection = str(printer.get("connection") or "").casefold()
+    if connection == "bluetooth":
+        return bool(
+            printer.get("configured") is True
+            and printer.get("paired") is True
+            and printer.get("spp") is True
+            and printer.get("dispatchable", True) is True
+        )
+    return _is_ready_printer_entry(printer)
+
+
 def _printer_identifiers(printer: dict) -> set[str]:
     return {
         str(printer.get(key) or "").strip().casefold()
@@ -203,7 +218,7 @@ def bind_single_ready_printer(
         for printer in diagnostics.get("printers") or []
         if (
             isinstance(printer, dict)
-            and _is_ready_printer_entry(printer)
+            and _is_dispatchable_printer_entry(printer)
             and str(printer.get("name") or "").strip()
         )
     ]
@@ -274,6 +289,14 @@ def bind_single_ready_windows_usb(
 def _diagnostics_have_ready_printer(diagnostics: dict) -> bool:
     return any(
         _is_ready_printer_entry(printer)
+        for printer in diagnostics.get("printers") or []
+        if isinstance(printer, dict)
+    )
+
+
+def _diagnostics_have_dispatchable_printer(diagnostics: dict) -> bool:
+    return any(
+        _is_dispatchable_printer_entry(printer)
         for printer in diagnostics.get("printers") or []
         if isinstance(printer, dict)
     )
@@ -495,7 +518,7 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                         diagnostics, checked_at = maintenance.snapshot
                         ready = not bool(getattr(adapter, "requires_physical_printer", True)) or (
                             now - checked_at <= MAX_DIAGNOSTIC_AGE_SECONDS
-                            and _diagnostics_have_ready_printer(diagnostics)
+                            and _diagnostics_have_dispatchable_printer(diagnostics)
                         )
                         if ready:
                             started = time.perf_counter()
