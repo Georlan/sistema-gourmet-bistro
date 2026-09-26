@@ -91,6 +91,10 @@ class TestPrinterEndpointModel:
         assert endpoint.paper_width_mm == 80
         assert endpoint.columns == 48
         assert endpoint.paper_profile == "custom-80mm"
+        assert endpoint.font_mode == "a"
+        assert endpoint.encoding == "cp860"
+        assert endpoint.code_page == 3
+        assert endpoint.compact_whitespace is False
 
     def test_legacy_58mm_auto_profile_migrates_from_32_to_42_columns(self):
         endpoint = PrinterEndpoint(
