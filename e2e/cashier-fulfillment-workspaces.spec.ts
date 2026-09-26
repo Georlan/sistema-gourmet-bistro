@@ -720,3 +720,268 @@ test('Pedidos, Cozinha e Entregas convergem entre três terminais sem refresh ma
   await expectNoHorizontalOverflow(kitchenPage);
   await expectNoHorizontalOverflow(deliveriesPage);
 });
+
+async function mockTwoTerminalPickupBackend(context: BrowserContext) {
+  let pickup = makeOrder('pickup-normal-e2e', 5200, 'Retirada', 40, {
+    delivery_status: 'pendente',
+    identificador: 'Cliente Retirada E2E',
+    delivery_telefone: '85999995200',
+    fechada: false,
+    pago: true,
+    itens: [{
+      id: 'item-pickup-5200',
+      produto_id: '101',
+      preco_unit: 40,
+      observacao: '',
+      cliente_nome: 'Cliente Retirada E2E',
+      status: 'preparando',
+      pago: true,
+      produto: { nome: 'Hambúrguer Retirada' },
+    }],
+  });
+
+  const fanoutOrdersUpdated = async () => {
+    await Promise.all(context.pages().map(async (terminal) => {
+      if (!terminal.url().includes('?view=caixa')) return;
+      await terminal.evaluate(() => window.dispatchEvent(new Event('koma_orders_updated'))).catch(() => {});
+    }));
+  };
+
+  await context.route(`${API_ORIGIN}/**`, async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const { pathname } = url;
+
+    if (pathname === '/comandas/delivery/ativos' || pathname === '/comandas/detalhes/todos') {
+      const activeList = pickup.fechada ? [] : [pickup];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(activeList) });
+      return;
+    }
+
+    if (pathname === '/comandas/delivery/retiradas/concluidas-recentes') {
+      const recent = pickup.fechada ? [{ ...pickup, fechado_em: now, valor_pago: 40 }] : [];
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(recent) });
+      return;
+    }
+
+    if (pathname === '/comandas/delivery/entregas/concluidas-recentes') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+
+    if (pathname.endsWith('/delivery/status') && request.method() === 'PUT') {
+      const nextStatus = url.searchParams.get('status_novo') || pickup.delivery_status;
+      pickup = { ...pickup, delivery_status: nextStatus };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pickup) });
+      await fanoutOrdersUpdated();
+      return;
+    }
+
+    if (pathname.endsWith('/fechar') && request.method() === 'PUT') {
+      pickup = { ...pickup, fechada: true, delivery_status: 'finalizado' };
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pickup) });
+      await fanoutOrdersUpdated();
+      return;
+    }
+
+    if (pathname === '/mesas/') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+
+    if (pathname === '/produtos/catalogo') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          categorias: [{ id: 'cat-burgers', nome: 'Burgers', destino_impressao: 'COZINHA' }],
+          produtos: [{ id: '101', nome: 'Hambúrguer Retirada', preco: 40, categoria_id: 'cat-burgers', ativo: true }],
+        }),
+      });
+      return;
+    }
+
+    if (pathname === '/caixa/configuracoes') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...cashierConfig,
+          plano: 'pro',
+          plano_efetivo: 'pro',
+          entitlements: { printing: true, kds: true },
+        }),
+      });
+      return;
+    }
+
+    if (pathname === '/caixa/turno/atual') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 501,
+          aberto_por_id: 'caixa-e2e',
+          aberto_em: now,
+          saldo_inicial: 100,
+          status: 'aberto',
+          movimentacoes: [],
+          pagamentos: [],
+        }),
+      });
+      return;
+    }
+
+    if (pathname === '/caixa/turno-atual/resumo') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          turno_id: 501,
+          status: 'aberto',
+          operador_id: 'caixa-e2e',
+          operador_nome: 'Caixa E2E',
+          aberto_em: now,
+          tempo_aberto_minutos: 5,
+          saldo_inicial: 100,
+          total_vendas: 0,
+          total_dinheiro: 0,
+          total_pix: 0,
+          total_cartao: 0,
+          total_sangrias: 0,
+          total_suprimentos: 0,
+          saldo_esperado_dinheiro: 100,
+          total_pedidos_pagos: 0,
+          atividades_recentes: [],
+        }),
+      });
+      return;
+    }
+
+    if (
+      pathname === '/caixa/pagamentos/pendentes'
+      || pathname === '/auth/usuarios'
+      || pathname === '/chat/caixa/conversas'
+      || pathname === '/comandas/motoboys/lista'
+    ) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+
+    if (pathname === '/auth/smartpos/caixa/operacao') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+      return;
+    }
+
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+}
+
+test('Pedidos e Retiradas convergem em tempo real para um pedido de retirada normal sem refresh manual', async ({ context }) => {
+  await mockTwoTerminalPickupBackend(context);
+
+  const ordersPage = await context.newPage();
+  const pickupsPage = await context.newPage();
+
+  await seedCashierSession(ordersPage, 'pedidos');
+  await seedCashierSession(pickupsPage, 'retiradas');
+
+  await Promise.all([
+    ordersPage.goto('/?view=caixa'),
+    pickupsPage.goto('/?view=caixa'),
+  ]);
+
+  const pickups = pickupsPage.locator('#cashier-pickups-workspace');
+  await expect(pickups).toContainText('Cliente Retirada E2E');
+  await expect(pickups).toContainText('Aguardando aceite');
+  await expect(ordersPage.getByRole('button', { name: /Aguardando aceite/i })).toBeVisible();
+
+  await pickups.getByRole('button', { name: 'Aceitar pedido' }).click();
+  await expect(pickups).toContainText('Em preparo');
+
+  const ordersBalcaoTab = ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Balcão' });
+  await ordersBalcaoTab.waitFor({ state: 'attached' });
+  await ordersBalcaoTab.evaluate((element) => { (element as HTMLButtonElement).click(); });
+
+  const ordersCard = ordersPage.locator('.orders-card--digital').filter({ hasText: 'Cliente Retirada E2E' });
+  await expect(ordersCard).toBeVisible();
+  await expect(ordersCard).toContainText(/Em preparo/i);
+
+  await ordersCard.getByRole('button', { name: /Pronto para retirada/i }).click();
+  await expect(pickups).toContainText('Pronto para retirada');
+
+  await pickups.getByRole('button', { name: 'Confirmar retirada' }).click();
+  await expect(pickups.getByText('Nenhuma retirada pronta aguardando cliente.')).toBeVisible();
+  await expect(ordersCard).toHaveCount(0);
+});
+
+test('sessão recupera estado atualizado de pedidos após reconexão de WebSocket sem refresh manual', async ({ page }) => {
+  let delivery = makeOrder('delivery-reconnect-e2e', 5300, 'Delivery', 60, {
+    delivery_status: 'producao',
+    identificador: 'Cliente Reconexao',
+    delivery_telefone: '85999995300',
+    motoboy_id: null,
+  });
+
+  await page.route(`${API_ORIGIN}/**`, async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const { pathname } = url;
+
+    if (pathname === '/comandas/delivery/ativos' || pathname === '/comandas/detalhes/todos') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([delivery]) });
+      return;
+    }
+    if (
+      pathname === '/comandas/delivery/retiradas/concluidas-recentes'
+      || pathname === '/comandas/delivery/entregas/concluidas-recentes'
+      || pathname === '/comandas/motoboys/lista'
+      || pathname === '/mesas/'
+      || pathname === '/caixa/pagamentos/pendentes'
+      || pathname === '/auth/usuarios'
+      || pathname === '/chat/caixa/conversas'
+    ) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+    if (pathname === '/caixa/configuracoes') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(cashierConfig) });
+      return;
+    }
+    if (pathname === '/caixa/turno/atual' || pathname === '/caixa/turno-atual/resumo') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ turno_id: 501, status: 'aberto', saldo_inicial: 100, aberto_em: now }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+
+  await seedCashierSession(page, 'pedidos');
+  await page.goto('/?view=caixa');
+
+  const balcaoTab = page.locator('.orders-mobile-stages__button').filter({ hasText: 'Balcão' });
+  await balcaoTab.waitFor({ state: 'attached' });
+  await balcaoTab.evaluate((element) => { (element as HTMLButtonElement).click(); });
+
+  const ordersCard = page.locator('.orders-card--digital').filter({ hasText: 'Cliente Reconexao' });
+  await expect(ordersCard).toBeVisible();
+  await expect(ordersCard).toContainText(/Em preparo/i);
+
+  // Enquanto a sessão fica sem conexão com o WebSocket, o backend avança para "pronto"
+  delivery = { ...delivery, delivery_status: 'pronto' };
+
+  // Ao reconectar, o evento koma_orders_updated disparado na reconexão refaz a busca autoritativa
+  await page.evaluate(() => window.dispatchEvent(new Event('koma_orders_updated')));
+
+  const concluirTab = page.locator('.orders-mobile-stages__button').filter({ hasText: 'Concluir' });
+  await concluirTab.waitFor({ state: 'attached' });
+  await concluirTab.evaluate((element) => { (element as HTMLButtonElement).click(); });
+
+  const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Cliente Reconexao' });
+  await expect(readyCard).toBeVisible();
+  await expect(readyCard).toContainText(/Pronto/i);
+});
+

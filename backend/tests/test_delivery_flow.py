@@ -517,3 +517,54 @@ def test_quick_counter_sale_still_closes_immediately_after_full_payment(setup_db
         assert float(sale.valor_pago) == 15.0
     finally:
         db.close()
+
+
+def test_concurrent_courier_assignment_last_write_wins_authoritative(setup_db):
+    headers = _delivery_headers()
+    c1 = client.post(
+        "/comandas/motoboys/cadastro",
+        json={"nome": "Entregador Alpha", "telefone": "81 91111-2222"},
+        headers=headers,
+    )
+    assert c1.status_code == 201
+    c1_id = c1.json()["id"]
+
+    c2 = client.post(
+        "/comandas/motoboys/cadastro",
+        json={"nome": "Entregador Beta", "telefone": "81 93333-4444"},
+        headers=headers,
+    )
+    assert c2.status_code == 201
+    c2_id = c2.json()["id"]
+
+    order = client.post(
+        "/comandas/",
+        json={
+            "mesa_id": None,
+            "garcom_id": "u-del-01",
+            "tipo": "Delivery",
+            "identificador": "Cliente Concorrente",
+            "delivery_status": "producao",
+            "delivery_telefone": "81 99999-8888",
+            "delivery_endereco": "Rua Concorrente, 100",
+            "delivery_taxa": 5.0,
+            "delivery_forma_pagamento": "cartao_credito",
+        },
+        headers=headers,
+    )
+    assert order.status_code == 201
+    order_id = order.json()["id"]
+
+    res1 = client.put(f"/comandas/{order_id}/delivery/entregador", json={"motoboy_id": c1_id}, headers=headers)
+    res2 = client.put(f"/comandas/{order_id}/delivery/entregador", json={"motoboy_id": c2_id}, headers=headers)
+
+    assert res1.status_code == 200
+    assert res2.status_code == 200
+
+    db = SessionLocal(restaurante_id=1)
+    try:
+        persisted = db.query(Comanda).filter(Comanda.id == order_id).one()
+        assert persisted.motoboy_id == c2_id
+    finally:
+        db.close()
+

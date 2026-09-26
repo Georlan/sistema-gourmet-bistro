@@ -777,6 +777,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           fetchOrdersFromAPI();
           if (isManagementRole(activeRole)) fetchPagamentosPendentes();
           fetchTurnoResumo();
+          window.dispatchEvent(new Event('koma_orders_updated'));
         }
         // Reconcilia visões gerenciais após quedas silenciosas de conexão.
         // Os listeners só consultam dados quando a respectiva tela está aberta.
