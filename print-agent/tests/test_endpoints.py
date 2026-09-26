@@ -42,6 +42,13 @@ class TestPrinterEndpointModel:
             "paper_profile": "thermal-80mm",
             "paper_width_mm": 80,
             "columns": 48,
+            "font_mode": "A",
+            "encoding": "cp860",
+            "code_page": 3,
+            "line_spacing_dots": None,
+            "feed_lines": 3,
+            "compact_layout": False,
+            "print_width_dots": 576,
         }
 
     def test_known_printer_models_receive_paper_profiles(self):
@@ -57,11 +64,33 @@ class TestPrinterEndpointModel:
         )
 
         assert compact.paper_width_mm == 58
-        assert compact.columns == 32
-        assert compact.paper_profile == "thermal-58mm"
+        assert compact.columns == 42
+        assert compact.paper_profile == "thermal-58mm-compact-v2"
+        assert compact.options["font_mode"] == "B"
+        assert compact.options["line_spacing_dots"] == 20
+        assert compact.options["feed_lines"] == 2
+        assert compact.options["compact_layout"] is True
+        assert compact.options["print_width_dots"] == 384
         assert wide.paper_width_mm == 80
         assert wide.columns == 48
         assert wide.paper_profile == "thermal-80mm"
+
+    def test_legacy_auto_58mm_profile_is_migrated_to_compact_v2(self):
+        endpoint = PrinterEndpoint(
+            name="KA-1445",
+            transport="bluetooth_rfcomm",
+            address="86:67:7A:6B:30:C4",
+            options={
+                "paper_profile": "thermal-58mm",
+                "paper_width_mm": 58,
+                "columns": 32,
+            },
+        )
+
+        assert endpoint.paper_profile == "thermal-58mm-compact-v2"
+        assert endpoint.columns == 42
+        assert endpoint.options["font_mode"] == "B"
+        assert endpoint.options["compact_layout"] is True
 
     def test_explicit_paper_profile_overrides_model_suggestion(self):
         endpoint = PrinterEndpoint(
@@ -78,6 +107,8 @@ class TestPrinterEndpointModel:
         assert endpoint.paper_width_mm == 80
         assert endpoint.columns == 48
         assert endpoint.paper_profile == "custom-80mm"
+        assert endpoint.options["font_mode"] == "A"
+        assert endpoint.options["compact_layout"] is False
 
     def test_endpoint_serialization_roundtrip(self):
         original = PrinterEndpoint(
