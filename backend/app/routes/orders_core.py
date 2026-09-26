@@ -8,7 +8,7 @@ from sqlalchemy import and_, func, or_
 from typing import List, Optional
 import logging
 
-from ..database import get_db, current_restaurante_id, require_tenant_id
+from ..database import get_db, current_restaurante_id, require_tenant_id, tenant_session_scope
 from ..config import settings
 from ..models import (
     Comanda,
@@ -1282,8 +1282,7 @@ def painel_entregador(
         detail="App do Entregador disponível apenas no plano Premium ou com add-on ativo.",
     )
 
-    tenant_token = current_restaurante_id.set(rest_id)
-    try:
+    with tenant_session_scope(db, rest_id):
         motoboy = db.query(Motoboy).filter(
             Motoboy.id == motoboy_id,
             Motoboy.restaurante_id == rest_id
@@ -1333,5 +1332,3 @@ def painel_entregador(
             },
             "entregas": entregas
         }
-    finally:
-        current_restaurante_id.reset(tenant_token)
