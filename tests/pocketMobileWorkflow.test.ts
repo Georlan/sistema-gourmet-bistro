@@ -222,6 +222,13 @@ test('mobile menu avoids duplicated owner shortcuts and keeps the compact touch-
   assert.match(cashierCss, /\.cashier-sidebar__footer--mobile/);
 });
 
+test('mobile order stage names match the columns they actually project', () => {
+  const ordersWorkspace = readFileSync(new URL('../src/components/caixa/orders/CaixaOrdersWorkspace.tsx', import.meta.url), 'utf8');
+
+  assert.match(ordersWorkspace, /id: 'digital' as const, label: 'Digitais'/);
+  assert.doesNotMatch(ordersWorkspace, /id: 'digital' as const, label: 'Balcão'/);
+});
+
 test('mobile orders prioritize actionable controls above the fold', () => {
   const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
 
