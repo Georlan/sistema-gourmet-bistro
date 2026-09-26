@@ -1235,14 +1235,10 @@ export function PrintMonitorPanel({
               <span className="mt-1 block text-[10px] text-koma-muted">
                 Nenhuma impressora encontrada neste computador.
               </span>
-              <button
-                type="button"
-                onClick={() => void loadMonitor(true)}
-                disabled={loading || !hasOnlineAgent}
-                className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl koma-btn-success px-4 py-2 text-xs font-bold cursor-pointer shadow-xs"
-              >
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar impressoras
-              </button>
+              <span className="mt-4 inline-flex items-center gap-2 text-[10px] font-semibold text-koma-muted">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                Aguardando uma impressora · atualização automática
+              </span>
             </div>
           )}
         </div>
