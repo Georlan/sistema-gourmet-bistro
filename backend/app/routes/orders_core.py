@@ -827,20 +827,39 @@ def update_item_status(
 @router.get("/delivery/ativos", response_model=List[ComandaDetail])
 def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
-    Retorna comandas com ciclo operacional da coluna central que ainda estão abertas.\n    Inclui delivery, retirada, consumo local online e consumo local do Caixa sem mesa;\n    salão tradicional continua fora porque não possui esse ciclo operacional.\n    """
-    return db.query(Comanda).filter(
-        Comanda.restaurante_id == require_tenant_id(),
-        or_(
-            Comanda.tipo.in_(["Delivery", "Entrega", "Retirada", "Viagem"]),
-            and_(
-                Comanda.tipo.in_(["Consumo no Local", "Mesa", "Local"]),
-                Comanda.delivery_status.isnot(None),
-                Comanda.lancamentos.any(Lancamento.origem.in_(["cardapio", "caixa"])),
+    Retorna comandas com ciclo operacional da coluna central que ainda estão abertas.\n    Inclui delivery, retirada, consumo local online e consumo local do Caixa sem mesa;\n    salão tradicional continua fora porque não possui esse ciclo operacional.
+
+    Usa a mesma projeção canônica de detalhes do Caixa e carrega relações em
+    lote. Retornar ORM cru aqui fazia a serialização disparar lazy-loads por
+    pedido/item e transformava uma query de ~milissegundos em segundos.
+    """
+    rest_id = require_tenant_id()
+    checks = (
+        db.query(Comanda)
+        .options(
+            joinedload(Comanda.itens).joinedload(Item.produto),
+            joinedload(Comanda.criada_por),
+            selectinload(Comanda.lancamentos)
+            .selectinload(Lancamento.itens)
+            .joinedload(Item.produto),
+        )
+        .filter(
+            Comanda.restaurante_id == rest_id,
+            or_(
+                Comanda.tipo.in_(["Delivery", "Entrega", "Retirada", "Viagem"]),
+                and_(
+                    Comanda.tipo.in_(["Consumo no Local", "Mesa", "Local"]),
+                    Comanda.delivery_status.isnot(None),
+                    Comanda.lancamentos.any(Lancamento.origem.in_(["cardapio", "caixa"])),
+                ),
             ),
-        ),
-        Comanda.fechada == False,
-        _operational_online_payment_filter(),
-    ).all()
+            Comanda.fechada == False,
+            _operational_online_payment_filter(),
+        )
+        .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
+        .all()
+    )
+    return project_check_details(db, checks, rest_id)
 
 
 @router.post("/{comanda_id}/delivery/converter-retirada", response_model=ComandaResponse)
