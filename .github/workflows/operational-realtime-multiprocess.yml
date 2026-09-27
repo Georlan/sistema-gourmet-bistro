@@ -33,7 +33,7 @@ jobs:
     env:
       ENVIRONMENT: test
       SECRET_KEY: realtime-ci-secret-only
-      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      ENCRYPTION_KEY: dgvrWayyUxrh0PjzBcjn1AJ5woxjUE3lLTRptHDUSEQ=
       PYTHONPATH: backend
       DATABASE_URL: sqlite:///./realtime-ci.db
       MIGRATION_DATABASE_URL: sqlite:///./realtime-ci.db
