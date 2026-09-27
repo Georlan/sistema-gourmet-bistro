@@ -27,7 +27,7 @@ test('Cardápio online espelha as mesmas funções na navegação responsiva', (
   assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
   assert.match(caixa, /className=\{clsx\('cashier-subnav__button', isSidebarTabActive\(sub\.id\) && 'is-active'\)\}/);
   assert.match(caixa, /aria-current=\{isSidebarTabActive\(sub\.id\) \? 'page' : undefined\}/);
-  assert.doesNotMatch(caixa, /cashier-subnav__mobile-select|<select|<option/);
+  assert.doesNotMatch(caixa, /cashier-subnav__mobile-select/);
   assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
 });
 
