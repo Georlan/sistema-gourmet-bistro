@@ -13,6 +13,7 @@ const legalV29 = readFileSync('src/legal/legalContentV29.ts', 'utf8');
 const legalV30 = readFileSync('src/legal/legalContentV30.ts', 'utf8');
 const legalV31 = readFileSync('src/legal/legalContentV31.ts', 'utf8');
 const legalContent = readFileSync('src/legal/legalContentV32.ts', 'utf8');
+const legalV33 = readFileSync('src/legal/legalContentV33.ts', 'utf8');
 const legalEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const legalPage = readFileSync('src/legal/LegalPage.tsx', 'utf8');
 const planContract = readFileSync('src/legal/PlanContractPageV2.tsx', 'utf8');
@@ -29,7 +30,7 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal preserva snapshots anteriores e publica fachada vigente 3.2', () => {
+test('central legal preserva snapshots anteriores e publica fachada vigente 3.3', () => {
   for (const slug of ['termos','planos','privacidade','dpa','suboperadores','cookies','cardapio-termos','cardapio-privacidade']) {
     assert.match(legalV2, new RegExp(`slug: '${slug}'`));
   }
@@ -43,12 +44,15 @@ test('central legal preserva snapshots anteriores e publica fachada vigente 3.2'
   assert.match(legalV30, /LEGAL_VERSION = '3\.0'/);
   assert.match(legalV31, /LEGAL_VERSION = '3\.1'/);
   assert.match(legalContent, /LEGAL_VERSION = '3\.2'/);
+  assert.match(legalV33, /LEGAL_VERSION = '3\.3'/);
   assert.match(legalV26, /18\/09\/2026/);
   assert.match(legalV29, /23\/09\/2026/);
   assert.match(legalContent, /24\/09\/2026/);
+  assert.match(legalV33, /27\/09\/2026/);
   assert.match(legalV30, /from '\.\/legalContentRecurring'/);
   assert.match(legalV31, /from '\.\/legalContentV30'/);
   assert.match(legalContent, /from '\.\/legalContentV31'/);
+  assert.match(legalV33, /from '\.\/legalContentV32'/);
   assert.match(legacyLegalContent, /LEGAL_VERSION = '1\.2'/);
   assert.match(legalPage, /from '\.\/legalContent'/);
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
@@ -117,8 +121,8 @@ test('checkout reconhece cartão Pix universal e Saldo Mercado Pago', () => {
   assert.match(planContract, /payment-methods-v2/);
 });
 
-test('proveniência jurídica fixa commit e blob da Legal 3.2 sem documento fiscal pessoal', () => {
-  assert.match(legalEvidence, /legalContentV32/);
+test('proveniência jurídica fixa commit e blob da Legal 3.3 sem documento fiscal pessoal', () => {
+  assert.match(legalEvidence, /legalContentV33/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /requireDocument\('termos'\)/);
@@ -126,6 +130,11 @@ test('proveniência jurídica fixa commit e blob da Legal 3.2 sem documento fisc
   assert.match(legalEvidence, /requireDocument\('dpa'\)/);
   assert.match(legalEvidence, /requireDocument\('privacidade'\)/);
   assert.doesNotMatch(legalEvidence, /KOMA_LEGAL_PROVIDER_TAX_ID/);
+});
+
+test('Legal 3.3 vincula o início dos sete dias à liberação pelo SuperAdmin', () => {
+  assert.match(legalV33, /equipe KÔMA confere a implantação e libera a operação por meio do SuperAdmin/);
+  assert.match(legalV33, /liberação explícita pelo SuperAdmin KÔMA/);
 });
 
 test('segunda via reproduz o snapshot aceito sem confundir com a versão pública atual', () => {

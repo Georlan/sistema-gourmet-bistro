@@ -27,5 +27,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           KOMA_FRONTEND_URL: ${{ vars.KOMA_PRODUCTION_FRONTEND_URL || 'https://app.komafood.com.br' }}
+          KOMA_CENTRAL_URL: https://central.komafood.com.br
           KOMA_API_URL: ${{ vars.KOMA_PRODUCTION_API_URL || 'https://sistema-gourmet-bistro-production.up.railway.app' }}
         run: node scripts/ops-monitor.mjs

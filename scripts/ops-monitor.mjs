@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const DEFAULT_FRONTEND = 'https://app.komafood.com.br';
+const DEFAULT_CENTRAL = 'https://central.komafood.com.br';
 const DEFAULT_API = 'https://sistema-gourmet-bistro-production.up.railway.app';
 const ISSUE_TITLE = '[KÔMA] Indisponibilidade de produção';
 
@@ -30,9 +31,9 @@ async function check(url, expectedType) {
   }
 }
 
-export async function checkTargets(frontend = DEFAULT_FRONTEND, api = DEFAULT_API) {
+export async function checkTargets(frontend = DEFAULT_FRONTEND, api = DEFAULT_API, central = DEFAULT_CENTRAL) {
   const failures = [];
-  for (const [url, type] of [[frontend, 'html'], [`${api}/health/live`, 'live'], [`${api}/health/ready`, 'ready']]) {
+  for (const [url, type] of [[frontend, 'html'], [central, 'html'], [`${api}/health/live`, 'live'], [`${api}/health/ready`, 'ready']]) {
     try { await check(url, type); } catch (error) { failures.push(`${url}: ${error.message}`); }
   }
   return failures;
@@ -71,7 +72,7 @@ async function main() {
   ]);
   const existing = issues?.find(issue => !issue.pull_request && issue.title === ISSUE_TITLE);
   const previous = previousRunState(runs?.workflow_runs || [], process.env.GITHUB_RUN_ID, existing?.number);
-  const failures = await checkTargets(process.env.KOMA_FRONTEND_URL || DEFAULT_FRONTEND, process.env.KOMA_API_URL || DEFAULT_API);
+  const failures = await checkTargets(process.env.KOMA_FRONTEND_URL || DEFAULT_FRONTEND, process.env.KOMA_API_URL || DEFAULT_API, process.env.KOMA_CENTRAL_URL || DEFAULT_CENTRAL);
   const state = await reconcileMonitor({
     previous, failures,
     createIssue: async (title, body) => (await api('/issues', 'POST', { title, body }))?.number,

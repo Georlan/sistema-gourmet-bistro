@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const DEFAULT_FRONTEND_URL = 'https://app.komafood.com.br';
+const DEFAULT_CENTRAL_URL = 'https://central.komafood.com.br';
 const DEFAULT_API_URL = 'https://sistema-gourmet-bistro-production.up.railway.app';
 const DEFAULT_CORS_PATH = '/cardapio/pedidos';
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -150,6 +151,7 @@ async function checkCheckoutCors(apiUrl, frontendUrl, corsPath) {
 
 async function main() {
   const frontendUrl = normalizeBaseUrl(process.env.KOMA_FRONTEND_URL, DEFAULT_FRONTEND_URL);
+  const centralUrl = normalizeBaseUrl(process.env.KOMA_CENTRAL_URL, DEFAULT_CENTRAL_URL);
   const apiUrl = normalizeBaseUrl(process.env.KOMA_API_URL, DEFAULT_API_URL);
   const corsPath = (process.env.KOMA_CORS_PATH || DEFAULT_CORS_PATH).trim();
   const expectedApiSha = (process.env.KOMA_EXPECTED_API_SHA || '').trim();
@@ -164,6 +166,7 @@ async function main() {
   await checkApiReadiness(apiUrl);
   await checkContractReadiness(apiUrl, expectedApiSha);
   await checkFrontend(frontendUrl);
+  await checkHtml(centralUrl, 'SuperAdmin público');
   await checkContractPages(frontendUrl);
   await checkCheckoutCors(apiUrl, frontendUrl, corsPath);
 

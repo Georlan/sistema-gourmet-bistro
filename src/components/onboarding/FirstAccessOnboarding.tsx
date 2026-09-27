@@ -41,6 +41,7 @@ type OnboardingStatus = {
     daysRemaining: number | null;
   };
   trialCanStart: boolean;
+  readyForRelease: boolean;
   payments: {
     mercadoPagoConnected: boolean;
     pixOnlineAvailable: boolean;
@@ -140,7 +141,6 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const [errorMessage, setErrorMessage] = useState('');
   const [orderTypes, setOrderTypes] = useState<OrderType[]>([]);
   const [savingOperations, setSavingOperations] = useState(false);
-  const [startingTrial, setStartingTrial] = useState(false);
   const [operationError, setOperationError] = useState('');
 
   const headers = useMemo(() => ({
@@ -231,32 +231,6 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       setOperationError(error instanceof Error ? error.message : 'Não foi possível salvar as modalidades.');
     } finally {
       setSavingOperations(false);
-    }
-  };
-
-  const startTrial = async () => {
-    setStartingTrial(true);
-    setErrorMessage('');
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/onboarding/start-trial`, {
-        method: 'POST',
-        headers,
-      });
-      if (!response.ok) {
-        throw new Error(await responseDetail(response, 'Não foi possível iniciar o período grátis.'));
-      }
-      const next = await response.json() as OnboardingStatus;
-      applySnapshot(next);
-      try {
-        sessionStorage.setItem(ONBOARDING_TEST_ORDER_KEY, '1');
-      } catch {
-        // The order still works; readiness can be retried from a normal browser context.
-      }
-      openCashierAt('operacao', 'balcao', false);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Não foi possível iniciar o período grátis.');
-    } finally {
-      setStartingTrial(false);
     }
   };
 
@@ -355,7 +329,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 </div>
                 <h1 className="mt-4 text-2xl font-black sm:text-3xl">Bem-vindo ao KÔMA, {restaurantName}</h1>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-koma-muted">
-                  Conclua os quatro itens mínimos. Seu período grátis só começa quando você clicar para iniciar a operação.
+                  Conclua os quatro itens mínimos. A equipe KÔMA confirma a liberação da operação; seus 7 dias grátis começam nesse momento.
                 </p>
               </div>
               <div className="grid min-w-[250px] grid-cols-2 gap-2">
@@ -485,8 +459,8 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 <p className="text-xs font-black">
                   {!configurationComplete
                     ? 'Finalize os quatro itens essenciais'
-                    : snapshot.trialCanStart
-                      ? 'Configuração concluída — você decide quando iniciar'
+                    : snapshot.readyForRelease
+                      ? 'Configuração concluída — aguardando liberação KÔMA'
                       : snapshot.readiness.readyToOperate
                         ? 'Prontidão operacional validada'
                         : 'Operação liberada — finalize o pedido de teste'}
@@ -494,24 +468,13 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 <p className="mt-1 text-[10px] text-koma-muted">
                   {!configurationComplete
                     ? 'Dados do restaurante, horários, produto ativo e modalidades precisam estar prontos.'
-                    : snapshot.trialCanStart
-                      ? 'Ao iniciar, começam os 7 dias grátis e o próximo pedido do Caixa será marcado para validação do onboarding.'
+                    : snapshot.readyForRelease
+                      ? 'A equipe KÔMA verificará a configuração e iniciará os 7 dias grátis ao liberar sua operação. Atualize esta tela para acompanhar.'
                       : snapshot.readiness.readyToOperate
                         ? 'O pedido de teste foi pago e fechado com sucesso.'
                         : 'Complete pagamento e fechamento do pedido de teste para registrar a prontidão.'}
                 </p>
               </div>
-
-              {configurationComplete && snapshot.trialCanStart && (
-                <button
-                  type="button"
-                  disabled={startingTrial}
-                  onClick={() => void startTrial()}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-xs font-black text-zinc-950 disabled:opacity-60"
-                >
-                  {startingTrial ? 'Iniciando…' : 'Iniciar 7 dias e fazer teste'} <ArrowRight size={14} />
-                </button>
-              )}
 
               {configurationComplete && snapshot.readiness.trialStarted && !snapshot.readiness.readyToOperate && (
                 <button

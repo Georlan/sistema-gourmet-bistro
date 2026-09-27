@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarClock, RefreshCw, Search, Sparkles } from "lucide-react";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 import { SuperAdminTrialModal } from "./SuperAdminTrialModal";
+import { SuperAdminReleaseModal } from "./SuperAdminReleaseModal";
 import type { Tenant } from "./superAdminTypes";
 
 type TrialStatus = "active" | "expired" | "ended" | "converted" | "not_started";
@@ -15,6 +16,7 @@ type TrialRecord = {
   trialStartedAt?: string | null;
   trialEndsAt?: string | null;
   daysRemaining: number;
+  commercialOnboarding?: boolean;
 };
 
 interface SuperAdminTrialsTabProps {
@@ -50,6 +52,7 @@ export function SuperAdminTrialsTab({ tenants, globalSearch, refreshTenants }: S
   const [error, setError] = useState<string | null>(null);
   const [localSearch, setLocalSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [releaseRestaurantId, setReleaseRestaurantId] = useState<string | null>(null);
 
   const loadTrials = useCallback(async () => {
     setIsLoading(true);
@@ -145,7 +148,9 @@ export function SuperAdminTrialsTab({ tenants, globalSearch, refreshTenants }: S
                       <td className="px-4 py-3.5 font-bold text-koma-foreground">{item.trialStatus === "active" ? `${item.daysRemaining} dia${item.daysRemaining === 1 ? "" : "s"}` : "—"}</td>
                       <td className="px-4 py-3.5 text-koma-muted">{formatDate(item.trialEndsAt)}</td>
                       <td className="px-4 py-3.5 text-koma-secondary">{item.saasStatus}</td>
-                      <td className="px-4 py-3.5 text-right"><button type="button" disabled={!tenant} onClick={() => tenant && setSelectedTenant(tenant)} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-800/50 bg-violet-950/30 px-3 py-1.5 text-[11px] font-bold text-violet-200 hover:bg-violet-900/40 disabled:cursor-not-allowed disabled:opacity-40" title={tenant ? "Gerenciar período grátis" : "Tenant não disponível na fonte principal"}><CalendarClock className="h-3.5 w-3.5" /> Gerenciar</button></td>
+                      <td className="px-4 py-3.5 text-right">{item.commercialOnboarding
+                        ? <button type="button" onClick={() => setReleaseRestaurantId(item.restaurantId)} className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-bold text-zinc-950">Ver implantação e liberar</button>
+                        : <button type="button" disabled={!tenant} onClick={() => tenant && setSelectedTenant(tenant)} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-800/50 bg-violet-950/30 px-3 py-1.5 text-[11px] font-bold text-violet-200 hover:bg-violet-900/40 disabled:cursor-not-allowed disabled:opacity-40" title={tenant ? "Gerenciar período grátis" : "Tenant não disponível na fonte principal"}><CalendarClock className="h-3.5 w-3.5" /> Gerenciar</button>}</td>
                     </tr>
                   );
                 })}
@@ -156,6 +161,7 @@ export function SuperAdminTrialsTab({ tenants, globalSearch, refreshTenants }: S
       </div>
 
       {selectedTenant && <SuperAdminTrialModal tenant={selectedTenant} onClose={() => setSelectedTenant(null)} onUpdated={() => void refreshAll()} />}
+      {releaseRestaurantId && <SuperAdminReleaseModal restaurantId={releaseRestaurantId} onClose={() => setReleaseRestaurantId(null)} onReleased={() => void refreshAll()} />}
     </div>
   );
 }

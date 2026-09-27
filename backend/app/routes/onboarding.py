@@ -34,7 +34,6 @@ from ..models import (
 from ..saas_billing_models import SaaSSubscription
 from ..security import get_current_user
 from ..services.onboarding_readiness import evaluate_operation_readiness
-from ..services.onboarding_trial import ensure_trial_started_after_onboarding
 from ..services.operational_modes import explicit_order_types
 from .super_admin_onboarding import DEFAULT_TRIAL_DAYS, restaurant_trials
 
@@ -402,11 +401,12 @@ def _build_onboarding_status(
             dict(trial_row) if trial_row else None,
             setup_pending=setup_pending,
         ),
-        "trialCanStart": bool(
+        "readyForRelease": bool(
             setup_pending
             and configuration_complete
             and not getattr(current_user, "is_support_mode", False)
         ),
+        "trialCanStart": False,
         "payments": {
             "mercadoPagoConnected": mercado_pago_connected,
             "pixOnlineAvailable": mercado_pago_connected,
@@ -486,40 +486,9 @@ def start_trial_after_readiness(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Explicitly releases operation and starts the trial after minimum setup."""
+    """Legacy route: only the SuperAdmin may release a commercial trial."""
     _require_onboarding_role(current_user)
-    if getattr(current_user, "is_support_mode", False):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Modo Suporte não pode iniciar o período grátis do cliente.",
-        )
-
-    snapshot = _build_onboarding_status(db, current_user=current_user)
-    if not snapshot["readiness"]["configurationComplete"]:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Conclua a configuração mínima antes de iniciar o período grátis.",
-        )
-
-    if snapshot["trial"]["status"] == "setup":
-        result = ensure_trial_started_after_onboarding(
-            db,
-            restaurante_id=require_tenant_id(),
-            actor=f"usuario:{current_user.id}",
-        )
-        if result is None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="O período grátis não está disponível para esta assinatura.",
-            )
-        db.add(
-            ActivityLog(
-                restaurante_id=require_tenant_id(),
-                garcom_id=current_user.id,
-                action="ONBOARDING_TRIAL_STARTED",
-                details="Início explícito do período grátis e liberação operacional.",
-            )
-        )
-        db.commit()
-
-    return _build_onboarding_status(db, current_user=current_user)
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="A liberação da operação e dos 7 dias grátis é feita pelo SuperAdmin.",
+    )

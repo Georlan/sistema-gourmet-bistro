@@ -45,13 +45,13 @@ function LegalFooter() {
 
 function PixAutomaticReturn() {
   useEffect(() => {
-    window.location.replace('/contratar/pro?retorno=pix-automatico');
+    window.location.replace('/contratar/pro?retorno=mercado-pago');
   }, []);
   return (
     <div className="koma-legal-shell">
       <LegalHeader />
       <main className="koma-legal-main koma-legal-not-found">
-        <span>PIX AUTOMÁTICO</span>
+        <span>MERCADO PAGO</span>
         <h1>CONFIRMANDO SUA AUTORIZAÇÃO.</h1>
         <p>Você será levado de volta à contratação. Nenhuma mensalidade fixa é cobrada antes do fim dos 7 dias grátis.</p>
       </main>
