@@ -9,6 +9,8 @@ import { KomaLoading } from "./components/app/KomaLoading";
 import { TenantSuspensionBoundary } from "./components/auth/TenantSuspensionBoundary";
 import { initializeKomaTheme } from "./config/theme";
 import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
+import { SupportCodeNotice } from "./components/app/SupportCodeNotice";
+import { installSupportCodeObserver } from "./utils/supportCode";
 
 import {
   KOMA_OPERATIONAL_APP_URL,
@@ -133,6 +135,7 @@ function bypassTenantSuspensionBoundary(): boolean {
 }
 
 const isLegacyOperationalRedirect = redirectLegacyOperationalStaffHost();
+installSupportCodeObserver();
 
 // O cardápio público preserva seu contrato explícito de isolamento do tema
 // operacional. As demais rotas públicas comerciais seguem o mesmo tema escuro,
@@ -230,6 +233,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <RootApp />
       </React.Suspense>
       {hasCustomerSupportSurface ? <CustomerSupportWidget /> : null}
+      <SupportCodeNotice />
     </TenantSuspensionBoundary>
     </AppRecoveryBoundary>
   </React.StrictMode>,
