@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime
+
 from app.services import signup_notifications
 
 
@@ -11,6 +13,23 @@ def _capture_enqueue(monkeypatch):
 
     monkeypatch.setattr(signup_notifications, "enqueue", capture)
     return calls
+
+
+def test_trial_release_queues_customer_and_owner_once_per_channel(monkeypatch):
+    calls = _capture_enqueue(monkeypatch)
+    monkeypatch.setattr(signup_notifications.settings, "KOMA_OWNER_EMAIL", "owner@example.com")
+    monkeypatch.delenv("KOMA_OWNER_WHATSAPP_PHONE", raising=False)
+    signup_notifications.enqueue_trial_started(
+        object(), tenant_id=42, restaurant_name="Restaurante QA", plan="pro",
+        billing_cycle="annual", customer_name="Ana", customer_email="ana@example.com",
+        customer_phone="5584999999999",
+        trial_ends_at=datetime.datetime(2026, 10, 4, 12, tzinfo=datetime.timezone.utc),
+    )
+    assert [item["kind"] for item in calls] == ["trial-started-customer", "trial-started-owner"]
+    assert all(item["protocol"] == "tenant-42" for item in calls)
+    assert "plano pro (anual)" in calls[0]["message"].lower()
+    assert "04/10/2026" in calls[0]["message"]
+    assert "Nenhuma mensalidade fixa foi cobrada" in calls[0]["message"]
 
 
 def test_acceptance_message_does_not_claim_upfront_payment(monkeypatch):

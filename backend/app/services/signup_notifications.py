@@ -60,6 +60,66 @@ def enqueue(db, *, protocol, kind, email, phone, subject, message, expires_hours
             )
 
 
+def enqueue_signup_started(db, *, signup_id, restaurant_name, plan, billing_cycle):
+    """Queue an idempotent owner notice when a resumable signup first exists."""
+    owner_email = settings.KOMA_OWNER_EMAIL
+    owner_phone = os.getenv("KOMA_OWNER_WHATSAPP_PHONE", "").strip()
+    if not (owner_email or owner_phone):
+        return
+    enqueue(
+        db,
+        protocol=signup_id,
+        kind="signup-started-owner",
+        email=owner_email,
+        phone=owner_phone,
+        subject="Nova inscrição iniciada — KÔMA",
+        message=(
+            f"Nova inscrição KÔMA iniciada: {restaurant_name}. Plano: {plan} ({billing_cycle}). "
+            f"Identificador: {signup_id}. Acompanhe o status em "
+            f"{settings.KOMA_PUBLIC_APP_URL}/super-admin (aba Inscrições)."
+        ),
+    )
+
+
+def enqueue_trial_started(
+    db, *, tenant_id, restaurant_name, plan, billing_cycle,
+    customer_name, customer_email, customer_phone, trial_ends_at,
+):
+    """Queue customer and owner notices with stable IDs for release retries."""
+    protocol = f"tenant-{tenant_id}"
+    cycle = "anual" if billing_cycle in {"annual", "anual"} else "mensal"
+    end_label = trial_ends_at.strftime("%d/%m/%Y às %H:%M UTC")
+    enqueue(
+        db,
+        protocol=protocol,
+        kind="trial-started-customer",
+        email=customer_email,
+        phone=customer_phone,
+        subject="Seus 7 dias grátis começaram — KÔMA",
+        message=(
+            f"Olá, {customer_name}! A operação do {restaurant_name} foi liberada. "
+            f"Seus 7 dias grátis começaram agora e terminam em {end_label}. "
+            f"Plano {plan} ({cycle}). Nenhuma mensalidade fixa foi cobrada na liberação. "
+            f"Acesse {settings.KOMA_PUBLIC_APP_URL}/?view=caixa para continuar."
+        ),
+    )
+    owner_email = settings.KOMA_OWNER_EMAIL
+    owner_phone = os.getenv("KOMA_OWNER_WHATSAPP_PHONE", "").strip()
+    if owner_email or owner_phone:
+        enqueue(
+            db,
+            protocol=protocol,
+            kind="trial-started-owner",
+            email=owner_email,
+            phone=owner_phone,
+            subject="Operação liberada e trial iniciado — KÔMA",
+            message=(
+                f"Operação liberada: {restaurant_name} (#{tenant_id}), plano {plan} ({cycle}). "
+                f"Trial termina em {end_label}. Acompanhe no SuperAdmin."
+            ),
+        )
+
+
 def enqueue_acceptance(
     db, *, protocol, restaurant_name, representative_name, email, phone
 ):
@@ -67,7 +127,7 @@ def enqueue_acceptance(
         f"Olá, {representative_name}! A inscrição do {restaurant_name} no KÔMA foi recebida. "
         f"Protocolo: {protocol}. Agora escolha o meio de pagamento. A mensalidade fixa é R$ 0 hoje. "
         "Depois da liberação você configura o restaurante com calma; os 7 dias grátis só começam "
-        "após os 4 itens essenciais da implantação e a confirmação do início pelo administrador."
+        "após os 4 itens essenciais da implantação e a liberação da operação pela equipe KÔMA."
     )
     enqueue(
         db,
@@ -118,7 +178,7 @@ def enqueue_activation(
             f"Olá, {representative_name}! O {restaurant_name} foi liberado. Crie sua senha para o "
             f"primeiro acesso: {link} . O link é pessoal e válido por 72 horas. Depois do login, "
             "conclua dados do restaurante, horários, cardápio e modalidades de operação. Seus 7 dias grátis ainda não estão "
-            "correndo: depois dos 4 itens essenciais, confirme o início do período grátis no KÔMA."
+            "correndo: depois dos 4 itens essenciais, a equipe KÔMA liberará a operação e iniciará o período grátis."
         ),
     )
 
@@ -130,7 +190,7 @@ def enqueue_release_required(db, *, protocol, restaurant_name, plan, billing_cyc
         f"Autorização recorrente confirmada para {restaurant_name}. Protocolo: {protocol}. "
         f"Plano: {plan} ({billing_cycle}). Nenhuma mensalidade fixa foi cobrada hoje. "
         "Revise e libere o acesso. A recorrência ficará pausada durante a implantação e os 7 dias "
-        "grátis só começarão depois dos 4 itens essenciais e da confirmação do início pelo administrador: "
+        "grátis só começarão depois dos 4 itens essenciais e da liberação pelo SuperAdmin: "
         f"{settings.KOMA_PUBLIC_APP_URL}/super-admin"
     )
     enqueue(

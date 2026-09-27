@@ -43,11 +43,11 @@ test('configured restaurants prioritize function search and can resume setup fro
   assert.match(cashierSettings, /removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
 });
 
-test('required onboarding persists and releases operation only after explicit trial start', () => {
+test('required onboarding persists and waits for explicit SuperAdmin release', () => {
   assert.match(onboarding, /Conclua os quatro itens mínimos/);
   assert.match(onboarding, /configurationComplete/);
-  assert.match(onboarding, /\/api\/onboarding\/start-trial/);
-  assert.match(onboarding, /Iniciar 7 dias e fazer teste/);
+  assert.match(onboarding, /aguardando liberação KÔMA/);
+  assert.doesNotMatch(onboarding, /\/api\/onboarding\/start-trial/);
   assert.match(onboarding, /sessionStorage\.setItem\(ONBOARDING_SETUP_MODE_KEY, '1'\)/);
   assert.match(onboarding, /sessionStorage\.removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
   assert.match(boundary, /!gate\.requiredComplete/);

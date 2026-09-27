@@ -2,6 +2,7 @@ import datetime
 import logging
 import math
 import re
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -21,6 +22,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..database import Base, SessionLocal, tenant_session_scope
 from ..models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
+from ..saas_billing_models import SaaSSubscription
 from ..security import get_password_hash
 from ..subscription import VALID_SUBSCRIPTION_PLANS
 from .super_admin import _discover_restaurant_ids, get_current_admin
@@ -319,6 +321,110 @@ def _parse_tenant_id(tenant_id: str) -> int:
         )
 
 
+def _commercial_release_preview(db, tenant_id: int) -> dict[str, Any]:
+    # Import here to keep the existing route composition free of circular imports.
+    from .onboarding import _build_onboarding_status
+
+    snapshot = _build_onboarding_status(
+        db, current_user=SimpleNamespace(is_support_mode=False)
+    )
+    subscription = (
+        db.query(SaaSSubscription)
+        .filter(SaaSSubscription.restaurante_id == tenant_id)
+        .one_or_none()
+    )
+    if subscription is None:
+        raise HTTPException(status_code=409, detail="Restaurante sem assinatura comercial vinculada.")
+    return {
+        "restaurant": snapshot["restaurant"],
+        "subscription": {
+            "status": subscription.status,
+            "billingCycle": subscription.billing_cycle,
+            "paymentMethod": subscription.payment_method_type,
+            "trialStartedAt": _as_utc(subscription.trial_started_at).isoformat() if subscription.trial_started_at else None,
+            "trialEndsAt": _as_utc(subscription.trial_ends_at).isoformat() if subscription.trial_ends_at else None,
+        },
+        "steps": {key: snapshot["steps"][key] for key in ("profile", "hours", "catalog", "operations")},
+        "operations": snapshot["operations"],
+        "readyForRelease": snapshot["readyForRelease"],
+        "trialStarted": snapshot["readiness"]["trialStarted"],
+    }
+
+
+@router.get("/onboarding/restaurantes/{tenant_id}/release")
+def preview_commercial_release(
+    tenant_id: str,
+    admin: dict[str, Any] = Depends(get_current_admin),
+):
+    tenant_id_int = _parse_tenant_id(tenant_id)
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id_int):
+            return _commercial_release_preview(db, tenant_id_int)
+    finally:
+        db.close()
+
+
+@router.post("/onboarding/restaurantes/{tenant_id}/release")
+def release_commercial_operation(
+    tenant_id: str,
+    admin: dict[str, Any] = Depends(get_current_admin),
+):
+    """Starts the commercial trial only after an explicit SuperAdmin release."""
+    from ..services.onboarding_trial import ensure_trial_started_after_onboarding
+
+    tenant_id_int = _parse_tenant_id(tenant_id)
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id_int):
+            preview = _commercial_release_preview(db, tenant_id_int)
+            trial_ends_at = preview["subscription"]["trialEndsAt"]
+            if isinstance(trial_ends_at, str):
+                trial_ends_at = datetime.datetime.fromisoformat(trial_ends_at)
+            if not preview["trialStarted"]:
+                if not preview["readyForRelease"]:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Perfil, horários, produto ativo e modalidades precisam estar prontos antes da liberação.",
+                    )
+                result = ensure_trial_started_after_onboarding(
+                    db,
+                    restaurante_id=tenant_id_int,
+                    actor=f"superadmin:{admin.get('user') or 'unknown'}",
+                )
+                if result is None:
+                    raise HTTPException(status_code=409, detail="Assinatura indisponível para iniciar o trial.")
+                trial_ends_at = result["trial_ends_at"]
+            try:
+                from ..services.signup_notifications import enqueue_trial_started
+
+                customer = (
+                    db.query(Usuario)
+                    .filter(Usuario.restaurante_id == tenant_id_int, Usuario.cargo == "admin")
+                    .order_by(Usuario.id)
+                    .first()
+                )
+                if customer is not None:
+                    enqueue_trial_started(
+                        db,
+                        tenant_id=tenant_id_int,
+                        restaurant_name=preview["restaurant"]["name"],
+                        plan=preview["restaurant"]["plan"],
+                        billing_cycle=preview["subscription"]["billingCycle"],
+                        customer_name=customer.nome,
+                        customer_email=customer.email,
+                        customer_phone=customer.telefone,
+                        trial_ends_at=trial_ends_at,
+                    )
+                    db.commit()
+            except Exception:
+                db.rollback()
+                logger.exception("SUPERADMIN TRIAL NOTICE QUEUE FAILED tenant=%s", tenant_id_int)
+            return _commercial_release_preview(db, tenant_id_int)
+    finally:
+        db.close()
+
+
 @router.get("/trials")
 def list_trials(admin: dict[str, Any] = Depends(get_current_admin)):
     """Lista o entitlement de teste grátis sem inferir cobrança ou MRR."""
@@ -338,6 +444,11 @@ def list_trials(admin: dict[str, Any] = Depends(get_current_admin)):
                     continue
                 row = _read_trial(db, tenant_id)
                 snapshot = _trial_snapshot(row, now)
+                commercial_subscription = (
+                    db.query(SaaSSubscription)
+                    .filter(SaaSSubscription.restaurante_id == tenant_id)
+                    .one_or_none()
+                )
                 result.append(
                     {
                         "restaurantId": str(tenant_id),
@@ -352,6 +463,11 @@ def list_trials(admin: dict[str, Any] = Depends(get_current_admin)):
                         ),
                         "trialEndsAt": snapshot["trial_ends_at"] if snapshot else None,
                         "daysRemaining": snapshot["days_remaining"] if snapshot else 0,
+                        "commercialOnboarding": bool(
+                            commercial_subscription
+                            and commercial_subscription.status in {"onboarding", "suspended"}
+                            and commercial_subscription.trial_started_at is None
+                        ),
                     }
                 )
 

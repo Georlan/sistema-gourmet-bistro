@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import datetime
 from types import SimpleNamespace
+import pytest
+from fastapi import HTTPException
 
 from fastapi.testclient import TestClient
 
@@ -10,6 +12,7 @@ from app.routes.onboarding import (
     _profile_is_configured,
     _required_progress,
     _trial_status_payload,
+    start_trial_after_readiness,
 )
 from app.services.onboarding_readiness import evaluate_operation_readiness
 from app.services.operational_modes import (
@@ -24,11 +27,24 @@ def test_onboarding_routes_are_registered_once():
     assert "get" in openapi_paths["/api/onboarding/status"]
     assert "put" in openapi_paths["/api/onboarding/operations"]
     assert "post" in openapi_paths["/api/onboarding/start-trial"]
+    assert "get" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/release"]
+    assert "post" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/release"]
 
     with TestClient(app) as client:
         assert client.get("/api/onboarding/status").status_code == 401
         assert client.put("/api/onboarding/operations", json={"order_types": ["retirada"]}).status_code == 401
         assert client.post("/api/onboarding/start-trial").status_code == 401
+        assert client.get("/api/super-admin/onboarding/restaurantes/1/release").status_code == 401
+        assert client.post("/api/super-admin/onboarding/restaurantes/1/release").status_code == 401
+
+
+def test_restaurant_admin_cannot_start_commercial_trial():
+    with pytest.raises(HTTPException) as error:
+        start_trial_after_readiness(
+            db=None,
+            current_user=SimpleNamespace(cargo="admin", role="admin"),
+        )
+    assert error.value.status_code == 403
 
 
 def test_trial_projection_reports_real_remaining_days_without_mutation():
