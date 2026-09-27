@@ -212,7 +212,7 @@ def _resolve_tracking_payment_state(
                 estornar_estoque_dos_itens(db, comanda.itens)
                 try:
                     from ..websocket_manager import manager
-                    manager.broadcast_sync({"event": "tables_updated"}, restaurante_id)
+                    manager.queue_committed_broadcast(db, {"event": "tables_updated"}, restaurante_id)
                 except Exception:
                     pass
             db.flush()

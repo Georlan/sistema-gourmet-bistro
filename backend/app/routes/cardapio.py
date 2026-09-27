@@ -230,7 +230,7 @@ def consultar_status_pedido_publico(
                         pass
                     try:
                         from ..websocket_manager import manager
-                        manager.broadcast_sync({"event": "tables_updated"}, int(rest_id))
+                        manager.queue_committed_broadcast(db, {"event": "tables_updated"}, int(rest_id))
                     except Exception:
                         pass
                 db.flush()

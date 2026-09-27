@@ -1,0 +1,49 @@
+name: Operational Realtime Multiprocess
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/websocket_manager.py'
+      - 'backend/app/services/operational_realtime_bus.py'
+      - 'backend/app/database.py'
+      - 'backend/tests/test_operational_realtime_multiprocess.py'
+      - '.github/workflows/operational-realtime-multiprocess.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  two-process-realtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: realtime_test
+          POSTGRES_PASSWORD: realtime_test
+          POSTGRES_DB: realtime_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U realtime_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: realtime-ci-secret-only
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      PYTHONPATH: backend
+      DATABASE_URL: sqlite:///./realtime-ci.db
+      MIGRATION_DATABASE_URL: sqlite:///./realtime-ci.db
+      KOMA_REALTIME_TEST_DATABASE_URL: postgresql+psycopg2://realtime_test:realtime_test@127.0.0.1:5432/realtime_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.15'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: python -m pip install -r backend/requirements-dev.txt
+      - run: python -m pytest -q -ra backend/tests/test_operational_realtime_multiprocess.py

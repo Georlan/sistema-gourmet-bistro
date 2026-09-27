@@ -28,6 +28,14 @@ def _close_revoked_websockets(session):
         from .websocket_manager import manager
         for restaurante_id, user_id in revoked:
             manager.revoke(restaurante_id, user_id)
+    pending = session.info.pop("operational_realtime_after_commit", [])
+    if pending:
+        from .websocket_manager import manager
+        for envelope in pending:
+            manager.broadcast_sync(
+                envelope["message"], envelope["restaurante_id"],
+                target_audience=envelope["audience"],
+            )
 
 
 @event.listens_for(Session, "after_rollback")
@@ -35,12 +43,14 @@ def _discard_websocket_revocations(session):
     nested = session.get_nested_transaction()
     snapshots = session.info.get("commit_notification_savepoints", {})
     if nested in snapshots:
-        outbox, revocations = snapshots[nested]
+        outbox, revocations, broadcasts = snapshots[nested]
         session.info["outbox_pending_notification"] = outbox
         session.info["revoked_websocket_sessions"] = set(revocations)
+        session.info["operational_realtime_after_commit"] = list(broadcasts)
         return
     session.info.pop("outbox_pending_notification", None)
     session.info.pop("revoked_websocket_sessions", None)
+    session.info.pop("operational_realtime_after_commit", None)
 
 
 @event.listens_for(Session, "after_transaction_create")
@@ -49,6 +59,7 @@ def _snapshot_commit_notifications(session, transaction):
         session.info.setdefault("commit_notification_savepoints", {})[transaction] = (
             session.info.get("outbox_pending_notification", False),
             set(session.info.get("revoked_websocket_sessions", set())),
+            list(session.info.get("operational_realtime_after_commit", [])),
         )
 
 
@@ -59,6 +70,7 @@ def _clean_commit_notifications(session, transaction):
         # Session.close() can end a transaction without after_rollback.
         session.info.pop("outbox_pending_notification", None)
         session.info.pop("revoked_websocket_sessions", None)
+        session.info.pop("operational_realtime_after_commit", None)
         session.info.pop("commit_notification_savepoints", None)
 
 # ContextVar to track the logical restaurante_id for the current request context
