@@ -96,7 +96,12 @@ class ConnectionManager:
                 pass
             return
 
-        await websocket.accept(subprotocol=subprotocol)
+        if self.bus:
+            await websocket.accept(subprotocol=subprotocol, headers=[
+                (b"x-koma-instance", self.bus.instance_id[:8].encode())
+            ])
+        else:
+            await websocket.accept(subprotocol=subprotocol)
         self._loop = asyncio.get_running_loop()
         if user_id is not None:
             self.identities[websocket] = (restaurante_id, user_id, asyncio.get_running_loop())

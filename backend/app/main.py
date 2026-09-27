@@ -196,6 +196,7 @@ async def run_migrations_on_startup():
 
 @app.middleware("http")
 async def add_request_id_and_structured_log(request: Request, call_next):
+    from .websocket_manager import manager
     supplied_request_id = (request.headers.get("X-Request-ID") or "").strip()
     request_id = (
         supplied_request_id
@@ -208,6 +209,7 @@ async def add_request_id_and_structured_log(request: Request, call_next):
     response = await call_next(request)
     duration_ms = round((perf_counter() - started_at) * 1_000, 2)
     response.headers["X-Request-ID"] = request_id
+    response.headers["X-Koma-Instance"] = manager.bus.instance_id[:8] if manager.bus else "local"
     request_logger.info(
         json.dumps(
             {

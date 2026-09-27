@@ -41,8 +41,12 @@ if (!Array.isArray(tenants) || tenants.length < 5 ||
 const rounds = Number(process.env.KOMA_CAPACITY_ORDERS_PER_TENANT || 4);
 const timeout = Number(process.env.KOMA_CAPACITY_TIMEOUT_MS || 5000);
 const p95Limit = Number(process.env.KOMA_CAPACITY_P95_LIMIT_MS || 2000);
+const expectedReplicas = Number(process.env.KOMA_CAPACITY_EXPECT_REPLICAS || 1);
 if (!Number.isInteger(rounds) || rounds < 1 || rounds > 20 || timeout < 1000 || p95Limit < 100) {
   throw new Error('Invalid load limits');
+}
+if (!Number.isInteger(expectedReplicas) || expectedReplicas < 1 || expectedReplicas > 2) {
+  throw new Error('Invalid expected replica count');
 }
 
 const results = [];
@@ -52,7 +56,7 @@ function percentile(values, quantile) {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.ceil(sorted.length * quantile) - 1];
 }
-async function call(name, path, { method = 'GET', token, body, expected = [200], headers = {} } = {}) {
+async function call(name, path, { method = 'GET', token, body, expected = [200], headers = {}, onResponse } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   const began = performance.now();
@@ -68,7 +72,9 @@ async function call(name, path, { method = 'GET', token, body, expected = [200],
     let data;
     try { data = JSON.parse(raw); } catch { data = raw; }
     const elapsed = performance.now() - began;
-    results.push({ name, status: response.status, ms: elapsed, expected: expected.includes(response.status) });
+    onResponse?.(response.headers.get('x-koma-instance'));
+    results.push({ name, status: response.status, ms: elapsed, expected: expected.includes(response.status),
+      instance: response.headers.get('x-koma-instance') });
     recorded = true;
     if (!expected.includes(response.status)) throw new Error(`${name}: HTTP ${response.status} ${raw.slice(0, 200)}`);
     return data;
@@ -106,12 +112,16 @@ const sockets = await Promise.all(context.map(async ctx => {
     origin: 'https://app.komafood.com.br',
   });
   ctx.realtimeEvents = [];
+  ctx.operationalEvents = [];
+  ctx.orderInstances = new Set();
+  socket.on('upgrade', response => { ctx.websocketInstance = response.headers['x-koma-instance']; });
   socket.on('message', raw => {
     try {
       const event = JSON.parse(String(raw));
       if (event.event === 'draft_status' && Number(event.mesa_id) >= 50000) {
         ctx.realtimeEvents.push(event);
       }
+      if (event.event === 'tables_updated') ctx.operationalEvents.push(event);
     } catch { /* Other operational events are not part of this probe. */ }
   });
   await new Promise((resolve, reject) => {
@@ -142,7 +152,8 @@ async function oneOrder(ctx, index) {
   const body = { tipo: 'Balcão', identificador: 'Balcão', idempotency_key: key,
     itens: [{ produto_id: 'capacity-product' }] };
   const options = { method: 'POST', token: ctx.token, body, expected: [201],
-    headers: { 'X-Idempotency-Key': key } };
+    headers: { 'X-Idempotency-Key': key },
+    onResponse: instance => { if (instance) ctx.orderInstances.add(instance); } };
   const [first, repeated] = await Promise.all([
     call('order.create', '/comandas/venda-direta', options),
     call('order.retry', '/comandas/venda-direta', options),
@@ -210,10 +221,16 @@ for (const ctx of context) {
     });
   }
 }
+if (expectedReplicas === 2 && !context.some(ctx =>
+  ctx.websocketInstance && ctx.operationalEvents.length > 0 &&
+  [...ctx.orderInstances].some(instance => instance !== ctx.websocketInstance))) {
+  throw new Error('No operational event was observed across two distinct backend instances');
+}
 for (const socket of sockets) socket.close();
 
 const duration = (performance.now() - started) / 1000;
 const latencies = results.filter(r => r.expected).map(r => r.ms);
+const instances = [...new Set(results.map(r => r.instance).filter(Boolean))].sort();
 const metrics = {
   tenants: context.length, orders: context.length * rounds, operations: results.length,
   concurrency: context.length * 2,
@@ -230,6 +247,10 @@ const metrics = {
   stock_failures: 0,
   realtime_failures: 0,
   realtime_connections: sockets.length,
+  instances,
+  websocket_instances: [...new Set(context.map(ctx => ctx.websocketInstance).filter(Boolean))].sort(),
+  cross_replica_realtime_tenants: context.filter(ctx => ctx.websocketInstance && ctx.operationalEvents.length > 0 &&
+    [...ctx.orderInstances].some(instance => instance !== ctx.websocketInstance)).length,
 };
 metrics.by_operation = Object.fromEntries([...new Set(results.map(r => r.name))].map(name => {
   const operation = results.filter(r => r.name === name);
@@ -237,6 +258,6 @@ metrics.by_operation = Object.fromEntries([...new Set(results.map(r => r.name))]
     errors: operation.filter(r => !r.expected).length }];
 }));
 console.log(JSON.stringify(metrics, null, 2));
-if (metrics.p95_ms > p95Limit || results.some(r => !r.expected)) {
+if (instances.length < expectedReplicas || metrics.p95_ms > p95Limit || results.some(r => !r.expected)) {
   throw new Error('Capacity gate failed latency or HTTP criteria');
 }
