@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard,
   Store,
@@ -20,6 +20,7 @@ import {
 import type { Tenant } from "./superAdminTypes";
 import {
   clearSuperAdminSession,
+  getSuperAdminToken,
   publicApiFetch,
   superAdminErrorMessage,
   superAdminFetch,
@@ -60,9 +61,13 @@ export default function SuperAdminPanel() {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [globalSearch, setGlobalSearch] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [tenantsAvailable, setTenantsAvailable] = useState(false);
-  const [isLoadingTenants, setIsLoadingTenants] = useState(false);
+  const [tenantSnapshot, setTenantSnapshot] = useState<{ data: Tenant[]; hasSnapshot: boolean; status: "loading" | "ready" | "refreshing" | "error" }>({ data: [], hasSnapshot: false, status: "loading" });
+  const tenantFlightRef = useRef<Promise<void> | null>(null);
+  const tenantMountedRef = useRef(false);
+  const tenantSessionRef = useRef(getSuperAdminToken());
+  const tenants = tenantSnapshot.data;
+  const tenantsAvailable = tenantSnapshot.hasSnapshot;
+  const isLoadingTenants = tenantSnapshot.status === "loading" || tenantSnapshot.status === "refreshing";
   const [contracts, setContracts] = useState<ContractInboxItem[]>([]);
   const [contractsAvailable, setContractsAvailable] = useState(false);
   const [isLoadingContracts, setIsLoadingContracts] = useState(false);
@@ -99,30 +104,34 @@ export default function SuperAdminPanel() {
     setAuditLogs(prev => [newLog, ...prev.slice(0, 99)]);
   };
 
-  const fetchTenants = async () => {
-    setIsLoadingTenants(true);
-    try {
-      const response = await superAdminFetch("/api/super-admin/restaurantes");
-      if (!response.ok) {
-        setTenants([]);
-        setTenantsAvailable(false);
-        return;
-      }
-
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        setTenants(data);
-        setTenantsAvailable(true);
-      } else {
-        setTenants([]);
-        setTenantsAvailable(false);
-      }
-    } catch {
-      setTenants([]);
-      setTenantsAvailable(false);
-    } finally {
-      setIsLoadingTenants(false);
+  const fetchTenants = (): Promise<void> => {
+    const session = getSuperAdminToken();
+    if (tenantSessionRef.current !== session) {
+      tenantSessionRef.current = session;
+      tenantFlightRef.current = null;
+      setTenantSnapshot({ data: [], hasSnapshot: false, status: "loading" });
     }
+    if (tenantFlightRef.current) return tenantFlightRef.current;
+    setTenantSnapshot(previous => ({ ...previous, status: previous.hasSnapshot ? "refreshing" : "loading" }));
+    const flight = (async () => {
+      try {
+        const response = await superAdminFetch("/api/super-admin/restaurantes");
+        if (!response.ok) throw new Error(`Falha ao carregar restaurantes (${response.status})`);
+        const data: unknown = await response.json();
+        if (!Array.isArray(data)) throw new Error("Resposta inválida ao carregar restaurantes");
+        if (tenantMountedRef.current && tenantSessionRef.current === session && getSuperAdminToken() === session) {
+          setTenantSnapshot({ data: data as Tenant[], hasSnapshot: true, status: "ready" });
+        }
+      } catch {
+        if (tenantMountedRef.current && tenantSessionRef.current === session && getSuperAdminToken() === session) {
+          setTenantSnapshot(previous => ({ ...previous, status: "error" }));
+        }
+      } finally {
+        if (tenantSessionRef.current === session) tenantFlightRef.current = null;
+      }
+    })();
+    tenantFlightRef.current = flight;
+    return flight;
   };
 
   const fetchContracts = async () => {
@@ -157,6 +166,7 @@ export default function SuperAdminPanel() {
   };
 
   useEffect(() => {
+    tenantMountedRef.current = true;
     publicApiFetch("/health/live")
       .then(res => res.json())
       .then(data => setRuntimeHealth({
@@ -176,6 +186,7 @@ export default function SuperAdminPanel() {
     const contractInboxPoll = window.setInterval(refreshContractInboxWhenVisible, 30_000);
     document.addEventListener("visibilitychange", refreshContractInboxWhenVisible);
     return () => {
+      tenantMountedRef.current = false;
       window.clearInterval(contractInboxPoll);
       document.removeEventListener("visibilitychange", refreshContractInboxWhenVisible);
     };
@@ -192,7 +203,7 @@ export default function SuperAdminPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: targetStatus }),
       });
-      setTenants(prev => prev.map(t => t.id === id ? { ...t, status: targetStatus } : t));
+      setTenantSnapshot(prev => ({ ...prev, data: prev.data.map(t => t.id === id ? { ...t, status: targetStatus } : t) }));
       addAuditLog(`Status do restaurante #${id} alterado para ${targetStatus}.`, "INFO", "TENANTS");
       return true;
     } catch (err) {
@@ -238,6 +249,7 @@ export default function SuperAdminPanel() {
   ];
 
   const backendIsOnline = runtimeHealth?.status === "ok";
+  const tenantTab = ["overview", "incidents", "tenants", "trials", "payments", "billing"].includes(activeTab);
 
   return (
     <div className="min-h-screen bg-koma-page text-koma-foreground flex flex-col font-sans antialiased" id="superadmin-root">
@@ -321,6 +333,15 @@ export default function SuperAdminPanel() {
         </aside>
 
         <main className="flex-1 bg-koma-page p-6 overflow-y-auto" id="superadmin-content">
+          {tenantTab && !tenantsAvailable && (
+            <div className="rounded-xl border border-zinc-800 bg-koma-card p-8 text-center" role={tenantSnapshot.status === "error" ? "alert" : "status"}>
+              <p className="font-bold">{tenantSnapshot.status === "error" ? "Não foi possível carregar os restaurantes" : "Carregando restaurantes…"}</p>
+              {tenantSnapshot.status === "error" && <button type="button" className="mt-4 rounded-lg border border-zinc-700 px-4 py-2 text-sm" onClick={() => void fetchTenants()}>Tentar novamente</button>}
+            </div>
+          )}
+          {tenantTab && tenantsAvailable && tenantSnapshot.status === "refreshing" && <p role="status" className="mb-3 text-xs text-koma-muted">Atualizando restaurantes…</p>}
+          {tenantTab && tenantsAvailable && tenantSnapshot.status === "error" && <div role="alert" className="mb-3 rounded-lg border border-amber-700 p-3 text-xs text-amber-300">Mostrando os últimos restaurantes carregados. <button type="button" className="underline" onClick={() => void fetchTenants()}>Tentar novamente</button></div>}
+          {(!tenantTab || tenantsAvailable) && <>
           {activeTab === "overview" && (
             <SuperAdminOverviewTab
               tenants={tenants}
@@ -370,6 +391,7 @@ export default function SuperAdminPanel() {
             <SuperAdminPaymentsTab tenants={tenants} tenantsAvailable={tenantsAvailable} />
           )}
           {activeTab === "billing" && <SuperAdminBillingTab tenants={tenants} tenantsAvailable={tenantsAvailable} />}
+          </>}
           {activeTab === "operations" && <SuperAdminOperationsTab onAddLog={addAuditLog} onTriggerTelegramAlert={triggerTelegramAlert} />}
           {activeTab === "audit" && <SuperAdminAuditTab logs={auditLogs} onClearLogs={() => setAuditLogs([])} />}
           {activeTab === "settings" && <SuperAdminSettingsTab onAddLog={addAuditLog} onTriggerTelegramAlert={triggerTelegramAlert} />}
