@@ -97,12 +97,15 @@ async def lifespan(app: FastAPI):
         print("[OUTBOX] Worker de integração assíncrona iniciado no lifespan.", flush=True)
 
     from .services.order_chat_hub import order_chat_hub
+    from .websocket_manager import manager
+    manager.start()
     order_chat_hub.ensure_started()
     try:
         yield
     finally:
         import asyncio
         await asyncio.to_thread(order_chat_hub.stop)
+        await asyncio.to_thread(manager.stop)
         if signup_task:
             import contextlib
             signup_task.cancel()
@@ -193,6 +196,7 @@ async def run_migrations_on_startup():
 
 @app.middleware("http")
 async def add_request_id_and_structured_log(request: Request, call_next):
+    from .websocket_manager import manager
     supplied_request_id = (request.headers.get("X-Request-ID") or "").strip()
     request_id = (
         supplied_request_id
@@ -205,6 +209,7 @@ async def add_request_id_and_structured_log(request: Request, call_next):
     response = await call_next(request)
     duration_ms = round((perf_counter() - started_at) * 1_000, 2)
     response.headers["X-Request-ID"] = request_id
+    response.headers["X-Koma-Instance"] = manager.bus.instance_id[:8] if manager.bus else "local"
     request_logger.info(
         json.dumps(
             {
@@ -457,6 +462,7 @@ def liveness_check():
 @app.get("/health/ready")
 def health_check():
     """Sinaliza prontidão real: sem PostgreSQL, o backend não recebe tráfego."""
+    from .websocket_manager import manager
     db_status = "healthy"
     started_at = perf_counter()
     try:
@@ -476,6 +482,11 @@ def health_check():
         "database": db_status,
         "database_latency_ms": round((perf_counter() - started_at) * 1_000, 2),
         "print_queue": {"backend": "postgres", "consumer": "koma-print"},
-        "websocket": {"active_connections": _websocket_connections_count()},
+        "websocket": {
+            "active_connections": _websocket_connections_count(),
+            "transport_connected": bool(manager.bus and manager.bus.ready.is_set()) if engine.dialect.name == "postgresql" else True,
+            "generation": manager.bus.generation if manager.bus else 0,
+            "instance": manager.bus.instance_id[:8] if manager.bus else "local",
+        },
     }
     return JSONResponse(status_code=200 if ready else 503, content=payload)

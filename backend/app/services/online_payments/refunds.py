@@ -142,7 +142,7 @@ def _close_refunded_order_in_session(
             pass
         try:
             from ...websocket_manager import manager
-            manager.broadcast_sync({"event": "tables_updated"}, restaurante_id)
+            manager.queue_committed_broadcast(db, {"event": "tables_updated"}, restaurante_id)
         except Exception:
             pass
 

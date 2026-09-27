@@ -1,6 +1,9 @@
 import asyncio
 import logging
+import uuid
 from fastapi import WebSocket
+
+from .services.operational_realtime_bus import OperationalRealtimeBus
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +17,68 @@ PUBLIC_CLIENT_EVENTS = {
 }
 
 class ConnectionManager:
-    def __init__(self) -> None:
+    def __init__(self, *, shared_transport: bool = False) -> None:
         # Keeps track of active WebSocket connections grouped by restaurante_id and client_type
         # Structure: { restaurante_id: { "internal": [WebSocket...], "client": [WebSocket...] } }
         self.active_connections: dict[int, dict[str, list[WebSocket]]] = {}
         self.identities: dict[WebSocket, tuple[int, str, asyncio.AbstractEventLoop]] = {}
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self.bus = OperationalRealtimeBus(self._on_bus_event) if shared_transport else None
+
+    def start(self) -> None:
+        self._loop = asyncio.get_running_loop()
+        if self.bus:
+            self.bus.start()
+
+    def stop(self) -> None:
+        if self.bus:
+            self.bus.stop()
+
+    def _on_bus_event(self, envelope: dict) -> None:
+        if self.bus and envelope.get("origin") == self.bus.instance_id:
+            return
+        rid = envelope.get("restaurante_id")
+        if not isinstance(rid, int) or isinstance(rid, bool) or rid <= 0:
+            return
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+        if envelope.get("action") == "revoke":
+            user_id = envelope.get("user_id")
+            if user_id is None or isinstance(user_id, str):
+                loop.call_soon_threadsafe(self._revoke_local, rid, user_id)
+        elif envelope.get("action") == "broadcast":
+            message = envelope.get("message")
+            audience = envelope.get("audience")
+            if isinstance(message, dict) and audience in {"internal", "client", "all"}:
+                loop.call_soon_threadsafe(
+                    lambda: asyncio.create_task(self._broadcast_local(message, rid, audience))
+                )
+
+    @staticmethod
+    def _audience(message: dict, target_audience: str | None) -> str:
+        if target_audience in {"internal", "client", "all"}:
+            return target_audience
+        event_name = message.get("event") or message.get("type") or ""
+        return "all" if event_name in PUBLIC_CLIENT_EVENTS else "internal"
+
+    def _envelope(self, action: str, restaurante_id: int, **fields) -> dict:
+        return {
+            "version": 1, "event_id": uuid.uuid4().hex,
+            "origin": self.bus.instance_id if self.bus else None,
+            "action": action, "restaurante_id": restaurante_id, **fields,
+        }
+
+    def queue_committed_broadcast(self, db, message: dict, restaurante_id: int, *, target_audience: str | None = None) -> None:
+        if not self.bus:
+            db.info.setdefault("operational_realtime_after_commit", []).append(
+                self._envelope("broadcast", restaurante_id, message=message, audience=self._audience(message, target_audience))
+            )
+            return
+        envelope = self._envelope("broadcast", restaurante_id, message=message, audience=self._audience(message, target_audience))
+        # No local send occurred: the publishing process must consume this after commit too.
+        envelope["origin"] = None
+        self.bus.queue_committed(db, envelope)
 
     async def connect(
         self,
@@ -36,7 +96,13 @@ class ConnectionManager:
                 pass
             return
 
-        await websocket.accept(subprotocol=subprotocol)
+        if self.bus:
+            await websocket.accept(subprotocol=subprotocol, headers=[
+                (b"x-koma-instance", self.bus.instance_id[:8].encode())
+            ])
+        else:
+            await websocket.accept(subprotocol=subprotocol)
+        self._loop = asyncio.get_running_loop()
         if user_id is not None:
             self.identities[websocket] = (restaurante_id, user_id, asyncio.get_running_loop())
 
@@ -69,6 +135,14 @@ class ConnectionManager:
 
     def revoke(self, restaurante_id: int, user_id: str | None = None) -> None:
         """Called after commit, including from synchronous request threads."""
+        self._revoke_local(restaurante_id, user_id)
+        if self.bus:
+            try:
+                self.bus.publish(self._envelope("revoke", restaurante_id, user_id=user_id))
+            except Exception as exc:
+                logger.warning("Cross-process WebSocket revocation publish failed: %s", type(exc).__name__)
+
+    def _revoke_local(self, restaurante_id: int, user_id: str | None = None) -> None:
         for socket, (rid, uid, loop) in list(self.identities.items()):
             if rid != restaurante_id or (user_id is not None and uid != user_id):
                 continue
@@ -112,16 +186,17 @@ class ConnectionManager:
             logger.warning("Broadcast ignorado: restaurante_id ausente ou inválido.")
             return
 
+        audience = self._audience(message, target_audience)
+        await self._broadcast_local(message, restaurante_id, audience)
+        if self.bus:
+            try:
+                await asyncio.to_thread(self.bus.publish, self._envelope("broadcast", restaurante_id, message=message, audience=audience))
+            except Exception as exc:
+                logger.warning("Cross-process WebSocket broadcast failed: %s", type(exc).__name__)
+
+    async def _broadcast_local(self, message: dict, restaurante_id: int, target_audience: str) -> None:
         if restaurante_id not in self.active_connections:
             return
-
-        # Auto-resolve target_audience if not specified
-        if target_audience is None:
-            event_name = message.get("event") or message.get("type") or ""
-            if event_name in PUBLIC_CLIENT_EVENTS:
-                target_audience = "all"
-            else:
-                target_audience = "internal"
 
         ctype_dict = self.active_connections[restaurante_id]
         sockets_to_send: list[WebSocket] = []
@@ -169,14 +244,22 @@ class ConnectionManager:
         except RuntimeError:
             pass
 
-        for _socket, (_rid, _uid, sock_loop) in list(self.identities.items()):
-            if not sock_loop.is_closed():
-                sock_loop.call_soon_threadsafe(
-                    lambda: asyncio.create_task(
-                        self.broadcast(message, restaurante_id=restaurante_id, tenant_id=tenant_id, target_audience=target_audience)
-                    )
-                )
-                return
+        rid = restaurante_id if restaurante_id is not None else tenant_id
+        if rid is None:
+            from .database import current_restaurante_id
+            rid = current_restaurante_id.get()
+        if not isinstance(rid, int) or isinstance(rid, bool) or rid <= 0:
+            return
+        audience = self._audience(message, target_audience)
+        if self._loop and not self._loop.is_closed():
+            self._loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(self._broadcast_local(message, rid, audience))
+            )
+        if self.bus:
+            try:
+                self.bus.publish(self._envelope("broadcast", rid, message=message, audience=audience))
+            except Exception as exc:
+                logger.warning("Cross-process WebSocket broadcast failed: %s", type(exc).__name__)
 
 # Singleton instance of the connection manager
-manager = ConnectionManager()
+manager = ConnectionManager(shared_transport=True)
