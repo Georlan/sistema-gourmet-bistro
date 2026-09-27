@@ -70,6 +70,52 @@ def test_new_signup_queues_owner_notice_once_before_acceptance(signup_client, mo
         assert db.query(SignupNotification).count() == 1
 
 
+def test_new_signup_queues_telegram_only_for_owner(signup_client, monkeypatch):
+    client, Session = signup_client
+    monkeypatch.setattr(settings, "KOMA_OWNER_EMAIL", "")
+    monkeypatch.setenv("KOMA_OWNER_WHATSAPP_PHONE", "5585999999999")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-bot-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "owner-chat")
+
+    created = client.post("/api/signups", json=DATA)
+    assert created.status_code == 201, created.text
+    with Session() as db:
+        notices = db.query(SignupNotification).all()
+        assert [notice.id for notice in notices] == [
+            f"{created.json()['id']}:signup-started-owner:telegram"
+        ]
+
+
+def test_telegram_delivery_uses_configured_chat_and_rejects_provider_failure(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-bot-token")
+    calls = []
+
+    class Response:
+        is_success = True
+
+        def json(self):
+            return {"ok": True}
+
+    def post(url, *, timeout, json):
+        calls.append((url, timeout, json))
+        return Response()
+
+    monkeypatch.setattr(signup_notifications.httpx, "post", post)
+    payload = {"channel": "telegram", "recipient": "owner-chat", "message": "Nova inscrição"}
+    signup_notifications._deliver(payload, "protocol:owner:telegram")
+    assert calls == [
+        (
+            "https://api.telegram.org/bottest-bot-token/sendMessage",
+            15,
+            {"chat_id": "owner-chat", "text": "Nova inscrição"},
+        )
+    ]
+
+    monkeypatch.setattr(Response, "json", lambda self: {"ok": False})
+    with pytest.raises(RuntimeError, match="telegram_provider_rejected"):
+        signup_notifications._deliver(payload, "protocol:owner:telegram")
+
+
 def test_signup_expiry_and_admin_authorization(signup_client):
     client, Session = signup_client
     token = client.post("/api/signups", json=DATA).json()["token"]
@@ -165,7 +211,7 @@ def test_authorized_card_waits_for_manual_release_and_notifies_owner(client_and_
         releases = db.query(SignupNotification).filter(
             SignupNotification.id.like(f"{protocol}:release-required:%")
         ).all()
-        assert {item.id.rsplit(":", 1)[-1] for item in releases} == {"email", "whatsapp"}
+        assert {item.id.rsplit(":", 1)[-1] for item in releases} == {"email"}
 
 
 def test_account_money_authorization_waits_for_manual_release(client_and_session, monkeypatch):

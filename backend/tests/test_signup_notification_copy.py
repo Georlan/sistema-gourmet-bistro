@@ -73,7 +73,7 @@ def test_acceptance_notifies_owner_by_email_without_requiring_whatsapp(monkeypat
     owner = calls[1]
     assert owner["kind"] == "owner"
     assert owner["email"] == "owner@example.com"
-    assert owner["phone"] == ""
+    assert owner["phone"] is None
     assert owner["subject"] == "Nova inscrição iniciada — KÔMA"
     assert "Acompanhe o status na aba Inscrições do SuperAdmin" in owner["message"]
 
