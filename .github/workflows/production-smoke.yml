@@ -6,16 +6,16 @@ on:
       frontend_url:
         description: URL pública do frontend
         required: false
-        default: https://sistema-gourmet-bistro.pages.dev
+        default: https://app.komafood.com.br
         type: string
       api_url:
         description: URL pública do backend
         required: false
         default: https://sistema-gourmet-bistro-production.up.railway.app
         type: string
-  # Production validation is intentionally asynchronous: it must never hold a merge or deploy.
+  # Daily validation stays asynchronous and does not block merges or deploys.
   schedule:
-    - cron: '17 * * * *'
+    - cron: '17 9 * * *'
 
 permissions:
   contents: read
@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     env:
-      KOMA_FRONTEND_URL: ${{ github.event.inputs.frontend_url || vars.KOMA_PRODUCTION_FRONTEND_URL || 'https://sistema-gourmet-bistro.pages.dev' }}
+      KOMA_FRONTEND_URL: ${{ github.event.inputs.frontend_url || vars.KOMA_PRODUCTION_FRONTEND_URL || 'https://app.komafood.com.br' }}
       KOMA_API_URL: ${{ github.event.inputs.api_url || vars.KOMA_PRODUCTION_API_URL || 'https://sistema-gourmet-bistro-production.up.railway.app' }}
     steps:
       - name: Checkout
