@@ -530,7 +530,7 @@ def get_garcons_relatorio(
             LEFT JOIN vendas_por_garcom AS v
               ON v.garcom_id = u.id
             WHERE u.restaurante_id = :restaurante_id
-              AND u.role = 'garcom'
+              AND u.cargo = 'garcom'
             ORDER BY u.nome ASC
             """
         ),
