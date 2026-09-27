@@ -6,7 +6,7 @@ import pytest
 import datetime
 from types import SimpleNamespace
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db, current_restaurante_id
@@ -78,6 +78,7 @@ def override_get_db():
 
 @pytest.fixture(autouse=True)
 def setup_database(monkeypatch):
+    print_agents_route._clear_invalid_agent_token_cache()
     def test_session_local(**kwargs):
         kwargs.pop("restaurante_id", None)
         return TestingSessionLocal()
@@ -149,6 +150,7 @@ def setup_database(monkeypatch):
         db.close()
         yield
     finally:
+        print_agents_route._clear_invalid_agent_token_cache()
         current_restaurante_id.reset(token_var)
         import os
         try:
@@ -195,6 +197,30 @@ def mark_agent_printer_ready(agent_id: str) -> None:
         db.commit()
     finally:
         db.close()
+
+
+def test_invalid_agent_token_is_negative_cached_to_avoid_db_hammering():
+    """A mesma credencial revogada consulta o banco só uma vez por janela de cache."""
+    statements = []
+
+    def capture_statement(_conn, _cursor, statement, _params, _context, _executemany):
+        normalized = str(statement).lower()
+        if "from print_agent_tokens" in normalized and "token_hash" in normalized:
+            statements.append(normalized)
+
+    event.listen(engine, "before_cursor_execute", capture_statement)
+    try:
+        client = TestClient(app)
+        for _ in range(3):
+            response = client.post(
+                "/api/print-agents/jobs/claim-batch?limit=10",
+                headers={"X-Agent-Token": "revoked-stale-agent-token"},
+            )
+            assert response.status_code == 401
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_statement)
+
+    assert len(statements) == 1
 
 
 def test_atomic_claim_job_success():
