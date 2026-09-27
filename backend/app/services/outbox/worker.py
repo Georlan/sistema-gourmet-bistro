@@ -240,8 +240,16 @@ class OutboxWorker:
             self._task = None
 
 
-# Instância singleton padrão da aplicação
-default_outbox_worker = OutboxWorker()
+# Instância singleton padrão da aplicação. Os defaults reduzem polling vazio sem
+# sacrificar wake imediato após commits de Outbox.
+default_outbox_worker = OutboxWorker(
+    poll_interval_seconds=float(os.getenv("OUTBOX_POLL_INTERVAL", "2.0")),
+    batch_size=int(os.getenv("OUTBOX_BATCH_SIZE", "20")),
+    max_idle_seconds=float(os.getenv("OUTBOX_MAX_IDLE_SECONDS", "60")),
+    restaurant_cache_ttl_seconds=float(
+        os.getenv("OUTBOX_RESTAURANT_CACHE_TTL_SECONDS", "60")
+    ),
+)
 
 
 async def _run_standalone_cli():
@@ -250,6 +258,10 @@ async def _run_standalone_cli():
     worker = OutboxWorker(
         poll_interval_seconds=float(os.getenv("OUTBOX_POLL_INTERVAL", "2.0")),
         batch_size=int(os.getenv("OUTBOX_BATCH_SIZE", "20")),
+        max_idle_seconds=float(os.getenv("OUTBOX_MAX_IDLE_SECONDS", "60")),
+        restaurant_cache_ttl_seconds=float(
+            os.getenv("OUTBOX_RESTAURANT_CACHE_TTL_SECONDS", "60")
+        ),
     )
 
     loop = asyncio.get_running_loop()
