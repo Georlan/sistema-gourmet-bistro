@@ -57,8 +57,12 @@ class OutboxWorker:
         batch_size: int = 20,
         worker_id: Optional[str] = None,
         stale_timeout_seconds: int = DEFAULT_STALE_TIMEOUT_SECONDS,
+        max_idle_seconds: float = 60.0,
+        restaurant_cache_ttl_seconds: float = 60.0,
     ):
         self.poll_interval_seconds = poll_interval_seconds
+        self.max_idle_seconds = max(float(max_idle_seconds), float(poll_interval_seconds))
+        self.restaurant_cache_ttl_seconds = max(float(restaurant_cache_ttl_seconds), 0.0)
         self.batch_size = batch_size
         self.worker_id = worker_id or f"worker-{uuid.uuid4().hex[:8]}"
         self.stale_timeout_seconds = stale_timeout_seconds
@@ -68,6 +72,22 @@ class OutboxWorker:
         self._wake_event: Optional[asyncio.Event] = None
         self._loop = None
         self._last_chat_retention_at = 0.0
+        self._cached_restaurant_ids: Optional[list[int]] = None
+        self._restaurant_cache_expires_at = 0.0
+
+    def _active_restaurant_ids(self, db: Session) -> list[int]:
+        """Evita redescobrir a mesma lista de tenants em todo ciclo ocioso."""
+        now = time.monotonic()
+        if (
+            self._cached_restaurant_ids is not None
+            and now < self._restaurant_cache_expires_at
+        ):
+            return list(self._cached_restaurant_ids)
+
+        restaurant_ids = discover_active_restaurant_ids(db)
+        self._cached_restaurant_ids = list(restaurant_ids)
+        self._restaurant_cache_expires_at = now + self.restaurant_cache_ttl_seconds
+        return restaurant_ids
 
     def wake(self):
         """Commit notification is a hint; periodic reconciliation stays durable."""
@@ -96,7 +116,7 @@ class OutboxWorker:
             if restaurant_id is not None:
                 target_tenant_ids = [restaurant_id]
             else:
-                target_tenant_ids = discover_active_restaurant_ids(db)
+                target_tenant_ids = self._active_restaurant_ids(db)
 
             for rid in target_tenant_ids:
                 try:
@@ -179,7 +199,7 @@ class OutboxWorker:
                         await asyncio.wait_for(self._wake_event.wait(), timeout=idle_delay)
                         idle_delay = self.poll_interval_seconds
                     except asyncio.TimeoutError:
-                        idle_delay = min(10.0, idle_delay * 2)
+                        idle_delay = min(self.max_idle_seconds, idle_delay * 2)
 
             except asyncio.CancelledError:
                 logger.info("[OUTBOX WORKER] Recebido cancelamento no worker %s.", self.worker_id)
