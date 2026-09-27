@@ -4,6 +4,8 @@ import datetime
 import logging
 import os
 import re
+import threading
+import time
 from collections.abc import Mapping
 from typing import Any, Literal, Optional, List
 from fastapi import (
@@ -43,6 +45,58 @@ PRINT_QUEUE_VISIBLE_LIMIT = 50
 AGENT_COMMAND_TIMEOUT_SECONDS = 45
 UNRESOLVED_JOB_STATUSES = ("pending", "claimed", "printing")
 TERMINAL_JOB_STATUSES = ("printed", "failed", "cancelled")
+
+# Repeated requests from a revoked/obsolete desktop agent used to hit PostgreSQL
+# on every polling cycle. Keep only hashes (never raw credentials), bound memory,
+# and expire entries automatically so a stale installation cannot hammer the DB.
+INVALID_AGENT_TOKEN_CACHE_TTL_SECONDS = 300
+INVALID_AGENT_TOKEN_CACHE_MAX_ENTRIES = 2048
+_invalid_agent_token_cache: dict[str, float] = {}
+_invalid_agent_token_cache_lock = threading.Lock()
+
+
+def _invalid_agent_token_is_cached(token_hash: str, *, now: float | None = None) -> bool:
+    current = time.monotonic() if now is None else now
+    with _invalid_agent_token_cache_lock:
+        expires_at = _invalid_agent_token_cache.get(token_hash)
+        if expires_at is None:
+            return False
+        if expires_at <= current:
+            _invalid_agent_token_cache.pop(token_hash, None)
+            return False
+        return True
+
+
+def _remember_invalid_agent_token(token_hash: str, *, now: float | None = None) -> None:
+    current = time.monotonic() if now is None else now
+    with _invalid_agent_token_cache_lock:
+        if len(_invalid_agent_token_cache) >= INVALID_AGENT_TOKEN_CACHE_MAX_ENTRIES:
+            expired = [
+                key for key, expires_at in _invalid_agent_token_cache.items()
+                if expires_at <= current
+            ]
+            for key in expired:
+                _invalid_agent_token_cache.pop(key, None)
+            if len(_invalid_agent_token_cache) >= INVALID_AGENT_TOKEN_CACHE_MAX_ENTRIES:
+                oldest_key = min(
+                    _invalid_agent_token_cache,
+                    key=_invalid_agent_token_cache.get,
+                )
+                _invalid_agent_token_cache.pop(oldest_key, None)
+        _invalid_agent_token_cache[token_hash] = (
+            current + INVALID_AGENT_TOKEN_CACHE_TTL_SECONDS
+        )
+
+
+def _forget_invalid_agent_token(token_hash: str) -> None:
+    with _invalid_agent_token_cache_lock:
+        _invalid_agent_token_cache.pop(token_hash, None)
+
+
+def _clear_invalid_agent_token_cache() -> None:
+    """Test/support helper: never stores or exposes the raw agent credential."""
+    with _invalid_agent_token_cache_lock:
+        _invalid_agent_token_cache.clear()
 
 
 def require_internal_print_simulator_user(current_user=Depends(get_current_user)):
@@ -797,6 +851,12 @@ def get_current_agent(
         )
 
     computed_hash = hash_token(raw_token.strip())
+    if _invalid_agent_token_is_cached(computed_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de agente inválido ou revogado"
+        )
+
     if db.get_bind().dialect.name == "postgresql":
         identity = db.execute(
             text(
@@ -820,11 +880,13 @@ def get_current_agent(
         ).mappings().first()
 
     if not identity:
+        _remember_invalid_agent_token(computed_hash)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de agente inválido ou revogado"
         )
 
+    _forget_invalid_agent_token(computed_hash)
     restaurante_id = identity["restaurante_id"]
     bind_session_to_tenant(db, restaurante_id)
     current_restaurante_id.set(restaurante_id)
