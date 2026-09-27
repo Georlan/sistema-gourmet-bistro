@@ -35,7 +35,7 @@ function main() {
   }
   const result = spawnSync(process.env.RAILWAY_BIN || 'railway', [
     'logs', '--project', target.project, '--environment', target.environment, '--service', target.service,
-    '--since', process.env.KOMA_TRACE_SINCE || '24h', '--lines', '1000', '--json',
+    '--since', process.env.KOMA_TRACE_SINCE || '24h', '--lines', '100', '--filter', id, '--json',
   ], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 30000 });
   if (result.error || result.status !== 0) {
     console.error('Não foi possível consultar os logs Railway; confira a sessão CLI e os IDs do serviço.');
