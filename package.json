@@ -13,6 +13,7 @@
     "audit:light": "node scripts/light_mode_contrast_check.mjs",
     "test:unit": "tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
+    "e2e:surface-integrity": "KOMA_E2E_PORT=4283 playwright test e2e/surface-integrity.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2",
     "capacity:smoke": "node scripts/capacity-smoke.mjs",
     "capacity:five-tenants": "node scripts/capacity-five-tenants.mjs",
     "ops:trace": "node scripts/ops-trace.mjs",

@@ -137,6 +137,7 @@ async function mockCashierBackend(page: Page) {
       ],
     };
     else if (pathname === '/caixa/configuracoes') body = cashierConfig;
+    else if (pathname === '/caixa/movimentacoes') body = [];
     else if (pathname === '/caixa/turno/atual') body = openShift;
     else if (pathname === '/caixa/turno-atual/resumo') {
       body = {
