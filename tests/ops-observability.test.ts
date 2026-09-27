@@ -56,10 +56,11 @@ test("monitor confirms failure, deduplicates issue, and confirms recovery", asyn
 
 test("trace returns only matching structured events", () => {
   const lines = [
-    JSON.stringify({ timestamp: "2026-09-27T00:00:00Z", message: JSON.stringify({ event: "http_exception", request_id: "abcdef1234567890", exception_type: "RuntimeError" }) }),
+    JSON.stringify({ timestamp: "2026-09-27T00:00:00Z", message: "", event: "http_request", request_id: "abcdef1234567890", support_code: "abcdef123456", status_code: 500 }),
+    JSON.stringify({ timestamp: "2026-09-27T00:00:00Z", message: JSON.stringify({ event: "http_exception", request_id: "abcdef1234567890", support_code: "abcdef123456", exception_type: "RuntimeError" }) }),
     JSON.stringify({ timestamp: "2026-09-27T00:00:01Z", message: "noise abcdef123456" }),
   ];
-  assert.equal(parseTraceLines(lines, "abcdef123456").length, 1);
+  assert.equal(parseTraceLines(lines, "abcdef123456").length, 2);
   assert.equal(parseTraceLines(lines, "00000000").length, 0);
 });
 

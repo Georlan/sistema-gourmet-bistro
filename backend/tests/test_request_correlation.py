@@ -25,6 +25,7 @@ def test_unexpected_error_correlates_response_exception_and_tenant_without_leak(
             events = [json.loads(record.getMessage()) for record in caplog.records if record.name == "koma.http"]
             correlated = [event for event in events if event.get("request_id") == request_id]
             assert {event["event"] for event in correlated} == {"http_exception", "http_request"}
+            assert all(event["support_code"] == request_id[:12] for event in correlated)
             assert all(event["restaurante_id"] == tenant for event in correlated)
             assert all(event["instance"] and event["timestamp"] and event["path"] == "/_fixture/correlation" for event in correlated)
             assert next(event for event in correlated if event["event"] == "http_exception")["exception_type"] == "RuntimeError"
