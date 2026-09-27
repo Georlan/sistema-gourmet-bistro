@@ -17,13 +17,24 @@ from ..signup_models import RestaurantSignup, SignupNotification
 logger = logging.getLogger(__name__)
 
 
-def enqueue(db, *, protocol, kind, email, phone, subject, message, expires_hours=72):
+def _owner_telegram_chat():
+    if not os.getenv("TELEGRAM_BOT_TOKEN", "").strip():
+        return None
+    return os.getenv("TELEGRAM_CHAT_ID", "").strip() or None
+
+
+def enqueue(
+    db, *, protocol, kind, email, phone, subject, message,
+    telegram_chat=None, expires_hours=72,
+):
     now = dt.datetime.now(dt.timezone.utc)
     channels = []
     if email:
         channels.append(("email", email))
     if phone:
         channels.append(("whatsapp", phone))
+    if telegram_chat:
+        channels.append(("telegram", telegram_chat))
     for channel, recipient in channels:
         values = dict(
             id=f"{protocol}:{kind}:{channel}",
@@ -63,15 +74,16 @@ def enqueue(db, *, protocol, kind, email, phone, subject, message, expires_hours
 def enqueue_signup_started(db, *, signup_id, restaurant_name, plan, billing_cycle):
     """Queue an idempotent owner notice when a resumable signup first exists."""
     owner_email = settings.KOMA_OWNER_EMAIL
-    owner_phone = os.getenv("KOMA_OWNER_WHATSAPP_PHONE", "").strip()
-    if not (owner_email or owner_phone):
+    owner_telegram = _owner_telegram_chat()
+    if not (owner_email or owner_telegram):
         return
     enqueue(
         db,
         protocol=signup_id,
         kind="signup-started-owner",
         email=owner_email,
-        phone=owner_phone,
+        phone=None,
+        telegram_chat=owner_telegram,
         subject="Nova inscrição iniciada — KÔMA",
         message=(
             f"Nova inscrição KÔMA iniciada: {restaurant_name}. Plano: {plan} ({billing_cycle}). "
@@ -104,14 +116,15 @@ def enqueue_trial_started(
         ),
     )
     owner_email = settings.KOMA_OWNER_EMAIL
-    owner_phone = os.getenv("KOMA_OWNER_WHATSAPP_PHONE", "").strip()
-    if owner_email or owner_phone:
+    owner_telegram = _owner_telegram_chat()
+    if owner_email or owner_telegram:
         enqueue(
             db,
             protocol=protocol,
             kind="trial-started-owner",
             email=owner_email,
-            phone=owner_phone,
+            phone=None,
+            telegram_chat=owner_telegram,
             subject="Operação liberada e trial iniciado — KÔMA",
             message=(
                 f"Operação liberada: {restaurant_name} (#{tenant_id}), plano {plan} ({cycle}). "
@@ -139,14 +152,15 @@ def enqueue_acceptance(
         message=message,
     )
     owner_email = settings.KOMA_OWNER_EMAIL
-    owner_phone = os.getenv("KOMA_OWNER_WHATSAPP_PHONE", "").strip()
-    if owner_email or owner_phone:
+    owner_telegram = _owner_telegram_chat()
+    if owner_email or owner_telegram:
         enqueue(
             db,
             protocol=protocol,
             kind="owner",
             email=owner_email,
-            phone=owner_phone,
+            phone=None,
+            telegram_chat=owner_telegram,
             subject="Nova inscrição iniciada — KÔMA",
             message=(
                 f"Nova inscrição KÔMA iniciada: {restaurant_name}. Protocolo: {protocol}. "
@@ -185,7 +199,6 @@ def enqueue_activation(
 
 def enqueue_release_required(db, *, protocol, restaurant_name, plan, billing_cycle):
     """Avisa o operador uma única vez quando uma autorização aguarda liberação manual."""
-    owner_phone = os.getenv("KOMA_OWNER_WHATSAPP_PHONE", "").strip()
     message = (
         f"Autorização recorrente confirmada para {restaurant_name}. Protocolo: {protocol}. "
         f"Plano: {plan} ({billing_cycle}). Nenhuma mensalidade fixa foi cobrada hoje. "
@@ -198,7 +211,8 @@ def enqueue_release_required(db, *, protocol, restaurant_name, plan, billing_cyc
         protocol=protocol,
         kind="release-required",
         email=settings.KOMA_OWNER_EMAIL,
-        phone=owner_phone,
+        phone=None,
+        telegram_chat=_owner_telegram_chat(),
         subject="Restaurante aguardando liberação — KÔMA",
         message=message,
     )
@@ -224,7 +238,18 @@ def _deliver(payload, delivery_id):
         )
         if not response.is_success:
             raise RuntimeError("email_provider_rejected")
-    else:
+    elif payload["channel"] == "telegram":
+        bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+        if not bot_token or not payload["recipient"]:
+            raise RuntimeError("telegram_not_configured")
+        response = httpx.post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            timeout=15,
+            json={"chat_id": payload["recipient"], "text": payload["message"]},
+        )
+        if not response.is_success or not response.json().get("ok"):
+            raise RuntimeError("telegram_provider_rejected")
+    elif payload["channel"] == "whatsapp":
         if not settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
             raise RuntimeError("whatsapp_not_configured")
         from .whatsapp import enviar_texto_whatsapp_detalhado
@@ -234,6 +259,8 @@ def _deliver(payload, delivery_id):
         )
         if not result.sucesso:
             raise RuntimeError("whatsapp_provider_rejected")
+    else:
+        raise RuntimeError("unknown_notification_channel")
 
 
 def dispatch_batch():
