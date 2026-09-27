@@ -162,3 +162,16 @@ test('order modal associates eligible unlinked orders to a table through the ded
   assert.match(owner, /associateTable: handleAssociateSelectedKanbanTable/);
   assert.match(owner, /pdvTableOptions\.map/);
 });
+
+
+test('PDV requires and persists payment method for pickup and delivery', () => {
+  const pdv = source('src/components/caixa/pdv/useCashierPdv.ts');
+  const view = source('src/components/caixa/pdv/CashierPdvView.tsx');
+
+  assert.match(pdv, /pdvPaymentMethod/);
+  assert.match(pdv, /Escolha a forma de pagamento da entrega ou retirada/);
+  assert.match(pdv, /delivery_forma_pagamento:/);
+  assert.match(view, /Forma de pagamento:/);
+  assert.match(view, /PAYMENT_LABELS/);
+  assert.match(view, /pdvOrderType !== 'dine_in' && !pdvPaymentMethod/);
+});

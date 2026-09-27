@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
+import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
 import { Check, ChevronLeft, ChevronRight, Edit3, Info, Minus, Package, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
@@ -88,6 +89,8 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     pdvCustomerLookup,
     pdvOrderType,
     setPdvOrderType,
+    pdvPaymentMethod,
+    setPdvPaymentMethod,
     pdvDeliveryAddressDraft,
     pdvDeliveryAddressLegacyHint,
     handlePdvDeliveryAddressChange,
@@ -879,6 +882,35 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   </div>
                 )}
 
+                {(pdvOrderType === 'pickup' || pdvOrderType === 'delivery') && (
+                  <div className="space-y-1.5">
+                    <label className="block text-[8px] font-bold uppercase tracking-wider text-koma-subtle">
+                      Forma de pagamento:
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((method) => (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => setPdvPaymentMethod(method)}
+                          aria-pressed={pdvPaymentMethod === method}
+                          className={clsx(
+                            'min-h-9 rounded-lg border px-2 py-1.5 text-[9px] font-bold transition-colors',
+                            pdvPaymentMethod === method
+                              ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                              : 'border-koma-border bg-koma-input text-koma-muted hover:border-emerald-500/30 hover:text-koma-foreground',
+                          )}
+                        >
+                          {PAYMENT_LABELS[method]}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[8px] leading-relaxed text-koma-muted">
+                      Essa informação acompanha a via de retirada/entrega e evita cobrança duplicada.
+                    </p>
+                  </div>
+                )}
+
                 <div
                   className={"flex justify-between items-center font-mono border-t border-koma-border pt-2 text-[11px] font-bold text-koma-foreground"}
                 >
@@ -891,7 +923,11 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 <button
                   id="pdv-submit-btn"
                   type="submit"
-                  disabled={pdvCart.length === 0 || isLoading}
+                  disabled={
+                    pdvCart.length === 0
+                    || isLoading
+                    || (pdvOrderType !== 'dine_in' && !pdvPaymentMethod)
+                  }
                   className={"w-full min-h-11 py-2 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] rounded-xl border border-transparent font-bold text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex flex-col items-center justify-center gap-0.5 disabled:cursor-not-allowed disabled:border-[#272c29] disabled:bg-koma-card disabled:text-zinc-600"}
                 >
                   <div className={"flex items-center gap-1"}>

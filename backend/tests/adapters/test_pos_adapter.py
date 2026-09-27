@@ -141,6 +141,7 @@ class TestPosAdapter:
             "mesa_id": 1,
             "identificador": "Cliente Retirada",
             "delivery_telefone": "81999997777",
+            "delivery_forma_pagamento": "pix",
             "itens": [{"produto_id": "prod-char-simples"}],
         }
         res = char_client.post("/comandas/venda-direta", json=payload, headers=headers)
@@ -149,6 +150,28 @@ class TestPosAdapter:
         assert data["tipo"] == "Retirada"
         assert data["mesa_id"] == 1
         assert data["delivery_status"] == "producao"
+        assert data["delivery_forma_pagamento"] == "pix"
+
+    def test_pos_adapter_preserves_payment_method_in_canonical_command(self, char_client, char_setup):
+        headers = char_setup["headers"]
+        payload = {
+            "tipo": "retirada",
+            "identificador": "Cliente Retirada",
+            "delivery_telefone": "81999997777",
+            "delivery_forma_pagamento": "cartao_debito",
+            "itens": [{"produto_id": "prod-char-simples"}],
+        }
+
+        with patch.object(
+            OrderApplicationService,
+            "create_order",
+            wraps=OrderApplicationService.create_order,
+        ) as spy_create:
+            response = char_client.post("/comandas/venda-direta", json=payload, headers=headers)
+
+        assert response.status_code == 201
+        cmd: CreateOrderCommand = spy_create.call_args[0][1]
+        assert cmd.payment_method == "cartao_debito"
 
     def test_pos_adapter_rejects_delivery_associated_with_table(self, char_client, char_setup):
         """[CONTRATO] Delivery usa endereço como referência e não aceita mesa."""
