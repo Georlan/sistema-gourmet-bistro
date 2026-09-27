@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import WebSocket from 'ws';
 
 const HOMOLOGATION_HOST = 'koma-production-3b05.up.railway.app';
 const requiredHost = (process.env.KOMA_CAPACITY_ALLOW_HOST || HOMOLOGATION_HOST).trim().toLowerCase();
@@ -96,7 +97,43 @@ for (const tenant of tenants) {
     throw new Error(`Stock isolation failed for ${tenant.email}`);
   }
   context.push({ ...tenant, token: login.access_token, ids: [], stockId,
-    stockBefore: ownStock.estoque_atual });
+    stockBefore: ownStock.estoque_atual, userId: login.usuario.id });
+}
+
+const sockets = await Promise.all(context.map(async ctx => {
+  const url = `wss://${HOMOLOGATION_HOST}/ws/${ctx.userId}`;
+  const socket = new WebSocket(url, ['koma-auth', ctx.token], {
+    origin: 'https://app.komafood.com.br',
+  });
+  ctx.realtimeEvents = [];
+  socket.on('message', raw => {
+    try {
+      const event = JSON.parse(String(raw));
+      if (event.event === 'draft_status' && Number(event.mesa_id) >= 50000) {
+        ctx.realtimeEvents.push(event);
+      }
+    } catch { /* Other operational events are not part of this probe. */ }
+  });
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`WebSocket connection timed out for ${ctx.restaurante_id}`)), timeout);
+    socket.once('open', () => { clearTimeout(timer); resolve(); });
+    socket.once('error', error => { clearTimeout(timer); reject(error); });
+  });
+  return socket;
+}));
+for (const [index, ctx] of context.entries()) {
+  sockets[index].send(JSON.stringify({ action: 'draft_status', mesa_id: 50000 + ctx.restaurante_id, ativo: true }));
+}
+const realtimeDeadline = performance.now() + Math.min(timeout, 3000);
+while (context.some(ctx => ctx.realtimeEvents.length < 1) && performance.now() < realtimeDeadline) {
+  await new Promise(resolve => setTimeout(resolve, 50));
+}
+await new Promise(resolve => setTimeout(resolve, 300));
+for (const ctx of context) {
+  if (ctx.realtimeEvents.length !== 1 ||
+      ctx.realtimeEvents[0].mesa_id !== 50000 + ctx.restaurante_id) {
+    throw new Error(`Realtime tenant isolation failed for ${ctx.restaurante_id}`);
+  }
 }
 
 const runId = randomUUID();
@@ -159,6 +196,7 @@ for (const ctx of context) {
     });
   }
 }
+for (const socket of sockets) socket.close();
 
 const duration = (performance.now() - started) / 1000;
 const latencies = results.filter(r => r.expected).map(r => r.ms);
@@ -175,6 +213,8 @@ const metrics = {
   isolation_failures: 0,
   idempotency_failures: 0,
   stock_failures: 0,
+  realtime_failures: 0,
+  realtime_connections: sockets.length,
 };
 metrics.by_operation = Object.fromEntries([...new Set(results.map(r => r.name))].map(name => {
   const operation = results.filter(r => r.name === name);
