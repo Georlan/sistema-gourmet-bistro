@@ -24,10 +24,10 @@ test('Cardápio online espelha as mesmas funções na navegação responsiva', (
   const caixa = source('../src/components/CaixaPanel.tsx');
   assert.match(caixa, /onlineMenuSubnavItems = getCashierNavigationItem\('cardapio_digital'\)\?\.children \?\? \[\]/);
   assert.match(caixa, /activeTab === 'cardapio_digital'/);
-  assert.match(caixa, /onlineMenuSubnavItems\.map/);
-  assert.match(caixa, /Seção do cardápio online/);
-  assert.match(caixa, /cashier-subnav__mobile-select lg:hidden/);
-  assert.match(caixa, /hidden lg:flex gap-2/);
+  assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
+  assert.match(caixa, /className=\{clsx\('cashier-subnav__button', isSidebarTabActive\(sub\.id\) && 'is-active'\)\}/);
+  assert.match(caixa, /aria-current=\{isSidebarTabActive\(sub\.id\) \? 'page' : undefined\}/);
+  assert.doesNotMatch(caixa, /cashier-subnav__mobile-select|<select|<option/);
   assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
 });
 
