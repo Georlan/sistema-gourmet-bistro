@@ -34,6 +34,7 @@ from ..services.customer_relationship import (
 )
 from ..websocket_manager import manager
 from ..timezone_utils import (
+    OPERATIONAL_TIMEZONE,
     parse_operational_filter_datetime,
     to_database_utc,
     to_operational_local_time,
@@ -92,32 +93,80 @@ def get_pico_horarios(
     from collections import Counter
 
     rest_id = require_tenant_id()
+    dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]
+
+    # Produção usa PostgreSQL. Agrupar no banco mantém o custo proporcional ao
+    # número de grupos (máx. 168 combinações dia/hora), em vez de transferir
+    # todo o histórico de comandas fechadas para o processo web.
+    if db.get_bind().dialect.name == "postgresql":
+        timezone_name = getattr(
+            OPERATIONAL_TIMEZONE,
+            "key",
+            "America/Fortaleza",
+        )
+        rows = db.execute(
+            text(
+                """
+                SELECT
+                    EXTRACT(
+                        DOW FROM timezone(
+                            :timezone_name,
+                            fechado_em AT TIME ZONE 'UTC'
+                        )
+                    )::int AS dia_semana,
+                    EXTRACT(
+                        HOUR FROM timezone(
+                            :timezone_name,
+                            fechado_em AT TIME ZONE 'UTC'
+                        )
+                    )::int AS hora,
+                    COUNT(*)::int AS total_pedidos
+                FROM comandas
+                WHERE restaurante_id = :restaurante_id
+                  AND fechada = TRUE
+                  AND fechado_em IS NOT NULL
+                GROUP BY 1, 2
+                ORDER BY total_pedidos DESC, dia_semana ASC, hora ASC
+                """
+            ),
+            {
+                "timezone_name": timezone_name,
+                "restaurante_id": rest_id,
+            },
+        ).mappings().all()
+        return [
+            {
+                "dia_semana_label": dias[int(row["dia_semana"]) % 7],
+                "dia_semana": int(row["dia_semana"]) % 7,
+                "hora": f'{int(row["hora"]):02d}h',
+                "total_pedidos": int(row["total_pedidos"]),
+            }
+            for row in rows
+        ]
+
+    # SQLite continua sendo usado nos testes/desenvolvimento e não oferece a
+    # mesma semântica de timezone. Mantemos o fallback pequeno e determinístico.
     timestamps = db.query(Comanda.fechado_em).filter(
         Comanda.restaurante_id == rest_id,
         Comanda.fechada == True,
         Comanda.fechado_em.isnot(None),
     ).all()
-
-    # Agrupar depois da conversão mantém o resultado igual em SQLite e
-    # PostgreSQL e impede que 18h UTC apareça como pico às 18h no Ceará.
     counts: Counter[tuple[int, int]] = Counter()
     for (closed_at,) in timestamps:
         local_dt = to_operational_local_time(closed_at)
         if local_dt:
-            # Python: segunda=0; a API histórica do Kôma usa domingo=0.
             day_index = (local_dt.weekday() + 1) % 7
             counts[(day_index, local_dt.hour)] += 1
 
-    results = []
-    dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]
-    for (dia_idx, hora_val), total in counts.most_common():
-        results.append({
+    return [
+        {
             "dia_semana_label": dias[dia_idx % 7],
             "dia_semana": dia_idx % 7,
             "hora": f"{hora_val:02d}h",
             "total_pedidos": total,
-        })
-    return results
+        }
+        for (dia_idx, hora_val), total in counts.most_common()
+    ]
 
 # ----------------- PROGRAMA DE FIDELIDADE UNIFICADO -----------------
 
