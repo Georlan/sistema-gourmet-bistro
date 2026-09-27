@@ -80,7 +80,7 @@ function isCanonicalOperationalEntryRoute(): boolean {
   // pelo login unificado; somente superfícies públicas/utilitárias escapam.
   // O view=operacional em loopback existe exclusivamente para exercitar este
   // mesmo shell canônico no Playwright, sem alterar o roteamento público.
-  if (isPublicMenuRoute() || isPublicCommercialRoute() || isOperationalUtilityRoute()) return false;
+  if (isPublicMenuRoute() || (!localOperationalTestRoute && isPublicCommercialRoute()) || isOperationalUtilityRoute()) return false;
 
   return viewParam !== "cardapio"
     && viewParam !== "landing"

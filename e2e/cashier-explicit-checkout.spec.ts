@@ -13,7 +13,7 @@ test('checkout da mesa exige itens e método explícitos', async ({ page }) => {
   await expect(card).toBeVisible();
   await card.getByRole('button', { name: 'Ver comanda', exact: true }).click();
 
-  const details = page.getByRole('dialog', { name: 'Mesa 7', exact: true });
+  const details = page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true });
   await details.getByRole('button', { name: 'Receber', exact: true }).click();
   await expect(details).toBeHidden();
   await expect(page.getByText('Receber Pagamento', { exact: true })).toBeVisible();

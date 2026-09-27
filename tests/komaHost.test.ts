@@ -85,6 +85,13 @@ describe('resolveKomaHost', () => {
     assert.equal(resolved.tenantSlug, 'pordosol');
   });
 
+  it('keeps an explicit public cardápio view above the local landing fallback', () => {
+    for (const host of ['localhost', '127.0.0.1', 'preview-652.pages.dev']) {
+      const resolved = resolveKomaHost(host, '/', '?view=cardapio&restaurante_id=1');
+      assert.equal(resolved.surface, 'public');
+    }
+  });
+
   it('resolves central.komafood.com.br to central super admin', () => {
     const resolved = resolveKomaHost('central.komafood.com.br', '/', '');
     assert.equal(resolved.kind, 'central');

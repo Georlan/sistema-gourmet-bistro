@@ -205,7 +205,7 @@ export function resolveKomaHost(
     || cleanHost === '127.0.0.1';
   const isExplicitLandingRoute = pathname.startsWith('/landing') || viewParam === 'landing';
 
-  if (isExplicitLandingRoute || (isApexLandingDomain && pathname === '/')) {
+  if (isExplicitLandingRoute || (isApexLandingDomain && pathname === '/' && !isExplicitPublicRoute)) {
     return {
       kind: 'landing',
       surface: 'landing',
