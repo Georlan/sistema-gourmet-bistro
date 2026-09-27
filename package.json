@@ -14,7 +14,9 @@
     "test:unit": "tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
     "capacity:smoke": "node scripts/capacity-smoke.mjs",
-    "capacity:five-tenants": "node scripts/capacity-five-tenants.mjs"
+    "capacity:five-tenants": "node scripts/capacity-five-tenants.mjs",
+    "ops:trace": "node scripts/ops-trace.mjs",
+    "ops:doctor": "node scripts/ops-doctor.mjs"
   },
   "dependencies": {
     "@number-flow/react": "^0.6.2",

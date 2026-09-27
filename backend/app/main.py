@@ -2,6 +2,9 @@ import os
 import json
 import logging
 import uuid
+import re
+import sys
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from time import perf_counter
 
@@ -125,6 +128,35 @@ app = FastAPI(
 )
 
 request_logger = logging.getLogger("koma.http")
+request_logger.setLevel(logging.INFO)
+request_logger.propagate = False
+if not request_logger.handlers:
+    request_logger.addHandler(logging.StreamHandler(sys.stdout))
+
+
+def _instance_id() -> str:
+    from .websocket_manager import manager
+    return manager.bus.instance_id[:8] if manager.bus else "local"
+
+
+def _route_pattern(request: Request) -> str:
+    route = request.scope.get("route")
+    return getattr(route, "path", None) or "<unmatched>"
+
+
+def _log_unexpected_error(request: Request, exc: Exception) -> None:
+    request_logger.error(json.dumps({
+        "event": "http_exception",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "request_id": getattr(request.state, "request_id", None),
+        "restaurante_id": getattr(request.state, "restaurante_id", None),
+        "instance": _instance_id(),
+        "method": request.method,
+        "path": _route_pattern(request),
+        "status_code": 500,
+        "duration_ms": round((perf_counter() - getattr(request.state, "started_at", perf_counter())) * 1_000, 2),
+        "exception_type": type(exc).__name__,
+    }, separators=(",", ":")))
 
 
 def should_create_schema_on_startup() -> bool:
@@ -196,27 +228,34 @@ async def run_migrations_on_startup():
 
 @app.middleware("http")
 async def add_request_id_and_structured_log(request: Request, call_next):
-    from .websocket_manager import manager
     supplied_request_id = (request.headers.get("X-Request-ID") or "").strip()
     request_id = (
         supplied_request_id
-        if supplied_request_id and len(supplied_request_id) <= 128
+        if re.fullmatch(r"[A-Za-z0-9_-]{8,64}", supplied_request_id)
         else uuid.uuid4().hex
     )
     request.state.request_id = request_id
     sentry_sdk.set_tag("request_id", request_id)
     started_at = perf_counter()
-    response = await call_next(request)
+    request.state.started_at = started_at
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        _log_unexpected_error(request, exc)
+        response = JSONResponse(status_code=500, content={"detail": "Erro interno do servidor."})
     duration_ms = round((perf_counter() - started_at) * 1_000, 2)
     response.headers["X-Request-ID"] = request_id
-    response.headers["X-Koma-Instance"] = manager.bus.instance_id[:8] if manager.bus else "local"
+    response.headers["X-Koma-Instance"] = _instance_id()
     request_logger.info(
         json.dumps(
             {
                 "event": "http_request",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "request_id": request_id,
+                "restaurante_id": getattr(request.state, "restaurante_id", None),
+                "instance": _instance_id(),
                 "method": request.method,
-                "path": request.url.path,
+                "path": _route_pattern(request),
                 "status_code": response.status_code,
                 "duration_ms": duration_ms,
             },
@@ -231,17 +270,17 @@ async def handle_unhandled_exceptions_middleware(request: Request, call_next):
     try:
         return await call_next(request)
     except Exception as exc:
-        import traceback
-
-        print(
-            f"[UNHANDLED ROUTE EXCEPTION] {request.method} {request.url.path}:\n"
-            f"{traceback.format_exc()}"
-        )
+        request_id = getattr(request.state, "request_id", None) or uuid.uuid4().hex
+        request.state.request_id = request_id
+        _log_unexpected_error(request, exc)
         is_dev = os.getenv("ENVIRONMENT", "production").lower() == "development"
         body = {"detail": "Erro interno do servidor."}
         if is_dev:
             body["error"] = str(exc)
-        return JSONResponse(status_code=500, content=body)
+        return JSONResponse(status_code=500, content=body, headers={
+            "X-Request-ID": request_id,
+            "X-Koma-Instance": _instance_id(),
+        })
 
 
 @app.middleware("http")
@@ -303,6 +342,7 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
 
     sentry_sdk.set_tag("tenant_id", tenant_id)
     sentry_sdk.set_tag("restaurante_id", str(restaurante_id) if restaurante_id is not None else "")
+    request.state.restaurante_id = restaurante_id
 
     if restaurante_id is None:
         return await call_next(request)
@@ -333,17 +373,17 @@ async def add_security_headers_middleware(request: Request, call_next):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    import traceback
-
-    print(
-        f"[GLOBAL UNHANDLED ERROR] {request.method} {request.url.path}:\n"
-        f"{traceback.format_exc()}"
-    )
+    request_id = getattr(request.state, "request_id", None) or uuid.uuid4().hex
+    request.state.request_id = request_id
+    _log_unexpected_error(request, exc)
     is_dev = os.getenv("ENVIRONMENT") == "development"
     body = {"detail": "Erro interno do servidor."}
     if is_dev:
         body["error"] = str(exc)
-    return JSONResponse(status_code=500, content=body)
+    return JSONResponse(status_code=500, content=body, headers={
+        "X-Request-ID": request_id,
+        "X-Koma-Instance": _instance_id(),
+    })
 
 
 @app.exception_handler(HTTPException)

@@ -1,0 +1,31 @@
+name: External availability monitor
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: external-availability-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Check public endpoints and reconcile issue
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          KOMA_FRONTEND_URL: ${{ vars.KOMA_PRODUCTION_FRONTEND_URL || 'https://app.komafood.com.br' }}
+          KOMA_API_URL: ${{ vars.KOMA_PRODUCTION_API_URL || 'https://sistema-gourmet-bistro-production.up.railway.app' }}
+        run: node scripts/ops-monitor.mjs
