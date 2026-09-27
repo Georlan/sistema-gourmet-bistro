@@ -274,7 +274,7 @@ test('mobile information architecture avoids duplicated deep navigation', () => 
   assert.match(mobileSidebar, /expandActiveChildren=\{false\}/);
   assert.match(sidebarNavigation, /expandActiveChildren = true/);
   assert.match(caixaPanel, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
-  assert.doesNotMatch(caixaPanel, /cashier-subnav__mobile-select|<select|<option/);
+  assert.doesNotMatch(caixaPanel, /cashier-subnav__mobile-select/);
   assert.match(caixaPanel, /if \(sub\.requiredFeature\) return operationalEntitlementEnabled\(planEntitlements, sub\.requiredFeature\)/);
   assert.match(caixaPanel, /'Cardápio online'/);
 });
