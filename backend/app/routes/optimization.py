@@ -448,70 +448,103 @@ def get_garcons_relatorio(
     ))
 ):
     """
-    Retorna o relatório simplificado de desempenho dos garçons.
-    Calcula o total de pedidos atendidos e a comissão acumulada (10% de serviço).
+    Retorna o desempenho dos garçons com uma única agregação SQL.
+
+    A implementação anterior fazia consultas em cascata por garçom, comanda e
+    item/modificador. Em histórico maior isso virava N+1 e ocupava o pool do
+    banco desnecessariamente.
     """
-    import datetime
-    from ..database import current_restaurante_id, require_tenant_id
-    from ..models import Comanda
-    
     rest_id = require_tenant_id()
-    
+
     dt_inicio = parse_operational_filter_datetime(data_inicio)
     fim_eh_dia = bool(data_fim and len(data_fim.strip()) == 10)
     dt_fim = parse_operational_filter_datetime(data_fim, end_of_day=fim_eh_dia)
     db_inicio = to_database_utc(dt_inicio)
     db_fim = to_database_utc(dt_fim)
 
-    garcons = db.query(Usuario).filter(
-        Usuario.restaurante_id == rest_id,
-        Usuario.role == "garcom"
-    ).all()
-    
-    results = []
-    for g in garcons:
-        # Get all closed comandas
-        comandas_query = db.query(Comanda).filter(
-            Comanda.restaurante_id == rest_id,
-            Comanda.garcom_id == g.id,
-            Comanda.fechada == True
+    filters = [
+        "restaurante_id = :restaurante_id",
+        "fechada = TRUE",
+    ]
+    params: dict[str, object] = {"restaurante_id": rest_id}
+    if db_inicio:
+        filters.append("fechado_em >= :data_inicio")
+        params["data_inicio"] = db_inicio
+    if db_fim:
+        filters.append(
+            "fechado_em < :data_fim"
+            if fim_eh_dia
+            else "fechado_em <= :data_fim"
         )
-        if db_inicio:
-            comandas_query = comandas_query.filter(Comanda.fechado_em >= db_inicio)
-        if db_fim:
-            comandas_query = comandas_query.filter(
-                Comanda.fechado_em < db_fim
-                if fim_eh_dia
-                else Comanda.fechado_em <= db_fim
-            )
-            
-        comandas = comandas_query.all()
-        pedidos_atendidos = len(comandas)
-        comissao_acumulada = 0.0
-        
-        for c in comandas:
-            comanda_total = 0.0
-            for item in c.itens:
-                if item.status != "cancelado":
-                    item_total = item.preco_unit
-                    # Sum modifiers
-                    modifiers_sum = db.execute(text(
-                        "SELECT SUM(preco_aplicado) FROM item_modificadores WHERE item_id = :item_id"
-                    ), {"item_id": item.id}).scalar() or 0.0
-                    item_total += modifiers_sum
-                    comanda_total += item_total
-            
-            # Service charge is 10% of total
-            comissao_acumulada += comanda_total * 0.10
-            
-        results.append({
-            "nome_garcon": g.nome,
-            "pedidos_atendidos": pedidos_atendidos,
-            "comissao_acumulada": round(comissao_acumulada, 2)
-        })
-        
-    return results
+        params["data_fim"] = db_fim
 
+    rows = db.execute(
+        text(
+            f"""
+            WITH scoped_comandas AS (
+                SELECT id, garcom_id
+                FROM comandas
+                WHERE {" AND ".join(filters)}
+            ),
+            pedidos_por_garcom AS (
+                SELECT garcom_id, COUNT(*) AS pedidos_atendidos
+                FROM scoped_comandas
+                GROUP BY garcom_id
+            ),
+            modificadores_por_item AS (
+                SELECT item_id, COALESCE(SUM(preco_aplicado), 0) AS total_modificadores
+                FROM item_modificadores
+                WHERE restaurante_id = :restaurante_id
+                GROUP BY item_id
+            ),
+            vendas_por_garcom AS (
+                SELECT
+                    c.garcom_id,
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN i.id IS NOT NULL
+                                 AND COALESCE(i.status, '') <> 'cancelado'
+                                THEN COALESCE(i.preco_unit, 0)
+                                   + COALESCE(m.total_modificadores, 0)
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ) AS total_vendido
+                FROM scoped_comandas AS c
+                LEFT JOIN itens AS i
+                  ON i.comanda_id = c.id
+                 AND i.restaurante_id = :restaurante_id
+                LEFT JOIN modificadores_por_item AS m
+                  ON m.item_id = i.id
+                GROUP BY c.garcom_id
+            )
+            SELECT
+                u.nome AS nome_garcon,
+                COALESCE(p.pedidos_atendidos, 0) AS pedidos_atendidos,
+                ROUND(COALESCE(v.total_vendido, 0) * 0.10, 2) AS comissao_acumulada
+            FROM usuarios AS u
+            LEFT JOIN pedidos_por_garcom AS p
+              ON p.garcom_id = u.id
+            LEFT JOIN vendas_por_garcom AS v
+              ON v.garcom_id = u.id
+            WHERE u.restaurante_id = :restaurante_id
+              AND u.role = 'garcom'
+            ORDER BY u.nome ASC
+            """
+        ),
+        params,
+    ).mappings().all()
+
+    return [
+        {
+            "nome_garcon": row["nome_garcon"],
+            "pedidos_atendidos": int(row["pedidos_atendidos"] or 0),
+            "comissao_acumulada": round(float(row["comissao_acumulada"] or 0), 2),
+        }
+        for row in rows
+    ]
 
 class ClientUpdate(BaseModel):
     cliente: str
