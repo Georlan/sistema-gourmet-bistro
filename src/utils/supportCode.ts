@@ -4,7 +4,7 @@ export const SUPPORT_ERROR_EVENT = "koma:support-error";
 
 export function supportCodeFromRequestId(requestId: string | null): string | null {
   const value = requestId?.trim() || "";
-  return /^[a-fA-F0-9]{32}$/.test(value) || /^[a-fA-F0-9-]{36}$/.test(value)
+  return /^[A-Za-z0-9_-]{8,64}$/.test(value)
     ? value.slice(0, 12)
     : null;
 }

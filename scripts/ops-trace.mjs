@@ -22,7 +22,7 @@ export function parseTraceLines(lines, id) {
 
 function main() {
   const [id, environmentName = 'production'] = process.argv.slice(2);
-  if (!id || !/^[a-fA-F0-9-]{8,36}$/.test(id)) {
+  if (!id || !/^[A-Za-z0-9_-]{8,64}$/.test(id)) {
     console.error('Uso: npm run ops:trace -- <request-id-ou-support-code> [production|homologation]');
     process.exitCode = 2;
     return;

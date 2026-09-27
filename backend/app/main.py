@@ -231,7 +231,7 @@ async def add_request_id_and_structured_log(request: Request, call_next):
     supplied_request_id = (request.headers.get("X-Request-ID") or "").strip()
     request_id = (
         supplied_request_id
-        if re.fullmatch(r"[a-fA-F0-9]{32}|[a-fA-F0-9-]{36}", supplied_request_id)
+        if re.fullmatch(r"[A-Za-z0-9_-]{8,64}", supplied_request_id)
         else uuid.uuid4().hex
     )
     request.state.request_id = request_id

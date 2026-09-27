@@ -8,6 +8,7 @@ test("support code is a searchable request ID prefix", async () => {
   Object.assign(globalThis, { window: { location: { hostname: "localhost", protocol: "http:", href: "http://localhost:3000/" } } });
   const { supportCodeFromRequestId } = await import("../src/utils/supportCode");
   assert.equal(supportCodeFromRequestId("abcdef1234567890abcdef1234567890"), "abcdef123456");
+  assert.equal(supportCodeFromRequestId("h3o-check-123"), "h3o-check-12");
   assert.equal(supportCodeFromRequestId("secret token"), null);
 });
 
