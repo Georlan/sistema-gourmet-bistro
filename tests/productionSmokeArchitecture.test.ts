@@ -9,7 +9,7 @@ const readiness = readFileSync('backend/app/routes/contract_readiness.py', 'utf8
 test('production smoke stays asynchronous and cannot become a merge/deploy gate', () => {
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /schedule:/);
-  assert.match(workflow, /cron:\s*['"]17 \* \* \* \*['"]/);
+  assert.match(workflow, /cron:\s*['"]17 9 \* \* \*['"]/);
   assert.doesNotMatch(workflow, /workflow_run:/);
   assert.match(workflow, /group: production-smoke-\$\{\{ github\.event_name \}\}/);
   assert.match(workflow, /cancel-in-progress: true/);
@@ -19,6 +19,7 @@ test('production smoke stays asynchronous and cannot become a merge/deploy gate'
   assert.match(readiness, /RAILWAY_GIT_COMMIT_SHA/);
   assert.match(readiness, /"deploymentGitSha": deployment_git_sha/);
   assert.match(smoke, /KOMA_EXPECTED_API_SHA/);
+  assert.match(smoke, /\/health\/live/);
   assert.match(smoke, /payload\?\.deploymentGitSha !== expectedApiSha/);
 });
 
