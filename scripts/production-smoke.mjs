@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const DEFAULT_FRONTEND_URL = 'https://sistema-gourmet-bistro.pages.dev';
+const DEFAULT_FRONTEND_URL = 'https://app.komafood.com.br';
 const DEFAULT_API_URL = 'https://sistema-gourmet-bistro-production.up.railway.app';
 const DEFAULT_CORS_PATH = '/cardapio/pedidos';
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -63,6 +63,10 @@ async function checkHtml(url, label) {
 }
 
 async function checkApiReadiness(apiUrl) {
+  const liveUrl = `${apiUrl}/health/live`;
+  const liveResponse = await request(liveUrl, { method: 'GET' });
+  assertOk(liveResponse, 'Backend liveness');
+  console.log(`✓ Backend liveness ${liveResponse.status} — ${liveUrl}`);
   const url = `${apiUrl}/health/ready`;
   const response = await request(url, { method: 'GET' });
   assertOk(response, 'Backend readiness');
