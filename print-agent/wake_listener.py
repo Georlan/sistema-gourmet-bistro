@@ -17,7 +17,10 @@ from api_client import AGENT_VERSION
 
 
 log = logging.getLogger("print-agent.wakeup")
-# Com SSE/LISTEN saudável, polling é apenas reconciliação de segurança.\n# Um evento print-job acorda o agente imediatamente; se o push cair,\n# push_available volta a False e o loop retoma o polling rápido configurado.\nPUSH_FALLBACK_POLL_SECONDS = 30.0
+# Com SSE/LISTEN saudável, polling é apenas reconciliação de segurança.
+# Um evento print-job acorda o agente imediatamente; se o push cair,
+# push_available volta a False e o loop retoma o polling rápido configurado.
+PUSH_FALLBACK_POLL_SECONDS = 30.0
 
 
 def iter_sse_events(lines: Iterable[object]) -> Iterator[Tuple[str, str]]:
