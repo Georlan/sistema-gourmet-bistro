@@ -81,7 +81,10 @@ async function main() {
       const http = railway(['logs', '--project', PROJECT, '--environment', ENVIRONMENT, '--service', SERVICE, '--since', '1h', '--lines', '1000', '--json']);
       if (http.status === 0) {
         const entries = http.stdout.split('\n').flatMap(line => {
-          try { const parsed = JSON.parse(line); return [JSON.parse(parsed.message)]; } catch { return []; }
+          try {
+            const parsed = JSON.parse(line);
+            return [parsed.event ? parsed : JSON.parse(parsed.message)];
+          } catch { return []; }
         }).filter(item => item.event === 'http_request');
         const errors = entries.filter(item => item.status_code >= 500);
         const times = entries.map(item => item.duration_ms).filter(Number.isFinite).sort((a, b) => a - b);

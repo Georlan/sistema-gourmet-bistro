@@ -10,12 +10,13 @@ export function parseTraceLines(lines, id) {
   return lines.flatMap(line => {
     try {
       const railway = JSON.parse(line);
-      const message = typeof railway.message === 'string' ? railway.message : '';
-      if (!message.includes(id)) return [];
-      let entry;
-      try { entry = JSON.parse(message); } catch { return []; }
+      let entry = railway;
+      if (!entry.event && typeof railway.message === 'string') {
+        try { entry = JSON.parse(railway.message); } catch { return []; }
+      }
       if (!['http_request', 'http_exception'].includes(entry.event)) return [];
-      return [{ timestamp: railway.timestamp || entry.timestamp, ...entry }];
+      if (entry.request_id !== id && entry.support_code !== id) return [];
+      return [{ ...entry, timestamp: entry.timestamp || railway.timestamp }];
     } catch { return []; }
   }).slice(-20);
 }
@@ -35,7 +36,8 @@ function main() {
   }
   const result = spawnSync(process.env.RAILWAY_BIN || 'railway', [
     'logs', '--project', target.project, '--environment', target.environment, '--service', target.service,
-    '--since', process.env.KOMA_TRACE_SINCE || '24h', '--lines', '100', '--filter', id, '--json',
+    '--since', process.env.KOMA_TRACE_SINCE || '24h', '--lines', '100',
+    '--filter', id.length <= 12 ? `@support_code:${id}` : `@request_id:${id}`, '--json',
   ], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, timeout: 30000 });
   if (result.error || result.status !== 0) {
     console.error('Não foi possível consultar os logs Railway; confira a sessão CLI e os IDs do serviço.');
