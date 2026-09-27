@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { AlertTriangle, Loader2, PauseCircle, PlayCircle, RefreshCw, X } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { API_BASE_URL } from '../../../config/api';
 import { getOperatorAccessToken } from '../../../utils/authSession';
@@ -45,42 +45,72 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
   const [customReason, setCustomReason] = useState('');
   const [duration, setDuration] = useState<15 | 30 | 60 | null>(null);
   const [error, setError] = useState('');
+  const loadFlightRef = useRef<Promise<void> | null>(null);
+  const dirtyRef = useRef(false);
+  const mountedRef = useRef(false);
 
-  const loadStatus = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/online-orders/control`, {
-        headers: getAuthHeaders(),
-        cache: 'no-store',
-      });
-      if (response.status === 401 || response.status === 403) {
-        setAuthorized(false);
-        return;
+  const loadStatus = useCallback((): Promise<void> => {
+    if (loadFlightRef.current) return loadFlightRef.current;
+    const requestToken = getOperatorAccessToken();
+    const flight = (async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/online-orders/control`, {
+          headers: requestToken ? { Authorization: `Bearer ${requestToken}` } : {},
+          cache: 'no-store',
+        });
+        if (!mountedRef.current || getOperatorAccessToken() !== requestToken) return;
+        if (response.status === 401 || response.status === 403) {
+          setAuthorized(false);
+          return;
+        }
+        if (!response.ok) return;
+        const payload = (await response.json()) as OperationalStatus;
+        if (!mountedRef.current || getOperatorAccessToken() !== requestToken) return;
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !payload.counts) return;
+        setAuthorized(true);
+        setStatusData(payload);
+      } catch {
+        // Controle de emergência não deve derrubar o Caixa se a leitura falhar.
+      } finally {
+        // Só existe estado semântico depois que a primeira tentativa terminou.
+        // Em caso de falha mostramos indisponível, nunca "0 pedidos" ou "despausado".
+        if (mountedRef.current) setStatusLoading(false);
+        loadFlightRef.current = null;
+        if (dirtyRef.current && mountedRef.current) {
+          dirtyRef.current = false;
+          queueMicrotask(() => { void loadStatus(); });
+        }
       }
-      if (!response.ok) return;
-      const payload = (await response.json()) as OperationalStatus;
-      if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !payload.counts) return;
-      setAuthorized(true);
-      setStatusData(payload);
-    } catch {
-      // Controle de emergência não deve derrubar o Caixa se a leitura falhar.
-    } finally {
-      // Só existe estado semântico depois que a primeira tentativa terminou.
-      // Em caso de falha mostramos indisponível, nunca "0 pedidos" ou "despausado".
-      setStatusLoading(false);
-    }
+    })();
+    loadFlightRef.current = flight;
+    return flight;
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     void loadStatus();
+    let hintTimer: number | null = null;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (hintTimer !== null) window.clearTimeout(hintTimer);
+      hintTimer = window.setTimeout(() => {
+        hintTimer = null;
+        if (loadFlightRef.current) dirtyRef.current = true;
+        else void loadStatus();
+      }, 100);
+    };
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') void loadStatus();
-    }, 10000);
-    const refresh = () => void loadStatus();
+    }, 30000);
     window.addEventListener('koma_orders_updated', refresh);
+    window.addEventListener('koma_online_order_control_updated', refresh);
     document.addEventListener('visibilitychange', refresh);
     return () => {
+      mountedRef.current = false;
+      if (hintTimer !== null) window.clearTimeout(hintTimer);
       window.clearInterval(interval);
       window.removeEventListener('koma_orders_updated', refresh);
+      window.removeEventListener('koma_online_order_control_updated', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
   }, [loadStatus]);
