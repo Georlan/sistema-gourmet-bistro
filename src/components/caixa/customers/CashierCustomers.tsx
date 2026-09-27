@@ -38,6 +38,8 @@ interface Props {
   setActiveSubTab: (tab: string) => void;
   showToast: CashierNotice;
   loyaltyUsers: LoyaltyCustomer[];
+  customersStatus: 'loading' | 'ready' | 'refreshing' | 'error';
+  hasCustomerSnapshot: boolean;
   refreshLoyaltyUsers: () => Promise<void>;
   hasLoyalty: boolean;
   hasCoupons: boolean;
@@ -51,6 +53,8 @@ export default function CashierCustomers({
   setActiveSubTab,
   showToast,
   loyaltyUsers,
+  customersStatus,
+  hasCustomerSnapshot,
   refreshLoyaltyUsers,
   hasLoyalty,
   hasCoupons,
@@ -266,11 +270,26 @@ export default function CashierCustomers({
           })
           .catch((err) => console.error('Error fetching fidelity config:', err));
       }
-      void refreshLoyaltyUsers();
     }
   }, [activeTab, activeSubTab, apiBaseUrl, authHeaders.Authorization, hasLoyalty]);
+  if (activeTab === 'clientes' && !hasCustomerSnapshot) {
+    return (
+      <div className="rounded-2xl border border-koma-border bg-koma-panel p-8 text-center" role={customersStatus === 'error' ? 'alert' : 'status'}>
+        <p className="font-bold text-koma-foreground">
+          {customersStatus === 'error' ? 'Não foi possível carregar os clientes' : 'Carregando clientes…'}
+        </p>
+        {customersStatus === 'error' && (
+          <button type="button" className="koma-btn-secondary mt-4 rounded-lg px-4 py-2" onClick={() => void refreshLoyaltyUsers()}>
+            Tentar novamente
+          </button>
+        )}
+      </div>
+    );
+  }
   return (
     <>
+      {customersStatus === 'refreshing' && <p role="status" className="text-xs text-koma-muted">Atualizando clientes…</p>}
+      {customersStatus === 'error' && <div role="alert" className="rounded-lg border border-amber-700 p-3 text-xs text-amber-300">Mostrando os últimos clientes carregados. <button type="button" className="underline" onClick={() => void refreshLoyaltyUsers()}>Tentar novamente</button></div>}
       {activeTab === 'clientes' && activeSubTab === 'fidelidade' && hasLoyalty && (
         <div className="space-y-4 text-left animate-fade-in">
           <OperationalBanner

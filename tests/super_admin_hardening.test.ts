@@ -136,6 +136,7 @@ describe('Super Admin Hardening & Integrity', () => {
       'utf-8'
     );
     assert.ok(panelContent.includes('tenantsAvailable'));
-    assert.ok(panelContent.includes('setTenantsAvailable(false)'));
+    assert.ok(panelContent.includes('tenantsAvailable = tenantSnapshot.hasSnapshot'));
+    assert.ok(panelContent.includes('setTenantSnapshot(previous => ({ ...previous, status: "error" }))'));
   });
 });
