@@ -1,13 +1,21 @@
 #!/usr/bin/env node
 const DEFAULT_FRONTEND = 'https://app.komafood.com.br';
 const DEFAULT_API = 'https://sistema-gourmet-bistro-production.up.railway.app';
-const STATE_NAME = 'KOMA_MONITOR_STATE';
 const ISSUE_TITLE = '[KÔMA] Indisponibilidade de produção';
 
 export function nextMonitorState(previous, healthy) {
   const state = { failures: 0, successes: 0, issue: null, ...previous };
   if (healthy) return { ...state, failures: 0, successes: state.successes + 1 };
   return { ...state, failures: state.failures + 1, successes: 0 };
+}
+
+export function previousRunState(runs, currentRunId, openIssue) {
+  const previous = runs.find(run => String(run.id) !== String(currentRunId) && run.status === 'completed');
+  return {
+    failures: previous?.conclusion === 'failure' ? 1 : 0,
+    successes: previous?.conclusion === 'success' ? 1 : 0,
+    issue: openIssue || null,
+  };
 }
 
 async function check(url, expectedType) {
@@ -57,9 +65,12 @@ async function main() {
     if (!response.ok) throw new Error(`GitHub API ${method} ${path}: HTTP ${response.status}`);
     return response.status === 204 ? null : response.json();
   }
-  const variable = await api(`/actions/variables/${STATE_NAME}`);
-  let previous = {};
-  try { previous = JSON.parse(variable?.value || '{}'); } catch { /* reset malformed state */ }
+  const [runs, issues] = await Promise.all([
+    api('/actions/workflows/external-availability-monitor.yml/runs?per_page=5'),
+    api('/issues?state=open&per_page=100'),
+  ]);
+  const existing = issues?.find(issue => !issue.pull_request && issue.title === ISSUE_TITLE);
+  const previous = previousRunState(runs?.workflow_runs || [], process.env.GITHUB_RUN_ID, existing?.number);
   const failures = await checkTargets(process.env.KOMA_FRONTEND_URL || DEFAULT_FRONTEND, process.env.KOMA_API_URL || DEFAULT_API);
   const state = await reconcileMonitor({
     previous, failures,
@@ -71,10 +82,8 @@ async function main() {
     },
   });
   if (!state.issue && failures.length && state.failures >= 2) throw new Error('Falha ao criar issue');
-  if (variable) await api(`/actions/variables/${STATE_NAME}`, 'PATCH', { name: STATE_NAME, value: JSON.stringify(state) });
-  else await api('/actions/variables', 'POST', { name: STATE_NAME, value: JSON.stringify(state) });
   console.log(failures.length ? `Falha ${state.failures}: ${failures.join('; ')}` : `Saudável (${state.successes} verificações); issue ${state.issue || 'nenhuma'}`);
-  if (failures.length && state.failures >= 2) process.exitCode = 1;
+  if (failures.length) process.exitCode = 1;
 }
 
 if (process.argv[1]?.endsWith('ops-monitor.mjs')) main().catch(error => {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nextMonitorState, reconcileMonitor } from "../scripts/ops-monitor.mjs";
+import { nextMonitorState, previousRunState, reconcileMonitor } from "../scripts/ops-monitor.mjs";
 import { parseTraceLines } from "../scripts/ops-trace.mjs";
 import { diagnose } from "../scripts/ops-doctor.mjs";
 
@@ -50,6 +50,7 @@ test("monitor confirms failure, deduplicates issue, and confirms recovery", asyn
   assert.equal(state.issue, null);
   assert.deepEqual(calls, ["create", "update", "close"]);
   assert.deepEqual(nextMonitorState({ failures: 1, successes: 0 }, true).failures, 0);
+  assert.deepEqual(previousRunState([{ id: 10, status: "in_progress" }, { id: 9, status: "completed", conclusion: "failure" }], 10, 42), { failures: 1, successes: 0, issue: 42 });
 });
 
 test("trace returns only matching structured events", () => {
