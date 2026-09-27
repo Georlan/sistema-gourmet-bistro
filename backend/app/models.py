@@ -988,6 +988,12 @@ class ConfiguracaoRestaurante(Base):
     webhook_url = Column(String(255), nullable=True)
     webhook_secret = Column(String(128), nullable=True)
     webhook_ativo = Column(Boolean, default=False, nullable=False)
+    whatsapp_alerts_enabled = Column(Boolean, default=False, nullable=False)
+    whatsapp_instance_name = Column(String(100), nullable=True)
+    whatsapp_recipient_phone = Column(String(16), nullable=True)
+    whatsapp_next_send_at = Column(DateTime(timezone=True), nullable=True)
+    whatsapp_consecutive_failures = Column(Integer, default=0, nullable=False)
+    whatsapp_circuit_open_until = Column(DateTime(timezone=True), nullable=True)
 
     restaurante = relationship("Restaurante", lazy="joined")
 

@@ -768,6 +768,8 @@ class OrderApplicationService:
                     aggregate_type="order",
                     aggregate_id=str(novo_lancamento.id),
                 )
+                from ...services.tenant_order_whatsapp import enqueue_order_alert
+                enqueue_order_alert(db, event)
 
             if commit:
                 db.commit()

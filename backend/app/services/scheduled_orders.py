@@ -126,6 +126,8 @@ def _publish_created_event(db: Session, comanda: Comanda) -> None:
         aggregate_type="order",
         aggregate_id=str(lancamento.id),
     )
+    from .tenant_order_whatsapp import enqueue_order_alert
+    enqueue_order_alert(db, event)
 
 
 def release_due_scheduled_orders_in_session(

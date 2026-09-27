@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { MercadoPagoConnectionCard } from '../online-menu/MercadoPagoConnectionCard';
 import { CashierFiscalSettings } from './CashierFiscalSettings';
+import { RestaurantWhatsAppSettings } from './RestaurantWhatsAppSettings';
 
 interface Props {
   apiBaseUrl: string;
@@ -79,6 +80,7 @@ export function CashierIntegrationsSettings({ apiBaseUrl, authHeaders }: Props) 
 
             <MercadoPagoConnectionCard apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
           </section>
+          <RestaurantWhatsAppSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
         </>
       )}
     </div>

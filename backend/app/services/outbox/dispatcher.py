@@ -54,6 +54,13 @@ def recover_stale_outbox_claims(
     count = len(stale_events)
     if count > 0:
         for ev in stale_events:
+            if ev.event_name == "koma.whatsapp.order_created" and ev.attempts > 0:
+                ev.status = "dead_letter"
+                ev.last_error = "Tentativa incerta após interrupção; reenvio automático bloqueado."
+                ev.locked_at = None
+                ev.locked_by = None
+                ev.processed_at = now
+                continue
             ev.status = "failed" if ev.attempts > 0 else "pending"
             ev.last_error = f"Stale claim recovered (locked > {stale_timeout_seconds}s)"
             ev.locked_at = None
@@ -245,6 +252,11 @@ def dispatch_single_claimed_snapshot(
             worker_id,
         )
         return False
+
+    if snapshot.get("event_name") == "koma.whatsapp.order_created":
+        from ..tenant_order_whatsapp import dispatch_alert
+        with tenant_session_scope(db, int(rid)):
+            return dispatch_alert(db, snapshot)
 
     # Web Push é transporte interno do KÔMA: não deve cair no webhook configurado
     # pelo restaurante. FORCE RLS exige que o worker entre explicitamente no
