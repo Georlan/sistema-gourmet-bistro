@@ -456,6 +456,8 @@ class OnlinePaymentService:
                     aggregate_type="order",
                     aggregate_id=str(lancamento.id),
                 )
+                from ..tenant_order_whatsapp import enqueue_order_alert
+                enqueue_order_alert(db, event)
 
         if approval_effects_applied:
             from ..online_order_control import auto_accept_online_order_if_enabled
