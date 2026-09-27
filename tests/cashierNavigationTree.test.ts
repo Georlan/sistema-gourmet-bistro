@@ -277,6 +277,9 @@ test('persisted aliases normalize with the active parent context', () => {
   assert.deepEqual(normalizeCashierNavigationState('relatorios', 'fluxo_caixa'), {
     tab: 'relatorios', subTab: 'financeiro',
   });
+  assert.deepEqual(normalizeCashierNavigationState('operacao', 'preparo'), {
+    tab: 'operacao', subTab: 'preparo',
+  });
 });
 
 test('a stale or mismatched child falls back to the selected parent default', () => {
@@ -388,8 +391,9 @@ test('online menu mirrors canonical destinations across responsive section navig
   );
   assert.match(caixa, /onlineMenuSubnavItems = getCashierNavigationItem\('cardapio_digital'\)\?\.children \?\? \[\]/);
   assert.match(caixa, /activeTab === 'cardapio_digital'/);
-  assert.match(caixa, /onlineMenuSubnavItems\.map/);
   assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
+  assert.match(caixa, /className=\{clsx\('cashier-subnav__button', isSidebarTabActive\(sub\.id\) && 'is-active'\)\}/);
+  assert.doesNotMatch(caixa, /cashier-subnav__mobile-select/);
   assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
 });
 
@@ -486,6 +490,21 @@ test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redu
   assert.deepEqual(getCashierSidebarGroupsForPlan('premium', premiumEntitlements), CASHIER_SIDEBAR_GROUPS);
 });
 
+
+test('preparo stays on the production queue and upgrades to KDS only when entitlement exists', () => {
+  assert.deepEqual(
+    normalizeCashierTargetForEntitlements({ tab: 'operacao', subTab: 'preparo' }, pocketEntitlements),
+    { tab: 'operacao', subTab: 'preparo' },
+  );
+  assert.deepEqual(
+    normalizeCashierTargetForEntitlements({ tab: 'operacao', subTab: 'preparo' }, proEntitlements),
+    { tab: 'operacao', subTab: 'kds' },
+  );
+  assert.deepEqual(
+    normalizeCashierTargetForEntitlements({ tab: 'operacao', subTab: 'kds' }, pocketEntitlements),
+    { tab: 'operacao', subTab: 'preparo' },
+  );
+});
 
 test('explicit entitlement overrides can grant or revoke plan navigation capabilities', () => {
   const pocketWithAddons = getCashierSidebarGroupsForPlan('pocket', {

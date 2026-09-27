@@ -303,3 +303,24 @@ test('atribuição de entregador invalida Pedidos e Entregas em outros dispositi
   assert.match(cashierPanelSource, /selectedByOrderId: selectedMotoboys/);
   assert.match(cashierPanelSource, /selectedMotoboys=\{selectedMotoboys\}/);
 });
+
+test('reconexão de WebSocket dispara reconciliação autoritativa de pedidos sem refresh manual', () => {
+  const onopenSlice = appSource
+    .split('socket.onopen = () => {', 2)[1]
+    .split('socket.onmessage =', 1)[0];
+
+  assert.match(onopenSlice, /const isReconnect = hasOpenedOnce;/);
+  assert.match(onopenSlice, /if \(isReconnect\) \{/);
+  assert.match(onopenSlice, /fetchOrdersFromAPI\(\);/);
+  assert.match(onopenSlice, /window\.dispatchEvent\(new Event\('koma_orders_updated'\)\);/);
+});
+
+test('concorrência de atribuição: sincronização autoritativa elimina seleção fantasma no frontend', () => {
+  const syncSlice = cashierOrdersSource
+    .split('const syncSelectedMotoboysFromServer =', 2)[1]
+    .split('const fetchDeliveryOrders =', 1)[0];
+
+  assert.match(syncSlice, /order\.motoboyId \? String\(order\.motoboyId\) : ''/);
+  assert.match(syncSlice, /applySelectedMotoboysState\(next\);/);
+});
+

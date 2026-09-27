@@ -233,7 +233,7 @@ export function CaixaOrdersWorkspace({
 
   const ordersStages = [
     { id: 'salon' as const, label: 'Salão', count: filteredCol1.length },
-    { id: 'digital' as const, label: 'Balcão', count: filteredDigitalProduction.length },
+    { id: 'digital' as const, label: 'Digitais', count: filteredDigitalProduction.length },
     { id: 'closing' as const, label: 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length },
   ];
   const effectiveMobileOrdersStage = mobileOrdersStage;

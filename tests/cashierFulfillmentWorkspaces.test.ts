@@ -72,6 +72,14 @@ test('Entregas resolve aceite, preparo, logística, cobrança e conclusão com a
   assert.doesNotMatch(couriers, /\/comandas\/\$\{[^}]+\}\/fechar/);
 });
 
+test('resumo de entregas contém labels no card em viewports estreitos', () => {
+  assert.match(couriers, /grid min-w-0 grid-cols-3 gap-1\.5 sm:gap-2/);
+  assert.match(couriers, /block break-words text-\[7px\][^\n]*aguardando \/ preparo/);
+  assert.doesNotMatch(couriers, />aguardando\/preparo</);
+  assert.match(couriers, /Entregas próprias/);
+  assert.doesNotMatch(couriers, /conclua deliveries/);
+});
+
 test('workspaces recebem as mesmas ações do controller e expõem falha de sincronização sem zerar snapshot', () => {
   assert.match(panel, /deliveryOrdersLoadState=\{deliveryOrdersLoadState\}/);
   assert.match(panel, /handleAcceptPendingDeliveryOrder=\{handleAcceptPendingDeliveryOrder\}/);

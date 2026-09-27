@@ -832,7 +832,13 @@ export function CaixaPanel({
             })}
 
             {activeTab === 'cardapio_digital' && onlineMenuSubnavItems.map((sub) => (
-              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} aria-current={isSidebarTabActive(sub.id) ? 'page' : undefined} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
+              <button
+                key={sub.id}
+                type="button"
+                onClick={() => handleSidebarNavigation(sub.id)}
+                aria-current={isSidebarTabActive(sub.id) ? 'page' : undefined}
+                className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
+              >
                 {sub.label}
               </button>
             ))}
@@ -1409,10 +1415,7 @@ export function CaixaPanel({
           activeTab={activeTab}
           activeSubTab={activeSubTab}
           dedicatedKds={hasDedicatedKds}
-          onNavigate={(tab, subTab) => {
-            setActiveTab(tab);
-            setActiveSubTab(subTab);
-          }}
+          onNavigate={(navigationId) => handleSidebarNavigation(navigationId)}
           onOpenMenu={() => setIsMobileSidebarOpen(true)}
           orderCount={sidebarOrderCount}
           kitchenCount={activeKitchenItems.length}
