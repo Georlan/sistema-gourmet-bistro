@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { ORDERING_BLOCK_CONFLICT_DETAIL } from '../src/cardapio/orderingBlockUi';
 
 const API_ORIGIN = 'http://127.0.0.1:8000';
 
@@ -64,6 +65,7 @@ type CapturedOrder = {
 };
 
 type BackendOptions = {
+  orderConflictDetail?: string;
   menu?: Pick<typeof basePublicMenuPayload, "produtos" | "categorias">;
   statusOverride?: string;
   orderStatus?: string;
@@ -117,6 +119,14 @@ async function mockPublicMenuBackend(
     if (pathname === '/cardapio/pedidos' && request.method() === 'POST') {
       const order = request.postDataJSON() as CapturedOrder;
       capturedOrders.push(order);
+      if (options.orderConflictDetail) {
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({ detail: options.orderConflictDetail }),
+        });
+        return;
+      }
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -148,6 +158,19 @@ async function mockPublicMenuBackend(
       return;
     }
 
+    if (pathname.startsWith('/api/cardapio/pedidos/acompanhar/') && pathname.endsWith('/summary')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'pedido-e2e', numero_pedido: 4321,
+          status: options.orderStatus ?? 'pendente', tipo: 'Retirada', total: 48,
+          fechada: Boolean(options.orderClosed),
+        }),
+      });
+      return;
+    }
+
     if (pathname === '/cardapio/clientes/me') {
       await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ detail: 'sem sessão' }) });
       return;
@@ -158,6 +181,25 @@ async function mockPublicMenuBackend(
 
   return { getOtpRequests: () => otpRequests };
 }
+
+test('bloqueio autoritativo encerra o checkout sem reenviar o pedido', async ({ page }) => {
+  const capturedOrders: CapturedOrder[] = [];
+  await mockPublicMenuBackend(page, capturedOrders, { orderConflictDetail: ORDERING_BLOCK_CONFLICT_DETAIL });
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#btn-fast-add-101').click();
+  await openCart(page);
+  await page.getByPlaceholder('Como devemos chamar você?').fill('Ana Teste');
+  await page.getByPlaceholder('(00) 00000-0000').fill('85999999999');
+  await page.getByRole('button', { name: /Retirada/ }).click();
+  await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
+  await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
+  await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
+
+  await expect(page.getByRole('heading', { name: 'Novos pedidos bloqueados' })).toBeVisible();
+  await expect(page.locator('#btn-place-order-final')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Voltar ao cardápio' })).toBeVisible();
+  expect(capturedOrders).toHaveLength(1);
+});
 
 async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -545,6 +587,7 @@ test('pedido recusado continua visível em vez de desaparecer', async ({ page })
       total: 48,
       timestamp: Date.now(),
       idempotency_key: 'pedido-e2e-key',
+      tracking_token: 'qa-capability-token',
     }));
   });
   await mockPublicMenuBackend(page, capturedOrders, { orderStatus: 'recusado', orderClosed: true });
@@ -553,6 +596,10 @@ test('pedido recusado continua visível em vez de desaparecer', async ({ page })
   await expect(page.getByText('Pedido não aceito', { exact: true })).toBeVisible();
   await expect(page.getByText(/não conseguiu aceitar este pedido/i)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Fazer novo pedido', exact: true })).toBeVisible();
+  await page.locator((page.viewportSize()?.width || 0) <= 640 ? '#mobile-nav-orders' : '#btn-my-orders-header').click();
+  await expect(page.getByRole('button', { name: 'Ver motivo da recusa' })).toBeVisible();
+  await page.getByRole('button', { name: 'Ver motivo da recusa' }).click();
+  await expect(page.locator('#inline-order-chat-panel')).toBeVisible();
   expect(capturedOrders).toHaveLength(0);
 });
 
