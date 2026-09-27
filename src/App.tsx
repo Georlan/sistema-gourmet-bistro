@@ -820,6 +820,9 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           }
           if (eventName === "config_updated" || eventName === "CONFIG_UPDATE") {
             scheduleRealtimeRefresh({ config: true });
+            if (data.source === "online_order_control") {
+              window.dispatchEvent(new Event('koma_online_order_control_updated'));
+            }
           }
           if (eventName === "cash_updated") {
             scheduleRealtimeRefresh({ summary: true });
