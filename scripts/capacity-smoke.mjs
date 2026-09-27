@@ -58,6 +58,57 @@ function parseTokens() {
     .filter(Boolean);
 }
 
+async function resolveTokens(baseUrl, timeoutMs) {
+  const configuredTokens = parseTokens();
+  if (configuredTokens.length) return configuredTokens;
+
+  const username = (process.env.KOMA_CAPACITY_LOGIN_EMAIL || '').trim();
+  const password = process.env.KOMA_CAPACITY_LOGIN_PASSWORD || '';
+  const restaurantIdRaw = (process.env.KOMA_CAPACITY_LOGIN_RESTAURANT_ID || '').trim();
+
+  if (!username && !password && !restaurantIdRaw) return [];
+  if (!username || !password) {
+    throw new Error(
+      'Defina KOMA_CAPACITY_LOGIN_EMAIL e KOMA_CAPACITY_LOGIN_PASSWORD juntos.',
+    );
+  }
+
+  let restaurantId;
+  if (restaurantIdRaw) {
+    restaurantId = Number(restaurantIdRaw);
+    if (!Number.isInteger(restaurantId) || restaurantId <= 0) {
+      throw new Error('KOMA_CAPACITY_LOGIN_RESTAURANT_ID deve ser um inteiro positivo.');
+    }
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        password,
+        ...(restaurantId ? { restaurante_id: restaurantId } : {}),
+      }),
+      signal: controller.signal,
+      redirect: 'error',
+    });
+    if (!response.ok) {
+      throw new Error(`Login QA falhou com HTTP ${response.status}`);
+    }
+    const payload = await response.json();
+    const token = String(payload?.access_token || '').trim();
+    if (!token) {
+      throw new Error('Login QA não retornou access_token.');
+    }
+    return [token];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function request(baseUrl, path, token, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -107,7 +158,7 @@ async function main() {
   );
   const timeoutMs = positiveInt('KOMA_CAPACITY_TIMEOUT_MS', DEFAULT_TIMEOUT_MS);
   const p95LimitMs = positiveInt('KOMA_CAPACITY_P95_LIMIT_MS', DEFAULT_P95_LIMIT_MS);
-  const tokens = parseTokens();
+  const tokens = await resolveTokens(baseUrl, timeoutMs);
 
   console.log('KÔMA capacity smoke — READ ONLY / HOMOLOGAÇÃO');
   console.log(`API: ${baseUrl}`);
