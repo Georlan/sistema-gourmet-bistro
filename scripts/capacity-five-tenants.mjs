@@ -167,6 +167,20 @@ for (const ctx of context) {
   const detail = await call('order.detail', `/comandas/${ctx.ids[0]}`, { token: ctx.token });
   const itemId = detail.itens?.[0]?.id;
   if (!itemId) throw new Error(`Order has no item for tenant ${ctx.restaurante_id}`);
+  const paymentKey = `capacity-pay-${runId}-${ctx.restaurante_id}`;
+  const paymentOptions = { method: 'POST', token: ctx.token, expected: [201],
+    body: { valor: 10, metodo: 'dinheiro', idempotency_key: paymentKey } };
+  const [payment, paymentRetry] = await Promise.all([
+    call('payment.create', `/caixa/comandas/${ctx.ids[0]}/pagar`, paymentOptions),
+    call('payment.retry', `/caixa/comandas/${ctx.ids[0]}/pagar`, paymentOptions),
+  ]);
+  if (!payment.id || payment.id !== paymentRetry.id) {
+    throw new Error(`Payment intention duplicated for ${ctx.restaurante_id}`);
+  }
+  const shiftDetail = await call('shift.payments', '/caixa/turno/atual', { token: ctx.token });
+  if (shiftDetail.pagamentos?.filter(entry => entry.id === payment.id).length !== 1) {
+    throw new Error(`Payment was not recorded exactly once for ${ctx.restaurante_id}`);
+  }
   await call('kitchen.preparing', `/comandas/itens/${itemId}/status?status=preparando`, {
     method: 'PUT', token: ctx.token,
   });
@@ -212,6 +226,7 @@ const metrics = {
   timeouts: results.filter(r => r.timeout).length,
   isolation_failures: 0,
   idempotency_failures: 0,
+  payment_failures: 0,
   stock_failures: 0,
   realtime_failures: 0,
   realtime_connections: sockets.length,
