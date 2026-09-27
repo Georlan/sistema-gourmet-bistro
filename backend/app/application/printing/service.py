@@ -14,6 +14,7 @@ from ...printer_service import printer_service
 from ...services.atendimentos import AtendimentoError, ensure_launch_identity
 from ...services.clientes import buscar_cliente_por_telefone
 from ...services.customer_relationship import load_customer_relationship_metrics
+from ...services.order_financials import open_balance
 from ...services.printing import (
     PrintingRequestError,
     enqueue_cash_closing_receipt,
@@ -374,6 +375,7 @@ class PrintingApplicationService:
         is_online_order = origin_label == "CARDÁPIO ONLINE"
         customer_name = str(comanda.identificador or "").strip() or None
         is_delivery = cls._is_delivery_type(comanda.tipo)
+        is_pickup = cls._is_pickup_type(comanda.tipo)
         is_dine_in = cls._is_dine_in_type(comanda.tipo)
         table_id = (
             int(comanda.mesa_id)
@@ -411,6 +413,7 @@ class PrintingApplicationService:
         for destination, destination_items in routed_items.items():
             destination_key = str(destination).strip().upper() or "COZINHA"
             is_primary = destination_key == str(primary_destination).strip().upper()
+            payment_required = bool(is_primary and (is_delivery or is_pickup))
             variant = ComandaVariant(
                 origin_label=origin_label,
                 location_label=location_label,
@@ -426,10 +429,14 @@ class PrintingApplicationService:
                 via_label=None if is_primary else destination_key,
                 delivery_address=(comanda.delivery_endereco if is_delivery and is_primary else None),
                 delivery_neighborhood=(comanda.delivery_bairro if is_delivery and is_primary else None),
-                payment_method=(comanda.delivery_forma_pagamento if is_primary else None),
+                payment_method=(
+                    comanda.delivery_forma_pagamento
+                    if is_primary and (payment_required or is_online_order)
+                    else None
+                ),
                 change_for=(
                     float(comanda.delivery_troco_para)
-                    if is_primary and comanda.delivery_troco_para is not None
+                    if payment_required and comanda.delivery_troco_para is not None
                     else None
                 ),
                 delivery_fee=(
@@ -448,13 +455,21 @@ class PrintingApplicationService:
                     else 0.0
                 ),
                 online_payment_status=(
-                    comanda.online_payment_status if is_primary else None
+                    comanda.online_payment_status
+                    if is_primary and (payment_required or is_online_order)
+                    else None
                 ),
                 amount_paid=(
                     float(comanda.valor_pago or 0.0)
-                    if is_primary
+                    if is_primary and (payment_required or is_online_order)
                     else 0.0
                 ),
+                amount_due=(
+                    float(open_balance(comanda))
+                    if payment_required
+                    else 0.0
+                ),
+                payment_required=payment_required,
                 show_financial_breakdown=is_primary,
             )
             payload = render_canonical_comanda(
@@ -712,6 +727,11 @@ class PrintingApplicationService:
     def _is_delivery_type(tipo: object) -> bool:
         normalized = str(tipo or "").strip().casefold()
         return any(term in normalized for term in ("delivery", "entrega"))
+
+    @staticmethod
+    def _is_pickup_type(tipo: object) -> bool:
+        normalized = str(tipo or "").strip().casefold()
+        return any(term in normalized for term in ("retir", "viagem", "balcao", "balcão"))
 
     @staticmethod
     def _is_dine_in_type(tipo: object) -> bool:
