@@ -462,14 +462,6 @@ def read_root():
     }
 
 
-@app.get("/sentry-debug")
-def trigger_backend_error():
-    if os.getenv("ENVIRONMENT") == "production":
-        raise HTTPException(status_code=404, detail="Endpoint indisponível.")
-    division_by_zero = 1 / 0
-    return {"status": division_by_zero}
-
-
 def _deployment_commit() -> str | None:
     commit = (
         os.getenv("RAILWAY_GIT_COMMIT_SHA")
