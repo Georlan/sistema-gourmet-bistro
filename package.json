@@ -12,7 +12,8 @@
     "lint": "tsc --noEmit",
     "audit:light": "node scripts/light_mode_contrast_check.mjs",
     "test:unit": "tsx --test tests/*.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "capacity:smoke": "node scripts/capacity-smoke.mjs"
   },
   "dependencies": {
     "@number-flow/react": "^0.6.2",
