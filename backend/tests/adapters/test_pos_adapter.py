@@ -133,6 +133,23 @@ class TestPosAdapter:
         assert data["mesa_id"] is None
         assert data["delivery_status"] == "producao"
 
+    def test_pos_adapter_accepts_pickup_without_customer_or_payment(self, char_client, char_setup):
+        """[UX/CONTRATO] Retirada do caixa pode ser lançada sem cadastro nem pagamento antecipado."""
+        headers = char_setup["headers"]
+        payload = {
+            "tipo": "retirada",
+            "itens": [{"produto_id": "prod-char-simples"}],
+        }
+
+        res = char_client.post("/comandas/venda-direta", json=payload, headers=headers)
+
+        assert res.status_code == 201
+        data = res.json()
+        assert data["tipo"] == "Retirada"
+        assert data["identificador"] is None
+        assert data["delivery_telefone"] is None
+        assert data["delivery_forma_pagamento"] is None
+
     def test_pos_adapter_accepts_pickup_associated_with_table(self, char_client, char_setup):
         """[CONTRATO] Retirada preserva a mesa opcional sem mudar de modalidade."""
         headers = char_setup["headers"]
