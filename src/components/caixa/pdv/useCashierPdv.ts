@@ -194,6 +194,7 @@ export function useCashierPdv({
       } else if (e.key === 'F2') {
         e.preventDefault();
         setPdvOrderType('pickup');
+        setPdvTargetMesaId(0);
       } else if (e.key === 'F3') {
         e.preventDefault();
         setPdvOrderType('dine_in');
@@ -204,6 +205,7 @@ export function useCashierPdv({
       } else if (e.key === 'F8') {
         e.preventDefault();
         setPdvOrderType('delivery');
+        setPdvTargetMesaId(0);
       } else if (e.key === 'F4') {
         e.preventDefault();
         if (pdvCart.length > 0) {
