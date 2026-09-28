@@ -62,7 +62,7 @@ export function CashierCancelConsumptionDialog({
                 </span>
                 <h3 id="cancel-table-title" className="mt-1 text-lg font-bold text-koma-foreground">
                   {cancelConsumptionTarget.scope === 'table'
-                    ? `Liberar Mesa ${cancelConsumptionTarget.mesaId} sem receber?`
+                    ? `Cancelar consumo e liberar Mesa ${cancelConsumptionTarget.mesaId}?`
                     : isRejection
                       ? 'Recusar este pedido?'
                       : cancelConsumptionTarget.scope === 'digital'
@@ -71,7 +71,7 @@ export function CashierCancelConsumptionDialog({
                 </h3>
                 <p className="mt-1 text-[11px] leading-relaxed text-koma-subtle">
                   {cancelConsumptionTarget.scope === 'table'
-                    ? 'Todos os pedidos da mesa serão cancelados. Esta opção existe apenas no Salão.'
+                    ? 'Todos os pedidos da mesa serão cancelados. Pagamentos lançados manualmente no Caixa serão anulados no histórico; pagamentos confirmados por integração continuam protegidos e bloqueiam esta ação.'
                     : isRejection
                       ? 'O pedido não entrará em produção e o cliente receberá o motivo informado abaixo.'
                       : cancelConsumptionTarget.scope === 'digital'
