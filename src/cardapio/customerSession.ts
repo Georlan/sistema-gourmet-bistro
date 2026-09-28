@@ -6,7 +6,7 @@ export interface CustomerProfile {
   address: string;
   points: number;
   cashback: number;
-  emailVerified: boolean;
+  emailVerified?: boolean;
   phoneVerified: boolean;
 }
 
