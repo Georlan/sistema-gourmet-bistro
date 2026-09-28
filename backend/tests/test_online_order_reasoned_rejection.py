@@ -225,19 +225,19 @@ def test_concurrent_accept_and_reject_only_one_transition_wins():
 
     def accept():
         barrier.wait()
-        with TestClient(app) as concurrent_client:
-            return concurrent_client.put(
-                "/comandas/reject-race-1/delivery/status",
-                params={"status_novo": "producao"}, headers=_headers(),
-            )
+        concurrent_client = TestClient(app)
+        return concurrent_client.put(
+            "/comandas/reject-race-1/delivery/status",
+            params={"status_novo": "producao"}, headers=_headers(),
+        )
 
     def reject():
         barrier.wait()
-        with TestClient(app) as concurrent_client:
-            return concurrent_client.post(
-                "/api/online-orders/orders/reject-race-1/reject",
-                headers=_headers(), json={"reason": "Pedido indisponível"},
-            )
+        concurrent_client = TestClient(app)
+        return concurrent_client.post(
+            "/api/online-orders/orders/reject-race-1/reject",
+            headers=_headers(), json={"reason": "Pedido indisponível"},
+        )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         accept_future = pool.submit(accept)
