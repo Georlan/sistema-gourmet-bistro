@@ -66,6 +66,7 @@ PERMISSION_ROLES = MappingProxyType({
     "comandas:forcar_fechamento": frozenset({"admin", "gerente", "caixa"}),
     "comandas:reabrir": frozenset({"admin", "gerente", "caixa"}),
     "pedidos:alterar_status": frozenset({"admin", "gerente", "caixa"}),
+    "pedidos:alterar_status_item": frozenset({"admin", "gerente", "caixa", "cozinha"}),
 })
 
 
