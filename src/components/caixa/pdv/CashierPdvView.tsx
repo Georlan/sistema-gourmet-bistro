@@ -1118,6 +1118,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 legacyHint={pdvDeliveryAddressLegacyHint || null}
                 compact
                 idPrefix="pdv-delivery-address"
+                requireCompleteLocation
               />
             </div>
 
