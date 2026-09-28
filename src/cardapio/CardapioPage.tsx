@@ -322,6 +322,7 @@ export default function CardapioPage() {
         about: String(restaurant.sobre_nos || ""),
         paymentMethods,
         onlinePaymentEnabled: restaurant.pagamento_online_ativo === true,
+        customerAccountRequired: restaurant.conta_cliente_obrigatoria === true,
         activeOrderTypes: Array.isArray(restaurant.tipos_pedido_ativos)
           ? restaurant.tipos_pedido_ativos.filter((item: unknown): item is "consumo_local" | "retirada" | "delivery" =>
               item === "consumo_local" || item === "retirada" || item === "delivery"
@@ -1143,6 +1144,8 @@ export default function CardapioPage() {
             setIsCheckoutOpen(true);
           }}
           user={user}
+          customerToken={customerToken}
+          accountRequired={activeBrand.customerAccountRequired === true}
           onAuthClick={() => setIsAuthOpen(true)}
           orderingEnabled={orderingEnabled}
           orderingMessage={orderingMessage}
@@ -1150,7 +1153,12 @@ export default function CardapioPage() {
       )}
 
       {isAuthOpen && (
-        <CardapioAuthModal restaurantId={activeBrand.id} onClose={() => setIsAuthOpen(false)} onLoginSuccess={handleLoginSuccess} />
+        <CardapioAuthModal
+          restaurantId={activeBrand.id}
+          accountRequired={activeBrand.customerAccountRequired === true}
+          onClose={() => setIsAuthOpen(false)}
+          onLoginSuccess={handleLoginSuccess}
+        />
       )}
 
       {isProfileOpen && (
