@@ -198,6 +198,93 @@ def _registration_restaurante_id(token: str) -> int:
         ) from exc
 
 
+def _send_existing_account_verification_email(
+    db: Session,
+    *,
+    restaurante_id: int,
+    cliente: Cliente,
+) -> str:
+    """Issue a single-use e-mail verification link for a legacy account after password auth."""
+    if not registration_email_available():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Confirmação por e-mail indisponível no momento. Tente novamente mais tarde.",
+        )
+    if not cliente.email or not cliente.senha_hash:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Esta conta precisa atualizar o e-mail antes de continuar.",
+        )
+
+    now = _utcnow()
+    email = cliente.email.strip().lower()
+    challenge = db.query(CustomerRegistrationChallenge).filter(
+        CustomerRegistrationChallenge.restaurante_id == restaurante_id,
+        CustomerRegistrationChallenge.email == email,
+    ).with_for_update().first()
+
+    if challenge is not None:
+        last_send = challenge.ultimo_envio_em
+        if last_send.tzinfo is None:
+            last_send = last_send.replace(tzinfo=datetime.timezone.utc)
+        elapsed = (now - last_send).total_seconds()
+        if elapsed < settings.CUSTOMER_EMAIL_RESEND_SECONDS:
+            db.commit()
+            return "Já enviamos a confirmação para seu e-mail. Abra o link para continuar."
+
+    token = generate_customer_registration_token(restaurante_id)
+    token_hash = hash_customer_registration_token(restaurante_id, token)
+    expires_at = now + datetime.timedelta(
+        seconds=settings.CUSTOMER_EMAIL_VERIFICATION_TTL_SECONDS
+    )
+
+    if challenge is None:
+        import uuid
+        challenge = CustomerRegistrationChallenge(
+            id=str(uuid.uuid4()),
+            restaurante_id=restaurante_id,
+            nome=cliente.nome,
+            email=email,
+            telefone=cliente.telefone,
+            endereco=cliente.endereco or None,
+            senha_hash=cliente.senha_hash,
+            token_hash=token_hash,
+            expira_em=expires_at,
+            criado_em=now,
+            ultimo_envio_em=now,
+            email_verificado_em=None,
+        )
+        db.add(challenge)
+    else:
+        challenge.nome = cliente.nome
+        challenge.telefone = cliente.telefone
+        challenge.endereco = cliente.endereco or None
+        challenge.senha_hash = cliente.senha_hash
+        challenge.token_hash = token_hash
+        challenge.expira_em = expires_at
+        challenge.ultimo_envio_em = now
+        challenge.email_verificado_em = None
+
+    db.flush([challenge])
+    restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
+    sent = send_registration_email(
+        email,
+        name=cliente.nome,
+        token=token,
+        restaurant_name=restaurante.nome if restaurante else "KÔMA",
+        idempotency_key=f"customer-existing-verification:{challenge.id}:{token_hash[:24]}",
+    )
+    if not sent:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Não foi possível enviar a confirmação por e-mail agora. Tente novamente em instantes.",
+        )
+
+    db.commit()
+    return "Enviamos um link para confirmar o e-mail desta conta. Abra o link para continuar."
+
+
 @router.post(
     "/cadastro/solicitar",
     status_code=status.HTTP_202_ACCEPTED,
@@ -365,12 +452,46 @@ def confirm_customer_registration(
             Cliente.senha_hash.isnot(None),
         ).first()
         if existing_email is not None:
+            if existing_email.email_verificado_em is not None:
+                db.delete(challenge)
+                db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Esta conta já foi confirmada. Faça login.",
+                )
+            if (
+                existing_email.telefone != challenge.telefone
+                or existing_email.senha_hash != challenge.senha_hash
+            ):
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Não foi possível vincular esta confirmação à conta existente.",
+                )
+
+            existing_email.email_verificado_em = now
             db.delete(challenge)
             db.commit()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Esta conta já foi criada. Faça login.",
+            db.refresh(existing_email)
+            access_token = create_customer_access_token(
+                cliente_id=existing_email.id,
+                restaurante_id=restaurante_id,
             )
+            background_tasks.add_task(
+                manager.broadcast,
+                {
+                    "event": "customers_updated",
+                    "detail": {"action": "updated", "cliente_id": existing_email.id},
+                },
+                restaurante_id,
+                target_audience="internal",
+            )
+            return {
+                "access_token": access_token,
+                "token_type": "customer",
+                "restaurante_id": restaurante_id,
+                "cliente": _profile(existing_email).model_dump(),
+            }
 
         existing_phone = db.query(Cliente).filter(
             Cliente.restaurante_id == restaurante_id,
@@ -833,6 +954,20 @@ def login_customer(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="E-mail ou senha incorretos.",
+            )
+
+        if (
+            settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS
+            and cliente.email_verificado_em is None
+        ):
+            detail = _send_existing_account_verification_email(
+                db,
+                restaurante_id=restaurante_id,
+                cliente=cliente,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=detail,
             )
 
         access_token = create_customer_access_token(
