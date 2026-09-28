@@ -62,7 +62,7 @@ export function CashierCancelConsumptionDialog({
                 </span>
                 <h3 id="cancel-table-title" className="mt-1 text-lg font-bold text-koma-foreground">
                   {cancelConsumptionTarget.scope === 'table'
-                    ? `Liberar Mesa ${cancelConsumptionTarget.mesaId} sem receber?`
+                    ? `Cancelar consumo e liberar Mesa ${cancelConsumptionTarget.mesaId}?`
                     : isRejection
                       ? 'Recusar este pedido?'
                       : cancelConsumptionTarget.scope === 'digital'
@@ -71,7 +71,7 @@ export function CashierCancelConsumptionDialog({
                 </h3>
                 <p className="mt-1 text-[11px] leading-relaxed text-koma-subtle">
                   {cancelConsumptionTarget.scope === 'table'
-                    ? 'Todos os pedidos da mesa serão cancelados. Esta opção existe apenas no Salão.'
+                    ? 'Todos os pedidos da mesa serão cancelados. Valores já recebidos e confirmados manualmente permanecem registrados no caixa; o saldo restante não será marcado como pago. Pagamentos confirmados por integração continuam protegidos e bloqueiam esta ação.'
                     : isRejection
                       ? 'O pedido não entrará em produção e o cliente receberá o motivo informado abaixo.'
                       : cancelConsumptionTarget.scope === 'digital'
@@ -113,6 +113,18 @@ export function CashierCancelConsumptionDialog({
                 <span className="text-[9px] text-koma-muted">valor do pedido</span>
               </div>
             </div>
+
+            {cancelConsumptionTarget.scope === 'table' && Number(cancelConsumptionTarget.valorPago || 0) > 0 && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.08] px-3 py-2.5 text-[11px] leading-relaxed text-amber-200">
+                <strong className="font-mono">
+                  {Number(cancelConsumptionTarget.valorPago || 0).toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                  })}
+                </strong>
+                {' '}já recebido permanece registrado no caixa. O restante do consumo será cancelado, não quitado.
+              </div>
+            )}
 
             <label className="block space-y-1.5">
               <span className="text-[9px] font-bold uppercase tracking-wider text-koma-subtle">

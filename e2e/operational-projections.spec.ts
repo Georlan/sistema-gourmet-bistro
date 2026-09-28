@@ -218,7 +218,7 @@ test('cancelar a mesa inteira permanece uma ação de Salão com motivo e escopo
   await expect(details).toContainText('Prato em preparo');
   await expect(details).toContainText('Prato da segunda rodada');
   await details.getByRole('button', { name: 'Cancelar toda a mesa e liberar', exact: true }).click();
-  const confirmation = page.getByRole('dialog', { name: 'Liberar Mesa 7 sem receber?' });
+  const confirmation = page.getByRole('dialog', { name: 'Cancelar consumo e liberar Mesa 7?' });
   await expect(confirmation.getByRole('button', { name: 'Cancelar e liberar', exact: true })).toBeDisabled();
   await confirmation.getByPlaceholder('Ex.: pedido lançado por engano').fill('Atendimento duplicado');
   await confirmation.getByRole('button', { name: 'Cancelar e liberar', exact: true }).click();
