@@ -64,8 +64,7 @@ export default function CustomerRegistrationConfirmPage() {
           throw new Error('A confirmação do e-mail não gerou a etapa segura de telefone.');
         }
         setPhoneClaimToken(data.registration_token);
-        setPhoneClaimToken('');
-      setRegistrationToken('');
+        setRegistrationToken('');
         setRestaurantId(data.restaurante_id || null);
         setState('phone_required');
         setMessage(data.detail || 'Confirme também seu telefone para proteger o histórico existente.');
@@ -136,6 +135,7 @@ export default function CustomerRegistrationConfirmPage() {
       const data = await response.json().catch(() => ({})) as SessionPayload;
       if (!response.ok) throw new Error(data.detail || 'Não foi possível confirmar o telefone.');
       finishSession(data);
+      setPhoneClaimToken('');
       setRegistrationToken('');
     } catch (error) {
       setMessage(authRequestErrorMessage(error, 'Não foi possível concluir a vinculação.'));
