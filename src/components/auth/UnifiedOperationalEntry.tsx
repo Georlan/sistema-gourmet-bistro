@@ -25,6 +25,9 @@ const MANAGEMENT_ROLES = new Set<AppRole>(['admin', 'gerente', 'caixa']);
 
 function resolvePortalForRole(role: AppRole): OperationalPortal | null {
   if (role === 'garcom') return 'garcom';
+  // Cozinha usa o namespace operacional do Caixa, mas o App mantém o cargo
+  // e renderiza diretamente o KitchenPanel em vez do painel administrativo.
+  if (role === 'cozinha') return 'caixa';
   if (MANAGEMENT_ROLES.has(role)) return 'caixa';
   return null;
 }
