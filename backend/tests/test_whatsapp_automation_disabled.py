@@ -70,6 +70,52 @@ def test_enviar_codigo_otp_whatsapp_returns_false_when_automation_disabled():
     assert result is False
 
 
+def test_customer_phone_verification_can_use_evolution_without_global_automation(monkeypatch):
+    """O gate estreito de posse do telefone não liga as demais automações WhatsApp."""
+    called_http = False
+
+    class FakeResponse:
+        status_code = 200
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+        @staticmethod
+        def json():
+            return {"key": {"id": "test-message-id", "remoteJid": "5588999990001@s.whatsapp.net"}}
+
+    def mock_post(*args, **kwargs):
+        nonlocal called_http
+        called_http = True
+        return FakeResponse()
+
+    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False)
+    monkeypatch.setattr(settings, "CUSTOMER_PHONE_VERIFICATION_ENABLED", True)
+    monkeypatch.setattr(settings, "KOMA_WHATSAPP_PROVIDER", "evolution")
+    monkeypatch.setattr(settings, "EVOLUTION_API_URL", "https://evolution.example.test")
+    monkeypatch.setattr(settings, "EVOLUTION_API_KEY", "test-key")
+    monkeypatch.setattr(settings, "EVOLUTION_INSTANCE_NAME", "koma-test")
+    monkeypatch.setattr(whatsapp_service.httpx.Client, "post", mock_post)
+
+    result = whatsapp_service.enviar_codigo_otp_whatsapp(
+        "88999990001",
+        "123456",
+        "Restaurante Teste",
+        customer_verification=True,
+    )
+    assert result is True
+    assert called_http is True
+
+    # O mesmo serviço continua bloqueado para uma mensagem operacional comum.
+    called_http = False
+    assert whatsapp_service.enviar_texto_whatsapp(
+        "88999990001",
+        "Mensagem operacional",
+    ) is False
+    assert called_http is False
+
+
 def test_solicitar_otp_endpoint_returns_503_when_automation_disabled():
     """Confirma que o endpoint de solicitação de OTP do cliente retorna 503 quando a automação está desativada."""
     response = client.post("/cardapio/clientes/otp/solicitar", json={

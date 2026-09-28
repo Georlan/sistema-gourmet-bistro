@@ -332,9 +332,22 @@ def _insert_guest_cliente_if_needed(
         & (clientes.c.telefone == telefone)
     )
     existing = connection.execute(
-        select(clientes.c.id, clientes.c.nome).where(criteria)
+        select(
+            clientes.c.id,
+            clientes.c.nome,
+            clientes.c.email,
+            clientes.c.senha_hash,
+            clientes.c.telefone_verificado_em,
+        ).where(criteria)
     ).first()
     if existing is not None:
+        # Uma conta criada por e-mail pode carregar um telefone ainda não comprovado.
+        # Pedidos anônimos que conhecem apenas esse número não podem ser anexados à
+        # conta, pois isso faria histórico futuro aparecer para quem nunca provou
+        # posse do telefone.
+        has_account = bool(existing.email or existing.senha_hash)
+        if has_account and existing.telefone_verificado_em is None:
+            return None, None
         return str(existing.id), str(existing.nome)
 
     cliente_id = str(uuid.uuid4())

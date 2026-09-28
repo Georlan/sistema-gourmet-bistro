@@ -6,6 +6,7 @@ export interface CustomerProfile {
   address: string;
   points: number;
   cashback: number;
+  emailVerified?: boolean;
   phoneVerified: boolean;
 }
 
@@ -22,6 +23,7 @@ interface CustomerProfileApi {
   endereco?: string;
   saldo_pontos?: number;
   saldo_cashback?: number;
+  email_verificado?: boolean;
   telefone_verificado?: boolean;
 }
 
@@ -51,6 +53,7 @@ export function mapCustomerProfile(payload: CustomerProfileApi): CustomerProfile
     address: String(payload.endereco || ""),
     points: Number(payload.saldo_pontos || 0),
     cashback: Number(payload.saldo_cashback || 0),
+    emailVerified: payload.email_verificado === true,
     phoneVerified: payload.telefone_verificado === true,
   };
 }

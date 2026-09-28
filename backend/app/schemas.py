@@ -1000,17 +1000,17 @@ class CustomerProfileResponse(BaseModel):
     endereco: str = ""
     saldo_pontos: int = 0
     saldo_cashback: float = 0.0
+    email_verificado: bool = False
     telefone_verificado: bool = False
 
 
-class CustomerRegisterRequest(BaseModel):
-    restaurante_id: int
+class CustomerRegistrationRequest(BaseModel):
+    restaurante_id: int = Field(gt=0)
     nome: str = Field(min_length=2, max_length=100)
     email: str = Field(min_length=5, max_length=150)
     senha: str = Field(min_length=8, max_length=128)
     telefone: str = Field(min_length=10, max_length=20)
     endereco: Optional[str] = Field(default="", max_length=300)
-    codigo: str = Field(pattern=r"^\d{6}$")
 
     @field_validator("nome")
     @classmethod
@@ -1028,10 +1028,33 @@ class CustomerRegisterRequest(BaseModel):
             raise ValueError("E-mail inválido.")
         return email
 
+    @field_validator("telefone")
+    @classmethod
+    def normalize_phone(cls, value: str) -> str:
+        phone = "".join(character for character in value if character.isdigit())
+        if len(phone) not in {10, 11}:
+            raise ValueError("Telefone do cliente deve conter DDD e 10 ou 11 dígitos.")
+        return phone
+
     @field_validator("endereco")
     @classmethod
     def normalize_address(cls, value: Optional[str]) -> str:
         return (value or "").strip()
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CustomerRegistrationConfirm(BaseModel):
+    token: str = Field(min_length=20, max_length=256)
+    model_config = ConfigDict(extra="forbid")
+
+
+class CustomerRegistrationPhoneConfirm(CustomerRegistrationConfirm):
+    codigo: str = Field(pattern=r"^\d{6}$")
+
+
+class CustomerRegisterRequest(CustomerRegistrationRequest):
+    codigo: str = Field(pattern=r"^\d{6}$")
 
 
 class CustomerLoginRequest(BaseModel):

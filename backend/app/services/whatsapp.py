@@ -119,12 +119,18 @@ def enviar_texto_whatsapp_detalhado(
     mensagem: str,
     *,
     contexto: str = "mensagem",
+    customer_verification: bool = False,
 ) -> ResultadoEnvioWhatsApp:
     """Envia texto pela Evolution e retorna somente metadados seguros do envio."""
-    if not getattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False):
+    global_enabled = getattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False)
+    verification_enabled = (
+        customer_verification
+        and getattr(settings, "CUSTOMER_PHONE_VERIFICATION_ENABLED", False)
+    )
+    if not global_enabled and not verification_enabled:
         logger.debug(
             "[WHATSAPP DESATIVADO] Envio automático ignorado "
-            "(KOMA_WHATSAPP_AUTOMATION_ENABLED=false)."
+            "(automação global e verificação dedicada desativadas)."
         )
         return ResultadoEnvioWhatsApp(
             sucesso=False,
@@ -254,12 +260,14 @@ def enviar_texto_whatsapp(
     mensagem: str,
     *,
     contexto: str = "mensagem",
+    customer_verification: bool = False,
 ) -> bool:
     """Compatibilidade: envia pela Evolution e retorna apenas sucesso/falha."""
     return enviar_texto_whatsapp_detalhado(
         telefone,
         mensagem,
         contexto=contexto,
+        customer_verification=customer_verification,
     ).sucesso
 
 
@@ -311,11 +319,22 @@ def obter_status_evolution() -> dict[str, object]:
         }
 
 
-def enviar_codigo_otp_whatsapp(telefone: str, codigo: str, nome_restaurante: str = "Kôma") -> bool:
-    """Envia OTP exclusivamente pelo provedor explicitamente configurado."""
+def enviar_codigo_otp_whatsapp(
+    telefone: str,
+    codigo: str,
+    nome_restaurante: str = "Kôma",
+    *,
+    customer_verification: bool = False,
+) -> bool:
+    """Envia OTP pelo provedor configurado, com gate dedicado para prova de telefone."""
     provider = getattr(settings, "KOMA_WHATSAPP_PROVIDER", "evolution")
     if provider == "meta":
-        return enviar_otp_whatsapp_meta(telefone, nome_restaurante, codigo)
+        return enviar_otp_whatsapp_meta(
+            telefone,
+            nome_restaurante,
+            codigo,
+            customer_verification=customer_verification,
+        )
     mensagem = (
         f"Seu código de acesso {nome_restaurante} é {codigo}. "
         "Ele expira em poucos minutos. Não compartilhe este código."
@@ -324,6 +343,7 @@ def enviar_codigo_otp_whatsapp(telefone: str, codigo: str, nome_restaurante: str
         telefone,
         mensagem,
         contexto="código de acesso",
+        customer_verification=customer_verification,
     )
 
 
@@ -336,13 +356,24 @@ def enviar_notificacao_whatsapp_task(telefone: str, mensagem: str) -> None:
     )
 
 
-def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: str) -> bool:
+def enviar_otp_whatsapp_meta(
+    telefone: str,
+    nome_restaurante: str,
+    codigo_otp: str,
+    *,
+    customer_verification: bool = False,
+) -> bool:
     """
     Envia código OTP por WhatsApp utilizando a Meta Cloud API oficial.
     Retorna True se enviado com sucesso e False quando indisponível ou com falha.
     """
-    if not getattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False):
-        logger.debug("[WHATSAPP DESATIVADO] Envio de OTP Meta ignorado (KOMA_WHATSAPP_AUTOMATION_ENABLED=false).")
+    global_enabled = getattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False)
+    verification_enabled = (
+        customer_verification
+        and getattr(settings, "CUSTOMER_PHONE_VERIFICATION_ENABLED", False)
+    )
+    if not global_enabled and not verification_enabled:
+        logger.debug("[WHATSAPP DESATIVADO] Envio de OTP Meta ignorado pelos gates de configuração.")
         return False
 
     global _META_LAST_ERROR, _META_COUNTRY_RESTRICTION

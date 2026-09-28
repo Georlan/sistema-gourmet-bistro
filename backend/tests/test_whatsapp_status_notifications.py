@@ -401,8 +401,8 @@ def test_otp_evolution_nao_tenta_meta(monkeypatch):
     monkeypatch.setattr(
         whatsapp_service,
         "enviar_texto_whatsapp",
-        lambda telefone, mensagem, contexto="": chamadas.append(
-            (telefone, mensagem, contexto)
+        lambda telefone, mensagem, contexto="", customer_verification=False: chamadas.append(
+            (telefone, mensagem, contexto, customer_verification)
         ) or True,
     )
 
@@ -415,6 +415,7 @@ def test_otp_evolution_nao_tenta_meta(monkeypatch):
     assert enviado is True
     assert len(chamadas) == 1
     assert "123456" in chamadas[0][1]
+    assert chamadas[0][3] is False
 
 
 def test_diagnostico_evolution_indica_configuracao_ausente(monkeypatch):

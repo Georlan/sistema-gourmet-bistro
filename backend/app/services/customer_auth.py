@@ -40,6 +40,29 @@ def hash_phone_for_otp(restaurante_id: int, telefone: str) -> str:
     return _hmac_hex("customer-otp-phone", f"{restaurante_id}:{telefone}")
 
 
+def generate_customer_registration_token(restaurante_id: int) -> str:
+    if restaurante_id <= 0:
+        raise ValueError("Invalid tenant")
+    return f"{restaurante_id}.{secrets.token_urlsafe(32)}"
+
+
+def registration_token_restaurante_id(token: str) -> int:
+    try:
+        raw_id, secret = token.strip().split(".", 1)
+        restaurante_id = int(raw_id)
+    except (AttributeError, TypeError, ValueError):
+        raise ValueError("Link de confirmação inválido ou expirado.") from None
+    if restaurante_id <= 0 or len(secret) < 20:
+        raise ValueError("Link de confirmação inválido ou expirado.")
+    return restaurante_id
+
+
+def hash_customer_registration_token(restaurante_id: int, token: str) -> str:
+    if registration_token_restaurante_id(token) != restaurante_id:
+        raise ValueError("Link de confirmação inválido ou expirado.")
+    return _hmac_hex("customer-registration-token", token)
+
+
 def hash_public_rate_key(restaurante_id: int, scope: str, value: str) -> str:
     return _hmac_hex(
         "public-rate-limit",

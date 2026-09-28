@@ -1287,6 +1287,7 @@ class Cliente(Base):
     email = Column(String, nullable=True, index=True)
     senha_hash = Column(String, nullable=True)
     password_reset_at = Column(DateTime(timezone=True), nullable=True)
+    email_verificado_em = Column(DateTime(timezone=True), nullable=True)
     telefone_verificado_em = Column(DateTime(timezone=True), nullable=True)
     saldo_pontos = Column(Integer, default=0, nullable=False)
     saldo_cashback = Column(Numeric(14, 2, asdecimal=False), default=0.0, nullable=False)
@@ -1626,6 +1627,46 @@ class ItemContagemEstoque(Base):
     # Relationships
     contagem = relationship("SessaoContagemEstoque", back_populates="itens")
     insumo = relationship("Insumo")
+
+
+class CustomerRegistrationChallenge(Base):
+    __tablename__ = "customer_registration_challenges"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    nome = Column(String(100), nullable=False)
+    email = Column(String(150), nullable=False)
+    telefone = Column(String(20), nullable=False)
+    endereco = Column(String(300), nullable=True)
+    senha_hash = Column(String, nullable=False)
+    token_hash = Column(String(64), nullable=False)
+    expira_em = Column(DateTime(timezone=True), nullable=False)
+    criado_em = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    ultimo_envio_em = Column(DateTime(timezone=True), nullable=False)
+    email_verificado_em = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "restaurante_id",
+            "email",
+            name="uq_customer_registration_challenges_tenant_email",
+        ),
+        UniqueConstraint(
+            "restaurante_id",
+            "token_hash",
+            name="uq_customer_registration_challenges_tenant_token",
+        ),
+    )
 
 
 class OtpChallenge(Base):

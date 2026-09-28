@@ -61,6 +61,7 @@ from ...models import (
 from ...delivery_address_snapshot import persist_delivery_address_snapshot
 from ...services.atendimentos import ensure_launch_identity
 from ...services.clientes import (
+    buscar_cliente_por_telefone,
     cadastrar_ou_atualizar_cliente,
     normalizar_telefone_cliente,
 )
@@ -498,13 +499,26 @@ class OrderApplicationService:
                     endereco=delivery_addr,
                 )
         elif cmd.channel != OrderChannel.WEB_CARDAPIO and cmd.customer and cmd.customer.name and len(cmd.customer.name.strip()) >= 2 and clean_phone:
-            cliente = cadastrar_ou_atualizar_cliente(
+            existing_by_phone = buscar_cliente_por_telefone(
                 db,
                 restaurante_id=cmd.restaurant_id,
                 telefone=clean_phone,
-                nome=cmd.customer.name,
-                endereco=delivery_addr,
             )
+            # Conhecer um telefone informado em balcão/integração não prova posse.
+            # Não anexe pedidos a uma conta que foi criada por e-mail enquanto o
+            # número ainda não tiver sido confirmado.
+            if not (
+                existing_by_phone is not None
+                and (existing_by_phone.email or existing_by_phone.senha_hash)
+                and existing_by_phone.telefone_verificado_em is None
+            ):
+                cliente = cadastrar_ou_atualizar_cliente(
+                    db,
+                    restaurante_id=cmd.restaurant_id,
+                    telefone=clean_phone,
+                    nome=cmd.customer.name,
+                    endereco=delivery_addr,
+                )
 
         # 6. Resolução da Comanda
         comanda = None
