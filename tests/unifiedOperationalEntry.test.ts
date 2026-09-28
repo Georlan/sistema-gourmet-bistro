@@ -81,6 +81,16 @@ test('unified login lets backend identity choose restaurant and role choose port
   assert.doesNotMatch(entry, /localStorage\.setItem\('koma_waiter_token'/);
 });
 
+test('kitchen role uses the cashier session namespace and lands directly on KDS', () => {
+  const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
+  const authSession = source('../src/utils/authSession.ts');
+  const app = source('../src/App.tsx');
+
+  assert.match(entry, /if \(role === 'cozinha'\) return 'caixa';/);
+  assert.match(authSession, /role === 'admin' \|\| role === 'gerente' \|\| role === 'caixa' \|\| role === 'cozinha'\) return 'caixa';/);
+  assert.match(app, /activeRole === 'cozinha'[\s\S]*<KitchenPanel/);
+});
+
 test('unified operational entry passes the authenticated portal directly to App without a URL race', () => {
   const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
   const app = source('../src/App.tsx');
