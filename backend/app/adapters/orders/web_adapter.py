@@ -401,6 +401,14 @@ class CardapioWebAdapter:
                     raw_token=customer_token,
                     expected_restaurante_id=rest_id,
                 )
+                if (
+                    settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS
+                    and cliente.email_verificado_em is None
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Confirme seu e-mail antes de fazer o pedido.",
+                    )
                 telefone_clean = cliente.telefone
                 cliente_nome = cliente.nome
 
