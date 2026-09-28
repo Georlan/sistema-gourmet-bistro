@@ -187,14 +187,15 @@ export function useCashierOrders({
         }
       } else {
         await onRefreshOrders();
-        const manualPaymentsAnnulled = Number(data?.pagamentos_manuais_anulados || 0);
-        const manualPaymentsValue = Number(data?.valor_pagamentos_anulados || 0);
-        const legacyPaidValueAnnulled = Number(data?.valor_pago_legado_anulado || 0);
+        const manualPaymentsPreserved = Number(data?.pagamentos_manuais_preservados || 0);
+        const manualPaymentsValue = Number(data?.valor_pagamentos_preservados || 0);
+        const paidValuePreserved = Number(data?.valor_pago_preservado || 0);
+        const pendingPaymentsCancelled = Number(data?.pagamentos_pendentes_cancelados || 0);
         showToast(
           isOrderScope
             ? `${data.itens_cancelados} item(ns) deste pedido cancelado(s).${data.mesa_liberada ? ` Mesa ${data.mesa_id} liberada.` : ' Os demais pedidos da mesa foram preservados.'}`
-            : manualPaymentsAnnulled > 0 || legacyPaidValueAnnulled > 0
-              ? `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s). ${manualPaymentsAnnulled} pagamento(s) manual(is) anulado(s)${manualPaymentsValue > 0 ? ` (R$ ${manualPaymentsValue.toFixed(2).replace('.', ',')})` : ''}.`
+            : manualPaymentsPreserved > 0 || paidValuePreserved > 0
+              ? `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s). R$ ${Math.max(manualPaymentsValue, paidValuePreserved).toFixed(2).replace('.', ',')} já recebido(s) preservado(s); o restante não foi marcado como pago.${pendingPaymentsCancelled > 0 ? ` ${pendingPaymentsCancelled} pagamento(s) pendente(s) cancelado(s).` : ''}`
               : `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
           'success'
         );
