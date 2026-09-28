@@ -177,6 +177,7 @@ const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isPrintSimulatorRoute = pathname.startsWith("/ferramentas/simulador-impressao");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
+const isLandingEntryRoute = resolveKomaHost().surface === "landing" && !isLegalRoute && !isPlanContractRoute;
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
 const isOnboardingAwareManagementRoute = isHostedManagementEntryRoute();
 const isInternalSupportOperationalRoute =
@@ -210,6 +211,8 @@ const RootApp = React.lazy(
       ? () => import("./legal/LegalPage")
       : isPlanContractRoute
         ? () => import("./legal/PlanContractPageV2")
+        : isLandingEntryRoute
+          ? () => import("./landing/LandingPage")
         : isUnifiedOperationalRoute
           ? () => import("./components/auth/UnifiedOperationalEntry")
           : isOnboardingAwareManagementRoute
@@ -223,7 +226,11 @@ const RouteLoading = () => pathname === "/recuperar-senha"
       <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">Preparando recuperação…</p>
     </main>
   )
-  : <KomaLoading label="Preparando Kôma…" />;
+  : isLandingEntryRoute
+    ? <div style={{ minHeight: '100dvh', background: '#111713', color: '#f7f8f1', padding: '26px max(18px, 5vw)', fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <strong>KÔMA</strong><main style={{ marginTop: 'min(16vh, 120px)' }}><p style={{ color: '#b9ee67' }}>Sistema para restaurantes</p><h1 style={{ fontSize: 'clamp(2.25rem, 9vw, 4.5rem)', lineHeight: 1.08, maxWidth: 750 }}>Pedidos, cozinha e caixa. Um só fluxo.</h1><a href="#planos" style={{ color: '#b9ee67' }}>Ver planos</a></main>
+      </div>
+    : <KomaLoading label="Preparando Kôma…" />;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
