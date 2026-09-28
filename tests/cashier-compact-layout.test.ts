@@ -24,7 +24,7 @@ test('short desktop layout protects emergency action and PDV cart space', () => 
   assert.match(compactCss, /max-height:\s*820px/);
   assert.match(compactCss, /--sidebar-width:\s*14rem/);
   assert.match(compactCss, /#online-orders-emergency-trigger/);
-  assert.match(compactCss, /:has\(> form > #pdv-submit-btn\)/);
+  assert.match(compactCss, /:has\(> form #pdv-submit-btn\)/);
   assert.match(compactCss, /min-width:\s*22\.5rem/);
   assert.match(compactCss, /#pdv-target-table\[data-table-status="free"\]/);
   assert.match(compactCss, /#pdv-submit-btn > span:last-child/);
