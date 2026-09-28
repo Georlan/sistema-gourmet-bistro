@@ -21,9 +21,7 @@ interface CardapioAuthModalProps {
   onLoginSuccess: (profile: CustomerProfile, token: string) => void;
 }
 
-// Gap conhecido documentado:
-// Recuperação de senha por e-mail transacional pendente de provedor.
-export const PASSWORD_RECOVERY = "PENDENTE";
+export const PASSWORD_RECOVERY = "ATIVO";
 
 export default function CardapioAuthModal({
   restaurantId,
@@ -37,8 +35,7 @@ export default function CardapioAuthModal({
   const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [registerStep, setRegisterStep] = useState<"details" | "otp">("details");
-  const [otpCode, setOtpCode] = useState("");
+  const [registerStep, setRegisterStep] = useState<"details" | "email_sent">("details");
 
   const numericRestaurantId = Number(restaurantId);
 
@@ -116,21 +113,7 @@ export default function CardapioAuthModal({
     setErrorMessage("");
 
     try {
-      if (registerStep === "details") {
-        const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/otp/solicitar`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ restaurante_id: numericRestaurantId, telefone: cleanPhone }),
-        });
-        const data = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(data?.detail || "Não foi possível enviar o código.");
-        setRegisterStep("otp");
-        return;
-      }
-      if (!/^\d{6}$/.test(otpCode)) {
-        throw new Error("Informe o código de 6 dígitos enviado por WhatsApp.");
-      }
-      const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/cadastro`, {
+      const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/cadastro/solicitar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -140,17 +123,13 @@ export default function CardapioAuthModal({
           telefone: cleanPhone,
           senha: password,
           endereco: "",
-          codigo: otpCode,
         }),
       });
-
       const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.access_token || !data?.cliente) {
-        throw new Error(data?.detail || "Falha ao criar conta.");
+      if (!response.ok) {
+        throw new Error(data?.detail || "Não foi possível enviar o e-mail de confirmação.");
       }
-
-      onLoginSuccess(mapCustomerProfile(data.cliente), String(data.access_token));
-      onClose();
+      setRegisterStep("email_sent");
     } catch (error) {
       setErrorMessage(authRequestErrorMessage(error, "Não foi possível criar sua conta agora."));
     } finally {
@@ -376,15 +355,24 @@ export default function CardapioAuthModal({
                 />
               </div>
             </label>
-            </> : <div className="space-y-3">
-              <button type="button" onClick={() => { setRegisterStep("details"); setOtpCode(""); setErrorMessage(""); }} className="flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-white">
+            </> : <div className="space-y-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+              <button
+                type="button"
+                onClick={() => { setRegisterStep("details"); setErrorMessage(""); }}
+                className="flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-white"
+              >
                 <ArrowLeft className="h-4 w-4" /> Alterar dados
               </button>
-              <p className="text-sm text-gray-300">Enviamos um código para <strong>{formatBrazilianPhone(phone)}</strong>.</p>
-              <label className="block">
-                <span className="mb-1 block text-xs font-bold text-gray-300">Código do WhatsApp</span>
-                <input type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-center font-mono text-xl tracking-[0.4em] text-white outline-none focus:border-emerald-500" required />
-              </label>
+              <div className="flex items-start gap-3">
+                <Mail className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+                <div>
+                  <p className="text-sm font-bold text-white">Confira seu e-mail</p>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-300">
+                    Enviamos um link de confirmação para <strong>{email.trim().toLowerCase()}</strong>.
+                    Abra o link para concluir a conta.
+                  </p>
+                </div>
+              </div>
             </div>}
 
             <button
@@ -392,7 +380,7 @@ export default function CardapioAuthModal({
               disabled={isSubmitting}
               className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 hover:shadow-emerald-500/30 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
             >
-              <span>{isSubmitting ? "Aguarde..." : registerStep === "details" ? "Enviar código pelo WhatsApp" : "Confirmar e criar conta"}</span>
+              <span>{isSubmitting ? "Aguarde..." : registerStep === "details" ? "Criar conta" : "Reenviar e-mail"}</span>
               {!isSubmitting && <ArrowRight className="h-4 w-4" />}
             </button>
           </form>
