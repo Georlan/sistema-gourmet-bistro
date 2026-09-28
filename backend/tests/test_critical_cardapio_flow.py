@@ -18,7 +18,9 @@ from app.models import (
     Item,
     ActivityLog,
     ConfiguracaoRestaurante,
+    Pagamento,
 )
+from app.smartpos_models import SmartPosPaymentIntent
 from app.security import create_access_token
 from app.services.customer_auth import create_customer_access_token
 
@@ -880,14 +882,29 @@ def test_cancelar_consumo_libera_mesa_sem_contabilizar_valor():
     assert abertas.json() == []
 
 
-def test_cancelar_consumo_bloqueia_mesa_com_valor_pago():
+def test_cancelar_consumo_anula_pagamento_manual_e_libera_mesa():
     mesa_id = 1000 + uuid.uuid4().int % 1_000_000
     comanda_id, token = _criar_pedido_de_mesa_para_cancelamento(mesa_id)
+    pagamento_id = f"p-manual-cancel-{uuid.uuid4().hex[:8]}"
 
     db = SessionLocal()
     try:
         comanda = db.query(Comanda).filter(Comanda.id == comanda_id).one()
+        turno = db.query(CaixaTurno).filter(
+            CaixaTurno.restaurante_id == 100,
+            CaixaTurno.status == "aberto",
+        ).one()
         comanda.valor_pago = 10
+        db.add(Pagamento(
+            id=pagamento_id,
+            restaurante_id=100,
+            comanda_id=comanda_id,
+            turno_id=turno.id,
+            valor=10,
+            metodo="pix",
+            status="aprovado",
+            idempotency_key=f"manual-cancel-{uuid.uuid4().hex}",
+        ))
         db.commit()
     finally:
         db.close()
@@ -895,15 +912,90 @@ def test_cancelar_consumo_bloqueia_mesa_com_valor_pago():
     response = client.post(
         f"/mesas/{mesa_id}/cancelar-consumo",
         headers={"Authorization": f"Bearer {token}"},
-        json={"motivo": "Tentativa inválida"},
+        json={"motivo": "Cliente abandonou o atendimento"},
     )
-    assert response.status_code == 409
-    assert "pagamento registrado" in response.json()["detail"].lower()
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["pagamentos_manuais_anulados"] == 1
+    assert payload["valor_pagamentos_anulados"] == 10.0
+    assert payload["valor_pago_legado_anulado"] == 10.0
 
     db = SessionLocal()
     try:
         comanda = db.query(Comanda).filter(Comanda.id == comanda_id).one()
+        pagamento = db.query(Pagamento).filter(Pagamento.id == pagamento_id).one()
+        assert comanda.fechada is True
+        assert float(comanda.valor_pago or 0) == 0
+        assert pagamento.status == "cancelado"
+        assert all(item.status == "cancelado" for item in comanda.itens)
+        assert all(item.pago is False for item in comanda.itens)
+        audit = db.query(ActivityLog).filter(
+            ActivityLog.restaurante_id == 100,
+            ActivityLog.action == "CANCEL_TABLE_CONSUMPTION",
+            ActivityLog.details.contains(f"Mesa {mesa_id}"),
+        ).one()
+        assert "1 pagamento(s) manual(is) anulado(s)" in audit.details
+    finally:
+        db.close()
+
+
+def test_cancelar_consumo_bloqueia_pagamento_confirmado_por_integracao():
+    mesa_id = 1000 + uuid.uuid4().int % 1_000_000
+    comanda_id, token = _criar_pedido_de_mesa_para_cancelamento(mesa_id)
+    pagamento_id = f"p-integrated-cancel-{uuid.uuid4().hex[:8]}"
+
+    db = SessionLocal()
+    try:
+        comanda = db.query(Comanda).filter(Comanda.id == comanda_id).one()
+        turno = db.query(CaixaTurno).filter(
+            CaixaTurno.restaurante_id == 100,
+            CaixaTurno.status == "aberto",
+        ).one()
+        comanda.valor_pago = 10
+        db.add(Pagamento(
+            id=pagamento_id,
+            restaurante_id=100,
+            comanda_id=comanda_id,
+            turno_id=turno.id,
+            valor=10,
+            metodo="pix",
+            status="aprovado",
+            idempotency_key=f"integrated-payment-{uuid.uuid4().hex}",
+        ))
+        db.flush()
+        db.add(SmartPosPaymentIntent(
+            id=f"spi-{uuid.uuid4().hex[:8]}",
+            restaurante_id=100,
+            turno_id=turno.id,
+            mesa_id=mesa_id,
+            operador_id="usr_cardapio_100",
+            valor=10,
+            metodo="pix",
+            captura="provider_integrado",
+            escopo="valor",
+            idempotency_key=f"integrated-intent-{uuid.uuid4().hex}",
+            status="aprovada",
+            pagamento_id=pagamento_id,
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/mesas/{mesa_id}/cancelar-consumo",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"motivo": "Tentativa com pagamento integrado"},
+    )
+    assert response.status_code == 409
+    assert "pagamento confirmado por integração" in response.json()["detail"].lower()
+
+    db = SessionLocal()
+    try:
+        comanda = db.query(Comanda).filter(Comanda.id == comanda_id).one()
+        pagamento = db.query(Pagamento).filter(Pagamento.id == pagamento_id).one()
         assert comanda.fechada is False
+        assert float(comanda.valor_pago or 0) == 10
+        assert pagamento.status == "aprovado"
         assert db.query(Item).filter(
             Item.comanda_id == comanda_id,
             Item.status != "cancelado",
