@@ -22,6 +22,7 @@ export default function CustomerRegistrationConfirmPage() {
   const [code, setCode] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [restaurantId, setRestaurantId] = React.useState<number | null>(null);
+  const attemptedTokenRef = React.useRef('');
 
   const finishSession = React.useCallback((payload: SessionPayload) => {
     if (!payload.access_token || !payload.cliente || !payload.restaurante_id) {
@@ -70,6 +71,8 @@ export default function CustomerRegistrationConfirmPage() {
   }, [finishSession]);
 
   React.useEffect(() => {
+    if (!registrationToken || attemptedTokenRef.current === registrationToken) return;
+    attemptedTokenRef.current = registrationToken;
     void confirmEmail(registrationToken);
   }, [confirmEmail, registrationToken]);
 
