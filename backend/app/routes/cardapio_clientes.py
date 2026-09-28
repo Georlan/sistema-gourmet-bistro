@@ -449,7 +449,7 @@ def request_registration_phone_verification(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    if not getattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False):
+    if not getattr(settings, "CUSTOMER_PHONE_VERIFICATION_ENABLED", False):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="A confirmação deste telefone está indisponível no momento.",
@@ -548,6 +548,7 @@ def request_registration_phone_verification(
                 challenge.telefone,
                 codigo,
                 restaurante.nome if restaurante else "KÔMA",
+                customer_verification=True,
             )
         except TypeError:
             sent = enviar_codigo_otp_whatsapp(challenge.telefone, codigo)
