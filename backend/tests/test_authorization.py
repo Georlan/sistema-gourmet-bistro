@@ -587,7 +587,7 @@ def test_admin_team_listing_is_scoped_to_authenticated_tenant():
 
 @pytest.mark.parametrize(
     "forbidden_cargo",
-    ["admin", "superadmin", "atendente", "cozinha"],
+    ["admin", "superadmin", "atendente"],
 )
 def test_team_invite_rejects_privileged_or_unsupported_roles(forbidden_cargo):
     client = TestClient(app)
@@ -604,6 +604,24 @@ def test_team_invite_rejects_privileged_or_unsupported_roles(forbidden_cargo):
     )
 
     assert response.status_code == 422
+
+
+def test_team_invite_accepts_kitchen_role():
+    client = TestClient(app)
+    headers = get_auth_headers(client, "admin", "123")
+
+    response = client.post(
+        "/caixa/funcionarios",
+        headers=headers,
+        json={
+            "nome": "Cozinha Autorizada",
+            "telefone": "81977775555",
+            "cargo": "cozinha",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["cargo"] == "cozinha"
 
 
 @pytest.mark.parametrize("extra_field", ["senha", "role", "restaurante_id"])
