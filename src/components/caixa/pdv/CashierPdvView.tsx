@@ -908,7 +908,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   )}
 
                   {(pdvOrderType === 'pickup' || pdvOrderType === 'delivery') && (
-                    <details className="rounded-xl border border-koma-border bg-koma-card/40">
+                    <details className="group rounded-xl border border-koma-border bg-koma-card/40">
                       <summary className="cursor-pointer list-none px-3 py-2.5">
                         <div className="flex items-center justify-between gap-3">
                           <div>
