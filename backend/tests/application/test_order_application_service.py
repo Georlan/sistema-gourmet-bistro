@@ -1,5 +1,6 @@
 """Testes de ponta a ponta do OrderApplicationService (Fase 3.1: Alinhamento Semântico e Transacional)."""
 
+import datetime
 from decimal import Decimal
 import pytest
 from sqlalchemy.orm import Session
@@ -536,6 +537,70 @@ class TestOrderApplicationServicePhase31:
             assert comanda_seated_dine is not None
             assert int(comanda_seated_dine.mesa_id) == 1
             assert comanda_seated_dine.delivery_status is None
+        finally:
+            db.close()
+
+    def test_pos_phone_does_not_link_email_only_account_without_phone_proof(self, char_setup):
+        """Telefone informado no POS não pode apropriar pedidos para conta sem posse comprovada."""
+        db: Session = SessionLocal()
+        try:
+            phone = "11988887766"
+            email = "email-only-order-guard@example.test"
+            account = db.query(Cliente).filter(
+                Cliente.restaurante_id == CHAR_RESTAURANT_ID,
+                Cliente.telefone == phone,
+            ).first()
+            if account is None:
+                account = Cliente(
+                    restaurante_id=CHAR_RESTAURANT_ID,
+                    nome="Conta E-mail",
+                    telefone=phone,
+                    email=email,
+                    senha_hash="hash-nao-utilizado-neste-teste",
+                    email_verificado_em=datetime.datetime.now(datetime.timezone.utc),
+                    telefone_verificado_em=None,
+                    saldo_pontos=0,
+                    saldo_cashback=0,
+                )
+                db.add(account)
+            else:
+                account.nome = "Conta E-mail"
+                account.email = email
+                account.senha_hash = "hash-nao-utilizado-neste-teste"
+                account.email_verificado_em = datetime.datetime.now(datetime.timezone.utc)
+                account.telefone_verificado_em = None
+            db.commit()
+            account_id = account.id
+
+            dto = OrderApplicationService.create_order(
+                db,
+                CreateOrderCommand(
+                    restaurant_id=CHAR_RESTAURANT_ID,
+                    channel=OrderChannel.POS,
+                    fulfillment=FulfillmentType.DINE_IN,
+                    items=(
+                        OrderItemInput(
+                            product_id="prod-char-simples",
+                            quantity=Decimal("1.00"),
+                        ),
+                    ),
+                    customer=CustomerInput(
+                        name="Pessoa no balcão",
+                        phone=phone,
+                    ),
+                ),
+            )
+
+            comanda = db.query(Comanda).filter(
+                Comanda.restaurante_id == CHAR_RESTAURANT_ID,
+                Comanda.id == dto.comanda_id,
+            ).one()
+            assert comanda.cliente_id is None
+
+            db.refresh(account)
+            assert account.id == account_id
+            assert account.email == email
+            assert account.telefone_verificado_em is None
         finally:
             db.close()
 
