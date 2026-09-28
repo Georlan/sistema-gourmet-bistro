@@ -187,10 +187,15 @@ export function useCashierOrders({
         }
       } else {
         await onRefreshOrders();
+        const manualPaymentsAnnulled = Number(data?.pagamentos_manuais_anulados || 0);
+        const manualPaymentsValue = Number(data?.valor_pagamentos_anulados || 0);
+        const legacyPaidValueAnnulled = Number(data?.valor_pago_legado_anulado || 0);
         showToast(
           isOrderScope
             ? `${data.itens_cancelados} item(ns) deste pedido cancelado(s).${data.mesa_liberada ? ` Mesa ${data.mesa_id} liberada.` : ' Os demais pedidos da mesa foram preservados.'}`
-            : `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
+            : manualPaymentsAnnulled > 0 || legacyPaidValueAnnulled > 0
+              ? `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s). ${manualPaymentsAnnulled} pagamento(s) manual(is) anulado(s)${manualPaymentsValue > 0 ? ` (R$ ${manualPaymentsValue.toFixed(2).replace('.', ',')})` : ''}.`
+              : `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
           'success'
         );
       }
