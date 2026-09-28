@@ -44,71 +44,71 @@
   /* The cart has priority over showing one extra product column. At the xl
    * breakpoint Tailwind switches to the side-by-side desktop flow; reserve a
    * readable order width instead of letting the panel become the sacrifice. */
-  .orders-workspace div:has(> form > #pdv-submit-btn) {
+  .orders-workspace div:has(> form #pdv-submit-btn) {
     width: clamp(22.5rem, 28vw, 24rem) !important;
     min-width: 22.5rem;
     max-width: 24rem;
   }
 
   /* Compact the cart chrome and donate the recovered height to the item list. */
-  .orders-workspace div:has(> form > #pdv-submit-btn) > div:first-child {
+  .orders-workspace div:has(> form #pdv-submit-btn) > div:first-child {
     padding: 0.45rem 0.65rem !important;
   }
 
-  .orders-workspace div:has(> form > #pdv-submit-btn) > div:first-child span > span:first-child {
+  .orders-workspace div:has(> form #pdv-submit-btn) > div:first-child span > span:first-child {
     width: 1.8rem !important;
     height: 1.8rem !important;
     border-radius: 0.6rem !important;
   }
 
-  .orders-workspace div:has(> form > #pdv-submit-btn) > div:nth-child(2) {
+  .orders-workspace div:has(> form #pdv-submit-btn) > div:nth-child(2) {
     padding: 0.45rem !important;
   }
 
-  .orders-workspace div:has(> form > #pdv-submit-btn) > div:nth-child(2) > div {
+  .orders-workspace div:has(> form #pdv-submit-btn) > div:nth-child(2) > div {
     padding: 0.55rem !important;
   }
 
-  .orders-workspace div:has(> form > #pdv-submit-btn) > div:nth-child(2) > div > * {
+  .orders-workspace div:has(> form #pdv-submit-btn) > div:nth-child(2) > div > * {
     margin-block: 0 !important;
   }
 
-  .orders-workspace div:has(> form > #pdv-submit-btn) > div:nth-child(2) > div > * + * {
+  .orders-workspace div:has(> form #pdv-submit-btn) > div:nth-child(2) > div > * + * {
     margin-top: 0.35rem !important;
   }
 
-  .orders-workspace div:has(> form > #pdv-submit-btn) > form {
+  .orders-workspace div:has(> form #pdv-submit-btn) > form {
     display: flex;
     flex-direction: column;
     gap: 0.45rem;
     padding: 0.45rem 0.65rem 0.6rem !important;
   }
 
-  .orders-workspace div:has(> form > #pdv-submit-btn) > form > * {
+  .orders-workspace div:has(> form #pdv-submit-btn) > form > * {
     margin-block: 0 !important;
   }
 
-  .orders-workspace div:has(> form > #pdv-submit-btn) > form > div:first-child {
+  .orders-workspace div:has(> form #pdv-submit-btn) > form > div:first-child {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
   }
 
-  .orders-workspace div:has(> form > #pdv-submit-btn) > form > div:first-child > * {
+  .orders-workspace div:has(> form #pdv-submit-btn) > form > div:first-child > * {
     margin-block: 0 !important;
   }
 
-  .orders-workspace div:has(> form > #pdv-submit-btn) > form details {
+  .orders-workspace div:has(> form #pdv-submit-btn) > form details {
     display: none !important;
   }
 
-  .orders-workspace div:has(> form > #pdv-submit-btn) > form > div:has(#pdv-target-table) {
+  .orders-workspace div:has(> form #pdv-submit-btn) > form > div:has(#pdv-target-table) {
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
   }
 
-  .orders-workspace div:has(> form > #pdv-submit-btn) > form > div:has(#pdv-target-table) > * {
+  .orders-workspace div:has(> form #pdv-submit-btn) > form > div:has(#pdv-target-table) > * {
     margin-block: 0 !important;
   }
 
