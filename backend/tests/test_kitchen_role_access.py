@@ -2,7 +2,9 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import CheckConstraint
 
+from app.models import Usuario
 from app.schemas import UsuarioAccessUpdate, UsuarioCreate
 from app.security import PERMISSION_ROLES, ensure_item_status_permission
 
@@ -17,6 +19,14 @@ def test_kitchen_role_is_accepted_by_team_schemas():
 
     assert created.cargo == "cozinha"
     assert updated.cargo == "cozinha"
+
+    cargo_constraint = next(
+        constraint
+        for constraint in Usuario.__table__.constraints
+        if isinstance(constraint, CheckConstraint)
+        and constraint.name == "ck_usuarios_cargo"
+    )
+    assert "'cozinha'" in str(cargo_constraint.sqltext)
 
 
 def test_kitchen_role_can_only_mark_items_ready():
