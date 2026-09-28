@@ -4,6 +4,7 @@ import { Order, Product } from '../../../types';
 import type { OperationalRequestContext, OperationalErrorSink } from '../operationalContracts';
 import {
   mapBackendComandaToOperationalOrder,
+  mergeOperationalSnapshotPreservingOptimisticOrders,
   preserveOptimisticOrderIdentity,
 } from './operationalOrderMapping';
 
@@ -145,14 +146,13 @@ export function useOperationalOrders({
 
       const mappedOrders = comandas.map((comanda: any) => mapBackendComandaToOrder(comanda, now));
 
-      setOrders((prevOrders) => {
-        const tempOrders = prevOrders.filter(
-          (p) =>
-            String(p.id).startsWith('temp-') &&
-            !mappedOrders.some((m) => m.mesaId > 0 && m.mesaId === p.mesaId),
-        );
-        return [...mappedOrders, ...tempOrders];
-      });
+      // A leitura completa pode chegar antes da resposta do POST/WS que confirma
+      // um lançamento novo. Nunca inferimos que um temp foi confirmado apenas
+      // porque já existe alguma comanda na mesma mesa: em mesa ocupada isso
+      // apagava o card "Pedido em envio" até o próximo refresh.
+      setOrders((prevOrders) =>
+        mergeOperationalSnapshotPreservingOptimisticOrders(mappedOrders, prevOrders)
+      );
       setLoadedScopeKey(requestScopeKey);
     } catch (err: any) {
       if (err.name !== 'AbortError') {
@@ -205,14 +205,11 @@ export function useOperationalOrders({
       ) return;
 
       setOrders((prevOrders) => {
+        // Um refresh direcionado prova a versão da comanda consultada, não que
+        // todo lançamento otimista da mesma mesa já foi materializado nela.
+        // O temp só sai pelo evento explícito de reconcile/remove do submit.
         const nextOrders = prevOrders.filter(
-          (order) =>
-            String(order.id) !== String(mappedOrder.id) &&
-            !(
-              String(order.id).startsWith('temp-') &&
-              mappedOrder.mesaId > 0 &&
-              order.mesaId === mappedOrder.mesaId
-            ),
+          (order) => String(order.id) !== String(mappedOrder.id),
         );
         return [...nextOrders, mappedOrder].sort((a, b) => a.timestamp - b.timestamp);
       });
