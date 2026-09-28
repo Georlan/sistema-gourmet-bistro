@@ -563,9 +563,14 @@ export function CaixaOrdersWorkspace({
                           {hasPrinting !== false ? (
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); actions.printConference(order); }}
-                              className="orders-card__icon"
-                              title="Imprimir pré-conta / conferência"
+                              disabled={isPendingConfirmation}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isPendingConfirmation) return;
+                                actions.printConference(order);
+                              }}
+                              className="orders-card__icon disabled:opacity-40 disabled:cursor-wait"
+                              title={isPendingConfirmation ? 'Aguardando confirmação do pedido' : 'Imprimir pré-conta / conferência'}
                               aria-label={`Imprimir conferência de ${presentation.title}`}
                             >
                               <Printer size={12} />
