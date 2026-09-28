@@ -803,7 +803,7 @@ def update_item_status(
     user_role = (current_garcom.role or current_garcom.cargo or "").lower().strip()
     if user_role == "cozinha" and status.lower().strip() != "pronto":
         raise HTTPException(
-            status_code=status_module.HTTP_403_FORBIDDEN,
+            status_code=403,
             detail="Acesso negado: a cozinha só pode marcar itens como pronto.",
         )
 
