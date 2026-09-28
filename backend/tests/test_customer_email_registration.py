@@ -222,6 +222,12 @@ def test_guest_history_requires_phone_ownership_before_claim(setup, monkeypatch)
     )
     assert confirm_email.status_code == 200
     assert confirm_email.json()["status"] == "phone_verification_required"
+    phone_claim_token = confirm_email.json()["registration_token"]
+    assert phone_claim_token != token
+    assert client.post(
+        "/cardapio/clientes/cadastro/confirmar",
+        json={"token": token},
+    ).status_code == 400
 
     db = factory()
     token_var = current_restaurante_id.set(71)
@@ -241,13 +247,13 @@ def test_guest_history_requires_phone_ownership_before_claim(setup, monkeypatch)
 
     request_phone = client.post(
         "/cardapio/clientes/cadastro/telefone/solicitar",
-        json={"token": token},
+        json={"token": phone_claim_token},
     )
     assert request_phone.status_code == 202, request_phone.text
 
     confirm_phone = client.post(
         "/cardapio/clientes/cadastro/telefone/confirmar",
-        json={"token": token, "codigo": "246810"},
+        json={"token": phone_claim_token, "codigo": "246810"},
     )
     assert confirm_phone.status_code == 200, confirm_phone.text
     assert confirm_phone.json()["cliente"]["id"] == "guest-71"
