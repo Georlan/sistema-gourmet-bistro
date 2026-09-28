@@ -680,6 +680,8 @@ class OrderApplicationService:
                     comanda.valor_desconto_cupom = float(coupon_discount_applied)
                 if quote.cashback_discount > Decimal("0.00"):
                     comanda.valor_desconto_cashback = float(quote.cashback_discount)
+                if comanda.delivery_status in ("producao", "pronto"):
+                    initial_lancamento_status = "producao"
 
             if cmd.fulfillment == FulfillmentType.DELIVERY and delivery_address_snapshot is not None:
                 persist_delivery_address_snapshot(

@@ -9,6 +9,7 @@ import {
   readActiveDeliveryStatus,
   reconcileDeliveryOrderAfterStatus,
 } from './deliveryOrderProjection';
+import { getDigitalOrderActionCapability } from '../../../domain/cashierOrderProjection';
 
 type Props = Pick<
   CaixaPanelProps,
@@ -825,9 +826,11 @@ export function useCashierOrders({
       if (optimisticStatus !== 'pendente') {
         setPendingAcceptanceOrders((current) => current.filter((order) => String(order.id) !== orderKey));
       }
-      setDeliveryOrders((current) =>
-        current.map((order) => String(order.id) === orderKey ? { ...order, status: optimisticStatus } : order)
-      );
+      if (optimisticStatus === 'producao') {
+        setDeliveryOrders((current) =>
+          current.map((order) => String(order.id) === orderKey ? { ...order, status: optimisticStatus } : order)
+        );
+      }
     }
 
     const finishCurrentMutation = () => {
@@ -844,7 +847,7 @@ export function useCashierOrders({
 
     const rollbackCurrentMutation = () => {
       if (!finishCurrentMutation()) return false;
-      if (previousOrder && optimisticStatus) {
+      if (previousOrder && optimisticStatus === 'producao') {
         setDeliveryOrders((current) => {
           const existingIndex = current.findIndex((order) => String(order.id) === orderKey);
           if (existingIndex >= 0) {
@@ -916,6 +919,9 @@ export function useCashierOrders({
       showToast('Selecione um entregador para despachar o pedido!', 'info');
       return;
     }
+    const orderKey = String(orderId);
+    if (pendingDeliveryOrderIds.has(orderKey)) return;
+    setPendingDeliveryOrderIds((current) => new Set(current).add(orderKey));
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/despachar`, {
         method: 'POST',
@@ -940,12 +946,18 @@ export function useCashierOrders({
         void fetchDeliveryOrders();
         void onRefreshOrders();
       } else {
-        const err = await res.json();
-        showToast(`Erro ao despachar: ${err.detail}`, 'error');
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail ? `Erro ao despachar: ${err.detail}` : 'Erro ao despachar pedido.', 'error');
       }
     } catch (err) {
       console.error(err);
       showToast('Erro de conexão ao despachar.', 'error');
+    } finally {
+      setPendingDeliveryOrderIds((current) => {
+        const next = new Set(current);
+        next.delete(orderKey);
+        return next;
+      });
     }
   };
 
@@ -1004,6 +1016,9 @@ export function useCashierOrders({
   };
 
   const handleCloseDigitalOrder = async (orderId: string): Promise<boolean> => {
+    const orderKey = String(orderId);
+    if (pendingDeliveryOrderIds.has(orderKey)) return false;
+    setPendingDeliveryOrderIds((current) => new Set(current).add(orderKey));
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, { method: 'PUT', headers: authHeaders });
       if (res.ok) {
@@ -1013,12 +1028,19 @@ export function useCashierOrders({
         void Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
         return true;
       }
-      showToast('Erro ao fechar comanda.', 'error');
+      const err = await res.json().catch(() => ({}));
+      showToast(err.detail || 'Erro ao fechar comanda.', 'error');
       return false;
     } catch (err) {
       console.error(err);
       showToast('Erro de conexão ao finalizar pedido.', 'error');
       return false;
+    } finally {
+      setPendingDeliveryOrderIds((current) => {
+        const next = new Set(current);
+        next.delete(orderKey);
+        return next;
+      });
     }
   };
 
@@ -1096,7 +1118,12 @@ export function useCashierOrders({
   };
 
   const handleAdvanceDigitalOrder = async (order: DeliveryOrderView) => {
-    if (order.status !== 'producao') return;
+    const orderKey = String(order.id);
+    if (pendingDeliveryOrderIds.has(orderKey)) return;
+    const capability = getDigitalOrderActionCapability(order, {
+      isPendingMutation: false,
+    });
+    if (!capability.isAllowed || capability.action !== 'mark_ready') return;
     await handleUpdateDeliveryStatus(order.id, 'pronto');
   };
 

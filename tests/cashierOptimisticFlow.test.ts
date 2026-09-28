@@ -6,7 +6,10 @@ import {
   projectDeliveryOrdersFromSharedSnapshot,
   reconcileDeliveryOrderAfterStatus,
 } from '../src/components/caixa/orders/deliveryOrderProjection';
-import { preserveOptimisticOrderIdentity } from '../src/components/app/data/operationalOrderMapping';
+import {
+  mergeOperationalSnapshotPreservingOptimisticOrders,
+  preserveOptimisticOrderIdentity,
+} from '../src/components/app/data/operationalOrderMapping';
 
 const source = (path: string) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
@@ -82,6 +85,29 @@ test('delivery hydration never replaces a known customer with the generic placeh
   assert.equal(reconcileDeliveryOrderAfterStatus(previous, authoritative).cliente, 'Nome Atualizado');
 });
 
+test('authoritative refresh never drops an in-flight order merely because the table already exists', () => {
+  const existing = {
+    id: 'c-existing',
+    mesaId: 14,
+    timestamp: 1,
+    tipo: 'Consumo no Local',
+    itens: [{ id: 'old-item', nome: 'Item antigo', status: 'preparando', preco: 10 }],
+  } as Order;
+  const pending = {
+    id: 'temp-new-batch',
+    mesaId: 14,
+    timestamp: 2,
+    tipo: 'Consumo no Local',
+    itens: [{ id: 'temp-item', nome: 'Novo item', status: 'preparando', preco: 20 }],
+  } as Order;
+
+  const merged = mergeOperationalSnapshotPreservingOptimisticOrders([existing], [existing, pending]);
+
+  assert.equal(merged.length, 2);
+  assert.ok(merged.some((order) => order.id === 'c-existing'));
+  assert.ok(merged.some((order) => order.id === 'temp-new-batch'));
+});
+
 test('temp to confirmed reconciliation never regresses a known customer name', () => {
   const optimistic = {
     id: 'temp-identity',
@@ -116,6 +142,15 @@ test('PDV reconciles or rolls back the temporary order instead of leaving duplic
   assert.match(operational, /String\(order\.id\) !== tempId/);
   assert.match(cashierOrders, /const \[deliveryOrders, setDeliveryOrders\] = useState<DeliveryOrderView\[\]>\(\[\]\)/);
   assert.doesNotMatch(cashierOrders, /projectDeliveryOrdersFromSharedSnapshot\(orders\)/);
+});
+
+test('temporary salon card stays visible but cannot send item mutations before confirmation', () => {
+  const workspace = source('src/components/caixa/orders/CaixaOrdersWorkspace.tsx');
+
+  assert.match(workspace, /startsWith\('temp-'\)/);
+  assert.match(workspace, /disabled=\{isPendingConfirmation\}/);
+  assert.match(workspace, /Aguardando confirmação…/);
+  assert.match(workspace, /if \(isPendingConfirmation\) return;/);
 });
 
 test('PDV models fulfillment separately from optional table association', () => {

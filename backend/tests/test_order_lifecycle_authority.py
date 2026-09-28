@@ -538,3 +538,78 @@ def test_operational_rejection_after_acceptance_uses_cancel_event(char_client, c
         "koma.order.accepted",
         "koma.order.cancelled",
     ]
+
+
+@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
+@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
+def test_lagging_pending_launch_on_preparing_comanda_reconciles_to_ready(char_client, char_setup):
+    """Regressão: comanda em produção com lançamento em pendente avança para pronto sem 409."""
+    _clear_outbox()
+    headers = char_setup["headers"]
+    comanda_id = _create_pickup(
+        char_client,
+        phone="11977770003",
+        customer_name="Lagging Pickup",
+    )
+
+    # 1. Aceita comanda para producao
+    accepted = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "producao"},
+        headers=headers,
+    )
+    assert accepted.status_code == 200, accepted.text
+
+    # 2. Simula lançamento legado em 'pendente' dentro da comanda em 'producao'
+    db = SessionLocal()
+    try:
+        comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+        assert comanda is not None
+        assert comanda.delivery_status == "producao"
+        for lanc in comanda.lancamentos:
+            lanc.status = "pendente"
+        db.commit()
+    finally:
+        db.close()
+
+    # 3. Avança para pronto: deve reconciliar pendente -> producao -> pronto sem 409
+    ready = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "pronto"},
+        headers=headers,
+    )
+    assert ready.status_code == 200, ready.text
+    assert ready.json()["delivery_status"] == "pronto"
+
+    db = SessionLocal()
+    try:
+        comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+        assert comanda.delivery_status == "pronto"
+        for lanc in comanda.lancamentos:
+            assert lanc.status == "pronto"
+    finally:
+        db.close()
+
+    event_names = _event_names_for_check(comanda_id)
+    assert "koma.order.accepted" in event_names
+    assert "koma.order.ready" in event_names
+
+
+def test_unaccepted_pending_comanda_rejects_direct_transition_to_ready(char_client, char_setup):
+    """Garante que a máquina de estados impede salto direto pendente -> pronto."""
+    headers = char_setup["headers"]
+    comanda_id = _create_pickup(
+        char_client,
+        phone="11977770004",
+        customer_name="Direct Jump Reject",
+    )
+
+    jump = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "pronto"},
+        headers=headers,
+    )
+    assert jump.status_code == 409
+    assert "pendente" in jump.text
+    assert "pronto" in jump.text
+
