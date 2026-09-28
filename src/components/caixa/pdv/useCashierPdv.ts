@@ -194,10 +194,6 @@ export function useCashierPdv({
       } else if (e.key === 'F2') {
         e.preventDefault();
         setPdvOrderType('pickup');
-        setTimeout(() => {
-          const phoneInput = document.getElementById('pdv-customer-phone-input');
-          if (phoneInput) phoneInput.focus();
-        }, 50);
       } else if (e.key === 'F3') {
         e.preventDefault();
         setPdvOrderType('dine_in');
@@ -208,10 +204,6 @@ export function useCashierPdv({
       } else if (e.key === 'F8') {
         e.preventDefault();
         setPdvOrderType('delivery');
-        setTimeout(() => {
-          const phoneInput = document.getElementById('pdv-customer-phone-input');
-          if (phoneInput) phoneInput.focus();
-        }, 50);
       } else if (e.key === 'F4') {
         e.preventDefault();
         if (pdvCart.length > 0) {
@@ -270,17 +262,21 @@ export function useCashierPdv({
       showToast('Seu carrinho de vendas está vazio.', 'info');
       return;
     }
-    if (pdvOrderType !== 'dine_in' && !pdvPaymentMethod) {
-      showToast('Escolha a forma de pagamento da entrega ou retirada.', 'info');
-      return;
-    }
     const normalizedCustomerPhone = pdvCustomerPhone.replace(/\D/g, '');
-    if (pdvOrderType !== 'dine_in' && ![10, 11].includes(normalizedCustomerPhone.length)) {
-      showToast('Informe um celular válido com DDD.', 'info');
+    if (pdvOrderType === 'delivery' && ![10, 11].includes(normalizedCustomerPhone.length)) {
+      showToast('Informe um celular válido com DDD para o delivery.', 'info');
       return;
     }
-    if (pdvOrderType !== 'dine_in' && pdvCustomerName.trim().length < 2) {
-      showToast('Informe o nome do cliente.', 'info');
+    if (pdvOrderType === 'delivery' && pdvCustomerName.trim().length < 2) {
+      showToast('Informe o nome do cliente para o delivery.', 'info');
+      return;
+    }
+    if (
+      pdvOrderType === 'pickup'
+      && normalizedCustomerPhone.length > 0
+      && ![10, 11].includes(normalizedCustomerPhone.length)
+    ) {
+      showToast('Complete o telefone com DDD ou deixe o campo vazio.', 'info');
       return;
     }
 
@@ -350,7 +346,7 @@ export function useCashierPdv({
         valorPago: 0,
         identificador: customerName || undefined,
         clienteId: customerId,
-        clientePhone: orderType === 'dine_in' ? null : customerPhone,
+        clientePhone: orderType === 'dine_in' ? null : customerPhone || null,
         statusComanda: null,
         deliveryStatus: orderType === 'dine_in'
           ? (mesaId > 0 ? null : 'producao' as const)
