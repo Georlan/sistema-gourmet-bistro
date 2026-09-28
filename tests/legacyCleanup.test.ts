@@ -38,6 +38,7 @@ test('team self-service keeps invite creation and uses explicit access lifecycle
   assert.match(team, /method: 'PATCH'/);
   assert.match(team, /Desativar este acesso\?/);
   assert.match(team, /onUpdateAccess=\{handleUpdateAccess\}/);
+  assert.match(people, /INVITABLE_ROLES = \\['garcom', 'caixa', 'cozinha', 'gerente', 'motoboy'\\]/);
   assert.match(people, /INVITABLE_ROLES/);
   assert.match(people, /handleAccessUpdate/);
   assert.match(people, />Desativar</);
