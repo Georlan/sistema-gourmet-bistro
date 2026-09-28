@@ -193,6 +193,25 @@ class Settings:
     CUSTOMER_OTP_MAX_IP_REQUESTS: int = int(
         os.getenv("CUSTOMER_OTP_MAX_IP_REQUESTS", "20")
     )
+    CUSTOMER_EMAIL_REGISTRATION_ENABLED: bool = (
+        os.getenv("CUSTOMER_EMAIL_REGISTRATION_ENABLED", "false").lower() == "true"
+    )
+    CUSTOMER_EMAIL_VERIFICATION_TTL_SECONDS: int = max(
+        300,
+        int(os.getenv("CUSTOMER_EMAIL_VERIFICATION_TTL_SECONDS", "900")),
+    )
+    CUSTOMER_EMAIL_RESEND_SECONDS: int = max(
+        10,
+        int(os.getenv("CUSTOMER_EMAIL_RESEND_SECONDS", "60")),
+    )
+    CUSTOMER_EMAIL_MAX_SENDS: int = max(
+        1,
+        int(os.getenv("CUSTOMER_EMAIL_MAX_SENDS", "5")),
+    )
+    CUSTOMER_EMAIL_MAX_IP_REQUESTS: int = max(
+        1,
+        int(os.getenv("CUSTOMER_EMAIL_MAX_IP_REQUESTS", "20")),
+    )
     
     # CORS Configuration
     CORS_ALLOWED_ORIGINS: str = os.getenv("CORS_ALLOWED_ORIGINS", "")
