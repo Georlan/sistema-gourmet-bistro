@@ -383,11 +383,20 @@ def confirm_customer_registration(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Este telefone já possui uma conta neste restaurante.",
                 )
+            # Consome o link de e-mail imediatamente. A segunda etapa recebe uma
+            # nova capability, mantida apenas em memória pelo frontend, para que
+            # replay do link original nunca avance novamente o cadastro.
+            phone_claim_token = generate_customer_registration_token(restaurante_id)
+            challenge.token_hash = hash_customer_registration_token(
+                restaurante_id,
+                phone_claim_token,
+            )
             challenge.email_verificado_em = challenge.email_verificado_em or now
             db.commit()
             return {
                 "status": "phone_verification_required",
                 "restaurante_id": restaurante_id,
+                "registration_token": phone_claim_token,
                 "detail": (
                     "Seu e-mail foi confirmado. Como este telefone já possui histórico no restaurante, "
                     "confirme também o número para vincular a conta com segurança."
