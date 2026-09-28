@@ -18,7 +18,7 @@ from app.models import (
     Restaurante,
 )
 from app.routes import cardapio_clientes as routes
-from app.security import verify_password
+from app.security import get_password_hash, verify_password
 from app.services.clientes import _insert_guest_cliente_if_needed
 
 
@@ -147,6 +147,65 @@ def test_email_registration_is_single_use_and_login_ready(setup):
     finally:
         current_restaurante_id.reset(token_var)
         db.close()
+
+
+def test_legacy_account_login_requires_email_confirmation_under_order_gate(setup, monkeypatch):
+    client, factory, sent = setup
+    monkeypatch.setattr(settings, "CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS", True)
+
+    db = factory()
+    token_var = current_restaurante_id.set(71)
+    try:
+        legacy = Cliente(
+            id="legacy-account-71",
+            restaurante_id=71,
+            telefone="88999990009",
+            nome="Cliente Legado",
+            email="legacy@example.test",
+            senha_hash=get_password_hash("senha-legada-123"),
+            email_verificado_em=None,
+            telefone_verificado_em=datetime.datetime.now(datetime.timezone.utc),
+            saldo_pontos=35,
+            saldo_cashback=7.5,
+        )
+        db.add(legacy)
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    login = client.post(
+        "/cardapio/clientes/login",
+        json={
+            "restaurante_id": 71,
+            "email": "legacy@example.test",
+            "senha": "senha-legada-123",
+        },
+    )
+    assert login.status_code == 403, login.text
+    assert "confirmar o e-mail" in login.json()["detail"].lower()
+    assert len(sent) == 1
+
+    confirm = client.post(
+        "/cardapio/clientes/cadastro/confirmar",
+        json={"token": sent[0]["token"]},
+    )
+    assert confirm.status_code == 200, confirm.text
+    assert confirm.json()["cliente"]["id"] == "legacy-account-71"
+    assert confirm.json()["cliente"]["email_verificado"] is True
+    assert confirm.json()["cliente"]["saldo_pontos"] == 35
+    assert confirm.json()["cliente"]["saldo_cashback"] == 7.5
+
+    login_after_confirmation = client.post(
+        "/cardapio/clientes/login",
+        json={
+            "restaurante_id": 71,
+            "email": "legacy@example.test",
+            "senha": "senha-legada-123",
+        },
+    )
+    assert login_after_confirmation.status_code == 200, login_after_confirmation.text
+    assert login_after_confirmation.json()["cliente"]["id"] == "legacy-account-71"
 
 
 def test_same_email_isolated_by_restaurant(setup):
