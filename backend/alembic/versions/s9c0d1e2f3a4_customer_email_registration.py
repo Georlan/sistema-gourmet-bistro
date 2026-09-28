@@ -1,7 +1,7 @@
 """Customer email registration challenges and verified-email marker.
 
 Revision ID: s9c0d1e2f3a4
-Revises: r7a8b9c0d1e2
+Revises: s8b9c0d1e2f3
 Create Date: 2026-09-28
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "s9c0d1e2f3a4"
-down_revision = "r7a8b9c0d1e2"
+down_revision = "s8b9c0d1e2f3"
 branch_labels = None
 depends_on = None
 
