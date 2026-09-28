@@ -801,19 +801,18 @@ def update_item_status(
     """
     Atualiza o status de um item conforme o RBAC operacional.
     """
-    if status not in ["preparando", "pronto", "entregue", "cancelado"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Status inválido"
-        )
-    ensure_item_status_permission(current_garcom, status)
-
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(
             status_code=404,
             detail="Item não encontrado"
         )
+    if status not in ["preparando", "pronto", "entregue", "cancelado"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Status inválido"
+        )
+    ensure_item_status_permission(current_garcom, status)
     item.status = status
     db.commit()
     db.refresh(item)
