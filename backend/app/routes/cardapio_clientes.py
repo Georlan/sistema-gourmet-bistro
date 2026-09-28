@@ -19,12 +19,15 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db, tenant_session_scope
-from ..models import Cliente, OtpChallenge, PublicRateLimit
+from ..models import Cliente, CustomerRegistrationChallenge, OtpChallenge, PublicRateLimit
 from ..schemas import (
     CustomerLoginRequest,
     CustomerOtpRequest,
     CustomerOtpVerify,
     CustomerProfileResponse,
+    CustomerRegistrationConfirm,
+    CustomerRegistrationPhoneConfirm,
+    CustomerRegistrationRequest,
     CustomerProfileUpdate,
     CustomerRegisterRequest,
     CustomerSessionResponse,
@@ -41,11 +44,18 @@ from ..services.customer_auth import (
     CustomerTokenClaims,
     create_customer_access_token,
     decode_customer_access_token,
+    generate_customer_registration_token,
     generate_otp,
+    hash_customer_registration_token,
     hash_otp,
     hash_phone_for_otp,
     hash_public_rate_key,
     otp_matches,
+    registration_token_restaurante_id,
+)
+from ..services.customer_registration import (
+    registration_email_available,
+    send_registration_email,
 )
 from ..services.whatsapp import enviar_codigo_otp_whatsapp
 from ..websocket_manager import manager
@@ -75,6 +85,7 @@ def _profile(cliente: Cliente) -> CustomerProfileResponse:
         endereco=cliente.endereco or "",
         saldo_pontos=int(cliente.saldo_pontos or 0),
         saldo_cashback=float(cliente.saldo_cashback or 0),
+        email_verificado=cliente.email_verificado_em is not None,
         telefone_verificado=cliente.telefone_verificado_em is not None,
     )
 
