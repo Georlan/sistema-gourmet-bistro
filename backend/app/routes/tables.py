@@ -12,8 +12,10 @@ from ..models import (
     Item,
     Usuario,
     Pagamento,
+    OnlinePaymentIntent,
     ActivityLog,
 )
+from ..smartpos_models import SmartPosPaymentIntent
 from ..schemas import (
     MesaResponse,
     MesaUpdate,
@@ -168,11 +170,11 @@ def cancelar_consumo_mesa(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("comandas:forcar_fechamento")),
 ):
-    """Cancela todo o consumo aberto de uma mesa sem gerar recebimento.
+    """Cancela todo o consumo aberto e libera a mesa sem fabricar quitação.
 
-    O histórico é preservado: itens são marcados como cancelados e comandas são
-    fechadas. Pagamentos existentes bloqueiam a operação para evitar apagar um
-    consumo que já produziu efeito financeiro.
+    Pagamentos manuais já aprovados permanecem registrados no caixa; o saldo
+    restante não é marcado como pago. Confirmações pendentes são canceladas.
+    Pagamentos confirmados por integração continuam bloqueando a operação.
     """
     rest_id = require_tenant_id()
     motivo = " ".join(payload.motivo.split())
@@ -207,20 +209,78 @@ def cancelar_consumo_mesa(
         )
 
     comanda_ids = [comanda.id for comanda in comandas]
-    pagamento_existente = db.query(Pagamento.id).filter(
-        Pagamento.restaurante_id == rest_id,
-        Pagamento.comanda_id.in_(comanda_ids),
-        or_(Pagamento.status.is_(None), Pagamento.status != "cancelado"),
-    ).first()
-    valor_pago_legado = any(float(comanda.valor_pago or 0) > 0 for comanda in comandas)
-    if pagamento_existente or valor_pago_legado:
+    pagamentos_ativos = (
+        db.query(Pagamento)
+        .filter(
+            Pagamento.restaurante_id == rest_id,
+            Pagamento.comanda_id.in_(comanda_ids),
+            or_(Pagamento.status.is_(None), Pagamento.status != "cancelado"),
+        )
+        .with_for_update()
+        .all()
+    )
+
+    # Nesta fase do produto, pagamentos digitados manualmente pelo Caixa são
+    # confirmações operacionais, não prova de liquidação externa. Ao destruir a
+    # mesa, valores já confirmados continuam contabilizados como recebidos, mas
+    # nenhum saldo restante é fabricado como pago. Confirmações ainda pendentes
+    # são canceladas. Pagamentos cuja liquidação veio de um provedor continuam
+    # protegidos: quando SmartPOS/checkout forem a autoridade do pagamento, a
+    # mesa não poderá ignorar uma confirmação externa.
+    pagamento_ids = [str(pagamento.id) for pagamento in pagamentos_ativos]
+    pagamentos_integrados: set[str] = set()
+    if pagamento_ids:
+        pagamentos_integrados.update(
+            str(row[0])
+            for row in db.query(OnlinePaymentIntent.pagamento_id).filter(
+                OnlinePaymentIntent.restaurante_id == rest_id,
+                OnlinePaymentIntent.pagamento_id.in_(pagamento_ids),
+            ).all()
+            if row[0]
+        )
+        pagamentos_integrados.update(
+            str(row[0])
+            for row in db.query(SmartPosPaymentIntent.pagamento_id).filter(
+                SmartPosPaymentIntent.restaurante_id == rest_id,
+                SmartPosPaymentIntent.pagamento_id.in_(pagamento_ids),
+                SmartPosPaymentIntent.captura == "provider_integrado",
+            ).all()
+            if row[0]
+        )
+
+    if pagamentos_integrados:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "Há pagamento registrado nesta mesa. Cancele ou estorne o "
-                "recebimento antes de liberar a mesa sem contabilizar o consumo."
+                "Há pagamento confirmado por integração nesta mesa. "
+                "Esse recebimento precisa ser estornado ou reconciliado pelo provedor "
+                "antes de cancelar o consumo."
             ),
         )
+
+    pagamentos_manuais = [
+        pagamento
+        for pagamento in pagamentos_ativos
+        if str(pagamento.id) not in pagamentos_integrados
+    ]
+    pagamentos_pendentes_cancelados = [
+        pagamento for pagamento in pagamentos_manuais
+        if pagamento.status == "pendente"
+    ]
+    pagamentos_manuais_preservados = [
+        pagamento for pagamento in pagamentos_manuais
+        if pagamento.status != "pendente"
+    ]
+    valor_pagamentos_preservados = round(
+        sum(float(pagamento.valor or 0) for pagamento in pagamentos_manuais_preservados),
+        2,
+    )
+    valor_pago_preservado = round(
+        sum(float(comanda.valor_pago or 0) for comanda in comandas),
+        2,
+    )
+    for pagamento in pagamentos_pendentes_cancelados:
+        pagamento.status = "cancelado"
 
     itens_ativos = [
         item
@@ -246,7 +306,12 @@ def cancelar_consumo_mesa(
         action="CANCEL_TABLE_CONSUMPTION",
         details=(
             f"Mesa {mesa_id}: {len(comandas)} comanda(s), {len(itens_ativos)} "
-            f"item(ns), total R$ {total_cancelado:.2f}. Motivo: {motivo}"
+            f"item(ns), total R$ {total_cancelado:.2f}; "
+            f"{len(pagamentos_manuais_preservados)} pagamento(s) manual(is) preservado(s), "
+            f"R$ {valor_pagamentos_preservados:.2f}; valor já recebido preservado "
+            f"R$ {valor_pago_preservado:.2f}; "
+            f"{len(pagamentos_pendentes_cancelados)} pagamento(s) pendente(s) cancelado(s). "
+            f"Motivo: {motivo}"
         ),
     ))
     db.commit()
@@ -260,12 +325,31 @@ def cancelar_consumo_mesa(
         rest_id,
     )
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
+    if pagamentos_manuais or valor_pago_preservado > 0:
+        background_tasks.add_task(
+            manager.broadcast,
+            {
+                "event": "cash_updated",
+                "detail": {
+                    "type": "cancelamento_mesa_com_pagamento_manual_preservado",
+                    "mesa_id": mesa_id,
+                    "pagamentos_preservados": len(pagamentos_manuais_preservados),
+                    "valor_preservado": valor_pagamentos_preservados,
+                    "pagamentos_pendentes_cancelados": len(pagamentos_pendentes_cancelados),
+                },
+            },
+            rest_id,
+        )
     return {
         "status": "cancelado",
         "mesa_id": mesa_id,
         "comandas_canceladas": len(comandas),
         "itens_cancelados": len(itens_ativos),
         "total_cancelado": total_cancelado,
+        "pagamentos_manuais_preservados": len(pagamentos_manuais_preservados),
+        "valor_pagamentos_preservados": valor_pagamentos_preservados,
+        "valor_pago_preservado": valor_pago_preservado,
+        "pagamentos_pendentes_cancelados": len(pagamentos_pendentes_cancelados),
     }
 
 

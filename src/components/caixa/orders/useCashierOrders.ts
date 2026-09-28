@@ -52,6 +52,7 @@ export function useCashierOrders({
     comandas: number;
     itens: number;
     total: number;
+    valorPago?: number;
     itemIds: string[];
   } | null>(null);
 
@@ -72,6 +73,7 @@ export function useCashierOrders({
       comandas: tableOrders.length,
       itens: activeItems.length,
       total: activeItems.reduce((sum, item) => sum + (Number(item.preco) || 0), 0),
+      valorPago: tableOrders.reduce((sum, order) => sum + (Number(order.valorPago) || 0), 0),
       itemIds: activeItems.map((item) => String(item.id)).filter(Boolean),
     });
     setCancelTableReason('');
@@ -187,10 +189,16 @@ export function useCashierOrders({
         }
       } else {
         await onRefreshOrders();
+        const manualPaymentsPreserved = Number(data?.pagamentos_manuais_preservados || 0);
+        const manualPaymentsValue = Number(data?.valor_pagamentos_preservados || 0);
+        const paidValuePreserved = Number(data?.valor_pago_preservado || 0);
+        const pendingPaymentsCancelled = Number(data?.pagamentos_pendentes_cancelados || 0);
         showToast(
           isOrderScope
             ? `${data.itens_cancelados} item(ns) deste pedido cancelado(s).${data.mesa_liberada ? ` Mesa ${data.mesa_id} liberada.` : ' Os demais pedidos da mesa foram preservados.'}`
-            : `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
+            : manualPaymentsPreserved > 0 || paidValuePreserved > 0
+              ? `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s). R$ ${Math.max(manualPaymentsValue, paidValuePreserved).toFixed(2).replace('.', ',')} já recebido(s) preservado(s); o restante não foi marcado como pago.${pendingPaymentsCancelled > 0 ? ` ${pendingPaymentsCancelled} pagamento(s) pendente(s) cancelado(s).` : ''}`
+              : `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
           'success'
         );
       }
