@@ -133,6 +133,9 @@ def test_email_registration_is_single_use_and_login_ready(setup):
     )
     assert login_before_confirmation.status_code == 403
     assert "confirma" in login_before_confirmation.json()["detail"].lower()
+    # Com cooldown zerado neste fixture, o login correto pode reenviar/rotacionar
+    # o link. O cliente deve usar sempre a capability mais recente recebida.
+    token = sent[-1]["token"]
 
     confirm = client.post(
         "/cardapio/clientes/cadastro/confirmar",
