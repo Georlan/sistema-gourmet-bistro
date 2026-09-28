@@ -25,6 +25,7 @@ const MANAGEMENT_ROLES = new Set<AppRole>(['admin', 'gerente', 'caixa']);
 
 function resolvePortalForRole(role: AppRole): OperationalPortal | null {
   if (role === 'garcom') return 'garcom';
+  if (role === 'cozinha') return 'caixa';
   if (MANAGEMENT_ROLES.has(role)) return 'caixa';
   return null;
 }
