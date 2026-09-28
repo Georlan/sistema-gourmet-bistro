@@ -27,6 +27,7 @@ from ..schemas import (
     MotoboyCreate, MotoboyResponse, VendaDiretaCreate
 )
 from ..security import (
+    ensure_item_status_permission,
     ensure_permission,
     get_current_user,
     require_permission,
@@ -795,21 +796,23 @@ def update_item_status(
     status: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom: Usuario = Depends(require_permission("pedidos:alterar_status"))
+    current_garcom: Usuario = Depends(get_current_user)
 ):
     """
-    Atualiza o status de um item (requer autenticação do garçom).
+    Atualiza o status de um item conforme o RBAC operacional.
     """
+    if status not in ["preparando", "pronto", "entregue", "cancelado"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Status inválido"
+        )
+    ensure_item_status_permission(current_garcom, status)
+
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(
             status_code=404,
             detail="Item não encontrado"
-        )
-    if status not in ["preparando", "pronto", "entregue", "cancelado"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Status inválido"
         )
     item.status = status
     db.commit()
