@@ -52,6 +52,7 @@ export function useCashierOrders({
     comandas: number;
     itens: number;
     total: number;
+    valorPago?: number;
     itemIds: string[];
   } | null>(null);
 
@@ -72,6 +73,7 @@ export function useCashierOrders({
       comandas: tableOrders.length,
       itens: activeItems.length,
       total: activeItems.reduce((sum, item) => sum + (Number(item.preco) || 0), 0),
+      valorPago: tableOrders.reduce((sum, order) => sum + (Number(order.valorPago) || 0), 0),
       itemIds: activeItems.map((item) => String(item.id)).filter(Boolean),
     });
     setCancelTableReason('');
