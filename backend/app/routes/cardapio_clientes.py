@@ -19,7 +19,13 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db, tenant_session_scope
-from ..models import Cliente, CustomerRegistrationChallenge, OtpChallenge, PublicRateLimit
+from ..models import (
+    Cliente,
+    CustomerRegistrationChallenge,
+    OtpChallenge,
+    PublicRateLimit,
+    Restaurante,
+)
 from ..schemas import (
     CustomerLoginRequest,
     CustomerOtpRequest,
