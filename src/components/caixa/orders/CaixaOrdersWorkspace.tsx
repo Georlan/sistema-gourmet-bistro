@@ -502,6 +502,7 @@ export function CaixaOrdersWorkspace({
               <>
                 {filteredCol1.map(({ order, tableMovement, smartPosState, presentation }) => {
                   const preparingItems = deriveProductionState(order.itens).preparingItems;
+                  const isPendingConfirmation = String(order.comandaId || order.id || '').startsWith('temp-');
                   const cardId = `prod-${order.id}`;
                   const sla = getOrderSlaData(order, nowTimestamp);
                   const isExpanded = !!expandedCardIds[cardId];
@@ -588,11 +589,22 @@ export function CaixaOrdersWorkspace({
                       {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); actions.markTableItemsReady(order); }}
-                        className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"}
+                        disabled={isPendingConfirmation}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isPendingConfirmation) return;
+                          actions.markTableItemsReady(order);
+                        }}
+                        className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-wait"}
                       >
                         <Check size={13} />
-                        <span>{preparingItems.length === 1 ? 'Marcar item como pronto' : 'Marcar itens como prontos'}</span>
+                        <span>
+                          {isPendingConfirmation
+                            ? 'Aguardando confirmação…'
+                            : preparingItems.length === 1
+                              ? 'Marcar item como pronto'
+                              : 'Marcar itens como prontos'}
+                        </span>
                       </button>
                     </div>
                   );
