@@ -6,7 +6,10 @@ import {
   projectDeliveryOrdersFromSharedSnapshot,
   reconcileDeliveryOrderAfterStatus,
 } from '../src/components/caixa/orders/deliveryOrderProjection';
-import { preserveOptimisticOrderIdentity } from '../src/components/app/data/operationalOrderMapping';
+import {
+  mergeOperationalSnapshotPreservingOptimisticOrders,
+  preserveOptimisticOrderIdentity,
+} from '../src/components/app/data/operationalOrderMapping';
 
 const source = (path: string) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
@@ -80,6 +83,29 @@ test('delivery hydration never replaces a known customer with the generic placeh
 
   const authoritative = { ...base, cliente: 'Nome Atualizado' } as any;
   assert.equal(reconcileDeliveryOrderAfterStatus(previous, authoritative).cliente, 'Nome Atualizado');
+});
+
+test('authoritative refresh never drops an in-flight order merely because the table already exists', () => {
+  const existing = {
+    id: 'c-existing',
+    mesaId: 14,
+    timestamp: 1,
+    tipo: 'Consumo no Local',
+    itens: [{ id: 'old-item', nome: 'Item antigo', status: 'preparando', preco: 10 }],
+  } as Order;
+  const pending = {
+    id: 'temp-new-batch',
+    mesaId: 14,
+    timestamp: 2,
+    tipo: 'Consumo no Local',
+    itens: [{ id: 'temp-item', nome: 'Novo item', status: 'preparando', preco: 20 }],
+  } as Order;
+
+  const merged = mergeOperationalSnapshotPreservingOptimisticOrders([existing], [existing, pending]);
+
+  assert.equal(merged.length, 2);
+  assert.ok(merged.some((order) => order.id === 'c-existing'));
+  assert.ok(merged.some((order) => order.id === 'temp-new-batch'));
 });
 
 test('temp to confirmed reconciliation never regresses a known customer name', () => {
