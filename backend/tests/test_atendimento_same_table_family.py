@@ -222,15 +222,31 @@ def test_cashier_modifier_endpoint_keeps_same_table_family_across_three_orders()
 
     first = submit("LOTE A PELO PDV REAL", "same-table-mod-a-1972")
     assert first.status_code == 200, first.text
-    base = first.json()["numero_pedido"]
+    first_payload = first.json()
+    base = first_payload["numero_pedido"]
+    assert [item["observacao"] for item in first_payload["itens"]] == ["LOTE A PELO PDV REAL"]
+    assert len(first_payload["lancamentos"]) == 1
 
     second = submit("LOTE B PELO PDV REAL", "same-table-mod-b-1972")
     assert second.status_code == 200, second.text
-    assert second.json()["numero_pedido"] == base
+    second_payload = second.json()
+    assert second_payload["numero_pedido"] == base
+    assert sorted(item["observacao"] for item in second_payload["itens"]) == [
+        "LOTE A PELO PDV REAL",
+        "LOTE B PELO PDV REAL",
+    ]
+    assert len(second_payload["lancamentos"]) == 2
 
     third = submit("LOTE C PELO PDV REAL", "same-table-mod-c-1972")
     assert third.status_code == 200, third.text
-    assert third.json()["numero_pedido"] == base
+    third_payload = third.json()
+    assert third_payload["numero_pedido"] == base
+    assert sorted(item["observacao"] for item in third_payload["itens"]) == [
+        "LOTE A PELO PDV REAL",
+        "LOTE B PELO PDV REAL",
+        "LOTE C PELO PDV REAL",
+    ]
+    assert len(third_payload["lancamentos"]) == 3
 
     families = _families()
     assert len(families) == 1
