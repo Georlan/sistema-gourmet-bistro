@@ -52,3 +52,25 @@ test('sessão canônica antiga de garçom corrige aliases gravados como Caixa', 
   assert.equal(localStorage.getItem('koma_waiter_id'), 'waiter-migrated');
   assert.equal(getPersistedOperationalPortal(), 'garcom');
 });
+
+test('sessão de cozinha restaura pelo namespace operacional do caixa', () => {
+  localStorage.setItem('koma_operator_session', JSON.stringify({
+    token: 'kitchen-token',
+    expiresAt: Date.now() + 60_000,
+    user: {
+      id: 'kitchen-user',
+      nome: 'Cozinha',
+      role: 'cozinha',
+      restaurante_id: 7,
+    },
+  }));
+  localStorage.setItem('koma_caixa_token', 'kitchen-token');
+  localStorage.setItem('koma_caixa_id', 'kitchen-user');
+  localStorage.setItem('koma_caixa_role', 'cozinha');
+
+  const session = getOperatorSession();
+
+  assert.equal(session?.user.role, 'cozinha');
+  assert.equal(localStorage.getItem('koma_caixa_token'), 'kitchen-token');
+  assert.equal(getPersistedOperationalPortal(), 'caixa');
+});
