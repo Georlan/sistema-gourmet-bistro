@@ -115,3 +115,42 @@ test('desktop 1366x768 compacta banners e libera a área operacional', async ({ 
   expect(searchBox).not.toBeNull();
   expect(searchBox!.y).toBeLessThan(240);
 });
+
+
+test('Novo pedido preserva o carrinho e adapta os dados operacionais por modalidade', async ({ page }, testInfo) => {
+  await openOperationalScenario(page, { subtab: 'pedidos' });
+
+  const main = page.getByRole('main');
+  await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  await page.getByRole('button', { name: 'Adicionar Prato em preparo rapidamente', exact: true }).click();
+
+  const cartToggle = page.getByRole('button', { name: /^Carrinho \(/ });
+  if (await cartToggle.isVisible()) await cartToggle.click();
+
+  const panel = page.locator('.cashier-pdv-cart');
+  await expect(panel).toBeVisible();
+  await expect(panel.getByLabel('Resumo do pedido')).toContainText('Retirada');
+  await expect(panel.getByText('Identificação do cliente', { exact: true })).toBeVisible();
+  await expect(panel.locator('#pdv-customer-phone-input')).toBeHidden();
+  await expect(panel.getByText(/Pagamento \(opcional agora\)/)).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Lançar Pedido', exact: false })).toBeEnabled();
+
+  await panel.getByRole('button', { name: 'Delivery', exact: true }).click();
+  await expect(panel.locator('#pdv-customer-phone-input')).toBeVisible();
+  await expect(panel.locator('#pdv-customer-name-input')).toBeVisible();
+  await expect(panel.getByText('Editar entrega', { exact: true })).toBeVisible();
+  await expect(panel.locator('#pdv-delivery-address-logradouro')).toBeHidden();
+  await panel.getByText('Editar entrega', { exact: true }).click();
+  await expect(panel.locator('#pdv-delivery-address-logradouro')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Lançar Pedido', exact: false })).toBeVisible();
+
+  await panel.getByRole('button', { name: 'Consumo local', exact: true }).click();
+  await expect(panel.locator('#pdv-target-table')).toBeVisible();
+  await expect(panel.locator('#pdv-customer-phone-input')).toHaveCount(0);
+  await expect(panel.getByText(/Pagamento \(opcional agora\)/)).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Lançar Pedido', exact: false })).toBeVisible();
+
+  if (process.env.KOMA_CAPTURE_UI) {
+    await page.screenshot({ path: testInfo.outputPath('cashier-pdv-operational-ux.png'), fullPage: true });
+  }
+});

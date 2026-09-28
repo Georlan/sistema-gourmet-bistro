@@ -192,6 +192,11 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   };
 
   const cartTotal = pdvCart.reduce((sum, item) => sum + pdvCartItemUnitPrice(item) * item.quantity, 0);
+  const deliveryAddressSummary = [
+    pdvDeliveryAddressDraft.logradouro,
+    pdvDeliveryAddressDraft.numero,
+    pdvDeliveryAddressDraft.bairro,
+  ].filter(Boolean).join(', ');
 
   return (
     <>
@@ -535,7 +540,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 </span>
               </div>
 
-              <div className={"cashier-pdv-cart-scroll flex-1 overflow-y-auto p-3 space-y-2"}>
+              <div className={"cashier-pdv-cart-scroll min-h-[180px] flex-1 overflow-y-auto p-3 space-y-2"}>
                 {pdvCart.length === 0 ? (
                   <div
                     className={"h-full min-h-44 flex flex-col items-center justify-center text-center px-6 text-koma-muted"}
@@ -668,278 +673,291 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
 
               <form
                 onSubmit={handlePdvSubmitOrder}
-                className={"p-3 border-t border-koma-border space-y-3 bg-koma-panel/40 shrink-0"}
+                noValidate
+                className={"min-h-0 max-h-[48%] shrink-0 border-t border-koma-border bg-koma-panel/40 flex flex-col"}
               >
-                <div className="space-y-1.5">
-                  <label
-                    className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}
-                  >
-                    Modalidade:
-                  </label>
-                  <div
-                    className={"grid grid-cols-3 gap-1 bg-koma-input p-1 rounded-xl border border-koma-border"}
-                  >
-                    {([
-                      { id: 'pickup', label: 'Retirada' },
-                      { id: 'delivery', label: 'Delivery' },
-                      { id: 'dine_in', label: 'Consumo local' },
-                    ] as const).map((type) => (
-                      <button
-                        key={type.id}
-                        type="button"
-                        onClick={() => {
-                          setPdvOrderType(type.id);
-                          if (type.id === 'delivery') setPdvTargetMesaId(0);
-                        }}
-                        className={`py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
-                          pdvOrderType === type.id
-                            ? 'bg-[#10b981] text-zinc-950 font-extrabold'
-                            : 'text-koma-subtle hover:text-koma-foreground'
-                        }`}
-                      >
-                        {type.label}
-                      </button>
-                    ))}
-                  </div>
-                  <details className="mt-1 text-left text-[9px] text-koma-muted">
-                    <summary className="w-fit cursor-pointer list-none font-semibold hover:text-koma-secondary">
-                      Ver atalhos de teclado
-                    </summary>
-                    <span className="mt-1 block font-mono">F2 Retirada · F3 Consumo local · F8 Delivery · F4 Finalizar</span>
-                  </details>
-                </div>
-
-                {pdvOrderType !== 'delivery' && (
-                  <div className="space-y-2">
-                    <div className={"flex items-center justify-between gap-3"}>
-                      <label
-                        htmlFor="pdv-target-table"
-                        className={"block text-[8px] font-bold uppercase tracking-wider text-koma-subtle"}
-                      >
-                        {pdvOrderType === 'pickup' ? 'Associar a uma mesa (opcional)' : 'Mesa (opcional)'}
-                      </label>
-                      <span className={"text-[8px] text-koma-muted"}>
-                        {pdvOccupiedTableCount} em atendimento
-                      </span>
-                    </div>
-                    <select
-                      id="pdv-target-table"
-                      value={pdvTargetMesaId || ''}
-                      onChange={(e) => setPdvTargetMesaId(Number(e.target.value) || 0)}
-                      aria-describedby="pdv-table-selection-help"
-                      data-table-status={
-                        selectedPdvTableOption?.isOccupied ? 'occupied' : selectedPdvTableOption ? 'free' : 'unselected'
-                      }
-                      className={clsx(
-                        'min-h-10 w-full rounded-xl border px-3 text-[10px] font-semibold text-koma-foreground outline-none transition-colors focus:ring-2',
-                        selectedPdvTableOption?.isOccupied
-                          ? 'border-[#6b2d37] bg-[#1b1013] focus:border-[#8a3d49] focus:ring-[#6b2d37]/20'
-                          : 'border-koma-border bg-koma-input focus:border-[#00b894]/70 focus:ring-[#00b894]/10',
-                      )}
-                    >
-                      <option value="">Sem mesa</option>
-                      {pdvTableOptions.map((option) => (
-                        <option
-                          key={option.table.id}
-                          value={option.table.id}
-                          data-table-status={option.isOccupied ? 'occupied' : 'free'}
-                          style={{
-                            backgroundColor: option.isOccupied ? '#1b1013' : '#090d0b',
-                            color: option.isOccupied ? '#e4a3ac' : '#d4d4d8',
-                          }}
-                        >
-                          {option.isOccupied ? '●' : '○'} {option.label}
-                          {option.table.nome ? ` · Mesa ${option.table.id}` : ''}
-                          {option.isOccupied
-                            ? ` · em atendimento${option.total > 0 ? ` · R$ ${option.total.toFixed(2).replace('.', ',')}` : ''}`
-                            : ' · livre'}
-                        </option>
-                      ))}
-                    </select>
-
-                    <div
-                      id="pdv-table-selection-help"
-                      className={clsx(
-                        'flex min-h-10 items-center gap-2.5 rounded-xl border px-3 py-2 text-left',
-                        selectedPdvTableOption?.isOccupied
-                          ? 'border-rose-300 dark:border-[#6b2d37]/80 bg-rose-50/90 dark:bg-[#261317]'
-                          : 'border-koma-border bg-koma-input',
-                      )}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={clsx(
-                          'h-2 w-2 shrink-0 rounded-full',
-                          selectedPdvTableOption?.isOccupied
-                            ? 'bg-rose-500 shadow-[0_0_0_3px_rgba(244,63,94,0.2)]'
-                            : selectedPdvTableOption
-                              ? 'bg-emerald-500'
-                              : 'bg-koma-muted',
-                        )}
-                      />
-                      <div className="min-w-0">
-                        <strong
-                          className={clsx(
-                            'block text-[9px] font-semibold',
-                            selectedPdvTableOption?.isOccupied
-                              ? 'text-rose-800 dark:text-[#e4a3ac]'
-                              : 'text-koma-foreground',
-                          )}
-                        >
-                          {!selectedPdvTableOption
-                            ? pdvOrderType === 'pickup'
-                              ? 'Retirada sem mesa'
-                              : 'Consumo no local sem mesa'
-                            : pdvOrderType === 'pickup'
-                              ? `${selectedPdvTableOption.label} será associada à retirada`
-                              : selectedPdvTableOption.isOccupied
-                                ? `${selectedPdvTableOption.label} já está em atendimento`
-                                : `${selectedPdvTableOption.label} está livre`}
-                        </strong>
-                        <span className={"mt-0.5 block text-[8px] leading-relaxed text-koma-muted"}>
-                          {pdvOrderType === 'pickup'
-                            ? selectedPdvTableOption
-                              ? 'A associação organiza o pedido; a modalidade continua sendo Retirada.'
-                              : 'Você pode deixar sem mesa e associar depois, se necessário.'
-                            : selectedPdvTableOption?.isOccupied
-                              ? 'Você pode continuar: os novos itens serão adicionados ao atendimento da mesa.'
-                              : selectedPdvTableOption
-                                ? 'O primeiro lançamento abrirá o atendimento automaticamente.'
-                                : 'O pedido permanece consumo no local sem vínculo com mesa.'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {(pdvOrderType === 'pickup' || pdvOrderType === 'delivery') && (
-                  <div className="space-y-2">
-                    <div className={"grid grid-cols-2 gap-2"}>
-                      <div className="space-y-1">
-                        <label
-                          className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}
-                        >
-                          Telefone:
-                        </label>
-                        <input
-                          id="pdv-customer-phone-input"
-                          type="tel"
-                          inputMode="numeric"
-                          autoComplete="tel"
-                          placeholder="(00) 00000-0000"
-                          required={pdvCart.length > 0}
-                          value={pdvCustomerPhone}
-                          onChange={(e) => {
-                            setPdvCustomerPhone(aplicarMascaraTelefoneInput(e.target.value));
-                            setPdvCustomerId(null);
-                          }}
-                          className={"w-full px-2 py-1.5 bg-koma-input border border-koma-border rounded-lg focus:outline-none text-koma-foreground text-[10px]"}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label
-                          className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}
-                        >
-                          Nome Cliente:
-                        </label>
-                        <input
-                          id="pdv-customer-name-input"
-                          type="text"
-                          autoComplete="name"
-                          placeholder="Ex: Maria"
-                          required={pdvCart.length > 0}
-                          value={pdvCustomerName}
-                          onChange={(e) => setPdvCustomerName(e.target.value)}
-                          className={"w-full px-2 py-1.5 bg-koma-input border border-koma-border rounded-lg focus:outline-none text-koma-foreground text-[10px]"}
-                        />
-                      </div>
-                    </div>
-                    {pdvCustomerLookup !== 'idle' && (
-                      <p
-                        className={clsx(
-                          'text-[8px]',
-                          'font-bold',
-                          pdvCustomerLookup === 'found' ? 'text-emerald-400' : 'text-koma-muted',
-                        )}
-                      >
-                        {pdvCustomerLookup === 'loading' && 'Buscando cliente...'}
-                        {pdvCustomerLookup === 'found' &&
-                          'Cliente encontrado — nome e endereço disponíveis para conferência.'}
-                        {pdvCustomerLookup === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
-                      </p>
-                    )}
-                    {pdvOrderType === 'delivery' && (
-                      <div className="rounded-xl border border-koma-border bg-koma-card/40 p-2">
-                        <DeliveryAddressFields
-                          value={pdvDeliveryAddressDraft}
-                          onChange={handlePdvDeliveryAddressChange}
-                          legacyHint={pdvDeliveryAddressLegacyHint || null}
-                          compact
-                          idPrefix="pdv-delivery-address"
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {(pdvOrderType === 'pickup' || pdvOrderType === 'delivery') && (
+                <div className="min-h-0 overflow-y-auto p-3 space-y-3 overscroll-contain">
                   <div className="space-y-1.5">
-                    <label className="block text-[8px] font-bold uppercase tracking-wider text-koma-subtle">
-                      Forma de pagamento:
-                    </label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((method) => (
+                    <div className="flex items-center justify-between gap-3">
+                      <label className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}>
+                        Modalidade
+                      </label>
+                      <details className="text-left text-[9px] text-koma-muted">
+                        <summary className="cursor-pointer list-none font-semibold hover:text-koma-secondary">
+                          Atalhos
+                        </summary>
+                        <span className="mt-1 block font-mono">F2 Retirada · F3 Consumo local · F8 Delivery · F4 Finalizar</span>
+                      </details>
+                    </div>
+                    <div className={"grid grid-cols-3 gap-1 bg-koma-input p-1 rounded-xl border border-koma-border"}>
+                      {([
+                        { id: 'pickup', label: 'Retirada' },
+                        { id: 'delivery', label: 'Delivery' },
+                        { id: 'dine_in', label: 'Consumo local' },
+                      ] as const).map((type) => (
                         <button
-                          key={method}
+                          key={type.id}
                           type="button"
-                          onClick={() => setPdvPaymentMethod(method)}
-                          aria-pressed={pdvPaymentMethod === method}
-                          className={clsx(
-                            'min-h-9 rounded-lg border px-2 py-1.5 text-[9px] font-bold transition-colors',
-                            pdvPaymentMethod === method
-                              ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                              : 'border-koma-border bg-koma-input text-koma-muted hover:border-emerald-500/30 hover:text-koma-foreground',
-                          )}
+                          onClick={() => {
+                            setPdvOrderType(type.id);
+                            if (type.id === 'delivery') setPdvTargetMesaId(0);
+                          }}
+                          className={`py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
+                            pdvOrderType === type.id
+                              ? 'bg-[#10b981] text-zinc-950 font-extrabold'
+                              : 'text-koma-subtle hover:text-koma-foreground'
+                          }`}
                         >
-                          {PAYMENT_LABELS[method]}
+                          {type.label}
                         </button>
                       ))}
                     </div>
-                    <p className="text-[8px] leading-relaxed text-koma-muted">
-                      Essa informação acompanha a via de retirada/entrega e evita cobrança duplicada.
-                    </p>
                   </div>
-                )}
 
-                <div
-                  className={"flex justify-between items-center font-mono border-t border-koma-border pt-2 text-[11px] font-bold text-koma-foreground"}
-                >
-                  <span>Total Pedido:</span>
-                  <span className={"text-emerald-700 dark:text-emerald-400 text-sm"}>
-                    {formatCurrency(cartTotal)}
-                  </span>
+                  <div aria-label="Resumo do pedido" className="grid grid-cols-3 gap-1.5 rounded-xl border border-koma-border bg-koma-input p-2">
+                    <div>
+                      <span className="block text-[7px] font-bold uppercase tracking-wider text-koma-muted">Modalidade</span>
+                      <strong className="text-[9px] text-koma-foreground">
+                        {pdvOrderType === 'pickup' ? 'Retirada' : pdvOrderType === 'delivery' ? 'Delivery' : 'Consumo local'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="block text-[7px] font-bold uppercase tracking-wider text-koma-muted">Itens</span>
+                      <strong className="font-mono text-[9px] text-koma-foreground">{pdvCartItemCount}</strong>
+                    </div>
+                    <div className="text-right">
+                      <span className="block text-[7px] font-bold uppercase tracking-wider text-koma-muted">Total</span>
+                      <strong className="font-mono text-[9px] text-emerald-600 dark:text-emerald-300">{formatCurrency(cartTotal)}</strong>
+                    </div>
+                  </div>
+
+                  {pdvOrderType === 'dine_in' && (
+                    <div className="space-y-2">
+                      <div className={"flex items-center justify-between gap-3"}>
+                        <label htmlFor="pdv-target-table" className={"block text-[8px] font-bold uppercase tracking-wider text-koma-subtle"}>
+                          Mesa
+                        </label>
+                        <span className={"text-[8px] text-koma-muted"}>{pdvOccupiedTableCount} em atendimento</span>
+                      </div>
+                      <select
+                        id="pdv-target-table"
+                        value={pdvTargetMesaId || ''}
+                        onChange={(e) => setPdvTargetMesaId(Number(e.target.value) || 0)}
+                        data-table-status={
+                          selectedPdvTableOption?.isOccupied ? 'occupied' : selectedPdvTableOption ? 'free' : 'unselected'
+                        }
+                        className={clsx(
+                          'min-h-10 w-full rounded-xl border px-3 text-[10px] font-semibold text-koma-foreground outline-none transition-colors focus:ring-2',
+                          selectedPdvTableOption?.isOccupied
+                            ? 'border-[#6b2d37] bg-[#1b1013] focus:border-[#8a3d49] focus:ring-[#6b2d37]/20'
+                            : 'border-koma-border bg-koma-input focus:border-[#00b894]/70 focus:ring-[#00b894]/10',
+                        )}
+                      >
+                        <option value="">Sem mesa</option>
+                        {pdvTableOptions.map((option) => (
+                          <option
+                            key={option.table.id}
+                            value={option.table.id}
+                            data-table-status={option.isOccupied ? 'occupied' : 'free'}
+                            style={{
+                              backgroundColor: option.isOccupied ? '#1b1013' : '#090d0b',
+                              color: option.isOccupied ? '#e4a3ac' : '#d4d4d8',
+                            }}
+                          >
+                            {option.isOccupied ? '●' : '○'} {option.label}
+                            {option.table.nome ? ` · Mesa ${option.table.id}` : ''}
+                            {option.isOccupied
+                              ? ` · em atendimento${option.total > 0 ? ` · R$ ${option.total.toFixed(2).replace('.', ',')}` : ''}`
+                              : ' · livre'}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[8px] leading-relaxed text-koma-muted">
+                        {selectedPdvTableOption
+                          ? selectedPdvTableOption.isOccupied
+                            ? 'Os itens serão adicionados ao atendimento existente.'
+                            : 'O primeiro lançamento abrirá o atendimento da mesa.'
+                          : 'Sem mesa também é permitido; você pode associar depois.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {pdvOrderType === 'pickup' && (
+                    <details className="rounded-xl border border-koma-border bg-koma-card/40">
+                      <summary className="cursor-pointer list-none px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <strong className="block text-[9px] text-koma-foreground">Identificação do cliente</strong>
+                            <span className="text-[8px] text-koma-muted">Opcional para retirada rápida</span>
+                          </div>
+                          <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
+                            {pdvCustomerName || pdvCustomerPhone ? 'Preenchido' : 'Adicionar'}
+                          </span>
+                        </div>
+                      </summary>
+                      <div className="grid grid-cols-2 gap-2 border-t border-koma-border p-3">
+                        <div className="space-y-1">
+                          <label className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Telefone</label>
+                          <input
+                            id="pdv-customer-phone-input"
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="tel"
+                            placeholder="(00) 00000-0000"
+                            value={pdvCustomerPhone}
+                            onChange={(e) => {
+                              setPdvCustomerPhone(aplicarMascaraTelefoneInput(e.target.value));
+                              setPdvCustomerId(null);
+                            }}
+                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground focus:outline-none"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Nome</label>
+                          <input
+                            id="pdv-customer-name-input"
+                            type="text"
+                            autoComplete="name"
+                            placeholder="Ex: Maria"
+                            value={pdvCustomerName}
+                            onChange={(e) => setPdvCustomerName(e.target.value)}
+                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground focus:outline-none"
+                          />
+                        </div>
+                        {pdvCustomerLookup !== 'idle' && (
+                          <p className={clsx('col-span-2 text-[8px] font-bold', pdvCustomerLookup === 'found' ? 'text-emerald-400' : 'text-koma-muted')}>
+                            {pdvCustomerLookup === 'loading' && 'Buscando cliente...'}
+                            {pdvCustomerLookup === 'found' && 'Cliente encontrado.'}
+                            {pdvCustomerLookup === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
+                          </p>
+                        )}
+                      </div>
+                    </details>
+                  )}
+
+                  {pdvOrderType === 'delivery' && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Telefone</label>
+                          <input
+                            id="pdv-customer-phone-input"
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="tel"
+                            placeholder="(00) 00000-0000"
+                            required={pdvCart.length > 0}
+                            value={pdvCustomerPhone}
+                            onChange={(e) => {
+                              setPdvCustomerPhone(aplicarMascaraTelefoneInput(e.target.value));
+                              setPdvCustomerId(null);
+                            }}
+                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground focus:outline-none"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Nome</label>
+                          <input
+                            id="pdv-customer-name-input"
+                            type="text"
+                            autoComplete="name"
+                            placeholder="Ex: Maria"
+                            required={pdvCart.length > 0}
+                            value={pdvCustomerName}
+                            onChange={(e) => setPdvCustomerName(e.target.value)}
+                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      {pdvCustomerLookup !== 'idle' && (
+                        <p className={clsx('text-[8px] font-bold', pdvCustomerLookup === 'found' ? 'text-emerald-400' : 'text-koma-muted')}>
+                          {pdvCustomerLookup === 'loading' && 'Buscando cliente...'}
+                          {pdvCustomerLookup === 'found' && 'Cliente encontrado — confira a entrega.'}
+                          {pdvCustomerLookup === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
+                        </p>
+                      )}
+                      <details className="rounded-xl border border-koma-border bg-koma-card/40">
+                        <summary className="cursor-pointer list-none px-3 py-2.5">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <strong className="block text-[9px] text-koma-foreground">Entrega</strong>
+                              <span className="block truncate text-[8px] text-koma-muted">
+                                {deliveryAddressSummary || pdvDeliveryAddressLegacyHint || 'Endereço ainda não informado'}
+                              </span>
+                            </div>
+                            <span className="shrink-0 text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
+                              Editar entrega
+                            </span>
+                          </div>
+                        </summary>
+                        <div className="border-t border-koma-border p-2">
+                          <DeliveryAddressFields
+                            value={pdvDeliveryAddressDraft}
+                            onChange={handlePdvDeliveryAddressChange}
+                            legacyHint={pdvDeliveryAddressLegacyHint || null}
+                            compact
+                            idPrefix="pdv-delivery-address"
+                          />
+                        </div>
+                      </details>
+                    </div>
+                  )}
+
+                  {(pdvOrderType === 'pickup' || pdvOrderType === 'delivery') && (
+                    <details className="rounded-xl border border-koma-border bg-koma-card/40">
+                      <summary className="cursor-pointer list-none px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <strong className="block text-[9px] text-koma-foreground">Pagamento <span className="font-normal text-koma-muted">(opcional agora)</span></strong>
+                            <span className="text-[8px] text-koma-muted">Pode ser informado no fechamento.</span>
+                          </div>
+                          <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
+                            {pdvPaymentMethod ? PAYMENT_LABELS[pdvPaymentMethod] : 'Adicionar'}
+                          </span>
+                        </div>
+                      </summary>
+                      <div className="grid grid-cols-2 gap-1.5 border-t border-koma-border p-3">
+                        {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((method) => (
+                          <button
+                            key={method}
+                            type="button"
+                            onClick={() => setPdvPaymentMethod(pdvPaymentMethod === method ? null : method)}
+                            aria-pressed={pdvPaymentMethod === method}
+                            className={clsx(
+                              'min-h-9 rounded-lg border px-2 py-1.5 text-[9px] font-bold transition-colors',
+                              pdvPaymentMethod === method
+                                ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                : 'border-koma-border bg-koma-input text-koma-muted hover:border-emerald-500/30 hover:text-koma-foreground',
+                            )}
+                          >
+                            {PAYMENT_LABELS[method]}
+                          </button>
+                        ))}
+                      </div>
+                    </details>
+                  )}
                 </div>
 
-                <button
-                  id="pdv-submit-btn"
-                  type="submit"
-                  disabled={
-                    pdvCart.length === 0
-                    || isLoading
-                    || (pdvOrderType !== 'dine_in' && !pdvPaymentMethod)
-                  }
-                  className={"w-full min-h-11 py-2 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] rounded-xl border border-transparent font-bold text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex flex-col items-center justify-center gap-0.5 disabled:cursor-not-allowed disabled:border-[#272c29] disabled:bg-koma-card disabled:text-zinc-600"}
-                >
-                  <div className={"flex items-center gap-1"}>
-                    <Check size={12} />
-                    <span>Lançar Pedido</span>
+                <div className="shrink-0 border-t border-koma-border bg-koma-panel p-3 shadow-[0_-10px_24px_rgba(0,0,0,0.12)]">
+                  <div className="mb-2 flex items-center justify-between font-mono text-[11px] font-bold text-koma-foreground">
+                    <span>Total pedido</span>
+                    <span className="text-sm text-emerald-700 dark:text-emerald-400">{formatCurrency(cartTotal)}</span>
                   </div>
-                  <span
-                    className={"text-[7.5px] text-emerald-600 dark:text-emerald-300/80 font-mono font-normal"}
+                  <button
+                    id="pdv-submit-btn"
+                    type="submit"
+                    disabled={pdvCart.length === 0 || isLoading}
+                    className="w-full min-h-11 py-2 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] rounded-xl border border-transparent font-bold text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex flex-col items-center justify-center gap-0.5 disabled:cursor-not-allowed disabled:border-[#272c29] disabled:bg-koma-card disabled:text-zinc-600"
                   >
-                    Pressione [F4] para finalizar
-                  </span>
-                </button>
+                    <div className="flex items-center gap-1">
+                      <Check size={12} />
+                      <span>Lançar Pedido</span>
+                    </div>
+                    <span className="text-[7.5px] text-emerald-600 dark:text-emerald-300/80 font-mono font-normal">
+                      Pressione [F4] para finalizar
+                    </span>
+                  </button>
+                </div>
               </form>
             </div>
 

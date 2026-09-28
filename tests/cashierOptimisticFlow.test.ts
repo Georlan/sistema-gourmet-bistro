@@ -162,7 +162,7 @@ test('PDV models fulfillment separately from optional table association', () => 
   assert.doesNotMatch(pdv, /Selecione a mesa de destino antes de lançar o pedido/);
   assert.match(pdv, /getElementById\('pdv-target-table'\)/);
 
-  assert.match(view, /pdvOrderType !== 'delivery'/);
+  assert.match(view, /pdvOrderType === 'dine_in'/);
   assert.match(view, /<option value="">Sem mesa<\/option>/);
   assert.match(view, /type\.id === 'delivery'\) setPdvTargetMesaId\(0\)/);
   assert.match(view, /id: 'dine_in', label: 'Consumo local'/);
@@ -199,14 +199,15 @@ test('order modal associates eligible unlinked orders to a table through the ded
 });
 
 
-test('PDV requires and persists payment method for pickup and delivery', () => {
+test('PDV keeps payment optional at launch and persists it when informed', () => {
   const pdv = source('src/components/caixa/pdv/useCashierPdv.ts');
   const view = source('src/components/caixa/pdv/CashierPdvView.tsx');
 
   assert.match(pdv, /pdvPaymentMethod/);
-  assert.match(pdv, /Escolha a forma de pagamento da entrega ou retirada/);
+  assert.doesNotMatch(pdv, /Escolha a forma de pagamento da entrega ou retirada/);
   assert.match(pdv, /delivery_forma_pagamento:/);
-  assert.match(view, /Forma de pagamento:/);
+  assert.match(view, /Pagamento/);
+  assert.match(view, /opcional agora/);
   assert.match(view, /PAYMENT_LABELS/);
-  assert.match(view, /pdvOrderType !== 'dine_in' && !pdvPaymentMethod/);
+  assert.match(view, /disabled=\{pdvCart\.length === 0 \|\| isLoading\}/);
 });
