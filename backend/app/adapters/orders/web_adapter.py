@@ -26,6 +26,7 @@ from ...application.orders.commands import (
 )
 from ...application.orders.idempotency import compute_fingerprint_for_public_payload
 from ...application.orders.service import OrderApplicationService
+from ...config import settings
 from ...database import current_restaurante_id
 from ...domain.orders.errors import (
     EmptyOrderItemsError,
@@ -340,6 +341,12 @@ class CardapioWebAdapter:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Restaurante temporariamente suspenso para novos pedidos.",
+                )
+
+            if settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS and not customer_token:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Entre ou crie sua conta e confirme o e-mail antes de fazer o pedido.",
                 )
 
             if is_scheduled:
