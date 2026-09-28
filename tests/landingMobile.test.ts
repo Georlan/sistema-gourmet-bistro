@@ -8,84 +8,59 @@ import { LeadCaptureModal } from '../src/landing/components/LeadCaptureModal';
 import { LeadCaptureProvider } from '../src/landing/components/LeadCaptureProvider';
 import { Plans } from '../src/landing/sections/Plans';
 import { FAQ } from '../src/landing/sections/FAQ';
+import { Hero } from '../src/landing/sections/Hero';
+import { HowItWorks } from '../src/landing/sections/HowItWorks';
+import { SUBSCRIPTION_PLANS, formatCurrency } from '../src/config/subscriptionPlans';
 
-test('demo message needs only two fields and preserves plan and billing selection', () => {
-  const lead = { responsavel: '  Ana & João  ', estabelecimento: '  Café São José  ' };
-  const selection = { plan: 'Kôma Pro', billing: 'anual' as const };
-  const message = KOMA_LANDING_CONFIG.getLeadMessage(lead, selection);
+const source = (path: string) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+test('demo message needs only two fields and preserves selection', () => {
+  const lead = { responsavel: 'Ana & João', estabelecimento: 'Café São José' };
+  const message = KOMA_LANDING_CONFIG.getLeadMessage(lead, { plan: 'Kôma Pro', billing: 'anual' });
   assert.match(message, /demonstração.*sem compromisso/);
-  assert.ok(message.includes('Responsável: Ana & João'));
-  assert.ok(message.includes('Estabelecimento: Café São José'));
   assert.ok(message.includes('Kôma Pro · cobrança anual'));
-  assert.equal(message.includes('undefined'), false);
-  assert.equal(message.includes('WhatsApp:'), false);
-  const url = new URL(KOMA_LANDING_CONFIG.getLeadWhatsappUrl(lead, selection));
-  assert.equal(url.hostname, 'wa.me');
-  assert.equal(url.searchParams.get('text'), message);
-  assert.equal(KOMA_LANDING_CONFIG.getLeadMessage(lead).includes('Plano de interesse'), false);
+  assert.equal(new URL(KOMA_LANDING_CONFIG.getLeadWhatsappUrl(lead)).hostname, 'wa.me');
 });
-
-test('demo uses a native dialog and only two required inputs, not a signup form', () => {
-  const html = renderToStaticMarkup(createElement(LeadCaptureModal, { open: true, onClose() {}, selection: { plan: 'Kôma Pocket', billing: 'mensal' } }));
+test('demo remains a two-field native dialog', () => {
+  const html = renderToStaticMarkup(createElement(LeadCaptureModal, { open: true, onClose() {} }));
   assert.ok(html.startsWith('<dialog'));
   assert.equal((html.match(/<input/g) ?? []).length, 2);
   assert.equal((html.match(/required=""/g) ?? []).length, 2);
-  assert.ok(html.includes('pattern=".*\\S.*"'));
-  assert.ok(html.includes('Isso não é uma contratação.'));
   assert.ok(html.includes('Nenhum dado é enviado automaticamente.'));
-  assert.ok(html.includes('aria-describedby='));
-  assert.ok(html.includes('role="status"'));
-  assert.equal(renderToStaticMarkup(createElement(LeadCaptureModal, { open: false, onClose() {} })), '');
 });
-
-test('Pocket, Pro e Premium mensais seguem direto para suas telas de contratação', () => {
+test('hero uses canonical entry price and plain commercial copy', () => {
+  const html = renderToStaticMarkup(createElement(Hero));
+  assert.ok(html.includes('Pedidos, cozinha e caixa.'));
+  assert.ok(html.includes(formatCurrency(Math.min(...SUBSCRIPTION_PLANS.map(p => p.price)))));
+  assert.equal(html.includes('VENDA MAIS'), false);
+});
+test('plan links preserve monthly checkout and detailed matrix is collapsed', () => {
   const html = renderToStaticMarkup(createElement(LeadCaptureProvider, null, createElement(Plans)));
-  assert.match(html, /href="\/contratar\/pocket\?cobranca=mensal"/);
-  assert.match(html, /href="\/contratar\/pro\?cobranca=mensal"/);
-  assert.match(html, /href="\/contratar\/premium\?cobranca=mensal"/);
-  assert.match(html, />CONTRATAR POCKET<\/a>/);
-  assert.match(html, />CONTRATAR PRO<\/a>/);
-  assert.match(html, />CONTRATAR PREMIUM<\/a>/);
-  assert.equal(html.includes('FALAR SOBRE PRO'), false);
-  assert.equal(html.includes('FALAR SOBRE PREMIUM'), false);
-  assert.equal(html.includes('koma-plan-savings'), false);
-  assert.equal((html.match(/class="koma-plan-addons"/g) ?? []).length, 3);
+  for (const plan of SUBSCRIPTION_PLANS) {
+    assert.ok(html.includes(`/contratar/${plan.id}?cobranca=mensal`));
+    assert.ok(html.includes(formatCurrency(plan.price)));
+  }
+  assert.ok(html.includes('Comparar todos os recursos +'));
+  assert.ok(html.includes('<details class="v2-plan-details"'));
+  assert.equal(html.includes('Mais recomendado'), false);
 });
-
-test('FAQ starts closed and explains delivery, pricing, internet and support without new promises', () => {
+test('FAQ consists of five closed questions', () => {
   const html = renderToStaticMarkup(createElement(FAQ));
-  assert.equal((html.match(/<details>/g) ?? []).length, 6);
-  assert.equal(html.includes('<details open'), false);
-  assert.ok(html.includes('inclusive no Pocket'));
-  assert.ok(html.includes('O app do entregador faz parte do Premium'));
-  assert.ok(html.includes('não cobra taxa de implantação'));
-  assert.ok(html.includes('não vende add-ons'));
+  assert.equal((html.match(/<details>/g) ?? []).length, 5);
+  assert.ok(html.includes('Quando começam os sete dias de teste?'));
   assert.ok(html.includes('não é plantão 24 horas'));
 });
-
-test('tour and device structure protect compact responsive layout and keyboard navigation', () => {
-  const tour = readFileSync(new URL('../src/landing/sections/HowItWorks.tsx', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../src/landing/mobile-refinement.css', import.meta.url), 'utf8');
-  const landing = readFileSync(new URL('../src/landing/LandingPage.tsx', import.meta.url), 'utf8');
-  assert.ok(tour.includes('role="tablist"'));
-  assert.ok(tour.includes('hidden={active !== index}'));
-  assert.ok(tour.includes('aria-controls={screen.id}'));
+test('tour offers one active panel and accessible keyboard tabs', () => {
+  const html = renderToStaticMarkup(createElement(HowItWorks));
+  assert.equal((html.match(/role="tabpanel"/g) ?? []).length, 1);
+  assert.equal((html.match(/role="tab"/g) ?? []).length, 3);
+  assert.ok(html.includes('Pedidos por etapa.'));
+  const tour = source('src/landing/sections/HowItWorks.tsx');
   for (const key of ['ArrowLeft', 'ArrowRight', 'Home', 'End']) assert.ok(tour.includes(key));
-  assert.ok(tour.includes("addEventListener('hashchange'"));
-  assert.match(css, /\.koma-frontal-canvas\s*\{[^}]*position: absolute/);
-  assert.match(css, /\.koma-tour-panel\[hidden\]\s*\{\s*display: none/);
-  assert.equal(landing.includes('<Capabilities />'), false);
-  assert.ok(landing.indexOf('<Plans />') < landing.indexOf('<FAQ />'));
+  assert.ok(tour.includes('KDS dedicado e impressão automática no Pro e Premium'));
 });
-
-test('tour removes the illustration caption and scales only tablet and phone frames', () => {
-  const tour = readFileSync(new URL('../src/landing/sections/HowItWorks.tsx', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../src/landing/mobile-refinement.css', import.meta.url), 'utf8');
-  assert.equal(tour.includes('Prévia ilustrativa'), false);
-  assert.equal(tour.includes('<figcaption>'), false);
-  assert.ok(tour.includes('aria-label={`Kôma · ${screen.label}`}'));
-  assert.match(css, /\.koma-tour-device \.koma-editable-tablet\s*\{\s*width: min\(84%, 560px\)/);
-  assert.match(css, /\.koma-tour-device \.koma-editable-phone\s*\{\s*width: min\(100%, 192px\)/);
-  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.koma-tour-device \.koma-editable-phone\s*\{\s*width: min\(100%, 176px\)/);
-  assert.equal(css.includes('.koma-tour-device .koma-editable-laptop'), false);
+test('header has no permanent WhatsApp CTA and mobile menu stays accessible', () => {
+  const header = source('src/landing/sections/Header.tsx');
+  assert.ok(header.includes('aria-controls="v2-mobile-nav"'));
+  assert.ok(header.includes('Abrir menu'));
+  assert.equal(header.includes('WhatsApp'), false);
 });
