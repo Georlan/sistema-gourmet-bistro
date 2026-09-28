@@ -69,13 +69,16 @@ test('logout from resolved portal clears only that portal and returns its tab to
 
 test('unified login lets backend identity choose restaurant and role choose portal without clearing the other portal', () => {
   const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
+  const authSession = source('../src/utils/authSession.ts');
 
   assert.match(entry, /username:\s*username\.trim\(\)\.toLowerCase\(\)/);
   assert.match(entry, /if \(restaurantId\) requestPayload\.restaurante_id = Number\(restaurantId\)/);
   assert.match(entry, /restaurant_selection_required/);
   assert.match(entry, /const restauranteId = Number\(data\?\.usuario\?\.restaurante_id\)/);
   assert.match(entry, /role === 'garcom'/);
+  assert.match(entry, /role === 'cozinha'\) return 'caixa'/);
   assert.match(entry, /MANAGEMENT_ROLES\.has\(role\)/);
+  assert.match(authSession, /role === 'cozinha'\) return 'caixa'/);
   assert.doesNotMatch(entry, /clearOperatorSession\(\);/);
   assert.match(entry, /saveOperatorSession\(data\.access_token, \{ \.\.\.data\.usuario, role \}\)/);
   assert.doesNotMatch(entry, /localStorage\.setItem\('koma_waiter_token'/);
