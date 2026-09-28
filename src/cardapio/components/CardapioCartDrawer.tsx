@@ -439,7 +439,7 @@ export default function CardapioCartDrawer({
       reportValidationError("Sua sacola está vazia.");
       return;
     }
-    if (accountRequired && (!user || !customerToken)) {
+    if (accountRequired && (!user || !customerToken || user.emailVerified !== true)) {
       reportValidationError(
         "Entre ou crie sua conta e confirme o e-mail antes de revisar o pedido.",
         "cart-identification",
