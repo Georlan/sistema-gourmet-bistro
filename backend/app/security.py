@@ -65,7 +65,8 @@ PERMISSION_ROLES = MappingProxyType({
     "impressao:administrar": frozenset({"admin", "gerente", "caixa"}),
     "comandas:forcar_fechamento": frozenset({"admin", "gerente", "caixa"}),
     "comandas:reabrir": frozenset({"admin", "gerente", "caixa"}),
-    "pedidos:alterar_status": frozenset({"admin", "gerente", "caixa", "cozinha"}),
+    "itens:alterar_status": frozenset({"admin", "gerente", "caixa", "cozinha"}),
+    "pedidos:alterar_status": frozenset({"admin", "gerente", "caixa"}),
 })
 
 
@@ -403,6 +404,19 @@ def ensure_permission(current_user: Optional[Usuario], permission: str) -> Usuar
             )
         )
     return current_user
+
+
+def ensure_item_status_permission(current_user: Optional[Usuario], target_status: str) -> Usuario:
+    """Autoriza status de item preservando o escopo mínimo do perfil Cozinha."""
+    authorized = ensure_permission(current_user, "itens:alterar_status")
+    user_role = (authorized.role or authorized.cargo or "garcom").lower().strip()
+    normalized_target = str(target_status or "").lower().strip()
+    if user_role == "cozinha" and normalized_target != "pronto":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="O perfil Cozinha pode marcar itens apenas como pronto.",
+        )
+    return authorized
 
 
 def require_permission(permission: str):
