@@ -29,7 +29,7 @@ interface EquipePessoasTabProps {
 }
 
 
-const INVITABLE_ROLES = ['garcom', 'caixa', 'gerente', 'motoboy'] as const;
+const INVITABLE_ROLES = ['garcom', 'caixa', 'cozinha', 'gerente', 'motoboy'] as const;
 
 function normalizeRole(user: SystemUser): string {
   const rawRole = String(user.role || user.cargo || 'garcom').trim().toLowerCase();
