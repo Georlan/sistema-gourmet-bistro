@@ -383,3 +383,103 @@ export const formatCashierOldestAge = (values: unknown[], now: number) => {
   const days = Math.floor(hours / 24);
   return `${days}d ${hours % 24}h`;
 };
+
+export interface DigitalOrderActionCapability {
+  action: 'accept' | 'mark_ready' | 'dispatch' | 'finalize' | 'none';
+  targetStatus?: 'producao' | 'pronto' | 'transito' | 'finalizado';
+  label: string;
+  isAllowed: boolean;
+  disabledReason?: string;
+}
+
+export function getDigitalOrderActionCapability(
+  order: {
+    id: string | number;
+    status?: string;
+    modalidade?: string;
+    pago?: boolean;
+    itens?: unknown;
+  },
+  options?: {
+    isPendingMutation?: boolean;
+    selectedCourierId?: string;
+    couriersLoaded?: boolean;
+  }
+): DigitalOrderActionCapability {
+  const isPending = Boolean(options?.isPendingMutation);
+  const status = String(order.status || '').trim().toLowerCase();
+  const modalidade = String(order.modalidade || '').trim().toLowerCase();
+  const isDelivery = modalidade === 'delivery';
+
+  if (status === 'pendente' || status === 'analise') {
+    return {
+      action: 'accept',
+      targetStatus: 'producao',
+      label: isPending ? 'Aceitando…' : 'Aceitar pedido',
+      isAllowed: !isPending,
+      disabledReason: isPending ? 'Aceitando pedido…' : undefined,
+    };
+  }
+
+  if (status === 'producao') {
+    let defaultLabel = 'Pronto para retirada';
+    if (isDelivery) defaultLabel = 'Pronto para sair';
+    else if (modalidade === 'dine_in') defaultLabel = 'Pronto para servir';
+
+    return {
+      action: 'mark_ready',
+      targetStatus: 'pronto',
+      label: isPending ? 'Avançando…' : defaultLabel,
+      isAllowed: !isPending,
+      disabledReason: isPending ? 'Avançando pedido…' : undefined,
+    };
+  }
+
+  if (status === 'pronto') {
+    if (isDelivery) {
+      const hasCourier = Boolean(options?.selectedCourierId);
+      const isLoaded = options?.couriersLoaded !== false;
+      const canDispatch = hasCourier && isLoaded && !isPending;
+      let disabledReason: string | undefined;
+      if (isPending) disabledReason = 'Despachando pedido…';
+      else if (!hasCourier) disabledReason = 'Selecione um entregador';
+      else if (!isLoaded) disabledReason = 'Carregando entregadores…';
+
+      return {
+        action: 'dispatch',
+        targetStatus: 'transito',
+        label: isPending ? 'Despachando…' : 'Saiu para entrega',
+        isAllowed: canDispatch,
+        disabledReason,
+      };
+    }
+
+    const finalizeLabel = order.pago ? 'Finalizar pedido' : 'Receber e finalizar';
+    return {
+      action: 'finalize',
+      targetStatus: 'finalizado',
+      label: isPending ? 'Finalizando…' : finalizeLabel,
+      isAllowed: !isPending,
+      disabledReason: isPending ? 'Finalizando pedido…' : undefined,
+    };
+  }
+
+  if (status === 'transito' || status === 'saiu_para_entrega') {
+    const finalizeLabel = order.pago ? 'Finalizar pedido' : 'Receber e finalizar';
+    return {
+      action: 'finalize',
+      targetStatus: 'finalizado',
+      label: isPending ? 'Finalizando…' : finalizeLabel,
+      isAllowed: !isPending,
+      disabledReason: isPending ? 'Finalizando pedido…' : undefined,
+    };
+  }
+
+  return {
+    action: 'none',
+    label: 'Concluído',
+    isAllowed: false,
+    disabledReason: 'Pedido não possui ações disponíveis',
+  };
+}
+

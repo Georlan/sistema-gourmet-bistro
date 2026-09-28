@@ -7,6 +7,7 @@ import {
   getCashierHumanOrderNumber,
   getCashierOrderSlaData,
   getCashierTableOrderPresentation,
+  getDigitalOrderActionCapability,
   isCashierTableOrder,
   projectCashierDeliveryState,
   projectCashierTableSlices,
@@ -241,3 +242,74 @@ test('relógio global não é consultado por projections; fallback capturado con
     Date.now = originalNow;
   }
 });
+
+test('getDigitalOrderActionCapability define capacidade canônica por status e modalidade', () => {
+  // 1. Pendente/análise só permite aceitar (produção), nunca finalizar ou avançar diretamente para pronto
+  const pendingPickup = getDigitalOrderActionCapability({ id: 'p-1', status: 'pendente', modalidade: 'retirada' });
+  assert.equal(pendingPickup.action, 'accept');
+  assert.equal(pendingPickup.targetStatus, 'producao');
+  assert.equal(pendingPickup.label, 'Aceitar pedido');
+  assert.equal(pendingPickup.isAllowed, true);
+
+  // 2. Em produção: retirada tem ação mark_ready ("Pronto para retirada")
+  const producingPickup = getDigitalOrderActionCapability({ id: 'p-2', status: 'producao', modalidade: 'retirada' });
+  assert.equal(producingPickup.action, 'mark_ready');
+  assert.equal(producingPickup.targetStatus, 'pronto');
+  assert.equal(producingPickup.label, 'Pronto para retirada');
+  assert.equal(producingPickup.isAllowed, true);
+
+  // 3. Em produção: delivery tem ação mark_ready ("Pronto para sair")
+  const producingDelivery = getDigitalOrderActionCapability({ id: 'p-3', status: 'producao', modalidade: 'delivery' });
+  assert.equal(producingDelivery.action, 'mark_ready');
+  assert.equal(producingDelivery.targetStatus, 'pronto');
+  assert.equal(producingDelivery.label, 'Pronto para sair');
+  assert.equal(producingDelivery.isAllowed, true);
+
+  // 4. Pronto: delivery exige motoboy para despachar
+  const readyDeliveryNoCourier = getDigitalOrderActionCapability(
+    { id: 'p-4', status: 'pronto', modalidade: 'delivery' },
+    { selectedCourierId: '' },
+  );
+  assert.equal(readyDeliveryNoCourier.action, 'dispatch');
+  assert.equal(readyDeliveryNoCourier.targetStatus, 'transito');
+  assert.equal(readyDeliveryNoCourier.isAllowed, false);
+  assert.equal(readyDeliveryNoCourier.disabledReason, 'Selecione um entregador');
+
+  const readyDeliveryWithCourier = getDigitalOrderActionCapability(
+    { id: 'p-4', status: 'pronto', modalidade: 'delivery' },
+    { selectedCourierId: 'mb-1', couriersLoaded: true },
+  );
+  assert.equal(readyDeliveryWithCourier.action, 'dispatch');
+  assert.equal(readyDeliveryWithCourier.targetStatus, 'transito');
+  assert.equal(readyDeliveryWithCourier.isAllowed, true);
+  assert.equal(readyDeliveryWithCourier.label, 'Saiu para entrega');
+
+  // 5. Pronto: retirada tem ação finalize ("Finalizar pedido" se pago, "Receber e finalizar" se a receber)
+  const readyPickupPaid = getDigitalOrderActionCapability({ id: 'p-5', status: 'pronto', modalidade: 'retirada', pago: true });
+  assert.equal(readyPickupPaid.action, 'finalize');
+  assert.equal(readyPickupPaid.label, 'Finalizar pedido');
+  assert.equal(readyPickupPaid.isAllowed, true);
+
+  const readyPickupUnpaid = getDigitalOrderActionCapability({ id: 'p-6', status: 'pronto', modalidade: 'retirada', pago: false });
+  assert.equal(readyPickupUnpaid.action, 'finalize');
+  assert.equal(readyPickupUnpaid.label, 'Receber e finalizar');
+  assert.equal(readyPickupUnpaid.isAllowed, true);
+
+  // 6. Mutação pendente bloqueia ação e exibe label progressivo
+  const mutatingProducing = getDigitalOrderActionCapability(
+    { id: 'p-7', status: 'producao', modalidade: 'retirada' },
+    { isPendingMutation: true },
+  );
+  assert.equal(mutatingProducing.action, 'mark_ready');
+  assert.equal(mutatingProducing.isAllowed, false);
+  assert.equal(mutatingProducing.label, 'Avançando…');
+
+  const mutatingReady = getDigitalOrderActionCapability(
+    { id: 'p-8', status: 'pronto', modalidade: 'retirada', pago: true },
+    { isPendingMutation: true },
+  );
+  assert.equal(mutatingReady.action, 'finalize');
+  assert.equal(mutatingReady.isAllowed, false);
+  assert.equal(mutatingReady.label, 'Finalizando…');
+});
+

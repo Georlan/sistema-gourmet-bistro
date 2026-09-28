@@ -191,12 +191,18 @@ class OrderLifecycleCoordinator:
             db.commit()
             db.refresh(comanda)
 
+        has_first_accept = transition.first_accept or any(
+            order_current == OrderStatus.PENDING
+            and target in {OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.DISPATCHED}
+            for _, order_current in pending_transitions
+        )
+
         return OrderLifecycleResult(
             comanda=comanda,
             current_status=current,
             target_status=target,
             changed=True,
-            first_accept=transition.first_accept,
+            first_accept=has_first_accept,
         )
 
 
@@ -228,8 +234,9 @@ class OrderLifecycleCoordinator:
 
         Os serviços de aplicação emitem eventos de domínio quando chamados; por
         isso não devemos chamá-los novamente para um lançamento que já está no
-        alvo. Ao mesmo tempo, qualquer lançamento atrasado que não possa alcançar
-        o alvo faz a transação falhar antes de qualquer escrita parcial.
+        alvo. Lançamentos atrasados em relação a um agregado já em produção são
+        reconciliados respeitando a sequência canônica da máquina de estados (ex:
+        pendente -> producao -> pronto), garantindo consumo de estoque e eventos.
         """
 
         pending: list[tuple[str, OrderStatus]] = []
@@ -245,6 +252,70 @@ class OrderLifecycleCoordinator:
                 # até em ``pendente``. A confirmação do agregado é a evidência
                 # autoritativa de que houve despacho.
                 effective_current = OrderStatus.DISPATCHED
+
+            if effective_current == target_status:
+                continue
+
+            # Reconciliação canônica de lançamentos atrasados em comandas já aceitas
+            if (
+                effective_current == OrderStatus.PENDING
+                and aggregate_status == OrderStatus.PREPARING
+                and target_status == OrderStatus.READY
+            ):
+                OrderStateMachine.validate_transition(
+                    current_status=OrderStatus.PENDING,
+                    target_status=OrderStatus.PREPARING,
+                    fulfillment=fulfillment,
+                )
+                OrderStateMachine.validate_transition(
+                    current_status=OrderStatus.PREPARING,
+                    target_status=OrderStatus.READY,
+                    fulfillment=fulfillment,
+                )
+                pending.append((order_id, effective_current))
+                continue
+
+            if (
+                effective_current == OrderStatus.PENDING
+                and aggregate_status in {OrderStatus.PREPARING, OrderStatus.READY}
+                and target_status == OrderStatus.DISPATCHED
+            ):
+                OrderStateMachine.validate_transition(
+                    current_status=OrderStatus.PENDING,
+                    target_status=OrderStatus.PREPARING,
+                    fulfillment=fulfillment,
+                )
+                OrderStateMachine.validate_transition(
+                    current_status=OrderStatus.PREPARING,
+                    target_status=OrderStatus.READY,
+                    fulfillment=fulfillment,
+                )
+                OrderStateMachine.validate_transition(
+                    current_status=OrderStatus.READY,
+                    target_status=OrderStatus.DISPATCHED,
+                    fulfillment=fulfillment,
+                )
+                pending.append((order_id, effective_current))
+                continue
+
+            if (
+                effective_current == OrderStatus.PREPARING
+                and aggregate_status == OrderStatus.READY
+                and target_status == OrderStatus.DISPATCHED
+            ):
+                OrderStateMachine.validate_transition(
+                    current_status=OrderStatus.PREPARING,
+                    target_status=OrderStatus.READY,
+                    fulfillment=fulfillment,
+                )
+                OrderStateMachine.validate_transition(
+                    current_status=OrderStatus.READY,
+                    target_status=OrderStatus.DISPATCHED,
+                    fulfillment=fulfillment,
+                )
+                pending.append((order_id, effective_current))
+                continue
+
             transition = OrderStateMachine.validate_transition(
                 current_status=effective_current,
                 target_status=target_status,
@@ -252,6 +323,7 @@ class OrderLifecycleCoordinator:
             )
             if transition.changed:
                 pending.append((order_id, effective_current))
+
         return pending
 
     @staticmethod
@@ -281,6 +353,12 @@ class OrderLifecycleCoordinator:
             return
 
         if target_status == OrderStatus.READY:
+            if current_status == OrderStatus.PENDING:
+                OrderApplicationService.accept_order(
+                    db,
+                    AcceptOrderCommand(**common),
+                    commit=False,
+                )
             OrderApplicationService.mark_order_ready(
                 db,
                 MarkOrderReadyCommand(**common),
@@ -289,6 +367,23 @@ class OrderLifecycleCoordinator:
             return
 
         if target_status == OrderStatus.DISPATCHED:
+            if current_status == OrderStatus.PENDING:
+                OrderApplicationService.accept_order(
+                    db,
+                    AcceptOrderCommand(**common),
+                    commit=False,
+                )
+                OrderApplicationService.mark_order_ready(
+                    db,
+                    MarkOrderReadyCommand(**common),
+                    commit=False,
+                )
+            elif current_status == OrderStatus.PREPARING:
+                OrderApplicationService.mark_order_ready(
+                    db,
+                    MarkOrderReadyCommand(**common),
+                    commit=False,
+                )
             OrderApplicationService.dispatch_order(
                 db,
                 DispatchOrderCommand(

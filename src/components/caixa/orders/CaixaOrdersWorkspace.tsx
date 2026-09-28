@@ -8,6 +8,7 @@ import {
   getCashierDeliveryStatusLabel as deliveryStatusLabel,
   getCashierHumanOrderNumber as humanOrderNumber,
   getCashierOrderSlaData as getOrderSlaData,
+  getDigitalOrderActionCapability,
 } from '../../../domain/cashierOrderProjection';
 import { formatCompactCurrency, formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import type { CashierTableCard, DeliveryOrderView, OrdersStage, PendingCashPayment, PendingCashPaymentCard } from './cashierWorkspaceTypes';
@@ -627,7 +628,11 @@ export function CaixaOrdersWorkspace({
                   const isDeliveryOrder = order.modalidade === 'delivery';
                   const kitchenProgress = getDigitalKitchenProgress(order);
                   const badgeText = deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
-                  const buttonText = isDeliveryOrder ? 'Pronto para sair' : order.modalidade === 'dine_in' ? 'Pronto para servir' : 'Pronto para retirada';
+                  const isMutating = acceptance.pendingOrderIds.has(String(order.id));
+                  const capability = getDigitalOrderActionCapability(order, {
+                    isPendingMutation: isMutating,
+                  });
+                  const buttonText = capability.label;
                   const tableBlockLabel = getDigitalOrderTableBlockLabel(order);
                   const orderNumber = humanOrderNumber(order);
                   return (
@@ -735,8 +740,13 @@ export function CaixaOrdersWorkspace({
                       {renderCourierControl(order, orderNumber)}
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); actions.advanceDigitalOrder(order); }}
-                        className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"}
+                        disabled={!capability.isAllowed}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!capability.isAllowed) return;
+                          actions.advanceDigitalOrder(order);
+                        }}
+                        className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"}
                       >
                         <Check size={13} />
                         <span>{buttonText}</span>
@@ -898,6 +908,12 @@ export function CaixaOrdersWorkspace({
                   const isDeliveryOrder = order.modalidade === 'delivery';
                   const isReadyDelivery = isDeliveryOrder && order.status === 'pronto';
                   const selectedCourierId = courierSelection(order);
+                  const isMutating = acceptance.pendingOrderIds.has(String(order.id));
+                  const capability = getDigitalOrderActionCapability(order, {
+                    isPendingMutation: isMutating,
+                    selectedCourierId,
+                    couriersLoaded: couriers.loadState === 'loaded',
+                  });
                   const badgeText = order.pago
                     ? 'PAGO'
                     : deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
@@ -986,16 +1002,17 @@ export function CaixaOrdersWorkspace({
                       {renderCourierControl(order, orderNumber)}
                       <button
                         type="button"
-                        disabled={isReadyDelivery && (!selectedCourierId || couriers.loadState !== 'loaded')}
+                        disabled={!capability.isAllowed}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (isReadyDelivery) actions.dispatchDelivery(String(order.id), selectedCourierId);
-                          else actions.finalizeDigitalOrder(order);
+                          if (!capability.isAllowed) return;
+                          if (capability.action === 'dispatch') actions.dispatchDelivery(String(order.id), selectedCourierId);
+                          else if (capability.action === 'finalize') actions.finalizeDigitalOrder(order);
                         }}
-                        className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"}
+                        className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"}
                       >
                         <Check size={13} />
-                        <span>{isReadyDelivery ? 'Saiu para entrega' : order.pago ? 'Finalizar pedido' : 'Receber e finalizar'}</span>
+                        <span>{capability.label}</span>
                       </button>
                     </div>
                   );
