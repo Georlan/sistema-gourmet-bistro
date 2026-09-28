@@ -505,6 +505,19 @@ def request_registration_phone_verification(
                     "detail": "Código já solicitado. Aguarde antes de reenviar.",
                     "retry_after_seconds": int(settings.CUSTOMER_OTP_RESEND_SECONDS - elapsed) + 1,
                 }
+            window_start = otp.janela_iniciada_em
+            if window_start.tzinfo is None:
+                window_start = window_start.replace(tzinfo=datetime.timezone.utc)
+            if now - window_start >= datetime.timedelta(
+                seconds=max(60, settings.CUSTOMER_OTP_WINDOW_SECONDS)
+            ):
+                otp.janela_iniciada_em = now
+                otp.envios_na_janela = 0
+            if int(otp.envios_na_janela or 0) >= max(1, settings.CUSTOMER_OTP_MAX_SENDS):
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Muitas solicitações. Aguarde alguns minutos e tente novamente.",
+                )
 
         codigo = generate_otp()
         codigo_hash = hash_otp(restaurante_id, challenge.telefone, codigo)
@@ -531,11 +544,14 @@ def request_registration_phone_verification(
         db.flush([otp])
         from ..models import Restaurante
         restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
-        sent = enviar_codigo_otp_whatsapp(
-            challenge.telefone,
-            codigo,
-            restaurante.nome if restaurante else "KÔMA",
-        )
+        try:
+            sent = enviar_codigo_otp_whatsapp(
+                challenge.telefone,
+                codigo,
+                restaurante.nome if restaurante else "KÔMA",
+            )
+        except TypeError:
+            sent = enviar_codigo_otp_whatsapp(challenge.telefone, codigo)
         if not sent:
             db.rollback()
             raise HTTPException(
