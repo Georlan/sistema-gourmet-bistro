@@ -24,6 +24,13 @@ async function showCart(page: Page) {
   await expect(page.locator('#pdv-submit-btn')).toBeVisible();
 }
 
+async function openPickupCustomer(page: Page) {
+  const section = page.getByTestId('pdv-pickup-customer');
+  const input = page.locator('#pdv-customer-name-input');
+  if (!await input.isVisible()) await section.locator('summary').click();
+  await expect(input).toBeVisible();
+}
+
 test('abertura não baixa módulos administrativos e atraso de módulo não bloqueia Pedidos', async ({ page }, testInfo) => {
   const scripts: string[] = [];
   page.on('request', request => { if (request.resourceType() === 'script') scripts.push(new URL(request.url()).pathname); });
@@ -59,6 +66,7 @@ test('rascunho administrativo e carrinho sobrevivem à navegação entre módulo
   await cashierSubnavButton(page, 'Novo pedido').click();
   await page.getByTitle('Adicionar Risoto da casa', { exact: true }).click();
   await showCart(page);
+  await openPickupCustomer(page);
   await page.locator('#pdv-customer-name-input').fill('Cliente do rascunho');
   await navigate(page, 'Cardápio');
   await page.getByRole('button', { name: 'Novo produto', exact: true }).click();
@@ -74,8 +82,9 @@ test('rascunho administrativo e carrinho sobrevivem à navegação entre módulo
   await navigate(page, 'Vendas');
   await cashierSubnavButton(page, 'Novo pedido').click();
   await showCart(page);
+  await openPickupCustomer(page);
   await expect(page.locator('#pdv-customer-name-input')).toHaveValue('Cliente do rascunho');
-  await expect(page.locator('#pdv-submit-btn').locator('..').getByText('R$ 42,00', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('pdv-order-summary').getByText('R$ 42,00', { exact: true })).toBeVisible();
 });
 
 test('falha ao carregar relatórios fica isolada e preserva o carrinho', async ({ page }) => {
@@ -89,7 +98,7 @@ test('falha ao carregar relatórios fica isolada e preserva o carrinho', async (
   await expect(page.locator('.orders-board')).toBeVisible();
   await cashierSubnavButton(page, 'Novo pedido').click();
   await showCart(page);
-  await expect(page.locator('#pdv-submit-btn').locator('..').getByText('R$ 42,00', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('pdv-order-summary').getByText('R$ 42,00', { exact: true })).toBeVisible();
   await navigate(page, 'Relatórios');
   page.once('dialog', dialog => dialog.dismiss());
   await page.getByRole('button', { name: 'Recarregar página' }).click();
@@ -97,7 +106,7 @@ test('falha ao carregar relatórios fica isolada e preserva o carrinho', async (
   await navigate(page, 'Vendas');
   await cashierSubnavButton(page, 'Novo pedido').click();
   await showCart(page);
-  await expect(page.locator('#pdv-submit-btn').locator('..').getByText('R$ 42,00', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('pdv-order-summary').getByText('R$ 42,00', { exact: true })).toBeVisible();
   await navigate(page, 'Relatórios');
   // Reload is an explicit user decision after acknowledging the unsaved draft.
   page.once('dialog', dialog => dialog.accept());
@@ -105,6 +114,31 @@ test('falha ao carregar relatórios fica isolada e preserva o carrinho', async (
   await expect(page.locator('.orders-board')).toBeVisible();
   await navigate(page, 'Relatórios');
   await expect(page.getByText('Pagamentos aprovados menos estornos', { exact: true })).toBeVisible();
+});
+
+test('Novo pedido adapta dados operacionais sem tirar prioridade do carrinho', async ({ page }) => {
+  await open(page);
+  await cashierSubnavButton(page, 'Novo pedido').click();
+  await page.getByTitle('Adicionar Risoto da casa', { exact: true }).click();
+  await showCart(page);
+
+  await expect(page.getByTestId('pdv-cart-items')).toBeVisible();
+  await expect(page.getByTestId('pdv-pickup-customer')).toBeVisible();
+  await expect(page.getByText('Pagamento (opcional agora)', { exact: true })).toBeVisible();
+  await expect(page.locator('#pdv-submit-btn')).toBeEnabled();
+
+  await page.getByRole('button', { name: 'Delivery', exact: true }).click();
+  await expect(page.getByTestId('pdv-delivery-summary')).toBeVisible();
+  await expect(page.locator('#pdv-delivery-address-logradouro')).toBeHidden();
+  await page.getByRole('button', { name: 'Editar entrega', exact: true }).click();
+  await expect(page.getByTestId('pdv-delivery-editor')).toBeVisible();
+  await expect(page.locator('#pdv-delivery-address-logradouro')).toBeVisible();
+  await page.getByRole('button', { name: 'Voltar ao pedido', exact: true }).click();
+
+  await page.getByRole('button', { name: 'Consumo local', exact: true }).click();
+  await expect(page.getByTestId('pdv-dine-in-table')).toBeVisible();
+  await expect(page.getByTestId('pdv-payment-section')).toHaveCount(0);
+  await expect(page.getByTestId('pdv-cart-items')).toBeVisible();
 });
 
 test('PDV preserva tentativa e carrinho após falha mesmo fora da tela', async ({ page }) => {
@@ -128,7 +162,7 @@ test('PDV preserva tentativa e carrinho após falha mesmo fora da tela', async (
   await cashierSubnavButton(page, 'Novo pedido').click();
   await showCart(page);
   await expect(page.locator('#pdv-target-table')).toHaveValue('10');
-  await expect(page.locator('#pdv-submit-btn').locator('..').getByText('R$ 42,00', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('pdv-order-summary').getByText('R$ 42,00', { exact: true })).toBeVisible();
   await page.locator('#pdv-submit-btn').click();
   await expect(page.getByText('Pedido confirmado e enviado à cozinha.', { exact: true })).toBeVisible();
   expect(sales).toHaveLength(2);
