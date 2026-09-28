@@ -882,10 +882,11 @@ def test_cancelar_consumo_libera_mesa_sem_contabilizar_valor():
     assert abertas.json() == []
 
 
-def test_cancelar_consumo_anula_pagamento_manual_e_libera_mesa():
+def test_cancelar_consumo_preserva_pagamento_manual_confirmado_e_libera_mesa():
     mesa_id = 1000 + uuid.uuid4().int % 1_000_000
     comanda_id, token = _criar_pedido_de_mesa_para_cancelamento(mesa_id)
-    pagamento_id = f"p-manual-cancel-{uuid.uuid4().hex[:8]}"
+    pagamento_id = f"p-manual-preserve-{uuid.uuid4().hex[:8]}"
+    pagamento_pendente_id = f"p-manual-pending-{uuid.uuid4().hex[:8]}"
 
     db = SessionLocal()
     try:
@@ -903,7 +904,17 @@ def test_cancelar_consumo_anula_pagamento_manual_e_libera_mesa():
             valor=10,
             metodo="pix",
             status="aprovado",
-            idempotency_key=f"manual-cancel-{uuid.uuid4().hex}",
+            idempotency_key=f"manual-preserve-{uuid.uuid4().hex}",
+        ))
+        db.add(Pagamento(
+            id=pagamento_pendente_id,
+            restaurante_id=100,
+            comanda_id=comanda_id,
+            turno_id=turno.id,
+            valor=2,
+            metodo="dinheiro",
+            status="pendente",
+            idempotency_key=f"manual-pending-{uuid.uuid4().hex}",
         ))
         db.commit()
     finally:
@@ -916,28 +927,32 @@ def test_cancelar_consumo_anula_pagamento_manual_e_libera_mesa():
     )
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["pagamentos_manuais_anulados"] == 1
-    assert payload["valor_pagamentos_anulados"] == 10.0
-    assert payload["valor_pago_legado_anulado"] == 10.0
+    assert payload["pagamentos_manuais_preservados"] == 1
+    assert payload["valor_pagamentos_preservados"] == 10.0
+    assert payload["valor_pago_preservado"] == 10.0
+    assert payload["pagamentos_pendentes_cancelados"] == 1
 
     db = SessionLocal()
     try:
         comanda = db.query(Comanda).filter(Comanda.id == comanda_id).one()
         pagamento = db.query(Pagamento).filter(Pagamento.id == pagamento_id).one()
+        pagamento_pendente = db.query(Pagamento).filter(
+            Pagamento.id == pagamento_pendente_id
+        ).one()
         assert comanda.fechada is True
-        assert float(comanda.valor_pago or 0) == 0
-        assert pagamento.status == "cancelado"
+        assert float(comanda.valor_pago or 0) == 10
+        assert pagamento.status == "aprovado"
+        assert pagamento_pendente.status == "cancelado"
         assert all(item.status == "cancelado" for item in comanda.itens)
-        assert all(item.pago is False for item in comanda.itens)
         audit = db.query(ActivityLog).filter(
             ActivityLog.restaurante_id == 100,
             ActivityLog.action == "CANCEL_TABLE_CONSUMPTION",
             ActivityLog.details.contains(f"Mesa {mesa_id}"),
         ).one()
-        assert "1 pagamento(s) manual(is) anulado(s)" in audit.details
+        assert "1 pagamento(s) manual(is) preservado(s)" in audit.details
+        assert "1 pagamento(s) pendente(s) cancelado(s)" in audit.details
     finally:
         db.close()
-
 
 def test_cancelar_consumo_bloqueia_pagamento_confirmado_por_integracao():
     mesa_id = 1000 + uuid.uuid4().int % 1_000_000
