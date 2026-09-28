@@ -618,10 +618,6 @@ def test_admin_team_listing_is_scoped_to_authenticated_tenant():
     assert "u-outro-tenant" not in returned_ids
 
 
-@pytest.mark.parametrize(
-    "forbidden_cargo",
-    ["admin", "superadmin", "atendente"],
-)
 def test_team_schemas_accept_kitchen_role():
     created = UsuarioCreate(
         nome="Cozinha Teste",
@@ -634,6 +630,10 @@ def test_team_schemas_accept_kitchen_role():
     assert updated.cargo == "cozinha"
 
 
+@pytest.mark.parametrize(
+    "forbidden_cargo",
+    ["admin", "superadmin", "atendente"],
+)
 def test_team_invite_rejects_privileged_or_unsupported_roles(forbidden_cargo):
     client = TestClient(app)
     headers = get_auth_headers(client, "admin", "123")
