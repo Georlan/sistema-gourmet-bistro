@@ -30,6 +30,7 @@ export interface CaixaOrdersWorkspaceProps {
   readonly search: { readonly query: string; readonly onChange: (query: string) => void };
   readonly acceptance: {
     readonly orders: readonly DeliveryOrderView[];
+    readonly pendingOrderIds: ReadonlySet<string>;
     readonly automatic: boolean;
     readonly drawerOpen: boolean;
     readonly onAutomaticChange: (automatic: boolean) => void;
@@ -163,7 +164,7 @@ export function CaixaOrdersWorkspace({
   const { tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
     tableClosing: filteredCol2Table, digitalFinalization: filteredDeliveryFinalization } = columns;
   const { query: searchQuery, onChange: setSearchQuery } = search;
-  const { orders: deliveryOrders, automatic: autoAccept, drawerOpen: isDrawerOpen,
+  const { orders: deliveryOrders, pendingOrderIds, automatic: autoAccept, drawerOpen: isDrawerOpen,
     onAutomaticChange: setAutoAccept, onDrawerChange: setIsDrawerOpen } = acceptance;
   const { stage: mobileOrdersStage, onStageChange: setMobileOrdersStage,
     expandedCardIds, onToggleCard: toggleCardExpansion } = navigation;
@@ -437,6 +438,7 @@ export function CaixaOrdersWorkspace({
                       <button
                         type="button"
                         onClick={() => actions.acceptDigitalOrder(order)}
+                        disabled={pendingOrderIds.has(String(order.id))}
                         className="orders-pending-card__accept"
                       >
                         ✓ Aceitar
@@ -444,6 +446,7 @@ export function CaixaOrdersWorkspace({
                       <button
                         type="button"
                         onClick={() => actions.rejectDigitalOrder(order)}
+                        disabled={pendingOrderIds.has(String(order.id))}
                         className="orders-pending-card__reject"
                       >
                         Recusar

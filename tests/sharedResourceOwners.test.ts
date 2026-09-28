@@ -64,11 +64,11 @@ test('cashier fallback cannot poll the order snapshot owned by App', () => {
   assert.match(source('src/App.tsx'), /fetchOrdersFromAPI\(\);[\s\S]*?8000/);
 });
 
-test('cashier hydrates digital orders from App snapshot and keeps one initial dedicated reconciliation', () => {
+test('cashier reads digital orders from dedicated server projection', () => {
   const owner = source('src/components/caixa/orders/useCashierOrders.ts');
   const realtime = source('src/components/caixa/realtime/useCashierRealtime.ts');
 
-  assert.match(owner, /projectDeliveryOrdersFromSharedSnapshot\(orders\)/);
+  assert.doesNotMatch(owner, /projectDeliveryOrdersFromSharedSnapshot\(orders\)/);
   assert.doesNotMatch(owner, /useEffect\(\(\) => \{\s*fetchDeliveryOrders\(\);\s*fetchMotoboys\(\);/);
   assert.match(realtime, /useEffect\(\(\) => \{\s*fetchTurno\(\);\s*fetchDeliveryOrders\(\);\s*fetchMotoboys\(\);/);
 });
