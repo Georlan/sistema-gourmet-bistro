@@ -114,8 +114,8 @@ test('PDV reconciles or rolls back the temporary order instead of leaving duplic
   assert.match(pdv, /koma_optimistic_order_remove/);
   assert.match(operational, /koma_optimistic_order_reconcile/);
   assert.match(operational, /String\(order\.id\) !== tempId/);
-  assert.match(cashierOrders, /projectDeliveryOrdersFromSharedSnapshot\(orders\)/);
-  assert.match(cashierOrders, /id\.startsWith\('temp-'\)/);
+  assert.match(cashierOrders, /const \[deliveryOrders, setDeliveryOrders\] = useState<DeliveryOrderView\[\]>\(\[\]\)/);
+  assert.doesNotMatch(cashierOrders, /projectDeliveryOrdersFromSharedSnapshot\(orders\)/);
 });
 
 test('PDV models fulfillment separately from optional table association', () => {

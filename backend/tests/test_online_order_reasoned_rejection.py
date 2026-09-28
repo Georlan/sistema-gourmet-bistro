@@ -1,10 +1,13 @@
 import datetime
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.database import Base, SessionLocal, current_restaurante_id, engine, tenant_session_scope
 from app.main import app
-from app.models import Comanda, Restaurante, Usuario
+from app.models import CaixaTurno, Comanda, Restaurante, Usuario
 from app.online_order_control_models import OnlineOrderCustomerBlock, OnlineOrderOperationalAudit
 from app.order_chat_models import (
     OrderConversation,
@@ -46,6 +49,7 @@ def _reset():
         db.query(Comanda).filter(
             Comanda.restaurante_id == RID
         ).delete(synchronize_session=False)
+        db.query(CaixaTurno).filter(CaixaTurno.restaurante_id == RID).delete(synchronize_session=False)
 
         restaurant = db.query(Restaurante).filter(Restaurante.id == RID).first()
         if restaurant is None:
@@ -65,6 +69,10 @@ def _reset():
                     status="ativo",
                 )
             )
+        db.flush()
+        db.add(CaixaTurno(
+            restaurante_id=RID, aberto_por_id=ADMIN_ID, saldo_inicial=0, status="aberto",
+        ))
         db.commit()
     finally:
         current_restaurante_id.reset(marker)
@@ -130,6 +138,132 @@ def test_reasoned_rejection_uses_canonical_lifecycle():
             )
             assert notice.event_key == "rejection_reason"
             assert notice.body == f"Motivo informado pelo restaurante: {reason}"
+    finally:
+        db.close()
+
+
+def test_acceptance_cannot_be_rejected_by_initial_rejection_endpoint():
+    _reset()
+    _order("reject-after-accept-1")
+    pending_before = client.get("/comandas/delivery/pendentes", headers=_headers())
+    assert pending_before.status_code == 200, pending_before.text
+    assert "reject-after-accept-1" in {row["id"] for row in pending_before.json()}
+    accepted = client.put(
+        "/comandas/reject-after-accept-1/delivery/status",
+        params={"status_novo": "producao"},
+        headers=_headers(),
+    )
+    assert accepted.status_code == 200, accepted.text
+    repeated_accept = client.put(
+        "/comandas/reject-after-accept-1/delivery/status",
+        params={"status_novo": "producao"}, headers=_headers(),
+    )
+    assert repeated_accept.status_code == 200, repeated_accept.text
+    active = client.get("/comandas/delivery/ativos", headers=_headers())
+    assert active.status_code == 200, active.text
+    assert next(row for row in active.json() if row["id"] == "reject-after-accept-1")["delivery_status"] == "producao"
+    pending_after = client.get("/comandas/delivery/pendentes", headers=_headers())
+    assert pending_after.status_code == 200, pending_after.text
+    assert "reject-after-accept-1" not in {row["id"] for row in pending_after.json()}
+
+    rejected = client.post(
+        "/api/online-orders/orders/reject-after-accept-1/reject",
+        headers=_headers(),
+        json={"reason": "Tentativa após aceite", "block_customer": True},
+    )
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["detail"]["current_status"] == "preparing"
+
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, RID):
+            order = db.query(Comanda).filter(Comanda.id == "reject-after-accept-1").one()
+            assert order.delivery_status == "producao"
+            assert db.query(OrderConversationEvent).filter(
+                OrderConversationEvent.pedido_id == order.id,
+                OrderConversationEvent.event_key == "rejection_reason",
+            ).count() == 0
+            assert db.query(OnlineOrderCustomerBlock).filter(
+                OnlineOrderCustomerBlock.restaurante_id == RID,
+            ).count() == 0
+    finally:
+        db.close()
+
+
+def test_replayed_rejection_does_not_repeat_notice_or_block():
+    _reset()
+    _order("reject-replay-1")
+    payload = {"reason": "Pedido indisponível", "block_customer": True}
+    first = client.post(
+        "/api/online-orders/orders/reject-replay-1/reject", headers=_headers(), json=payload,
+    )
+    assert first.status_code == 200, first.text
+    second = client.post(
+        "/api/online-orders/orders/reject-replay-1/reject", headers=_headers(), json=payload,
+    )
+    assert second.status_code == 409, second.text
+    assert second.json()["detail"]["current_status"] == "rejected"
+    pending_after = client.get("/comandas/delivery/pendentes", headers=_headers())
+    assert pending_after.status_code == 200, pending_after.text
+    assert "reject-replay-1" not in {row["id"] for row in pending_after.json()}
+    attempted_accept = client.put(
+        "/comandas/reject-replay-1/delivery/status",
+        params={"status_novo": "producao"}, headers=_headers(),
+    )
+    assert attempted_accept.status_code == 409, attempted_accept.text
+
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, RID):
+            assert db.query(OrderConversationEvent).filter(
+                OrderConversationEvent.pedido_id == "reject-replay-1",
+                OrderConversationEvent.event_key == "rejection_reason",
+            ).count() == 1
+            assert db.query(OnlineOrderCustomerBlock).filter(
+                OnlineOrderCustomerBlock.restaurante_id == RID,
+            ).count() == 1
+    finally:
+        db.close()
+
+
+@pytest.mark.skipif(engine.dialect.name != "postgresql", reason="FOR UPDATE requires PostgreSQL")
+def test_concurrent_accept_and_reject_only_one_transition_wins():
+    _reset()
+    _order("reject-race-1")
+    barrier = Barrier(2)
+
+    def accept():
+        barrier.wait()
+        concurrent_client = TestClient(app)
+        return concurrent_client.put(
+            "/comandas/reject-race-1/delivery/status",
+            params={"status_novo": "producao"}, headers=_headers(),
+        )
+
+    def reject():
+        barrier.wait()
+        concurrent_client = TestClient(app)
+        return concurrent_client.post(
+            "/api/online-orders/orders/reject-race-1/reject",
+            headers=_headers(), json={"reason": "Pedido indisponível"},
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        accept_future = pool.submit(accept)
+        reject_future = pool.submit(reject)
+        responses = [accept_future.result(), reject_future.result()]
+    assert sorted(response.status_code for response in responses) == [200, 409]
+
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, RID):
+            order = db.query(Comanda).filter(Comanda.id == "reject-race-1").one()
+            assert order.delivery_status in {"producao", "recusado"}
+            notice_count = db.query(OrderConversationEvent).filter(
+                OrderConversationEvent.pedido_id == order.id,
+                OrderConversationEvent.event_key == "rejection_reason",
+            ).count()
+            assert notice_count == (1 if order.delivery_status == "recusado" else 0)
     finally:
         db.close()
 

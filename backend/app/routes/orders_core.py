@@ -833,6 +833,16 @@ def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario 
     lote. Retornar ORM cru aqui fazia a serialização disparar lazy-loads por
     pedido/item e transformava uma query de ~milissegundos em segundos.
     """
+    return _listar_delivery_operacional(db, pending_only=False)
+
+
+@router.get("/delivery/pendentes", response_model=List[ComandaDetail])
+def listar_delivery_pendentes(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    """Somente pedidos cujo estado persistido ainda aguarda o primeiro aceite."""
+    return _listar_delivery_operacional(db, pending_only=True)
+
+
+def _listar_delivery_operacional(db: Session, *, pending_only: bool) -> List[ComandaDetail]:
     rest_id = require_tenant_id()
     checks = (
         db.query(Comanda)
@@ -855,6 +865,7 @@ def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario 
             ),
             Comanda.fechada == False,
             _operational_online_payment_filter(),
+            *([Comanda.delivery_status.in_(["pendente", "analise", "recebido", "pending"])] if pending_only else []),
         )
         .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
         .all()

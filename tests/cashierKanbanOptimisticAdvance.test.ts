@@ -30,7 +30,7 @@ test('falha do backend restaura snapshot anterior e força reconciliação segur
   assert.match(source, /const rollbackCurrentMutation = \(\) =>/);
   assert.match(source, /String\(order\.id\) === orderKey \? previousOrder : order/);
   assert.match(source, /void fetchDeliveryOrders\(\);/);
-  assert.match(source, /errorData\?\.detail \|\| 'Erro ao atualizar status do pedido\.'/);
+  assert.match(source, /errorData\?\.detail\?\.message \|\| 'Erro ao atualizar status do pedido\.'/);
 });
 
 test('reconstrução do #319 não ressuscita polling paralelo de 5 segundos', () => {

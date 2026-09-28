@@ -6,7 +6,6 @@ import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 import type { CashierTableCard, DeliveryOrderView } from '../orders/cashierWorkspaceTypes';
 import {
   projectApiComandaToDeliveryView,
-  projectDeliveryOrdersFromSharedSnapshot,
   readActiveDeliveryStatus,
   reconcileDeliveryOrderAfterStatus,
 } from './deliveryOrderProjection';
@@ -116,7 +115,14 @@ export function useCashierOrders({
     blockDurationHours?: 24 | 168 | 720 | null;
   } = {}) => {
     if (!cancelConsumptionTarget || cancelTableReason.trim().length < 3 || isCancellingTable) return;
+    const rejectionId = cancelConsumptionTarget.scope === 'digital' ? String(cancelConsumptionTarget.orderId || '') : '';
+    if (rejectionId && pendingDeliveryMutationRef.current[rejectionId]) return;
     setIsCancellingTable(true);
+    if (rejectionId) {
+      pendingDeliveryMutationRef.current[rejectionId] = { requestId: ++deliveryMutationSequenceRef.current };
+      deliveryOrdersRequestRef.current += 1;
+      setPendingDeliveryOrderIds((current) => new Set(current).add(rejectionId));
+    }
     try {
       const isOrderScope = cancelConsumptionTarget.scope === 'order';
       const isDigitalScope = cancelConsumptionTarget.scope === 'digital';
@@ -146,7 +152,14 @@ export function useCashierOrders({
             }
           );
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.detail || 'Não foi possível cancelar o pedido.');
+      if (!response.ok) {
+        if (response.status === 409 && isDigitalScope) {
+          setCancelConsumptionTarget(null);
+          setCancelTableReason('');
+          void onRefreshOrders();
+        }
+        throw new Error(typeof data?.detail === 'string' ? data.detail : data?.detail?.message || 'Não foi possível cancelar o pedido.');
+      }
 
       const cancelledOrderId = cancelConsumptionTarget.orderId;
       const digitalIntent = cancelConsumptionTarget.intent || 'cancel';
@@ -155,9 +168,11 @@ export function useCashierOrders({
       setCancelTableReason('');
       if (isDigitalScope) {
         setDeliveryOrders((current) => current.filter((order) => String(order.id) !== String(cancelledOrderId)));
+        setPendingAcceptanceOrders((current) => current.filter((order) => String(order.id) !== String(cancelledOrderId)));
+        void onRefreshOrders();
         window.dispatchEvent(new Event('koma_orders_updated'));
         if (digitalIntent === 'reject') {
-          if (deliveryOrders.filter((order) => order.status === 'pendente').length <= 1) {
+          if (pendingAcceptanceOrders.length <= 1) {
             setIsDrawerOpen(false);
           }
           showToast(
@@ -181,6 +196,16 @@ export function useCashierOrders({
     } catch (error: any) {
       showToast(error?.message || 'Não foi possível cancelar o pedido.', 'error');
     } finally {
+      if (rejectionId) {
+        delete pendingDeliveryMutationRef.current[rejectionId];
+        deliveryOrdersRequestRef.current += 1;
+        setPendingDeliveryOrderIds((current) => {
+          const next = new Set(current);
+          next.delete(rejectionId);
+          return next;
+        });
+        void fetchDeliveryOrders();
+      }
       setIsCancellingTable(false);
     }
   };
@@ -245,44 +270,16 @@ export function useCashierOrders({
     return { mergedMesaIds, transferredFromMesaIds };
   };
 
-  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>(
-    () => projectDeliveryOrdersFromSharedSnapshot(orders)
-  );
-  const [deliveryOrdersLoadState, setDeliveryOrdersLoadState] = useState<'loading' | 'loaded' | 'error'>(
-    () => projectDeliveryOrdersFromSharedSnapshot(orders).length > 0 ? 'loaded' : 'loading'
-  );
+  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>([]);
+  const [pendingAcceptanceOrders, setPendingAcceptanceOrders] = useState<DeliveryOrderView[]>([]);
+  const [deliveryOrdersLoadState, setDeliveryOrdersLoadState] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [pendingDeliveryOrderIds, setPendingDeliveryOrderIds] = useState<ReadonlySet<string>>(new Set());
   const deliveryOrdersRequestRef = useRef(0);
   const pendingDeliveryMutationRef = useRef<Record<string, PendingDeliveryMutation>>({});
   const deliveryMutationSequenceRef = useRef(0);
 
-  // The shared operational snapshot receives Caixa's optimistic order immediately.
-  // Project only missing rows so richer server data already loaded by /delivery/ativos
-  // remains authoritative. When a temp row is reconciled/rolled back upstream, remove it here too.
-  useEffect(() => {
-    const projected = projectDeliveryOrdersFromSharedSnapshot(orders);
-    const sharedIds = new Set(projected.map((order) => String(order.id)));
-
-    setDeliveryOrders((current) => {
-      let changed = false;
-      const currentIds = new Set(current.map((order) => String(order.id)));
-      const next = current.filter((order) => {
-        const id = String(order.id);
-        const keep = !id.startsWith('temp-') || sharedIds.has(id);
-        if (!keep) changed = true;
-        return keep;
-      });
-
-      for (let index = projected.length - 1; index >= 0; index -= 1) {
-        const order = projected[index];
-        const id = String(order.id);
-        if (currentIds.has(id)) continue;
-        next.unshift(order);
-        changed = true;
-      }
-
-      return changed ? next : current;
-    });
-  }, [orders]);
+  // The dedicated server projection owns this queue. The shared Caixa snapshot
+  // may be older than a confirmed acceptance and must never reinsert its rows.
 
   const [motoboys, setMotoboys] = useState<any[]>([]);
   const [motoboysLoadState, setMotoboysLoadState] = useState<'loading' | 'loaded' | 'error'>('loading');
@@ -400,9 +397,12 @@ export function useCashierOrders({
     const requestId = ++deliveryOrdersRequestRef.current;
     setDeliveryOrdersLoadState((current) => current === 'loaded' ? current : 'loading');
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
+      const [res, pendingRes] = await Promise.all([
+        fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders }),
+        fetch(`${apiBaseUrl}/comandas/delivery/pendentes`, { headers: authHeaders }),
+      ]);
+      if (res.ok && pendingRes.ok) {
+        const [data, pendingData] = await Promise.all([res.json(), pendingRes.json()]);
         if (requestId !== deliveryOrdersRequestRef.current) return;
         const mapped = data
           .map(mapComandaToDeliveryView)
@@ -423,6 +423,13 @@ export function useCashierOrders({
             return previous ? reconcileDeliveryOrderAfterStatus(previous, order) : order;
           });
         });
+        const pendingMapped = pendingData
+          .map(mapComandaToDeliveryView)
+          .filter((order: DeliveryOrderView | null): order is DeliveryOrderView => order !== null)
+          .filter((order: DeliveryOrderView) => !pendingDeliveryMutationRef.current[String(order.id)]);
+        setPendingAcceptanceOrders(Array.from(new Map<string, DeliveryOrderView>(
+          pendingMapped.map((order: DeliveryOrderView) => [String(order.id), order] as const)
+        ).values()));
         syncSelectedMotoboysFromServer(mapped);
         setDeliveryOrdersLoadState('loaded');
       } else if (requestId === deliveryOrdersRequestRef.current) {
@@ -811,9 +818,13 @@ export function useCashierOrders({
     const requestId = ++deliveryMutationSequenceRef.current;
 
     pendingDeliveryMutationRef.current[orderKey] = { status: optimisticStatus, requestId };
+    setPendingDeliveryOrderIds((current) => new Set(current).add(orderKey));
     deliveryOrdersRequestRef.current += 1;
 
     if (optimisticStatus) {
+      if (optimisticStatus !== 'pendente') {
+        setPendingAcceptanceOrders((current) => current.filter((order) => String(order.id) !== orderKey));
+      }
       setDeliveryOrders((current) =>
         current.map((order) => String(order.id) === orderKey ? { ...order, status: optimisticStatus } : order)
       );
@@ -822,6 +833,11 @@ export function useCashierOrders({
     const finishCurrentMutation = () => {
       if (pendingDeliveryMutationRef.current[orderKey]?.requestId !== requestId) return false;
       delete pendingDeliveryMutationRef.current[orderKey];
+      setPendingDeliveryOrderIds((current) => {
+        const next = new Set(current);
+        next.delete(orderKey);
+        return next;
+      });
       deliveryOrdersRequestRef.current += 1;
       return true;
     };
@@ -885,7 +901,7 @@ export function useCashierOrders({
 
       const errorData = await res.json().catch(() => ({}));
       rollbackCurrentMutation();
-      showToast(errorData?.detail || 'Erro ao atualizar status do pedido.', 'error');
+      showToast(typeof errorData?.detail === 'string' ? errorData.detail : errorData?.detail?.message || 'Erro ao atualizar status do pedido.', 'error');
       return false;
     } catch (err) {
       console.error(err);
@@ -1054,11 +1070,13 @@ export function useCashierOrders({
   };
 
   const handleAcceptPendingDeliveryOrder = async (order: DeliveryOrderView) => {
-    await handleUpdateDeliveryStatus(order.id, 'producao');
-    if (deliveryOrders.filter((o) => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
+    const accepted = await handleUpdateDeliveryStatus(order.id, 'producao');
+    if (accepted && pendingAcceptanceOrders.length <= 1) setIsDrawerOpen(false);
   };
 
-  const handleRejectPendingDeliveryOrder = (order: DeliveryOrderView) => openCancelOrderConfirmation(order, 'reject');
+  const handleRejectPendingDeliveryOrder = (order: DeliveryOrderView) => {
+    if (!pendingDeliveryMutationRef.current[String(order.id)]) openCancelOrderConfirmation(order, 'reject');
+  };
 
   const handleMarkTableItemsReady = async (order: CashierTableCard['order']) => {
     if (isLoading) return;
@@ -1240,6 +1258,8 @@ export function useCashierOrders({
     handleAddMotoboy,
     handleUpdateItemStatus,
     handleAcceptPendingDeliveryOrder,
+    pendingAcceptanceOrders,
+    pendingDeliveryOrderIds,
     handleRejectPendingDeliveryOrder,
     handleMarkTableItemsReady,
     handleAdvanceDigitalOrder,

@@ -279,7 +279,9 @@ export function CaixaPanel({
     handleCancelTableConsumption,
     getTableMovementContext,
     deliveryOrders,
+    pendingAcceptanceOrders,
     deliveryOrdersLoadState,
+    pendingDeliveryOrderIds,
     motoboys,
     motoboysLoadState,
     selectedMotoboys,
@@ -988,7 +990,8 @@ export function CaixaPanel({
                 insights={operationalOrderInsights}
                 search={{ query: searchQuery, onChange: setSearchQuery }}
                 acceptance={{
-                  orders: deliveryOrders,
+                  orders: pendingAcceptanceOrders,
+                  pendingOrderIds: pendingDeliveryOrderIds,
                   automatic: autoAccept,
                   drawerOpen: isDrawerOpen,
                   onAutomaticChange: (enabled) => { void updateAutoAccept(enabled); },

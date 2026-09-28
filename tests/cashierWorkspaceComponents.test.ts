@@ -40,7 +40,7 @@ function workspace(orders = [check()]): CaixaOrdersWorkspaceProps {
     pendingCashPayments: [], insights: { oldestOrder: '2 min', openValue: 160,
       actionMetric: { label: 'prontos para concluir', value: 1, needsAttention: true } },
     search: { query: '', onChange: noop },
-    acceptance: { orders: [], automatic: false, drawerOpen: false, onAutomaticChange: noop, onDrawerChange: noop },
+    acceptance: { orders: [], pendingOrderIds: new Set<string>(), automatic: false, drawerOpen: false, onAutomaticChange: noop, onDrawerChange: noop },
     navigation: { stage: 'salon', expandedCardIds: {}, onStageChange: noop, onToggleCard: noop },
     couriers: { options: [], loadState: 'loaded', selectedByOrderId: {}, onChange: noop, onRequestReassignment: noop },
     actions: { confirmCashPayment: noop, rejectCashPayment: noop, acceptDigitalOrder: noop,
@@ -50,6 +50,25 @@ function workspace(orders = [check()]): CaixaOrdersWorkspaceProps {
     isLoading: false, now: NOW,
   };
 }
+
+test('fila de aceite usa status confirmado e bloqueia ações durante a transição', () => {
+  const pending = digital({ id: 'online-69', status: 'pendente' });
+  const base = workspace();
+  const props: CaixaOrdersWorkspaceProps = {
+    ...base,
+    acceptance: { ...base.acceptance, drawerOpen: true, orders: [pending], pendingOrderIds: new Set(['online-69']) },
+  };
+  const pendingMarkup = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, props));
+  assert.match(pendingMarkup, /orders-pending-card/);
+  assert.equal(button(CaixaOrdersWorkspace(props), '✓ Aceitar').props.disabled, true);
+  assert.equal(button(CaixaOrdersWorkspace(props), 'Recusar').props.disabled, true);
+
+  const acceptedMarkup = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
+    ...props,
+    acceptance: { ...props.acceptance, orders: [], pendingOrderIds: new Set<string>() },
+  }));
+  assert.doesNotMatch(acceptedMarkup, /orders-pending-card p-4/);
+});
 
 type ViewElement = React.ReactElement<Record<string, unknown>>;
 function elements(node: ReactNode): ViewElement[] {
