@@ -1000,7 +1000,73 @@ class CustomerProfileResponse(BaseModel):
     endereco: str = ""
     saldo_pontos: int = 0
     saldo_cashback: float = 0.0
+    email_verificado: bool = False
     telefone_verificado: bool = False
+
+
+class CustomerEmailRegistrationRequest(BaseModel):
+    restaurante_id: int = Field(gt=0)
+    nome: str = Field(min_length=2, max_length=100)
+    email: str = Field(min_length=5, max_length=150)
+    senha: str = Field(min_length=8, max_length=128)
+    telefone: str = Field(min_length=10, max_length=20)
+    endereco: Optional[str] = Field(default="", max_length=300)
+
+    @field_validator("nome")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        name = " ".join(value.strip().split())
+        if len(name) < 2:
+            raise ValueError("Nome do cliente inválido.")
+        return name
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        email = value.strip().lower()
+        if "@" not in email or "." not in email:
+            raise ValueError("E-mail inválido.")
+        return email
+
+    @field_validator("telefone")
+    @classmethod
+    def normalize_phone(cls, value: str) -> str:
+        phone = "".join(character for character in value if character.isdigit())
+        if len(phone) not in {10, 11}:
+            raise ValueError("Telefone do cliente deve conter DDD e 10 ou 11 dígitos.")
+        return phone
+
+    @field_validator("senha")
+    @classmethod
+    def validate_password_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("A senha deve ter no máximo 72 bytes.")
+        return value
+
+    @field_validator("endereco")
+    @classmethod
+    def normalize_address(cls, value: Optional[str]) -> str:
+        return (value or "").strip()
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CustomerRegistrationTokenRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=2048)
+
+    @field_validator("token")
+    @classmethod
+    def normalize_token(cls, value: str) -> str:
+        token = value.strip()
+        if not token:
+            raise ValueError("Token de confirmação ausente.")
+        return token
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CustomerRegistrationPhoneConfirmRequest(CustomerRegistrationTokenRequest):
+    codigo: str = Field(pattern=r"^\d{6}$")
 
 
 class CustomerRegisterRequest(BaseModel):
@@ -1052,6 +1118,10 @@ class CustomerSessionResponse(BaseModel):
     access_token: str
     token_type: Literal["customer"] = "customer"
     cliente: CustomerProfileResponse
+
+
+class CustomerRegistrationSessionResponse(CustomerSessionResponse):
+    restaurante_id: int = Field(gt=0)
 
 
 class CustomerProfileUpdate(BaseModel):
