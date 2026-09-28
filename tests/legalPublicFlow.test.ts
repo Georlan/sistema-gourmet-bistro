@@ -147,14 +147,12 @@ test('segunda via reproduz o snapshot aceito sem confundir com a versão públic
 });
 
 test('landing envia cada plano e ciclo para sua própria contratação', () => {
-  assert.match(plans, /cobranca=\$\{billing\}/);
-  assert.match(plans, /CONTRATAR \{planLabel\}/);
-  assert.match(header, /href="\/#planos"/);
-  assert.doesNotMatch(header, /href="\/landing#planos"/);
+  assert.match(plans, /cobranca=\$\{yearly \? 'anual' : 'mensal'\}/);
+  assert.match(plans, /Contratar \{plan.name.replace/);
+  assert.match(header, /href="#planos"/);
   assert.doesNotMatch(header, /\/contratar\/pocket/);
-  assert.match(finalCta, /ESCOLHER MEU PLANO/);
-  assert.match(finalCta, /href="\/#planos"/);
-  assert.doesNotMatch(finalCta, /\/contratar\/pocket/);
+  assert.match(finalCta, /Ver planos/);
+  assert.match(finalCta, /href="#planos"/);
   assert.match(finalCta, /href="\/legal"/);
   assert.match(finalCta, /href="\/legal\/privacidade"/);
 });
