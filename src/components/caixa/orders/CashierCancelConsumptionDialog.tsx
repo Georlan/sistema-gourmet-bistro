@@ -114,6 +114,18 @@ export function CashierCancelConsumptionDialog({
               </div>
             </div>
 
+            {cancelConsumptionTarget.scope === 'table' && Number(cancelConsumptionTarget.valorPago || 0) > 0 && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.08] px-3 py-2.5 text-[11px] leading-relaxed text-amber-200">
+                <strong className="font-mono">
+                  {Number(cancelConsumptionTarget.valorPago || 0).toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
+                  })}
+                </strong>
+                {' '}já recebido permanece registrado no caixa. O restante do consumo será cancelado, não quitado.
+              </div>
+            )}
+
             <label className="block space-y-1.5">
               <span className="text-[9px] font-bold uppercase tracking-wider text-koma-subtle">
                 Motivo obrigatório
