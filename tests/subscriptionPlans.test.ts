@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createElement } from 'react';
-import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   SUBSCRIPTION_PLANS,
@@ -77,23 +76,33 @@ test('comparison matrix publishes the exact KOMA online-payment fee by plan', ()
   assert.deepEqual([fee.pocket, fee.pro, fee.premium], ['1,79%', '0,50%', '0,20%']);
 });
 
-test('landing starts monthly, has no setup fee or addons, and shows canonical prices and rates', () => {
+test('landing starts monthly, has no setup fee or addons, and shows all current prices and split fees', () => {
   const html = renderToStaticMarkup(createElement(Plans));
-  assert.ok(html.includes('Sem taxa de implantação'));
-  assert.ok(html.includes('sem módulos avulsos'));
-  assert.equal(html.includes('Mais recomendado'), false);
+  assert.equal(html.includes('koma-plan-savings'), false);
+  assert.equal(html.includes('89,00 por mês'), false);
+  assert.equal(html.includes('179,00 por mês'), false);
+  assert.equal(html.includes('269,00 por mês'), false);
+  assert.equal(html.includes('Adicionais do'), false);
+  assert.ok(html.includes('SEM TAXA DE IMPLANTAÇÃO'));
+  assert.ok(html.includes('Sem add-ons'));
+  assert.ok(html.includes('MAIS RECOMENDADO'));
+  assert.ok(html.includes('MENOR TAXA'));
+  assert.ok(html.includes('Cardápio digital, mesas, equipe, App do Garçom e delivery já começam no Pocket.'));
+  assert.ok(SUBSCRIPTION_PLANS.find(plan => plan.id === 'pocket')?.features.includes('App do Garçom para salão e comandas'));
+  assert.ok(SUBSCRIPTION_PLANS.find(plan => plan.id === 'pocket')?.features.includes('Equipe, funções e permissões por cargo'));
+
   for (const plan of SUBSCRIPTION_PLANS) {
-    assert.ok(html.includes(plan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })));
+    assert.ok(html.includes(`${plan.price},00 por mês`));
     assert.ok(html.includes(formatPercentage(plan.splitFeeRate)));
+    for (const feature of plan.features) assert.ok(html.includes(feature));
   }
 });
 
-test('landing qualifies the variable fee and annual discount', () => {
+test('landing explains that the variable fee only applies to paid online orders', () => {
   const html = renderToStaticMarkup(createElement(Plans));
-  assert.ok(html.includes('taxa KÔMA por pedido online pago'));
-  assert.ok(html.includes('Custos do provedor de pagamento são separados'));
-  const plans = readFileSync('src/landing/sections/Plans.tsx', 'utf8');
-  assert.ok(plans.includes('a taxa KÔMA não muda'));
+  assert.ok(html.includes('Você só paga essa taxa quando recebe um pedido online pago pelo sistema.'));
+  assert.ok(html.includes('custos do provedor de pagamento são separados'));
+  assert.ok(html.includes('a taxa por pedido permanece igual'));
 });
 
 test('legacy plan names still normalize to Premium without reintroducing addons', () => {
@@ -106,11 +115,12 @@ test('legacy plan names still normalize to Premium without reintroducing addons'
   assert.equal(normalizeSubscriptionPlan('unknown'), 'pocket');
 });
 
-test('landing does not promise unrelated modules', () => {
+test('landing does not promise unrelated modules as part of the commercial offer', () => {
   const html = renderToStaticMarkup(createElement(Plans));
-  assert.equal(html.includes('Emissão fiscal incluída'), false);
+  assert.ok(html.includes('Emissão fiscal e integração com marketplaces não fazem parte desta oferta.'));
   assert.equal(PLAN_COMPARISON_MATRIX.some(row => row.category === 'Notificações'), false);
 });
+
 
 test('annual discount applies to fixed price in Pocket, Pro and Premium', () => {
   const pocket = getSubscriptionPricing(39);
@@ -128,6 +138,6 @@ test('annual discount applies to fixed price in Pocket, Pro and Premium', () => 
   const html = renderToStaticMarkup(createElement(Plans));
   assert.ok(html.includes('Sem taxa de implantação'));
   assert.ok(html.includes('1,79%'));
-  assert.ok(html.includes('taxa KÔMA por pedido online pago'));
-  assert.ok(html.includes('Anual'));
+  assert.ok(html.includes('Seu restaurante cresceu. Sua taxa diminui.'));
+  assert.ok(html.includes('Mais volume, menor taxa.'));
 });

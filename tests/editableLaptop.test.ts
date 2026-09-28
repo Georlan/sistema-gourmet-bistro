@@ -54,10 +54,10 @@ test('notebook canvas is bounded independently of layout and fits the physical v
   assert.match(css, /overflow: hidden/);
 });
 
-test('active tour uses lightweight real screenshots instead of legacy shells', () => {
+test('Pedidos uses the approved notebook while the other devices remain unchanged', () => {
   const tour = readFileSync(new URL('../src/landing/sections/HowItWorks.tsx', import.meta.url), 'utf8');
-  assert.ok(tour.includes('pedidos.webp'));
-  assert.ok(tour.includes('cozinha.webp'));
-  assert.ok(tour.includes('cardapio.webp'));
-  assert.equal(tour.includes('<LaptopFrame'), false);
+  assert.ok(tour.includes('<LaptopFrame view={screen.view} screenshot={pedidosScreenshot} />'));
+  assert.ok(tour.includes('<TabletFrame view={screen.view} screenshot={cozinhaScreenshot} />'));
+  assert.ok(tour.includes('<EditablePhoneFrame shellSrc={phoneShell} screenshot={cardapioScreenshot}>'));
+  assert.equal(tour.includes('<FrontalLaptopFrame'), false);
 });
