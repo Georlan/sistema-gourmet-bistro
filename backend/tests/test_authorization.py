@@ -22,6 +22,7 @@ from app.models import (
     Usuario,
 )
 from app.security import get_password_hash
+from app.schemas import UsuarioAccessUpdate, UsuarioCreate
 from app.main import app
 from app.routes import auth as auth_route
 from app.routes import caixa as caixa_route
@@ -91,6 +92,12 @@ def setup_database():
             id="u-caixa", restaurante_id=1, nome="Caixa Auth",
             usuario="caixa", senha_hash=get_password_hash("123"),
             role="caixa", cargo="caixa", status="ativo"
+        ))
+        # Cozinha ativa
+        db.add(Usuario(
+            id="u-cozinha", restaurante_id=1, nome="Cozinha Auth",
+            usuario="cozinha", senha_hash=get_password_hash("123"),
+            role="cozinha", cargo="cozinha", status="ativo"
         ))
         # Usuário inativo
         db.add(Usuario(
@@ -226,6 +233,32 @@ def test_caixa_reaches_order_scope_cancellation_beyond_rbac_guard():
 
     assert response.status_code == 409, response.text
     assert "pedido mudou" in response.json()["detail"].lower()
+
+
+def test_kitchen_can_only_mark_item_ready_with_status_permission():
+    client = TestClient(app)
+    headers = get_auth_headers(client, "cozinha", "123")
+
+    ready_response = client.put(
+        "/comandas/itens/inexistente/status?status=pronto",
+        headers=headers,
+    )
+    assert ready_response.status_code == 404, ready_response.text
+
+    forbidden_item_status = client.put(
+        "/comandas/itens/inexistente/status?status=cancelado",
+        headers=headers,
+    )
+    assert forbidden_item_status.status_code == 403, forbidden_item_status.text
+    assert "só pode marcar itens como pronto" in forbidden_item_status.json()["detail"]
+
+    forbidden_order_status = client.put(
+        "/comandas/inexistente/delivery/status",
+        params={"status_novo": "pronto"},
+        headers=headers,
+    )
+    assert forbidden_order_status.status_code == 403, forbidden_order_status.text
+    assert "Acesso negado" in forbidden_order_status.json()["detail"]
 
 
 def test_inactive_user_blocked():
@@ -587,8 +620,20 @@ def test_admin_team_listing_is_scoped_to_authenticated_tenant():
 
 @pytest.mark.parametrize(
     "forbidden_cargo",
-    ["admin", "superadmin", "atendente", "cozinha"],
+    ["admin", "superadmin", "atendente"],
 )
+def test_team_schemas_accept_kitchen_role():
+    created = UsuarioCreate(
+        nome="Cozinha Teste",
+        telefone="81999998888",
+        cargo="cozinha",
+    )
+    updated = UsuarioAccessUpdate(cargo="cozinha")
+
+    assert created.cargo == "cozinha"
+    assert updated.cargo == "cozinha"
+
+
 def test_team_invite_rejects_privileged_or_unsupported_roles(forbidden_cargo):
     client = TestClient(app)
     headers = get_auth_headers(client, "admin", "123")
