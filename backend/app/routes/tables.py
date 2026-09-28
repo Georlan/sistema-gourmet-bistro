@@ -170,11 +170,11 @@ def cancelar_consumo_mesa(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("comandas:forcar_fechamento")),
 ):
-    """Cancela todo o consumo aberto de uma mesa sem gerar recebimento.
+    """Cancela todo o consumo aberto e libera a mesa sem fabricar quitação.
 
-    O histórico é preservado: itens são marcados como cancelados e comandas são
-    fechadas. Pagamentos existentes bloqueiam a operação para evitar apagar um
-    consumo que já produziu efeito financeiro.
+    Pagamentos manuais já aprovados permanecem registrados no caixa; o saldo
+    restante não é marcado como pago. Confirmações pendentes são canceladas.
+    Pagamentos confirmados por integração continuam bloqueando a operação.
     """
     rest_id = require_tenant_id()
     motivo = " ".join(payload.motivo.split())
@@ -263,15 +263,23 @@ def cancelar_consumo_mesa(
         for pagamento in pagamentos_ativos
         if str(pagamento.id) not in pagamentos_integrados
     ]
-    valor_pagamentos_anulados = round(
-        sum(float(pagamento.valor or 0) for pagamento in pagamentos_manuais),
+    pagamentos_pendentes_cancelados = [
+        pagamento for pagamento in pagamentos_manuais
+        if pagamento.status == "pendente"
+    ]
+    pagamentos_manuais_preservados = [
+        pagamento for pagamento in pagamentos_manuais
+        if pagamento.status != "pendente"
+    ]
+    valor_pagamentos_preservados = round(
+        sum(float(pagamento.valor or 0) for pagamento in pagamentos_manuais_preservados),
         2,
     )
-    valor_pago_legado_anulado = round(
+    valor_pago_preservado = round(
         sum(float(comanda.valor_pago or 0) for comanda in comandas),
         2,
     )
-    for pagamento in pagamentos_manuais:
+    for pagamento in pagamentos_pendentes_cancelados:
         pagamento.status = "cancelado"
 
     itens_ativos = [
@@ -285,11 +293,9 @@ def cancelar_consumo_mesa(
 
     for item in itens_ativos:
         item.status = "cancelado"
-        item.pago = False
         item.cancelado_por = current_user.id
     estornar_estoque_dos_itens(db, itens_ativos, usuario_id=current_user.id)
     for comanda in comandas:
-        comanda.valor_pago = 0
         comanda.fechada = True
         comanda.fechado_em = fechado_em
         comanda.status_comanda = None
@@ -301,9 +307,11 @@ def cancelar_consumo_mesa(
         details=(
             f"Mesa {mesa_id}: {len(comandas)} comanda(s), {len(itens_ativos)} "
             f"item(ns), total R$ {total_cancelado:.2f}; "
-            f"{len(pagamentos_manuais)} pagamento(s) manual(is) anulado(s), "
-            f"R$ {valor_pagamentos_anulados:.2f}; marcação paga anterior "
-            f"R$ {valor_pago_legado_anulado:.2f}. Motivo: {motivo}"
+            f"{len(pagamentos_manuais_preservados)} pagamento(s) manual(is) preservado(s), "
+            f"R$ {valor_pagamentos_preservados:.2f}; valor já recebido preservado "
+            f"R$ {valor_pago_preservado:.2f}; "
+            f"{len(pagamentos_pendentes_cancelados)} pagamento(s) pendente(s) cancelado(s). "
+            f"Motivo: {motivo}"
         ),
     ))
     db.commit()
@@ -317,16 +325,17 @@ def cancelar_consumo_mesa(
         rest_id,
     )
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
-    if pagamentos_manuais or valor_pago_legado_anulado > 0:
+    if pagamentos_manuais or valor_pago_preservado > 0:
         background_tasks.add_task(
             manager.broadcast,
             {
                 "event": "cash_updated",
                 "detail": {
-                    "type": "pagamentos_manuais_anulados_por_cancelamento_mesa",
+                    "type": "cancelamento_mesa_com_pagamento_manual_preservado",
                     "mesa_id": mesa_id,
-                    "pagamentos_anulados": len(pagamentos_manuais),
-                    "valor_anulado": valor_pagamentos_anulados,
+                    "pagamentos_preservados": len(pagamentos_manuais_preservados),
+                    "valor_preservado": valor_pagamentos_preservados,
+                    "pagamentos_pendentes_cancelados": len(pagamentos_pendentes_cancelados),
                 },
             },
             rest_id,
@@ -337,9 +346,10 @@ def cancelar_consumo_mesa(
         "comandas_canceladas": len(comandas),
         "itens_cancelados": len(itens_ativos),
         "total_cancelado": total_cancelado,
-        "pagamentos_manuais_anulados": len(pagamentos_manuais),
-        "valor_pagamentos_anulados": valor_pagamentos_anulados,
-        "valor_pago_legado_anulado": valor_pago_legado_anulado,
+        "pagamentos_manuais_preservados": len(pagamentos_manuais_preservados),
+        "valor_pagamentos_preservados": valor_pagamentos_preservados,
+        "valor_pago_preservado": valor_pago_preservado,
+        "pagamentos_pendentes_cancelados": len(pagamentos_pendentes_cancelados),
     }
 
 
