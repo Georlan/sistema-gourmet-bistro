@@ -235,7 +235,7 @@ def test_guest_history_requires_phone_ownership_before_claim(setup, monkeypatch)
         current_restaurante_id.reset(token_var)
         db.close()
 
-    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", True)
+    monkeypatch.setattr(settings, "CUSTOMER_PHONE_VERIFICATION_ENABLED", True)
     monkeypatch.setattr(routes, "generate_otp", lambda: "246810")
     monkeypatch.setattr(routes, "enviar_codigo_otp_whatsapp", lambda *args, **kwargs: True)
 
