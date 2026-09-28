@@ -14,7 +14,16 @@ from ..catalog_addons import (
     replace_category_links_for_group,
 )
 from ..database import get_db, require_tenant_id
-from ..models import Comanda, GrupoModificador, Item, Lancamento, OpcaoModificador, ProdutoGrupoModificador, Produto, Usuario
+from ..models import (
+    Comanda,
+    GrupoModificador,
+    Item,
+    Lancamento,
+    OpcaoModificador,
+    Produto,
+    ProdutoGrupoModificador,
+    Usuario,
+)
 from ..schemas import (
     ComandaDetail,
     GrupoModificadorCreate,
@@ -430,7 +439,7 @@ def criar_venda_direta_com_modificadores(
                     db.query(Comanda)
                     .options(
                         joinedload(Comanda.itens).joinedload(Item.produto),
-                        joinedload(Comanda.lancamentos).joinedload(Lancamento.itens),
+                        joinedload(Comanda.lancamentos).joinedload(Lancamento.itens).joinedload(Item.produto),
                         joinedload(Comanda.criada_por),
                     )
                     .filter(
