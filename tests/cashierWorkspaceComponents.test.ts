@@ -40,7 +40,7 @@ function workspace(orders = [check()]): CaixaOrdersWorkspaceProps {
     pendingCashPayments: [], insights: { oldestOrder: '2 min', openValue: 160,
       actionMetric: { label: 'prontos para concluir', value: 1, needsAttention: true } },
     search: { query: '', onChange: noop },
-    acceptance: { orders: [], pendingOrderIds: new Set(), automatic: false, drawerOpen: false, onAutomaticChange: noop, onDrawerChange: noop },
+    acceptance: { orders: [], pendingOrderIds: new Set<string>(), automatic: false, drawerOpen: false, onAutomaticChange: noop, onDrawerChange: noop },
     navigation: { stage: 'salon', expandedCardIds: {}, onStageChange: noop, onToggleCard: noop },
     couriers: { options: [], loadState: 'loaded', selectedByOrderId: {}, onChange: noop, onRequestReassignment: noop },
     actions: { confirmCashPayment: noop, rejectCashPayment: noop, acceptDigitalOrder: noop,
@@ -65,7 +65,7 @@ test('fila de aceite usa status confirmado e bloqueia ações durante a transiç
 
   const acceptedMarkup = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
     ...props,
-    acceptance: { ...props.acceptance, orders: [digital({ id: 'online-69', status: 'producao' })], pendingOrderIds: new Set() },
+    acceptance: { ...props.acceptance, orders: [digital({ id: 'online-69', status: 'producao' })], pendingOrderIds: new Set<string>() },
   }));
   assert.doesNotMatch(acceptedMarkup, /orders-pending-card p-4/);
 });

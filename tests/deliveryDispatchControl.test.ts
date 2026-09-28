@@ -64,7 +64,7 @@ function workspaceProps(): CaixaOrdersWorkspaceProps {
     pendingCashPayments: [],
     insights: { oldestOrder: '1 min', openValue: 33, actionMetric: { label: 'sem pendências', value: 0, needsAttention: false } },
     search: { query: '', onChange: noop },
-    acceptance: { orders: [], pendingOrderIds: new Set(), automatic: false, drawerOpen: false, onAutomaticChange: noop, onDrawerChange: noop },
+    acceptance: { orders: [], pendingOrderIds: new Set<string>(), automatic: false, drawerOpen: false, onAutomaticChange: noop, onDrawerChange: noop },
     navigation: { stage: 'digital', expandedCardIds: {}, onStageChange: noop, onToggleCard: noop },
     couriers: { options: [], loadState: 'loaded', selectedByOrderId: {}, onChange: noop, onRequestReassignment: noop },
     actions: {
