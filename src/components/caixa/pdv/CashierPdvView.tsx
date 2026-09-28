@@ -673,6 +673,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
 
               <form
                 onSubmit={handlePdvSubmitOrder}
+                noValidate
                 className={"min-h-0 max-h-[48%] shrink-0 border-t border-koma-border bg-koma-panel/40 flex flex-col"}
               >
                 <div className="min-h-0 overflow-y-auto p-3 space-y-3 overscroll-contain">
