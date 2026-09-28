@@ -12,10 +12,12 @@ interface SessionPayload {
   cliente?: Parameters<typeof mapCustomerProfile>[0];
   status?: string;
   detail?: string;
+  registration_token?: string;
 }
 
 export default function CustomerRegistrationConfirmPage() {
   const [registrationToken, setRegistrationToken] = React.useState(() => takeCustomerRegistrationToken());
+  const [phoneClaimToken, setPhoneClaimToken] = React.useState('');
   const [state, setState] = React.useState<ConfirmationState>('confirming');
   const [message, setMessage] = React.useState('');
   const [codeSent, setCodeSent] = React.useState(false);
@@ -58,6 +60,12 @@ export default function CustomerRegistrationConfirmPage() {
         throw new Error(data.detail || 'Não foi possível confirmar seu cadastro.');
       }
       if (data.status === 'phone_verification_required') {
+        if (!data.registration_token) {
+          throw new Error('A confirmação do e-mail não gerou a etapa segura de telefone.');
+        }
+        setPhoneClaimToken(data.registration_token);
+        setPhoneClaimToken('');
+      setRegistrationToken('');
         setRestaurantId(data.restaurante_id || null);
         setState('phone_required');
         setMessage(data.detail || 'Confirme também seu telefone para proteger o histórico existente.');
@@ -81,6 +89,7 @@ export default function CustomerRegistrationConfirmPage() {
       const token = takeCustomerRegistrationToken();
       if (!token) return;
       setRegistrationToken(token);
+      setPhoneClaimToken('');
       setCode('');
       setCodeSent(false);
       setState('confirming');
@@ -97,7 +106,7 @@ export default function CustomerRegistrationConfirmPage() {
       const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/cadastro/telefone/solicitar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: registrationToken }),
+        body: JSON.stringify({ token: phoneClaimToken }),
       });
       const data = await response.json().catch(() => ({})) as { detail?: string };
       if (!response.ok) throw new Error(data.detail || 'Não foi possível enviar o código.');
@@ -122,7 +131,7 @@ export default function CustomerRegistrationConfirmPage() {
       const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/cadastro/telefone/confirmar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: registrationToken, codigo: code }),
+        body: JSON.stringify({ token: phoneClaimToken, codigo: code }),
       });
       const data = await response.json().catch(() => ({})) as SessionPayload;
       if (!response.ok) throw new Error(data.detail || 'Não foi possível confirmar o telefone.');
