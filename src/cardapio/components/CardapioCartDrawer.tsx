@@ -95,6 +95,8 @@ interface CardapioCartDrawerProps {
   initialCouponCode?: string;
   onPlaceOrder: (orderData: CardapioCheckoutRequest) => void;
   user: any;
+  customerToken?: string | null;
+  accountRequired?: boolean;
   onAuthClick?: () => void;
   orderingEnabled?: boolean;
   orderingMessage?: string;
@@ -120,6 +122,8 @@ export default function CardapioCartDrawer({
   initialCouponCode = "",
   onPlaceOrder,
   user,
+  customerToken = null,
+  accountRequired = false,
   onAuthClick,
   orderingEnabled = true,
   orderingMessage = "Pedidos temporariamente pausados.",
@@ -223,6 +227,7 @@ export default function CardapioCartDrawer({
     if (user) {
       setGuestName(user.name || "");
       setGuestPhone(formatBrazilianPhone(user.phone || ""));
+      setGuestEmail(user.email || "");
       applyStoredAddress(user.address || "");
       return;
     }
@@ -432,6 +437,14 @@ export default function CardapioCartDrawer({
     }
     if (cart.length === 0) {
       reportValidationError("Sua sacola está vazia.");
+      return;
+    }
+    if (accountRequired && (!user || !customerToken)) {
+      reportValidationError(
+        "Entre ou crie sua conta e confirme o e-mail antes de revisar o pedido.",
+        "cart-identification",
+      );
+      onAuthClick?.();
       return;
     }
     if (paymentError || !paymentDetail) {
@@ -995,6 +1008,22 @@ export default function CardapioCartDrawer({
                       <p className="text-xs font-black text-koma-foreground">{user.name}</p>
                       <p className="mt-0.5 text-[10px] text-koma-muted">{formatBrazilianPhone(user.phone || "")} · cliente identificado</p>
                     </div>
+                  </div>
+                ) : accountRequired ? (
+                  <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-3.5">
+                    <p className="text-xs font-black text-koma-foreground">Conta necessária para pedir</p>
+                    <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
+                      Entre ou crie sua conta. No cadastro novo, confirme o link enviado ao seu e-mail antes de continuar.
+                    </p>
+                    {onAuthClick && (
+                      <button
+                        type="button"
+                        onClick={onAuthClick}
+                        className="mt-3 min-h-11 w-full rounded-xl bg-emerald-500 px-4 text-xs font-black text-white transition hover:bg-emerald-600"
+                      >
+                        Entrar ou criar conta
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="mt-3 space-y-3">
