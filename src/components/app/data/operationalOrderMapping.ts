@@ -21,6 +21,20 @@ const isPlaceholderOrderIdentifier = (value: unknown) => {
   return !normalized || normalized === 'cliente sem nome';
 };
 
+export function mergeOperationalSnapshotPreservingOptimisticOrders(
+  authoritative: readonly Order[],
+  current: readonly Order[],
+): Order[] {
+  const pending = current.filter((order) => String(order.id || '').startsWith('temp-'));
+  if (pending.length === 0) return [...authoritative];
+
+  const authoritativeIds = new Set(authoritative.map((order) => String(order.id)));
+  return [
+    ...authoritative,
+    ...pending.filter((order) => !authoritativeIds.has(String(order.id))),
+  ];
+}
+
 export function preserveOptimisticOrderIdentity(
   optimistic: Order | undefined,
   mapped: Order,
