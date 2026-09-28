@@ -129,6 +129,10 @@ jobs:
           python -m alembic history
           python -m alembic upgrade head
           python -m alembic current | grep "$HEAD_REV"
+      - name: Verify concurrent accept/reject on PostgreSQL
+        env:
+          KOMA_PYTEST_USE_EXTERNAL_DATABASE: 'true'
+        run: python -m pytest -q -ra backend/tests/test_online_order_reasoned_rejection.py::test_concurrent_accept_and_reject_only_one_transition_wins
           python -m alembic downgrade n3c4d5e6f7a8
           python -m alembic current | grep n3c4d5e6f7a8
           python -m alembic upgrade head
