@@ -144,6 +144,15 @@ test('PDV reconciles or rolls back the temporary order instead of leaving duplic
   assert.doesNotMatch(cashierOrders, /projectDeliveryOrdersFromSharedSnapshot\(orders\)/);
 });
 
+test('temporary salon card stays visible but cannot send item mutations before confirmation', () => {
+  const workspace = source('src/components/caixa/orders/CaixaOrdersWorkspace.tsx');
+
+  assert.match(workspace, /startsWith\('temp-'\)/);
+  assert.match(workspace, /disabled=\{isPendingConfirmation\}/);
+  assert.match(workspace, /Aguardando confirmação…/);
+  assert.match(workspace, /if \(isPendingConfirmation\) return;/);
+});
+
 test('PDV models fulfillment separately from optional table association', () => {
   const pdv = source('src/components/caixa/pdv/useCashierPdv.ts');
   const view = source('src/components/caixa/pdv/CashierPdvView.tsx');
