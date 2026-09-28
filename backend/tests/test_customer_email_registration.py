@@ -106,6 +106,34 @@ def test_email_registration_is_single_use_and_login_ready(setup):
     token = sent[0]["token"]
     assert "cliente@example.test" not in token
 
+    # O lead/cliente já alimenta a fonte canônica do CRM no aceite do signup,
+    # antes de clicar no e-mail, porém segue sem qualquer contato verificado.
+    db = factory()
+    token_var = current_restaurante_id.set(71)
+    try:
+        pending_customer = db.query(Cliente).filter(
+            Cliente.restaurante_id == 71,
+            Cliente.email == "cliente@example.test",
+        ).one()
+        assert pending_customer.nome == "Cliente Teste"
+        assert pending_customer.email_verificado_em is None
+        assert pending_customer.telefone_verificado_em is None
+        assert verify_password("senha-segura-123", pending_customer.senha_hash)
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    login_before_confirmation = client.post(
+        "/cardapio/clientes/login",
+        json={
+            "restaurante_id": 71,
+            "email": "cliente@example.test",
+            "senha": "senha-segura-123",
+        },
+    )
+    assert login_before_confirmation.status_code == 403
+    assert "confirma" in login_before_confirmation.json()["detail"].lower()
+
     confirm = client.post(
         "/cardapio/clientes/cadastro/confirmar",
         json={"token": token},
@@ -241,6 +269,10 @@ def test_resend_failure_rolls_back_pending_registration(setup, monkeypatch):
             CustomerRegistrationChallenge.restaurante_id == 71,
             CustomerRegistrationChallenge.email == "failed@example.test",
         ).first() is None
+        assert db.query(Cliente).filter(
+            Cliente.restaurante_id == 71,
+            Cliente.email == "failed@example.test",
+        ).first() is None
     finally:
         current_restaurante_id.reset(token_var)
         db.close()
@@ -274,6 +306,16 @@ def test_guest_history_requires_phone_ownership_before_claim(setup, monkeypatch)
     )
     assert response.status_code == 202
     token = sent[-1]["token"]
+
+    db = factory()
+    token_var = current_restaurante_id.set(71)
+    try:
+        guest_before_confirmation = db.get(Cliente, "guest-71")
+        assert guest_before_confirmation.email is None
+        assert guest_before_confirmation.senha_hash is None
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
 
     confirm_email = client.post(
         "/cardapio/clientes/cadastro/confirmar",
