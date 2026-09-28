@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import "./components/auth/passwordRecoveryToken";
+import "./components/auth/customerRegistrationToken";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
@@ -46,6 +47,7 @@ function isPublicCommercialRoute(): boolean {
 function isOperationalUtilityRoute(): boolean {
   const pathname = window.location.pathname;
   return pathname === "/recuperar-senha"
+    || pathname === "/confirmar-cadastro"
     || pathname.startsWith("/ferramentas/simulador-impressao")
     || pathname.startsWith("/smartpos")
     || pathname.startsWith("/ativar")
@@ -117,6 +119,7 @@ function bypassTenantSuspensionBoundary(): boolean {
   const resolved = resolveKomaHost();
 
   return pathname === "/recuperar-senha"
+    || pathname === "/confirmar-cadastro"
     || pathname.startsWith("/super-admin")
     || (isCentralSupportOperationalBridge() && hasInternalSupportSessionContext())
     || pathname.startsWith("/ferramentas/simulador-impressao")
@@ -202,6 +205,8 @@ if (
 const RootApp = React.lazy(
   pathname === "/recuperar-senha"
     ? () => import("./components/auth/PasswordResetPage")
+    : pathname === "/confirmar-cadastro"
+      ? () => import("./components/auth/CustomerRegistrationConfirmPage")
     : isPrintSimulatorRoute
     ? () => import("./printing-simulator/PrintingSimulatorPage")
     : isSmartPosRoute
@@ -217,10 +222,12 @@ const RootApp = React.lazy(
             : () => import("./App"),
 );
 
-const RouteLoading = () => pathname === "/recuperar-senha"
+const RouteLoading = () => pathname === "/recuperar-senha" || pathname === "/confirmar-cadastro"
   ? (
     <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
-      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">Preparando recuperação…</p>
+      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">
+        {pathname === "/recuperar-senha" ? "Preparando recuperação…" : "Preparando confirmação…"}
+      </p>
     </main>
   )
   : <KomaLoading label="Preparando Kôma…" />;
