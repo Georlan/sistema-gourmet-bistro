@@ -378,7 +378,7 @@ def confirm_customer_registration(
         ).with_for_update().first()
 
         if existing_phone is not None:
-            if existing_phone.email or existing_phone.senha_hash:
+            if existing_phone.senha_hash:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Este telefone já possui uma conta neste restaurante.",
@@ -470,7 +470,6 @@ def request_registration_phone_verification(
         guest = db.query(Cliente).filter(
             Cliente.restaurante_id == restaurante_id,
             Cliente.telefone == challenge.telefone,
-            Cliente.email.is_(None),
             Cliente.senha_hash.is_(None),
         ).first()
         if guest is None:
@@ -600,7 +599,7 @@ def confirm_registration_phone(
             Cliente.restaurante_id == restaurante_id,
             Cliente.telefone == challenge.telefone,
         ).with_for_update().first()
-        if cliente is None or cliente.email or cliente.senha_hash:
+        if cliente is None or cliente.senha_hash:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Esta ficha de cliente não está mais disponível para vinculação.",
