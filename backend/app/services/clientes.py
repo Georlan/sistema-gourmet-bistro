@@ -332,9 +332,22 @@ def _insert_guest_cliente_if_needed(
         & (clientes.c.telefone == telefone)
     )
     existing = connection.execute(
-        select(clientes.c.id, clientes.c.nome).where(criteria)
+        select(
+            clientes.c.id,
+            clientes.c.nome,
+            clientes.c.email,
+            clientes.c.senha_hash,
+            clientes.c.telefone_verificado_em,
+        ).where(criteria)
     ).first()
     if existing is not None:
+        # Uma conta criada por e-mail ainda não prova posse do telefone informado.
+        # Pedidos anônimos com o mesmo número não podem ganhar acesso implícito à
+        # identidade, histórico ou benefícios dessa conta. Quando o telefone já
+        # foi comprovado (ou a ficha continua guest), o vínculo legado permanece.
+        has_account_credentials = bool(existing.email or existing.senha_hash)
+        if has_account_credentials and existing.telefone_verificado_em is None:
+            return None, None
         return str(existing.id), str(existing.nome)
 
     cliente_id = str(uuid.uuid4())
