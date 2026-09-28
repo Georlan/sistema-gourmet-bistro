@@ -92,6 +92,7 @@ test('unified operational entry passes the authenticated portal directly to App 
   assert.doesNotMatch(entry, /requestAnimationFrame/);
   assert.match(app, /initialPortal\?: OperationalPortal/);
   assert.match(app, /if \(initialPortal\) \{[\s\S]*return initialPortal;/);
+  assert.match(app, /activeRole === 'cozinha' \? \([\s\S]*<KitchenPanel/);
 
   const login = source('../src/components/auth/OperationalLogin.tsx');
   assert.match(login, /Acesso da equipe/);
