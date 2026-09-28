@@ -64,7 +64,7 @@ function workspaceProps(): CaixaOrdersWorkspaceProps {
     pendingCashPayments: [],
     insights: { oldestOrder: '1 min', openValue: 33, actionMetric: { label: 'sem pendências', value: 0, needsAttention: false } },
     search: { query: '', onChange: noop },
-    acceptance: { orders: [], automatic: false, drawerOpen: false, onAutomaticChange: noop, onDrawerChange: noop },
+    acceptance: { orders: [], pendingOrderIds: new Set<string>(), automatic: false, drawerOpen: false, onAutomaticChange: noop, onDrawerChange: noop },
     navigation: { stage: 'digital', expandedCardIds: {}, onStageChange: noop, onToggleCard: noop },
     couriers: { options: [], loadState: 'loaded', selectedByOrderId: {}, onChange: noop, onRequestReassignment: noop },
     actions: {
@@ -323,4 +323,3 @@ test('concorrência de atribuição: sincronização autoritativa elimina seleç
   assert.match(syncSlice, /order\.motoboyId \? String\(order\.motoboyId\) : ''/);
   assert.match(syncSlice, /applySelectedMotoboysState\(next\);/);
 });
-

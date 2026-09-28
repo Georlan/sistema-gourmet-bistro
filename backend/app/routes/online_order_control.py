@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from ..application.orders.lifecycle import OrderLifecycleCoordinator
 from ..database import get_db, require_tenant_id
 from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
+from ..domain.orders.types import OrderStatus, normalize_to_order_status
 from ..models import Comanda, Usuario
 from ..online_order_control_models import OnlineOrderCustomerBlock
 from ..security import require_roles
@@ -205,6 +206,23 @@ def reject_online_order(
     """
     rid = require_tenant_id()
     try:
+        # Lock the aggregate before checking the initial-acceptance precondition.
+        # The lifecycle coordinator takes the same row lock in this transaction;
+        # a concurrent accept/reject must observe the winner's committed status.
+        current_order = (
+            db.query(Comanda)
+            .filter(Comanda.restaurante_id == rid, Comanda.id == comanda_id)
+            .with_for_update()
+            .first()
+        )
+        if current_order is None:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+        current_status = normalize_to_order_status(current_order.delivery_status)
+        if current_status != OrderStatus.PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"message": "O pedido já mudou de status.", "current_status": current_status.value},
+            )
         transition = OrderLifecycleCoordinator.transition_check_status(
             db,
             restaurant_id=rid,

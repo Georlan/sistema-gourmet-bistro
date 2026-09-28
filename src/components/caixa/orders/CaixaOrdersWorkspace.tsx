@@ -30,6 +30,7 @@ export interface CaixaOrdersWorkspaceProps {
   readonly search: { readonly query: string; readonly onChange: (query: string) => void };
   readonly acceptance: {
     readonly orders: readonly DeliveryOrderView[];
+    readonly pendingOrderIds: ReadonlySet<string>;
     readonly automatic: boolean;
     readonly drawerOpen: boolean;
     readonly onAutomaticChange: (automatic: boolean) => void;
@@ -163,7 +164,7 @@ export function CaixaOrdersWorkspace({
   const { tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
     tableClosing: filteredCol2Table, digitalFinalization: filteredDeliveryFinalization } = columns;
   const { query: searchQuery, onChange: setSearchQuery } = search;
-  const { orders: deliveryOrders, automatic: autoAccept, drawerOpen: isDrawerOpen,
+  const { orders: deliveryOrders, pendingOrderIds, automatic: autoAccept, drawerOpen: isDrawerOpen,
     onAutomaticChange: setAutoAccept, onDrawerChange: setIsDrawerOpen } = acceptance;
   const { stage: mobileOrdersStage, onStageChange: setMobileOrdersStage,
     expandedCardIds, onToggleCard: toggleCardExpansion } = navigation;
@@ -359,9 +360,9 @@ export function CaixaOrdersWorkspace({
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
             <span>Aguardando aceite</span>
-            {deliveryOrders.filter(o => o.status === 'pendente').length > 0 && (
+            {deliveryOrders.length > 0 && (
               <span className="orders-new-orders__count">
-                {deliveryOrders.filter(o => o.status === 'pendente').length}
+                {deliveryOrders.length}
               </span>
             )}
           </button>
@@ -396,13 +397,13 @@ export function CaixaOrdersWorkspace({
             </div>
             {/* Drawer body */}
             <div className={"flex-1 overflow-y-auto p-4 space-y-3"}>
-              {deliveryOrders.filter(o => o.status === 'pendente').length === 0 ? (
+              {deliveryOrders.length === 0 ? (
                 <div className={"flex flex-col items-center justify-center h-40 text-koma-muted text-[11px] italic"}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={"mb-3 opacity-40"}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
                   Nenhum pedido pendente
                 </div>
               ) : (
-                deliveryOrders.filter(o => o.status === 'pendente').map((order) => (
+                deliveryOrders.map((order) => (
                   <div key={order.id} className={"orders-pending-card p-4 rounded-xl space-y-3"}>
                     <div className={"flex justify-between items-start"}>
                       <div>
@@ -437,6 +438,7 @@ export function CaixaOrdersWorkspace({
                       <button
                         type="button"
                         onClick={() => actions.acceptDigitalOrder(order)}
+                        disabled={pendingOrderIds.has(String(order.id))}
                         className="orders-pending-card__accept"
                       >
                         ✓ Aceitar
@@ -444,6 +446,7 @@ export function CaixaOrdersWorkspace({
                       <button
                         type="button"
                         onClick={() => actions.rejectDigitalOrder(order)}
+                        disabled={pendingOrderIds.has(String(order.id))}
                         className="orders-pending-card__reject"
                       >
                         Recusar
