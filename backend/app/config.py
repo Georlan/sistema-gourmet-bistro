@@ -204,6 +204,11 @@ class Settings:
         30,
         min(int(os.getenv("CUSTOMER_EMAIL_RESEND_SECONDS", "60")), 3600),
     )
+    # Canal estreito para provar posse do telefone ao vincular uma ficha guest.
+    # É independente das automações operacionais de WhatsApp do restaurante.
+    CUSTOMER_PHONE_VERIFICATION_ENABLED: bool = (
+        os.getenv("CUSTOMER_PHONE_VERIFICATION_ENABLED", "false").lower() == "true"
+    )
     
     # CORS Configuration
     CORS_ALLOWED_ORIGINS: str = os.getenv("CORS_ALLOWED_ORIGINS", "")
