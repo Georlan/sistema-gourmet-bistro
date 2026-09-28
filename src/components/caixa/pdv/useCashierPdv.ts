@@ -270,17 +270,27 @@ export function useCashierPdv({
       showToast('Seu carrinho de vendas está vazio.', 'info');
       return;
     }
-    if (pdvOrderType !== 'dine_in' && !pdvPaymentMethod) {
-      showToast('Escolha a forma de pagamento da entrega ou retirada.', 'info');
-      return;
-    }
     const normalizedCustomerPhone = pdvCustomerPhone.replace(/\D/g, '');
-    if (pdvOrderType !== 'dine_in' && ![10, 11].includes(normalizedCustomerPhone.length)) {
-      showToast('Informe um celular válido com DDD.', 'info');
+    const hasPickupCustomerIdentity = pdvOrderType === 'pickup'
+      && (pdvCustomerName.trim().length > 0 || normalizedCustomerPhone.length > 0);
+
+    if (
+      pdvOrderType === 'delivery'
+      && ![10, 11].includes(normalizedCustomerPhone.length)
+    ) {
+      showToast('Informe um celular válido com DDD para o delivery.', 'info');
       return;
     }
-    if (pdvOrderType !== 'dine_in' && pdvCustomerName.trim().length < 2) {
-      showToast('Informe o nome do cliente.', 'info');
+    if (pdvOrderType === 'delivery' && pdvCustomerName.trim().length < 2) {
+      showToast('Informe o nome do cliente para o delivery.', 'info');
+      return;
+    }
+    if (hasPickupCustomerIdentity && ![10, 11].includes(normalizedCustomerPhone.length)) {
+      showToast('Para identificar a retirada, informe um celular válido com DDD.', 'info');
+      return;
+    }
+    if (hasPickupCustomerIdentity && pdvCustomerName.trim().length < 2) {
+      showToast('Para identificar a retirada, informe o nome do cliente.', 'info');
       return;
     }
 
@@ -397,10 +407,16 @@ export function useCashierPdv({
       const salePayload = {
         cliente_id: orderType === 'dine_in' ? undefined : customerId || undefined,
         mesa_id: orderType === 'delivery' ? null : mesaId || null,
-        tipo: orderType === 'dine_in' ? 'Consumo no Local' : orderType === 'delivery' ? 'Entrega' : 'Retirada',
-        identificador: customerName || undefined,
+        tipo: orderType === 'dine_in'
+          ? 'Consumo no Local'
+          : orderType === 'delivery'
+            ? 'Entrega'
+            : customerName.trim() || customerPhone.replace(/\D/g, '')
+              ? 'Retirada'
+              : 'Balcão',
+        identificador: customerName.trim() || undefined,
         delivery_status: orderType === 'dine_in' ? undefined : 'producao',
-        delivery_telefone: orderType === 'dine_in' ? undefined : customerPhone,
+        delivery_telefone: orderType === 'dine_in' || !customerPhone ? undefined : customerPhone,
         delivery_endereco: orderType === 'delivery' ? deliveryAddress : undefined,
         address_snapshot: orderType === 'delivery' ? deliverySnapshot || undefined : undefined,
         delivery_taxa: orderType === 'delivery' ? Number(deliveryTaxa || 0) : 0.0,
