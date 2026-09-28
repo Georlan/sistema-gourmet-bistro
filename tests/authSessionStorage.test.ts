@@ -71,6 +71,27 @@ test('saveOperatorSession persiste somente identidade operacional mínima', () =
   assert.equal(getPersistedOperationalPortal(), 'caixa');
 });
 
+test('sessão de cozinha usa namespace operacional do caixa preservando o papel', () => {
+  saveOperatorSession('kitchen-access-token', {
+    id: 'kitchen-1',
+    nome: 'Cozinha QA',
+    role: 'cozinha',
+    cargo: 'cozinha',
+    restaurante_id: 3,
+  });
+
+  const raw = localStorage.getItem('koma_operator_session_caixa') || '';
+  const parsed = JSON.parse(raw);
+
+  assert.equal(parsed.user.role, 'cozinha');
+  assert.equal(parsed.user.cargo, 'cozinha');
+  assert.equal(localStorage.getItem('koma_caixa_token'), 'kitchen-access-token');
+  assert.equal(localStorage.getItem('koma_caixa_role'), 'cozinha');
+  assert.equal(localStorage.getItem('koma_waiter_token'), null);
+  assert.equal(sessionStorage.getItem('koma_active_operational_portal'), 'caixa');
+  assert.equal(getPersistedOperationalPortal(), 'caixa');
+});
+
 test('sessão canônica de garçom usa apenas aliases de garçom', () => {
   saveOperatorSession('waiter-access-token', {
     id: 'waiter-1',
