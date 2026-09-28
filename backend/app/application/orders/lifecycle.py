@@ -134,7 +134,7 @@ class OrderLifecycleCoordinator:
             fulfillment=fulfillment,
             aggregate_status=current,
         )
-        if not pending_transitions:
+        if not pending_transitions and not transition.changed:
             return OrderLifecycleResult(
                 comanda=comanda,
                 current_status=current,
