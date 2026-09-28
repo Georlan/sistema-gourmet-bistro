@@ -298,6 +298,7 @@ def _send_existing_account_verification_email(
 def request_customer_registration(
     payload: CustomerRegistrationRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     if not registration_email_available():
@@ -351,23 +352,73 @@ def request_customer_registration(
             )
             db.commit()
 
-        existing_account = db.query(Cliente).filter(
+        now = _utcnow()
+
+        # O cadastro já alimenta a fonte canônica de clientes/CRM assim que o
+        # e-mail transacional é aceito pelo Resend. O registro nasce sem nenhum
+        # contato verificado e, portanto, não recebe sessão nem pode apropriar
+        # pedidos anônimos pelo telefone até a confirmação adequada.
+        cliente_por_email = db.query(Cliente).filter(
             Cliente.restaurante_id == restaurante_id,
             Cliente.email == email,
-            Cliente.senha_hash.isnot(None),
-        ).first()
-        if existing_account is not None:
+        ).with_for_update().first()
+        cliente_por_telefone = db.query(Cliente).filter(
+            Cliente.restaurante_id == restaurante_id,
+            Cliente.telefone == telefone,
+        ).with_for_update().first()
+
+        if cliente_por_email is not None and (
+            cliente_por_email.email_verificado_em is not None
+            or cliente_por_email.telefone_verificado_em is not None
+        ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Já existe uma conta com este e-mail neste restaurante. Faça login.",
             )
 
-        now = _utcnow()
+        if (
+            cliente_por_email is not None
+            and cliente_por_telefone is not None
+            and cliente_por_email.id != cliente_por_telefone.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Os dados informados já pertencem a cadastros diferentes neste restaurante.",
+            )
+
+        pending_customer = cliente_por_email
+        if pending_customer is None and cliente_por_telefone is not None:
+            if (
+                cliente_por_telefone.email_verificado_em is not None
+                or cliente_por_telefone.telefone_verificado_em is not None
+            ):
+                # Um telefone já comprovado nunca pode ser tomado por um novo
+                # cadastro baseado somente em posse de outro e-mail.
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Este telefone já possui uma conta neste restaurante. Faça login.",
+                )
+            if cliente_por_telefone.senha_hash:
+                # Registro totalmente pendente: nenhum contato foi comprovado e
+                # pedidos anônimos não podem ser ligados a ele. Reutilizamos a
+                # mesma ficha CRM e invalidamos o desafio anterior para evitar
+                # que um telefone digitado por engano fique bloqueado para sempre.
+                if cliente_por_telefone.email and cliente_por_telefone.email != email:
+                    db.query(CustomerRegistrationChallenge).filter(
+                        CustomerRegistrationChallenge.restaurante_id == restaurante_id,
+                        CustomerRegistrationChallenge.email == cliente_por_telefone.email,
+                    ).delete(synchronize_session=False)
+                pending_customer = cliente_por_telefone
+            else:
+                # Ficha guest existente: ela já está visível no CRM, mas não
+                # recebe credenciais/e-mail antes de provar posse do telefone.
+                pending_customer = None
+
         challenge = db.query(CustomerRegistrationChallenge).filter(
             CustomerRegistrationChallenge.restaurante_id == restaurante_id,
             CustomerRegistrationChallenge.email == email,
         ).with_for_update().first()
-        if challenge is not None:
+        if challenge is not None and challenge.ultimo_envio_em is not None:
             last_send = challenge.ultimo_envio_em
             if last_send.tzinfo is None:
                 last_send = last_send.replace(tzinfo=datetime.timezone.utc)
@@ -385,6 +436,35 @@ def request_customer_registration(
             seconds=settings.CUSTOMER_EMAIL_VERIFICATION_TTL_SECONDS
         )
         password_hash = get_password_hash(payload.senha)
+        address = (payload.endereco or "").strip() or None
+
+        pending_action = None
+        if pending_customer is None and cliente_por_telefone is None:
+            import uuid
+            pending_customer = Cliente(
+                id=str(uuid.uuid4()),
+                restaurante_id=restaurante_id,
+                telefone=telefone,
+                nome=nome,
+                endereco=address,
+                email=email,
+                senha_hash=password_hash,
+                email_verificado_em=None,
+                telefone_verificado_em=None,
+                saldo_pontos=0,
+                saldo_cashback=0.0,
+            )
+            db.add(pending_customer)
+            pending_action = "created"
+        elif pending_customer is not None:
+            pending_customer.nome = nome
+            pending_customer.telefone = telefone
+            pending_customer.email = email
+            pending_customer.senha_hash = password_hash
+            pending_customer.endereco = address or pending_customer.endereco
+            pending_customer.email_verificado_em = None
+            pending_customer.telefone_verificado_em = None
+            pending_action = "updated"
 
         if challenge is None:
             import uuid
@@ -394,7 +474,7 @@ def request_customer_registration(
                 nome=nome,
                 email=email,
                 telefone=telefone,
-                endereco=(payload.endereco or "").strip() or None,
+                endereco=address,
                 senha_hash=password_hash,
                 token_hash=token_hash,
                 expira_em=expires_at,
@@ -406,16 +486,17 @@ def request_customer_registration(
         else:
             challenge.nome = nome
             challenge.telefone = telefone
-            challenge.endereco = (payload.endereco or "").strip() or None
+            challenge.endereco = address
             challenge.senha_hash = password_hash
             challenge.token_hash = token_hash
             challenge.expira_em = expires_at
             challenge.ultimo_envio_em = now
             challenge.email_verificado_em = None
 
-        db.flush([challenge])
-        from ..models import Restaurante
-        restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
+        db.flush()
+        restaurante = db.query(Restaurante).filter(
+            Restaurante.id == restaurante_id,
+        ).first()
         sent = send_registration_email(
             email,
             name=nome,
@@ -429,9 +510,33 @@ def request_customer_registration(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Não foi possível enviar o e-mail de confirmação agora. Tente novamente em instantes.",
             )
-        db.commit()
+
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="O cadastro entrou em conflito com outra operação. Tente novamente.",
+            ) from None
+
+        if pending_customer is not None and pending_action is not None:
+            background_tasks.add_task(
+                manager.broadcast,
+                {
+                    "event": "customers_updated",
+                    "detail": {
+                        "action": pending_action,
+                        "cliente_id": pending_customer.id,
+                        "registration_pending": True,
+                    },
+                },
+                restaurante_id,
+                target_audience="internal",
+            )
+
         return {
-            "detail": "Enviamos um link de confirmação para seu e-mail.",
+            "detail": "Cadastro recebido. Enviamos um link de confirmação para seu e-mail.",
             "expires_in_seconds": settings.CUSTOMER_EMAIL_VERIFICATION_TTL_SECONDS,
         }
 
@@ -962,10 +1067,18 @@ def login_customer(
                 detail="E-mail ou senha incorretos.",
             )
 
-        if (
-            settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS
-            and cliente.email_verificado_em is None
-        ):
+        # Contas criadas pelo novo fluxo entram no CRM imediatamente,
+        # mas não ganham sessão enquanto nenhum contato tiver sido comprovado.
+        # Contas legadas com telefone já verificado preservam o comportamento
+        # anterior, salvo quando o rollout exige e-mail confirmado para pedidos.
+        requires_email_confirmation = (
+            cliente.email_verificado_em is None
+            and (
+                cliente.telefone_verificado_em is None
+                or settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS
+            )
+        )
+        if requires_email_confirmation:
             detail = _send_existing_account_verification_email(
                 db,
                 restaurante_id=restaurante_id,
