@@ -145,6 +145,9 @@ def test_reasoned_rejection_uses_canonical_lifecycle():
 def test_acceptance_cannot_be_rejected_by_initial_rejection_endpoint():
     _reset()
     _order("reject-after-accept-1")
+    pending_before = client.get("/comandas/delivery/pendentes", headers=_headers())
+    assert pending_before.status_code == 200, pending_before.text
+    assert "reject-after-accept-1" in {row["id"] for row in pending_before.json()}
     accepted = client.put(
         "/comandas/reject-after-accept-1/delivery/status",
         params={"status_novo": "producao"},
@@ -159,6 +162,9 @@ def test_acceptance_cannot_be_rejected_by_initial_rejection_endpoint():
     active = client.get("/comandas/delivery/ativos", headers=_headers())
     assert active.status_code == 200, active.text
     assert next(row for row in active.json() if row["id"] == "reject-after-accept-1")["delivery_status"] == "producao"
+    pending_after = client.get("/comandas/delivery/pendentes", headers=_headers())
+    assert pending_after.status_code == 200, pending_after.text
+    assert "reject-after-accept-1" not in {row["id"] for row in pending_after.json()}
 
     rejected = client.post(
         "/api/online-orders/orders/reject-after-accept-1/reject",
@@ -197,6 +203,9 @@ def test_replayed_rejection_does_not_repeat_notice_or_block():
     )
     assert second.status_code == 409, second.text
     assert second.json()["detail"]["current_status"] == "rejected"
+    pending_after = client.get("/comandas/delivery/pendentes", headers=_headers())
+    assert pending_after.status_code == 200, pending_after.text
+    assert "reject-replay-1" not in {row["id"] for row in pending_after.json()}
     attempted_accept = client.put(
         "/comandas/reject-replay-1/delivery/status",
         params={"status_novo": "producao"}, headers=_headers(),

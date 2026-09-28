@@ -65,7 +65,7 @@ test('fila de aceite usa status confirmado e bloqueia ações durante a transiç
 
   const acceptedMarkup = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
     ...props,
-    acceptance: { ...props.acceptance, orders: [digital({ id: 'online-69', status: 'producao' })], pendingOrderIds: new Set<string>() },
+    acceptance: { ...props.acceptance, orders: [], pendingOrderIds: new Set<string>() },
   }));
   assert.doesNotMatch(acceptedMarkup, /orders-pending-card p-4/);
 });

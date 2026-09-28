@@ -168,10 +168,11 @@ export function useCashierOrders({
       setCancelTableReason('');
       if (isDigitalScope) {
         setDeliveryOrders((current) => current.filter((order) => String(order.id) !== String(cancelledOrderId)));
+        setPendingAcceptanceOrders((current) => current.filter((order) => String(order.id) !== String(cancelledOrderId)));
         void onRefreshOrders();
         window.dispatchEvent(new Event('koma_orders_updated'));
         if (digitalIntent === 'reject') {
-          if (deliveryOrders.filter((order) => order.status === 'pendente').length <= 1) {
+          if (pendingAcceptanceOrders.length <= 1) {
             setIsDrawerOpen(false);
           }
           showToast(
@@ -270,6 +271,7 @@ export function useCashierOrders({
   };
 
   const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>([]);
+  const [pendingAcceptanceOrders, setPendingAcceptanceOrders] = useState<DeliveryOrderView[]>([]);
   const [deliveryOrdersLoadState, setDeliveryOrdersLoadState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [pendingDeliveryOrderIds, setPendingDeliveryOrderIds] = useState<ReadonlySet<string>>(new Set());
   const deliveryOrdersRequestRef = useRef(0);
@@ -395,9 +397,12 @@ export function useCashierOrders({
     const requestId = ++deliveryOrdersRequestRef.current;
     setDeliveryOrdersLoadState((current) => current === 'loaded' ? current : 'loading');
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
+      const [res, pendingRes] = await Promise.all([
+        fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders }),
+        fetch(`${apiBaseUrl}/comandas/delivery/pendentes`, { headers: authHeaders }),
+      ]);
+      if (res.ok && pendingRes.ok) {
+        const [data, pendingData] = await Promise.all([res.json(), pendingRes.json()]);
         if (requestId !== deliveryOrdersRequestRef.current) return;
         const mapped = data
           .map(mapComandaToDeliveryView)
@@ -418,6 +423,13 @@ export function useCashierOrders({
             return previous ? reconcileDeliveryOrderAfterStatus(previous, order) : order;
           });
         });
+        const pendingMapped = pendingData
+          .map(mapComandaToDeliveryView)
+          .filter((order: DeliveryOrderView | null): order is DeliveryOrderView => order !== null)
+          .filter((order: DeliveryOrderView) => !pendingDeliveryMutationRef.current[String(order.id)]);
+        setPendingAcceptanceOrders(Array.from(new Map<string, DeliveryOrderView>(
+          pendingMapped.map((order: DeliveryOrderView) => [String(order.id), order] as const)
+        ).values()));
         syncSelectedMotoboysFromServer(mapped);
         setDeliveryOrdersLoadState('loaded');
       } else if (requestId === deliveryOrdersRequestRef.current) {
@@ -810,6 +822,9 @@ export function useCashierOrders({
     deliveryOrdersRequestRef.current += 1;
 
     if (optimisticStatus) {
+      if (optimisticStatus !== 'pendente') {
+        setPendingAcceptanceOrders((current) => current.filter((order) => String(order.id) !== orderKey));
+      }
       setDeliveryOrders((current) =>
         current.map((order) => String(order.id) === orderKey ? { ...order, status: optimisticStatus } : order)
       );
@@ -1056,7 +1071,7 @@ export function useCashierOrders({
 
   const handleAcceptPendingDeliveryOrder = async (order: DeliveryOrderView) => {
     const accepted = await handleUpdateDeliveryStatus(order.id, 'producao');
-    if (accepted && deliveryOrders.filter((o) => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
+    if (accepted && pendingAcceptanceOrders.length <= 1) setIsDrawerOpen(false);
   };
 
   const handleRejectPendingDeliveryOrder = (order: DeliveryOrderView) => {
@@ -1243,6 +1258,7 @@ export function useCashierOrders({
     handleAddMotoboy,
     handleUpdateItemStatus,
     handleAcceptPendingDeliveryOrder,
+    pendingAcceptanceOrders,
     pendingDeliveryOrderIds,
     handleRejectPendingDeliveryOrder,
     handleMarkTableItemsReady,
