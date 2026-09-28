@@ -795,11 +795,18 @@ def update_item_status(
     status: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom: Usuario = Depends(require_permission("pedidos:alterar_status"))
+    current_garcom: Usuario = Depends(require_permission("pedidos:alterar_status_item"))
 ):
     """
-    Atualiza o status de um item (requer autenticação do garçom).
+    Atualiza o status de um item. Cozinha pode apenas concluir o preparo.
     """
+    user_role = (current_garcom.role or current_garcom.cargo or "").lower().strip()
+    if user_role == "cozinha" and status.lower().strip() != "pronto":
+        raise HTTPException(
+            status_code=status_module.HTTP_403_FORBIDDEN,
+            detail="Acesso negado: a cozinha só pode marcar itens como pronto.",
+        )
+
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(
