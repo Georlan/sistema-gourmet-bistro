@@ -783,7 +783,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   )}
 
                   {pdvOrderType === 'pickup' && (
-                    <details className="rounded-xl border border-koma-border bg-koma-card/40">
+                    <details className="group rounded-xl border border-koma-border bg-koma-card/40">
                       <summary className="cursor-pointer list-none px-3 py-2.5">
                         <div className="flex items-center justify-between gap-3">
                           <div>
@@ -791,7 +791,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                             <span className="text-[8px] text-koma-muted">Opcional para retirada rápida</span>
                           </div>
                           <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
-                            {pdvCustomerName || pdvCustomerPhone ? 'Preenchido' : 'Adicionar'}
+                            <span className="group-open:hidden">
+                              {pdvCustomerName || pdvCustomerPhone ? 'Preenchido' : 'Adicionar'}
+                            </span>
+                            <span className="hidden group-open:inline">Fechar</span>
                           </span>
                         </div>
                       </summary>
@@ -876,7 +879,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           {pdvCustomerLookup === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
                         </p>
                       )}
-                      <details className="rounded-xl border border-koma-border bg-koma-card/40">
+                      <details className="group rounded-xl border border-koma-border bg-koma-card/40">
                         <summary className="cursor-pointer list-none px-3 py-2.5">
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
@@ -886,7 +889,8 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                               </span>
                             </div>
                             <span className="shrink-0 text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
-                              Editar entrega
+                              <span className="group-open:hidden">Editar entrega</span>
+                              <span className="hidden group-open:inline">Fechar</span>
                             </span>
                           </div>
                         </summary>
@@ -904,7 +908,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   )}
 
                   {(pdvOrderType === 'pickup' || pdvOrderType === 'delivery') && (
-                    <details className="rounded-xl border border-koma-border bg-koma-card/40">
+                    <details className="group rounded-xl border border-koma-border bg-koma-card/40">
                       <summary className="cursor-pointer list-none px-3 py-2.5">
                         <div className="flex items-center justify-between gap-3">
                           <div>
@@ -912,7 +916,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                             <span className="text-[8px] text-koma-muted">Pode ser informado no fechamento.</span>
                           </div>
                           <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
-                            {pdvPaymentMethod ? PAYMENT_LABELS[pdvPaymentMethod] : 'Adicionar'}
+                            <span className="group-open:hidden">
+                              {pdvPaymentMethod ? PAYMENT_LABELS[pdvPaymentMethod] : 'Adicionar'}
+                            </span>
+                            <span className="hidden group-open:inline">Fechar</span>
                           </span>
                         </div>
                       </summary>

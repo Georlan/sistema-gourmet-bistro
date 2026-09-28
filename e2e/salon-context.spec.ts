@@ -132,7 +132,18 @@ test('Novo pedido preserva o carrinho e adapta os dados operacionais por modalid
   await expect(panel.getByLabel('Resumo do pedido')).toContainText('Retirada');
   await expect(panel.getByText('Identificação do cliente', { exact: true })).toBeVisible();
   await expect(panel.locator('#pdv-customer-phone-input')).toBeHidden();
+  const customerDetails = panel.locator('details').filter({ hasText: 'Identificação do cliente' });
+  await expect(customerDetails.getByText('Adicionar', { exact: true })).toBeVisible();
+  await customerDetails.locator('summary').click();
+  await expect(customerDetails.getByText('Fechar', { exact: true })).toBeVisible();
+  await customerDetails.locator('summary').click();
+
   await expect(panel.getByText(/Pagamento \(opcional agora\)/)).toBeVisible();
+  const paymentDetails = panel.locator('details').filter({ hasText: 'Pagamento' });
+  await expect(paymentDetails.getByText('Adicionar', { exact: true })).toBeVisible();
+  await paymentDetails.locator('summary').click();
+  await expect(paymentDetails.getByText('Fechar', { exact: true })).toBeVisible();
+  await paymentDetails.locator('summary').click();
   await expect(panel.getByRole('button', { name: 'Lançar Pedido', exact: false })).toBeEnabled();
 
   await panel.getByRole('button', { name: 'Delivery', exact: true }).click();
@@ -140,7 +151,9 @@ test('Novo pedido preserva o carrinho e adapta os dados operacionais por modalid
   await expect(panel.locator('#pdv-customer-name-input')).toBeVisible();
   await expect(panel.getByText('Editar entrega', { exact: true })).toBeVisible();
   await expect(panel.locator('#pdv-delivery-address-logradouro')).toBeHidden();
-  await panel.getByText('Editar entrega', { exact: true }).click();
+  const deliveryDetails = panel.locator('details').filter({ hasText: 'Entrega' });
+  await deliveryDetails.locator('summary').click();
+  await expect(deliveryDetails.getByText('Fechar', { exact: true })).toBeVisible();
   await expect(panel.locator('#pdv-delivery-address-logradouro')).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Lançar Pedido', exact: false })).toBeVisible();
 
