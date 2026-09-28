@@ -222,11 +222,11 @@ def cancelar_consumo_mesa(
 
     # Nesta fase do produto, pagamentos digitados manualmente pelo Caixa são
     # confirmações operacionais, não prova de liquidação externa. Ao destruir a
-    # mesa, esses registros podem ser anulados com auditoria para que o saldo
-    # restante não seja artificialmente tratado como pago. Pagamentos cuja
-    # liquidação veio de um provedor continuam protegidos: quando SmartPOS/
-    # checkout passarem a ser a autoridade do pagamento, a mesa não poderá
-    # ignorar uma confirmação externa.
+    # mesa, valores já confirmados continuam contabilizados como recebidos, mas
+    # nenhum saldo restante é fabricado como pago. Confirmações ainda pendentes
+    # são canceladas. Pagamentos cuja liquidação veio de um provedor continuam
+    # protegidos: quando SmartPOS/checkout forem a autoridade do pagamento, a
+    # mesa não poderá ignorar uma confirmação externa.
     pagamento_ids = [str(pagamento.id) for pagamento in pagamentos_ativos]
     pagamentos_integrados: set[str] = set()
     if pagamento_ids:
