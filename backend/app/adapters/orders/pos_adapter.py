@@ -185,18 +185,9 @@ class PosAdapter:
                     detail="Informe o endereço de entrega.",
                 )
 
-        if tipo_pedido == "Retirada" and not is_counter_sale:
-            if not (venda_in.identificador or "").strip():
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="Informe o nome do cliente para a retirada.",
-                )
-            if not (venda_in.delivery_telefone or "").strip():
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="Informe o telefone do cliente para a retirada.",
-                )
-
+        # Retirada de balcão precisa ser rápida: identificação e telefone são
+        # dados opcionais no canal POS. Quando informados, continuam sendo
+        # normalizados/persistidos normalmente; delivery mantém seus requisitos.
         if (
             tipo_pedido in {"Entrega", "Retirada"}
             and not is_counter_sale
