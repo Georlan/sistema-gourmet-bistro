@@ -5,7 +5,7 @@ import { Check, ChevronLeft, ChevronRight, Edit3, Info, Minus, Package, Plus, Se
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { getProductPresets } from '../../../domain/catalogPresentation';
-import { deliveryAddressDraftToSnapshot } from '../../../domain/deliveryAddress';
+import { deliveryAddressDraftToSnapshot, updateDeliveryAddressGeographicField } from '../../../domain/deliveryAddress';
 import {
   changeModifierQuantitySelection,
   modifierGroupSelectionValid,
@@ -1118,8 +1118,43 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 legacyHint={pdvDeliveryAddressLegacyHint || null}
                 compact
                 idPrefix="pdv-delivery-address"
-                requireCompleteLocation
               />
+              <div className="mt-2 grid grid-cols-[minmax(0,1fr)_76px] gap-2">
+                <label>
+                  <span className="mb-1 block text-[8px] font-bold uppercase tracking-wider text-koma-subtle">
+                    Cidade
+                  </span>
+                  <input
+                    id="pdv-delivery-address-cidade"
+                    autoComplete="address-level2"
+                    placeholder="Ex.: Fortaleza"
+                    value={pdvDeliveryAddressDraft.cidade}
+                    onChange={(event) => handlePdvDeliveryAddressChange(
+                      updateDeliveryAddressGeographicField(pdvDeliveryAddressDraft, 'cidade', event.target.value),
+                    )}
+                    className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground outline-none focus:border-emerald-500"
+                  />
+                </label>
+                <label>
+                  <span className="mb-1 block text-[8px] font-bold uppercase tracking-wider text-koma-subtle">
+                    UF
+                  </span>
+                  <input
+                    id="pdv-delivery-address-uf"
+                    autoComplete="address-level1"
+                    placeholder="CE"
+                    maxLength={2}
+                    value={pdvDeliveryAddressDraft.uf}
+                    onChange={(event) => handlePdvDeliveryAddressChange(
+                      updateDeliveryAddressGeographicField(pdvDeliveryAddressDraft, 'uf', event.target.value),
+                    )}
+                    className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] uppercase text-koma-foreground outline-none focus:border-emerald-500"
+                  />
+                </label>
+              </div>
+              <p className="mt-2 text-[8px] leading-relaxed text-koma-muted">
+                Bairro, cidade e UF precisam estar preenchidos para lançar o delivery.
+              </p>
             </div>
 
             <div className="mt-4 flex flex-col gap-3 border-t border-koma-border pt-4 sm:flex-row sm:items-center sm:justify-between">
