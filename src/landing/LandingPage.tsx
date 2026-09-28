@@ -1,15 +1,26 @@
 import React, { useEffect } from 'react';
-import './landing-v2.css';
+import './landing.css';
+import './mobile-refinement.css';
+import './plan-comparison.css';
 import { Header } from './sections/Header';
 import { Hero } from './sections/Hero';
 import { ValueStrip } from './sections/ValueStrip';
+import { SocialProof } from './sections/SocialProof';
+import { Management } from './sections/Management';
 import { HowItWorks } from './sections/HowItWorks';
 import { LeadCaptureProvider } from './components/LeadCaptureProvider';
+import { Implementation } from './sections/Implementation';
 import { FAQ } from './sections/FAQ';
 import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
 import { SUBSCRIPTION_PLANS } from '../config/subscriptionPlans';
 import { KOMA_SLOGAN } from '../brand/komaBrand';
+
+type DividerVariant = 'dark-light' | 'light-dark' | 'light-green';
+
+function AngleDivider({ variant }: { variant: DividerVariant }) {
+  return <div className={`koma-angle-divider koma-angle-divider--${variant}`} aria-hidden="true" />;
+}
 
 export default function LandingPage() {
   useEffect(() => {
@@ -82,29 +93,26 @@ export default function LandingPage() {
     if (!window.location.hash) window.scrollTo(0, 0);
     else requestAnimationFrame(() => document.getElementById(window.location.hash.slice(1))?.scrollIntoView());
 
-    const targets = document.querySelectorAll<HTMLElement>('[data-reveal]');
-    const observer = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (!entry.isIntersecting) return;
-        entry.target.classList.add('is-visible');
-        observer?.unobserve(entry.target);
-      });
-    }, { threshold: 0.08 });
-    targets.forEach(target => observer?.observe(target));
-
-    return () => { structuredData.remove(); observer?.disconnect(); };
+    return () => structuredData.remove();
   }, []);
 
   return (
-    <div className="koma-landing-v2">
+    <div className="koma-landing">
       <LeadCaptureProvider>
         <Header />
         <main>
           <Hero />
+          <AngleDivider variant="dark-light" />
+          <SocialProof />
           <ValueStrip />
+          <Management />
+          <AngleDivider variant="light-dark" />
           <HowItWorks />
+          <AngleDivider variant="dark-light" />
+          <Implementation />
           <Plans />
           <FAQ />
+          <AngleDivider variant="light-dark" />
           <FinalCTA />
         </main>
       </LeadCaptureProvider>

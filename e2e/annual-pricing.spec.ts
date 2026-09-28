@@ -12,11 +12,12 @@ for (const { plan, monthly, equivalent, total, savings } of annualPlans) {
       json: { credit_card: true, pix: true, account_money: true, publicKey: 'TEST-public' },
     }));
     await page.goto('/#planos');
-    const card = page.locator('.v2-plan-card').filter({ has: page.getByRole('heading', { name: new RegExp(plan, 'i') }) });
-    await expect(card.locator('.v2-plan-price')).toContainText( new RegExp(monthly.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(' ', '\\s*')));
-    await page.getByRole('group', { name: 'Período de cobrança' }).getByRole('button', { name: /^Anual/ }).click();
-    await expect(card.locator('.v2-plan-price')).toContainText( new RegExp(equivalent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(' ', '\\s*')));
+    const card = page.locator('.koma-plan-card').filter({ has: page.getByRole('heading', { name: new RegExp(plan, 'i') }) });
+    await expect(card.locator('.koma-plan-price')).toHaveAttribute('aria-label', new RegExp(monthly.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(' ', '\\s*')));
+    await page.getByRole('group', { name: 'Escolha entre cobrança mensal ou anual' }).getByRole('button', { name: /^Anual/ }).click();
+    await expect(card.locator('.koma-plan-price')).toHaveAttribute('aria-label', new RegExp(equivalent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(' ', '\\s*')));
     await expect(card).toContainText(total);
+    await expect(card).toContainText(savings);
     await card.getByRole('link', { name: new RegExp(`CONTRATAR ${plan}`, 'i') }).click();
     await expect(page).toHaveURL(new RegExp(`/contratar/${plan}\\?cobranca=anual`));
     await expect(page.getByRole('radio', { name: /^Anual/ })).toContainText(total);

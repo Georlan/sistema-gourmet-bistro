@@ -60,14 +60,15 @@ test.describe('checkout público de adesão KÔMA', () => {
   test('landing mantém foco em plano e preço sem expor roadmap de pagamentos', async ({ page }) => {
     await page.goto('/landing#planos');
 
-    await expect(page.getByRole('group', { name: 'Período de cobrança' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Escolha entre cobrança mensal ou anual' })).toBeVisible();
     await expect(page.getByLabel('Formas de pagamento da adesão')).toHaveCount(0);
     await expect(page.getByText('FORMAS DE PAGAMENTO', { exact: true })).toHaveCount(0);
 
-    const billingSwitch = page.getByRole('group', { name: 'Período de cobrança' });
+    const billingSwitch = page.getByRole('group', { name: 'Escolha entre cobrança mensal ou anual' });
     await billingSwitch.getByRole('button', { name: /^Anual\b/ }).click();
 
-    await expect(page.getByText(/No anual, o desconto vale apenas para o valor fixo/)).toBeVisible();
+    await expect(page.getByText(/É apenas uma referência de preço/)).toBeVisible();
+    await expect(page.getByText(/condições de pagamento são apresentadas na contratação/)).toBeVisible();
     await expect(page.getByText('Pix', { exact: true })).toHaveCount(0);
     await expect(page.getByText('NuPay', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Boleto bancário', { exact: true })).toHaveCount(0);
