@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.application.orders.commands import CreateOrderCommand
 from app.application.orders.service import OrderApplicationService
+from app.config import settings
 from app.database import SessionLocal
 from app.domain.orders.types import FulfillmentType, OrderChannel
 from app.models import (
@@ -64,6 +65,71 @@ class TestCardapioWebAdapter:
             assert cmd.customer.phone == "11999990001"
             assert len(cmd.items) == 1
             assert cmd.items[0].product_id == "prod-char-simples"
+
+    def test_web_adapter_requires_customer_session_when_gate_enabled(
+        self,
+        char_client,
+        char_setup,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(settings, "CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS", True)
+        payload = {
+            "restaurante_id": CHAR_RESTAURANT_ID,
+            "cliente_nome": "Cliente sem sessão",
+            "cliente_telefone": "11999990009",
+            "tipo_pedido": "retirada",
+            "itens": [
+                {
+                    "produto_id": "prod-char-simples",
+                    "quantidade": 1,
+                    "modificador_ids": [],
+                }
+            ],
+        }
+
+        res = char_client.post("/cardapio/pedidos", json=payload)
+
+        assert res.status_code == 401
+        assert "confirme o e-mail" in res.json()["detail"].lower()
+
+    def test_web_adapter_requires_verified_email_when_gate_enabled(
+        self,
+        char_client,
+        char_setup,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(settings, "CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS", True)
+        payload = {
+            "restaurante_id": CHAR_RESTAURANT_ID,
+            "cliente_nome": "Cliente não verificado",
+            "cliente_telefone": "11999990010",
+            "tipo_pedido": "retirada",
+            "itens": [
+                {
+                    "produto_id": "prod-char-simples",
+                    "quantidade": 1,
+                    "modificador_ids": [],
+                }
+            ],
+        }
+        unverified_customer = MagicMock(
+            email_verificado_em=None,
+            telefone="11999990010",
+            nome="Cliente não verificado",
+        )
+
+        with patch(
+            "app.adapters.orders.web_adapter.authenticated_customer",
+            return_value=(MagicMock(), unverified_customer),
+        ):
+            res = char_client.post(
+                "/cardapio/pedidos",
+                json=payload,
+                headers={"X-Koma-Customer-Token": "synthetic-customer-token"},
+            )
+
+        assert res.status_code == 403
+        assert "confirme seu e-mail" in res.json()["detail"].lower()
 
     def test_web_adapter_maps_public_dine_in_without_address(self, char_client, char_setup):
         payload = {

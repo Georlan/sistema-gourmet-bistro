@@ -237,6 +237,7 @@ def _public_restaurant_payload(
         "horarios_funcionamento": restaurante.horarios_funcionamento,
         "formas_pagamento_aceitas": restaurante.formas_pagamento_aceitas,
         "pagamento_online_ativo": pagamento_online_ativo,
+        "conta_cliente_obrigatoria": bool(settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS),
         "tipos_pedido_ativos": configuracao.tipos_pedido_ativos if configuracao else None,
         "delivery_ativo": configuracao.delivery_ativo is not False if configuracao else True,
         "cor_primaria": restaurante.cor_primaria,

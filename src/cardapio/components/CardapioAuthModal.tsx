@@ -17,6 +17,7 @@ import {
 
 interface CardapioAuthModalProps {
   restaurantId: string | number;
+  accountRequired?: boolean;
   onClose: () => void;
   onLoginSuccess: (profile: CustomerProfile, token: string) => void;
 }
@@ -25,6 +26,7 @@ export const PASSWORD_RECOVERY = "ATIVO";
 
 export default function CardapioAuthModal({
   restaurantId,
+  accountRequired = false,
   onClose,
   onLoginSuccess,
 }: CardapioAuthModalProps) {
@@ -74,7 +76,11 @@ export default function CardapioAuthModal({
         throw new Error(data?.detail || "E-mail ou senha incorretos.");
       }
 
-      onLoginSuccess(mapCustomerProfile(data.cliente), String(data.access_token));
+      const profile = mapCustomerProfile(data.cliente);
+      if (accountRequired && profile.emailVerified !== true) {
+        throw new Error("Confirme seu e-mail antes de fazer pedidos por este cardápio.");
+      }
+      onLoginSuccess(profile, String(data.access_token));
       onClose();
     } catch (error) {
       setErrorMessage(authRequestErrorMessage(error, "Falha ao realizar login."));
@@ -178,7 +184,9 @@ export default function CardapioAuthModal({
         </div>
 
         <p className="mt-2.5 text-xs leading-relaxed text-gray-300">
-          Acompanhe seus pedidos e consulte os benefícios disponíveis neste restaurante. Você também pode comprar como visitante.
+          {accountRequired
+            ? "Para enviar pedidos, entre na sua conta ou crie uma nova e confirme o cadastro pelo e-mail."
+            : "Acompanhe seus pedidos e consulte os benefícios disponíveis neste restaurante. Você também pode comprar como visitante."}
         </p>
 
         {/* Seletor de Abas (Entrar / Criar Conta) */}

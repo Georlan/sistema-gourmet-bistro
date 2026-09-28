@@ -26,6 +26,7 @@ from ...application.orders.commands import (
 )
 from ...application.orders.idempotency import compute_fingerprint_for_public_payload
 from ...application.orders.service import OrderApplicationService
+from ...config import settings
 from ...database import current_restaurante_id
 from ...domain.orders.errors import (
     EmptyOrderItemsError,
@@ -342,6 +343,12 @@ class CardapioWebAdapter:
                     detail="Restaurante temporariamente suspenso para novos pedidos.",
                 )
 
+            if settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS and not customer_token:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Entre ou crie sua conta e confirme o e-mail antes de fazer o pedido.",
+                )
+
             if is_scheduled:
                 normalized_schedule = validate_schedule_request(
                     db,
@@ -394,6 +401,14 @@ class CardapioWebAdapter:
                     raw_token=customer_token,
                     expected_restaurante_id=rest_id,
                 )
+                if (
+                    settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS
+                    and cliente.email_verificado_em is None
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Confirme seu e-mail antes de fazer o pedido.",
+                    )
                 telefone_clean = cliente.telefone
                 cliente_nome = cliente.nome
 

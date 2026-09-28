@@ -102,6 +102,7 @@ export interface BrandConfig {
   about?: string;
   paymentMethods?: PaymentMethodGroup[];
   onlinePaymentEnabled?: boolean;
+  customerAccountRequired?: boolean;
   activeOrderTypes?: Array<"consumo_local" | "retirada" | "delivery">;
   operatingHours?: OperatingHours[];
   googleMapsUrl?: string;

@@ -581,3 +581,13 @@ def test_status_endpoint_security_requires_idempotency_key():
     # Cross-order reversed: order B's key on order A's ID → 404
     r_cross2 = client.get(f"/cardapio/pedidos/{order_id_a}/status?key=sec-key-tenant-999-order-b")
     assert r_cross2.status_code == 404, "Key from order B must not unlock order A"
+
+def test_public_menu_exposes_customer_account_requirement(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS", True)
+    response = client.get("/api/cardapio-digital/public?restaurante_id=999")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["restaurante"]["conta_cliente_obrigatoria"] is True
+
