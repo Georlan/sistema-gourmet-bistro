@@ -201,3 +201,117 @@ class TestWaiterAdapter:
         )
         assert res.status_code == 400
         assert "Comanda já fechada" in res.json()["detail"]
+
+    def test_waiter_adapter_preserves_delivery_fulfillment_for_delivery_comanda(
+        self, char_client: TestClient, char_setup: dict
+    ):
+        """[CANAL DELIVERY] Garçom lançando itens em comanda Delivery preserva fulfillment DELIVERY e status pendente."""
+        headers = char_setup["headers"]
+
+        db = SessionLocal()
+        try:
+            cmd = Comanda(
+                id="cmd-char-waiter-delivery",
+                restaurante_id=CHAR_RESTAURANT_ID,
+                garcom_id="usr-char-garcom",
+                numero_pedido=99,
+                tipo="Delivery",
+                delivery_status="pendente",
+                delivery_endereco="Rua Teste, 100",
+                delivery_telefone="11999999999",
+                fechada=False,
+            )
+            db.add(cmd)
+            db.commit()
+        finally:
+            db.close()
+
+        payload = {
+            "garcom_id": "usr-char-garcom",
+            "itens": [{"produto_id": "prod-char-simples"}],
+        }
+
+        with patch.object(
+            OrderApplicationService,
+            "create_order",
+            wraps=OrderApplicationService.create_order,
+        ) as spy_create:
+            res = char_client.post(
+                "/comandas/cmd-char-waiter-delivery/lancamentos",
+                json=payload,
+                headers=headers,
+            )
+            assert res.status_code == 201
+
+            spy_create.assert_called_once()
+            cmd: CreateOrderCommand = spy_create.call_args[0][1]
+            assert cmd.fulfillment == FulfillmentType.DELIVERY
+
+        db = SessionLocal()
+        try:
+            lancamento_db = db.query(Lancamento).filter(Lancamento.id == res.json()["id"]).first()
+            assert lancamento_db is not None
+            assert lancamento_db.status == "pendente"
+            comanda_db = db.query(Comanda).filter(Comanda.id == "cmd-char-waiter-delivery").first()
+            assert comanda_db is not None
+            assert comanda_db.delivery_status == "pendente"
+        finally:
+            db.close()
+
+    def test_waiter_modifiers_adapter_preserves_delivery_fulfillment_for_delivery_comanda(
+        self, char_client: TestClient, char_setup: dict
+    ):
+        """[CANAL DELIVERY] Garçom lançando itens com modificadores em comanda Delivery preserva fulfillment DELIVERY."""
+        headers = char_setup["headers"]
+
+        comanda_id = "cmd-char-waiter-mods-deliv"
+        db = SessionLocal()
+        try:
+            cmd = Comanda(
+                id=comanda_id,
+                restaurante_id=CHAR_RESTAURANT_ID,
+                garcom_id="usr-char-garcom",
+                numero_pedido=100,
+                tipo="Delivery",
+                delivery_status="pendente",
+                delivery_endereco="Av Paulista, 1000",
+                delivery_telefone="11988888888",
+                fechada=False,
+            )
+            db.add(cmd)
+            db.commit()
+        finally:
+            db.close()
+
+        payload = {
+            "garcom_id": "usr-char-garcom",
+            "itens": [{"produto_id": "prod-char-simples", "modificador_ids": []}],
+        }
+
+        with patch.object(
+            OrderApplicationService,
+            "create_order",
+            wraps=OrderApplicationService.create_order,
+        ) as spy_create:
+            res = char_client.post(
+                f"/cardapio/modificadores/lancamentos/{comanda_id}",
+                json=payload,
+                headers=headers,
+            )
+            assert res.status_code == 200
+
+            spy_create.assert_called_once()
+            cmd: CreateOrderCommand = spy_create.call_args[0][1]
+            assert cmd.fulfillment == FulfillmentType.DELIVERY
+
+        db = SessionLocal()
+        try:
+            lancamento_db = db.query(Lancamento).filter(Lancamento.id == res.json()["id"]).first()
+            assert lancamento_db is not None
+            assert lancamento_db.status == "pendente"
+            comanda_db = db.query(Comanda).filter(Comanda.id == "cmd-char-waiter-mods-deliv").first()
+            assert comanda_db is not None
+            assert comanda_db.delivery_status == "pendente"
+        finally:
+            db.close()
+

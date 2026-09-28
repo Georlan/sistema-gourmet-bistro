@@ -395,6 +395,23 @@ class OrderApplicationService:
             else None
         )
 
+        if cmd.check_id:
+            existing_comanda_for_validation = (
+                db.query(Comanda)
+                .filter(
+                    Comanda.restaurante_id == cmd.restaurant_id,
+                    Comanda.id == str(cmd.check_id),
+                )
+                .first()
+            )
+            if existing_comanda_for_validation is not None:
+                if not delivery_addr and existing_comanda_for_validation.delivery_endereco:
+                    delivery_addr = existing_comanda_for_validation.delivery_endereco
+                if not delivery_neighborhood and existing_comanda_for_validation.delivery_bairro:
+                    delivery_neighborhood = existing_comanda_for_validation.delivery_bairro
+                if not clean_phone and existing_comanda_for_validation.delivery_telefone:
+                    clean_phone = normalizar_telefone_cliente(existing_comanda_for_validation.delivery_telefone)
+
         itens_solicitados = [
             {
                 "produto_id": item.product_id,

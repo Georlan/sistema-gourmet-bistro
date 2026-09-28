@@ -110,6 +110,50 @@ def test_aggregate_target_still_advances_a_lagging_launch():
     assert apply_transition.call_args.kwargs["current_status"] == OrderStatus.PREPARING
 
 
+def test_aggregate_target_advances_comanda_status_when_all_launches_already_at_target():
+    comanda = SimpleNamespace(
+        id="check-all-preparing",
+        delivery_status="pendente",
+        tipo="Delivery",
+        fechada=False,
+        fechado_em=None,
+        lancamentos=[
+            SimpleNamespace(id="launch-already-preparing", status="producao", timestamp=1),
+        ],
+    )
+
+    class FakeQuery:
+        def filter(self, *args):
+            return self
+
+        def with_for_update(self):
+            return self
+
+        def first(self):
+            return comanda
+
+    class FakeSession:
+        def query(self, *args):
+            return FakeQuery()
+
+    with patch.object(
+        OrderLifecycleCoordinator,
+        "_apply_single_transition",
+    ) as apply_transition, patch("app.services.order_chat_service.post_system_order_event"):
+        result = OrderLifecycleCoordinator.transition_check_status(
+            FakeSession(),
+            restaurant_id=CHAR_RESTAURANT_ID,
+            comanda_id=comanda.id,
+            target_status="producao",
+            commit=False,
+        )
+
+    assert result.changed is True
+    assert result.target_status == OrderStatus.PREPARING
+    assert comanda.delivery_status == "producao"
+    apply_transition.assert_not_called()
+
+
 def test_aggregate_rejection_chooses_reject_or_cancel_per_launch_status():
     active = [
         ("launch-pending", OrderStatus.PENDING),

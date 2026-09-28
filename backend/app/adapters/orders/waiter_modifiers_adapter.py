@@ -15,7 +15,7 @@ from fastapi import BackgroundTasks, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from ...application.orders.commands import CreateOrderCommand, CustomerInput, OrderItemInput
+from ...application.orders.commands import CreateOrderCommand, CustomerInput, DeliveryInput, OrderItemInput
 from ...application.orders.service import OrderApplicationService
 from ...application.printing import (
     PrintAction,
@@ -36,7 +36,7 @@ from ...domain.orders.errors import (
     ProductNotFoundError,
     ProductTenantMismatchError,
 )
-from ...domain.orders.types import FulfillmentType, OrderChannel
+from ...domain.orders.types import FulfillmentType, OrderChannel, normalize_to_fulfillment
 from ...models import Comanda, Item, ItemModificador, Lancamento, Usuario
 from ...services.atendimentos import ensure_atendimento_for_comanda, ensure_launch_identity
 from ...services.order_numbers import gerar_novo_numero_pedido_atomico
@@ -153,12 +153,20 @@ class WaiterModifiersAdapter:
         if not garcom:
             raise HTTPException(status_code=404, detail=f"Garçom '{lancamento_in.garcom_id}' não encontrado")
 
-        if comanda.tipo == "Entrega":
-            fulfillment = FulfillmentType.DELIVERY
-        elif comanda.tipo == "Retirada":
-            fulfillment = FulfillmentType.PICKUP
-        else:
-            fulfillment = FulfillmentType.DINE_IN
+        fulfillment = normalize_to_fulfillment(comanda.tipo)
+
+        delivery_input = None
+        if fulfillment == FulfillmentType.DELIVERY:
+            delivery_addr = (
+                comanda.delivery_endereco
+                or getattr(comanda, "endereco_entrega", None)
+                or "Endereço cadastrado na comanda"
+            )
+            delivery_input = DeliveryInput(
+                address=delivery_addr,
+                neighborhood=getattr(comanda, "delivery_bairro", None),
+                fee=getattr(comanda, "taxa_entrega", None),
+            )
 
         items_input = tuple(
             OrderItemInput(
@@ -169,19 +177,26 @@ class WaiterModifiersAdapter:
             )
             for item in lancamento_in.itens
         )
+        customer_phone = getattr(comanda, "delivery_telefone", None)
         customer_name = (
             lancamento_in.itens[0].cliente_nome
             if lancamento_in.itens and lancamento_in.itens[0].cliente_nome
             else comanda.identificador
+        )
+        table_id = (
+            str(comanda.mesa_id)
+            if comanda.mesa_id is not None and fulfillment != FulfillmentType.DELIVERY
+            else None
         )
         cmd = CreateOrderCommand(
             restaurant_id=rid,
             channel=OrderChannel.WAITER,
             fulfillment=fulfillment,
             items=items_input,
-            customer=CustomerInput(name=customer_name) if customer_name else None,
+            customer=CustomerInput(name=customer_name, phone=customer_phone) if (customer_name or customer_phone) else None,
+            delivery=delivery_input,
             check_id=comanda.id,
-            table_id=str(comanda.mesa_id) if comanda.mesa_id is not None else None,
+            table_id=table_id,
             idempotency_key=normalized_idempotency_key,
             operator_user_id=garcom_id,
         )
