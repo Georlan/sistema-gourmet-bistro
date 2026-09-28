@@ -3,7 +3,7 @@ from typing import List, Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ..adapters.orders.pos_adapter import PosAdapter
 from ..adapters.orders.waiter_modifiers_adapter import WaiterModifiersAdapter
@@ -14,8 +14,9 @@ from ..catalog_addons import (
     replace_category_links_for_group,
 )
 from ..database import get_db, require_tenant_id
-from ..models import GrupoModificador, OpcaoModificador, ProdutoGrupoModificador, Produto, Usuario
+from ..models import Comanda, GrupoModificador, Item, Lancamento, OpcaoModificador, ProdutoGrupoModificador, Produto, Usuario
 from ..schemas import (
+    ComandaDetail,
     GrupoModificadorCreate,
     GrupoModificadorResponse,
     LancamentoResponse,
@@ -383,7 +384,7 @@ def deletar_grupo(
     return None
 
 
-@router.post("/venda-direta")
+@router.post("/venda-direta", response_model=ComandaDetail)
 def criar_venda_direta_com_modificadores(
     payload: VendaDiretaComModificadoresCreate,
     background_tasks: BackgroundTasks,
@@ -425,8 +426,25 @@ def criar_venda_direta_com_modificadores(
                     db=db,
                     current_user=current_user,
                 )
-                db.refresh(principal)
-                return principal
+                completed = (
+                    db.query(Comanda)
+                    .options(
+                        joinedload(Comanda.itens).joinedload(Item.produto),
+                        joinedload(Comanda.lancamentos).joinedload(Lancamento.itens),
+                        joinedload(Comanda.criada_por),
+                    )
+                    .filter(
+                        Comanda.restaurante_id == rid,
+                        Comanda.id == principal.id,
+                    )
+                    .first()
+                )
+                if completed is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Pedido confirmado, mas a comanda não pôde ser reconstruída.",
+                    )
+                return completed
         except AtendimentoError as exc:
             db.rollback()
             raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
