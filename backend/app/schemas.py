@@ -894,6 +894,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     horarios_funcionamento: Optional[Any] = None
     formas_pagamento_aceitas: Optional[Any] = None
     pagamento_online_ativo: bool = False
+    conta_cliente_obrigatoria: bool = False
     tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
 
     @field_validator("tipos_pedido_ativos", mode="before")
