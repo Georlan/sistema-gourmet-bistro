@@ -76,7 +76,11 @@ export default function CardapioAuthModal({
         throw new Error(data?.detail || "E-mail ou senha incorretos.");
       }
 
-      onLoginSuccess(mapCustomerProfile(data.cliente), String(data.access_token));
+      const profile = mapCustomerProfile(data.cliente);
+      if (accountRequired && profile.emailVerified !== true) {
+        throw new Error("Confirme seu e-mail antes de fazer pedidos por este cardápio.");
+      }
+      onLoginSuccess(profile, String(data.access_token));
       onClose();
     } catch (error) {
       setErrorMessage(authRequestErrorMessage(error, "Falha ao realizar login."));
