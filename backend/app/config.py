@@ -204,6 +204,11 @@ class Settings:
         30,
         min(int(os.getenv("CUSTOMER_EMAIL_RESEND_SECONDS", "60")), 3600),
     )
+    # Rollout seguro: quando ativo, pedidos do cardápio exigem sessão de cliente.
+    # Permanece desligado por padrão até homologarmos cadastro por e-mail + checkout.
+    CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS: bool = (
+        os.getenv("CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS", "false").lower() == "true"
+    )
     # Canal estreito para provar posse do telefone ao vincular uma ficha guest.
     # É independente das automações operacionais de WhatsApp do restaurante.
     CUSTOMER_PHONE_VERIFICATION_ENABLED: bool = (
