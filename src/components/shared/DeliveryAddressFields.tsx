@@ -18,6 +18,7 @@ type DeliveryAddressFieldsProps = {
   compact?: boolean;
   legacyHint?: string | null;
   idPrefix?: string;
+  requireCompleteLocation?: boolean;
 };
 
 const updateField = (
@@ -36,6 +37,7 @@ export default function DeliveryAddressFields({
   compact = false,
   legacyHint,
   idPrefix = 'delivery-address',
+  requireCompleteLocation = false,
 }: DeliveryAddressFieldsProps) {
   const inputClass = compact
     ? 'w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground outline-none focus:border-emerald-500'
@@ -71,7 +73,10 @@ export default function DeliveryAddressFields({
 
       <div className="space-y-1.5">
         <label className="block">
-          <span className={labelClass}>Bairro <span className="font-normal opacity-70">(opcional)</span></span>
+          <span className={labelClass}>
+            Bairro
+            {!requireCompleteLocation && <span className="font-normal opacity-70"> (opcional)</span>}
+          </span>
           <input
             id={`${idPrefix}-bairro`}
             list={`${idPrefix}-bairro-options`}
@@ -80,6 +85,7 @@ export default function DeliveryAddressFields({
             value={value.bairro}
             onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'bairro', event.target.value))}
             className={inputClass}
+            required={requireCompleteLocation}
           />
           {neighborhoodOptions.length > 0 && (
             <datalist id={`${idPrefix}-bairro-options`}>
@@ -113,6 +119,36 @@ export default function DeliveryAddressFields({
           </div>
         )}
       </div>
+
+      {requireCompleteLocation && (
+        <div className="grid grid-cols-[minmax(0,1fr)_76px] gap-2">
+          <label>
+            <span className={labelClass}>Cidade</span>
+            <input
+              id={`${idPrefix}-cidade`}
+              autoComplete="address-level2"
+              placeholder="Ex.: Fortaleza"
+              value={value.cidade}
+              onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'cidade', event.target.value))}
+              className={inputClass}
+              required
+            />
+          </label>
+          <label>
+            <span className={labelClass}>UF</span>
+            <input
+              id={`${idPrefix}-uf`}
+              autoComplete="address-level1"
+              placeholder="CE"
+              maxLength={2}
+              value={value.uf}
+              onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'uf', event.target.value))}
+              className={inputClass}
+              required
+            />
+          </label>
+        </div>
+      )}
 
       <div className="grid grid-cols-[minmax(0,1fr)_92px] gap-2">
         <label>
