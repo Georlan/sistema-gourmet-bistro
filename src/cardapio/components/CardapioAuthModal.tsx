@@ -5,7 +5,7 @@ import { PasswordRecoveryHelp } from "../../components/auth/PasswordRecoveryHelp
  */
 
 import React, { useState } from "react";
-import { ArrowLeft, ArrowRight, Coins, Lock, Mail, Phone, Sparkles, User, X } from "lucide-react";
+import { ArrowRight, Coins, Lock, Mail, Phone, Sparkles, User, X } from "lucide-react";
 import { API_BASE_URL } from "../../config/api";
 import { authFetch, authRequestErrorMessage } from "../../utils/authRequest";
 import {
@@ -21,9 +21,7 @@ interface CardapioAuthModalProps {
   onLoginSuccess: (profile: CustomerProfile, token: string) => void;
 }
 
-// Gap conhecido documentado:
-// Recuperação de senha por e-mail transacional pendente de provedor.
-export const PASSWORD_RECOVERY = "PENDENTE";
+export const PASSWORD_RECOVERY = "ATIVO";
 
 export default function CardapioAuthModal({
   restaurantId,
@@ -37,8 +35,7 @@ export default function CardapioAuthModal({
   const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [registerStep, setRegisterStep] = useState<"details" | "otp">("details");
-  const [otpCode, setOtpCode] = useState("");
+  const [registerStep, setRegisterStep] = useState<"details" | "email_sent">("details");
 
   const numericRestaurantId = Number(restaurantId);
 
@@ -114,23 +111,8 @@ export default function CardapioAuthModal({
 
     setIsSubmitting(true);
     setErrorMessage("");
-
     try {
-      if (registerStep === "details") {
-        const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/otp/solicitar`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ restaurante_id: numericRestaurantId, telefone: cleanPhone }),
-        });
-        const data = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(data?.detail || "Não foi possível enviar o código.");
-        setRegisterStep("otp");
-        return;
-      }
-      if (!/^\d{6}$/.test(otpCode)) {
-        throw new Error("Informe o código de 6 dígitos enviado por WhatsApp.");
-      }
-      const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/cadastro`, {
+      const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/cadastro/solicitar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -140,17 +122,13 @@ export default function CardapioAuthModal({
           telefone: cleanPhone,
           senha: password,
           endereco: "",
-          codigo: otpCode,
         }),
       });
-
       const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.access_token || !data?.cliente) {
-        throw new Error(data?.detail || "Falha ao criar conta.");
+      if (!response.ok) {
+        throw new Error(data?.detail || "Não foi possível enviar o e-mail de confirmação.");
       }
-
-      onLoginSuccess(mapCustomerProfile(data.cliente), String(data.access_token));
-      onClose();
+      setRegisterStep("email_sent");
     } catch (error) {
       setErrorMessage(authRequestErrorMessage(error, "Não foi possível criar sua conta agora."));
     } finally {
@@ -299,102 +277,69 @@ export default function CardapioAuthModal({
         ) : (
           /* Formulário de Cadastro */
           <form onSubmit={handleRegister} className="mt-4 space-y-3" id="auth-register-form">
-            {registerStep === "details" ? <>
-            <label className="block">
-              <span className="mb-1 block text-xs font-bold text-gray-300">Nome completo</span>
-              <div className="relative">
-                <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  autoComplete="name"
-                  placeholder="Como podemos te chamar?"
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    if (errorMessage) setErrorMessage("");
-                  }}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
-                  required
-                />
+            {registerStep === "details" ? (
+              <>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-bold text-gray-300">Nome completo</span>
+                  <div className="relative">
+                    <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input type="text" autoComplete="name" placeholder="Como podemos te chamar?" value={name}
+                      onChange={(e) => { setName(e.target.value); if (errorMessage) setErrorMessage(""); }}
+                      className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50" required />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-bold text-gray-300">E-mail</span>
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input type="email" autoComplete="email" placeholder="seu@email.com" value={email}
+                      onChange={(e) => { setEmail(e.target.value); if (errorMessage) setErrorMessage(""); }}
+                      className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50" required />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-bold text-gray-300">Celular / WhatsApp (com DDD)</span>
+                  <div className="relative">
+                    <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input type="tel" inputMode="numeric" autoComplete="tel" placeholder="(11) 99999-9999" value={phone}
+                      onChange={(e) => { setPhone(formatBrazilianPhone(e.target.value)); if (errorMessage) setErrorMessage(""); }}
+                      className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50" required />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-bold text-gray-300">Criar senha</span>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input type="password" autoComplete="new-password" placeholder="Mínimo 8 caracteres" value={password}
+                      onChange={(e) => { setPassword(e.target.value); if (errorMessage) setErrorMessage(""); }}
+                      className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50" required />
+                  </div>
+                </label>
+                <button type="submit" disabled={isSubmitting}
+                  className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60 cursor-pointer">
+                  <span>{isSubmitting ? "Enviando..." : "Criar conta"}</span>
+                  {!isSubmitting && <ArrowRight className="h-4 w-4" />}
+                </button>
+              </>
+            ) : (
+              <div className="space-y-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                <div>
+                  <p className="text-sm font-bold text-emerald-300">Confira seu e-mail</p>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-300">
+                    Enviamos um link de confirmação para <strong>{email.trim().toLowerCase()}</strong>.
+                    Abra o link para concluir sua conta no KÔMA.
+                  </p>
+                </div>
+                <button type="submit" disabled={isSubmitting}
+                  className="flex min-h-11 w-full items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-bold text-gray-200 hover:bg-white/10 disabled:opacity-60">
+                  {isSubmitting ? "Reenviando..." : "Reenviar e-mail"}
+                </button>
+                <button type="button" onClick={() => { setRegisterStep("details"); setErrorMessage(""); }}
+                  className="min-h-11 w-full text-xs font-semibold text-gray-400 underline underline-offset-4 hover:text-white">
+                  Alterar dados
+                </button>
               </div>
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-xs font-bold text-gray-300">E-mail</span>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="email"
-                  autoComplete="email"
-                  placeholder="seu@email.com"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (errorMessage) setErrorMessage("");
-                  }}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
-                  required
-                />
-              </div>
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-xs font-bold text-gray-300">Celular / WhatsApp (com DDD)</span>
-              <div className="relative">
-                <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel"
-                  placeholder="(11) 99999-9999"
-                  value={phone}
-                  onChange={(e) => {
-                    setPhone(formatBrazilianPhone(e.target.value));
-                    if (errorMessage) setErrorMessage("");
-                  }}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
-                  required
-                />
-              </div>
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-xs font-bold text-gray-300">Criar senha</span>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="Mínimo 8 caracteres"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    if (errorMessage) setErrorMessage("");
-                  }}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
-                  required
-                />
-              </div>
-            </label>
-            </> : <div className="space-y-3">
-              <button type="button" onClick={() => { setRegisterStep("details"); setOtpCode(""); setErrorMessage(""); }} className="flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-white">
-                <ArrowLeft className="h-4 w-4" /> Alterar dados
-              </button>
-              <p className="text-sm text-gray-300">Enviamos um código para <strong>{formatBrazilianPhone(phone)}</strong>.</p>
-              <label className="block">
-                <span className="mb-1 block text-xs font-bold text-gray-300">Código do WhatsApp</span>
-                <input type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-center font-mono text-xl tracking-[0.4em] text-white outline-none focus:border-emerald-500" required />
-              </label>
-            </div>}
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 hover:shadow-emerald-500/30 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
-            >
-              <span>{isSubmitting ? "Aguarde..." : registerStep === "details" ? "Enviar código pelo WhatsApp" : "Confirmar e criar conta"}</span>
-              {!isSubmitting && <ArrowRight className="h-4 w-4" />}
-            </button>
+            )}
           </form>
         )}
 
