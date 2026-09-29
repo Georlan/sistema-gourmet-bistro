@@ -63,6 +63,9 @@ Regra estrutural:
   consumidor;
 - preflight e health probes são excluídos;
 - expurgo é aplicado por seis meses-calendário;
+- preservação excepcional pode suspender o expurgo até data definida por
+  `APPLICATION_ACCESS_LOG_LEGAL_HOLD_UNTIL`; valor inválido falha de forma
+  conservadora e preserva os registros;
 - a rotina usa armazenamento próprio, em vez de depender do prazo de retenção
   dos logs efêmeros do provedor de infraestrutura.
 
@@ -124,6 +127,7 @@ Foram reaproveitados:
 - teste de snapshots de pagamento em ciphertext;
 - teste provando que a trava RLS não é desabilitável em produção;
 - teste de registro mínimo de acesso cifrado e expurgo por seis meses;
+- teste de legal hold suspendendo o expurgo e falha conservadora de configuração;
 - documentação de retenção/ROPA alinhada ao comportamento real.
 
 ## 6. Itens deliberadamente posteriores
