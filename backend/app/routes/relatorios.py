@@ -47,6 +47,7 @@ CARGO_PERMISSIONS: Dict[str, Dict[str, Any]] = {
     "gerente": {"label": "Gerente", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": False},
     "caixa": {"label": "Operador de caixa", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": False},
     "garcom": {"label": "Gar\u00e7om", "pedidos": True, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
+    "atendente": {"label": "Atendente", "pedidos": True, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
     "motoboy": {"label": "Entregador", "pedidos": False, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
 }
 ROLE_ALIASES = {"operador_caixa": "caixa"}
@@ -87,7 +88,7 @@ def get_cargos_permissoes(
         or has_capability(db, rest_id, "courier_app")
         or db.query(Motoboy.id).filter(Motoboy.restaurante_id == rest_id).first() is not None
     )
-    target_roles = ["admin", "gerente", "caixa", "garcom"] + (["motoboy"] if has_courier else [])
+    target_roles = ["admin", "gerente", "caixa", "garcom", "atendente"] + (["motoboy"] if has_courier else [])
 
     cargos = []
     for role_key in target_roles:
