@@ -91,6 +91,7 @@ class Usuario(Base):
     cargo = Column(String(20), nullable=False, default="garcom")  # 'caixa' | 'garcom' | 'atendente' | 'gerente' | 'cozinha' | 'motoboy' | 'admin'
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=False)
     senha_hash = Column(String(255), nullable=True)
+    removed_at = Column(DateTime(timezone=True), nullable=True)
     token_convite = Column(String, nullable=True)
     token_expira_em = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(20), default="pendente_ativacao")  # 'pendente_ativacao' | 'ativo' | 'inativo'

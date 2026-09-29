@@ -25,7 +25,7 @@ interface EquipePessoasTabProps {
   onCreate: (payload: { nome: string; telefone: string; cargo: string }) => Promise<void>;
   onResendInvite: (user: SystemUser) => Promise<void>;
   onUpdateAccess: (user: SystemUser, payload: { cargo?: string; status?: 'ativo' | 'inativo' }) => Promise<void>;
-  onRemove: (userId: string) => Promise<void>;
+  onRemove: (userId: string, removerCadastro?: boolean) => Promise<void>;
 }
 
 
@@ -157,11 +157,11 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onUpdateAcce
     }
   };
 
-  const handleRemove = async (userId: string) => {
+  const handleRemove = async (userId: string, removerCadastro = false) => {
     if (busyUserAction) return;
     setBusyUserAction(`remove-${userId}`);
     try {
-      await onRemove(userId);
+      await onRemove(userId, removerCadastro);
     } catch {
       // A tela principal já apresenta a mensagem devolvida pela API.
     } finally {
@@ -288,6 +288,17 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onUpdateAcce
                             aria-label={`Desativar ${user.nome}`}
                           >
                             <Trash2 size={13} /> <span className="hidden sm:inline">Desativar</span>
+                          </button>
+                        )}
+                        {!isAdmin && (
+                          <button
+                            type="button"
+                            disabled={Boolean(busyUserAction)}
+                            onClick={() => void handleRemove(user.id, true)}
+                            className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-[10px] font-bold text-rose-700 hover:bg-rose-500/10 disabled:opacity-60 dark:text-rose-300"
+                            aria-label={`Remover ${user.nome} da equipe`}
+                          >
+                            <Trash2 size={13} /> Remover da equipe
                           </button>
                         )}
                       </div>

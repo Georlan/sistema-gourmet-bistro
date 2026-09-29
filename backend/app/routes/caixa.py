@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List, Optional, Union
@@ -143,7 +143,7 @@ def obter_funcionarios(
 ):
     """Retorna a lista de usuários pertencentes ao restaurante_id do contexto ativo."""
     rest_id = require_tenant_id()
-    return db.query(Usuario).filter(Usuario.restaurante_id == rest_id).all()
+    return db.query(Usuario).filter(Usuario.restaurante_id == rest_id, Usuario.removed_at.is_(None)).all()
 
 
 @router.post("/funcionarios", response_model=UsuarioInviteResponse, status_code=status.HTTP_201_CREATED)
@@ -193,6 +193,7 @@ def cadastrar_funcionario(
         motoboy_existente = db.query(Motoboy).filter(
             Motoboy.restaurante_id == rest_id,
             Motoboy.telefone == tel_clean,
+            or_(Motoboy.usuario_id.is_(None), Motoboy.usuario.has(Usuario.removed_at.is_(None))),
         ).first()
         if motoboy_existente:
             motoboy_existente.usuario_id = novo_usuario.id
