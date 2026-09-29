@@ -33,7 +33,7 @@ class UsuarioInviteResponse(UsuarioResponse):
 class UsuarioCreate(BaseModel):
     nome: str = Field(min_length=1, max_length=100)
     telefone: str = Field(min_length=10, max_length=20)
-    cargo: Literal["gerente", "caixa", "garcom", "cozinha", "motoboy"] = "garcom"
+    cargo: Literal["gerente", "caixa", "garcom", "atendente", "cozinha", "motoboy"] = "garcom"
 
     @field_validator("nome")
     @classmethod
@@ -47,7 +47,7 @@ class UsuarioCreate(BaseModel):
 
 
 class UsuarioAccessUpdate(BaseModel):
-    cargo: Optional[Literal["gerente", "caixa", "garcom", "cozinha", "motoboy"]] = None
+    cargo: Optional[Literal["gerente", "caixa", "garcom", "atendente", "cozinha", "motoboy"]] = None
     status: Optional[Literal["ativo", "inativo"]] = None
 
     @model_validator(mode="after")
