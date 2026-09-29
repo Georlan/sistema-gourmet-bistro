@@ -1,6 +1,8 @@
 # Super Admin — Aceitação da Fase 2
 
-Este roteiro valida o onboarding real de um novo restaurante sem SQL manual.
+Este roteiro valida provisionamento administrativo/QA sem SQL manual. Para
+cliente comercial e liberação do trial após implantação, use o
+[playbook operacional](onboarding/README.md).
 
 ## Pré-condições
 
@@ -30,10 +32,10 @@ Este roteiro valida o onboarding real de um novo restaurante sem SQL manual.
 6. Abra o Cardápio pelo link exibido e confirme catálogo vazio.
 7. Saia do Super Admin e faça login com o administrador inicial usando o `restaurante_id` criado.
 8. Confirme que o administrador entra no tenant novo e não enxerga dados de outros restaurantes.
-9. No Super Admin, altere o plano do tenant de QA, informando motivo, e confirme que a alteração aparece na listagem.
+9. Confirme que a edição cadastral não altera o plano. Em **Recursos/Benefícios**, conceda e revogue impressão com motivo no tenant QA; confira baseline e efetivo.
 10. Suspenda o tenant de QA com motivo explícito e confirme bloqueio de acesso da equipe/criação de novos pedidos.
 11. Reative o tenant e confirme o retorno do acesso.
-12. Consulte a Auditoria e confirme registros do onboarding, alteração de plano, suspensão e reativação sem senha/token/segredo.
+12. Consulte a Auditoria e confirme registros do onboarding, benefício individual, suspensão e reativação sem senha/token/segredo.
 
 ## Critérios de aprovação
 

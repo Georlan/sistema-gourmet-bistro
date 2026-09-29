@@ -153,3 +153,10 @@ test('proteções ficam antes dos callbacks/envio e troco é exclusivo de dinhei
   assert.match(drawer, /trocoPara: paymentDetail === "dinheiro" && precisaTroco/);
   assert.match(review, /troco_para: paymentMethodDetail === "dinheiro" \? trocoPara : undefined/);
 });
+
+test('somente dinheiro no checkout sem pagamento online não oferece Pix, cartão ou Mercado Pago', () => {
+  const html = renderCart(['Dinheiro']);
+  assert.match(html, />Dinheiro</);
+  assert.doesNotMatch(html, />Pix<|>Cartão de crédito<|>Cartão de débito<|Mercado Pago/);
+  assert.deepEqual(getCheckoutPaymentMethods(groups('Dinheiro'), false), ['dinheiro']);
+});

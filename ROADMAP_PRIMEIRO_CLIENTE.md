@@ -1,5 +1,7 @@
 # KÔMA — Roadmap para o Primeiro Cliente Piloto Pago
 
+> Para executar uma implantação hoje, use o [playbook operacional](docs/operations/onboarding/README.md). Este roadmap preserva histórico; contratação/trial seguem [signup-automation](docs/operations/signup-automation.md), não a antiga proposta de cobrança manual.
+
 **Objetivo:** Levar o KÔMA ao primeiro cliente real pagante em 7 dias com máxima confiabilidade operacional, segurança financeira e processos estruturados de suporte e implantação.
 
 ---

@@ -2,6 +2,10 @@
 
 - Cliente/tenant:
 - Plano e recursos contratados (inclui impressão?):
+- Benefício individual (capability, baseline, override efetivo, motivo/valor extra/validade):
+- Auditoria do benefício (registro, ator e data):
+- Pagamento online de pedidos habilitado? (se não, justificar NÃO APLICÁVEL):
+- Liberação operacional pelo SuperAdmin / início e fim do trial:
 - Processo fiscal atual confirmado com o restaurante:
 - Revisão/commit:
 - Data e janela do teste:

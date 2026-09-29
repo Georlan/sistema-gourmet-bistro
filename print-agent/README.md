@@ -124,30 +124,21 @@ wake-up usado pela impressão real, converte o payload com o pipeline ESC/POS e
 mede a latência. Esse modo não faz claim, não confirma o job e não escreve no
 CUPS/USB; portanto não falsifica uma impressão física.
 
-## Instalação no Windows
+### Verificação no Windows
 
-Pré-requisitos: a impressora disponível no Spooler do Windows. Se Python 3.10+
-não estiver instalado, o instalador usa o `winget` para instalar Python 3.12 no
-perfil do usuário.
-Extraia o projeto e clique duas vezes em:
+Guia de campo com instalação/atualização remotas pela main, pareamento,
+preflight, teste físico, reinício/logon e diagnóstico:
+[`docs/operations/onboarding/windows-printing.md`](../docs/operations/onboarding/windows-printing.md).
 
-```text
-INSTALAR-KOMA-WINDOWS.cmd
-```
-
-O atalho abre o instalador, faz o pareamento e valida a tarefa local. Como
-alternativa, abra o PowerShell na raiz do projeto e execute:
+Depois de instalar, execute no PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\print-agent\install-windows.ps1
+& "$env:LOCALAPPDATA\KomaPrintAgent\check-windows.ps1"
+& "$env:LOCALAPPDATA\KomaPrintAgent\.venv\Scripts\python.exe" "$env:LOCALAPPDATA\KomaPrintAgent\hardware_preflight.py" --report "$env:TEMP\koma-hardware-preflight.json"
 ```
 
-O instalador pareia o computador, instala o adaptador RAW, registra a tarefa
-`KomaPrintAgent` para iniciar no logon e configura o atalho `koma-print://`.
-
-Depois, `VERIFICAR-KOMA-WINDOWS.cmd` mostra em uma tela curta se o agente está
-instalado, se a tarefa está ativa, qual fila o Kôma memorizou e qual continua
-sendo a impressora padrão do Windows.
+O diagnóstico mostra tarefa, fila memorizada e impressora padrão. O preflight
+exige hardware presente; nenhum dos dois substitui a conferência do papel.
 
 ### Convivência com Anota AI e outros sistemas
 
@@ -172,7 +163,7 @@ Checklist antes da operação:
 5. Confirme que saíram dois cupons completos, sem mistura ou duplicidade.
 6. Reinicie o Windows e execute `VERIFICAR-KOMA-WINDOWS.cmd`.
 
-Diagnóstico:
+Diagnóstico Linux:
 
 ```bash
 systemctl --user status koma-print-agent.service
@@ -180,7 +171,8 @@ journalctl --user -u koma-print-agent.service -f
 lpstat -p -d
 ```
 
-Antes de homologar a impressão do primeiro cliente, execute o preflight que
+No Windows use o guia acima. No Linux/com o repositório, antes de homologar
+a impressão do primeiro cliente, execute o preflight que
 distingue uma fila antiga de uma impressora fisicamente presente:
 
 ```bash

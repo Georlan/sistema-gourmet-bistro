@@ -119,6 +119,12 @@ def has_plan_entitlement(
         return _resolve()
 
 
+def plan_entitlement_baseline(restaurante_id: int, stored_plan: Optional[str]) -> dict[str, bool]:
+    """Baseline comercial sem aplicar overrides individuais."""
+    plan = get_effective_subscription_plan(restaurante_id, stored_plan)
+    return {key: key in _PLAN_ENTITLEMENTS[plan] for key in sorted(KNOWN_ENTITLEMENTS)}
+
+
 def resolve_plan_entitlements(
     db: Session,
     restaurante_id: int,

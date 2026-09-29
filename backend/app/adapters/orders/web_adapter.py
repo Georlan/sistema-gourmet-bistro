@@ -384,8 +384,10 @@ class CardapioWebAdapter:
                 return _existing_order_response(db, existing_comanda)
 
             if (
-                not online_payment
-                and payment_method in PHYSICAL_CARD_METHODS
+                # Cadastros legados sem lista conservam o comportamento de dinheiro.
+                # Uma lista explícita governa também dinheiro e Pix online.
+                (isinstance(restaurante.formas_pagamento_aceitas, list)
+                 or payment_method in PHYSICAL_CARD_METHODS)
                 and payment_method not in _configured_payment_methods(
                     restaurante.formas_pagamento_aceitas
                 )

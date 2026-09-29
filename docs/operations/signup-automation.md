@@ -2,7 +2,7 @@
 
 ## Regra comercial canônica
 
-Plano e ciclo → dados mínimos salvos → aceite jurídico → autorização recorrente → liberação → implantação essencial → início explícito pelo administrador → 7 dias grátis → primeira cobrança automática → operação normal.
+Plano e ciclo → dados mínimos salvos → aceite jurídico → autorização recorrente → liberação → implantação essencial → liberação operacional explícita pelo SuperAdmin → 7 dias grátis → primeira cobrança automática → operação normal.
 
 A mensalidade fixa do KÔMA segue a mesma regra em qualquer forma de pagamento disponibilizada no checkout:
 
@@ -10,7 +10,7 @@ A mensalidade fixa do KÔMA segue a mesma regra em qualquer forma de pagamento d
 - o cliente apenas autoriza a recorrência antes da liberação;
 - a recorrência fica **pausada durante a implantação inicial**;
 - cadastro, criação de senha, perfil, horários e preparação do primeiro cardápio **não consomem nenhum dia grátis**;
-- os **7 dias grátis começam somente após os 4 itens essenciais**: perfil, horários, ao menos um produto ativo publicado e modalidades de operação; o administrador deve então confirmar o início;
+- os **7 dias grátis começam somente após os 4 itens essenciais**: perfil, horários, ao menos um produto ativo publicado e modalidades de operação; o SuperAdmin deve então conferir a implantação e liberar a operação;
 - no início do trial, a primeira cobrança é alinhada para D+7 antes de reativar a recorrência;
 - mensal renova mensalmente e anual renova a cada 12 meses;
 - o anual conserva o desconto de 10% sobre a mensalidade fixa, mas não é cobrado antecipadamente no dia da adesão;
@@ -30,7 +30,8 @@ Métodos recorrentes modelados no backend devem obedecer à mesma regra de autor
 - Quando `KOMA_SAAS_MANUAL_RELEASE_REQUIRED=true`, uma autorização recorrente pronta entra em `awaiting_release`; nenhum tenant é criado antes da ação do SuperAdmin.
 - Assim que uma autorização recorrente fica pronta para o fluxo de onboarding, ela deve permanecer pausada até a conclusão da implantação essencial. Se a pausa não puder ser confirmada, o fluxo falha fechado em vez de arriscar cobrança antecipada.
 - Na liberação, o tenant nasce com assinatura canônica em estado `onboarding`, sem `trial_started_at`, `trial_ends_at` ou período corrente. O cliente recebe o convite e pode configurar o restaurante, mas o gate de onboarding mantém Vendas/Caixa bloqueados até os 4 itens essenciais e o início explícito do trial.
-- O endpoint canônico `/api/onboarding/status` calcula o progresso usando dados reais. Após os 4 itens essenciais, `POST /api/onboarding/start-trial` inicia o trial de forma idempotente: define D+7 no provedor, reativa a recorrência, grava `trial_started_at`/`trial_ends_at` e muda a assinatura para `trialing`.
+- O endpoint canônico `/api/onboarding/status` calcula o progresso usando dados reais. Após os 4 itens essenciais, **Super Admin → Períodos grátis → Ver implantação e liberar** usa `POST /api/super-admin/onboarding/restaurantes/{tenant_id}/release` para iniciar o trial de forma idempotente: define D+7 no provedor, reativa a recorrência, grava `trial_started_at`/`trial_ends_at` e muda a assinatura para `trialing`.
+- A rota antiga `POST /api/onboarding/start-trial` recusa liberação pelo administrador do restaurante; o início comercial pertence ao SuperAdmin.
 - Se o alinhamento D+7 ou a reativação do provedor falhar, o backend não inicia o trial localmente e não libera uma cobrança antecipada; a configuração já salva permanece intacta para nova tentativa.
 - Recarregar a implantação depois do início do trial não renova nem empurra a data final.
 - Assinaturas antigas que já estavam `trialing` ou `active` não são reescritas por esta regra.
