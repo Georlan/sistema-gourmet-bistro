@@ -19,6 +19,7 @@ from ..services.password_recovery import (
     send_recovery_email,
     send_staff_recovery_email,
 )
+from ..services.clientes import buscar_cliente_por_email
 from ..services.public_orders import consume_rate_limit, client_ip
 from .auth import _lookup_users_before_tenant
 
@@ -78,14 +79,19 @@ def request_recovery(
     for candidate in candidates:
         rid = candidate['restaurante_id']
         with tenant_session_scope(db, rid):
-            model = Cliente if payload.kind == 'customer' else Usuario
-            query = db.query(model).filter(
-                model.restaurante_id == rid,
-                func.lower(model.email) == payload.email,
-            )
-            if payload.kind == 'staff':
-                query = query.filter(Usuario.id == candidate['id'], Usuario.status == 'ativo')
-            account = query.first()
+            if payload.kind == 'customer':
+                account = buscar_cliente_por_email(
+                    db,
+                    restaurante_id=rid,
+                    email=payload.email,
+                )
+            else:
+                account = db.query(Usuario).filter(
+                    Usuario.restaurante_id == rid,
+                    func.lower(Usuario.email) == payload.email,
+                    Usuario.id == candidate['id'],
+                    Usuario.status == 'ativo',
+                ).first()
             if not account or not account.senha_hash:
                 continue  # Guest/inactive records are never adopted by password recovery.
 
