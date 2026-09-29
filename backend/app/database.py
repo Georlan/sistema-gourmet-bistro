@@ -396,19 +396,20 @@ def validate_postgres_runtime_role() -> None:
     if not role["is_koma_app"]:
         failures.append("não é membro da role koma_app")
     if failures:
-        if os.getenv("STRICT_RLS_ROLE_CHECK", "true").lower() == "true":
+        strict_override = os.getenv("STRICT_RLS_ROLE_CHECK", "true").lower() == "true"
+        production = os.getenv("ENVIRONMENT", "production").strip().lower() == "production"
+        if production or strict_override:
             raise RuntimeError(
                 "DATABASE_URL insegura para o runtime PostgreSQL: "
                 f"role {role['role_name']!r} " + ", ".join(failures) + ". "
                 "Use uma role LOGIN dedicada, sem SUPERUSER/BYPASSRLS e membro de koma_app."
             )
-        else:
-            print(
-                f"[DATABASE] Aviso: Role PostgreSQL {role['role_name']!r} "
-                f"({', '.join(failures)}). Executando sem trava estrita para "
-                "ambiente PaaS (Railway).",
-                flush=True,
-            )
+        print(
+            f"[DATABASE] Aviso: Role PostgreSQL {role['role_name']!r} "
+            f"({', '.join(failures)}). STRICT_RLS_ROLE_CHECK=false é aceito "
+            "somente fora de produção.",
+            flush=True,
+        )
     else:
         print(
             f"[DATABASE] Role de runtime {role['role_name']!r} validada com segurança.",
