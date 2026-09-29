@@ -218,6 +218,77 @@ def test_connection_settings_require_manager_and_never_expose_provider_key(char_
     assert char_client.post("/caixa/configuracoes/whatsapp/enable", headers=waiter).status_code == 403
 
 
+def test_order_alerts_are_paced_per_restaurant(char_setup, monkeypatch):
+    from app.config import settings
+    from app.services import tenant_order_whatsapp as wa
+
+    rid = CHAR_RESTAURANT_ID
+    db = SessionLocal(restaurante_id=rid)
+
+    class Response:
+        status_code = 200
+
+    class SuccessClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def post(self, *args, **kwargs):
+            return Response()
+
+    try:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        config.whatsapp_alerts_enabled = True
+        config.whatsapp_instance_name = instance_name(rid)
+        config.whatsapp_recipient_phone = "5511999999999"
+        config.whatsapp_next_send_at = None
+        config.whatsapp_circuit_open_until = None
+        config.whatsapp_consecutive_failures = 0
+        db.query(IntegrationOutbox).filter_by(
+            restaurante_id=rid,
+            aggregate_id="wa-paced-test",
+        ).delete()
+        db.commit()
+
+        event = enqueue_order_alert(db, _order(rid, "wa-paced-test"))
+        db.commit()
+        before = dt.datetime.now(dt.timezone.utc)
+        monkeypatch.setattr(settings, "TENANT_WHATSAPP_MIN_SEND_INTERVAL_SECONDS", 13)
+        monkeypatch.setattr(wa, "connection_state", lambda _: "open")
+        monkeypatch.setattr(wa, "owner_phone", lambda _: "5511999999999")
+        monkeypatch.setattr(wa, "_provider", lambda: ("https://provider.test", {"header": "value"}))
+        monkeypatch.setattr(wa.httpx, "Client", SuccessClient)
+
+        assert dispatch_single_outbox_event(db, event) is True
+        db.refresh(config)
+        next_send = config.whatsapp_next_send_at
+        if next_send.tzinfo is None:
+            next_send = next_send.replace(tzinfo=dt.timezone.utc)
+        assert next_send >= before + dt.timedelta(seconds=12)
+        assert next_send <= before + dt.timedelta(seconds=15)
+    finally:
+        db.rollback()
+        db.query(IntegrationOutbox).filter_by(
+            restaurante_id=rid,
+            aggregate_id="wa-paced-test",
+        ).delete()
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        if config:
+            config.whatsapp_alerts_enabled = False
+            config.whatsapp_instance_name = None
+            config.whatsapp_recipient_phone = None
+            config.whatsapp_next_send_at = None
+            config.whatsapp_circuit_open_until = None
+            config.whatsapp_consecutive_failures = 0
+        db.commit()
+        db.close()
+
+
 def test_uncertain_send_is_not_replayed_after_timeout_or_worker_restart(char_setup, monkeypatch):
     from app.services import tenant_order_whatsapp as wa
 
