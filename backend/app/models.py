@@ -696,11 +696,29 @@ class Pagamento(Base):
     idempotency_key = Column(String(128), nullable=True, index=True)
     item_ids = Column(JSON, nullable=True)
     cliente_id = Column(String, nullable=True)
-    cpf_cliente = Column(String, nullable=True, index=True)
-    nome_cliente = Column(String, nullable=True)
+    _cpf_cliente = Column("cpf_cliente", Text, nullable=True)
+    _nome_cliente = Column("nome_cliente", Text, nullable=True)
     nsu_cartao = Column(String, nullable=True)
     chave_nfe_emitida = Column(String, nullable=True)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    @hybrid_property
+    def cpf_cliente(self):
+        return decrypt_field(self._cpf_cliente)
+
+    @cpf_cliente.setter
+    def cpf_cliente(self, value):
+        normalized = str(value or "").strip() or None
+        self._cpf_cliente = encrypt_field(normalized)
+
+    @hybrid_property
+    def nome_cliente(self):
+        return decrypt_field(self._nome_cliente)
+
+    @nome_cliente.setter
+    def nome_cliente(self, value):
+        normalized = " ".join(str(value or "").strip().split()) or None
+        self._nome_cliente = encrypt_field(normalized)
 
     # Relationships
     comanda = relationship("Comanda")
