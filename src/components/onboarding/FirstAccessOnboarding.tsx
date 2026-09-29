@@ -181,7 +181,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       }
       applySnapshot(await response.json() as OnboardingStatus);
     } catch (error) {
-      setState('error');
+      setState((current) => current === 'ready' ? 'ready' : 'error');
       setErrorMessage(
         error instanceof DOMException && error.name === 'AbortError'
           ? 'A implantação demorou para responder. Tente novamente.'
