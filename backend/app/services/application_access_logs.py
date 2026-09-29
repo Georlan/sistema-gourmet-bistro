@@ -9,6 +9,7 @@ from __future__ import annotations
 import calendar
 import datetime
 import logging
+import os
 import threading
 import time
 
@@ -33,6 +34,25 @@ def six_calendar_months_before(
     month = month_zero + 1
     day = min(value.day, calendar.monthrange(year, month)[1])
     return value.replace(year=year, month=month, day=day)
+
+
+def legal_hold_active(now: datetime.datetime) -> bool:
+    """Suspende expurgo quando uma preservação legal temporária estiver ativa."""
+    raw = os.getenv("APPLICATION_ACCESS_LOG_LEGAL_HOLD_UNTIL", "").strip()
+    if not raw:
+        return False
+    try:
+        hold_until = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if hold_until.tzinfo is None:
+            hold_until = hold_until.replace(tzinfo=datetime.timezone.utc)
+        return now < hold_until.astimezone(datetime.timezone.utc)
+    except ValueError:
+        # Configuração inválida falha para o lado conservador: preserva dados e
+        # gera alerta operacional, em vez de apagar durante um possível hold.
+        logger.error(
+            "APPLICATION_ACCESS_LOG_LEGAL_HOLD_UNTIL inválida; expurgo suspenso"
+        )
+        return True
 
 
 def _cleanup_due(now_monotonic: float) -> bool:
@@ -69,7 +89,9 @@ def record_application_access(
             )
         )
 
-        cleanup_reserved = _cleanup_due(time.monotonic())
+        cleanup_reserved = (
+            False if legal_hold_active(now) else _cleanup_due(time.monotonic())
+        )
         if cleanup_reserved:
             cutoff = six_calendar_months_before(now)
             db.execute(
