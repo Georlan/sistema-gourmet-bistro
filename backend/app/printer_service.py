@@ -678,7 +678,7 @@ class PrinterService:
         lines.append(
             f"CLIENTE: {comanda.identificador.upper() if comanda.identificador else 'NÃO INFORMADO'}"
         )
-        lines.append(f"TELEFONE: {mask_phone(comanda.delivery_telefone)}")
+        lines.append(f"TELEFONE: {format_phone_for_print(comanda.delivery_telefone)}")
         lines.append(f"PEDIDO: #{comanda.numero_pedido} | ENTREGA")
         lines.append(f"MOTOBOY: {motoboy_nome.upper()}")
         lines.append(f"DATA: {get_operational_now().strftime('%d/%m/%Y %H:%M')}")
@@ -753,7 +753,7 @@ class PrinterService:
         lines.append(
             f"CLIENTE: {comanda.identificador.upper() if comanda.identificador else 'NÃO INFORMADO'}"
         )
-        lines.append(f"TELEFONE: {mask_phone(comanda.delivery_telefone)}")
+        lines.append(f"TELEFONE: {format_phone_for_print(comanda.delivery_telefone)}")
         lines.append(f"PEDIDO: #{comanda.numero_pedido}")
         lines.append(f"MOTOBOY: {motoboy_nome.upper()}")
         lines.append(f"DATA: {get_operational_now().strftime('%d/%m/%Y %H:%M')}")
@@ -798,15 +798,23 @@ class PrinterService:
         return "\n".join(lines)
 
 
-def mask_phone(phone: Optional[str]) -> str:
+def format_phone_for_print(phone: Optional[str]) -> str:
+    """Formata o telefone completo para documentos operacionais autorizados.
+
+    A proteção de PII acontece no controle de acesso ao pedido/documento, não por
+    truncamento do contato necessário ao atendimento. Aceita números brasileiros
+    com ou sem DDI 55 e preserva entradas não padronizadas sem inventar dígitos.
+    """
     if not phone:
-        return "(XX) 9XXXX-XXXX"
+        return "NÃO INFORMADO"
     digits = "".join(c for c in phone if c.isdigit())
-    if len(digits) >= 4:
-        ddd = digits[:2]
-        last_two = digits[-2:]
-        return f"({ddd}) 9XXXX-XX{last_two}"
-    return "(XX) 9XXXX-XXXX"
+    if len(digits) in {12, 13} and digits.startswith("55"):
+        digits = digits[2:]
+    if len(digits) == 11:
+        return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
+    if len(digits) == 10:
+        return f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
+    return digits or "NÃO INFORMADO"
 
 
 printer_service = PrinterService()
