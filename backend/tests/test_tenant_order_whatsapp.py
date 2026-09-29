@@ -1,6 +1,7 @@
 from decimal import Decimal
 import datetime as dt
 import httpx
+from sqlalchemy.dialects import postgresql
 
 from app.database import SessionLocal, current_restaurante_id
 from app.domain.orders.events import OrderCreated
@@ -9,6 +10,7 @@ from app.models import ConfiguracaoRestaurante, IntegrationOutbox, Restaurante
 from app.security import create_access_token
 from app.services.tenant_order_whatsapp import (
     EVENT_NAME,
+    _locked_whatsapp_config_query,
     enqueue_order_alert,
     instance_name,
     render_alert,
@@ -29,6 +31,22 @@ def _order(restaurant_id: int, order_id: str) -> OrderCreated:
         customer_name="Pessoa que não deve sair no alerta",
         customer_phone="5511888888888",
     )
+
+
+def test_postgres_whatsapp_config_lock_does_not_lock_outer_join(char_setup):
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        statement = _locked_whatsapp_config_query(db, CHAR_RESTAURANT_ID).statement
+        sql = str(
+            statement.compile(
+                dialect=postgresql.dialect(),
+                compile_kwargs={"literal_binds": True},
+            )
+        )
+        assert "JOIN restaurantes" not in sql
+        assert "FOR UPDATE OF configuracoes_restaurante" in sql
+    finally:
+        db.close()
 
 
 def test_alert_is_opt_in_deduplicated_and_private(char_setup):

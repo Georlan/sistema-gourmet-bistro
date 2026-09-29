@@ -270,6 +270,18 @@ def _record_failure(db: Session, config: ConfiguracaoRestaurante) -> None:
     db.commit()
 
 
+def _locked_whatsapp_config_query(db: Session, restaurant_id: int):
+    # ConfiguracaoRestaurante has eager relationships that can generate a LEFT
+    # OUTER JOIN. PostgreSQL rejects plain FOR UPDATE against the nullable side
+    # of that join. Disable eager joins and explicitly lock only the config row.
+    return (
+        db.query(ConfiguracaoRestaurante)
+        .enable_eagerloads(False)
+        .filter(ConfiguracaoRestaurante.restaurante_id == restaurant_id)
+        .with_for_update(of=ConfiguracaoRestaurante)
+    )
+
+
 def mark_terminal(db: Session, snapshot: dict, *, status: str, reason: str, http_status: int | None = None) -> bool:
     from .outbox.dispatcher import settle_outbox_event
     settled = settle_outbox_event(
@@ -286,9 +298,7 @@ def dispatch_alert(db: Session, snapshot: dict) -> bool:
     from .outbox.dispatcher import settle_outbox_event
 
     rid = int(snapshot["restaurante_id"])
-    config = db.query(ConfiguracaoRestaurante).filter(
-        ConfiguracaoRestaurante.restaurante_id == rid,
-    ).with_for_update().first()
+    config = _locked_whatsapp_config_query(db, rid).first()
     if not config or not config.whatsapp_alerts_enabled:
         return mark_terminal(db, snapshot, status="delivered", reason="Avisos desativados.")
     if config.whatsapp_instance_name != instance_name(rid) or not config.whatsapp_recipient_phone:
