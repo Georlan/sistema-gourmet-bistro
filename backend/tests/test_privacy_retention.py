@@ -31,16 +31,16 @@ def _setup():
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
     db = factory()
-    token = current_restaurante_id.set(1)
+    token = current_restaurante_id.set(98765)
     try:
-        db.add(Restaurante(id=1, nome="R1", slug="r1"))
-        db.add(Usuario(id="u1", restaurante_id=1, nome="Admin", usuario="admin", senha_hash="x", role="admin", status="ativo"))
-        db.add(Cliente(id="c1", restaurante_id=1, nome="Cliente", telefone="85999990000"))
+        db.add(Restaurante(id=98765, nome="R98765", slug="r98765"))
+        db.add(Usuario(id="u1", restaurante_id=98765, nome="Admin", usuario="admin", senha_hash="x", role="admin", status="ativo"))
+        db.add(Cliente(id="c1", restaurante_id=98765, nome="Cliente", telefone="85999990000"))
         old = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=400)
         db.add(
             Comanda(
                 id="order-old",
-                restaurante_id=1,
+                restaurante_id=98765,
                 cliente_id="c1",
                 garcom_id="u1",
                 numero_pedido=1,
@@ -57,7 +57,7 @@ def _setup():
         db.add(
             MensagemWhatsApp(
                 id="msg-old",
-                restaurante_id=1,
+                restaurante_id=98765,
                 cliente_telefone="85999990000",
                 remetente="cliente",
                 conteudo="conteudo privado",
@@ -67,7 +67,7 @@ def _setup():
         db.add(
             RascunhoPedido(
                 id="draft-old",
-                restaurante_id=1,
+                restaurante_id=98765,
                 cliente_telefone="85999990000",
                 conteudo_json='{"x":1}',
                 criado_em=old,
@@ -75,7 +75,7 @@ def _setup():
         )
         db.add(
             HistoricoFidelidade(
-                restaurante_id=1,
+                restaurante_id=98765,
                 cliente_id="c1",
                 cliente_telefone="85999990000",
                 tipo_movimentacao="ACUMULO",
@@ -88,7 +88,7 @@ def _setup():
         db.add(
             ComandaDeliveryAddressSnapshot(
                 comanda_id="order-old",
-                restaurante_id=1,
+                restaurante_id=98765,
                 payload_encrypted="gAAAAABinvalid",
                 created_at=old,
             )
@@ -104,11 +104,11 @@ def test_retention_preserves_customer_and_commercial_history():
     engine, factory = _setup()
     cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=365)
     with engine.connect() as connection:
-        plan = build_retention_plan(connection, restaurante_id=1, cutoff=cutoff)
+        plan = build_retention_plan(connection, restaurante_id=98765, cutoff=cutoff)
     assert plan.counts["comandas_snapshots"] == 1
     result = apply_retention(
         engine,
-        restaurante_id=1,
+        restaurante_id=98765,
         cutoff=cutoff,
         expected_database=plan.database,
         expected_fingerprint=plan.fingerprint,
@@ -118,7 +118,7 @@ def test_retention_preserves_customer_and_commercial_history():
     assert result["validation"] == "passed"
 
     db = factory()
-    token = current_restaurante_id.set(1)
+    token = current_restaurante_id.set(98765)
     try:
         customer = db.get(Cliente, "c1")
         order = db.get(Comanda, "order-old")
@@ -147,7 +147,7 @@ def test_retention_requires_exact_dry_run_and_backup():
     engine, _ = _setup()
     cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=365)
     with engine.connect() as connection:
-        plan = build_retention_plan(connection, restaurante_id=1, cutoff=cutoff)
+        plan = build_retention_plan(connection, restaurante_id=98765, cutoff=cutoff)
 
     for kwargs in (
         {"confirmation": "wrong", "backup_reference": "snapshot"},
@@ -155,7 +155,7 @@ def test_retention_requires_exact_dry_run_and_backup():
         {"confirmation": CONFIRMATION_PHRASE, "backup_reference": "snapshot", "expected_fingerprint": "wrong"},
     ):
         params = dict(
-            restaurante_id=1,
+            restaurante_id=98765,
             cutoff=cutoff,
             expected_database=plan.database,
             expected_fingerprint=plan.fingerprint,
