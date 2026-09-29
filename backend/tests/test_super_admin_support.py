@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.database import SessionLocal, tenant_session_scope
 from app.main import app
-from app.models import Restaurante, SuperAdminAuditLog, Usuario
+from app.models import Cliente, Restaurante, SuperAdminAuditLog, Usuario
 from app.routes import super_admin
 from app.security import (
     _authenticated_user_from_token,
@@ -143,6 +143,62 @@ def test_support_mode_authenticates_operational_routes():
     op_resp = client.get("/produtos/", headers=support_headers)
     assert op_resp.status_code == 200
     assert isinstance(op_resp.json(), list)
+
+
+def test_customer_pii_requires_audited_support_mode():
+    """Super Admin direto não acessa PII tenant; Modo Suporte temporário pode."""
+    phone = f"859{str(int(uuid.uuid4().hex[:8], 16))[-8:].zfill(8)}"
+    customer_id = f"support-pii-{uuid.uuid4().hex}"
+
+    with SessionLocal() as db:
+        with tenant_session_scope(db, 1):
+            db.add(
+                Cliente(
+                    id=customer_id,
+                    restaurante_id=1,
+                    nome="Cliente Suporte LGPD",
+                    telefone=phone,
+                )
+            )
+            db.commit()
+
+    headers = _superadmin_headers()
+
+    # O JWT administrativo global usa restaurante_id=0 e não autentica rotas
+    # operacionais tenant-scoped; portanto não pode navegar diretamente na base.
+    direct = client.get("/fidelidade/clientes", headers=headers)
+    assert direct.status_code == 401
+
+    start = client.post(
+        "/api/super-admin/support/1/start",
+        json={"reason": "Diagnóstico de cadastro do cliente solicitado pelo restaurante."},
+        headers=headers,
+    )
+    assert start.status_code == 200, start.text
+    support_headers = {
+        "Authorization": f"Bearer {start.json()['access_token']}"
+    }
+
+    try:
+        scoped = client.get("/fidelidade/clientes", headers=support_headers)
+        assert scoped.status_code == 200, scoped.text
+        assert any(
+            row.get("id") == customer_id
+            and row.get("telefone") == phone
+            for row in scoped.json()
+        )
+    finally:
+        client.post(
+            "/api/super-admin/support/1/end",
+            json={"reason": "Diagnóstico de PII concluído."},
+            headers=headers,
+        )
+        with SessionLocal() as db:
+            with tenant_session_scope(db, 1):
+                customer = db.query(Cliente).filter(Cliente.id == customer_id).first()
+                if customer is not None:
+                    db.delete(customer)
+                    db.commit()
 
 
 def test_support_mode_allows_access_to_suspended_restaurant():
