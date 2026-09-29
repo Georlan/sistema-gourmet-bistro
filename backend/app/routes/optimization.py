@@ -251,7 +251,7 @@ def get_loyalty_clients(
 def lookup_loyalty_client(
     telefone: str,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("fidelidade:operar")),
+    current_user: Usuario = Depends(require_permission("pedidos:consultar_cliente")),
 ):
     restaurante_id = require_tenant_id()
     try:

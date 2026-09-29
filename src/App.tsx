@@ -12,6 +12,7 @@ import { useOperationalOrders } from './components/app/data/useOperationalOrders
 import { useOperationalTables } from './components/app/data/useOperationalTables';
 import { useOperationalDrafts } from './components/app/drafts/useOperationalDrafts';
 import { OperationalSnapshotLoading } from './components/app/OperationalSnapshotLoading';
+import { AttendantQuickOrderPanel } from './components/AttendantQuickOrderPanel';
 import { KitchenPanel } from './components/KitchenPanel';
 import { KomaLogo } from './components/KomaLogo';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
@@ -1627,6 +1628,25 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       <div className={`min-h-screen w-full bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
         <SupportSessionBanner />
         <OperationalSnapshotLoading error={fetchError} />
+      </div>
+    );
+  }
+
+  if (activeRole === 'atendente') {
+    return (
+      <div className={`w-full min-h-dvh bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+        <SupportSessionBanner />
+        <AttendantQuickOrderPanel
+          apiBaseUrl={API_BASE_URL}
+          authHeaders={managementAuthHeaders}
+          activeWaiterNome={activeWaiterNome}
+          liveProdutos={liveProdutos}
+          liveCategorias={liveCategorias}
+          catalogReady={isProductsLoaded}
+          onRefreshOrders={fetchOrdersFromAPI}
+          onOptimisticAddOrder={handleOptimisticAddOrder}
+          onLogout={handleLogout}
+        />
       </div>
     );
   }

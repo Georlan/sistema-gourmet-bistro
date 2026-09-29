@@ -398,9 +398,9 @@ def criar_venda_direta_com_modificadores(
     payload: VendaDiretaComModificadoresCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("pedidos:criar_rapido")),
 ):
-    """Venda do Caixa preservando complementos e a família ativa da mesa."""
+    """Venda rápida preservando complementos e a família ativa da mesa."""
     normalized_type = (payload.tipo or "").strip().casefold()
     is_local = normalized_type in {"consumo no local", "mesa", "local"}
 

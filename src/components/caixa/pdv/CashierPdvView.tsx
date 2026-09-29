@@ -89,6 +89,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     pdvCustomerLookup,
     pdvOrderType,
     setPdvOrderType,
+    allowedPdvOrderTypes,
     pdvPaymentMethod,
     setPdvPaymentMethod,
     pdvDeliveryAddressDraft,
@@ -197,6 +198,17 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     pdvDeliveryAddressDraft.numero,
     pdvDeliveryAddressDraft.bairro,
   ].filter(Boolean).join(', ');
+  const modalityOptions = ([
+    { id: 'pickup', label: 'Retirada' },
+    { id: 'delivery', label: 'Delivery' },
+    { id: 'dine_in', label: 'Consumo local' },
+  ] as const).filter((type) => allowedPdvOrderTypes.includes(type.id));
+  const shortcutLabels = [
+    allowedPdvOrderTypes.includes('pickup') ? 'F2 Retirada' : null,
+    allowedPdvOrderTypes.includes('dine_in') ? 'F3 Consumo local' : null,
+    allowedPdvOrderTypes.includes('delivery') ? 'F8 Delivery' : null,
+    'F4 Finalizar',
+  ].filter(Boolean).join(' · ');
 
   return (
     <>
@@ -686,15 +698,14 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                         <summary className="cursor-pointer list-none font-semibold hover:text-koma-secondary">
                           Atalhos
                         </summary>
-                        <span className="mt-1 block font-mono">F2 Retirada · F3 Consumo local · F8 Delivery · F4 Finalizar</span>
+                        <span className="mt-1 block font-mono">{shortcutLabels}</span>
                       </details>
                     </div>
-                    <div className={"grid grid-cols-3 gap-1 bg-koma-input p-1 rounded-xl border border-koma-border"}>
-                      {([
-                        { id: 'pickup', label: 'Retirada' },
-                        { id: 'delivery', label: 'Delivery' },
-                        { id: 'dine_in', label: 'Consumo local' },
-                      ] as const).map((type) => (
+                    <div className={clsx(
+                      'grid gap-1 bg-koma-input p-1 rounded-xl border border-koma-border',
+                      modalityOptions.length === 2 ? 'grid-cols-2' : 'grid-cols-3',
+                    )}>
+                      {modalityOptions.map((type) => (
                         <button
                           key={type.id}
                           type="button"

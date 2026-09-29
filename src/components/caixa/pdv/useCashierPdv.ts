@@ -22,6 +22,9 @@ export type PdvModifierSelection = {
   preco: number;
 };
 
+export type PdvOrderType = 'pickup' | 'delivery' | 'dine_in';
+const DEFAULT_PDV_ORDER_TYPES: readonly PdvOrderType[] = ['pickup', 'delivery', 'dine_in'];
+
 export type PdvCartItem = {
   product: Product;
   quantity: number;
@@ -51,6 +54,7 @@ type Props = {
   apiCategorias: CatalogCategory[];
   dynamicMenu: Product[];
   pdvTableOptions: Array<ReturnType<typeof projectCashierSalonTables>[number] & { label: string }>;
+  allowedOrderTypes?: readonly PdvOrderType[];
 };
 
 const emptyDeliveryAddress = (): DeliveryAddressDraft => ({ ...EMPTY_DELIVERY_ADDRESS });
@@ -71,6 +75,7 @@ export function useCashierPdv({
   apiCategorias,
   dynamicMenu,
   pdvTableOptions,
+  allowedOrderTypes = DEFAULT_PDV_ORDER_TYPES,
 }: Props) {
   const [balcaoMobileView, setBalcaoMobileView] = useState<'produtos' | 'carrinho'>('produtos');
 
@@ -94,7 +99,13 @@ export function useCashierPdv({
 
   const [pdvCustomerCPF, setPdvCustomerCPF] = useState('');
 
-  const [pdvOrderType, setPdvOrderType] = useState<'pickup' | 'delivery' | 'dine_in'>('pickup');
+  const allowedPdvOrderTypes = allowedOrderTypes.length > 0 ? allowedOrderTypes : DEFAULT_PDV_ORDER_TYPES;
+  const [pdvOrderType, setPdvOrderTypeState] = useState<PdvOrderType>(
+    () => allowedPdvOrderTypes.includes('pickup') ? 'pickup' : allowedPdvOrderTypes[0] || 'pickup',
+  );
+  const setPdvOrderType = (nextType: PdvOrderType) => {
+    if (allowedPdvOrderTypes.includes(nextType)) setPdvOrderTypeState(nextType);
+  };
 
   const [pdvPaymentMethod, setPdvPaymentMethod] = useState<PaymentMethod | null>(null);
 
@@ -191,21 +202,21 @@ export function useCashierPdv({
           searchInput.focus();
           (searchInput as HTMLInputElement).select();
         }
-      } else if (e.key === 'F2') {
+      } else if (e.key === 'F2' && allowedPdvOrderTypes.includes('pickup')) {
         e.preventDefault();
         setPdvOrderType('pickup');
         setTimeout(() => {
           const phoneInput = document.getElementById('pdv-customer-phone-input');
           if (phoneInput) phoneInput.focus();
         }, 50);
-      } else if (e.key === 'F3') {
+      } else if (e.key === 'F3' && allowedPdvOrderTypes.includes('dine_in')) {
         e.preventDefault();
         setPdvOrderType('dine_in');
         setTimeout(() => {
           const mesaSelect = document.getElementById('pdv-target-table');
           if (mesaSelect) mesaSelect.focus();
         }, 50);
-      } else if (e.key === 'F8') {
+      } else if (e.key === 'F8' && allowedPdvOrderTypes.includes('delivery')) {
         e.preventDefault();
         setPdvOrderType('delivery');
         setTimeout(() => {
@@ -228,7 +239,7 @@ export function useCashierPdv({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeSubTab, pdvCart]);
+  }, [activeSubTab, allowedPdvOrderTypes, pdvCart]);
 
   const handlePdvAddToCart = (product: Product) => {
     setPdvCart((prev) => {
@@ -592,6 +603,7 @@ export function useCashierPdv({
     pdvCustomerLookup,
     pdvOrderType,
     setPdvOrderType,
+    allowedPdvOrderTypes,
     pdvPaymentMethod,
     setPdvPaymentMethod,
     pdvDeliveryAddress,
