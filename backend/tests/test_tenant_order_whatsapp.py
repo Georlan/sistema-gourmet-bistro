@@ -256,6 +256,82 @@ def test_mobile_pairing_configure_returns_pairing_code(char_client, char_setup, 
         db.commit()
 
 
+def test_mobile_pairing_recovers_stale_provider_instance(char_client, char_setup, monkeypatch):
+    from app.services import tenant_order_whatsapp as wa
+
+    rid = CHAR_RESTAURANT_ID
+    admin = char_setup["headers"]
+    with SessionLocal(restaurante_id=rid) as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        config.whatsapp_alerts_enabled = False
+        config.whatsapp_instance_name = None
+        config.whatsapp_recipient_phone = None
+        db.commit()
+
+    request = httpx.Request("POST", "https://provider.test/instance/create")
+    response = httpx.Response(403, request=request)
+
+    def duplicate_instance(*args, **kwargs):
+        raise httpx.HTTPStatusError("duplicate", request=request, response=response)
+
+    calls = []
+    monkeypatch.setattr(wa, "create_instance_with_pairing_code", duplicate_instance)
+    monkeypatch.setattr(
+        wa,
+        "recreate_instance_with_pairing_code",
+        lambda restaurant_id, phone: (
+            calls.append((restaurant_id, phone))
+            or ({"qrcode": {"pairingCode": "24681357"}}, "24681357")
+        ),
+    )
+
+    result = char_client.post(
+        "/caixa/configuracoes/whatsapp/configure",
+        headers=admin,
+        json={"phone": "(88) 99961-6937", "mode": "pairing_code"},
+    )
+
+    assert result.status_code == 200, result.text
+    assert result.json()["pairing_code"] == "24681357"
+    assert calls == [(rid, "5588999616937")]
+
+    with SessionLocal(restaurante_id=rid) as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        config.whatsapp_instance_name = None
+        config.whatsapp_recipient_phone = None
+        config.whatsapp_alerts_enabled = False
+        db.commit()
+
+
+def test_disconnect_removes_provider_instance(char_client, char_setup, monkeypatch):
+    from app.services import tenant_order_whatsapp as wa
+
+    rid = CHAR_RESTAURANT_ID
+    admin = char_setup["headers"]
+    with SessionLocal(restaurante_id=rid) as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        config.whatsapp_instance_name = instance_name(rid)
+        config.whatsapp_recipient_phone = "5588999616937"
+        config.whatsapp_alerts_enabled = True
+        db.commit()
+
+    calls = []
+    monkeypatch.setattr(wa, "logout_instance", lambda restaurant_id: calls.append(("logout", restaurant_id)))
+    monkeypatch.setattr(wa, "delete_instance", lambda restaurant_id: calls.append(("delete", restaurant_id)))
+
+    result = char_client.post("/caixa/configuracoes/whatsapp/disconnect", headers=admin)
+
+    assert result.status_code == 200, result.text
+    assert result.json() == {"enabled": False, "state": "not_configured"}
+    assert calls == [("logout", rid), ("delete", rid)]
+
+    with SessionLocal(restaurante_id=rid) as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        assert config.whatsapp_instance_name is None
+        assert config.whatsapp_recipient_phone is None
+        assert config.whatsapp_alerts_enabled is False
+
+
 def test_connection_settings_require_manager_and_never_expose_provider_key(char_client, char_setup):
     admin = char_setup["headers"]
     status = char_client.get("/caixa/configuracoes/whatsapp", headers=admin)
