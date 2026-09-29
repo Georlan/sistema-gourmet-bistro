@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.database import SessionLocal, current_restaurante_id
+from app.services.clientes import cliente_telefone_lookup_hash
 from app.models import (
     Restaurante,
     Usuario,
@@ -127,7 +128,7 @@ def setup_rush_hour_environment():
         db.commit()
 
         # 7. Cliente de Fidelidade com saldo de cashback
-        cli = db.query(Cliente).filter(Cliente.restaurante_id == SIM_REST_ID, Cliente.telefone == "11988880001").first()
+        cli = db.query(Cliente).filter(Cliente.restaurante_id == SIM_REST_ID, Cliente.telefone_hash == cliente_telefone_lookup_hash(SIM_REST_ID, "11988880001")).first()
         if not cli:
             cli = Cliente(
                 id="cli-rush-vip",
@@ -394,7 +395,7 @@ def test_cashback_concurrency_protection():
     db = SessionLocal()
     token = current_restaurante_id.set(SIM_REST_ID)
     try:
-        cli = db.query(Cliente).filter(Cliente.restaurante_id == SIM_REST_ID, Cliente.telefone == "11988880001").first()
+        cli = db.query(Cliente).filter(Cliente.restaurante_id == SIM_REST_ID, Cliente.telefone_hash == cliente_telefone_lookup_hash(SIM_REST_ID, "11988880001")).first()
         assert cli.saldo_cashback >= 0.0, f"Saldo de fidelidade ficou negativo: {cli.saldo_cashback}"
     finally:
         current_restaurante_id.reset(token)
