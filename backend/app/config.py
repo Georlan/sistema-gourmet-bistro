@@ -355,6 +355,12 @@ class Settings:
         1.0,
         min(float(os.getenv("EVOLUTION_REQUEST_TIMEOUT_SECONDS", "10")), 30.0),
     )
+    # Avisos do WhatsApp operacional são redundância, não o caminho crítico.
+    # Espaçar envios reduz burst em horário de pico; o Kanban continua imediato.
+    TENANT_WHATSAPP_MIN_SEND_INTERVAL_SECONDS: int = max(
+        5,
+        min(int(os.getenv("TENANT_WHATSAPP_MIN_SEND_INTERVAL_SECONDS", "10")), 60),
+    )
 
     # Meta Cloud API (WhatsApp Oficial) - Opcional / Reservado para futuro
     META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "")
