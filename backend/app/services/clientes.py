@@ -352,7 +352,7 @@ def _insert_guest_cliente_if_needed(
             )
         ).first()
         if existing is not None:
-            return str(existing.id), str(existing.nome)
+            return str(existing.id), str(decrypt_field(existing.nome))
         return str(comanda.cliente_id), None
 
     raw_phone = comanda.delivery_telefone
