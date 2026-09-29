@@ -65,7 +65,7 @@ class Usuario(Base):
     __tablename__ = "usuarios"
     __table_args__ = (
         CheckConstraint(
-            "cargo IN ('admin', 'superadmin', 'caixa', 'garcom', 'gerente', 'cozinha', 'motoboy')",
+            "cargo IN ('admin', 'superadmin', 'caixa', 'garcom', 'gerente', 'atendente', 'cozinha', 'motoboy')",
             name="ck_usuarios_cargo",
         ),
         CheckConstraint(
@@ -88,7 +88,7 @@ class Usuario(Base):
     nome = Column(String(100), nullable=False)
     telefone = Column(String(50), index=True, nullable=True)
     email = Column(String(100), index=True, nullable=True)
-    cargo = Column(String(20), nullable=False, default="garcom")  # 'caixa' | 'garcom' | 'gerente' | 'cozinha' | 'motoboy' | 'admin'
+    cargo = Column(String(20), nullable=False, default="garcom")  # 'caixa' | 'garcom' | 'gerente' | 'atendente' | 'cozinha' | 'motoboy' | 'admin'
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=False)
     senha_hash = Column(String(255), nullable=True)
     token_convite = Column(String, nullable=True)
