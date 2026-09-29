@@ -1,6 +1,7 @@
 """Durable at-least-once delivery, encrypted payloads, bounded retry and lease."""
 import asyncio
 import datetime as dt
+import hashlib
 import json
 import logging
 import os
@@ -25,7 +26,7 @@ def _owner_telegram_chat():
 
 def enqueue(
     db, *, protocol, kind, email, phone, subject, message,
-    telegram_chat=None, expires_hours=72,
+    telegram_chat=None, expires_hours=72, context=None,
 ):
     now = dt.datetime.now(dt.timezone.utc)
     channels = []
@@ -45,6 +46,7 @@ def enqueue(
                         recipient=recipient,
                         subject=subject,
                         message=message,
+                        context=context,
                     )
                 )
             ),
@@ -197,6 +199,49 @@ def enqueue_activation(
     )
 
 
+def staff_invite_delivery_id(*, restaurante_id: int, usuario_id: str, token: str) -> str:
+    token_ref = hashlib.sha256(token.encode("utf-8")).hexdigest()[:12]
+    protocol = f"staff-{int(restaurante_id)}-{usuario_id}-{token_ref}"
+    return f"{protocol}:team-invite:whatsapp"
+
+
+def enqueue_staff_invite(
+    db,
+    *,
+    restaurante_id: int,
+    usuario_id: str,
+    phone: str,
+    person_name: str,
+    restaurant_name: str,
+    token: str,
+) -> str:
+    """Persist a staff invitation in the existing durable notification outbox.
+
+    The raw activation token only exists inside the encrypted payload. The
+    delivery identifier stores a short one-way reference so logs/status rows
+    never expose the invitation secret.
+    """
+    token_ref = hashlib.sha256(token.encode("utf-8")).hexdigest()[:12]
+    protocol = f"staff-{int(restaurante_id)}-{usuario_id}-{token_ref}"
+    link = f"{settings.KOMA_PUBLIC_APP_URL}/ativar#token={token}"
+    enqueue(
+        db,
+        protocol=protocol,
+        kind="team-invite",
+        email=None,
+        phone=phone,
+        subject="Convite para a equipe KÔMA",
+        message=(
+            f"Olá, {person_name}! Você foi convidado para trabalhar no "
+            f"*{restaurant_name}*.\n\nCrie sua senha e ative sua conta: {link}\n\n"
+            "Este convite expira em 24 horas."
+        ),
+        expires_hours=24,
+        context="convite de equipe",
+    )
+    return f"{protocol}:team-invite:whatsapp"
+
+
 def enqueue_release_required(db, *, protocol, restaurant_name, plan, billing_cycle):
     """Avisa o operador uma única vez quando uma autorização aguarda liberação manual."""
     message = (
@@ -255,7 +300,9 @@ def _deliver(payload, delivery_id):
         from .whatsapp import enviar_texto_whatsapp_detalhado
 
         result = enviar_texto_whatsapp_detalhado(
-            payload["recipient"], payload["message"], contexto="inscrição KÔMA"
+            payload["recipient"],
+            payload["message"],
+            contexto=payload.get("context") or "inscrição KÔMA",
         )
         if not result.sucesso:
             raise RuntimeError("whatsapp_provider_rejected")
