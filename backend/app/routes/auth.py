@@ -23,7 +23,7 @@ from ..services.staff_login_rate_limit import (
     record_staff_login_failure,
     staff_login_is_blocked,
 )
-from ..services.notificacoes import agendar_convite_equipe_task
+from ..services.signup_notifications import enqueue_staff_invite
 from ..services.plan_entitlements import (
     ENTITLEMENT_WAITER_APP,
     require_plan_entitlement,
@@ -783,17 +783,16 @@ def gdpr_opt_out(
 @router.post("/usuarios/{user_id}/reenviar-convite")
 def reenviar_convite_usuario(
     user_id: str,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
-    """Renova e envia automaticamente o convite pelo WhatsApp."""
+    """Renova o token e persiste uma nova tentativa no outbox durável."""
     import datetime
-    from datetime import timezone
 
+    rest_id = int(current_user.restaurante_id)
     usuario = db.query(Usuario).filter(
         Usuario.id == user_id,
-        Usuario.restaurante_id == current_user.restaurante_id,
+        Usuario.restaurante_id == rest_id,
     ).first()
     if not usuario:
         raise HTTPException(
@@ -807,27 +806,34 @@ def reenviar_convite_usuario(
             detail="Este usuário já ativou sua conta."
         )
 
-    # Um novo token permite reenviar intencionalmente sem reutilizar o segredo.
-    usuario.token_convite = str(uuid.uuid4())
-    usuario.token_expira_em = datetime.datetime.now(timezone.utc) + datetime.timedelta(hours=24)
-    db.commit()
-    db.refresh(usuario)
-
-    restaurante = db.query(Restaurante).filter(
-        Restaurante.id == current_user.restaurante_id,
-    ).first()
-    agendar_convite_equipe_task(
-        background_tasks,
-        restaurante_id=current_user.restaurante_id,
-        usuario_id=usuario.id,
-        telefone=usuario.telefone or "",
-        nome_pessoa=usuario.nome,
-        nome_restaurante=restaurante.nome if restaurante else "Kôma",
-        token_convite=usuario.token_convite,
+    # O token e a tentativa de entrega são confirmados na mesma transação.
+    # Se o outbox não puder ser persistido, o token anterior continua válido.
+    restaurante_nome = (
+        db.query(Restaurante.nome)
+        .filter(Restaurante.id == rest_id)
+        .scalar()
+        or "Kôma"
     )
+    novo_token = str(uuid.uuid4())
+    usuario.token_convite = novo_token
+    usuario.token_expira_em = (
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+    )
+    enqueue_staff_invite(
+        db,
+        restaurante_id=rest_id,
+        usuario_id=usuario.id,
+        phone=usuario.telefone or "",
+        person_name=usuario.nome,
+        restaurant_name=restaurante_nome,
+        token=novo_token,
+    )
+    db.commit()
+
     return {
-        "message": f"Convite para {usuario.nome} agendado no WhatsApp.",
+        "message": f"Nova tentativa de convite para {usuario.nome} entrou na fila de envio.",
         "convite_agendado": True,
+        "convite_status": "pending",
     }
 
 
