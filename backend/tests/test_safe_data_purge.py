@@ -128,8 +128,8 @@ def test_dry_run_is_non_mutating_and_reports_full_cleanup():
         assert plan.delete_counts["produtos"] == 2
         assert plan.delete_counts["configuracoes_restaurante"] == 2
         assert plan.delete_counts["restaurant_signups"] == 1
-        assert plan.delete_counts["application_access_logs"] == 1
         assert plan.delete_counts["restaurantes"] == 1
+        assert plan.preserved_counts["application_access_logs"] == 1
         assert plan.preserved_counts["restaurantes"] == 1
         assert plan.preserved_counts["restaurante_capabilities"] == 1
         assert plan.preserved_counts["saas_subscriptions"] == 1
@@ -165,7 +165,7 @@ def test_apply_keeps_only_minimal_tenant_one_shell():
         assert connection.execute(select(metadata.tables["comandas"])).all() == []
         assert connection.execute(select(metadata.tables["itens"])).all() == []
         assert connection.execute(select(metadata.tables["restaurant_signups"])).all() == []
-        assert connection.execute(select(metadata.tables["application_access_logs"])).all() == []
+        assert len(connection.execute(select(metadata.tables["application_access_logs"])).all()) == 1
 
 
 def test_apply_requires_exact_dry_run_and_backup_or_waiver():
