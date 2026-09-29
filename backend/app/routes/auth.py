@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
+import datetime
 import logging
 import re
 
@@ -441,7 +442,8 @@ def get_usuarios(
 ):
     """Retorna todos os usuários cadastrados (garçons, caixas, admins)."""
     return db.query(Usuario).filter(
-        Usuario.restaurante_id == current_user.restaurante_id
+        Usuario.restaurante_id == current_user.restaurante_id,
+        Usuario.removed_at.is_(None),
     ).all()
 
 @router.patch("/usuarios/{user_id}", response_model=UsuarioResponse)
@@ -462,6 +464,7 @@ def update_usuario_access(
     usuario = db.query(Usuario).filter(
         Usuario.id == user_id,
         Usuario.restaurante_id == current_user.restaurante_id,
+        Usuario.removed_at.is_(None),
     ).with_for_update().first()
     if not usuario:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado.")
@@ -604,6 +607,7 @@ def update_usuario_access(
 def delete_usuario(
     user_id: str,
     background_tasks: BackgroundTasks,
+    remover_cadastro: bool = False,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("equipe:administrar")),
 ):
@@ -645,7 +649,7 @@ def delete_usuario(
             )
 
     before_status = str(usuario.status or "pendente_ativacao").lower().strip()
-    if before_status != "inativo":
+    if before_status != "inativo" or (remover_cadastro and usuario.removed_at is None):
         usuario.status = "inativo"
         usuario.token_convite = None
         usuario.token_expira_em = None
@@ -668,17 +672,23 @@ def delete_usuario(
                 MotoboyTokenAtivo.revogado == False,
             ).update({MotoboyTokenAtivo.revogado: True})
 
+        if remover_cadastro:
+            usuario.removed_at = datetime.datetime.now(datetime.timezone.utc)
+            usuario.telefone = None
+            usuario.email = None
+            usuario.senha_hash = None
+
         db.add(ActivityLog(
             restaurante_id=current_user.restaurante_id,
             garcom_id=current_user.id,
-            action="TEAM_ACCESS_DEACTIVATE",
+            action="TEAM_MEMBER_REMOVE" if remover_cadastro else "TEAM_ACCESS_DEACTIVATE",
             details=f"user_id={usuario.id}; cargo={target_role}; status={before_status}->inativo",
         ))
         db.commit()
 
     background_tasks.add_task(
         manager.broadcast,
-        {"event": "team_updated", "detail": {"action": "deactivated", "user_id": user_id}},
+        {"event": "team_updated", "detail": {"action": "removed" if remover_cadastro else "deactivated", "user_id": user_id}},
         restaurante_id=current_user.restaurante_id,
         target_audience="internal",
     )

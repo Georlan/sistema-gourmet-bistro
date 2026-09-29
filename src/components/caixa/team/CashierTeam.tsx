@@ -116,15 +116,18 @@ export default function CashierTeam({
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Desativar este acesso? O histórico será preservado e as sessões atuais serão encerradas.')) return;
+  const handleDeleteUser = async (userId: string, removerCadastro = false) => {
+    const message = removerCadastro
+      ? 'Remover esta pessoa da equipe? O telefone e o e-mail serão liberados para um novo cadastro. O histórico será preservado e o acesso será encerrado.'
+      : 'Desativar este acesso? O histórico será preservado e as sessões atuais serão encerradas.';
+    if (!confirm(message)) return;
     try {
-      const res = await fetch(`${apiBaseUrl}/auth/usuarios/${userId}`, {
+      const res = await fetch(`${apiBaseUrl}/auth/usuarios/${userId}${removerCadastro ? "?remover_cadastro=true" : ""}`, {
         method: 'DELETE',
         headers: authHeaders,
       });
       if (res.ok) {
-        showToast('Acesso desativado e sessões revogadas com sucesso!');
+        showToast(removerCadastro ? 'Pessoa removida da equipe. Telefone liberado para novo cadastro!' : 'Acesso desativado e sessões revogadas com sucesso!');
         await fetchSystemUsers();
       } else {
         const errorData = await res.json().catch(() => ({}));

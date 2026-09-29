@@ -71,7 +71,7 @@ def get_cargos_permissoes(
     raw_role_expr = func.lower(func.trim(preferred_role_expr))
     role_rows = (
         db.query(raw_role_expr.label("raw_role"), func.count(Usuario.id).label("total"))
-        .filter(Usuario.restaurante_id == rest_id)
+        .filter(Usuario.restaurante_id == rest_id, Usuario.removed_at.is_(None))
         .group_by(raw_role_expr)
         .all()
     )
