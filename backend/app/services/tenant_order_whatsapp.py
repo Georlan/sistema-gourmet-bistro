@@ -106,15 +106,18 @@ def _request(
     return result if isinstance(result, dict) else {}
 
 
-def create_instance(restaurant_id: int) -> dict:
-    # Criar a sessão e preparar o QR pode levar alguns segundos no Evolution.
-    # O timeout curto de 4s usado para leituras/status fazia o cliente HTTP
-    # encerrar a requisição antes de o provider responder, gerando 499 no Railway.
-    return _request("POST", "/instance/create", body={
+def create_instance(restaurant_id: int, *, phone: str | None = None) -> dict:
+    # Criar a sessão e preparar o QR/pairing code pode levar alguns segundos.
+    # Na Evolution v2.3.7, o número precisa estar presente desde a criação para
+    # o Baileys gerar um pairing code realmente utilizável no mesmo celular.
+    body = {
         "instanceName": instance_name(restaurant_id),
         "integration": "WHATSAPP-BAILEYS",
         "qrcode": True,
-    }, timeout_seconds=15.0)
+    }
+    if phone:
+        body["number"] = normalize_phone(phone)
+    return _request("POST", "/instance/create", body=body, timeout_seconds=15.0)
 
 
 def connect_instance(restaurant_id: int) -> dict:
@@ -147,31 +150,53 @@ def _pairing_code(data: dict) -> str | None:
 
 
 def connect_instance_with_pairing_code(restaurant_id: int, phone: str) -> str:
-    """Request a same-device pairing code without exposing provider credentials."""
+    """Request a pairing code for an existing closed instance."""
     normalized = normalize_phone(phone)
-    name = quote(instance_name(restaurant_id))
-
-    # Evolution v2 Baileys commonly accepts the number query parameter.
-    # Some 2.3.x builds expose the newer pairingCode/phoneNumber spelling.
-    # Try the compatible path first and only fall back when no code is returned.
     data = _request(
         "GET",
-        f"/instance/connect/{name}?number={quote(normalized)}",
-        timeout_seconds=15.0,
-    )
-    code = _pairing_code(data)
-    if code:
-        return code
-
-    data = _request(
-        "GET",
-        f"/instance/connect/{name}?pairingCode=true&phoneNumber={quote(normalized)}",
+        f"/instance/connect/{quote(instance_name(restaurant_id))}?number={quote(normalized)}",
         timeout_seconds=15.0,
     )
     code = _pairing_code(data)
     if code:
         return code
     raise RuntimeError("Evolution não retornou um código de pareamento.")
+
+
+def create_instance_with_pairing_code(restaurant_id: int, phone: str) -> tuple[dict, str]:
+    """Create a fresh Evolution v2.3.7 session with the number from the first handshake."""
+    data = create_instance(restaurant_id, phone=phone)
+    code = _pairing_code(data)
+    if code:
+        return data, code
+    # Defensive fallback for providers that return the QR payload before exposing
+    # pairingCode but already stored the number in the freshly created session.
+    return data, connect_instance_with_pairing_code(restaurant_id, phone)
+
+
+def delete_instance(restaurant_id: int) -> None:
+    _request(
+        "DELETE",
+        f"/instance/delete/{quote(instance_name(restaurant_id))}",
+        timeout_seconds=15.0,
+    )
+
+
+def recreate_instance_with_pairing_code(restaurant_id: int, phone: str) -> tuple[dict, str]:
+    """Rebuild a not-yet-connected session so v2.3.7 receives the number at creation."""
+    try:
+        if connection_state(restaurant_id) == "open":
+            raise RuntimeError("WhatsApp já conectado.")
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code != 404:
+            raise
+
+    try:
+        delete_instance(restaurant_id)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code != 404:
+            raise
+    return create_instance_with_pairing_code(restaurant_id, phone)
 
 
 def logout_instance(restaurant_id: int) -> None:

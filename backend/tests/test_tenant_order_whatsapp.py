@@ -119,46 +119,55 @@ def test_evolution_qr_control_operations_use_longer_timeout(monkeypatch):
     assert calls[1][3] == 15.0
 
 
-def test_pairing_code_uses_same_phone(monkeypatch):
+def test_create_instance_with_pairing_code_sends_number_on_first_handshake(monkeypatch):
     from app.services import tenant_order_whatsapp as wa
 
     calls = []
 
     def fake_request(method, path, *, body=None, timeout_seconds=4.0):
-        calls.append((method, path, timeout_seconds))
-        return {"qrcode": {"pairingCode": "1234-5678"}}
+        calls.append((method, path, body, timeout_seconds))
+        return {"qrcode": {"pairingCode": "1234-5678", "code": "qr-value"}}
 
     monkeypatch.setattr(wa, "_request", fake_request)
 
-    code = wa.connect_instance_with_pairing_code(123, "(11) 99999-9999")
+    data, code = wa.create_instance_with_pairing_code(123, "(11) 99999-9999")
 
     assert code == "12345678"
+    assert data["qrcode"]["code"] == "qr-value"
     assert calls == [
         (
-            "GET",
-            "/instance/connect/koma-restaurant-123?number=5511999999999",
+            "POST",
+            "/instance/create",
+            {
+                "instanceName": "koma-restaurant-123",
+                "integration": "WHATSAPP-BAILEYS",
+                "qrcode": True,
+                "number": "5511999999999",
+            },
             15.0,
         )
     ]
 
 
-def test_pairing_code_falls_back_to_v23_query_variant(monkeypatch):
+def test_recreate_pairing_session_deletes_unpaired_instance(monkeypatch):
     from app.services import tenant_order_whatsapp as wa
 
     calls = []
+    monkeypatch.setattr(wa, "connection_state", lambda _: "connecting")
+    monkeypatch.setattr(wa, "delete_instance", lambda rid: calls.append(("delete", rid)))
+    monkeypatch.setattr(
+        wa,
+        "create_instance_with_pairing_code",
+        lambda rid, phone: (calls.append(("create", rid, phone)) or ({"qrcode": {}}, "87654321")),
+    )
 
-    def fake_request(method, path, *, body=None, timeout_seconds=4.0):
-        calls.append(path)
-        if "phoneNumber=" in path:
-            return {"pairingCode": "87654321"}
-        return {}
+    data, code = wa.recreate_instance_with_pairing_code(123, "11999999999")
 
-    monkeypatch.setattr(wa, "_request", fake_request)
-
-    assert wa.connect_instance_with_pairing_code(123, "11999999999") == "87654321"
+    assert data == {"qrcode": {}}
+    assert code == "87654321"
     assert calls == [
-        "/instance/connect/koma-restaurant-123?number=5511999999999",
-        "/instance/connect/koma-restaurant-123?pairingCode=true&phoneNumber=5511999999999",
+        ("delete", 123),
+        ("create", 123, "11999999999"),
     ]
 
 
@@ -174,11 +183,13 @@ def test_mobile_pairing_configure_returns_pairing_code(char_client, char_setup, 
         config.whatsapp_recipient_phone = None
         db.commit()
 
-    monkeypatch.setattr(wa, "create_instance", lambda _: {"qrcode": {"code": "qr-value"}})
     monkeypatch.setattr(
         wa,
-        "connect_instance_with_pairing_code",
-        lambda restaurant_id, phone: "12345678",
+        "create_instance_with_pairing_code",
+        lambda restaurant_id, phone: (
+            {"qrcode": {"code": "qr-value", "pairingCode": "12345678"}},
+            "12345678",
+        ),
     )
 
     response = char_client.post(
