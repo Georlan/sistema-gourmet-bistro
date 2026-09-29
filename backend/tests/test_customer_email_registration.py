@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.database import current_restaurante_id, get_db, tenant_session_scope
+from app.services.clientes import cliente_email_lookup_hash
 from app.models import (
     Cliente,
     CustomerRegistrationChallenge,
@@ -113,7 +114,7 @@ def test_email_registration_is_single_use_and_login_ready(setup):
     try:
         pending_customer = db.query(Cliente).filter(
             Cliente.restaurante_id == 71,
-            Cliente.email == "cliente@example.test",
+            Cliente.email_hash == cliente_email_lookup_hash(71, "cliente@example.test"),
         ).one()
         assert pending_customer.nome == "Cliente Teste"
         assert pending_customer.email_verificado_em is None
@@ -169,7 +170,7 @@ def test_email_registration_is_single_use_and_login_ready(setup):
     try:
         customer = db.query(Cliente).filter(
             Cliente.restaurante_id == 71,
-            Cliente.email == "cliente@example.test",
+            Cliente.email_hash == cliente_email_lookup_hash(71, "cliente@example.test"),
         ).one()
         assert customer.email_verificado_em is not None
         assert customer.telefone_verificado_em is None
@@ -270,11 +271,11 @@ def test_resend_failure_rolls_back_pending_registration(setup, monkeypatch):
     try:
         assert db.query(CustomerRegistrationChallenge).filter(
             CustomerRegistrationChallenge.restaurante_id == 71,
-            CustomerRegistrationChallenge.email == "failed@example.test",
+            CustomerRegistrationChallenge.email_hash == cliente_email_lookup_hash(71, "failed@example.test"),
         ).first() is None
         assert db.query(Cliente).filter(
             Cliente.restaurante_id == 71,
-            Cliente.email == "failed@example.test",
+            Cliente.email_hash == cliente_email_lookup_hash(71, "failed@example.test"),
         ).first() is None
     finally:
         current_restaurante_id.reset(token_var)
@@ -397,7 +398,7 @@ def test_anonymous_order_helper_will_not_link_unverified_account_phone(setup):
     try:
         account = db.query(Cliente).filter(
             Cliente.restaurante_id == 71,
-            Cliente.email == "unverified-phone@example.test",
+            Cliente.email_hash == cliente_email_lookup_hash(71, "unverified-phone@example.test"),
         ).one()
         assert account.telefone_verificado_em is None
 
@@ -441,7 +442,7 @@ def test_expired_and_tampered_registration_links_fail(setup):
     try:
         challenge = db.query(CustomerRegistrationChallenge).filter(
             CustomerRegistrationChallenge.restaurante_id == 71,
-            CustomerRegistrationChallenge.email == "expired@example.test",
+            CustomerRegistrationChallenge.email_hash == cliente_email_lookup_hash(71, "expired@example.test"),
         ).one()
         challenge.expira_em = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=1)
         db.commit()
