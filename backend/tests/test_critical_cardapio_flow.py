@@ -23,6 +23,7 @@ from app.models import (
 from app.smartpos_models import SmartPosPaymentIntent
 from app.security import create_access_token
 from app.services.customer_auth import create_customer_access_token
+from app.services.clientes import cliente_telefone_lookup_hash
 
 client = TestClient(app)
 
@@ -249,7 +250,7 @@ def test_caixa_venda_direta_nao_passa_pela_gaveta_online(
     try:
         cliente = db.query(Cliente).filter(
             Cliente.restaurante_id == 100,
-            Cliente.telefone == "".join(c for c in telefone if c.isdigit()),
+            Cliente.telefone_hash == cliente_telefone_lookup_hash(100, "".join(c for c in telefone if c.isdigit())),
         ).one()
         assert cliente.nome == identificador
         assert cliente.endereco == endereco
@@ -287,7 +288,7 @@ def test_pedido_digital_sem_otp_cria_cliente_sem_verificar_telefone():
     try:
         cliente = db.query(Cliente).filter(
             Cliente.restaurante_id == 100,
-            Cliente.telefone == telefone_normalizado,
+            Cliente.telefone_hash == cliente_telefone_lookup_hash(100, telefone_normalizado),
         ).one()
         comanda = db.query(Comanda).filter(
             Comanda.restaurante_id == 100,
@@ -387,11 +388,11 @@ def test_cliente_do_caixa_faz_login_otp_e_pedido_vincula_mesmo_id(monkeypatch):
         assert comanda.delivery_telefone == telefone
         assert db.query(Cliente).filter(
             Cliente.restaurante_id == 100,
-            Cliente.telefone == telefone,
+            Cliente.telefone_hash == cliente_telefone_lookup_hash(100, telefone),
         ).count() == 1
         assert db.query(Cliente).filter(
             Cliente.restaurante_id == 100,
-            Cliente.telefone == "81911112222",
+            Cliente.telefone_hash == cliente_telefone_lookup_hash(100, "81911112222"),
         ).count() == 0
     finally:
         current_restaurante_id.reset(token_var)
