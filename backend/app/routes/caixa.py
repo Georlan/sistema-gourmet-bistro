@@ -49,7 +49,7 @@ from ..services.delivery_fee_policy import (
     validate_delivery_fee,
 )
 from ..services.delivery_fee_suggestion import suggest_delivery_fee
-from ..services.notificacoes import agendar_convite_equipe_task
+from ..services.signup_notifications import enqueue_staff_invite
 from ..timezone_utils import elapsed_minutes_since
 
 logger = logging.getLogger("koma.caixa")
@@ -174,6 +174,12 @@ def cadastrar_funcionario(
         
     token_convite = str(uuid.uuid4())
     token_expira_em = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+    restaurante_nome = (
+        db.query(Restaurante.nome)
+        .filter(Restaurante.id == rest_id)
+        .scalar()
+        or "Kôma"
+    )
 
     novo_usuario = Usuario(
         id=str(uuid.uuid4())[:8],
@@ -207,6 +213,17 @@ def cadastrar_funcionario(
                 ativo=True,
             )
             db.add(novo_motoboy)
+
+    enqueue_staff_invite(
+        db,
+        restaurante_id=rest_id,
+        usuario_id=novo_usuario.id,
+        phone=novo_usuario.telefone or "",
+        person_name=novo_usuario.nome,
+        restaurant_name=restaurante_nome,
+        token=token_convite,
+    )
+
     try:
         db.commit()
     except IntegrityError:
@@ -216,17 +233,6 @@ def cadastrar_funcionario(
             detail="Telefone indisponível para cadastro.",
         )
     db.refresh(novo_usuario)
-
-    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
-    agendar_convite_equipe_task(
-        background_tasks,
-        restaurante_id=rest_id,
-        usuario_id=novo_usuario.id,
-        telefone=novo_usuario.telefone,
-        nome_pessoa=novo_usuario.nome,
-        nome_restaurante=restaurante.nome if restaurante else "Kôma",
-        token_convite=token_convite,
-    )
 
     background_tasks.add_task(
         manager.broadcast,
