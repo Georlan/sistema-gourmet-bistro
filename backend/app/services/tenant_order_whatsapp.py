@@ -126,6 +126,54 @@ def connect_instance(restaurant_id: int) -> dict:
     )
 
 
+def _pairing_code(data: dict) -> str | None:
+    candidates = [
+        data.get("pairingCode"),
+        data.get("pairing_code"),
+    ]
+    qrcode = data.get("qrcode")
+    if isinstance(qrcode, dict):
+        candidates.extend([
+            qrcode.get("pairingCode"),
+            qrcode.get("pairing_code"),
+        ])
+    for value in candidates:
+        if not isinstance(value, str):
+            continue
+        cleaned = re.sub(r"[^A-Za-z0-9]", "", value).upper()
+        if 6 <= len(cleaned) <= 12:
+            return cleaned
+    return None
+
+
+def connect_instance_with_pairing_code(restaurant_id: int, phone: str) -> str:
+    """Request a same-device pairing code without exposing provider credentials."""
+    normalized = normalize_phone(phone)
+    name = quote(instance_name(restaurant_id))
+
+    # Evolution v2 Baileys commonly accepts the number query parameter.
+    # Some 2.3.x builds expose the newer pairingCode/phoneNumber spelling.
+    # Try the compatible path first and only fall back when no code is returned.
+    data = _request(
+        "GET",
+        f"/instance/connect/{name}?number={quote(normalized)}",
+        timeout_seconds=15.0,
+    )
+    code = _pairing_code(data)
+    if code:
+        return code
+
+    data = _request(
+        "GET",
+        f"/instance/connect/{name}?pairingCode=true&phoneNumber={quote(normalized)}",
+        timeout_seconds=15.0,
+    )
+    code = _pairing_code(data)
+    if code:
+        return code
+    raise RuntimeError("Evolution não retornou um código de pareamento.")
+
+
 def logout_instance(restaurant_id: int) -> None:
     _request("DELETE", f"/instance/logout/{quote(instance_name(restaurant_id))}")
 
@@ -217,7 +265,12 @@ def dispatch_alert(db: Session, snapshot: dict) -> bool:
         )
         return False
 
-    config.whatsapp_next_send_at = now + dt.timedelta(seconds=5)
+    # WhatsApp is only a secondary operational alert channel. Pace automated
+    # sends per restaurant so a rush never becomes a burst of near-simultaneous
+    # messages. The Kanban remains immediate; only the redundant alert waits.
+    config.whatsapp_next_send_at = now + dt.timedelta(
+        seconds=settings.TENANT_WHATSAPP_MIN_SEND_INTERVAL_SECONDS
+    )
     db.commit()
 
     # A disconnected provider has not accepted the message, so delayed retry is safe.
