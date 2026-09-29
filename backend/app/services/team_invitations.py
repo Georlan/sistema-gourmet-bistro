@@ -13,7 +13,7 @@ def delivery_prefix(tenant_id):
 def delivery_id(user):
     if not user.token_convite:
         return None
-    ref = hashlib.sha256(user.token_convite.encode()).hexdigest()[:16]
+    ref = hashlib.sha256(str(user.token_convite).encode("utf-8")).hexdigest()[:16]
     return f"{delivery_prefix(user.restaurante_id)}{user.id}-{ref}:invite:email"
 
 
