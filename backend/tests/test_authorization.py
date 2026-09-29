@@ -474,6 +474,14 @@ def test_manager_and_cashier_can_administer_team(username):
 def test_admin_creates_only_pending_invite_in_own_tenant(monkeypatch):
     from app.services import whatsapp as whatsapp_service
 
+    readiness = {
+        "ready": True,
+        "reason": "ready",
+        "message": "Convite agendado para envio pelo WhatsApp.",
+    }
+    monkeypatch.setattr(caixa_route, "obter_prontidao_convite_equipe", lambda: readiness)
+    monkeypatch.setattr(auth_route, "obter_prontidao_convite_equipe", lambda: readiness)
+
     mensagens = []
     monkeypatch.setattr(
         whatsapp_service,
@@ -539,6 +547,52 @@ def test_admin_creates_only_pending_invite_in_own_tenant(monkeypatch):
         ).order_by(NotificacaoWhatsApp.id.desc()).first()
         assert registro is not None
         assert "token=" not in registro.conteudo
+
+
+def test_invite_unavailable_preserves_pending_token_and_reports_clear_status(monkeypatch):
+    unavailable = {
+        "ready": False,
+        "reason": "automation_disabled",
+        "message": "WhatsApp automático está desativado. A pessoa foi cadastrada, mas o convite não foi enviado.",
+    }
+    monkeypatch.setattr(caixa_route, "obter_prontidao_convite_equipe", lambda: unavailable)
+    monkeypatch.setattr(auth_route, "obter_prontidao_convite_equipe", lambda: unavailable)
+
+    client = TestClient(app)
+    headers = get_auth_headers(client, "admin", "123")
+
+    created_response = client.post(
+        "/caixa/funcionarios",
+        headers=headers,
+        json={
+            "nome": "Convite sem canal",
+            "telefone": "81944443333",
+            "cargo": "cozinha",
+        },
+    )
+    assert created_response.status_code == 201, created_response.text
+    created = created_response.json()
+    assert created["convite_agendado"] is False
+    assert created["convite_status"] == "indisponivel"
+    assert "não foi enviado" in created["convite_mensagem"]
+
+    with TestingSessionLocal() as db:
+        saved = db.get(Usuario, created["id"])
+        assert saved is not None
+        original_token = saved.token_convite
+        original_expiry = saved.token_expira_em
+
+    resend = client.post(
+        f"/auth/usuarios/{created['id']}/reenviar-convite",
+        headers=headers,
+    )
+    assert resend.status_code == 503, resend.text
+    assert "WhatsApp" in resend.json()["detail"]
+
+    with TestingSessionLocal() as db:
+        unchanged = db.get(Usuario, created["id"])
+        assert unchanged.token_convite == original_token
+        assert unchanged.token_expira_em == original_expiry
 
 
 def test_team_creation_broadcasts_realtime_refresh(monkeypatch):
