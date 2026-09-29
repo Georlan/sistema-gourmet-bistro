@@ -157,7 +157,9 @@ test('PDV models fulfillment separately from optional table association', () => 
   const pdv = source('src/components/caixa/pdv/useCashierPdv.ts');
   const view = source('src/components/caixa/pdv/CashierPdvView.tsx');
 
-  assert.match(pdv, /useState<'pickup' \| 'delivery' \| 'dine_in'>\('pickup'\)/);
+  assert.match(pdv, /export type PdvOrderType = 'pickup' \\| 'delivery' \\| 'dine_in'/);
+  assert.match(pdv, /DEFAULT_PDV_ORDER_TYPES/);
+  assert.match(pdv, /useState<PdvOrderType>/);
   assert.match(pdv, /mesa_id: orderType === 'delivery' \? null : mesaId \|\| null/);
   assert.doesNotMatch(pdv, /Selecione a mesa de destino antes de lançar o pedido/);
   assert.match(pdv, /getElementById\('pdv-target-table'\)/);
