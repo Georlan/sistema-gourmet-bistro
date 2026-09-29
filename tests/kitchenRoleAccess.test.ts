@@ -12,9 +12,9 @@ test('kitchen role is invitable and unified login opens the KDS role path', () =
 
   assert.match(
     people,
-    /INVITABLE_ROLES = \['garcom', 'caixa', 'cozinha', 'gerente', 'motoboy'\]/,
+    /INVITABLE_ROLES = \['garcom', 'atendente', 'caixa', 'cozinha', 'gerente', 'motoboy'\]/,
   );
-  assert.match(entry, /role === 'cozinha' \|\| MANAGEMENT_ROLES\.has\(role\)/);
+  assert.match(entry, /role === 'cozinha' \|\| role === 'atendente' \|\| MANAGEMENT_ROLES\.has\(role\)/);
   assert.match(
     authSession,
     /role === 'admin' \|\| role === 'gerente' \|\| role === 'caixa' \|\| role === 'cozinha'/,
