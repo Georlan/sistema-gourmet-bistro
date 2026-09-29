@@ -26,9 +26,10 @@ class UsuarioResponse(BaseModel):
 
 
 class UsuarioInviteResponse(UsuarioResponse):
-    """Confirma o agendamento sem expor o token secreto ao navegador."""
+    """Confirma o enfileiramento sem expor o token secreto ao navegador."""
 
     convite_agendado: bool = True
+    convite_status: Literal["pending"] = "pending"
 
 class UsuarioCreate(BaseModel):
     nome: str = Field(min_length=1, max_length=100)
