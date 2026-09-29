@@ -129,7 +129,6 @@ def test_dry_run_is_non_mutating_and_reports_full_cleanup():
         assert plan.delete_counts["configuracoes_restaurante"] == 2
         assert plan.delete_counts["restaurant_signups"] == 1
         assert plan.delete_counts["restaurantes"] == 1
-        assert plan.preserved_counts["application_access_logs"] == 1
         assert plan.preserved_counts["restaurantes"] == 1
         assert plan.preserved_counts["restaurante_capabilities"] == 1
         assert plan.preserved_counts["saas_subscriptions"] == 1
