@@ -37,7 +37,8 @@ Documento interno inspirado no modelo simplificado da ANPD para agentes de trata
 - **Compartilhamentos:** Railway, Supabase, Cloudflare, Mercado Pago quando houver Pix e WhatsApp/Meta quando houver notificação.
 - **Transferência internacional:** sim.
 - **Retenção:** conforme necessidade operacional, contrato do restaurante, obrigações legais e defesa de direitos; após término do SaaS aplica-se janela de exportação e política de eliminação.
-- **Segurança:** criptografia de campos aplicáveis, TLS, tenant isolation/RLS, idempotência, autenticação do cliente quando utilizada.
+- **Segurança:** PII canônica do cliente criptografada em repouso; telefone/e-mail pesquisáveis por blind index HMAC tenant-scoped; snapshots operacionais de nome/telefone/endereço do pedido criptografados; TLS, tenant isolation/RLS, idempotência e autenticação do cliente quando utilizada.
+- **Relacionamento/CRM:** métricas de recorrência são derivadas por `cliente_id` (pedidos concluídos, gasto, ticket, última compra e dias sem comprar), sem depender de telefone/endereço repetidos em pedidos históricos.
 
 ## 4. Observações de alergia ou saúde
 
@@ -61,8 +62,8 @@ Documento interno inspirado no modelo simplificado da ANPD para agentes de trata
 - **Papéis:** restaurante e KÔMA definem o fluxo comercial; Mercado Pago possui tratamentos próprios e pode atuar como controlador independente para KYC, antifraude, liquidação e obrigação regulatória.
 - **Compartilhamentos:** Mercado Pago e infraestrutura KÔMA.
 - **Transferência internacional:** região do Mercado Pago não determinada; a infraestrutura KÔMA permanece internacional.
-- **Retenção:** registros financeiros e de conciliação conforme obrigações legais e defesa de direitos.
-- **Segurança:** OAuth, tokens cifrados, webhooks validados, idempotência, reconciliação e ledger de refund.
+- **Retenção:** registros financeiros e de conciliação conforme obrigações legais e defesa de direitos; snapshots pessoais redundantes devem ser minimizados quando deixarem de ser necessários.
+- **Segurança:** OAuth, tokens cifrados, webhooks validados, idempotência, reconciliação e ledger de refund; snapshots legados `cpf_cliente`/`nome_cliente` são criptografados em repouso e `cliente_id` é a chave canônica quando disponível.
 
 ## 6. Notificações WhatsApp
 
@@ -84,7 +85,7 @@ Documento interno inspirado no modelo simplificado da ANPD para agentes de trata
 - **Bases:** legítimo interesse com minimização; cumprimento de obrigação legal; exercício regular de direitos.
 - **Compartilhamentos:** Railway e Cloudflare; outros provedores somente se ativados e documentados.
 - **Transferência internacional:** sim.
-- **Retenção:** deve observar a obrigação de guarda de registros de acesso à aplicação quando aplicável; pendente validar e implementar retenção de 6 meses de forma minimizada e segura.
+- **Retenção:** quando o art. 15 do Marco Civil for aplicável, os registros de acesso à aplicação devem ser mantidos por 6 meses, sob sigilo e em ambiente controlado e seguro; retenção adicional exige fundamento específico e documentado.
 - **Segurança:** acesso restrito, filtros de logs sensíveis, request-id e ausência deliberada de segredos/tokens nos registros.
 
 ## 8. Suporte e atendimento de privacidade
