@@ -63,6 +63,12 @@ def _test_engine():
         Column("comanda_id", ForeignKey("comandas.id", ondelete="CASCADE"), nullable=False),
     )
     Table("restaurant_signups", metadata, Column("id", Integer, primary_key=True), Column("payload", String))
+    Table(
+        "application_access_logs",
+        metadata,
+        Column("id", String, primary_key=True),
+        Column("ip_address", String),
+    )
     metadata.create_all(engine)
 
     with engine.begin() as connection:
@@ -104,6 +110,10 @@ def _test_engine():
                 {"id": restaurant_id, "comanda_id": restaurant_id},
             )
         connection.execute(metadata.tables["restaurant_signups"].insert(), {"id": 1, "payload": "old@email"})
+        connection.execute(
+            metadata.tables["application_access_logs"].insert(),
+            {"id": "access-1", "ip_address": "encrypted-ip"},
+        )
     return engine
 
 
@@ -118,6 +128,7 @@ def test_dry_run_is_non_mutating_and_reports_full_cleanup():
         assert plan.delete_counts["produtos"] == 2
         assert plan.delete_counts["configuracoes_restaurante"] == 2
         assert plan.delete_counts["restaurant_signups"] == 1
+        assert plan.delete_counts["application_access_logs"] == 1
         assert plan.delete_counts["restaurantes"] == 1
         assert plan.preserved_counts["restaurantes"] == 1
         assert plan.preserved_counts["restaurante_capabilities"] == 1
@@ -154,6 +165,7 @@ def test_apply_keeps_only_minimal_tenant_one_shell():
         assert connection.execute(select(metadata.tables["comandas"])).all() == []
         assert connection.execute(select(metadata.tables["itens"])).all() == []
         assert connection.execute(select(metadata.tables["restaurant_signups"])).all() == []
+        assert connection.execute(select(metadata.tables["application_access_logs"])).all() == []
 
 
 def test_apply_requires_exact_dry_run_and_backup_or_waiver():
