@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
+from app.services.clientes import cliente_telefone_lookup_hash
 from app.models import Restaurante, Categoria, Produto, Cliente, Usuario
 from app.routes.cardapio_digital import public_tenant_scope
 from app.routes.auth import create_access_token
@@ -233,7 +234,12 @@ def test_mesmo_telefone_cria_fichas_isoladas_por_restaurante():
             finally:
                 current_restaurante_id.reset(token)
 
-        clientes = db.query(Cliente).filter(Cliente.telefone == telefone).all()
+        clientes = db.query(Cliente).filter(
+            Cliente.telefone_hash.in_([
+                cliente_telefone_lookup_hash(101, telefone),
+                cliente_telefone_lookup_hash(202, telefone),
+            ])
+        ).all()
         assert {(cliente.restaurante_id, cliente.nome) for cliente in clientes} == {
             (101, "Cliente do Tenant A"),
             (202, "Cliente do Tenant B"),

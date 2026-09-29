@@ -71,7 +71,7 @@ def get_recent_satisfaction_reviews(
     """
     results = db.query(
         AvaliacaoCliente,
-        Cliente.nome.label("cliente_nome"),
+        Cliente,
     ).join(
         Cliente,
         and_(
@@ -86,13 +86,13 @@ def get_recent_satisfaction_reviews(
     ).limit(limit).all()
 
     recentes = []
-    for av, cliente_nome in results:
+    for av, cliente in results:
         utc_dt = to_utc(av.criado_em)
         iso_str = utc_dt.isoformat() if utc_dt else str(av.criado_em)
         recentes.append({
             "id": str(av.id),
             "cliente_id": str(av.cliente_id),
-            "cliente_nome": cliente_nome or "Cliente",
+            "cliente_nome": cliente.nome or "Cliente",
             "nota": av.nota,
             "classificacao": classify_satisfaction_rating(av.nota),
             "comentario": av.comentario,

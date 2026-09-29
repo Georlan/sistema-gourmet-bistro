@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.database import Base, SessionLocal, current_restaurante_id, engine
 from app.main import app
+from app.services.clientes import cliente_email_lookup_hash
 from app.models import (
     CaixaTurno,
     Categoria,
@@ -190,7 +191,7 @@ def test_customer_registration_requires_whatsapp_code():
     try:
         assert db.query(Cliente).filter(
             Cliente.restaurante_id == 101,
-            Cliente.email == "sem-confirmacao@exemplo.com",
+            Cliente.email_hash == cliente_email_lookup_hash(101, "sem-confirmacao@exemplo.com"),
         ).first() is None
     finally:
         db.close()

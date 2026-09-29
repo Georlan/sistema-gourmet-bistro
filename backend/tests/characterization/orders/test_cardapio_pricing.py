@@ -278,13 +278,14 @@ class TestLegacyCardapioPricing:
         """[OBSERVADO] Cliente com R$ 6.00 de cashback usando cashback em pedido de R$ 25.00 paga R$ 19.00."""
         from app.database import SessionLocal
         from app.models import Cliente
+        from app.services.clientes import cliente_telefone_lookup_hash
 
         phone = "11999990013"
         db = SessionLocal()
         try:
             cli = db.query(Cliente).filter(
                 Cliente.restaurante_id == CHAR_RESTAURANT_ID,
-                Cliente.telefone == phone,
+                Cliente.telefone_hash == cliente_telefone_lookup_hash(CHAR_RESTAURANT_ID, phone),
             ).first()
             if not cli:
                 cli = Cliente(

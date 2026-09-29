@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.database import Base, SessionLocal, engine
 from app.main import app
+from app.services.clientes import cliente_telefone_lookup_hash
 from app.models import Cliente, PublicRateLimit, Restaurante
 
 
@@ -38,7 +39,7 @@ def test_public_customer_recognition_is_minimal_and_tenant_scoped():
 
         cliente = db.query(Cliente).filter(
             Cliente.restaurante_id == tenant_a,
-            Cliente.telefone == telefone,
+            Cliente.telefone_hash == cliente_telefone_lookup_hash(tenant_a, telefone),
         ).first()
         if cliente is None:
             db.add(
