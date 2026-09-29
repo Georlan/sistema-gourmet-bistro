@@ -97,6 +97,28 @@ def test_alert_is_opt_in_deduplicated_and_private(char_setup):
         db.close()
 
 
+def test_evolution_qr_control_operations_use_longer_timeout(monkeypatch):
+    from app.services import tenant_order_whatsapp as wa
+
+    calls = []
+
+    def fake_request(method, path, *, body=None, timeout_seconds=4.0):
+        calls.append((method, path, body, timeout_seconds))
+        return {"ok": True}
+
+    monkeypatch.setattr(wa, "_request", fake_request)
+
+    wa.create_instance(123)
+    wa.connect_instance(123)
+
+    assert calls[0][0] == "POST"
+    assert calls[0][1] == "/instance/create"
+    assert calls[0][3] == 15.0
+    assert calls[1][0] == "GET"
+    assert calls[1][1] == "/instance/connect/koma-restaurant-123"
+    assert calls[1][3] == 15.0
+
+
 def test_connection_settings_require_manager_and_never_expose_provider_key(char_client, char_setup):
     admin = char_setup["headers"]
     status = char_client.get("/caixa/configuracoes/whatsapp", headers=admin)
