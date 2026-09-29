@@ -17,6 +17,7 @@ from ..services.clientes import (
     buscar_cliente_por_telefone,
     cadastrar_ou_atualizar_cliente,
     cliente_payload,
+    cliente_telefone_lookup_hash,
     normalizar_nome_cliente,
     normalizar_telefone_cliente,
     registrar_movimento_fidelidade,
@@ -706,7 +707,10 @@ def create_loyalty_client(
 
     cliente_existente = db.query(Cliente).filter(
         Cliente.restaurante_id == restaurante_id,
-        Cliente.telefone == tel_limpo,
+        Cliente.telefone_hash == cliente_telefone_lookup_hash(
+            restaurante_id,
+            tel_limpo,
+        ),
     ).first()
     if cliente_existente:
         raise HTTPException(status_code=400, detail="Cliente com este telefone já cadastrado.")
