@@ -261,7 +261,7 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onUpdateAcce
                           <input type="email" aria-label={`E-mail de ${user.nome}`} value={inviteEmails[user.id] ?? user.email ?? ''} onChange={(event) => setInviteEmails((current) => ({ ...current, [user.id]: event.target.value }))} className="mt-1 w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-koma-foreground" />
                         </label>
                         <p className="text-[10px] text-koma-muted">
-                          {user.convite_email_status === 'enviado' ? 'E-mail enviado ao Resend. Confira também o spam.' : user.convite_email_status === 'na_fila' ? 'E-mail na fila de envio.' : user.convite_email_status === 'falhou' ? 'Falha no envio do e-mail. Reenvie o convite.' : 'Informe o e-mail e reenvie o convite.'}
+                          {user.convite_email_status === 'entregue' ? 'E-mail entregue. Abra o convite para ativar o acesso.' : user.convite_email_status === 'enviado' ? 'E-mail enviado ao Resend. Confira também o spam.' : user.convite_email_status === 'na_fila' ? 'E-mail na fila de envio.' : user.convite_email_status === 'falhou' ? 'Falha no envio do e-mail. Reenvie o convite.' : 'Informe o e-mail e reenvie o convite.'}
                         </p>
                       </div>
                     )}

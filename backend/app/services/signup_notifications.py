@@ -13,6 +13,7 @@ from ..config import settings
 from ..crypt import decrypt_field, encrypt_field
 from ..database import SessionLocal
 from ..signup_models import RestaurantSignup, SignupNotification
+from .email_delivery import send_email, provider_email_id, record_acceptance
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +32,8 @@ def enqueue(
     channels = []
     if email:
         channels.append(("email", email))
-    if phone:
-        channels.append(("whatsapp", phone))
+    # Inscrições e convites usam Resend; Telegram é reservado ao proprietário.
+    # phone permanece no contrato para compatibilidade, sem criar envio WhatsApp.
     if telegram_chat:
         channels.append(("telegram", telegram_chat))
     for channel, recipient in channels:
@@ -222,22 +223,11 @@ def _deliver(payload, delivery_id):
     if payload["channel"] == "email":
         if not settings.RESEND_API_KEY or not settings.EMAIL_FROM:
             raise RuntimeError("email_not_configured")
-        response = httpx.post(
-            "https://api.resend.com/emails",
-            timeout=15,
-            headers={
-                "Authorization": f"Bearer {settings.RESEND_API_KEY}",
-                "Idempotency-Key": delivery_id,
-            },
-            json={
-                "from": settings.EMAIL_FROM,
-                "to": [payload["recipient"]],
-                "subject": payload["subject"],
-                "text": payload["message"],
-            },
-        )
+        response = send_email({'from': settings.EMAIL_FROM, 'to': [payload['recipient']],
+            'subject': payload['subject'], 'text': payload['message']}, delivery_id, timeout=15)
         if not response.is_success:
             raise RuntimeError("email_provider_rejected")
+        return provider_email_id(response)
     elif payload["channel"] == "telegram":
         bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
         if not bot_token or not payload["recipient"]:
@@ -249,16 +239,6 @@ def _deliver(payload, delivery_id):
         )
         if not response.is_success or not response.json().get("ok"):
             raise RuntimeError("telegram_provider_rejected")
-    elif payload["channel"] == "whatsapp":
-        if not settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
-            raise RuntimeError("whatsapp_not_configured")
-        from .whatsapp import enviar_texto_whatsapp_detalhado
-
-        result = enviar_texto_whatsapp_detalhado(
-            payload["recipient"], payload["message"], contexto="inscrição KÔMA"
-        )
-        if not result.sucesso:
-            raise RuntimeError("whatsapp_provider_rejected")
     else:
         raise RuntimeError("unknown_notification_channel")
 
@@ -306,8 +286,9 @@ def dispatch_batch():
 
     for row in rows:
         error = None
+        email_id = None
         try:
-            _deliver(json.loads(decrypt_field(row["payload_encrypted"])), row["id"])
+            email_id = _deliver(json.loads(decrypt_field(row["payload_encrypted"])), row["id"])
         except Exception as exc:
             error = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
             error = error[:100]
@@ -320,6 +301,8 @@ def dispatch_batch():
         )
         due = now + dt.timedelta(seconds=min(3600, 30 * 2 ** min(row["attempts"], 7)))
         with SessionLocal() as db:
+            if email_id:
+                record_acceptance(db, email_id, row["id"])
             values = dict(
                 id=row["id"], claim=claim, status=state, error=error, due=due
             )

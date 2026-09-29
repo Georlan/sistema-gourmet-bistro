@@ -2,7 +2,7 @@
 import hashlib
 from sqlalchemy import text, inspect, select
 from ..config import settings
-from ..signup_models import SignupNotification
+from ..signup_models import SignupNotification, EmailDeliveryReceipt
 from .signup_notifications import enqueue
 
 
@@ -35,13 +35,16 @@ def with_delivery_status(db, users, tenant_id):
     if db.get_bind().dialect.name == 'postgresql':
         rows = db.execute(text('SELECT * FROM koma_internal.team_invite_delivery_status()')).mappings().all()
     elif inspect(db.get_bind()).has_table('signup_notifications'):
-        rows = db.execute(select(SignupNotification.id, SignupNotification.status, SignupNotification.last_error).where(
-            SignupNotification.id.startswith(delivery_prefix(tenant_id)))).mappings().all()
+        statement = select(SignupNotification.id, SignupNotification.status, SignupNotification.last_error)
+        if inspect(db.get_bind()).has_table('email_delivery_receipts'):
+            statement = statement.add_columns(EmailDeliveryReceipt.status.label('delivery_status')).outerjoin(
+                EmailDeliveryReceipt, EmailDeliveryReceipt.notification_id == SignupNotification.id)
+        rows = db.execute(statement.where(SignupNotification.id.startswith(delivery_prefix(tenant_id)))).mappings().all()
     else:
         rows = []
-    states = {row['id']: (row['status'], row['last_error']) for row in rows}
+    states = {row['id']: (row['status'], row['last_error'], row.get('delivery_status')) for row in rows}
     for user in users:
-        state, error = states.get(delivery_id(user), (None, None))
-        user.convite_email_status = ('enviado' if state == 'sent' else 'falhou' if error or state == 'failed'
+        state, error, receipt = states.get(delivery_id(user), (None, None, None))
+        user.convite_email_status = ('entregue' if receipt == 'delivered' else 'falhou' if receipt in {'bounced', 'complained', 'failed', 'suppressed'} else 'enviado' if state == 'sent' else 'falhou' if error or state == 'failed'
                                     else 'na_fila' if state else 'email_ausente' if not user.email else 'nao_agendado')
     return users

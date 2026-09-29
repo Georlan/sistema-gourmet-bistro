@@ -142,7 +142,7 @@ def test_resume_recovers_accepted_contract_without_duplicate(signup_client):
     resumed = client.get("/api/signups/current", headers={"X-Signup-Token": saved["token"]})
     assert resumed.json()["receipt"]["protocol"] == first.json()["protocol"]
     with Session() as db:
-        assert db.query(SignupNotification).count() == 2
+        assert db.query(SignupNotification).count() == 1
 
 
 def test_notification_failure_persists_and_retries(signup_client, monkeypatch):
@@ -166,7 +166,7 @@ def test_notification_failure_persists_and_retries(signup_client, monkeypatch):
     monkeypatch.setattr(signup_notifications, "_deliver", lambda payload, key: sent.append(key))
     signup_notifications.dispatch_batch()
     signup_notifications.dispatch_batch()
-    assert len(sent) == 2
+    assert len(sent) == 1
     with Session() as db:
         assert all(row.status == "sent" and row.payload_encrypted == "" for row in db.query(SignupNotification))
 
@@ -426,3 +426,15 @@ def test_expired_failed_delivery_erases_private_payload(signup_client, monkeypat
             row.payload_encrypted == "" and row.last_error == "expired"
             for row in db.query(SignupNotification)
         )
+
+
+def test_signup_channels_never_enqueue_whatsapp_even_when_enabled(signup_client, monkeypatch):
+    _, Session = signup_client
+    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", True)
+    with Session() as db:
+        signup_notifications.enqueue(db, protocol="channel-policy", kind="activation",
+            email="customer@example.test", phone="5585999999999", telegram_chat="owner-chat",
+            subject="Ativação", message="Teste")
+        db.commit()
+        ids = {row.id for row in db.query(SignupNotification).all()}
+        assert ids == {"channel-policy:activation:email", "channel-policy:activation:telegram"}
