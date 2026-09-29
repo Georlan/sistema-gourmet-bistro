@@ -46,6 +46,11 @@ const MemoizedCaixaPanel = React.lazy(() =>
     default: module.MemoizedCaixaPanel
   }))
 );
+const AttendantPanel = React.lazy(() =>
+  import('./components/AttendantPanel').then(module => ({
+    default: module.AttendantPanel
+  }))
+);
 
 const CashierLoading = () => (
   <div className="w-full h-full bg-koma-page text-koma-accent flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.18em]">
@@ -68,7 +73,9 @@ function hasInternalSupportSessionContext(): boolean {
 }
 
 const MANAGEMENT_ROLES = new Set<AppRole>(['admin', 'gerente', 'caixa']);
+const CASHIER_PORTAL_ROLES = new Set<AppRole>(['admin', 'gerente', 'caixa', 'cozinha', 'atendente']);
 const isManagementRole = (role: AppRole) => MANAGEMENT_ROLES.has(role);
+const isCashierPortalRole = (role: AppRole) => CASHIER_PORTAL_ROLES.has(role);
 
 
 const readJwtSubject = (token: string): string => {
@@ -1157,8 +1164,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         setLoginError("A conta não possui um perfil de acesso válido. Procure o administrador do estabelecimento.");
         return;
       }
-      if (portal === 'caixa' && !isManagementRole(role)) {
-        setLoginError("Acesso negado. Use uma conta de caixa, gerente ou administrador.");
+      if (portal === 'caixa' && !isCashierPortalRole(role)) {
+        setLoginError("Acesso negado. Use uma conta operacional compatível com esta área.");
         return;
       }
       if (portal === 'garcom' && role !== 'garcom' && role !== 'admin') {
@@ -1627,6 +1634,30 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       <div className={`min-h-screen w-full bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
         <SupportSessionBanner />
         <OperationalSnapshotLoading error={fetchError} />
+      </div>
+    );
+  }
+
+  if (activeRole === 'atendente') {
+    return (
+      <div className={`min-h-screen w-full bg-koma-page text-koma-foreground font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+        <SupportSessionBanner />
+        <React.Suspense fallback={<CashierLoading />}>
+          <AttendantPanel
+            orders={orders}
+            onRefreshOrders={fetchOrdersFromAPI}
+            apiBaseUrl={API_BASE_URL}
+            authHeaders={managementAuthHeaders}
+            activeWaiterNome={activeWaiterNome}
+            salonTables={salonTables}
+            liveProdutos={liveProdutos}
+            liveCategorias={liveCategorias}
+            catalogReady={isProductsLoaded}
+            onRefreshCategorias={fetchLiveCatalog}
+            onOptimisticAddOrder={handleOptimisticAddOrder}
+            onLogout={handleLogout}
+          />
+        </React.Suspense>
       </div>
     );
   }
