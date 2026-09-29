@@ -33,7 +33,9 @@ GRANT koma_app TO koma_runtime;
 O proprietário das tabelas e o usuário usado pelo Alembic não podem ser
 `koma_runtime`. A aplicação recusa iniciar se `DATABASE_URL` usar uma role
 superuser, `BYPASSRLS`, proprietária de tabela tenant ou que não pertença a
-`koma_app`.
+`koma_app`. Em produção essa trava é incondicional: definir
+`STRICT_RLS_ROLE_CHECK=false` não autoriza o runtime inseguro. O override existe
+somente em development/test/staging/homologation para diagnóstico controlado.
 
 ### 3. Atualizar as variáveis de ambiente do banco
 No painel de hospedagem (Supabase / Railway / Render / AWS):
