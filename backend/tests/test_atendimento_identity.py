@@ -615,3 +615,21 @@ def test_batch_item_transfer_preserves_original_order_identity_and_is_atomic_on_
         db.rollback()
     finally:
         db.close()
+
+
+def test_read_projection_preserves_original_launch_context_after_transfer():
+    from app.services.order_read_projection import project_check_details
+    with SessionLocal() as db:
+        original = _command(db, "kitchen-original", 1, 801)
+        target = _command(db, "kitchen-target", 2, 802)
+        launch = _launch(db, original, "kitchen-launch", "kitchen-item")
+        launch.origem = "garcom"
+        item = db.query(Item).filter(Item.id == "kitchen-item").one()
+        item.comanda_id = target.id
+        db.flush()
+        db.expire(target, ["itens"])
+        projected = project_check_details(db, [target], TENANT)[0].itens[0]
+        assert projected.lancamento_timestamp == launch.timestamp
+        assert projected.lancamento_origem == "garcom"
+        assert projected.lancamento_responsavel_nome == "Georlan Teste"
+        assert project_check_details(db, [target], TENANT + 1)[0].itens[0].lancamento_timestamp is None

@@ -9,7 +9,7 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from ..domain.orders.types import format_order_family_id
-from ..models import Comanda, ItemModificador, OpcaoModificador
+from ..models import Comanda, ItemModificador, OpcaoModificador, Lancamento, Usuario
 from ..operational_models import AtendimentoMesa, LancamentoIdentidade
 from ..schemas import ComandaDetail, ItemModifierResponse
 
@@ -74,6 +74,18 @@ def project_check_details(
     }
     if not launch_ids:
         return details
+    launch_context = {
+        row.id: row for row in db.query(
+            Lancamento.id, Lancamento.timestamp, Lancamento.origem,
+            Usuario.nome.label("responsavel_nome"),
+        ).outerjoin(Usuario, and_(
+            Usuario.id == Lancamento.garcom_id,
+            Usuario.restaurante_id == Lancamento.restaurante_id,
+        )).filter(
+            Lancamento.restaurante_id == restaurante_id,
+            Lancamento.id.in_(launch_ids),
+        ).all()
+    }
     rows = (
         db.query(LancamentoIdentidade.lancamento_id,
                  LancamentoIdentidade.sequencia, AtendimentoMesa.numero_conta)
@@ -94,4 +106,9 @@ def project_check_details(
             launch.display_number = labels.get(launch.id)
         for item in detail.itens:
             item.lancamento_display_number = labels.get(item.lancamento_id)
+            context = launch_context.get(item.lancamento_id)
+            if context:
+                item.lancamento_timestamp = context.timestamp
+                item.lancamento_origem = context.origem
+                item.lancamento_responsavel_nome = context.responsavel_nome
     return details

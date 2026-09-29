@@ -139,7 +139,11 @@ export function mapBackendComandaToOperationalOrder({
           displayNumber: launchId ? launchIdentities[launchId]?.displayNumber : undefined,
           numeroPedido,
           tipo,
-          origemOperacional,
+          timestamp: item.lancamento_timestamp
+            ? parseBackendDateTime(item.lancamento_timestamp)
+            : undefined,
+          responsavelNome: item.lancamento_responsavel_nome || undefined,
+          origemOperacional: item.lancamento_origem || origemOperacional,
           identificador,
         };
       }),

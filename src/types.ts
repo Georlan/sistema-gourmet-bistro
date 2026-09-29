@@ -44,6 +44,10 @@ export interface OrderItem {
   pago?: boolean;
   lancamentoId?: string;
   comandaId?: string;
+  displayNumber?: string;
+  timestamp?: number;
+  responsavelNome?: string;
+  origemOperacional?: Order['origemOperacional'];
 }
 
 export interface Order {

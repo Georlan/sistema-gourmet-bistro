@@ -6,6 +6,7 @@
 import React from 'react';
 import { ChefHat, CheckCircle, Clock, Utensils, MessageSquare, Loader } from 'lucide-react';
 import { Order, OrderItem } from '../types';
+import { getKdsDestinationLabel, getKdsTicketLabel } from './caixa/kitchen/kdsProjection';
 
 interface KitchenPanelProps {
   orders: Order[];
@@ -39,6 +40,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
   // Extract all items currently in 'preparando' status across all active orders
   const activeKitchenItems = React.useMemo(() => {
     const list: {
+      order: Order;
       orderId: string;
       mesaId: number;
       garcomNome: string;
@@ -54,10 +56,11 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
       order.itens.forEach((item) => {
         if (item.status === 'preparando') {
           list.push({
+            order,
             orderId: order.id,
             mesaId: order.mesaId,
-            garcomNome: order.garcomNome,
-            orderTimestamp: order.timestamp,
+            garcomNome: item.responsavelNome || order.garcomNome,
+            orderTimestamp: item.timestamp ?? order.timestamp,
             item,
           });
         }
@@ -69,7 +72,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
   }, [orders]);
 
   return (
-    <div className="bg-koma-card text-koma-foreground rounded-3xl border border-koma-border p-6 shadow-2xl space-y-6">
+    <div className="bg-koma-card text-koma-foreground rounded-3xl border border-koma-border p-3 sm:p-6 shadow-2xl space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-5 border-b border-koma-border">
         <div className="flex items-center gap-3">
@@ -78,7 +81,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
           </div>
           <div>
             <h3 className="font-serif text-lg font-bold text-koma-foreground tracking-wide">Fila da cozinha</h3>
-            <p className="text-xs text-koma-muted">Itens em preparo e observações da operação</p>
+            <p className="text-xs text-koma-muted">Itens por ordem de chegada • atenção após 10 min</p>
           </div>
         </div>
 
@@ -87,7 +90,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-600/15 dark:bg-emerald-950/30 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600/15 dark:bg-emerald-950/30"></span>
           </span>
-          <span className="text-[10px] uppercase font-bold text-koma-foreground font-sans tracking-wider">Conectado ao Salão</span>
+          <span className="text-[10px] uppercase font-bold text-koma-foreground font-sans tracking-wider">Fila de preparo</span>
         </div>
       </div>
 
@@ -106,11 +109,15 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {activeKitchenItems.map(({ orderId, mesaId, orderTimestamp, item }) => {
-            const minutesElapsed = Math.floor((currentTime - orderTimestamp) / 60000);
+          {activeKitchenItems.map(({ order, orderId, mesaId, garcomNome, orderTimestamp, item }, index) => {
+            const minutesElapsed = Math.max(0, Math.floor((currentTime - orderTimestamp) / 60000));
             
             // Highlight cooking items waiting more than 15 minutes
             const isDelayed = minutesElapsed >= 15;
+            const displayNumber = item.displayNumber || (item.lancamentoId
+              ? order.launchIdentities?.[item.lancamentoId]?.displayNumber : order.displayNumber);
+            const label = displayNumber || (mesaId <= 0 ? order.numeroPedido : undefined);
+            const ticketLabel = label ? getKdsTicketLabel({ orderId, displayNumber: String(label) }) : 'sem número';
 
             return (
               <div
@@ -126,7 +133,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                   {/* Card Header: Table, Timer, and delay badge */}
                   <div className="flex justify-between items-center pb-3 border-b border-koma-border">
                     <span className="font-serif font-bold text-lg text-koma-foreground">
-                      {mesaId && mesaId > 0 ? `Mesa ${mesaId}` : 'Balcão / Viagem'}
+                      Pedido {ticketLabel}
                     </span>
                     
                     <div className="flex items-center gap-1.5 bg-koma-card px-2.5 py-1 rounded-full border border-koma-border">
@@ -137,6 +144,15 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                     </div>
                   </div>
 
+                  <div className="flex flex-wrap gap-2 text-xs text-koma-muted">
+                    <span className="font-semibold text-koma-foreground">{getKdsDestinationLabel(order)}</span>
+                    <span>{({ cardapio: 'Cardápio online', caixa: 'Caixa', garcom: 'Garçom', smartpos: 'SmartPOS', desconhecida: 'Origem não informada' })[item.origemOperacional || order.origemOperacional || 'desconhecida']}</span>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-2 text-xs">
+                    <div><dt className="text-koma-muted">Horário do pedido</dt><dd className="font-mono font-semibold">{new Date(orderTimestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</dd></div>
+                    <div><dt className="text-koma-muted">Prioridade por espera</dt><dd className={isDelayed ? 'font-bold text-rose-600 dark:text-rose-300' : 'font-semibold'}>{isDelayed ? 'Atrasado' : minutesElapsed >= 10 ? 'Atenção' : 'Normal'} · {index + 1}º na fila</dd></div>
+                    <div className="col-span-2 min-w-0"><dt className="text-koma-muted">Lançado por</dt><dd className="break-words">{garcomNome || 'Não informado'}</dd></div>
+                  </dl>
                   {/* Product detail */}
                   <div className="space-y-3">
                     <div className="flex justify-between items-start gap-2">
@@ -148,6 +164,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                       )}
                     </div>
 
+                    {item.modificadores?.length ? <ul className="text-xs text-koma-muted">{item.modificadores.map(modifier => <li key={modifier.id}>+ {modifier.nome}</li>)}</ul> : null}
                     {/* Unit observation - Crucial for kitchen */}
                     {item.observacao ? (
                       <div className="flex items-start gap-1.5 p-3 bg-amber-50 border border-dashed border-amber-300 dark:bg-rose-950/40 dark:border-rose-900/50 rounded-xl text-xs text-amber-800 dark:text-amber-300 leading-normal font-sans">
