@@ -97,6 +97,46 @@ def test_alert_is_opt_in_deduplicated_and_private(char_setup):
         db.close()
 
 
+def test_brazilian_mobile_owner_jid_matches_with_or_without_ninth_digit():
+    from app.services import tenant_order_whatsapp as wa
+
+    assert wa.phones_match("5588999616937", "558899616937") is True
+    assert wa.phones_match("558899616937", "5588999616937") is True
+    assert wa.phones_match("5588999616937", "558899616938") is False
+
+
+def test_connected_status_accepts_baileys_legacy_mobile_jid(char_client, char_setup, monkeypatch):
+    from app.services import tenant_order_whatsapp as wa
+
+    rid = CHAR_RESTAURANT_ID
+    admin = char_setup["headers"]
+    with SessionLocal(restaurante_id=rid) as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        config.whatsapp_instance_name = instance_name(rid)
+        config.whatsapp_recipient_phone = "5588999616937"
+        config.whatsapp_alerts_enabled = False
+        db.commit()
+
+    monkeypatch.setattr(wa, "connection_state", lambda _: "open")
+    monkeypatch.setattr(wa, "owner_phone", lambda _: "558899616937")
+
+    response = char_client.get("/caixa/configuracoes/whatsapp", headers=admin)
+    assert response.status_code == 200, response.text
+    assert response.json()["state"] == "connected"
+    assert response.json()["phone_ending"] == "6937"
+
+    enable = char_client.post("/caixa/configuracoes/whatsapp/enable", headers=admin)
+    assert enable.status_code == 200, enable.text
+    assert enable.json() == {"enabled": True}
+
+    with SessionLocal(restaurante_id=rid) as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        config.whatsapp_alerts_enabled = False
+        config.whatsapp_instance_name = None
+        config.whatsapp_recipient_phone = None
+        db.commit()
+
+
 def test_evolution_qr_control_operations_use_longer_timeout(monkeypatch):
     from app.services import tenant_order_whatsapp as wa
 

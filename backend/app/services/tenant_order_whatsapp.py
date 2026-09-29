@@ -35,6 +35,26 @@ def normalize_phone(value: str) -> str:
     return phone
 
 
+def phones_match(left: str | None, right: str | None) -> bool:
+    if not left or not right:
+        return False
+    try:
+        left_normalized = normalize_phone(left)
+        right_normalized = normalize_phone(right)
+    except ValueError:
+        return False
+    if left_normalized == right_normalized:
+        return True
+
+    def legacy_mobile_form(value: str) -> str:
+        national = value[2:]
+        if len(national) == 11 and national[2] == "9":
+            return value[:4] + national[3:]
+        return value
+
+    return legacy_mobile_form(left_normalized) == legacy_mobile_form(right_normalized)
+
+
 @dataclass(frozen=True)
 class _AlertEvent:
     restaurant_id: int
@@ -300,7 +320,10 @@ def dispatch_alert(db: Session, snapshot: dict) -> bool:
 
     # A disconnected provider has not accepted the message, so delayed retry is safe.
     try:
-        if connection_state(rid) != "open" or owner_phone(rid) != config.whatsapp_recipient_phone:
+        if connection_state(rid) != "open" or not phones_match(
+            owner_phone(rid),
+            config.whatsapp_recipient_phone,
+        ):
             raise RuntimeError("WhatsApp desconectado ou número vinculado diferente.")
     except Exception:
         _record_failure(db, config)
