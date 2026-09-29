@@ -12,7 +12,7 @@ from ...printer_service import (
     ESC_DOUBLE_HEIGHT_ON,
     ESC_NORMAL_SIZE,
     align_center,
-    mask_phone,
+    format_phone_for_print,
     printer_service,
     split_justified,
 )
@@ -372,7 +372,7 @@ def _insert_context_block(
             ) or ["NOME: NÃO INFORMADO"]
             block.extend(customer_lines)
         if customer_phone:
-            block.append(f"TELEFONE: {mask_phone(customer_phone)}")
+            block.append(f"TELEFONE: {format_phone_for_print(customer_phone)}")
         if (
             float(variant.cashback_discount or 0.0) > 0
             and variant.loyalty_previous_orders is not None

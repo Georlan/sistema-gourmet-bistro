@@ -837,6 +837,7 @@ export const LEGAL_DOCUMENTS: LegalDocument[] = [
         paragraphs: [
           'Se o consumidor informar alergia, intolerância ou outra condição de saúde em observação, essa informação é dado pessoal sensível e deve ser limitada ao necessário para preparação segura.',
           'O dado será disponibilizado às pessoas do restaurante que precisem conhecê-lo para executar o pedido e poderá ser mantido apenas pelo período necessário ou autorizado pela legislação. Evite inserir diagnóstico ou informação sensível sem relação com a compra.',
+          'Informações sensíveis inseridas em observações pertencem ao contexto operacional do pedido e não devem ser transformadas automaticamente em atributo comercial do cliente, segmento de CRM, fidelidade ou marketing.',
         ],
       },
       {
