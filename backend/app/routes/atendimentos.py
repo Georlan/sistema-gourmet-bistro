@@ -199,9 +199,9 @@ def venda_direta_respeitando_familia_principal(
     venda_in: VendaDiretaCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("pedidos:criar_rapido")),
 ):
-    """PDV em mesa ocupada continua no mesmo atendimento e avança a letra do pedido."""
+    """Pedido rápido em mesa ocupada continua no mesmo atendimento e avança a letra do pedido."""
     from .orders import criar_venda_direta, lancar_itens
 
     normalized_type = (venda_in.tipo or "").strip().casefold()
