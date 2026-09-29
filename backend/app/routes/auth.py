@@ -7,7 +7,7 @@ import uuid
 import logging
 import re
 
-from ..database import bind_session_to_tenant, get_db, current_restaurante_id
+from ..database import bind_session_to_tenant, get_db, current_restaurante_id, require_tenant_id
 from ..models import ActivityLog, Restaurante, Usuario, Motoboy, MotoboyTokenAtivo
 from ..schemas import LoginRequest, LoginResponse, UsuarioAccessUpdate, UsuarioResponse, AtivarContaRequest
 from ..security import (
@@ -23,7 +23,7 @@ from ..services.staff_login_rate_limit import (
     record_staff_login_failure,
     staff_login_is_blocked,
 )
-from ..services.notificacoes import agendar_convite_equipe_task
+from ..services.notificacoes import agendar_convite_equipe_task, obter_prontidao_convite_equipe
 from ..services.plan_entitlements import (
     ENTITLEMENT_WAITER_APP,
     require_plan_entitlement,
@@ -787,13 +787,14 @@ def reenviar_convite_usuario(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
-    """Renova e envia automaticamente o convite pelo WhatsApp."""
+    """Renova o token somente quando o canal de WhatsApp está pronto para o reenvio."""
     import datetime
-    from datetime import timezone
 
+    del current_user
+    rest_id = require_tenant_id()
     usuario = db.query(Usuario).filter(
         Usuario.id == user_id,
-        Usuario.restaurante_id == current_user.restaurante_id,
+        Usuario.restaurante_id == rest_id,
     ).first()
     if not usuario:
         raise HTTPException(
@@ -807,18 +808,29 @@ def reenviar_convite_usuario(
             detail="Este usuário já ativou sua conta."
         )
 
-    # Um novo token permite reenviar intencionalmente sem reutilizar o segredo.
+    prontidao = obter_prontidao_convite_equipe()
+    if not bool(prontidao.get("ready")):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(
+                prontidao.get("message")
+                or "WhatsApp de convites indisponível no momento. Tente novamente em instantes."
+            ),
+        )
+
+    # O token anterior só é invalidado depois de confirmar que o canal está pronto.
     usuario.token_convite = str(uuid.uuid4())
-    usuario.token_expira_em = datetime.datetime.now(timezone.utc) + datetime.timedelta(hours=24)
+    usuario.token_expira_em = (
+        datetime.datetime.now(datetime.timezone.utc)
+        + datetime.timedelta(hours=24)
+    )
     db.commit()
     db.refresh(usuario)
 
-    restaurante = db.query(Restaurante).filter(
-        Restaurante.id == current_user.restaurante_id,
-    ).first()
+    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     agendar_convite_equipe_task(
         background_tasks,
-        restaurante_id=current_user.restaurante_id,
+        restaurante_id=rest_id,
         usuario_id=usuario.id,
         telefone=usuario.telefone or "",
         nome_pessoa=usuario.nome,
@@ -828,6 +840,7 @@ def reenviar_convite_usuario(
     return {
         "message": f"Convite para {usuario.nome} agendado no WhatsApp.",
         "convite_agendado": True,
+        "convite_status": "agendado",
     }
 
 
