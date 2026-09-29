@@ -217,6 +217,9 @@ class ItemResponse(BaseModel):
     lancamento_id: str
     # Identity of the original order, including after an item transfer.
     lancamento_display_number: Optional[str] = None
+    lancamento_timestamp: Optional[datetime] = None
+    lancamento_origem: Optional[str] = None
+    lancamento_responsavel_nome: Optional[str] = None
     produto_id: str
     preco_unit: float
     observacao: str

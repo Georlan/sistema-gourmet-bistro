@@ -108,3 +108,17 @@ test('table launch identity stays human-readable instead of falling back to tech
   assert.equal((order.itens[0] as any).displayNumber, '20-B');
   assert.equal((order.itens[0] as any).origemOperacional, 'garcom');
 });
+
+
+test('cozinha preserva autor, origem e horário do lançamento original do item', () => {
+  const order = mapBackendComandaToOperationalOrder({
+    comanda: makeComanda({ itens: [{ id: 'transferred', produto_id: 'rice', preco_unit: 35,
+      status: 'preparando', lancamento_id: 'second-launch', lancamento_display_number: '91-B',
+      lancamento_timestamp: '2026-09-29T22:09:00Z', lancamento_origem: 'garcom',
+      lancamento_responsavel_nome: 'Sarah' }] }), liveProdutos: [],
+  });
+  assert.equal(order.itens[0].displayNumber, '91-B');
+  assert.equal(order.itens[0].responsavelNome, 'Sarah');
+  assert.equal(order.itens[0].origemOperacional, 'garcom');
+  assert.equal(order.itens[0].timestamp, Date.parse('2026-09-29T22:09:00Z'));
+});

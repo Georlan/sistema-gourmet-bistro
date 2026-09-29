@@ -517,7 +517,7 @@ export function CaixaPanel({
         ...item,
         orderId: order.id,
         mesaId: order.mesaId,
-        garcomNome: order.garcomNome,
+        garcomNome: item.responsavelNome || order.garcomNome,
         timestamp: (item as any).created_at || (item as any).timestamp || order.timestamp,
       })),
   );
