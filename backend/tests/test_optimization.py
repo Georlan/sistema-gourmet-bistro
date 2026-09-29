@@ -64,6 +64,27 @@ def get_auth_headers(client, username, password):
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
+def test_restaurant_can_register_customer_when_whatsapp_channel_is_unavailable(monkeypatch):
+    """CRM manual não deve depender do canal de convite/WhatsApp."""
+    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False)
+
+    client = TestClient(app)
+    headers = get_auth_headers(client, "caixa", "123")
+    response = client.post(
+        "/fidelidade/clientes",
+        headers=headers,
+        json={
+            "cliente": "Cliente cadastrado pelo restaurante",
+            "telefone": "85999998888",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    created = response.json()
+    assert created["cliente"] == "Cliente cadastrado pelo restaurante"
+    assert created["telefone"] == "85999998888"
+
+
 def test_peak_hours_pure_sql():
     client = TestClient(app)
     headers = get_auth_headers(client, "caixa", "123")
