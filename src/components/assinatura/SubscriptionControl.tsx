@@ -134,7 +134,7 @@ export function SubscriptionControl({ accessToken }: { accessToken?: string }) {
       <p className="my-2">
         {summary}{' '}
         {setupPending
-          ? 'Conclua os 4 itens essenciais da implantação. O SuperAdmin libera a operação e inicia o período grátis.'
+          ? 'Conclua os 4 itens essenciais da implantação. Depois disso, a equipe KÔMA revisa, libera a operação e inicia o período grátis.'
           : subscription.paidUntil
             ? `Período vigente até ${new Date(subscription.paidUntil).toLocaleDateString('pt-BR')}.`
             : ''}

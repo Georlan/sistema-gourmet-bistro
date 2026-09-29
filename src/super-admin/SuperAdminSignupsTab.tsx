@@ -58,6 +58,7 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
   const [releasingProtocol, setReleasingProtocol] = useState<string | null>(null);
   const [reissuingProtocol, setReissuingProtocol] = useState<string | null>(null);
   const [catalogBusyId, setCatalogBusyId] = useState<string | null>(null);
+  const [catalogPreview, setCatalogPreview] = useState<{ url: string; item: CatalogAssistanceItem } | null>(null);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
@@ -194,6 +195,39 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
     }
   };
 
+  const closeCatalogPreview = () => {
+    setCatalogPreview(current => {
+      if (current) URL.revokeObjectURL(current.url);
+      return null;
+    });
+  };
+
+  const previewCatalogSource = async (item: CatalogAssistanceItem) => {
+    setCatalogBusyId(item.id);
+    setError('');
+    try {
+      const response = await superAdminFetch(
+        `/api/super-admin/catalog-assistance/${encodeURIComponent(item.restaurant_id)}/${encodeURIComponent(item.id)}/file`,
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || 'Não foi possível abrir o arquivo do cardápio.');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setCatalogPreview(current => {
+        if (current) URL.revokeObjectURL(current.url);
+        return { url, item };
+      });
+      await markCatalogProcessing(item);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao abrir o cardápio.');
+    } finally {
+      setCatalogBusyId(null);
+    }
+  };
+
   const downloadCatalogSource = async (item: CatalogAssistanceItem) => {
     setCatalogBusyId(item.id);
     setError('');
@@ -259,6 +293,29 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
   };
 
   return <>
+    {catalogPreview && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-label="Visualização do cardápio enviado">
+        <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-700 bg-koma-surface shadow-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 p-4">
+            <div className="min-w-0">
+              <p className="text-sm font-bold">{catalogPreview.item.restaurant_name}</p>
+              <p className="truncate text-xs text-koma-muted">{catalogPreview.item.filename}</p>
+            </div>
+            <button type="button" onClick={closeCatalogPreview} className="rounded border border-zinc-700 px-3 py-2 text-xs font-semibold">
+              Fechar
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto bg-black/20 p-4">
+            {catalogPreview.item.content_type === 'application/pdf'
+              ? <iframe title="Cardápio enviado" src={catalogPreview.url} className="h-[72vh] w-full rounded-xl bg-white" />
+              : catalogPreview.item.content_type.startsWith('image/')
+                ? <img src={catalogPreview.url} alt={`Cardápio enviado por ${catalogPreview.item.restaurant_name}`} className="mx-auto max-h-[72vh] max-w-full rounded-xl object-contain" />
+                : <p className="p-8 text-center text-sm text-koma-muted">Este formato não possui pré-visualização no navegador. Use “Baixar fonte”.</p>}
+          </div>
+        </div>
+      </div>
+    )}
+
     <SuperAdminHomologationReadiness />
 
     <section className="mb-5 rounded-xl border border-zinc-800 bg-koma-surface p-5 text-koma-foreground">
@@ -296,10 +353,18 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
                   <button
                     type="button"
                     disabled={catalogBusyId === item.id}
+                    onClick={() => void previewCatalogSource(item)}
+                    className="rounded border border-zinc-700 px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                  >
+                    {catalogBusyId === item.id ? 'Abrindo…' : 'Visualizar fonte'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={catalogBusyId === item.id}
                     onClick={() => void downloadCatalogSource(item)}
                     className="rounded border border-zinc-700 px-3 py-2 text-xs font-semibold disabled:opacity-50"
                   >
-                    {catalogBusyId === item.id ? 'Processando…' : 'Baixar fonte'}
+                    Baixar fonte
                   </button>
                   <label className="cursor-pointer rounded bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500">
                     Publicar JSON revisado

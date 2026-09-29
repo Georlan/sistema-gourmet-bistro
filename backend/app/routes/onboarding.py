@@ -337,9 +337,24 @@ def _build_onboarding_status(
         legacy_policy_allowed=legacy_policy_allowed,
     )
 
+    trial_row = db.execute(
+        select(restaurant_trials).where(restaurant_trials.c.restaurante_id == tenant_id)
+    ).mappings().one_or_none()
+    trial_snapshot = _trial_status_payload(
+        dict(trial_row) if trial_row else None,
+        setup_pending=setup_pending,
+    )
+    onboarding_mode = "commercial" if subscription is not None else "administrative"
+    trial_started = bool(subscription and subscription.trial_started_at is not None)
+    administrative_window_active = bool(
+        onboarding_mode == "administrative"
+        and trial_snapshot["status"] in {"active", "converted"}
+    )
+    operation_released = bool(trial_started or administrative_window_active)
+
     explicit_modes = explicit_order_types(config)
     test_order_detected = False
-    if subscription and subscription.trial_started_at is not None:
+    if operation_released:
         query = (
             db.query(Comanda)
             .join(
@@ -351,11 +366,17 @@ def _build_onboarding_status(
                 Comanda.restaurante_id == tenant_id,
                 Comanda.onboarding_test.is_(True),
                 Comanda.fechada.is_(True),
-                Comanda.criado_em >= subscription.trial_started_at,
                 Pagamento.restaurante_id == tenant_id,
                 Pagamento.status == "aprovado",
             )
         )
+        test_window_start = (
+            subscription.trial_started_at
+            if subscription and subscription.trial_started_at is not None
+            else (trial_row["trial_started_at"] if trial_row else None)
+        )
+        if test_window_start is not None:
+            query = query.filter(Comanda.criado_em >= test_window_start)
         if explicit_modes:
             query = query.filter(Comanda.tipo.in_(_test_order_type_values(explicit_modes)))
         test_order_detected = query.first() is not None
@@ -373,22 +394,24 @@ def _build_onboarding_status(
         progress["total"] > 0
         and progress["completed"] >= progress["total"]
     )
-    trial_started = bool(subscription and subscription.trial_started_at is not None)
-    ready_to_operate = configuration_complete and trial_started and test_order_detected
+    ready_to_operate = configuration_complete and operation_released and test_order_detected
+
+    if not configuration_complete:
+        release_state = "configuring"
+    elif onboarding_mode == "commercial" and not trial_started:
+        release_state = "awaiting_koma"
+    else:
+        release_state = "released"
 
     blockers = [
         key
         for key in ("profile", "hours", "catalog", "operations")
         if not steps[key]
     ]
-    if configuration_complete and not trial_started:
+    if configuration_complete and onboarding_mode == "commercial" and not trial_started:
         blockers.append("trial")
-    elif configuration_complete and not test_order_detected:
+    elif configuration_complete and operation_released and not test_order_detected:
         blockers.append("test_order")
-
-    trial_row = db.execute(
-        select(restaurant_trials).where(restaurant_trials.c.restaurante_id == tenant_id)
-    ).mappings().one_or_none()
 
     return {
         "restaurant": {
@@ -397,10 +420,13 @@ def _build_onboarding_status(
             "slug": str(restaurant.slug or ""),
             "plan": str(restaurant.plano or ""),
         },
-        "trial": _trial_status_payload(
-            dict(trial_row) if trial_row else None,
-            setup_pending=setup_pending,
-        ),
+        "trial": trial_snapshot,
+        "onboarding": {
+            "mode": onboarding_mode,
+            "releaseState": release_state,
+            "operationReleased": operation_released,
+            "requiresKomaRelease": bool(onboarding_mode == "commercial" and not trial_started),
+        },
         "readyForRelease": bool(
             setup_pending
             and configuration_complete
@@ -424,6 +450,7 @@ def _build_onboarding_status(
         "readiness": {
             "configurationComplete": configuration_complete,
             "trialStarted": trial_started,
+            "operationReleased": operation_released,
             "readyToOperate": ready_to_operate,
             "blockers": blockers,
         },
