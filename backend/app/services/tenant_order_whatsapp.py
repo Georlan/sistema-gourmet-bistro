@@ -91,9 +91,15 @@ def _provider() -> tuple[str, dict[str, str]]:
     return base, {"apikey": key, "Accept": "application/json"}
 
 
-def _request(method: str, path: str, *, body: dict | None = None) -> dict:
+def _request(
+    method: str,
+    path: str,
+    *,
+    body: dict | None = None,
+    timeout_seconds: float = 4.0,
+) -> dict:
     base, headers = _provider()
-    with httpx.Client(timeout=4.0) as client:
+    with httpx.Client(timeout=timeout_seconds) as client:
         response = client.request(method, f"{base}{path}", headers=headers, json=body)
         response.raise_for_status()
         result = response.json()
@@ -101,15 +107,23 @@ def _request(method: str, path: str, *, body: dict | None = None) -> dict:
 
 
 def create_instance(restaurant_id: int) -> dict:
+    # Criar a sessão e preparar o QR pode levar alguns segundos no Evolution.
+    # O timeout curto de 4s usado para leituras/status fazia o cliente HTTP
+    # encerrar a requisição antes de o provider responder, gerando 499 no Railway.
     return _request("POST", "/instance/create", body={
         "instanceName": instance_name(restaurant_id),
         "integration": "WHATSAPP-BAILEYS",
         "qrcode": True,
-    })
+    }, timeout_seconds=15.0)
 
 
 def connect_instance(restaurant_id: int) -> dict:
-    return _request("GET", f"/instance/connect/{quote(instance_name(restaurant_id))}")
+    # Gerar/renovar o QR também é uma operação de controle potencialmente lenta.
+    return _request(
+        "GET",
+        f"/instance/connect/{quote(instance_name(restaurant_id))}",
+        timeout_seconds=15.0,
+    )
 
 
 def logout_instance(restaurant_id: int) -> None:
