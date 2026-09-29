@@ -58,4 +58,4 @@ def test_staff_resend_uses_tenant_context_and_stable_snapshots():
     assert "db.refresh(usuario)" not in block
     assert "token_convite = str(uuid.uuid4())" in block
     assert "db.query(Restaurante.nome)" in block
-    assert "token_convite=token_convite" in block
+    assert "enqueue_invite(db, usuario, nome_restaurante)" in block

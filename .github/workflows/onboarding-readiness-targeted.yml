@@ -147,3 +147,6 @@ jobs:
 
           python -m alembic upgrade head
           python -m alembic current | grep -F "$expected_head"
+
+      - name: Prove team invite delivery metadata isolation with runtime role
+        run: python scripts/check-team-invite-status.py

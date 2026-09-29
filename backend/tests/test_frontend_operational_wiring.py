@@ -132,8 +132,8 @@ def test_operational_whatsapp_delivery_is_automatic_and_tokens_stay_server_side(
 
     motoboy_source = _source("src/components/MotoboyPwaPage.tsx")
 
-    assert "agendar_convite_equipe_task" in caixa_source
-    assert "agendar_convite_equipe_task" in auth_source
+    assert "enqueue_invite" in caixa_source
+    assert "enqueue_invite" in auth_source
     assert "[WHATSAPP SIMULADO]" not in caixa_source
     assert "openWaInvite" not in frontend_source
     assert "handleDespacharWhatsApp" not in frontend_source
@@ -141,5 +141,5 @@ def test_operational_whatsapp_delivery_is_automatic_and_tokens_stay_server_side(
     assert "/delivery/despachar" in _source("src/components/caixa/orders/useCashierOrders.ts")
     assert "window.open(waUrl" not in frontend_source
     assert "wa.me" not in motoboy_source
-    assert "O convite será enviado automaticamente pelo WhatsApp." in team_ui_source
+    assert "O convite será enviado por e-mail para a pessoa criar sua senha." in team_ui_source
     assert "Cadastrar e enviar" in team_ui_source

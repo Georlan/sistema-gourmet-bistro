@@ -22,8 +22,8 @@ type TeamFilter = 'todos' | 'ativos' | 'convites';
 
 interface EquipePessoasTabProps {
   users: SystemUser[];
-  onCreate: (payload: { nome: string; telefone: string; cargo: string }) => Promise<void>;
-  onResendInvite: (user: SystemUser) => Promise<void>;
+  onCreate: (payload: { nome: string; telefone: string; email: string; cargo: string }) => Promise<void>;
+  onResendInvite: (user: SystemUser, email: string) => Promise<void>;
   onUpdateAccess: (user: SystemUser, payload: { cargo?: string; status?: 'ativo' | 'inativo' }) => Promise<void>;
   onRemove: (userId: string, removerCadastro?: boolean) => Promise<void>;
 }
@@ -58,6 +58,8 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onUpdateAcce
   const [formError, setFormError] = useState('');
   const [nome, setNome] = useState('');
   const [telefone, setTelefone] = useState('');
+  const [email, setEmail] = useState('');
+  const [inviteEmails, setInviteEmails] = useState<Record<string, string>>({});
   const [cargo, setCargo] = useState<(typeof INVITABLE_ROLES)[number]>('garcom');
 
   const activeCount = users.filter((user) => memberStatus(user) === 'ativo').length;
@@ -118,9 +120,10 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onUpdateAcce
     setSubmitting(true);
     setFormError('');
     try {
-      await onCreate({ nome: cleanName, telefone: cleanPhone, cargo });
+      await onCreate({ nome: cleanName, telefone: cleanPhone, email: email.trim(), cargo });
       setNome('');
       setTelefone('');
+      setEmail('');
       setCargo('garcom');
       setInviteOpen(false);
     } catch (error) {
@@ -134,7 +137,7 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onUpdateAcce
     if (busyUserAction) return;
     setBusyUserAction(`invite-${user.id}`);
     try {
-      await onResendInvite(user);
+      await onResendInvite(user, inviteEmails[user.id] ?? user.email ?? '');
     } catch {
       // A tela principal já apresenta a mensagem devolvida pela API.
     } finally {
@@ -251,6 +254,17 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onUpdateAcce
                         {status === 'ativo' ? 'Acesso ativo' : status === 'pendente' ? 'Aguardando ativação' : 'Inativo'}
                       </span>
                     </div>
+                    {status === 'pendente' && (
+                      <div className="mt-2 space-y-1">
+                        <label className="block text-[10px] text-koma-muted">
+                          E-mail do convite
+                          <input type="email" aria-label={`E-mail de ${user.nome}`} value={inviteEmails[user.id] ?? user.email ?? ''} onChange={(event) => setInviteEmails((current) => ({ ...current, [user.id]: event.target.value }))} className="mt-1 w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-koma-foreground" />
+                        </label>
+                        <p className="text-[10px] text-koma-muted">
+                          {user.convite_email_status === 'enviado' ? 'E-mail enviado ao Resend. Confira também o spam.' : user.convite_email_status === 'na_fila' ? 'E-mail na fila de envio.' : user.convite_email_status === 'falhou' ? 'Falha no envio do e-mail. Reenvie o convite.' : 'Informe o e-mail e reenvie o convite.'}
+                        </p>
+                      </div>
+                    )}
                     <div className="mt-3 flex flex-wrap items-end justify-between gap-3 border-t border-koma-border pt-3">
                       <div>
                         {isAdmin ? (
@@ -275,7 +289,7 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onUpdateAcce
                       </div>
                       <div className="flex items-center gap-2">
                         {status === 'pendente' && (
-                          <button type="button" disabled={Boolean(busyUserAction)} onClick={() => void handleResend(user)} className="koma-btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-60">
+                          <button type="button" disabled={Boolean(busyUserAction) || !(inviteEmails[user.id] ?? user.email ?? '').trim()} onClick={() => void handleResend(user)} className="koma-btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-60">
                             <Send size={13} /> {busyUserAction === `invite-${user.id}` ? 'Enviando...' : 'Reenviar convite'}
                           </button>
                         )}
@@ -326,7 +340,7 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onUpdateAcce
               <div>
                 <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400">Novo acesso</p>
                 <h2 id="invite-team-title" className="mt-1 font-serif text-lg font-bold text-koma-foreground">Convidar para a equipe</h2>
-                <p className="mt-1 text-[10px] text-koma-muted">O convite será enviado automaticamente pelo WhatsApp.</p>
+                <p className="mt-1 text-[10px] text-koma-muted">O convite será enviado por e-mail para a pessoa criar sua senha.</p>
               </div>
               <button type="button" onClick={closeInvite} className="rounded-full p-2 text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground" aria-label="Fechar convite"><X size={17} /></button>
             </div>
@@ -342,6 +356,11 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onUpdateAcce
                   <input required inputMode="tel" value={telefone} onChange={(event) => handlePhoneChange(event.target.value)} placeholder="(81) 99999-9999" className="w-full rounded-xl border border-koma-border bg-koma-input px-3.5 py-2.5 font-mono text-xs text-koma-foreground outline-none focus:border-emerald-500" />
                 </label>
               </div>
+
+              <label className="block space-y-1.5">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-koma-muted">E-mail</span>
+                <input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="pessoa@exemplo.com" className="w-full rounded-xl border border-koma-border bg-koma-input px-3.5 py-2.5 text-xs text-koma-foreground" />
+              </label>
 
               <fieldset>
                 <legend className="mb-2 text-[9px] font-bold uppercase tracking-wider text-koma-muted">O que essa pessoa fará?</legend>
@@ -364,7 +383,7 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onUpdateAcce
               <div className="grid grid-cols-2 gap-2 border-t border-koma-border pt-4">
                 <button type="button" onClick={closeInvite} className="koma-btn-secondary px-4 py-2.5 text-xs font-bold">Cancelar</button>
                 <button type="submit" disabled={submitting} className="koma-btn-success inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60">
-                  <Send size={14} /> {submitting ? 'Enviando...' : 'Cadastrar e enviar'}
+                  <Send size={14} /> {submitting ? 'Enviando...' : 'Cadastrar e enviar e-mail'}
                 </button>
               </div>
             </form>

@@ -76,7 +76,7 @@ Métodos recorrentes podem cancelar as cobranças futuras. Se o cancelamento aco
 
 - E-mail: `RESEND_API_KEY`, `EMAIL_FROM`.
 - Aviso ao operador: `KOMA_OWNER_EMAIL` e/ou `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`. O Telegram recebe novos avisos de inscrição, início do trial e pedidos de liberação somente quando as duas variáveis estão configuradas. O canal WhatsApp do operador não é enfileirado para esses avisos.
-- WhatsApp para clientes e equipe: integração existente + `KOMA_WHATSAPP_AUTOMATION_ENABLED=true`; manter desligada até homologar esse fluxo separadamente.
+- WhatsApp para clientes: integração existente + `KOMA_WHATSAPP_AUTOMATION_ENABLED=true`; manter desligada até homologar esse fluxo separadamente.
 - Worker: `ENABLE_OUTBOX_WORKER=true`.
 
 As mensagens de aceite, liberação e primeiro acesso devem dizer explicitamente que os 7 dias grátis ainda não estão correndo durante a implantação.
@@ -103,3 +103,11 @@ Executar no ambiente isolado:
 NuPay, carteira Mercado Pago, débito e anual parcelado não devem ser anunciados como disponíveis enquanto não suportarem explicitamente a regra canônica: autorização recorrente, R$ 0 hoje, implantação sem consumir trial, 7 dias grátis completos e cobrança automática posterior.
 
 Importação de PDF/foto com IA continua separada da cobrança, mas faz parte do passo essencial de cardápio quando resultar em produto publicado.
+
+## Convites de equipe por e-mail
+
+A criação na tela Equipe exige e-mail e mantém o telefone como contato. Convites antigos sem e-mail podem receber o endereço no próprio card antes do reenvio. O backend preserva compatibilidade com cadastros legados sem e-mail, retornando `convite_agendado=false` nesses casos.
+
+Os convites usam Resend pela fila persistente existente (`signup_notifications`), com payload criptografado, chave idempotente por geração do convite, validade de 24 horas e retentativas limitadas. Cadastro/renovação e enfileiramento são confirmados na mesma transação. Reenviar renova o link e invalida o anterior.
+
+A equipe mostra “na fila”, “enviado ao Resend” ou “falha”; envio aceito pelo provedor não comprova entrega na caixa de entrada. A consulta de metadados no PostgreSQL é restrita ao tenant da transação e não expõe destinatário, conteúdo ou token. Não depende da automação de WhatsApp.
