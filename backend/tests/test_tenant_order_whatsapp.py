@@ -119,6 +119,49 @@ def test_evolution_qr_control_operations_use_longer_timeout(monkeypatch):
     assert calls[1][3] == 15.0
 
 
+def test_pairing_code_uses_same_phone(monkeypatch):
+    from app.services import tenant_order_whatsapp as wa
+
+    calls = []
+
+    def fake_request(method, path, *, body=None, timeout_seconds=4.0):
+        calls.append((method, path, timeout_seconds))
+        return {"qrcode": {"pairingCode": "1234-5678"}}
+
+    monkeypatch.setattr(wa, "_request", fake_request)
+
+    code = wa.connect_instance_with_pairing_code(123, "(11) 99999-9999")
+
+    assert code == "12345678"
+    assert calls == [
+        (
+            "GET",
+            "/instance/connect/koma-restaurant-123?number=5511999999999",
+            15.0,
+        )
+    ]
+
+
+def test_pairing_code_falls_back_to_v23_query_variant(monkeypatch):
+    from app.services import tenant_order_whatsapp as wa
+
+    calls = []
+
+    def fake_request(method, path, *, body=None, timeout_seconds=4.0):
+        calls.append(path)
+        if "phoneNumber=" in path:
+            return {"pairingCode": "87654321"}
+        return {}
+
+    monkeypatch.setattr(wa, "_request", fake_request)
+
+    assert wa.connect_instance_with_pairing_code(123, "11999999999") == "87654321"
+    assert calls == [
+        "/instance/connect/koma-restaurant-123?number=5511999999999",
+        "/instance/connect/koma-restaurant-123?pairingCode=true&phoneNumber=5511999999999",
+    ]
+
+
 def test_connection_settings_require_manager_and_never_expose_provider_key(char_client, char_setup):
     admin = char_setup["headers"]
     status = char_client.get("/caixa/configuracoes/whatsapp", headers=admin)
