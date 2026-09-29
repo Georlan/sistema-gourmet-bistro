@@ -22,7 +22,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 import datetime
 import uuid
 from .database import Base, current_restaurante_id
-from .crypt import encrypt_field, decrypt_field
+from .crypt import decrypt_field, encrypt_field, pii_lookup_hash
 
 class Restaurante(Base):
     __tablename__ = "restaurantes"
@@ -1278,13 +1278,15 @@ class HistoricoFidelidade(Base):
 
 class Cliente(Base):
     __tablename__ = "clientes"
-    
+
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
-    telefone = Column(String, nullable=False)
-    nome = Column(String, nullable=False)
-    endereco = Column(String, nullable=True)
-    email = Column(String, nullable=True, index=True)
+    _telefone = Column("telefone", Text, nullable=False)
+    telefone_hash = Column(String(64), nullable=False)
+    _nome = Column("nome", Text, nullable=False)
+    _endereco = Column("endereco", Text, nullable=True)
+    _email = Column("email", Text, nullable=True)
+    email_hash = Column(String(64), nullable=True)
     senha_hash = Column(String, nullable=True)
     password_reset_at = Column(DateTime(timezone=True), nullable=True)
     email_verificado_em = Column(DateTime(timezone=True), nullable=True)
@@ -1292,20 +1294,69 @@ class Cliente(Base):
     saldo_pontos = Column(Integer, default=0, nullable=False)
     saldo_cashback = Column(Numeric(14, 2, asdecimal=False), default=0.0, nullable=False)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
-    
+
     __table_args__ = (
         UniqueConstraint(
-            'restaurante_id',
-            'id',
-            name='uq_clientes_restaurante_id_id',
+            "restaurante_id",
+            "id",
+            name="uq_clientes_restaurante_id_id",
         ),
-        UniqueConstraint('restaurante_id', 'telefone', name='uq_restaurante_cliente_telefone'),
-        UniqueConstraint('restaurante_id', 'email', name='uq_restaurante_cliente_email'),
+        UniqueConstraint(
+            "restaurante_id",
+            "telefone_hash",
+            name="uq_restaurante_cliente_telefone",
+        ),
+        UniqueConstraint(
+            "restaurante_id",
+            "email_hash",
+            name="uq_restaurante_cliente_email",
+        ),
         CheckConstraint(
             "saldo_cashback >= 0",
             name="ck_clientes_cashback_nonnegative_finite",
         ),
     )
+
+    @hybrid_property
+    def telefone(self):
+        return decrypt_field(self._telefone)
+
+    @telefone.setter
+    def telefone(self, value):
+        if value is None:
+            self._telefone = None
+            return
+        raw = str(value).strip()
+        digits = "".join(char for char in raw if char.isdigit())
+        normalized = digits if len(digits) in {10, 11} else raw
+        self._telefone = encrypt_field(normalized)
+
+    @hybrid_property
+    def nome(self):
+        return decrypt_field(self._nome)
+
+    @nome.setter
+    def nome(self, value):
+        normalized = " ".join(str(value or "").strip().split())
+        self._nome = encrypt_field(normalized)
+
+    @hybrid_property
+    def endereco(self):
+        return decrypt_field(self._endereco)
+
+    @endereco.setter
+    def endereco(self, value):
+        normalized = str(value or "").strip() or None
+        self._endereco = encrypt_field(normalized)
+
+    @hybrid_property
+    def email(self):
+        return decrypt_field(self._email)
+
+    @email.setter
+    def email(self, value):
+        normalized = str(value or "").strip().lower() or None
+        self._email = encrypt_field(normalized)
 
     comandas = relationship("Comanda", back_populates="cliente")
     pagamentos = relationship("Pagamento", back_populates="cliente")
@@ -1317,6 +1368,25 @@ class Cliente(Base):
         "AvaliacaoCliente",
         back_populates="cliente",
         cascade="all, delete-orphan",
+    )
+
+
+@event.listens_for(Cliente, "before_insert")
+@event.listens_for(Cliente, "before_update")
+def _sync_cliente_pii_blind_indexes(_mapper, _connection, target: Cliente) -> None:
+    restaurante_id = int(target.restaurante_id or current_restaurante_id.get() or 0)
+    telefone = str(target.telefone or "").strip()
+    if telefone:
+        target.telefone_hash = pii_lookup_hash(
+            "cliente-telefone",
+            restaurante_id,
+            telefone,
+        )
+    email = str(target.email or "").strip().lower()
+    target.email_hash = (
+        pii_lookup_hash("cliente-email", restaurante_id, email)
+        if email
+        else None
     )
 
 
@@ -1640,10 +1710,11 @@ class CustomerRegistrationChallenge(Base):
         nullable=False,
         index=True,
     )
-    nome = Column(String(100), nullable=False)
-    email = Column(String(150), nullable=False)
-    telefone = Column(String(20), nullable=False)
-    endereco = Column(String(300), nullable=True)
+    _nome = Column("nome", Text, nullable=False)
+    _email = Column("email", Text, nullable=False)
+    email_hash = Column(String(64), nullable=False)
+    _telefone = Column("telefone", Text, nullable=False)
+    _endereco = Column("endereco", Text, nullable=True)
     senha_hash = Column(String, nullable=False)
     token_hash = Column(String(64), nullable=False)
     expira_em = Column(DateTime(timezone=True), nullable=False)
@@ -1658,7 +1729,7 @@ class CustomerRegistrationChallenge(Base):
     __table_args__ = (
         UniqueConstraint(
             "restaurante_id",
-            "email",
+            "email_hash",
             name="uq_customer_registration_challenges_tenant_email",
         ),
         UniqueConstraint(
@@ -1666,6 +1737,56 @@ class CustomerRegistrationChallenge(Base):
             "token_hash",
             name="uq_customer_registration_challenges_tenant_token",
         ),
+    )
+
+    @hybrid_property
+    def nome(self):
+        return decrypt_field(self._nome)
+
+    @nome.setter
+    def nome(self, value):
+        self._nome = encrypt_field(" ".join(str(value or "").strip().split()))
+
+    @hybrid_property
+    def email(self):
+        return decrypt_field(self._email)
+
+    @email.setter
+    def email(self, value):
+        self._email = encrypt_field(str(value or "").strip().lower())
+
+    @hybrid_property
+    def telefone(self):
+        return decrypt_field(self._telefone)
+
+    @telefone.setter
+    def telefone(self, value):
+        raw = str(value or "").strip()
+        digits = "".join(char for char in raw if char.isdigit())
+        normalized = digits if len(digits) in {10, 11} else raw
+        self._telefone = encrypt_field(normalized)
+
+    @hybrid_property
+    def endereco(self):
+        return decrypt_field(self._endereco)
+
+    @endereco.setter
+    def endereco(self, value):
+        self._endereco = encrypt_field(str(value or "").strip() or None)
+
+
+@event.listens_for(CustomerRegistrationChallenge, "before_insert")
+@event.listens_for(CustomerRegistrationChallenge, "before_update")
+def _sync_registration_challenge_pii_blind_index(
+    _mapper,
+    _connection,
+    target: CustomerRegistrationChallenge,
+) -> None:
+    restaurante_id = int(target.restaurante_id or current_restaurante_id.get() or 0)
+    target.email_hash = pii_lookup_hash(
+        "cliente-email",
+        restaurante_id,
+        str(target.email or "").strip().lower(),
     )
 
 
