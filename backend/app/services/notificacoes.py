@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import logging
 
 from sqlalchemy.orm import Session
@@ -234,34 +233,6 @@ def agendar_notificacao_whatsapp_task(
             db.close()
 
     _agendar_corrotina(background_tasks, _runner)
-
-
-def agendar_convite_equipe_task(
-    background_tasks,
-    *,
-    restaurante_id: int,
-    usuario_id: str,
-    telefone: str,
-    nome_pessoa: str,
-    nome_restaurante: str,
-    token_convite: str,
-) -> None:
-    link = f"{settings.KOMA_PUBLIC_APP_URL}/ativar#token={token_convite}"
-    conteudo = (
-        f"Olá, {nome_pessoa}! Você foi convidado para trabalhar no "
-        f"*{nome_restaurante}*.\n\nCrie sua senha e ative sua conta: {link}\n\n"
-        "Este convite expira em 24 horas."
-    )
-    token_ref = hashlib.sha256(token_convite.encode("utf-8")).hexdigest()[:12]
-    agendar_notificacao_whatsapp_task(
-        background_tasks,
-        telefone=telefone,
-        conteudo=conteudo,
-        tipo="convite_equipe",
-        restaurante_id=restaurante_id,
-        conteudo_auditoria=f"Convite de equipe para usuário {usuario_id} ({token_ref}).",
-        contexto="convite de equipe",
-    )
 
 
 def agendar_notificacao_status_task(
