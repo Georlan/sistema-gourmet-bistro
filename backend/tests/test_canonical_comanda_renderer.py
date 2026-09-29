@@ -75,7 +75,7 @@ def test_online_pickup_hides_operator_and_prints_customer_payment_and_paid_warni
     assert "CANAL:" not in ticket
     assert "CLIENTE" in ticket
     assert "NOME: GEORLAN" in ticket
-    assert "TELEFONE: (88) 9XXXX-XX34" in ticket
+    assert "TELEFONE: (88) 99999-1234" in ticket
     assert "FIDELIDADE:" not in ticket
     assert "ITENS" in ticket
     assert "VALOR" in ticket
@@ -151,7 +151,7 @@ def test_delivery_keeps_customer_loyalty_payment_and_full_financial_breakdown():
     assert "CANAL:" not in ticket
     assert "CLIENTE" in ticket
     assert "NOME: MARIA" in ticket
-    assert "TELEFONE: (88) 9XXXX-XX34" in ticket
+    assert "TELEFONE: (88) 99999-1234" in ticket
     assert "FIDELIDADE: 15 PEDIDOS ANTERIORES" in ticket
     assert "ENTREGA" in ticket
     assert "ENDEREÇO: Rua José de Alencar, 124," in ticket
@@ -187,7 +187,7 @@ def test_cashback_without_registered_loyalty_keeps_basic_customer_block_only():
     )
 
     assert "NOME: VISITANTE" in ticket
-    assert "TELEFONE: (88) 9XXXX-XX34" in ticket
+    assert "TELEFONE: (88) 99999-1234" in ticket
     assert "FIDELIDADE:" not in ticket
     assert "DESCONTO CASHBACK:" in ticket
 
@@ -321,7 +321,7 @@ def test_online_dine_in_without_table_prints_customer_pix_and_never_fakes_delive
     assert "TAXA DE ENTREGA:" not in ticket
     assert "CLIENTE" in ticket
     assert "NOME: CLIENTE ONLINE COM NOME" in ticket
-    assert "TELEFONE: (88) 9XXXX-XX34" in ticket
+    assert "TELEFONE: (88) 99999-1234" in ticket
     assert "2x EXECUTIVO DA CASA" in ticket
     assert "1x COCA-COLA LATA" in ticket
     assert "FORMA: PIX ONLINE" in ticket
@@ -353,6 +353,6 @@ def test_online_dine_in_reprint_after_table_association_keeps_online_customer_an
     assert "ORIGEM: CARDÁPIO ONLINE" in ticket
     assert "MESA: 4" in ticket
     assert "NOME: GABRIELE" in ticket
-    assert "TELEFONE: (88) 9XXXX-XX27" in ticket
+    assert "TELEFONE: (88) 99660-1927" in ticket
     assert "FORMA: DINHEIRO" in ticket
     assert ticket.count("REIMPRESSÃO") == 1
