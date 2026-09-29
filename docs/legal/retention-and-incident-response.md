@@ -28,6 +28,23 @@ Documento interno. Não publicar detalhes operacionais que facilitem abuso; a ve
 | Suporte | período necessário à resolução e defesa de direitos | evitar dados pessoais excessivos em WhatsApp/screenshots |
 | Dados de alergia/saúde em observação | vinculados ao pedido e sua retenção legítima | não extrair para marketing ou perfilamento |
 
+
+## 2.1 Regra técnica de minimização para consumidores
+
+A LGPD não define um prazo único aplicável a todos os dados. O KÔMA não executa eliminação automática baseada apenas em "cliente inativo".
+
+Para preservar o relacionamento comercial legítimo sem reter PII redundante indefinidamente:
+
+- `Cliente.id` permanece como identidade canônica do relacionamento;
+- pedidos, itens, valores, datas, fidelidade e métricas comerciais podem permanecer quando ainda houver finalidade legítima;
+- telefone, nome e endereço canônicos de `Cliente` ficam criptografados em repouso;
+- snapshots redundantes antigos de telefone/endereço/nome em pedidos podem ser minimizados mediante cutoff explicitamente aprovado;
+- a minimização não remove `cliente_id`, datas, itens, valores ou demais fatos necessários ao histórico/CRM;
+- conteúdo antigo de WhatsApp/rascunhos pode ser anonimizado pelo mesmo processo;
+- dados financeiros/fiscais, logs de segurança e backups ficam fora da rotina automática e exigem a retenção específica aplicável.
+
+A rotina `backend/tools/privacy_retention.py` é dry-run por padrão e exige, para aplicação: restaurante explícito, cutoff explícito, banco esperado, fingerprint do dry-run, referência de backup e frase de confirmação. Nenhum prazo é embutido no código.
+
 ## 3. Encerramento de restaurante
 
 1. Registrar data e motivo do encerramento.
