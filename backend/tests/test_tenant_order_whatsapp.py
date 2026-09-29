@@ -119,6 +119,92 @@ def test_evolution_qr_control_operations_use_longer_timeout(monkeypatch):
     assert calls[1][3] == 15.0
 
 
+def test_pairing_code_uses_same_phone(monkeypatch):
+    from app.services import tenant_order_whatsapp as wa
+
+    calls = []
+
+    def fake_request(method, path, *, body=None, timeout_seconds=4.0):
+        calls.append((method, path, timeout_seconds))
+        return {"qrcode": {"pairingCode": "1234-5678"}}
+
+    monkeypatch.setattr(wa, "_request", fake_request)
+
+    code = wa.connect_instance_with_pairing_code(123, "(11) 99999-9999")
+
+    assert code == "12345678"
+    assert calls == [
+        (
+            "GET",
+            "/instance/connect/koma-restaurant-123?number=5511999999999",
+            15.0,
+        )
+    ]
+
+
+def test_pairing_code_falls_back_to_v23_query_variant(monkeypatch):
+    from app.services import tenant_order_whatsapp as wa
+
+    calls = []
+
+    def fake_request(method, path, *, body=None, timeout_seconds=4.0):
+        calls.append(path)
+        if "phoneNumber=" in path:
+            return {"pairingCode": "87654321"}
+        return {}
+
+    monkeypatch.setattr(wa, "_request", fake_request)
+
+    assert wa.connect_instance_with_pairing_code(123, "11999999999") == "87654321"
+    assert calls == [
+        "/instance/connect/koma-restaurant-123?number=5511999999999",
+        "/instance/connect/koma-restaurant-123?pairingCode=true&phoneNumber=5511999999999",
+    ]
+
+
+def test_mobile_pairing_configure_returns_pairing_code(char_client, char_setup, monkeypatch):
+    from app.services import tenant_order_whatsapp as wa
+
+    rid = CHAR_RESTAURANT_ID
+    admin = char_setup["headers"]
+    with SessionLocal(restaurante_id=rid) as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        config.whatsapp_alerts_enabled = False
+        config.whatsapp_instance_name = None
+        config.whatsapp_recipient_phone = None
+        db.commit()
+
+    monkeypatch.setattr(wa, "create_instance", lambda _: {"qrcode": {"code": "qr-value"}})
+    monkeypatch.setattr(
+        wa,
+        "connect_instance_with_pairing_code",
+        lambda restaurant_id, phone: "12345678",
+    )
+
+    response = char_client.post(
+        "/caixa/configuracoes/whatsapp/configure",
+        headers=admin,
+        json={"phone": "(11) 99999-9999", "mode": "pairing_code"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "state": "connecting",
+        "enabled": False,
+        "qr_code": None,
+        "pairing_code": "12345678",
+    }
+
+    with SessionLocal(restaurante_id=rid) as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        assert config.whatsapp_instance_name == instance_name(rid)
+        assert config.whatsapp_recipient_phone == "5511999999999"
+        assert config.whatsapp_alerts_enabled is False
+        config.whatsapp_instance_name = None
+        config.whatsapp_recipient_phone = None
+        db.commit()
+
+
 def test_connection_settings_require_manager_and_never_expose_provider_key(char_client, char_setup):
     admin = char_setup["headers"]
     status = char_client.get("/caixa/configuracoes/whatsapp", headers=admin)
@@ -130,6 +216,77 @@ def test_connection_settings_require_manager_and_never_expose_provider_key(char_
     waiter = {"Authorization": f"Bearer {waiter_token}"}
     assert char_client.get("/caixa/configuracoes/whatsapp", headers=waiter).status_code == 403
     assert char_client.post("/caixa/configuracoes/whatsapp/enable", headers=waiter).status_code == 403
+
+
+def test_order_alerts_are_paced_per_restaurant(char_setup, monkeypatch):
+    from app.config import settings
+    from app.services import tenant_order_whatsapp as wa
+
+    rid = CHAR_RESTAURANT_ID
+    db = SessionLocal(restaurante_id=rid)
+
+    class Response:
+        status_code = 200
+
+    class SuccessClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def post(self, *args, **kwargs):
+            return Response()
+
+    try:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        config.whatsapp_alerts_enabled = True
+        config.whatsapp_instance_name = instance_name(rid)
+        config.whatsapp_recipient_phone = "5511999999999"
+        config.whatsapp_next_send_at = None
+        config.whatsapp_circuit_open_until = None
+        config.whatsapp_consecutive_failures = 0
+        db.query(IntegrationOutbox).filter_by(
+            restaurante_id=rid,
+            aggregate_id="wa-paced-test",
+        ).delete()
+        db.commit()
+
+        event = enqueue_order_alert(db, _order(rid, "wa-paced-test"))
+        db.commit()
+        before = dt.datetime.now(dt.timezone.utc)
+        monkeypatch.setattr(settings, "TENANT_WHATSAPP_MIN_SEND_INTERVAL_SECONDS", 13)
+        monkeypatch.setattr(wa, "connection_state", lambda _: "open")
+        monkeypatch.setattr(wa, "owner_phone", lambda _: "5511999999999")
+        monkeypatch.setattr(wa, "_provider", lambda: ("https://provider.test", {"header": "value"}))
+        monkeypatch.setattr(wa.httpx, "Client", SuccessClient)
+
+        assert dispatch_single_outbox_event(db, event) is True
+        db.refresh(config)
+        next_send = config.whatsapp_next_send_at
+        if next_send.tzinfo is None:
+            next_send = next_send.replace(tzinfo=dt.timezone.utc)
+        assert next_send >= before + dt.timedelta(seconds=12)
+        assert next_send <= before + dt.timedelta(seconds=15)
+    finally:
+        db.rollback()
+        db.query(IntegrationOutbox).filter_by(
+            restaurante_id=rid,
+            aggregate_id="wa-paced-test",
+        ).delete()
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        if config:
+            config.whatsapp_alerts_enabled = False
+            config.whatsapp_instance_name = None
+            config.whatsapp_recipient_phone = None
+            config.whatsapp_next_send_at = None
+            config.whatsapp_circuit_open_until = None
+            config.whatsapp_consecutive_failures = 0
+        db.commit()
+        db.close()
 
 
 def test_uncertain_send_is_not_replayed_after_timeout_or_worker_restart(char_setup, monkeypatch):

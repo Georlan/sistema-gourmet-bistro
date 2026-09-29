@@ -17,6 +17,7 @@ router = APIRouter(prefix="/caixa/configuracoes/whatsapp", tags=["WhatsApp opera
 
 class ConfigureRequest(BaseModel):
     phone: str
+    mode: str = "qr"
 
 
 def _config(db: Session, user: Usuario) -> ConfiguracaoRestaurante:
@@ -80,6 +81,10 @@ def configure(
         phone = wa.normalize_phone(body.phone)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    mode = (body.mode or "qr").strip().lower()
+    if mode not in {"qr", "pairing_code"}:
+        raise HTTPException(status_code=422, detail="Modo de conexão inválido.")
+
     config = _config(db, user)
     if config.whatsapp_instance_name and config.whatsapp_recipient_phone != phone:
         raise HTTPException(status_code=409, detail="Desconecte o número atual antes de configurar outro.")
@@ -95,11 +100,24 @@ def configure(
             raise _provider_error(exc) from exc
     except Exception as exc:
         raise _provider_error(exc) from exc
+
+    pairing_code = None
+    if mode == "pairing_code":
+        try:
+            pairing_code = wa.connect_instance_with_pairing_code(user.restaurante_id, phone)
+        except Exception as exc:
+            raise _provider_error(exc) from exc
+
     config.whatsapp_instance_name = wa.instance_name(user.restaurante_id)
     config.whatsapp_recipient_phone = phone
     config.whatsapp_alerts_enabled = False
     db.commit()
-    return {"state": "waiting_qr", "enabled": False, "qr_code": _safe_qr(data)}
+    return {
+        "state": "connecting" if pairing_code else "waiting_qr",
+        "enabled": False,
+        "qr_code": _safe_qr(data) if not pairing_code else None,
+        "pairing_code": pairing_code,
+    }
 
 
 @router.post("/qr")
@@ -115,6 +133,27 @@ def refresh_qr(
     except Exception as exc:
         raise _provider_error(exc) from exc
     return {"state": "waiting_qr", "qr_code": _safe_qr(data)}
+
+
+@router.post("/pairing-code")
+def refresh_pairing_code(
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    config = _config(db, user)
+    if (
+        config.whatsapp_instance_name != wa.instance_name(user.restaurante_id)
+        or not config.whatsapp_recipient_phone
+    ):
+        raise HTTPException(status_code=409, detail="Configure primeiro o WhatsApp deste restaurante.")
+    try:
+        code = wa.connect_instance_with_pairing_code(
+            user.restaurante_id,
+            config.whatsapp_recipient_phone,
+        )
+    except Exception as exc:
+        raise _provider_error(exc) from exc
+    return {"state": "connecting", "pairing_code": code}
 
 
 @router.post("/enable")
