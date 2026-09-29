@@ -101,10 +101,21 @@ def configure(
                     phone,
                 )
             else:
-                data, pairing_code = wa.create_instance_with_pairing_code(
-                    user.restaurante_id,
-                    phone,
-                )
+                try:
+                    data, pairing_code = wa.create_instance_with_pairing_code(
+                        user.restaurante_id,
+                        phone,
+                    )
+                except httpx.HTTPStatusError as exc:
+                    # Evolution keeps a logged-out instance name until it is
+                    # explicitly deleted. Recover that stale provider state
+                    # instead of surfacing a 502 to a freshly configured tenant.
+                    if exc.response.status_code not in {403, 409}:
+                        raise
+                    data, pairing_code = wa.recreate_instance_with_pairing_code(
+                        user.restaurante_id,
+                        phone,
+                    )
         else:
             data = (
                 wa.create_instance(user.restaurante_id)
@@ -216,6 +227,13 @@ def disconnect(
     if config.whatsapp_instance_name == wa.instance_name(user.restaurante_id):
         try:
             wa.logout_instance(user.restaurante_id)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code not in {400, 404}:
+                raise _provider_error(exc) from exc
+        except Exception as exc:
+            raise _provider_error(exc) from exc
+        try:
+            wa.delete_instance(user.restaurante_id)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code != 404:
                 raise _provider_error(exc) from exc
