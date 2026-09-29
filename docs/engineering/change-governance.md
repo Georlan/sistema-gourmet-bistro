@@ -2,24 +2,51 @@
 
 ## Quality gates de merge
 
-Os quatro contexts exigidos pela proteção da branch `main` voltaram a executar validações reais em `.github/workflows/quality-gate.yml`.
+A proteção ativa de `main` usa o ruleset **Protect main branch**. Em 29/09/2026,
+seu único status obrigatório é `Merge verdict` (GitHub Actions), com a branch
+atualizada em relação à base, PR obrigatório e threads de revisão resolvidas.
+Não há atores com bypass. Consulte o ruleset novamente antes de integrar:
+a configuração do GitHub é a fonte de verdade dos checks exigidos.
 
-Checks obrigatórios:
+`Merge verdict` executa `.github/workflows/quality-gate.yml` (**Koma Minimal
+Gate**): TypeScript, suíte unitária frontend, build de produção e compilação
+sintática de `backend/app`. Quando o detector de paths sensíveis é acionado,
+também executa regressões focais de autenticação, onboarding, cobrança, planos
+e otimização. Esse detector não equivale à cobertura de todo o backend.
 
-- `Frontend typecheck + unit + build`: TypeScript, suíte unitária frontend e build de produção;
-- `Backend full + critical regression gate`: Alembic com head único e suíte completa `backend/tests`;
-- `Browser regression matrix`: smoke E2E de owners operacionais e contexto de salão em mobile/desktop;
-- `postgres-security-audit`: regressões de CORS, contrato do Super Admin e invariantes multitenant.
+Os antigos contexts `Frontend typecheck + unit + build`, `Backend full +
+critical regression gate`, `Browser regression matrix` e
+`postgres-security-audit` não são os status obrigatórios atuais. Não procurar
+esses nomes como evidência de execução nem confundir checks ausentes com verdes.
 
-O antigo `merge-compatibility-shim.yml`, que publicava sucesso sem executar testes, foi removido. Nenhum PR deve ser mergeado se um desses contexts estiver vermelho ou ausente.
+## Validação adicional por risco
 
-## Estratégia de velocidade
+O requisito do ruleset é o mínimo para integrar; não substitui a revisão nem
+os testes pertinentes à mudança. Pagamentos, estoque, autenticação,
+multi-tenant/RLS, migrations e state machines exigem regressões direcionadas,
+incluindo concorrência e isolamento quando aplicável.
 
-O caminho crítico de PR concentra validações que protegem comportamento, autenticação, tenancy e build sem restaurar toda a antiga matriz pesada em cada alteração.
+- `Backend Full Suite` (`Full backend pytest`) executa a suíte completa em PRs
+  que alteram `backend/tests/**`, ou por disparo manual. Alterar somente código
+  backend não garante que esse workflow seja iniciado automaticamente.
+- Os workflows focais em `.github/workflows/` possuem seus próprios filtros:
+  verificar quais realmente rodaram no SHA atual, suas conclusões e logs.
+- Mudanças em migrations devem validar head único e lineage PostgreSQL.
+- Regressões de browser devem cobrir os fluxos operacionais afetados.
 
-Auditorias de maior custo, PostgreSQL adversarial completo, concorrência, dependency audit e matrizes browser extensas podem continuar em workflows dedicados, agendados ou pós-merge. Mudanças de alto risco em pagamentos, autenticação, estoque, migrações, multi-tenant/RLS e state machines ainda devem receber testes direcionados adicionais no próprio PR.
+Não integrar com falhas relevantes abertas nem com validações necessárias
+pendentes. Preview Cloudflare e status Railway não substituem testes.
 
-Mudanças pequenas de UI/UX não precisam ampliar a suíte além dos gates canônicos e dos testes diretamente afetados.
+## Segurança após integração e publicação
+
+`Main Push Safety Gate` roda a cada push em `main`: typecheck, testes unitários
+e build frontend; head Alembic único e smoke crítico backend. Esse workflow é
+uma verificação pós-merge, não a suíte backend completa.
+
+Após deploy, confira o commit ativo na API e o deployment Railway. Execute
+`node scripts/production-smoke.mjs`; quando validar uma publicação específica,
+forneça `KOMA_EXPECTED_API_SHA`. Um smoke verde sem conferir o SHA prova
+saúde da versão servida, não que a nova versão foi publicada.
 
 ## Regra de evidência
 
