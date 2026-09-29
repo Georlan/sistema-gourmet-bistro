@@ -111,7 +111,7 @@ export interface Waiter {
   nome: string;
 }
 
-export type AppRole = 'garcom' | 'caixa' | 'gerente' | 'cozinha' | 'admin';
+export type AppRole = 'garcom' | 'atendente' | 'caixa' | 'gerente' | 'cozinha' | 'admin';
 
 export interface AppSettings {
   exibirImagens: boolean;
