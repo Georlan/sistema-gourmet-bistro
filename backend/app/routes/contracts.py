@@ -30,7 +30,6 @@ from ..legal_config import (
 )
 from ..models import Usuario
 from ..security import IPRateLimiter, get_current_user
-from ..services.contract_notifications import schedule_contract_accepted_notifications
 from ..subscription import (
     COMMERCIAL_PRICING_VERSION,
     VALID_SUBSCRIPTION_PLANS,

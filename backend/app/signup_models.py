@@ -23,3 +23,12 @@ class SignupNotification(SignupBase):
     expires_at = Column(DateTime(timezone=True), nullable=False)
     claim_token = Column(String(36), nullable=True)
     last_error = Column(String(100), nullable=True)
+
+
+class EmailDeliveryReceipt(SignupBase):
+    """Only provider IDs and states; never email addresses, message bodies or tokens."""
+    __tablename__ = "email_delivery_receipts"
+    email_id = Column(String(36), primary_key=True)
+    notification_id = Column(String(100), nullable=True, unique=True)
+    status = Column(String(32), nullable=False, default="sent")
+    occurred_at = Column(DateTime(timezone=True), nullable=False)

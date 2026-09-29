@@ -437,6 +437,8 @@ app.include_router(customer_satisfaction.router)
 app.include_router(online_payments.router)
 app.include_router(estoque.router)
 app.include_router(cardapio.router)
+from .routes import resend_webhook
+app.include_router(resend_webhook.router)
 app.include_router(cardapio_clientes.router)
 app.include_router(cupons.router)
 app.include_router(cupons.public_router)
