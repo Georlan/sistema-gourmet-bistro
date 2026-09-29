@@ -68,9 +68,17 @@ export default function CashierTeam({
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.detail || 'Falha ao cadastrar funcionário');
     }
+    const data = await res.json().catch(() => ({}));
     await fetchSystemUsers();
     window.dispatchEvent(new CustomEvent('koma_team_updated'));
-    showToast('Pessoa cadastrada e convite agendado automaticamente!');
+    if (data.convite_agendado === false) {
+      showToast(
+        data.convite_mensagem || 'Pessoa cadastrada, mas o WhatsApp do convite está indisponível.',
+        'info',
+      );
+    } else {
+      showToast(data.convite_mensagem || 'Pessoa cadastrada e convite agendado automaticamente!');
+    }
   };
 
   const handleResendInvite = async (user: SystemUser) => {
