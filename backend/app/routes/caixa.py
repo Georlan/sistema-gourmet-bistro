@@ -49,7 +49,7 @@ from ..services.delivery_fee_policy import (
     validate_delivery_fee,
 )
 from ..services.delivery_fee_suggestion import suggest_delivery_fee
-from ..services.notificacoes import agendar_convite_equipe_task
+from ..services.team_invitations import enqueue_invite, with_delivery_status
 from ..timezone_utils import elapsed_minutes_since
 
 logger = logging.getLogger("koma.caixa")
@@ -143,7 +143,7 @@ def obter_funcionarios(
 ):
     """Retorna a lista de usuários pertencentes ao restaurante_id do contexto ativo."""
     rest_id = require_tenant_id()
-    return db.query(Usuario).filter(Usuario.restaurante_id == rest_id, Usuario.removed_at.is_(None)).all()
+    return with_delivery_status(db, db.query(Usuario).filter(Usuario.restaurante_id == rest_id, Usuario.removed_at.is_(None)).all(), rest_id)
 
 
 @router.post("/funcionarios", response_model=UsuarioInviteResponse, status_code=status.HTTP_201_CREATED)
@@ -179,6 +179,7 @@ def cadastrar_funcionario(
         id=str(uuid.uuid4())[:8],
         nome=user_in.nome,
         telefone=tel_clean,
+        email=user_in.email,
         cargo=user_in.cargo,
         restaurante_id=rest_id,
         senha_hash=None,
@@ -208,26 +209,20 @@ def cadastrar_funcionario(
                 ativo=True,
             )
             db.add(novo_motoboy)
+    restaurante_nome = db.query(Restaurante.nome).filter(Restaurante.id == rest_id).scalar() or "Kôma"
+    convite_agendado = enqueue_invite(db, novo_usuario, restaurante_nome)
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Telefone indisponível para cadastro.",
+            detail="Telefone ou e-mail indisponível para cadastro.",
         )
     db.refresh(novo_usuario)
 
-    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
-    agendar_convite_equipe_task(
-        background_tasks,
-        restaurante_id=rest_id,
-        usuario_id=novo_usuario.id,
-        telefone=novo_usuario.telefone,
-        nome_pessoa=novo_usuario.nome,
-        nome_restaurante=restaurante.nome if restaurante else "Kôma",
-        token_convite=token_convite,
-    )
+    novo_usuario.convite_agendado = convite_agendado
+    novo_usuario.convite_email_status = "na_fila" if convite_agendado else "email_ausente"
 
     background_tasks.add_task(
         manager.broadcast,

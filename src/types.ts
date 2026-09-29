@@ -272,6 +272,8 @@ export interface SystemUser {
   status?: 'pendente_ativacao' | 'ativo' | 'inativo' | string;
   created_at?: string;
   convite_agendado?: boolean;
+  email?: string;
+  convite_email_status?: string;
 }
 
 export interface BotChatMessage {

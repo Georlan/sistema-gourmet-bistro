@@ -21,6 +21,8 @@ from app.models import (
     Restaurante,
     Usuario,
 )
+from app.signup_models import SignupBase, SignupNotification
+from app.crypt import decrypt_field
 from app.security import get_password_hash
 from app.main import app
 from app.routes import auth as auth_route
@@ -57,8 +59,10 @@ def setup_database():
     token_var = current_restaurante_id.set(1)
     try:
         app.dependency_overrides[get_db] = override_get_db
+        SignupBase.metadata.drop_all(bind=engine)
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
+        SignupBase.metadata.create_all(bind=engine)
         db = TestingSessionLocal()
 
         db.merge(Restaurante(id=1, nome="Auth Test Bistro", plano="bistro"))
@@ -493,6 +497,7 @@ def test_admin_creates_only_pending_invite_in_own_tenant(monkeypatch):
             "nome": "  Nova Garçonete  ",
             "telefone": "(81) 99999-8877",
             "cargo": "garcom",
+            "email": "new-team@example.test",
         },
     )
 
@@ -504,10 +509,7 @@ def test_admin_creates_only_pending_invite_in_own_tenant(monkeypatch):
     assert created["cargo"] == "garcom"
     assert created["convite_agendado"] is True
     assert "token_convite" not in created
-    assert len(mensagens) == 1
-    assert mensagens[0][0] == "81999998877"
-    assert "/ativar#token=" in mensagens[0][1]
-    assert "/ativar?token=" not in mensagens[0][1]
+    assert mensagens == []
 
     with TestingSessionLocal() as db:
         saved = db.get(Usuario, created["id"])
@@ -525,20 +527,19 @@ def test_admin_creates_only_pending_invite_in_own_tenant(monkeypatch):
     assert resend.status_code == 200, resend.text
     assert resend.json()["convite_agendado"] is True
     assert "token_convite" not in resend.json()
-    assert len(mensagens) == 2
+    assert mensagens == []
 
     with TestingSessionLocal() as db:
         renovado = db.get(Usuario, created["id"])
         assert renovado.token_convite != token_inicial
 
-    with SessionLocal() as notification_db:
-        registro = notification_db.query(NotificacaoWhatsApp).filter(
-            NotificacaoWhatsApp.restaurante_id == 1,
-            NotificacaoWhatsApp.tipo == "convite_equipe",
-            NotificacaoWhatsApp.telefone == "81999998877",
-        ).order_by(NotificacaoWhatsApp.id.desc()).first()
-        assert registro is not None
-        assert "token=" not in registro.conteudo
+    with TestingSessionLocal() as db:
+        rows = db.query(SignupNotification).all()
+        assert len(rows) == 2
+        assert all(row.status == "pending" for row in rows)
+        assert all("token=" not in row.payload_encrypted for row in rows)
+        assert all("/ativar#token=" in decrypt_field(row.payload_encrypted) for row in rows)
+        assert all('"channel": "email"' in decrypt_field(row.payload_encrypted) for row in rows)
 
 
 def test_team_creation_broadcasts_realtime_refresh(monkeypatch):
@@ -889,3 +890,46 @@ def test_valid_configuration_update_preserves_subscription_plan():
     assert response.json()["taxa_servico_ativa"] is False
     with TestingSessionLocal() as db:
         assert db.get(Restaurante, 1).plano == "bistro"
+
+
+def test_legacy_invite_accepts_email_and_reports_resend_queue_state(monkeypatch):
+    from app.services import signup_notifications
+    client = TestClient(app)
+    headers = get_auth_headers(client, 'admin', '123')
+    created = client.post('/caixa/funcionarios', headers=headers,
+                          json={'nome': 'Email Invite', 'telefone': '81999998877', 'cargo': 'cozinha'})
+    assert created.status_code == 201
+    user_id = created.json()['id']
+    assert created.json()['convite_agendado'] is False
+    url = f'/auth/usuarios/{user_id}/reenviar-convite'
+    assert client.post(url, headers=headers).status_code == 400
+    assert client.post(url, headers=headers, json={'email': 'invalid'}).status_code == 422
+    assert client.post(url, headers=headers, json={'email': 'team@example.test'}).status_code == 200
+    def member():
+        return next(user for user in client.get('/caixa/funcionarios', headers=headers).json() if user['id'] == user_id)
+    assert member()['convite_email_status'] == 'na_fila'
+    with TestingSessionLocal() as db:
+        row = db.query(SignupNotification).one()
+        delivery_key = row.id
+        import json
+        payload = json.loads(decrypt_field(row.payload_encrypted))
+        assert payload['recipient'] == 'team@example.test'
+        from types import SimpleNamespace
+        calls = []
+        monkeypatch.setattr(signup_notifications.settings, 'RESEND_API_KEY', 'local-test-only')
+        monkeypatch.setattr(signup_notifications.settings, 'EMAIL_FROM', 'Koma <test@example.test>')
+        monkeypatch.setattr(signup_notifications.httpx, 'post', lambda url, **kwargs: calls.append((url, kwargs)) or SimpleNamespace(is_success=True))
+        signup_notifications._deliver(payload, delivery_key)
+        assert calls[0][0] == 'https://api.resend.com/emails'
+        assert calls[0][1]['headers']['Idempotency-Key'] == delivery_key
+        assert calls[0][1]['json']['to'] == ['team@example.test']
+        row.status = 'sent'
+        row.payload_encrypted = ''
+        db.commit()
+    assert member()['convite_email_status'] == 'enviado'
+    assert client.post(url, headers=headers).status_code == 200
+    with TestingSessionLocal() as db:
+        row = db.query(SignupNotification).filter(SignupNotification.id != delivery_key).one()
+        row.last_error = 'email_provider_rejected'
+        db.commit()
+    assert member()['convite_email_status'] == 'falhou'

@@ -58,7 +58,16 @@ export default function CashierTeam({
     }
   }, [activeTab, activeSubTab]);
 
-  const handleAddUser = async (payload: { nome: string; telefone: string; cargo: string }) => {
+  const hasPendingInvites = systemUsers.some((user) => user.status === 'pendente_ativacao');
+  useEffect(() => {
+    if (activeTab !== 'permissoes_cargos' || !hasPendingInvites) return;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void fetchSystemUsers();
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [activeTab, hasPendingInvites, apiBaseUrl, authHeaders.Authorization]);
+
+  const handleAddUser = async (payload: { nome: string; telefone: string; email: string; cargo: string }) => {
     const res = await fetch(`${apiBaseUrl}/caixa/funcionarios`, {
       method: 'POST',
       headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -70,18 +79,24 @@ export default function CashierTeam({
     }
     await fetchSystemUsers();
     window.dispatchEvent(new CustomEvent('koma_team_updated'));
-    showToast('Pessoa cadastrada e convite agendado automaticamente!');
+    showToast('Pessoa cadastrada. Convite na fila de envio por e-mail.');
   };
 
-  const handleResendInvite = async (user: SystemUser) => {
+  const handleResendInvite = async (user: SystemUser, email: string) => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      showToast('Informe um e-mail válido para reenviar o convite.', 'error');
+      throw new Error('E-mail inválido.');
+    }
     try {
       const res = await fetch(`${apiBaseUrl}/auth/usuarios/${user.id}/reenviar-convite`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       });
       if (res.ok) {
         const data = await res.json();
-        showToast(data.message || `Convite para ${user.nome} agendado automaticamente!`);
+        await fetchSystemUsers();
+        showToast(data.message || `Convite para ${user.nome} na fila de envio por e-mail!`);
       } else {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.detail || 'Não foi possível reenviar o convite no momento.');

@@ -19,6 +19,7 @@ class UsuarioResponse(BaseModel):
     restaurante_id: Optional[int] = None
     status: Optional[str] = "pendente_ativacao"
     created_at: Optional[datetime] = None
+    convite_email_status: Optional[str] = None
     usuario: Optional[str] = None
     role: Optional[str] = None
 
@@ -28,11 +29,12 @@ class UsuarioResponse(BaseModel):
 class UsuarioInviteResponse(UsuarioResponse):
     """Confirma o agendamento sem expor o token secreto ao navegador."""
 
-    convite_agendado: bool = True
+    convite_agendado: bool = False
 
 class UsuarioCreate(BaseModel):
     nome: str = Field(min_length=1, max_length=100)
     telefone: str = Field(min_length=10, max_length=20)
+    email: Optional[str] = Field(default=None, max_length=100)
     cargo: Literal["gerente", "caixa", "garcom", "atendente", "cozinha", "motoboy"] = "garcom"
 
     @field_validator("nome")
@@ -43,7 +45,27 @@ class UsuarioCreate(BaseModel):
             raise ValueError("Nome é obrigatório.")
         return nome
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value):
+        if value is None:
+            return None
+        value = value.strip().lower()
+        import re
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+            raise ValueError("Informe um e-mail válido.")
+        return value
+
     model_config = ConfigDict(extra="forbid")
+
+
+class TeamInviteResend(BaseModel):
+    email: Optional[str] = Field(default=None, max_length=100)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value):
+        return UsuarioCreate.validate_email(value)
 
 
 class UsuarioAccessUpdate(BaseModel):

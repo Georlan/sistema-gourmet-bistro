@@ -38,8 +38,36 @@ test('remove funcionário inativo e cadastra novo convite com o mesmo telefone',
   const dialog = page.getByRole('dialog', { name: 'Convidar para a equipe' });
   await dialog.getByLabel('Nome completo').fill('Pessoa Nova');
   await dialog.getByLabel('WhatsApp').fill('88999616937');
+  await dialog.getByLabel('E-mail', { exact: true }).fill('nova@example.test');
   await dialog.getByRole('button', { name: /^Cozinha/ }).click();
-  await dialog.getByRole('button', { name: 'Cadastrar e enviar' }).click();
+  await dialog.getByRole('button', { name: 'Cadastrar e enviar e-mail' }).click();
   await expect(page.getByRole('heading', { name: 'Pessoa Nova' })).toBeVisible();
   await expect(page.getByText('Aguardando ativação', { exact: true })).toBeVisible();
+});
+
+test('convite antigo recebe e-mail e mostra envio pelo Resend', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  let email: string | undefined;
+  let status = 'email_ausente';
+  await page.route('**/caixa/funcionarios', route => route.fulfill({ json: [{
+    id: 'pending-email', nome: 'Convite Antigo', telefone: '88999616937', cargo: 'cozinha',
+    status: 'pendente_ativacao', email, convite_email_status: status,
+  }] }));
+  await page.route('**/auth/usuarios/pending-email/reenviar-convite', async route => {
+    expect(route.request().postDataJSON()).toEqual({ email: 'equipe@example.test' });
+    email = 'equipe@example.test';
+    status = 'enviado';
+    await route.fulfill({ json: { message: 'Convite colocado na fila de envio por e-mail.' } });
+  });
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  const sidebar = page.locator('.cashier-sidebar:visible');
+  if (!await sidebar.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+  await sidebar.getByRole('button', { name: /^Equipe(?: \d+)?$/ }).click();
+  await expect(page.getByRole('button', { name: 'Reenviar convite' })).toBeDisabled();
+  await page.getByRole('textbox', { name: 'E-mail de Convite Antigo' }).fill('equipe@example.test');
+  await page.getByRole('button', { name: 'Reenviar convite' }).click();
+  await expect(page.getByText('E-mail enviado ao Resend. Confira também o spam.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'E-mail de Convite Antigo' })).toHaveValue('equipe@example.test');
 });

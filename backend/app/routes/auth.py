@@ -24,7 +24,8 @@ from ..services.staff_login_rate_limit import (
     record_staff_login_failure,
     staff_login_is_blocked,
 )
-from ..services.notificacoes import agendar_convite_equipe_task
+from ..services.team_invitations import enqueue_invite, with_delivery_status
+from ..schemas import TeamInviteResend
 from ..services.plan_entitlements import (
     ENTITLEMENT_WAITER_APP,
     require_plan_entitlement,
@@ -441,10 +442,10 @@ def get_usuarios(
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
     """Retorna todos os usuários cadastrados (garçons, caixas, admins)."""
-    return db.query(Usuario).filter(
+    return with_delivery_status(db, db.query(Usuario).filter(
         Usuario.restaurante_id == current_user.restaurante_id,
         Usuario.removed_at.is_(None),
-    ).all()
+    ).all(), current_user.restaurante_id)
 
 @router.patch("/usuarios/{user_id}", response_model=UsuarioResponse)
 def update_usuario_access(
@@ -794,6 +795,7 @@ def gdpr_opt_out(
 def reenviar_convite_usuario(
     user_id: str,
     background_tasks: BackgroundTasks,
+    payload: TeamInviteResend | None = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
@@ -817,39 +819,27 @@ def reenviar_convite_usuario(
             detail="Este usuário já ativou sua conta."
         )
 
-    # Um novo token permite reenviar intencionalmente sem reutilizar o segredo.
+    email = payload.email if payload and payload.email else usuario.email
+    if not email:
+        raise HTTPException(status_code=400, detail="Informe o e-mail da pessoa para enviar o convite.")
+    duplicate = db.query(Usuario).filter(Usuario.restaurante_id == restaurante_id,
+        Usuario.email == email, Usuario.id != user_id).first()
+    if duplicate:
+        raise HTTPException(status_code=409, detail="Este e-mail já está cadastrado neste estabelecimento.")
     token_convite = str(uuid.uuid4())
+    usuario.email = email
     usuario.token_convite = token_convite
-    usuario.token_expira_em = (
-        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
-    )
-    db.commit()
+    usuario.token_expira_em = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+    nome_restaurante = db.query(Restaurante.nome).filter(Restaurante.id == restaurante_id).scalar() or "Kôma"
+    enqueue_invite(db, usuario, nome_restaurante)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="E-mail indisponível para convite.")
+    return {"message": "Convite colocado na fila de envio por e-mail.",
+            "convite_agendado": True, "convite_email_status": "na_fila"}
 
-    # Use only stable scalar snapshots after the commit. This keeps the resend
-    # path aligned with the create flow and avoids depending on ORM refresh/
-    # detached-instance details for the notification side effect.
-    telefone = str(usuario.telefone or "")
-    nome_pessoa = str(usuario.nome or "")
-    nome_restaurante = (
-        db.query(Restaurante.nome)
-        .filter(Restaurante.id == restaurante_id)
-        .scalar()
-        or "Kôma"
-    )
-
-    agendar_convite_equipe_task(
-        background_tasks,
-        restaurante_id=restaurante_id,
-        usuario_id=str(usuario.id),
-        telefone=telefone,
-        nome_pessoa=nome_pessoa,
-        nome_restaurante=str(nome_restaurante),
-        token_convite=token_convite,
-    )
-    return {
-        "message": f"Convite para {usuario.nome} agendado no WhatsApp.",
-        "convite_agendado": True,
-    }
 
 
 # SmartPOS is part of this authenticated namespace, not a package import side effect.
