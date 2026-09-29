@@ -88,10 +88,28 @@ def configure(
     config = _config(db, user)
     if config.whatsapp_instance_name and config.whatsapp_recipient_phone != phone:
         raise HTTPException(status_code=409, detail="Desconecte o número atual antes de configurar outro.")
+
+    pairing_code = None
     try:
-        data = wa.create_instance(user.restaurante_id) if not config.whatsapp_instance_name else wa.connect_instance(user.restaurante_id)
+        if mode == "pairing_code":
+            if config.whatsapp_instance_name:
+                data, pairing_code = wa.recreate_instance_with_pairing_code(
+                    user.restaurante_id,
+                    phone,
+                )
+            else:
+                data, pairing_code = wa.create_instance_with_pairing_code(
+                    user.restaurante_id,
+                    phone,
+                )
+        else:
+            data = (
+                wa.create_instance(user.restaurante_id)
+                if not config.whatsapp_instance_name
+                else wa.connect_instance(user.restaurante_id)
+            )
     except httpx.HTTPStatusError as exc:
-        if exc.response.status_code in {400, 403, 409}:
+        if mode == "qr" and exc.response.status_code in {400, 403, 409}:
             try:
                 data = wa.connect_instance(user.restaurante_id)
             except Exception as connect_exc:
@@ -100,13 +118,6 @@ def configure(
             raise _provider_error(exc) from exc
     except Exception as exc:
         raise _provider_error(exc) from exc
-
-    pairing_code = None
-    if mode == "pairing_code":
-        try:
-            pairing_code = wa.connect_instance_with_pairing_code(user.restaurante_id, phone)
-        except Exception as exc:
-            raise _provider_error(exc) from exc
 
     config.whatsapp_instance_name = wa.instance_name(user.restaurante_id)
     config.whatsapp_recipient_phone = phone
@@ -147,7 +158,7 @@ def refresh_pairing_code(
     ):
         raise HTTPException(status_code=409, detail="Configure primeiro o WhatsApp deste restaurante.")
     try:
-        code = wa.connect_instance_with_pairing_code(
+        _, code = wa.recreate_instance_with_pairing_code(
             user.restaurante_id,
             config.whatsapp_recipient_phone,
         )
