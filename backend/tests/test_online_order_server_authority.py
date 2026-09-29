@@ -371,3 +371,77 @@ def test_criacao_publica_tem_rate_limit_por_telefone(monkeypatch):
         statuses.append(response.status_code)
 
     assert statuses == [201, 201, 429]
+
+
+@pytest.mark.parametrize('detail,online', [('cartao_credito', False), ('cartao_debito', False), ('pix', False), ('pix', True)])
+def test_cash_only_rejects_other_methods_without_creating_order(detail, online):
+    db = SessionLocal()
+    tenant = current_restaurante_id.set(RESTAURANTE_ID)
+    try:
+        restaurant = db.query(Restaurante).filter_by(id=RESTAURANTE_ID).one()
+        restaurant.formas_pagamento_aceitas = ['Dinheiro']
+        db.commit()
+        before = db.query(Comanda).filter_by(restaurante_id=RESTAURANTE_ID).count()
+    finally:
+        current_restaurante_id.reset(tenant)
+        db.close()
+    payload = _payload(f'cash-only-{detail}-{online}', payment_detail=detail)
+    if online:
+        payload['forma_pagamento'] = 'online'
+        payload['cliente_email'] = 'consumer@example.test'
+    response = client.post('/cardapio/pedidos', json=payload)
+    assert response.status_code == 422, response.text
+    db = SessionLocal()
+    tenant = current_restaurante_id.set(RESTAURANTE_ID)
+    try:
+        assert db.query(Comanda).filter_by(restaurante_id=RESTAURANTE_ID).count() == before
+    finally:
+        current_restaurante_id.reset(tenant)
+        db.close()
+
+
+@pytest.mark.parametrize('configured', [['Cartão de débito'], []])
+def test_explicit_configuration_rejects_disabled_cash(configured):
+    db = SessionLocal()
+    tenant = current_restaurante_id.set(RESTAURANTE_ID)
+    try:
+        db.query(Restaurante).filter_by(id=RESTAURANTE_ID).one().formas_pagamento_aceitas = configured
+        db.commit()
+    finally:
+        current_restaurante_id.reset(tenant)
+        db.close()
+    response = client.post('/cardapio/pedidos', json=_payload('cash-disabled'))
+    assert response.status_code == 422, response.text
+    assert 'não está habilitada' in response.json()['detail']
+
+
+def test_cash_only_order_works_without_online_account():
+    db = SessionLocal()
+    tenant = current_restaurante_id.set(RESTAURANTE_ID)
+    try:
+        db.query(Restaurante).filter_by(id=RESTAURANTE_ID).one().formas_pagamento_aceitas = ['Dinheiro']
+        db.commit()
+    finally:
+        current_restaurante_id.reset(tenant)
+        db.close()
+    response = client.post('/cardapio/pedidos', json=_payload('cash-only-success'))
+    assert response.status_code == 201, response.text
+    assert response.json()['pagamento']['cobranca_online'] is False
+
+
+def test_closed_schedule_keeps_catalog_and_blocks_new_order():
+    db = SessionLocal()
+    tenant = current_restaurante_id.set(RESTAURANTE_ID)
+    try:
+        db.query(Restaurante).filter_by(id=RESTAURANTE_ID).one().horarios_funcionamento = [{'days': 'Segunda a Domingo', 'hours': 'Fechado'}]
+        db.commit()
+    finally:
+        current_restaurante_id.reset(tenant)
+        db.close()
+    catalog = client.get(f'/api/cardapio-digital/public?restaurante_id={RESTAURANTE_ID}')
+    assert catalog.status_code == 200
+    assert catalog.json()['restaurante']['aceitando_pedidos'] is False
+    assert catalog.json()['restaurante']['origem_disponibilidade'] == 'schedule'
+    assert any(product['id'] == PRODUTO_ID for product in catalog.json()['produtos'])
+    response = client.post('/cardapio/pedidos', json=_payload('closed-catalog'))
+    assert response.status_code == 409

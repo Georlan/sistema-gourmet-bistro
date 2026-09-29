@@ -53,6 +53,8 @@ def test_windows_installer_has_persistence_update_and_uninstall():
     assert "Register-ScheduledTask" in installer
     assert "Start-ScheduledTask" in installer
 
+    assert '"hardware_preflight.py"' in installer
+
     # Preservação de arquivos essenciais e dependências
     assert '"wake_listener.py"' in installer
     assert '"simulator.py"' in installer

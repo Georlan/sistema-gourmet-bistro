@@ -228,3 +228,35 @@ def test_legacy_reprint_alias_uses_same_model_and_only_adds_reprint_marker():
     reprint_payload = _jobs()[-1].payload_text
     assert "REIMPRESSÃO" in reprint_payload
     assert _without_reprint_marker(reprint_payload) == original_payload.rstrip()
+
+
+def test_pocket_admin_grant_printing_through_audit_then_print_and_revoke():
+    from app.database import tenant_session_scope
+    from app.routes.super_admin import get_current_admin
+    from app.smartpos_models import RestauranteCapability
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, TENANT_ID):
+            db.query(Restaurante).filter_by(id=TENANT_ID).one().plano = 'pocket'
+            db.commit()
+        payload = {'source_type': 'pedido', 'source_id': LAUNCH_ID, 'action': 'imprimir', 'idempotency_key': 'pocket-benefit-print'}
+        assert client.post('/impressao', headers=_headers(), json=payload).status_code == 403
+        assert _jobs() == []
+        app.dependency_overrides[get_current_admin] = lambda: {'user': 'owner@example.test', 'role': 'superadmin'}
+        benefit_url = f'/api/super-admin/restaurantes/{TENANT_ID}/capabilities/printing'
+        grant = client.patch(benefit_url, json={'mode': 'grant', 'reason': 'Primeiro cliente KÔMA; extra R$ 0'})
+        assert grant.status_code == 200, grant.text
+        assert grant.json()['plan'] == 'pocket'
+        assert grant.json()['effective']['printing'] is True
+        printed = client.post('/impressao', headers=_headers(), json=payload)
+        assert printed.status_code == 200, printed.text
+        assert len(_jobs()) == 1
+        assert client.patch(benefit_url, json={'mode': 'revoke', 'reason': 'Encerramento do benefício'}).status_code == 200
+        payload['idempotency_key'] = 'pocket-benefit-revoked'
+        assert client.post('/impressao', headers=_headers(), json=payload).status_code == 403
+        assert len(_jobs()) == 1
+    finally:
+        with tenant_session_scope(db, TENANT_ID):
+            db.query(RestauranteCapability).filter_by(restaurante_id=TENANT_ID).delete()
+            db.commit()
+        db.close()

@@ -23,6 +23,9 @@ from .super_admin_signup_recovery import router as _super_admin_signup_recovery_
 from .super_admin_catalog_assistance import router as _super_admin_catalog_assistance_router  # noqa: E402
 from .super_admin_fiscal_compliance import router as _super_admin_fiscal_compliance_router  # noqa: E402
 
+from .super_admin_capabilities import router as _super_admin_capabilities_router
+
+_super_admin.router.include_router(_super_admin_capabilities_router)
 _super_admin.router.include_router(_super_admin_access_router)
 _super_admin.router.include_router(_super_admin_support_router)
 _super_admin.router.include_router(_super_admin_incidents_router)

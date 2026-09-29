@@ -21,6 +21,7 @@ import {
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 import { SuperAdminNewTenantModal } from "./SuperAdminNewTenantModal";
 import { SuperAdminSupportModal } from "./SuperAdminSupportModal";
+import { SuperAdminCapabilitiesModal } from "./SuperAdminCapabilitiesModal";
 import type { Tenant } from "./superAdminTypes";
 
 interface SuperAdminTenantsTabProps {
@@ -66,6 +67,7 @@ export function SuperAdminTenantsTab({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("ALL");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [benefitsTenant, setBenefitsTenant] = useState<Tenant | null>(null);
   const [supportTenant, setSupportTenant] = useState<Tenant | null>(null);
   const [showNewTenantModal, setShowNewTenantModal] = useState(false);
 
@@ -217,6 +219,7 @@ export function SuperAdminTenantsTab({
 
   return (
     <div className="space-y-6">
+      {benefitsTenant && <SuperAdminCapabilitiesModal key={benefitsTenant.id} tenant={benefitsTenant} onClose={() => setBenefitsTenant(null)} />}
       <div className="space-y-4 rounded-xl border border-[#1e293b] bg-koma-card p-5 shadow-sm">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
@@ -292,6 +295,7 @@ export function SuperAdminTenantsTab({
                     <td className="px-4 py-3.5 text-koma-foreground">{tenant.monthlyBilling != null ? formatCurrency(tenant.monthlyBilling) : "—"}</td>
                     <td className="px-4 py-3.5 text-koma-muted">{formatActivity(tenant.lastActivity)}</td>
                     <td className="px-4 py-3.5 text-right"><div className="inline-flex items-center gap-1.5">
+                      <button type="button" onClick={() => setBenefitsTenant(tenant)} className="rounded border border-zinc-700 px-2 py-1 text-koma-secondary">Recursos/Benefícios</button>
                       <button type="button" onClick={() => setSupportTenant(tenant)} className="flex items-center gap-1 rounded border border-amber-800/60 bg-amber-950/40 px-2 py-1 text-amber-300 hover:bg-amber-900/60 hover:text-amber-100" title="Acessar estabelecimento em Modo Suporte auditado"><Headphones className="h-3 w-3" /> Suporte</button>
                       <button type="button" onClick={() => setSelectedTenant(tenant)} className="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-koma-secondary hover:bg-zinc-800 hover:text-koma-foreground" title="Ver detalhes"><Eye className="h-3 w-3" /> Detalhes</button>
                       <button type="button" onClick={() => openEditModal(tenant)} className="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-koma-secondary hover:bg-zinc-800 hover:text-koma-foreground" title="Editar cadastro e tipo de operação"><Edit3 className="h-3 w-3" /> Editar</button>

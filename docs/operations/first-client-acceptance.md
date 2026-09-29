@@ -5,7 +5,8 @@ os blocos aplicáveis abaixo têm evidência anexada ao relatório. Para um Pock
 sem impressão contratada, registre o bloco 4 como `NÃO APLICÁVEL`, com plano e
 escopo confirmados pelo restaurante, e valide a fila de preparo na tela durante
 o turno completo. Se o restaurante depender de papel, o bloco 4 é obrigatório
-e o Pocket não atende esse escopo.
+incluindo Pocket com override individual `printing=true` auditado; o baseline
+do Pocket continua sem impressão. Use o [playbook de onboarding](onboarding/README.md).
 
 Fila CUPS/Spooler criada,
 teste automatizado ou status `printed` isoladamente não comprovam saída física
@@ -72,7 +73,8 @@ Obrigatório para planos e operações com impressão. Não execute este bloco c
 critério do Pocket quando a operação foi contratada exclusivamente com fila de
 preparo na tela; registre a justificativa no relatório.
 
-Com a impressora conectada ao computador do restaurante, rode primeiro:
+No Windows, siga os comandos do [guia operacional](onboarding/windows-printing.md),
+inclusive o preflight instalado pelo agente. No Linux/com o repositório, rode primeiro:
 
 ```bash
 python3 print-agent/hardware_preflight.py \
@@ -84,7 +86,7 @@ O comando deve retornar `status: PASSED`. `BLOCKED` impede o aceite, mesmo se
 
 Depois, com o Print Agent pareado e ativo:
 
-1. em **Configurações → Salão e impressão**, use **Imprimir teste**;
+1. em **Configurações → Impressão**, use **Imprimir teste**;
 2. crie um pedido real de homologação com um item de COZINHA e outro de BAR,
    ambos com adicional e observação;
 3. solicite uma conferência de conta;
