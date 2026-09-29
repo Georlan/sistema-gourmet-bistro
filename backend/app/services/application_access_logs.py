@@ -73,9 +73,9 @@ def record_application_access(
         if cleanup_reserved:
             cutoff = six_calendar_months_before(now)
             db.execute(
-                delete(ApplicationAccessLog).where(
-                    ApplicationAccessLog.accessed_at < cutoff
-                )
+                delete(ApplicationAccessLog)
+                .where(ApplicationAccessLog.accessed_at < cutoff)
+                .execution_options(synchronize_session=False)
             )
 
         db.commit()
