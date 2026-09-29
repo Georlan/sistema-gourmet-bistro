@@ -49,6 +49,9 @@ Estado técnico após o Bloco 2:
 - mensagens, transcrições e rascunhos de WhatsApp permanecem criptografados;
 - snapshots legados de identificação em `Pagamento` permanecem legíveis pela
   aplicação autorizada, mas criptografados no banco;
+- registros de acesso à aplicação persistem somente IP cifrado e data/hora e são
+  expurgados após seis meses-calendário; não registram rota, payload, token ou
+  User-Agent nessa base legal;
 - nenhum job automático elimina cliente apenas porque ficou inativo;
 - prazo de minimização dos snapshots de pedidos não é inventado no código:
   deve acompanhar a finalidade, obrigação aplicável e defesa de direitos.
