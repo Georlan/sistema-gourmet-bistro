@@ -165,7 +165,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   }, []);
 
   const loadSnapshot = useCallback(async () => {
-    setState('loading');
+    setState((current) => current === 'ready' ? 'ready' : 'loading');
     setErrorMessage('');
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), ONBOARDING_LOAD_TIMEOUT_MS);
@@ -321,6 +321,10 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
 
   const restaurantName = snapshot.restaurant.name || String(user?.nome || 'Seu restaurante');
   const configurationComplete = snapshot.readiness.configurationComplete;
+  const isCommercial = snapshot.onboarding.mode === 'commercial';
+  const isAdministrative = snapshot.onboarding.mode === 'administrative';
+  const isAwaitingKoma = snapshot.onboarding.releaseState === 'awaiting_koma';
+  const operationReleased = snapshot.onboarding.operationReleased;
 
   return (
     <main className="min-h-screen bg-koma-page px-4 py-6 text-koma-foreground sm:px-6 lg:px-8">
@@ -330,11 +334,22 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-emerald-400">
-                  <CheckCircle2 size={13} /> Conta ativada
+                  <CheckCircle2 size={13} />
+                  {isAdministrative
+                    ? 'Ambiente de homologação'
+                    : operationReleased
+                      ? 'Operação liberada'
+                      : 'Implantação em andamento'}
                 </div>
                 <h1 className="mt-4 text-2xl font-black sm:text-3xl">Bem-vindo ao KÔMA, {restaurantName}</h1>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-koma-muted">
-                  Conclua os quatro itens mínimos. A equipe KÔMA confirma a liberação da operação; seus 7 dias grátis começam nesse momento.
+                  {isAdministrative
+                    ? 'Use este ambiente para homologar a operação. A janela administrativa já está em andamento e não representa o trial comercial de um cliente.'
+                    : isAwaitingKoma
+                      ? 'Sua configuração essencial está pronta. A equipe KÔMA está revisando e liberando sua operação; você não precisa fazer mais nada agora.'
+                      : operationReleased
+                        ? 'Tudo pronto. Sua operação foi liberada e o período grátis comercial já está em andamento.'
+                        : 'Vamos deixar seu restaurante pronto. Complete os quatro itens essenciais; depois a equipe KÔMA faz a liberação e inicia seus 7 dias grátis.'}
                 </p>
               </div>
               <div className="grid min-w-[250px] grid-cols-2 gap-2">
@@ -343,7 +358,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                   <p className="mt-1 text-sm font-black">{planLabel(snapshot.restaurant.plan)}</p>
                 </div>
                 <div className="rounded-2xl border border-koma-border bg-koma-page p-3">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-koma-subtle">Trial</p>
+                  <p className="text-[9px] font-black uppercase tracking-wider text-koma-subtle">
+                    {isAdministrative ? 'Homologação' : 'Trial'}
+                  </p>
                   <p className="mt-1 text-sm font-black">{trialLabel(snapshot.trial)}</p>
                 </div>
               </div>
@@ -356,12 +373,45 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 <div className="flex items-center gap-2 text-sm font-black">
                   <Sparkles size={16} className="text-emerald-400" /> Configuração inicial
                 </div>
-                <p className="mt-1 text-xs text-koma-muted">{snapshot.progress.completed} de {snapshot.progress.total} itens essenciais concluídos</p>
+                <p className="mt-1 text-xs text-koma-muted">
+                  {configurationComplete
+                    ? '4 de 4 itens essenciais concluídos'
+                    : `Falta pouco — ${snapshot.progress.completed} de ${snapshot.progress.total} concluídos`}
+                </p>
               </div>
               <button type="button" onClick={() => void loadSnapshot()} className="inline-flex items-center gap-2 self-start rounded-xl border border-koma-border px-3 py-2 text-[10px] font-black text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-400">
                 <RefreshCw size={12} /> Atualizar
               </button>
             </div>
+
+            {isCommercial && (
+              <div className="mt-5 grid gap-2 sm:grid-cols-3" aria-label="Etapas da liberação">
+                {[
+                  { id: 'setup', label: 'Configuração', done: configurationComplete, active: !configurationComplete },
+                  { id: 'review', label: 'Revisão KÔMA', done: operationReleased, active: configurationComplete && !operationReleased },
+                  { id: 'released', label: 'Liberado', done: operationReleased, active: operationReleased },
+                ].map((item, index) => (
+                  <div
+                    key={item.id}
+                    className={`rounded-xl border p-3 ${
+                      item.done
+                        ? 'border-emerald-500/30 bg-emerald-500/10'
+                        : item.active
+                          ? 'border-amber-500/30 bg-amber-500/10'
+                          : 'border-koma-border bg-koma-page'
+                    }`}
+                  >
+                    <p className="text-[9px] font-black uppercase tracking-wider text-koma-subtle">
+                      Etapa {index + 1}
+                    </p>
+                    <p className="mt-1 flex items-center gap-2 text-xs font-black">
+                      {item.done ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Circle size={14} className={item.active ? 'text-amber-400' : 'text-koma-subtle'} />}
+                      {item.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <SubscriptionControl accessToken={accessToken} />
             <CatalogAssistanceUpload
@@ -391,7 +441,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                   onClick={() => void saveOperations()}
                   className="rounded-xl bg-emerald-500 px-4 py-2.5 text-[10px] font-black text-zinc-950 disabled:opacity-60"
                 >
-                  {savingOperations ? 'Salvando…' : 'Salvar modalidades'}
+                  {savingOperations ? 'Salvando…' : operationNotice ? 'Salvo ✓' : 'Salvar modalidades'}
                 </button>
               </div>
 
@@ -420,13 +470,17 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                   ))}
                 </div>
               )}
-              {operationError && <p className="mt-3 text-[10px] font-bold text-rose-600">{operationError}</p>}
+              {operationNotice && (
+                <p role="status" className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-[10px] font-bold text-emerald-300">
+                  {operationNotice}
+                </p>
+              )}
+              {operationError && <p role="alert" className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-[10px] font-bold text-rose-300">{operationError}</p>}
             </section>
 
             <div className="mt-5 space-y-3">
               {steps.map((step) => {
                 const Icon = step.icon;
-                const blockedUntilTrial = step.id === 'first-order' && !snapshot.readiness.trialStarted;
                 return (
                   <article key={step.id} className="flex flex-col gap-4 rounded-2xl border border-koma-border bg-koma-page p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 gap-3">
@@ -445,11 +499,10 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                       {step.done ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
                       <button
                         type="button"
-                        disabled={blockedUntilTrial}
-                        onClick={() => openCashierAt(step.tab, step.subTab, step.id !== 'first-order')}
+                        onClick={() => openCashierAt(step.tab, step.subTab, true)}
                         className="inline-flex items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3 py-2 text-[10px] font-black transition hover:border-emerald-500/35 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-45"
                       >
-                        {blockedUntilTrial ? 'Depois de iniciar' : step.actionLabel} <ArrowRight size={12} />
+                        {step.actionLabel} <ArrowRight size={12} />
                       </button>
                     </div>
                   </article>
@@ -457,44 +510,117 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               })}
             </div>
 
+            <section className="mt-6 rounded-2xl border border-koma-border bg-koma-raised/20 p-4">
+              <div className="flex items-start gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-page text-koma-muted">
+                  <CreditCard size={17} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-sm font-black">Pode configurar depois</h2>
+                    <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">Opcional</span>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
+                    O restaurante pode operar e receber pagamentos no atendimento sem Mercado Pago. Conecte somente se quiser liberar Pix ou outros pagamentos online pelo KÔMA.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <span className={`text-[10px] font-bold ${snapshot.steps.mercadoPago ? 'text-emerald-400' : 'text-koma-subtle'}`}>
+                      {snapshot.steps.mercadoPago ? 'Mercado Pago conectado ✓' : 'Mercado Pago não conectado — tudo bem por enquanto'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openCashierAt('cardapio_digital', 'cardapio_pagamentos', true)}
+                      className="rounded-xl border border-koma-border bg-koma-page px-3 py-2 text-[10px] font-black transition hover:border-emerald-500/35 hover:text-emerald-400"
+                    >
+                      {snapshot.steps.mercadoPago ? 'Revisar conexão' : 'Configurar quando quiser'} <ArrowRight size={12} className="inline" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {operationReleased && (
+              <section className="mt-4 rounded-2xl border border-koma-border bg-koma-raised/20 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-page text-koma-muted">
+                      <ShoppingBag size={17} />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-sm font-black">Validação antes do primeiro turno</h2>
+                        <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">Opcional</span>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
+                        Faça um pedido de teste para validar preparo, pagamento e fechamento. Isso não bloqueia o acesso à operação.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem(ONBOARDING_TEST_ORDER_KEY, '1');
+                      } catch {
+                        // Restricted storage only affects automatic marking.
+                      }
+                      openCashierAt('operacao', 'balcao', false);
+                    }}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-page px-4 py-2.5 text-[10px] font-black transition hover:border-emerald-500/35 hover:text-emerald-400"
+                  >
+                    {snapshot.steps.firstOrder ? 'Pedido de teste validado ✓' : 'Fazer pedido de teste'} <ArrowRight size={12} />
+                  </button>
+                </div>
+              </section>
+            )}
+
             {errorMessage && <p className="mt-4 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-[10px] font-bold text-rose-600">{errorMessage}</p>}
 
-            <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-raised/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className={`mt-6 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
+              isAwaitingKoma
+                ? 'border-amber-500/30 bg-amber-500/10'
+                : operationReleased
+                  ? 'border-emerald-500/30 bg-emerald-500/10'
+                  : 'border-koma-border bg-koma-raised/40'
+            }`}>
               <div>
                 <p className="text-xs font-black">
                   {!configurationComplete
-                    ? 'Finalize os quatro itens essenciais'
-                    : snapshot.readyForRelease
-                      ? 'Configuração concluída — aguardando liberação KÔMA'
-                      : snapshot.readiness.readyToOperate
-                        ? 'Prontidão operacional validada'
-                        : 'Operação liberada — finalize o pedido de teste'}
+                    ? `Falta pouco — ${snapshot.progress.completed} de ${snapshot.progress.total} concluídos`
+                    : isAwaitingKoma
+                      ? 'Sua parte está concluída ✓'
+                      : isAdministrative
+                        ? 'Homologação pronta para continuar'
+                        : snapshot.readiness.readyToOperate
+                          ? 'Prontidão operacional validada'
+                          : 'Tudo pronto! Seu KÔMA está liberado.'}
                 </p>
-                <p className="mt-1 text-[10px] text-koma-muted">
+                <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
                   {!configurationComplete
-                    ? 'Dados do restaurante, horários, produto ativo e modalidades precisam estar prontos.'
-                    : snapshot.readyForRelease
-                      ? 'A equipe KÔMA verificará a configuração e iniciará os 7 dias grátis ao liberar sua operação. Atualize esta tela para acompanhar.'
-                      : snapshot.readiness.readyToOperate
-                        ? 'O pedido de teste foi pago e fechado com sucesso.'
-                        : 'Complete pagamento e fechamento do pedido de teste para registrar a prontidão.'}
+                    ? 'Dados do restaurante, horários, produto ativo e modalidades são os únicos itens obrigatórios para esta etapa.'
+                    : isAwaitingKoma
+                      ? 'A equipe KÔMA está revisando e liberando sua operação em paralelo. Você não precisa configurar Mercado Pago nem permanecer nesta tela; o status será atualizado automaticamente.'
+                      : isAdministrative
+                        ? 'Este tenant é de QA. A janela de homologação já começou no provisionamento e não representa o início de um trial comercial.'
+                        : snapshot.readiness.readyToOperate
+                          ? 'O pedido de teste também foi pago e fechado com sucesso.'
+                          : 'A operação já pode começar. O pedido de teste continua disponível como validação opcional antes do primeiro turno.'}
                 </p>
               </div>
 
-              {configurationComplete && snapshot.readiness.trialStarted && !snapshot.readiness.readyToOperate && (
+              {isAwaitingKoma && (
+                <div className="inline-flex items-center gap-2 self-start rounded-full border border-amber-500/30 bg-koma-page px-3 py-2 text-[10px] font-black text-amber-300">
+                  <RefreshCw size={12} className="animate-spin" /> Aguardando KÔMA
+                </div>
+              )}
+
+              {operationReleased && (
                 <button
                   type="button"
-                  onClick={() => {
-                    try {
-                      sessionStorage.setItem(ONBOARDING_TEST_ORDER_KEY, '1');
-                    } catch {
-                      // Restricted storage only affects automatic marking.
-                    }
-                    openCashierAt('operacao', 'balcao', false);
-                  }}
+                  onClick={() => openCashierAt('operacao', 'balcao', false)}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-koma-foreground px-5 py-3 text-xs font-black text-koma-page"
                 >
-                  Fazer pedido de teste <ArrowRight size={14} />
+                  Entrar no KÔMA <ArrowRight size={14} />
                 </button>
               )}
             </div>
