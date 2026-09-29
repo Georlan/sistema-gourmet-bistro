@@ -42,10 +42,10 @@ type OnboardingStatus = {
   };
   trialCanStart: boolean;
   readyForRelease: boolean;
-  onboarding: {
+  onboarding?: {
     mode: 'commercial' | 'administrative';
     releaseState: 'configuring' | 'awaiting_koma' | 'released';
-    operationReleased: boolean;
+    operationReleased?: boolean;
     requiresKomaRelease: boolean;
   };
   payments: {
@@ -200,7 +200,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
 
   useEffect(() => {
     if (
-      snapshot?.onboarding.mode !== 'commercial'
+      snapshot?.onboarding?.mode !== 'commercial'
       || snapshot.onboarding.releaseState !== 'awaiting_koma'
     ) return;
 
@@ -208,7 +208,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       if (!document.hidden) void loadSnapshot();
     }, 8000);
     return () => window.clearInterval(timer);
-  }, [loadSnapshot, snapshot?.onboarding.mode, snapshot?.onboarding.releaseState]);
+  }, [loadSnapshot, snapshot?.onboarding?.mode, snapshot?.onboarding?.releaseState]);
 
   const openCashierAt = (tab: string, subTab: string, setupMode = true) => {
     try {
@@ -321,10 +321,22 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
 
   const restaurantName = snapshot.restaurant.name || String(user?.nome || 'Seu restaurante');
   const configurationComplete = snapshot.readiness.configurationComplete;
-  const isCommercial = snapshot.onboarding.mode === 'commercial';
-  const isAdministrative = snapshot.onboarding.mode === 'administrative';
-  const isAwaitingKoma = snapshot.onboarding.releaseState === 'awaiting_koma';
-  const operationReleased = snapshot.onboarding.operationReleased;
+  const inferredCommercial = snapshot.trial.status === 'setup' || snapshot.readyForRelease;
+  const onboardingMode = snapshot.onboarding?.mode || (inferredCommercial ? 'commercial' : 'administrative');
+  const operationReleased = snapshot.onboarding?.operationReleased
+    ?? snapshot.readiness.operationReleased
+    ?? snapshot.readiness.trialStarted;
+  const releaseState = snapshot.onboarding?.releaseState
+    || (!configurationComplete
+      ? 'configuring'
+      : snapshot.readyForRelease
+        ? 'awaiting_koma'
+        : operationReleased
+          ? 'released'
+          : 'configuring');
+  const isCommercial = onboardingMode === 'commercial';
+  const isAdministrative = onboardingMode === 'administrative';
+  const isAwaitingKoma = releaseState === 'awaiting_koma';
 
   return (
     <main className="min-h-screen bg-koma-page px-4 py-6 text-koma-foreground sm:px-6 lg:px-8">
