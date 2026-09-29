@@ -40,9 +40,11 @@ from ..schemas import (
 )
 from ..security import get_password_hash, verify_password
 from ..services.clientes import (
+    buscar_cliente_por_email,
     buscar_cliente_por_id,
     buscar_cliente_por_telefone,
     cadastrar_ou_atualizar_cliente,
+    cliente_email_lookup_hash,
     normalizar_nome_cliente,
     normalizar_telefone_cliente,
 )
@@ -226,7 +228,7 @@ def _send_existing_account_verification_email(
     email = cliente.email.strip().lower()
     challenge = db.query(CustomerRegistrationChallenge).filter(
         CustomerRegistrationChallenge.restaurante_id == restaurante_id,
-        CustomerRegistrationChallenge.email == email,
+        CustomerRegistrationChallenge.email_hash == cliente_email_lookup_hash(restaurante_id, email),
     ).with_for_update().first()
 
     if challenge is not None:
@@ -358,14 +360,12 @@ def request_customer_registration(
         # e-mail transacional é aceito pelo Resend. O registro nasce sem nenhum
         # contato verificado e, portanto, não recebe sessão nem pode apropriar
         # pedidos anônimos pelo telefone até a confirmação adequada.
-        cliente_por_email = db.query(Cliente).filter(
-            Cliente.restaurante_id == restaurante_id,
-            Cliente.email == email,
-        ).with_for_update().first()
-        cliente_por_telefone = db.query(Cliente).filter(
-            Cliente.restaurante_id == restaurante_id,
-            Cliente.telefone == telefone,
-        ).with_for_update().first()
+        cliente_por_email = buscar_cliente_por_email(
+            db, restaurante_id=restaurante_id, email=email, bloquear=True
+        )
+        cliente_por_telefone = buscar_cliente_por_telefone(
+            db, restaurante_id=restaurante_id, telefone=telefone, bloquear=True
+        )
 
         if cliente_por_email is not None and (
             cliente_por_email.email_verificado_em is not None
@@ -406,7 +406,7 @@ def request_customer_registration(
                 if cliente_por_telefone.email and cliente_por_telefone.email != email:
                     db.query(CustomerRegistrationChallenge).filter(
                         CustomerRegistrationChallenge.restaurante_id == restaurante_id,
-                        CustomerRegistrationChallenge.email == cliente_por_telefone.email,
+                        CustomerRegistrationChallenge.email_hash == cliente_email_lookup_hash(restaurante_id, cliente_por_telefone.email),
                     ).delete(synchronize_session=False)
                 pending_customer = cliente_por_telefone
             else:
@@ -416,7 +416,7 @@ def request_customer_registration(
 
         challenge = db.query(CustomerRegistrationChallenge).filter(
             CustomerRegistrationChallenge.restaurante_id == restaurante_id,
-            CustomerRegistrationChallenge.email == email,
+            CustomerRegistrationChallenge.email_hash == cliente_email_lookup_hash(restaurante_id, email),
         ).with_for_update().first()
         if challenge is not None and challenge.ultimo_envio_em is not None:
             last_send = challenge.ultimo_envio_em
@@ -557,11 +557,11 @@ def confirm_customer_registration(
         )
         now = _utcnow()
 
-        existing_email = db.query(Cliente).filter(
-            Cliente.restaurante_id == restaurante_id,
-            Cliente.email == challenge.email,
-            Cliente.senha_hash.isnot(None),
-        ).first()
+        existing_email = buscar_cliente_por_email(
+            db, restaurante_id=restaurante_id, email=challenge.email
+        )
+        if existing_email is not None and existing_email.senha_hash is None:
+            existing_email = None
         if existing_email is not None:
             if existing_email.email_verificado_em is not None:
                 db.delete(challenge)
@@ -604,10 +604,9 @@ def confirm_customer_registration(
                 "cliente": _profile(existing_email).model_dump(),
             }
 
-        existing_phone = db.query(Cliente).filter(
-            Cliente.restaurante_id == restaurante_id,
-            Cliente.telefone == challenge.telefone,
-        ).with_for_update().first()
+        existing_phone = buscar_cliente_por_telefone(
+            db, restaurante_id=restaurante_id, telefone=challenge.telefone, bloquear=True
+        )
 
         if existing_phone is not None:
             if existing_phone.senha_hash:
@@ -708,11 +707,11 @@ def request_registration_phone_verification(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Confirme primeiro o e-mail enviado pelo KÔMA.",
             )
-        guest = db.query(Cliente).filter(
-            Cliente.restaurante_id == restaurante_id,
-            Cliente.telefone == challenge.telefone,
-            Cliente.senha_hash.is_(None),
-        ).first()
+        guest = buscar_cliente_por_telefone(
+            db, restaurante_id=restaurante_id, telefone=challenge.telefone
+        )
+        if guest is not None and guest.senha_hash is not None:
+            guest = None
         if guest is None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -837,10 +836,9 @@ def confirm_registration_phone(
             telefone=challenge.telefone,
             codigo=payload.codigo,
         )
-        cliente = db.query(Cliente).filter(
-            Cliente.restaurante_id == restaurante_id,
-            Cliente.telefone == challenge.telefone,
-        ).with_for_update().first()
+        cliente = buscar_cliente_por_telefone(
+            db, restaurante_id=restaurante_id, telefone=challenge.telefone, bloquear=True
+        )
         if cliente is None or cliente.senha_hash:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -944,10 +942,9 @@ def register_customer(
         db.commit()
 
         # 1. Verificar se já existe cliente com este e-mail neste restaurante
-        cliente_por_email = db.query(Cliente).filter(
-            Cliente.restaurante_id == restaurante_id,
-            Cliente.email == email_normalizado,
-        ).first()
+        cliente_por_email = buscar_cliente_por_email(
+            db, restaurante_id=restaurante_id, email=email_normalizado
+        )
 
         if cliente_por_email is not None:
             raise HTTPException(
@@ -964,10 +961,9 @@ def register_customer(
 
         # Com o telefone confirmado, o cadastro pode adotar com segurança a ficha
         # criada anteriormente pelo Caixa e manter histórico, pontos e cashback.
-        cliente_por_tel = db.query(Cliente).filter(
-            Cliente.restaurante_id == restaurante_id,
-            Cliente.telefone == telefone_normalizado,
-        ).with_for_update().first()
+        cliente_por_tel = buscar_cliente_por_telefone(
+            db, restaurante_id=restaurante_id, telefone=telefone_normalizado, bloquear=True
+        )
 
         if cliente_por_tel is not None and (cliente_por_tel.email or cliente_por_tel.senha_hash):
             raise HTTPException(
@@ -1050,10 +1046,9 @@ def login_customer(
         )
         db.commit()
 
-        cliente = db.query(Cliente).filter(
-            Cliente.restaurante_id == restaurante_id,
-            Cliente.email == email_normalizado,
-        ).first()
+        cliente = buscar_cliente_por_email(
+            db, restaurante_id=restaurante_id, email=email_normalizado
+        )
 
         if cliente is None or not cliente.senha_hash:
             raise HTTPException(
