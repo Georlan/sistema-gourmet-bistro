@@ -29,6 +29,10 @@ preservadas por serem registros legais, append-only e não participarem das
 restrições de unicidade de email ou telefone. Seus vínculos tenant-scoped são
 apagados com restaurantes removidos.
 
+`application_access_logs` também é preservada: trata-se de evidência legal global
+com retenção própria de seis meses e não de dado de homologação. O purge nunca
+antecipa seu expurgo.
+
 ### LIMPAR no restaurante 1
 
 Todas as tabelas alcançáveis por FK a partir do restaurante são limpas, exceto a
