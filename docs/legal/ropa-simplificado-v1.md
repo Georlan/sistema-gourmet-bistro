@@ -37,7 +37,7 @@ Documento interno inspirado no modelo simplificado da ANPD para agentes de trata
 - **Compartilhamentos:** Railway, Supabase, Cloudflare, Mercado Pago quando houver Pix e WhatsApp/Meta quando houver notificação.
 - **Transferência internacional:** sim.
 - **Retenção:** conforme necessidade operacional, contrato do restaurante, obrigações legais e defesa de direitos; após término do SaaS aplica-se janela de exportação e política de eliminação.
-- **Segurança:** criptografia de campos aplicáveis, TLS, tenant isolation/RLS, idempotência, autenticação do cliente quando utilizada.
+- **Segurança:** PII canônica de cliente criptografada em repouso com blind indexes tenant-scoped para busca; snapshots de telefone/endereço do pedido criptografados; TLS, tenant isolation/RLS, idempotência e autenticação do cliente quando utilizada.
 
 ## 4. Observações de alergia ou saúde
 
