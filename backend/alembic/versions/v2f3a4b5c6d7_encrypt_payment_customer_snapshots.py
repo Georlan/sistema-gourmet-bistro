@@ -71,6 +71,20 @@ def downgrade() -> None:
     bind = op.get_bind()
     _backfill(bind, encrypt=False)
 
+    if bind.dialect.name == "postgresql":
+        op.alter_column(
+            "pagamentos",
+            "cpf_cliente",
+            type_=sa.String(),
+            existing_nullable=True,
+        )
+        op.alter_column(
+            "pagamentos",
+            "nome_cliente",
+            type_=sa.String(),
+            existing_nullable=True,
+        )
+
     if "ix_pagamentos_cpf_cliente" not in {
         item["name"] for item in sa.inspect(bind).get_indexes("pagamentos")
     }:
