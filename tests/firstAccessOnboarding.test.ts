@@ -81,7 +81,7 @@ test('setup mode exposes canonical configuration and fiscal without exposing nor
 test('initial setup reuses the same cashier online-menu screens and Mercado Pago integration owner', () => {
   assert.match(onboarding, /subTab: 'cardapio_perfil'/);
   assert.match(onboarding, /subTab: 'cardapio_pedidos'/);
-  assert.match(onboarding, /subTab: 'cardapio_pagamentos'/);
+  assert.match(onboarding, /openCashierAt\('cardapio_digital', 'cardapio_pagamentos', true\)/);
   assert.match(onlineMenu, /cardapio_perfil: 'perfil'/);
   assert.match(onlineMenu, /cardapio_pedidos: 'pedidos'/);
   assert.match(onlineMenu, /cardapio_pagamentos: 'pagamentos'/);
