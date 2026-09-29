@@ -551,7 +551,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               </div>
             </section>
 
-            {operationReleased && (
+            {configurationComplete && operationReleased && (
               <section className="mt-4 rounded-2xl border border-koma-border bg-koma-raised/20 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-start gap-3">
@@ -626,7 +626,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 </div>
               )}
 
-              {operationReleased && (
+              {configurationComplete && operationReleased && (
                 <button
                   type="button"
                   onClick={() => openCashierAt('operacao', 'balcao', false)}
