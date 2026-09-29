@@ -20,13 +20,38 @@ Documento interno. Não publicar detalhes operacionais que facilitem abuso; a ve
 | Cadastro e contrato do restaurante | vigência + prazo necessário a obrigações e defesa de direitos | revisar com enquadramento fiscal definitivo |
 | Aceite eletrônico, hashes e comprovante | em regra até 5 anos após encerramento | preservar versão exata e snapshot comercial |
 | Dados operacionais do restaurante | vigência + 30 dias de janela de exportação | depois eliminar/anonimizar salvo retenção legal específica |
-| Pedidos e registros financeiros | conforme obrigação do restaurante e necessidade de conciliação/defesa | não prometer prazo único sem mapear obrigação fiscal/consumerista |
-| Logs de aplicação e segurança | prazo legal aplicável | P0: validar/implementar guarda de 6 meses quando Marco Civil exigir |
+| Cliente e histórico de relacionamento | enquanto houver finalidade legítima de relacionamento do restaurante e demais bases aplicáveis | inatividade não apaga automaticamente a identidade; métricas comerciais usam `cliente_id`, sem depender de PII repetida nos pedidos |
+| Pedidos e registros financeiros | conforme obrigação do restaurante e necessidade de conciliação/defesa | preservar fatos comerciais; PII redundante deve permanecer protegida e ser minimizada quando sua finalidade terminar |
+| Logs de aplicação e segurança | 6 meses quando a obrigação do art. 15 do Marco Civil for aplicável; prazo diverso somente com fundamento documentado | manter sob sigilo, em ambiente controlado e seguro |
 | Registros de incidentes de segurança | mínimo de 5 anos quando submetidos ao regulamento da ANPD | inclui incidentes comunicados e não comunicados quando aplicável |
-| Backups manuais de produção | seguir procedimento de backup vigente | cópia externa protegida continua obrigatória para continuidade |
+| Backups de produção | seguir ciclo técnico documentado do provedor/procedimento vigente | dado eliminado no ambiente ativo pode permanecer até expirar no backup; restauração é somente para continuidade/recuperação e não reintroduz o dado apagado ao uso comercial normal |
 | Sessões/tokens temporários | somente enquanto válidos ou necessários a auditoria de revogação | nunca guardar token em log |
 | Suporte | período necessário à resolução e defesa de direitos | evitar dados pessoais excessivos em WhatsApp/screenshots |
 | Dados de alergia/saúde em observação | vinculados ao pedido e sua retenção legítima | não extrair para marketing ou perfilamento |
+
+## 2.1 Separação entre histórico comercial e PII
+
+Para consumidores, a fonte canônica de identidade é `Cliente.id`. As métricas de
+relacionamento — quantidade de pedidos, gasto total, ticket médio, última compra
+e dias sem comprar — são derivadas de `Comanda.cliente_id`. Telefone, e-mail,
+nome, endereço e snapshots de pagamento não devem ser usados como chave de
+relacionamento quando `cliente_id` estiver disponível.
+
+Essa separação permite conservar o histórico comercial necessário ao restaurante
+sem transformar cópias redundantes de telefone/endereço em requisito permanente
+do CRM.
+
+Estado técnico após o Bloco 2:
+
+- PII canônica de `Cliente` é criptografada em repouso;
+- telefone/e-mail pesquisáveis usam blind indexes HMAC tenant-scoped;
+- `Comanda.identificador`, telefone e endereço de entrega permanecem criptografados;
+- mensagens, transcrições e rascunhos de WhatsApp permanecem criptografados;
+- snapshots legados de identificação em `Pagamento` permanecem legíveis pela
+  aplicação autorizada, mas criptografados no banco;
+- nenhum job automático elimina cliente apenas porque ficou inativo;
+- prazo de minimização dos snapshots de pedidos não é inventado no código:
+  deve acompanhar a finalidade, obrigação aplicável e defesa de direitos.
 
 ## 3. Encerramento de restaurante
 
