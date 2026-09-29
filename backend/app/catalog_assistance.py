@@ -88,6 +88,11 @@ def safe_catalog_filename(filename: str | None, content_type: str) -> str:
         "application/pdf": ".pdf",
         "image/png": ".png",
         "image/jpeg": ".jpg",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+        "image/bmp": ".bmp",
+        "image/avif": ".avif",
+        "image/heic": ".heic",
     }.get(content_type, "")
     path = PurePath(raw)
     stem = path.stem or "cardapio"
@@ -96,6 +101,11 @@ def safe_catalog_filename(filename: str | None, content_type: str) -> str:
         "application/pdf": {".pdf"},
         "image/png": {".png"},
         "image/jpeg": {".jpg", ".jpeg"},
+        "image/webp": {".webp"},
+        "image/gif": {".gif"},
+        "image/bmp": {".bmp"},
+        "image/avif": {".avif"},
+        "image/heic": {".heic", ".heif"},
     }.get(content_type, set())
     if extension not in accepted_extensions:
         raw = f"{stem}{canonical_extension}"
@@ -106,7 +116,11 @@ def detect_catalog_source_type(declared_type: str | None, content: bytes) -> str
     normalized = (declared_type or "").split(";", 1)[0].strip().lower()
     aliases = {
         "image/jpg": "image/jpeg",
+        "image/pjpeg": "image/jpeg",
+        "image/x-png": "image/png",
+        "image/heif": "image/heic",
         "application/x-pdf": "application/pdf",
+        "binary/octet-stream": "application/octet-stream",
     }
     normalized = aliases.get(normalized, normalized)
 
@@ -117,10 +131,25 @@ def detect_catalog_source_type(declared_type: str | None, content: bytes) -> str
         detected = "image/png"
     elif content.startswith(b"\xff\xd8\xff"):
         detected = "image/jpeg"
+    elif len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        detected = "image/webp"
+    elif content.startswith((b"GIF87a", b"GIF89a")):
+        detected = "image/gif"
+    elif content.startswith(b"BM"):
+        detected = "image/bmp"
+    elif len(content) >= 12 and content[4:8] == b"ftyp":
+        brand = content[8:12].lower()
+        if brand in {b"avif", b"avis"}:
+            detected = "image/avif"
+        elif brand in {b"heic", b"heix", b"hevc", b"hevx", b"heif", b"mif1", b"msf1"}:
+            detected = "image/heic"
 
     if detected is None:
-        raise ValueError("Formato inválido. Envie PDF, PNG, JPG ou JPEG.")
+        raise ValueError(
+            "Formato inválido. Envie PDF ou uma imagem JPG, PNG, WEBP, GIF, BMP, AVIF ou HEIC."
+        )
 
-    if normalized not in {"", "application/octet-stream", detected}:
+    generic_declared_types = {"", "application/octet-stream", "image/*"}
+    if normalized not in generic_declared_types | {detected}:
         raise ValueError("O conteúdo do arquivo não corresponde ao formato informado.")
     return detected
