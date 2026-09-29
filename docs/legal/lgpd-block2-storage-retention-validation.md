@@ -56,6 +56,16 @@ Regra estrutural:
 - eliminação/anonymização por solicitação de titular será consolidada no Bloco 3,
   reaproveitando o fluxo já existente.
 
+### Registros de acesso à aplicação
+
+- base dedicada guarda somente IP cifrado e data/hora;
+- não guarda rota, query string, payload, token, User-Agent ou identidade do
+  consumidor;
+- preflight e health probes são excluídos;
+- expurgo é aplicado por seis meses-calendário;
+- a rotina usa armazenamento próprio, em vez de depender do prazo de retenção
+  dos logs efêmeros do provedor de infraestrutura.
+
 ### PostgreSQL / RLS
 
 - aplicação valida a role de runtime no startup;
@@ -113,6 +123,7 @@ Foram reaproveitados:
 - teste de PII canônica em ciphertext;
 - teste de snapshots de pagamento em ciphertext;
 - teste provando que a trava RLS não é desabilitável em produção;
+- teste de registro mínimo de acesso cifrado e expurgo por seis meses;
 - documentação de retenção/ROPA alinhada ao comportamento real.
 
 ## 6. Itens deliberadamente posteriores
