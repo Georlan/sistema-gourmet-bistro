@@ -230,7 +230,7 @@ def get_fidelidade_config(
 @router.get("/fidelidade/clientes")
 def get_loyalty_clients(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("fidelidade:operar"))
+    current_user: Usuario = Depends(require_permission("clientes:operar"))
 ):
     """Retorna a ficha canônica; o ID não muda quando nome/telefone mudam."""
     restaurante_id = require_tenant_id()
@@ -559,7 +559,7 @@ def update_loyalty_client(
     data: ClientUpdate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("fidelidade:operar"))
+    current_user: Usuario = Depends(require_permission("clientes:operar"))
 ):
     """
     Edita a ficha pelo ID estável. Telefone é um identificador natural
@@ -685,7 +685,7 @@ def create_loyalty_client(
     data: ClientCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("fidelidade:operar"))
+    current_user: Usuario = Depends(require_permission("clientes:operar"))
 ):
     """
     Cadastra manualmente um novo cliente e lança o saldo inicial se fornecido.

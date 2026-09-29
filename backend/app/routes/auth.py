@@ -7,7 +7,7 @@ import uuid
 import logging
 import re
 
-from ..database import bind_session_to_tenant, get_db, current_restaurante_id
+from ..database import bind_session_to_tenant, get_db, current_restaurante_id, require_tenant_id
 from ..models import ActivityLog, Restaurante, Usuario, Motoboy, MotoboyTokenAtivo
 from ..schemas import LoginRequest, LoginResponse, UsuarioAccessUpdate, UsuarioResponse, AtivarContaRequest
 from ..security import (
@@ -789,11 +789,11 @@ def reenviar_convite_usuario(
 ):
     """Renova e envia automaticamente o convite pelo WhatsApp."""
     import datetime
-    from datetime import timezone
 
+    restaurante_id = require_tenant_id()
     usuario = db.query(Usuario).filter(
         Usuario.id == user_id,
-        Usuario.restaurante_id == current_user.restaurante_id,
+        Usuario.restaurante_id == restaurante_id,
     ).first()
     if not usuario:
         raise HTTPException(
@@ -808,22 +808,33 @@ def reenviar_convite_usuario(
         )
 
     # Um novo token permite reenviar intencionalmente sem reutilizar o segredo.
-    usuario.token_convite = str(uuid.uuid4())
-    usuario.token_expira_em = datetime.datetime.now(timezone.utc) + datetime.timedelta(hours=24)
+    token_convite = str(uuid.uuid4())
+    usuario.token_convite = token_convite
+    usuario.token_expira_em = (
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+    )
     db.commit()
-    db.refresh(usuario)
 
-    restaurante = db.query(Restaurante).filter(
-        Restaurante.id == current_user.restaurante_id,
-    ).first()
+    # Use only stable scalar snapshots after the commit. This keeps the resend
+    # path aligned with the create flow and avoids depending on ORM refresh/
+    # detached-instance details for the notification side effect.
+    telefone = str(usuario.telefone or "")
+    nome_pessoa = str(usuario.nome or "")
+    nome_restaurante = (
+        db.query(Restaurante.nome)
+        .filter(Restaurante.id == restaurante_id)
+        .scalar()
+        or "Kôma"
+    )
+
     agendar_convite_equipe_task(
         background_tasks,
-        restaurante_id=current_user.restaurante_id,
-        usuario_id=usuario.id,
-        telefone=usuario.telefone or "",
-        nome_pessoa=usuario.nome,
-        nome_restaurante=restaurante.nome if restaurante else "Kôma",
-        token_convite=usuario.token_convite,
+        restaurante_id=restaurante_id,
+        usuario_id=str(usuario.id),
+        telefone=telefone,
+        nome_pessoa=nome_pessoa,
+        nome_restaurante=str(nome_restaurante),
+        token_convite=token_convite,
     )
     return {
         "message": f"Convite para {usuario.nome} agendado no WhatsApp.",
