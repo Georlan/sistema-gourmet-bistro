@@ -36,13 +36,8 @@ PRESERVE_TENANT_ONE_TABLES = frozenset(
 
 # Dados globais de retomada/notificação de cadastros de homologação. Não são
 # configuração do Resend; apenas filas/capabilities antigas armazenadas no banco.
-GLOBAL_OPERATIONAL_TABLES = frozenset(
-    {
-        "restaurant_signups",
-        "signup_notifications",
-        "application_access_logs",
-    }
-)
+GLOBAL_OPERATIONAL_TABLES = frozenset({"restaurant_signups", "signup_notifications"})
+GLOBAL_PRESERVED_TABLES = frozenset({"application_access_logs"})
 
 REQUIRED_PRESERVED_TABLES = ("restaurantes",)
 
@@ -144,6 +139,13 @@ def _preserved_counts(connection: Connection, metadata: MetaData) -> dict[str, i
         if name == "restaurantes":
             predicate = table.c.id == KEEP_RESTAURANT_ID
         result[name] = _count(connection, table, predicate)
+
+    # Evidência legal global não é dado de homologação. A limpeza desta tabela
+    # pertence exclusivamente à política própria de retenção de seis meses.
+    for name in sorted(GLOBAL_PRESERVED_TABLES):
+        table = metadata.tables.get(name)
+        if table is not None:
+            result[name] = _count(connection, table, None)
     return result
 
 
@@ -171,11 +173,15 @@ def _delete_predicates(metadata: MetaData) -> tuple[dict[str, Any], tuple[str, .
 
         if alternatives:
             predicates[table.name] = or_(*alternatives)
-        elif table.name not in PRESERVE_TENANT_ONE_TABLES and table.name not in {
-            "contract_acceptances",
-            "fiscal_official_reference_snapshots",
-            "fiscal_official_reference_states",
-        }:
+        elif (
+            table.name not in PRESERVE_TENANT_ONE_TABLES
+            and table.name not in GLOBAL_PRESERVED_TABLES
+            and table.name not in {
+                "contract_acceptances",
+                "fiscal_official_reference_snapshots",
+                "fiscal_official_reference_states",
+            }
+        ):
             unclassified.append(table.name)
 
     restaurants = metadata.tables.get("restaurantes")
