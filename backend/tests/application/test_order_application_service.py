@@ -19,6 +19,7 @@ from app.application.orders.service import OrderApplicationService
 from app.database import SessionLocal
 from app.domain.orders.errors import InvalidOrderTransitionError
 from app.domain.orders.types import FulfillmentType, OrderChannel
+from app.services.clientes import cliente_telefone_lookup_hash
 from app.models import Cliente, Comanda, ConfiguracaoRestaurante, Cupom, HistoricoFidelidade, Item, Lancamento, MovimentacaoEstoque
 from tests.characterization.orders.fixtures import (
     CHAR_RESTAURANT_ID,
@@ -279,7 +280,7 @@ class TestOrderApplicationServicePhase31:
         try:
             cliente = db.query(Cliente).filter(
                 Cliente.restaurante_id == CHAR_RESTAURANT_ID,
-                Cliente.telefone == "11999998888",
+                Cliente.telefone_hash == cliente_telefone_lookup_hash(CHAR_RESTAURANT_ID, "11999998888"),
             ).first()
             if not cliente:
                 cliente = Cliente(
