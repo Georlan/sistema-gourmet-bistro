@@ -211,7 +211,7 @@ def apply_retention(
         ).rowcount or 0
 
         minimized_orders = connection.execute(
-            update(Comanda)
+            update(Comanda.__table__)
             .where(eligible_orders)
             .values(
                 identificador=encrypt_field("Cliente"),
@@ -222,7 +222,7 @@ def apply_retention(
         ).rowcount or 0
 
         anonymized_messages = connection.execute(
-            update(MensagemWhatsApp)
+            update(MensagemWhatsApp.__table__)
             .where(
                 MensagemWhatsApp.restaurante_id == restaurante_id,
                 MensagemWhatsApp.criado_em < cutoff,
@@ -236,7 +236,7 @@ def apply_retention(
         ).rowcount or 0
 
         anonymized_drafts = connection.execute(
-            update(RascunhoPedido)
+            update(RascunhoPedido.__table__)
             .where(
                 RascunhoPedido.restaurante_id == restaurante_id,
                 RascunhoPedido.criado_em < cutoff,
@@ -249,7 +249,7 @@ def apply_retention(
         ).rowcount or 0
 
         minimized_loyalty = connection.execute(
-            update(HistoricoFidelidade)
+            update(HistoricoFidelidade.__table__)
             .where(
                 HistoricoFidelidade.restaurante_id == restaurante_id,
                 HistoricoFidelidade.cliente_id.is_not(None),
