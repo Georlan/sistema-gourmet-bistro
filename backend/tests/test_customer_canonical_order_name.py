@@ -11,6 +11,7 @@ from app.application.orders.commands import (
 from app.application.orders.service import OrderApplicationService
 from app.database import SessionLocal
 from app.domain.orders.types import FulfillmentType, OrderChannel
+from app.services.clientes import cliente_telefone_lookup_hash
 from app.models import Cliente, Comanda
 from tests.characterization.orders.fixtures import CHAR_RESTAURANT_ID, char_client, char_setup
 
@@ -54,7 +55,7 @@ def test_public_order_uses_canonical_customer_name_in_operational_check(char_set
 
         persisted_customer = db.query(Cliente).filter(
             Cliente.restaurante_id == CHAR_RESTAURANT_ID,
-            Cliente.telefone == phone,
+            Cliente.telefone_hash == cliente_telefone_lookup_hash(CHAR_RESTAURANT_ID, phone),
         ).one()
         command = db.query(Comanda).filter(
             Comanda.restaurante_id == CHAR_RESTAURANT_ID,
