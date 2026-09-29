@@ -1,3 +1,4 @@
+// Regression coverage for the production team-invite delivery flow.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
