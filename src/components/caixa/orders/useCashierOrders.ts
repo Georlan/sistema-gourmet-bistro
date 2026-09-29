@@ -132,9 +132,11 @@ export function useCashierOrders({
       const isPendingRejection = isDigitalScope && cancelConsumptionTarget.intent === 'reject';
       const response = isDigitalScope
         ? await fetch(
-            `${apiBaseUrl}/api/online-orders/orders/${encodeURIComponent(cancelConsumptionTarget.orderId || '')}/reject`,
+            isPendingRejection
+              ? `${apiBaseUrl}/api/online-orders/orders/${encodeURIComponent(cancelConsumptionTarget.orderId || '')}/reject`
+              : `${apiBaseUrl}/comandas/${encodeURIComponent(cancelConsumptionTarget.orderId || '')}/delivery/status?status_novo=recusado`,
             {
-              method: 'POST',
+              method: isPendingRejection ? 'POST' : 'PUT',
               headers: { ...authHeaders, 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 reason: cancelTableReason.trim(),

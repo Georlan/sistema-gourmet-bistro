@@ -9,7 +9,7 @@ from app.application.orders.lifecycle import OrderLifecycleCoordinator
 from app.application.orders.service import OrderApplicationService
 from app.database import SessionLocal
 from app.domain.orders.types import FulfillmentType, OrderChannel, OrderStatus
-from app.models import Comanda, IntegrationOutbox, Item, Lancamento
+from app.models import Comanda, IntegrationOutbox, Item, Lancamento, Insumo
 from tests.characterization.orders.fixtures import (
     CHAR_RESTAURANT_ID,
     char_client,
@@ -510,6 +510,8 @@ def test_pending_rejection_uses_rejected_event(char_client, char_setup):
 def test_operational_rejection_after_acceptance_uses_cancel_event(char_client, char_setup):
     _clear_outbox()
     headers = char_setup["headers"]
+    with SessionLocal(restaurante_id=CHAR_RESTAURANT_ID) as db:
+        stock_before = {row.id: row.estoque_atual for row in db.query(Insumo).all()}
     comanda_id = _create_pickup(
         char_client,
         phone="11977770002",
@@ -523,10 +525,18 @@ def test_operational_rejection_after_acceptance_uses_cancel_event(char_client, c
     )
     assert accepted.status_code == 200, accepted.text
 
+    ready = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "pronto"},
+        headers=headers,
+    )
+    assert ready.status_code == 200, ready.text
+    reason = "Cliente desistiu da retirada"
     cancelled = char_client.put(
         f"/comandas/{comanda_id}/delivery/status",
         params={"status_novo": "recusado"},
         headers=headers,
+        json={"reason": reason},
     )
     assert cancelled.status_code == 200, cancelled.text
     assert cancelled.json()["delivery_status"] == "recusado"
@@ -536,8 +546,28 @@ def test_operational_rejection_after_acceptance_uses_cancel_event(char_client, c
     assert names == [
         "koma.order.created",
         "koma.order.accepted",
+        "koma.order.ready",
         "koma.order.cancelled",
     ]
+
+    with SessionLocal(restaurante_id=CHAR_RESTAURANT_ID) as db:
+        events = db.query(IntegrationOutbox).filter(
+            IntegrationOutbox.restaurante_id == CHAR_RESTAURANT_ID,
+            IntegrationOutbox.event_name == "koma.order.cancelled",
+        ).all()
+        event = next(event for event in events if event.payload.get("check_id") == comanda_id)
+        assert event.payload["reason"] == reason
+        order = db.query(Comanda).filter(Comanda.id == comanda_id).one()
+        assert order.valor_pago == 0
+        assert all(item.status == "cancelado" for item in order.itens)
+    replay = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "recusado"}, headers=headers, json={"reason": reason},
+    )
+    assert replay.status_code == 200, replay.text
+    assert _event_names_for_check(comanda_id) == names
+    with SessionLocal(restaurante_id=CHAR_RESTAURANT_ID) as db:
+        assert {row.id: row.estoque_atual for row in db.query(Insumo).all()} == stock_before
 
 
 @patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)

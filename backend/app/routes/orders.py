@@ -8,6 +8,7 @@ rotas de delivery/retirada deste módulo não escrevem estado de pedido
 from __future__ import annotations
 
 from fastapi import BackgroundTasks, Depends, Header, HTTPException, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..application.orders.lifecycle import (
@@ -195,6 +196,10 @@ def _normalize_legacy_progress_target(comanda: Comanda, target: str) -> str:
     return target
 
 
+class OrderStatusReasonPayload(BaseModel):
+    reason: str = Field(min_length=3, max_length=300)
+
+
 @router.put("/{comanda_id}/delivery/status", response_model=ComandaResponse)
 def atualizar_status_delivery(
     comanda_id: str,
@@ -202,6 +207,7 @@ def atualizar_status_delivery(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
+    payload: OrderStatusReasonPayload | None = None,
 ):
     """Adapta o status legado para os comandos canônicos do ciclo de vida."""
     target = _canonical_target_or_422(status_novo)
@@ -251,7 +257,7 @@ def atualizar_status_delivery(
             else None
         ),
         reason=(
-            "Recusado/cancelado pela operação via ciclo de delivery"
+            (payload.reason.strip() if payload else "Recusado/cancelado pela operação via ciclo de delivery")
             if target_status in {OrderStatus.REJECTED, OrderStatus.CANCELLED}
             else None
         ),

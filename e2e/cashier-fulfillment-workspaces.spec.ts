@@ -1,4 +1,5 @@
 import { BrowserContext, expect, Page, test } from '@playwright/test';
+import { showStage } from './fixtures/operational';
 
 const API_ORIGIN = 'http://127.0.0.1:8000';
 const now = new Date().toISOString();
@@ -985,3 +986,34 @@ test('sessão recupera estado atualizado de pedidos após reconexão de WebSocke
   await expect(readyCard).toContainText(/Pronto/i);
 });
 
+
+test('cancelar retirada pronta usa lifecycle canônico e remove o pedido sem cobrar', async ({ page }) => {
+  await seedCashierSession(page, 'pedidos');
+  await mockFulfillmentBackend(page, { pickupStatus: 'pronto' });
+  await page.route(`${API_ORIGIN}/api/online-orders/orders/pickup-workspace-e2e/reject`, route =>
+    route.fulfill({ status: 409, contentType: 'application/json',
+      body: JSON.stringify({ detail: { message: 'O pedido já mudou de status.', current_status: 'ready' } }) }));
+  const writes: { path: string; method: string; reason?: string }[] = [];
+  page.on('request', request => {
+    if (!['PUT', 'POST'].includes(request.method())) return;
+    const url = new URL(request.url());
+    if (!url.pathname.includes('pickup-workspace-e2e')) return;
+    writes.push({ path: url.pathname + url.search, method: request.method(),
+      reason: request.postDataJSON()?.reason });
+  });
+  await page.goto('/?view=caixa');
+  await showStage(page, 'Concluir');
+  const card = page.locator('.orders-card--closing').filter({ hasText: 'Ana Retirada' });
+  await expect(card).toBeVisible();
+  await card.click();
+  await page.locator('.orders-detail-modal').getByRole('button', { name: 'Cancelar pedido', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Cancelar este pedido?' });
+  await dialog.getByPlaceholder('Ex.: pedido lançado por engano').fill('Cliente desistiu da retirada');
+  await dialog.getByRole('button', { name: 'Cancelar pedido', exact: true }).click();
+  await expect(page.getByText('Pedido cancelado e removido da operação ativa.', { exact: true })).toBeVisible();
+  await expect(card).toHaveCount(0);
+  expect(writes).toEqual([{
+    path: '/comandas/pickup-workspace-e2e/delivery/status?status_novo=recusado',
+    method: 'PUT', reason: 'Cliente desistiu da retirada',
+  }]);
+});
