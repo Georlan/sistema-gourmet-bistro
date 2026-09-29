@@ -13,6 +13,7 @@ from app.application.orders.commands import (
 from app.application.orders.service import OrderApplicationService
 from app.database import SessionLocal, current_restaurante_id
 from app.domain.orders.types import FulfillmentType, OrderChannel
+from app.services.clientes import cliente_telefone_lookup_hash
 from app.models import (
     Cliente,
     Comanda,
@@ -58,7 +59,7 @@ def test_web_guest_order_creates_and_links_canonical_customer(char_setup):
 
         customer = db.query(Cliente).filter(
             Cliente.restaurante_id == CHAR_RESTAURANT_ID,
-            Cliente.telefone == phone,
+            Cliente.telefone_hash == cliente_telefone_lookup_hash(CHAR_RESTAURANT_ID, phone),
         ).one()
         command = db.query(Comanda).filter(
             Comanda.restaurante_id == CHAR_RESTAURANT_ID,
@@ -98,7 +99,7 @@ def test_public_order_links_existing_phone_without_overwriting_profile(char_setu
 
         persisted = db.query(Cliente).filter(
             Cliente.restaurante_id == CHAR_RESTAURANT_ID,
-            Cliente.telefone == phone,
+            Cliente.telefone_hash == cliente_telefone_lookup_hash(CHAR_RESTAURANT_ID, phone),
         ).one()
         command = db.query(Comanda).filter(
             Comanda.restaurante_id == CHAR_RESTAURANT_ID,
@@ -149,7 +150,7 @@ def test_same_phone_in_other_tenant_never_leaks_identity(char_setup):
         ).one()
         local_customer = db.query(Cliente).filter(
             Cliente.restaurante_id == CHAR_RESTAURANT_ID,
-            Cliente.telefone == phone,
+            Cliente.telefone_hash == cliente_telefone_lookup_hash(CHAR_RESTAURANT_ID, phone),
         ).one()
 
         assert command.cliente_id == local_customer.id
