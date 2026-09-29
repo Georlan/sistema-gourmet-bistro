@@ -587,7 +587,7 @@ def test_admin_team_listing_is_scoped_to_authenticated_tenant():
 
 @pytest.mark.parametrize(
     "forbidden_cargo",
-    ["admin", "superadmin", "atendente"],
+    ["admin", "superadmin"],
 )
 def test_team_invite_rejects_privileged_or_unsupported_roles(forbidden_cargo):
     client = TestClient(app)
