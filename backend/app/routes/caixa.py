@@ -49,7 +49,7 @@ from ..services.delivery_fee_policy import (
     validate_delivery_fee,
 )
 from ..services.delivery_fee_suggestion import suggest_delivery_fee
-from ..services.notificacoes import agendar_convite_equipe_task
+from ..services.notificacoes import agendar_convite_equipe_task, obter_prontidao_convite_equipe
 from ..timezone_utils import elapsed_minutes_since
 
 logger = logging.getLogger("koma.caixa")
@@ -218,15 +218,18 @@ def cadastrar_funcionario(
     db.refresh(novo_usuario)
 
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
-    agendar_convite_equipe_task(
-        background_tasks,
-        restaurante_id=rest_id,
-        usuario_id=novo_usuario.id,
-        telefone=novo_usuario.telefone,
-        nome_pessoa=novo_usuario.nome,
-        nome_restaurante=restaurante.nome if restaurante else "Kôma",
-        token_convite=token_convite,
-    )
+    prontidao = obter_prontidao_convite_equipe()
+    convite_agendado = bool(prontidao.get("ready"))
+    if convite_agendado:
+        agendar_convite_equipe_task(
+            background_tasks,
+            restaurante_id=rest_id,
+            usuario_id=novo_usuario.id,
+            telefone=novo_usuario.telefone,
+            nome_pessoa=novo_usuario.nome,
+            nome_restaurante=restaurante.nome if restaurante else "Kôma",
+            token_convite=token_convite,
+        )
 
     background_tasks.add_task(
         manager.broadcast,
@@ -237,8 +240,14 @@ def cadastrar_funcionario(
         restaurante_id=rest_id,
         target_audience="internal",
     )
-    
-    return novo_usuario
+
+    payload = UsuarioInviteResponse.model_validate(novo_usuario).model_dump()
+    payload.update(
+        convite_agendado=convite_agendado,
+        convite_status="agendado" if convite_agendado else "indisponivel",
+        convite_mensagem=str(prontidao.get("message") or ""),
+    )
+    return payload
 
 
 # ----------------- TURNO ENDPOINTS -----------------
