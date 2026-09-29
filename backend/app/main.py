@@ -265,6 +265,38 @@ async def add_request_id_and_structured_log(request: Request, call_next):
             separators=(",", ":"),
         )
     )
+
+    # Registro mínimo exigível de acesso à aplicação: somente IP cifrado +
+    # data/hora. Não grava rota, query string, payload, token ou User-Agent.
+    # Health probes e preflight não representam acesso do usuário à aplicação.
+    if (
+        os.getenv("ENVIRONMENT", "production").strip().lower() != "test"
+        and request.method != "OPTIONS"
+        and request.url.path not in {"/health", "/healthz"}
+    ):
+        try:
+            import asyncio
+            from .services.application_access_logs import record_application_access
+            from .services.public_orders import client_ip
+
+            await asyncio.to_thread(
+                record_application_access,
+                client_ip(request),
+                accessed_at=datetime.now(timezone.utc),
+            )
+        except Exception:
+            # Falha de logging não deve vazar IP nem transformar uma resposta
+            # válida em erro HTTP; o erro operacional fica observável sem PII.
+            request_logger.error(
+                json.dumps(
+                    {
+                        "event": "application_access_log_failure",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "request_id": request_id,
+                    },
+                    separators=(",", ":"),
+                )
+            )
     return response
 
 
