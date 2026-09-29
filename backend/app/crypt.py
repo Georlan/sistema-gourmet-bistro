@@ -51,9 +51,20 @@ except Exception as e:
 
 
 def encrypt_field(plain_text: Any) -> Any:
-    """Encrypts plain text string using Fernet if not empty."""
+    """Encrypts plain text string using Fernet if not empty.
+
+    Already-valid Fernet values are returned unchanged. This keeps encrypted
+    model setters idempotent when a canonical value crosses an internal layer
+    that may already have materialized ciphertext.
+    """
     if not plain_text or not isinstance(plain_text, str):
         return plain_text
+    if plain_text.startswith("gAAAAA"):
+        try:
+            cipher.decrypt(plain_text.encode("utf-8"))
+            return plain_text
+        except Exception:
+            pass
     try:
         return cipher.encrypt(plain_text.encode("utf-8")).decode("utf-8")
     except Exception:
