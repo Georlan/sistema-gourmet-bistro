@@ -58,7 +58,7 @@ function minimalOperatorIdentity(user: any): OperatorIdentitySnapshot {
 function identityPortal(user: OperatorIdentitySnapshot): OperationalPortal | null {
   const role = String(user.role || user.cargo || '').trim().toLowerCase();
   if (role === 'garcom') return 'garcom';
-  if (role === 'admin' || role === 'gerente' || role === 'caixa' || role === 'cozinha') return 'caixa';
+  if (role === 'admin' || role === 'gerente' || role === 'caixa' || role === 'cozinha' || role === 'atendente') return 'caixa';
   return null;
 }
 
