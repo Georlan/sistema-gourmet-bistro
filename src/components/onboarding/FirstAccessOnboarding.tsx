@@ -179,12 +179,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       if (!response.ok) {
         throw new Error(await responseDetail(response, 'Não foi possível carregar a implantação inicial.'));
       }
-      const next = await response.json() as OnboardingStatus;
-      applySnapshot(next);
-      const selectedLabels = next.operations.orderTypes
-        .map((value) => ORDER_TYPE_OPTIONS.find((option) => option.value === value)?.label || value)
-        .join(', ');
-      setOperationNotice(`Modalidades salvas ✓${selectedLabels ? `: ${selectedLabels}` : ''}`);
+      applySnapshot(await response.json() as OnboardingStatus);
     } catch (error) {
       setState('error');
       setErrorMessage(
@@ -253,7 +248,12 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       if (!response.ok) {
         throw new Error(await responseDetail(response, 'Não foi possível salvar as modalidades.'));
       }
-      applySnapshot(await response.json() as OnboardingStatus);
+      const next = await response.json() as OnboardingStatus;
+      applySnapshot(next);
+      const selectedLabels = next.operations.orderTypes
+        .map((value) => ORDER_TYPE_OPTIONS.find((option) => option.value === value)?.label || value)
+        .join(', ');
+      setOperationNotice(`Modalidades salvas ✓${selectedLabels ? `: ${selectedLabels}` : ''}`);
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : 'Não foi possível salvar as modalidades.');
     } finally {
@@ -291,28 +291,6 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       tab: 'cardapio',
       subTab: 'produtos',
       icon: UtensilsCrossed,
-    },
-    {
-      id: 'payments',
-      title: 'Conecte o Mercado Pago para Pix online',
-      description: 'O Cardápio Online funciona com pagamento no atendimento sem Mercado Pago. Conecte apenas para liberar Pix online.',
-      done: snapshot.steps.mercadoPago,
-      optional: true,
-      actionLabel: snapshot.steps.mercadoPago ? 'Revisar conexão' : 'Conectar Mercado Pago',
-      tab: 'cardapio_digital',
-      subTab: 'cardapio_pagamentos',
-      icon: CreditCard,
-    },
-    {
-      id: 'first-order',
-      title: 'Valide com um pedido de teste',
-      description: 'Depois de iniciar o trial, o próximo pedido criado pelo Caixa pode ser usado para validar preparo, pagamento e fechamento reais.',
-      done: snapshot.steps.firstOrder,
-      optional: true,
-      actionLabel: snapshot.steps.firstOrder ? 'Ver pedidos' : 'Fazer pedido de teste',
-      tab: 'operacao',
-      subTab: 'balcao',
-      icon: ShoppingBag,
     },
   ] : [];
 
