@@ -70,7 +70,7 @@ export default function CashierTeam({
     }
     await fetchSystemUsers();
     window.dispatchEvent(new CustomEvent('koma_team_updated'));
-    showToast('Pessoa cadastrada e convite agendado automaticamente!');
+    showToast('Pessoa cadastrada. O convite entrou na fila de envio pelo WhatsApp.');
   };
 
   const handleResendInvite = async (user: SystemUser) => {
@@ -81,7 +81,7 @@ export default function CashierTeam({
       });
       if (res.ok) {
         const data = await res.json();
-        showToast(data.message || `Convite para ${user.nome} agendado automaticamente!`);
+        showToast(data.message || `Nova tentativa de convite para ${user.nome} entrou na fila de envio.`);
       } else {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.detail || 'Não foi possível reenviar o convite no momento.');
