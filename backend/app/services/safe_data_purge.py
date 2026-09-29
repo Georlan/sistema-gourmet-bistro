@@ -36,7 +36,13 @@ PRESERVE_TENANT_ONE_TABLES = frozenset(
 
 # Dados globais de retomada/notificação de cadastros de homologação. Não são
 # configuração do Resend; apenas filas/capabilities antigas armazenadas no banco.
-GLOBAL_OPERATIONAL_TABLES = frozenset({"restaurant_signups", "signup_notifications"})
+GLOBAL_OPERATIONAL_TABLES = frozenset(
+    {
+        "restaurant_signups",
+        "signup_notifications",
+        "application_access_logs",
+    }
+)
 
 REQUIRED_PRESERVED_TABLES = ("restaurantes",)
 
