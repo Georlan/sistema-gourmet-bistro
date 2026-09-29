@@ -23,6 +23,7 @@ def test_catalog_source_detection_uses_file_signature_not_only_mime():
     assert detect_catalog_source_type("image/jpg", b"\xff\xd8\xffmenu") == "image/jpeg"
     assert detect_catalog_source_type("application/octet-stream", b"\x89PNG\r\n\x1a\nmenu") == "image/png"
     assert detect_catalog_source_type("image/webp", b"RIFF\x10\x00\x00\x00WEBPmenu") == "image/webp"
+    assert detect_catalog_source_type("image/jpeg", b"RIFF\x10\x00\x00\x00WEBPmenu") == "image/webp"
     assert detect_catalog_source_type("image/gif", b"GIF89amenu") == "image/gif"
     assert detect_catalog_source_type("image/bmp", b"BMmenu") == "image/bmp"
     assert detect_catalog_source_type("image/avif", b"\x00\x00\x00\x18ftypavifmenu") == "image/avif"
