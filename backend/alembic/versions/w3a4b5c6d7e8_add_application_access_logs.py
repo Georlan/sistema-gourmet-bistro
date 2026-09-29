@@ -33,10 +33,10 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         # Tabela global: não carrega restaurante_id e portanto não entra no RLS
-        # tenant. O runtime recebe apenas o necessário para inserir, consultar em
-        # atendimento legal e expurgar registros fora da janela de retenção.
+        # tenant. O runtime recebe somente INSERT + DELETE para registrar acesso
+        # e aplicar retenção. Consulta legal exige credencial administrativa.
         op.execute(
-            "GRANT SELECT, INSERT, DELETE ON TABLE public.application_access_logs TO koma_app"
+            "GRANT INSERT, DELETE ON TABLE public.application_access_logs TO koma_app"
         )
 
 
