@@ -18,7 +18,14 @@ const assistanceLabel = (status?: string) => {
   if (status === 'processing') return 'Em preparação pela equipe KÔMA';
   if (status === 'completed') return 'Implantação assistida concluída';
   if (status === 'cancelled') return 'Envio cancelado';
-  return 'Recebido pela equipe KÔMA';
+  return 'Cardápio recebido ✓';
+};
+
+const formatReceivedAt = (value: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('pt-BR');
 };
 
 export function CatalogAssistanceUpload({
@@ -34,9 +41,11 @@ export function CatalogAssistanceUpload({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [noticeKind, setNoticeKind] = useState<'success' | 'error' | ''>('');
 
   const chooseFile = (file?: File) => {
     setNotice('');
+    setNoticeKind('');
     if (!file) {
       setSelectedFile(null);
       return;
@@ -44,6 +53,7 @@ export function CatalogAssistanceUpload({
     if (file.size > MAX_FILE_SIZE) {
       setSelectedFile(null);
       setNotice('O arquivo deve ter no máximo 10 MB.');
+      setNoticeKind('error');
       return;
     }
     setSelectedFile(file);
@@ -53,6 +63,7 @@ export function CatalogAssistanceUpload({
     if (!selectedFile || busy) return;
     setBusy(true);
     setNotice('');
+    setNoticeKind('');
     try {
       const body = new FormData();
       body.append('file', selectedFile);
@@ -66,10 +77,12 @@ export function CatalogAssistanceUpload({
         throw new Error(payload?.detail || 'Não foi possível enviar o cardápio.');
       }
       setSelectedFile(null);
-      setNotice(payload?.message || 'Cardápio recebido para implantação assistida.');
+      setNotice(payload?.message || 'Cardápio recebido ✓ A equipe KÔMA já pode acessar o arquivo.');
+      setNoticeKind('success');
       onSubmitted();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Falha ao enviar o cardápio.');
+      setNoticeKind('error');
     } finally {
       setBusy(false);
     }
@@ -99,6 +112,11 @@ export function CatalogAssistanceUpload({
             <CheckCircle2 size={15} /> {assistanceLabel(activeAssistance.status)}
           </div>
           <p className="mt-1 break-all text-xs text-koma-muted">{activeAssistance.filename}</p>
+          {activeAssistance.createdAt && (
+            <p className="mt-1 text-[10px] text-koma-subtle">
+              Recebido em {formatReceivedAt(activeAssistance.createdAt)}
+            </p>
+          )}
           {activeAssistance.status !== 'completed' && (
             <p className="mt-2 text-[11px] leading-relaxed text-koma-subtle">
               Se precisar corrigir o arquivo, envie outro abaixo. O envio anterior será substituído na fila de implantação.
@@ -114,7 +132,7 @@ export function CatalogAssistanceUpload({
             aria-label="Arquivo do cardápio para implantação assistida"
             className="sr-only"
             type="file"
-            accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.heic,.heif,application/pdf,image/png,image/jpeg,image/webp,image/gif,image/bmp,image/avif,image/heic,image/heif"
             disabled={busy}
             onChange={event => chooseFile(event.target.files?.[0])}
           />
@@ -126,7 +144,7 @@ export function CatalogAssistanceUpload({
               Escolher PDF ou foto
             </label>
             <span className="min-w-0 break-all text-xs text-koma-muted">
-              {selectedFile?.name || 'PDF, PNG ou JPG · até 10 MB'}
+              {selectedFile?.name || 'PDF ou imagem (JPG, PNG, WEBP, GIF, BMP, AVIF, HEIC) · até 10 MB'}
             </span>
           </div>
           <button
@@ -144,7 +162,19 @@ export function CatalogAssistanceUpload({
       <p className="mt-3 text-[11px] leading-relaxed text-koma-subtle">
         O envio do arquivo não marca o cardápio como concluído. O passo só fica pronto quando os produtos forem realmente publicados no restaurante após conferência.
       </p>
-      {notice && <p role="status" className="mt-3 text-xs text-koma-muted">{notice}</p>}
+      {notice && (
+        <p
+          role={noticeKind === 'error' ? 'alert' : 'status'}
+          aria-live="polite"
+          className={`mt-3 rounded-xl border p-3 text-xs font-semibold ${
+            noticeKind === 'error'
+              ? 'border-rose-500/25 bg-rose-500/10 text-rose-300'
+              : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+          }`}
+        >
+          {notice}
+        </p>
+      )}
     </section>
   );
 }
