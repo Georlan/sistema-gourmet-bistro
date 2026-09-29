@@ -42,6 +42,12 @@ type OnboardingStatus = {
   };
   trialCanStart: boolean;
   readyForRelease: boolean;
+  onboarding: {
+    mode: 'commercial' | 'administrative';
+    releaseState: 'configuring' | 'awaiting_koma' | 'released';
+    operationReleased: boolean;
+    requiresKomaRelease: boolean;
+  };
   payments: {
     mercadoPagoConnected: boolean;
     pixOnlineAvailable: boolean;
@@ -79,6 +85,7 @@ type OnboardingStatus = {
   readiness: {
     configurationComplete: boolean;
     trialStarted: boolean;
+    operationReleased: boolean;
     readyToOperate: boolean;
     blockers: string[];
   };
@@ -142,6 +149,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const [orderTypes, setOrderTypes] = useState<OrderType[]>([]);
   const [savingOperations, setSavingOperations] = useState(false);
   const [operationError, setOperationError] = useState('');
+  const [operationNotice, setOperationNotice] = useState('');
 
   const headers = useMemo(() => ({
     Authorization: `Bearer ${accessToken}`,
@@ -171,7 +179,12 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       if (!response.ok) {
         throw new Error(await responseDetail(response, 'Não foi possível carregar a implantação inicial.'));
       }
-      applySnapshot(await response.json() as OnboardingStatus);
+      const next = await response.json() as OnboardingStatus;
+      applySnapshot(next);
+      const selectedLabels = next.operations.orderTypes
+        .map((value) => ORDER_TYPE_OPTIONS.find((option) => option.value === value)?.label || value)
+        .join(', ');
+      setOperationNotice(`Modalidades salvas ✓${selectedLabels ? `: ${selectedLabels}` : ''}`);
     } catch (error) {
       setState('error');
       setErrorMessage(
@@ -190,6 +203,18 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     void loadSnapshot();
   }, [loadSnapshot]);
 
+  useEffect(() => {
+    if (
+      snapshot?.onboarding.mode !== 'commercial'
+      || snapshot.onboarding.releaseState !== 'awaiting_koma'
+    ) return;
+
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void loadSnapshot();
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [loadSnapshot, snapshot?.onboarding.mode, snapshot?.onboarding.releaseState]);
+
   const openCashierAt = (tab: string, subTab: string, setupMode = true) => {
     try {
       sessionStorage.setItem('koma_active_tab', tab);
@@ -203,6 +228,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   };
 
   const toggleOrderType = (value: OrderType) => {
+    setOperationNotice('');
     setOrderTypes((current) =>
       current.includes(value)
         ? current.filter((item) => item !== value)
@@ -217,6 +243,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     }
     setSavingOperations(true);
     setOperationError('');
+    setOperationNotice('');
     try {
       const response = await fetch(`${API_BASE_URL}/api/onboarding/operations`, {
         method: 'PUT',
