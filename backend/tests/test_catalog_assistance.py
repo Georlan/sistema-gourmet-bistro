@@ -22,6 +22,11 @@ def test_catalog_source_detection_uses_file_signature_not_only_mime():
     assert detect_catalog_source_type("application/pdf", b"%PDF-1.7\nmenu") == "application/pdf"
     assert detect_catalog_source_type("image/jpg", b"\xff\xd8\xffmenu") == "image/jpeg"
     assert detect_catalog_source_type("application/octet-stream", b"\x89PNG\r\n\x1a\nmenu") == "image/png"
+    assert detect_catalog_source_type("image/webp", b"RIFF\x10\x00\x00\x00WEBPmenu") == "image/webp"
+    assert detect_catalog_source_type("image/gif", b"GIF89amenu") == "image/gif"
+    assert detect_catalog_source_type("image/bmp", b"BMmenu") == "image/bmp"
+    assert detect_catalog_source_type("image/avif", b"\x00\x00\x00\x18ftypavifmenu") == "image/avif"
+    assert detect_catalog_source_type("image/heif", b"\x00\x00\x00\x18ftypheicmenu") == "image/heic"
 
     with pytest.raises(ValueError, match="não corresponde"):
         detect_catalog_source_type("image/png", b"%PDF-1.7\nmenu")
@@ -32,6 +37,8 @@ def test_catalog_source_detection_uses_file_signature_not_only_mime():
 def test_catalog_filename_is_sanitized_and_extension_matches_content():
     assert safe_catalog_filename("../Cardápio Cliente.PDF", "application/pdf") == "Cardápio Cliente.PDF"
     assert safe_catalog_filename("menu.png", "image/jpeg") == "menu.jpg"
+    assert safe_catalog_filename("menu.jpg", "image/webp") == "menu.webp"
+    assert safe_catalog_filename("foto.heif", "image/heic") == "foto.heif"
     assert safe_catalog_filename("menu\nfinal", "image/png") == "menufinal.png"
 
 
