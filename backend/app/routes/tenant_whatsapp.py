@@ -60,7 +60,10 @@ def get_status(
     try:
         provider_state = wa.connection_state(user.restaurante_id)
         if provider_state == "open":
-            state = "connected" if wa.owner_phone(user.restaurante_id) == config.whatsapp_recipient_phone else "error"
+            state = "connected" if wa.phones_match(
+                wa.owner_phone(user.restaurante_id),
+                config.whatsapp_recipient_phone,
+            ) else "error"
         elif provider_state in {"connecting", "close"}:
             state = "connecting" if provider_state == "connecting" else "disconnected"
         else:
@@ -177,7 +180,10 @@ def enable(
         valid = (
             config.whatsapp_instance_name == wa.instance_name(user.restaurante_id)
             and wa.connection_state(user.restaurante_id) == "open"
-            and wa.owner_phone(user.restaurante_id) == config.whatsapp_recipient_phone
+            and wa.phones_match(
+                wa.owner_phone(user.restaurante_id),
+                config.whatsapp_recipient_phone,
+            )
         )
     except Exception as exc:
         raise _provider_error(exc) from exc
