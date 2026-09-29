@@ -10,7 +10,8 @@ from decimal import Decimal
 from urllib.parse import quote
 
 import httpx
-from sqlalchemy import and_\nfrom sqlalchemy.orm import Session
+from sqlalchemy import and_
+from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..domain.orders.events import OrderCreated
