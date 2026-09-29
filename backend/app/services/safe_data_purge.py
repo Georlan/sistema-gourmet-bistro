@@ -139,13 +139,6 @@ def _preserved_counts(connection: Connection, metadata: MetaData) -> dict[str, i
         if name == "restaurantes":
             predicate = table.c.id == KEEP_RESTAURANT_ID
         result[name] = _count(connection, table, predicate)
-
-    # Evidência legal global não é dado de homologação. A limpeza desta tabela
-    # pertence exclusivamente à política própria de retenção de seis meses.
-    for name in sorted(GLOBAL_PRESERVED_TABLES):
-        table = metadata.tables.get(name)
-        if table is not None:
-            result[name] = _count(connection, table, None)
     return result
 
 
