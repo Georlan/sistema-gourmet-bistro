@@ -24,8 +24,8 @@ export const ROLE_META: Record<string, { label: string; description: string; per
   },
   atendente: {
     label: 'Atendente',
-    description: 'Registra pedidos de balcão, retirada e atendimento rápido.'
-    permissionDescription: 'Registra pedidos rápidos sem acesso às rotinas administrativas do caixa.'
+    description: 'Registra pedidos de balcão, retirada e atendimento rápido.',
+    permissionDescription: 'Registra pedidos rápidos sem acesso às rotinas administrativas do caixa.',
   },
   cozinha: {
     label: 'Cozinha',
