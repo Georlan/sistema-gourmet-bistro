@@ -13,6 +13,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..crypt import decrypt_field, encrypt_field, pii_lookup_hash
 from ..models import (
     Cliente,
     Comanda,
@@ -45,6 +46,37 @@ def normalizar_nome_cliente(nome: str) -> str:
     return normalizado
 
 
+def cliente_telefone_lookup_hash(restaurante_id: int, telefone: str) -> str:
+    return pii_lookup_hash(
+        "cliente-telefone",
+        restaurante_id,
+        normalizar_telefone_cliente(telefone),
+    )
+
+
+def cliente_email_lookup_hash(restaurante_id: int, email: str) -> str:
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        raise ValueError("E-mail do cliente ausente.")
+    return pii_lookup_hash("cliente-email", restaurante_id, normalized)
+
+
+def buscar_cliente_por_email(
+    db: Session,
+    *,
+    restaurante_id: int,
+    email: str,
+    bloquear: bool = False,
+) -> Optional[Cliente]:
+    query = db.query(Cliente).filter(
+        Cliente.restaurante_id == restaurante_id,
+        Cliente.email_hash == cliente_email_lookup_hash(restaurante_id, email),
+    )
+    if bloquear:
+        query = query.with_for_update()
+    return query.first()
+
+
 def buscar_cliente_por_telefone(
     db: Session,
     *,
@@ -55,7 +87,10 @@ def buscar_cliente_por_telefone(
     telefone_normalizado = normalizar_telefone_cliente(telefone)
     query = db.query(Cliente).filter(
         Cliente.restaurante_id == restaurante_id,
-        Cliente.telefone == telefone_normalizado,
+        Cliente.telefone_hash == cliente_telefone_lookup_hash(
+            restaurante_id,
+            telefone_normalizado,
+        ),
     )
     if bloquear:
         query = query.with_for_update()
@@ -96,10 +131,11 @@ def cadastrar_ou_atualizar_cliente(
     nome_normalizado = normalizar_nome_cliente(nome)
     endereco_normalizado = (endereco or "").strip() or None
 
-    cliente = db.query(Cliente).filter(
-        Cliente.restaurante_id == restaurante_id,
-        Cliente.telefone == telefone_normalizado,
-    ).first()
+    cliente = buscar_cliente_por_telefone(
+        db,
+        restaurante_id=restaurante_id,
+        telefone=telefone_normalizado,
+    )
 
     if cliente is None:
         novo_cliente = Cliente(
@@ -119,7 +155,10 @@ def cadastrar_ou_atualizar_cliente(
         except IntegrityError:
             cliente = db.query(Cliente).filter(
                 Cliente.restaurante_id == restaurante_id,
-                Cliente.telefone == telefone_normalizado,
+                Cliente.telefone_hash == cliente_telefone_lookup_hash(
+                    restaurante_id,
+                    telefone_normalizado,
+                ),
             ).one()
 
     cliente.nome = nome_normalizado
@@ -327,9 +366,10 @@ def _insert_guest_cliente_if_needed(
         return None, None
 
     clientes = Cliente.__table__
+    telefone_hash = cliente_telefone_lookup_hash(comanda.restaurante_id, telefone)
     criteria = (
         (clientes.c.restaurante_id == comanda.restaurante_id)
-        & (clientes.c.telefone == telefone)
+        & (clientes.c.telefone_hash == telefone_hash)
     )
     existing = connection.execute(
         select(
@@ -345,18 +385,20 @@ def _insert_guest_cliente_if_needed(
         # Pedidos anônimos que conhecem apenas esse número não podem ser anexados à
         # conta, pois isso faria histórico futuro aparecer para quem nunca provou
         # posse do telefone.
-        has_account = bool(existing.email or existing.senha_hash)
+        has_account = bool(decrypt_field(existing.email) or existing.senha_hash)
         if has_account and existing.telefone_verificado_em is None:
             return None, None
-        return str(existing.id), str(existing.nome)
+        return str(existing.id), str(decrypt_field(existing.nome))
 
     cliente_id = str(uuid.uuid4())
     values = {
         "id": cliente_id,
         "restaurante_id": comanda.restaurante_id,
-        "telefone": telefone,
-        "nome": nome,
-        "endereco": (comanda.delivery_endereco or "").strip() or None,
+        "telefone": encrypt_field(telefone),
+        "telefone_hash": telefone_hash,
+        "nome": encrypt_field(nome),
+        "endereco": encrypt_field((comanda.delivery_endereco or "").strip() or None),
+        "email_hash": None,
         "saldo_pontos": 0,
         "saldo_cashback": 0.0,
     }
@@ -364,12 +406,12 @@ def _insert_guest_cliente_if_needed(
     dialect = connection.dialect.name
     if dialect == "postgresql":
         statement = pg_insert(clientes).values(**values).on_conflict_do_nothing(
-            index_elements=["restaurante_id", "telefone"],
+            index_elements=["restaurante_id", "telefone_hash"],
         )
         connection.execute(statement)
     elif dialect == "sqlite":
         statement = sqlite_insert(clientes).values(**values).on_conflict_do_nothing(
-            index_elements=["restaurante_id", "telefone"],
+            index_elements=["restaurante_id", "telefone_hash"],
         )
         connection.execute(statement)
     else:
@@ -388,7 +430,7 @@ def _insert_guest_cliente_if_needed(
     ).first()
     if resolved is None:
         return None, None
-    return str(resolved.id), str(resolved.nome)
+    return str(resolved.id), str(decrypt_field(resolved.nome))
 
 
 @event.listens_for(Comanda, "before_insert")
