@@ -26,9 +26,11 @@ class UsuarioResponse(BaseModel):
 
 
 class UsuarioInviteResponse(UsuarioResponse):
-    """Confirma o agendamento sem expor o token secreto ao navegador."""
+    """Expõe somente o estado seguro do convite, sem devolver o token secreto."""
 
     convite_agendado: bool = True
+    convite_status: Literal["agendado", "indisponivel"] = "agendado"
+    convite_mensagem: Optional[str] = None
 
 class UsuarioCreate(BaseModel):
     nome: str = Field(min_length=1, max_length=100)
