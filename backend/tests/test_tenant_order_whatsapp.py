@@ -3,6 +3,8 @@ import datetime as dt
 import httpx
 from sqlalchemy.dialects import postgresql
 
+from app.application.orders.commands import CreateOrderCommand, CustomerInput, OrderItemInput
+from app.application.orders.service import OrderApplicationService
 from app.database import SessionLocal, current_restaurante_id
 from app.domain.orders.events import OrderCreated
 from app.domain.orders.types import FulfillmentType, OrderChannel
@@ -70,9 +72,11 @@ def test_alert_is_opt_in_deduplicated_and_private(char_setup):
         db.commit()
         rows = db.query(IntegrationOutbox).filter_by(restaurante_id=rid, event_name=EVENT_NAME, aggregate_id="wa-test-184").all()
         assert len(rows) == 1
-        assert "customer_name" not in rows[0].payload
+        assert rows[0].payload["customer_name"] == "Pessoa que não deve sair no alerta"
         assert "customer_phone" not in rows[0].payload
-        assert "Pessoa" not in render_alert(rows[0].payload)
+        rendered = render_alert(rows[0].payload)
+        assert "Cliente: Pessoa que não deve sair no alerta" in rendered
+        assert "Delivery" in rendered
 
         if not db.query(Restaurante).filter_by(id=other_id).first():
             db.add(Restaurante(id=other_id, nome="Outro restaurante", slug="wa-other-778", plano="pocket"))
@@ -113,6 +117,91 @@ def test_alert_is_opt_in_deduplicated_and_private(char_setup):
             config.whatsapp_recipient_phone = None
         db.commit()
         db.close()
+
+
+def test_whatsapp_alert_snapshots_customer_items_notes_and_online_number(char_setup):
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    rid = CHAR_RESTAURANT_ID
+    try:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        config.whatsapp_alerts_enabled = True
+        config.whatsapp_instance_name = instance_name(rid)
+        config.whatsapp_recipient_phone = "5511999999999"
+        db.commit()
+
+        dto = OrderApplicationService.create_order(
+            db,
+            CreateOrderCommand(
+                restaurant_id=rid,
+                channel=OrderChannel.WEB_CARDAPIO,
+                fulfillment=FulfillmentType.PICKUP,
+                items=(
+                    OrderItemInput(
+                        product_id="prod-char-simples",
+                        quantity=Decimal("2.00"),
+                        notes="Sem calda, por favor",
+                    ),
+                ),
+                customer=CustomerInput(name="Sarah", phone="11988887777"),
+            ),
+        )
+
+        row = db.query(IntegrationOutbox).filter(
+            IntegrationOutbox.restaurante_id == rid,
+            IntegrationOutbox.event_name == EVENT_NAME,
+            IntegrationOutbox.aggregate_id == str(dto.order_id),
+        ).one()
+
+        assert row.payload["display_number"] == dto.display_number
+        assert "-" not in row.payload["display_number"]
+        assert row.payload["customer_name"] == "Sarah"
+        assert "customer_phone" not in row.payload
+        assert row.payload["items"] == [
+            {
+                "name": row.payload["items"][0]["name"],
+                "quantity": 2,
+                "notes": "Sem calda, por favor",
+                "modifiers": [],
+            }
+        ]
+        assert row.payload["items"][0]["name"]
+
+        rendered = render_alert(row.payload)
+        assert f"Novo pedido #{dto.display_number}" in rendered
+        assert "Cliente: Sarah" in rendered
+        assert "Retirada" in rendered
+        assert "2x " in rendered
+        assert "Obs.: Sem calda, por favor" in rendered
+        assert "Abra o KÔMA para acompanhar e avançar o pedido." in rendered
+    finally:
+        db.rollback()
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        if config:
+            config.whatsapp_alerts_enabled = False
+            config.whatsapp_instance_name = None
+            config.whatsapp_recipient_phone = None
+        db.commit()
+        db.close()
+
+
+def test_whatsapp_alert_distinguishes_dine_in_from_pickup():
+    payload = {
+        "display_number": "80",
+        "fulfillment": "dine_in",
+        "total": "25.80",
+        "items_count": 2,
+        "customer_name": "Sarah",
+        "items": [
+            {"name": "Pudim da Casa", "quantity": 1, "notes": None, "modifiers": []},
+            {"name": "Brownie com Sorvete", "quantity": 1, "notes": "Sem calda", "modifiers": []},
+        ],
+    }
+    message = render_alert(payload)
+    assert "Consumo no local · R$ 25,80" in message
+    assert "Retirada" not in message
+    assert "1x Pudim da Casa" in message
+    assert "1x Brownie com Sorvete" in message
+    assert "Obs.: Sem calda" in message
 
 
 def test_brazilian_mobile_owner_jid_matches_with_or_without_ninth_digit():

@@ -159,7 +159,11 @@ class OrderApplicationService:
             except Exception:
                 pass
         if display_number is None and check_number:
-            display_number = format_order_family_id(check_number, 1)
+            display_number = (
+                format_order_family_id(check_number, 1)
+                if cls._uses_table_order_family(comanda)
+                else str(check_number)
+            )
         return {
             "order_id": order_id,
             "check_id": check_id,
@@ -1324,6 +1328,11 @@ class OrderApplicationService:
 
         return None, None
 
+    @staticmethod
+    def _uses_table_order_family(comanda: Comanda) -> bool:
+        """Sufixos A/B/C existem apenas para subpedidos de uma conta de mesa."""
+        return bool(comanda.tipo == "Consumo no Local" and comanda.mesa_id)
+
     @classmethod
     def _resolve_order_identity(
         cls,
@@ -1331,30 +1340,17 @@ class OrderApplicationService:
         lancamento: Lancamento,
         comanda: Comanda,
     ) -> tuple[int, str]:
-        """Resolve a identidade canônica (sequence, display_number) do pedido."""
-        if comanda.tipo == "Consumo no Local" and comanda.mesa_id:
+        """Resolve a identidade humana do pedido.
+
+        Uma conta de mesa pode receber vários lançamentos, então usa 24-A/24-B.
+        Pedidos sem mesa (cardápio, retirada, delivery, balcão) são pedidos
+        independentes e usam somente o número da comanda, por exemplo 80.
+        """
+        if cls._uses_table_order_family(comanda):
             identity = ensure_launch_identity(db, lancamento)
             return identity.sequencia, identity.label
 
-        # Para Delivery / Retirada ou quando não há atendimento de mesa
-        launches = (
-            db.query(Lancamento.id)
-            .filter(Lancamento.comanda_id == comanda.id)
-            .order_by(Lancamento.timestamp.asc(), Lancamento.id.asc())
-            .all()
-        )
-        launch_ids = [l[0] for l in launches]
-        try:
-            seq = launch_ids.index(lancamento.id) + 1
-        except ValueError:
-            seq = len(launch_ids) or 1
-
-        label = (
-            format_order_family_id(comanda.numero_pedido, seq)
-            if comanda.numero_pedido
-            else f"{seq}"
-        )
-        return seq, label
+        return 1, str(comanda.numero_pedido) if comanda.numero_pedido else "1"
 
     @classmethod
     def _to_order_dto(
@@ -1371,10 +1367,18 @@ class OrderApplicationService:
             sequence, display_number = cls._resolve_order_identity(db, lancamento, comanda)
         elif sequence is None:
             sequence = 1
-            display_number = f"{comanda.numero_pedido}-A" if comanda.numero_pedido else None
+            display_number = (
+                format_order_family_id(comanda.numero_pedido, 1)
+                if comanda.numero_pedido and cls._uses_table_order_family(comanda)
+                else (str(comanda.numero_pedido) if comanda.numero_pedido else None)
+            )
 
         if display_number is None and comanda.numero_pedido:
-            display_number = format_order_family_id(comanda.numero_pedido, sequence)
+            display_number = (
+                format_order_family_id(comanda.numero_pedido, sequence)
+                if cls._uses_table_order_family(comanda)
+                else str(comanda.numero_pedido)
+            )
 
         target_items = (
             [it for it in comanda.itens if it.lancamento_id == lancamento.id]

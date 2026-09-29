@@ -31,7 +31,8 @@ Uma Comanda pode possuir vários Pedidos.
 
 ## IDENTIDADE DO PEDIDO
 
-A identidade humana por família já existe no legado:
+A identidade por família com sufixos A/B/C pertence às contas de mesa, onde uma
+mesma Comanda pode receber vários lançamentos ao longo do atendimento:
 
 sequencia 1 → A
 sequencia 2 → B
@@ -39,20 +40,21 @@ sequencia 2 → B
 sequencia 26 → Z
 sequencia 27 → AA
 
-Exemplo:
+Exemplo de mesa:
 
 24-A
 24-B
 24-C
 
-Essa regra não deve permanecer específica de Garçom/Mesa/Impressão.
-
-No domínio universal, ela deve se tornar uma propriedade canônica do Order, consumível por qualquer projeção/interface.
+Pedidos independentes sem mesa — Cardápio Web, delivery, retirada, balcão e
+integrações equivalentes — usam somente o número humano da Comanda, por exemplo
+`80`. Eles não devem aparecer como `80-A`, porque não são subpedidos de uma
+família de mesa.
 
 Manter distinção entre:
 
 - order.id = ID técnico interno
-- order.display_number = "24-B"
+- order.display_number = "24-B" em subpedido de mesa, ou "80" em pedido sem mesa
 - order.comanda_id = vínculo com a conta
 - order.sequence = 2
 - order.external_reference = ID externo de iFood/99Food/Keeta/etc.
@@ -79,21 +81,9 @@ Isso é uma inconsistência de projeção/consumo do modelo, não motivo para cr
 
 ## ARQUITETURA ALVO
 
-Todos os canais:
-
-- Garçom
-- Mesa
-- PDV/Balcão
-- Cardápio Web
-- QR
-- Totem
-- iFood
-- 99Food
-- Keeta
-- WhatsApp
-- API
-
-devem convergir para o mesmo conceito canônico de Order.
+Todos os canais devem convergir para o mesmo conceito canônico de Order, mas a
+forma humana respeita o contexto operacional: sufixo de família somente quando o
+pedido pertence a uma conta de mesa; número simples quando o pedido é independente.
 
 Fluxo alvo:
 

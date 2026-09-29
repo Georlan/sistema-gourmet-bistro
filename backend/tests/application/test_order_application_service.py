@@ -29,7 +29,7 @@ from tests.characterization.orders.fixtures import (
 
 class TestOrderApplicationServicePhase31:
     def test_canonical_identity_order_is_not_comanda(self, char_setup):
-        """Garante que Order == Lancamento, order_id != comanda_id e display_number segue a família (ex: '1-A')."""
+        """Pedido online sem mesa usa o número da comanda, sem sufixo de subpedido."""
         db: Session = SessionLocal()
         try:
             cmd = CreateOrderCommand(
@@ -53,8 +53,7 @@ class TestOrderApplicationServicePhase31:
             assert dto.comanda_id.startswith("c-")  # Comanda ID
             assert dto.order_id != dto.comanda_id  # Order != Comanda
             assert dto.sequence == 1
-            assert dto.display_number.endswith("-A")  # ex: '1-A'
-            assert dto.display_number == f"{dto.display_number.split('-')[0]}-A"
+            assert "-" not in dto.display_number
 
             # Verificar no banco
             lanc = db.query(Lancamento).filter(Lancamento.id == dto.order_id).first()
@@ -63,7 +62,32 @@ class TestOrderApplicationServicePhase31:
 
             comanda = db.query(Comanda).filter(Comanda.id == dto.comanda_id).first()
             assert comanda is not None
-            assert str(comanda.numero_pedido) == dto.display_number.split("-")[0]
+            assert dto.display_number == str(comanda.numero_pedido)
+        finally:
+            db.close()
+
+    def test_web_dine_in_without_table_does_not_get_suborder_suffix(self, char_setup):
+        db: Session = SessionLocal()
+        try:
+            dto = OrderApplicationService.create_order(
+                db,
+                CreateOrderCommand(
+                    restaurant_id=CHAR_RESTAURANT_ID,
+                    channel=OrderChannel.WEB_CARDAPIO,
+                    fulfillment=FulfillmentType.DINE_IN,
+                    items=(
+                        OrderItemInput(
+                            product_id="prod-char-simples",
+                            quantity=Decimal("1.00"),
+                        ),
+                    ),
+                    customer=CustomerInput(name="Cliente local", phone="11999990009"),
+                ),
+            )
+            comanda = db.query(Comanda).filter(Comanda.id == dto.comanda_id).one()
+            assert comanda.mesa_id is None
+            assert dto.display_number == str(comanda.numero_pedido)
+            assert "-" not in dto.display_number
         finally:
             db.close()
 

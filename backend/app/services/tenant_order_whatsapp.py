@@ -10,12 +10,20 @@ from decimal import Decimal
 from urllib.parse import quote
 
 import httpx
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..domain.orders.events import OrderCreated
 from ..domain.orders.types import OrderChannel
-from ..models import ConfiguracaoRestaurante, IntegrationOutbox
+from ..models import (
+    ConfiguracaoRestaurante,
+    IntegrationOutbox,
+    Item,
+    ItemModificador,
+    OpcaoModificador,
+    Produto,
+)
 from .outbox.publisher import enqueue_outbox_event_in_session
 
 EVENT_NAME = "koma.whatsapp.order_created"
@@ -56,6 +64,14 @@ def phones_match(left: str | None, right: str | None) -> bool:
 
 
 @dataclass(frozen=True)
+class _AlertItem:
+    name: str
+    quantity: int
+    notes: str | None = None
+    modifiers: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class _AlertEvent:
     restaurant_id: int
     order_id: str
@@ -64,6 +80,80 @@ class _AlertEvent:
     fulfillment: str
     total: str
     items_count: int
+    customer_name: str | None
+    items: tuple[_AlertItem, ...]
+
+
+def _clean_alert_text(value: object, *, max_length: int) -> str:
+    cleaned = " ".join(str(value or "").split())
+    return cleaned[:max_length]
+
+
+def _snapshot_alert_items(
+    db: Session,
+    *,
+    restaurant_id: int,
+    order_id: str,
+) -> tuple[_AlertItem, ...]:
+    rows = (
+        db.query(Item, Produto.nome)
+        .join(
+            Produto,
+            and_(
+                Produto.restaurante_id == Item.restaurante_id,
+                Produto.id == Item.produto_id,
+            ),
+        )
+        .filter(
+            Item.restaurante_id == restaurant_id,
+            Item.lancamento_id == str(order_id),
+            Item.status != "cancelado",
+        )
+        .all()
+    )
+    if not rows:
+        return ()
+
+    item_ids = [item.id for item, _name in rows]
+    modifier_names: dict[str, list[str]] = {}
+    modifier_rows = (
+        db.query(ItemModificador.item_id, OpcaoModificador.nome)
+        .join(
+            OpcaoModificador,
+            and_(
+                OpcaoModificador.restaurante_id == ItemModificador.restaurante_id,
+                OpcaoModificador.id == ItemModificador.opcao_modificador_id,
+            ),
+        )
+        .filter(
+            ItemModificador.restaurante_id == restaurant_id,
+            ItemModificador.item_id.in_(item_ids),
+        )
+        .order_by(ItemModificador.id.asc())
+        .all()
+    )
+    for item_id, modifier_name in modifier_rows:
+        modifier_names.setdefault(str(item_id), []).append(
+            _clean_alert_text(modifier_name, max_length=80)
+        )
+
+    grouped: dict[tuple[str, str, tuple[str, ...]], int] = {}
+    for item, product_name in rows:
+        name = _clean_alert_text(product_name, max_length=120) or "Item"
+        notes = _clean_alert_text(item.observacao, max_length=240)
+        modifiers = tuple(modifier_names.get(str(item.id), ()))
+        key = (name, notes, modifiers)
+        grouped[key] = grouped.get(key, 0) + 1
+
+    return tuple(
+        _AlertItem(
+            name=name,
+            quantity=quantity,
+            notes=notes or None,
+            modifiers=modifiers,
+        )
+        for (name, notes, modifiers), quantity in grouped.items()
+    )
 
 
 def enqueue_order_alert(db: Session, order: OrderCreated) -> IntegrationOutbox | None:
@@ -86,14 +176,21 @@ def enqueue_order_alert(db: Session, order: OrderCreated) -> IntegrationOutbox |
     ).first()
     if existing:
         return existing
+    items = _snapshot_alert_items(
+        db,
+        restaurant_id=order.restaurant_id,
+        order_id=str(order.order_id),
+    )
     event = _AlertEvent(
         restaurant_id=order.restaurant_id,
         order_id=str(order.order_id),
         event_id=event_id,
-        display_number=str(order.display_number or order.check_number or order.order_id)[:32],
+        display_number=str(order.check_number or order.display_number or order.order_id)[:32],
         fulfillment=str(order.fulfillment),
         total=str(Decimal(str(order.total)).quantize(Decimal("0.01"))),
         items_count=max(0, int(order.items_count)),
+        customer_name=_clean_alert_text(order.customer_name, max_length=120) or None,
+        items=items,
     )
     record = enqueue_outbox_event_in_session(
         db, event, event_name=EVENT_NAME, aggregate_type="order",
@@ -252,11 +349,51 @@ def owner_phone(restaurant_id: int) -> str | None:
 
 
 def render_alert(payload: dict) -> str:
-    kind = "Delivery" if payload.get("fulfillment") == "delivery" else "Retirada"
+    kind = {
+        "delivery": "Delivery",
+        "pickup": "Retirada",
+        "dine_in": "Consumo no local",
+    }.get(str(payload.get("fulfillment") or ""), "Pedido online")
     amount = Decimal(str(payload.get("total", "0"))).quantize(Decimal("0.01"))
     number = re.sub(r"[^\w-]", "", str(payload.get("display_number", "")))[:32]
-    count = max(0, int(payload.get("items_count", 0)))
-    return f"Novo pedido #{number}\n{kind} · R$ {str(amount).replace('.', ',')}\n{count} itens\nAbra o KÔMA para acompanhar."
+    customer = _clean_alert_text(payload.get("customer_name"), max_length=120) or "Cliente"
+
+    lines = [
+        f"Novo pedido #{number}",
+        f"Cliente: {customer}",
+        f"{kind} · R$ {str(amount).replace('.', ',')}",
+        "",
+        "Pedido:",
+    ]
+    items = payload.get("items")
+    if isinstance(items, list) and items:
+        for raw_item in items:
+            if not isinstance(raw_item, dict):
+                continue
+            quantity = max(1, int(raw_item.get("quantity", 1)))
+            name = _clean_alert_text(raw_item.get("name"), max_length=120) or "Item"
+            lines.append(f"{quantity}x {name}")
+            modifiers = raw_item.get("modifiers")
+            if isinstance(modifiers, list) and modifiers:
+                clean_modifiers = [
+                    _clean_alert_text(modifier, max_length=80)
+                    for modifier in modifiers
+                    if _clean_alert_text(modifier, max_length=80)
+                ]
+                if clean_modifiers:
+                    lines.append("  + " + ", ".join(clean_modifiers))
+            notes = _clean_alert_text(raw_item.get("notes"), max_length=240)
+            if notes:
+                lines.append(f"  Obs.: {notes}")
+    else:
+        count = max(0, int(payload.get("items_count", 0)))
+        lines.append(f"{count} itens")
+
+    lines.extend(["", "Abra o KÔMA para acompanhar e avançar o pedido."])
+    message = "\n".join(lines)
+    if len(message) <= 3500:
+        return message
+    return message[:3440].rstrip() + "\n…\nAbra o KÔMA para acompanhar."
 
 
 def _aware(value: dt.datetime | None) -> dt.datetime | None:
