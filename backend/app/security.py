@@ -52,6 +52,8 @@ def superadmin_session_generation() -> str:
 PERMISSION_ROLES = MappingProxyType({
     "caixa:operar": frozenset({"admin", "gerente", "caixa"}),
     "smartpos:receber": frozenset({"garcom", "caixa", "gerente"}),
+    "pedidos:criar_rapido": frozenset({"admin", "gerente", "caixa", "garcom", "atendente"}),
+    "pedidos:consultar_cliente": frozenset({"admin", "gerente", "caixa", "atendente"}),
     "equipe:administrar": frozenset({"admin", "gerente", "caixa"}),
     "estoque:consultar": frozenset({"admin", "gerente", "caixa"}),
     "estoque:administrar": frozenset({"admin", "gerente", "caixa"}),
