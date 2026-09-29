@@ -150,6 +150,8 @@ def detect_catalog_source_type(declared_type: str | None, content: bytes) -> str
         )
 
     generic_declared_types = {"", "application/octet-stream", "image/*"}
-    if normalized not in generic_declared_types | {detected}:
+    declared_image = normalized.startswith("image/")
+    detected_image = detected.startswith("image/")
+    if normalized not in generic_declared_types | {detected} and not (declared_image and detected_image):
         raise ValueError("O conteúdo do arquivo não corresponde ao formato informado.")
     return detected
