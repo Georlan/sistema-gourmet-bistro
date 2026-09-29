@@ -1165,6 +1165,36 @@ class ItemModificador(Base):
     preco_aplicado = Column(Numeric(14, 2, asdecimal=False), nullable=False)
 
 
+class ApplicationAccessLog(Base):
+    """Registro mínimo de acesso à aplicação para obrigação legal aplicável.
+
+    Armazena somente data/hora e IP cifrado. Não persiste rota, payload,
+    query string, token, User-Agent ou identidade do consumidor.
+    """
+
+    __tablename__ = "application_access_logs"
+    __table_args__ = (
+        Index("ix_application_access_logs_accessed_at", "accessed_at"),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    _ip_address = Column("ip_address", Text, nullable=False)
+    accessed_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+
+    @hybrid_property
+    def ip_address(self):
+        return decrypt_field(self._ip_address)
+
+    @ip_address.setter
+    def ip_address(self, value):
+        normalized = str(value or "").strip()[:128] or "unknown"
+        self._ip_address = encrypt_field(normalized)
+
+
 class ActivityLog(Base):
     __tablename__ = "activity_logs"
     
