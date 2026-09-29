@@ -11,6 +11,35 @@ from . import whatsapp as whatsapp_service
 
 logger = logging.getLogger("koma.notificacoes")
 
+
+def obter_prontidao_convite_equipe() -> dict[str, object]:
+    """Valida se o canal de WhatsApp está realmente pronto antes de prometer um convite."""
+    if not getattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False):
+        return {
+            "ready": False,
+            "reason": "automation_disabled",
+            "message": "WhatsApp automático está desativado. A pessoa foi cadastrada, mas o convite não foi enviado.",
+        }
+
+    diagnostico = whatsapp_service.obter_status_evolution()
+    if not bool(diagnostico.get("configured")):
+        return {
+            "ready": False,
+            "reason": "provider_not_configured",
+            "message": "WhatsApp não está configurado. A pessoa foi cadastrada, mas o convite não foi enviado.",
+        }
+    if not bool(diagnostico.get("connected")):
+        return {
+            "ready": False,
+            "reason": "provider_disconnected",
+            "message": "WhatsApp está desconectado. A pessoa foi cadastrada, mas o convite não foi enviado.",
+        }
+    return {
+        "ready": True,
+        "reason": "ready",
+        "message": "Convite agendado para envio pelo WhatsApp.",
+    }
+
 MENSAGENS_STATUS = {
     "recebido": "✅ Pedido recebido! {restaurante} já começou a preparar.\nPedido #{numero_pedido}.",
     "em_preparo": "🍳 Seu pedido está sendo preparado com carinho!\nPedido #{numero_pedido} • {restaurante}.",
