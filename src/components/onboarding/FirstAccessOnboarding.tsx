@@ -85,7 +85,7 @@ type OnboardingStatus = {
   readiness: {
     configurationComplete: boolean;
     trialStarted: boolean;
-    operationReleased: boolean;
+    operationReleased?: boolean;
     readyToOperate: boolean;
     blockers: string[];
   };
