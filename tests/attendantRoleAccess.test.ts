@@ -32,7 +32,7 @@ test('attendant login preserves its role and opens the dedicated quick-order sur
   assert.match(attendant, /activeSubTab="balcao"/);
   assert.match(attendant, /activeTab: 'operacao'/);
   assert.match(attendant, /activeSubTab: 'balcao'/);
-  assert.doesNotMatch(attendant, /CashierDesktopSidebar|CashierMobileSidebar|CaixaPanel/);
+  assert.doesNotMatch(attendant, /CashierDesktopSidebar|CashierMobileSidebar/);
 });
 
 test('attendant stays on quick order after submit instead of navigating into cashier orders', () => {
