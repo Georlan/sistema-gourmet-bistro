@@ -7,8 +7,8 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 const motoboy = source('../src/components/MotoboyPwaPage.tsx');
 const activation = source('../src/components/CaixaAtivarPage.tsx');
 const orders = source('../backend/app/routes/orders.py');
-const notifications = source('../backend/app/services/notificacoes.py');
-const contracts = source('../backend/app/services/contract_notifications.py');
+const notifications = source('../backend/app/services/team_invitations.py');
+const contracts = source('../backend/app/services/signup_notifications.py');
 const main = source('../backend/app/main.py');
 
 test('motoboy browser secret is bootstrapped then removed from the URL', () => {

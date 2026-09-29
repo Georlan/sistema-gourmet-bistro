@@ -7,6 +7,7 @@ import logging
 import httpx
 
 from ..config import settings
+from .email_delivery import send_email, record_direct_acceptance, message_key
 
 
 logger = logging.getLogger("koma.customer_registration")
@@ -48,20 +49,8 @@ def send_registration_email(
         "e funciona uma única vez. Se você não solicitou este cadastro, ignore este e-mail."
     )
     try:
-        response = httpx.post(
-            "https://api.resend.com/emails",
-            timeout=10,
-            headers={
-                "Authorization": f"Bearer {settings.RESEND_API_KEY}",
-                "Idempotency-Key": idempotency_key[:256],
-            },
-            json={
-                "from": settings.EMAIL_FROM,
-                "to": [email],
-                "subject": subject,
-                "text": text,
-            },
-        )
+        response = send_email({'from': settings.EMAIL_FROM, 'to': [email],
+            'subject': subject, 'text': text}, idempotency_key[:256], attempts=3, timeout=4)
     except httpx.HTTPError:
         logger.warning("Customer registration email delivery unavailable")
         return False
@@ -72,4 +61,5 @@ def send_registration_email(
             response.status_code,
         )
         return False
+    record_direct_acceptance(response, message_key('registration', {'key': idempotency_key}))
     return True

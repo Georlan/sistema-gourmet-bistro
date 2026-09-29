@@ -10,6 +10,7 @@ import httpx
 import jwt
 
 from ..config import settings
+from .email_delivery import send_email, message_key, record_direct_acceptance
 
 logger = logging.getLogger(__name__)
 
@@ -59,17 +60,11 @@ def _post_recovery_email(email: str, *, subject: str, text: str) -> None:
     if not recovery_available():
         return
     try:
-        response = httpx.post(
-            'https://api.resend.com/emails',
-            timeout=10,
-            headers={'Authorization': f'Bearer {settings.RESEND_API_KEY}'},
-            json={
-                'from': settings.EMAIL_FROM,
-                'to': [email],
-                'subject': subject,
-                'text': text,
-            },
-        )
+        payload = {'from': settings.EMAIL_FROM, 'to': [email], 'subject': subject, 'text': text}
+        delivery_id = message_key('recovery', payload)
+        response = send_email(payload, delivery_id, attempts=3, timeout=4)
+        if response.is_success:
+            record_direct_acceptance(response, delivery_id)
         if not response.is_success:
             logger.warning('Password recovery email delivery failed (status=%s)', response.status_code)
     except httpx.HTTPError:

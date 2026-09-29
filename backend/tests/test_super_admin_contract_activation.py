@@ -222,7 +222,7 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
         deliveries = db.query(SignupNotification).filter(
             SignupNotification.id.like(f"{protocol}:activation:%")
         ).all()
-        assert {item.id.rsplit(":", 1)[-1] for item in deliveries} == {"email", "whatsapp"}
+        assert {item.id.rsplit(":", 1)[-1] for item in deliveries} == {"email"}
     finally:
         db.close()
 

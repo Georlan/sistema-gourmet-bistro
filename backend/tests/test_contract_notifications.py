@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import logging
 import uuid
-from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
@@ -15,7 +13,6 @@ from app.config import settings
 from app.contract_models import ContractAcceptance
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.routes import contracts
-from app.services import contract_notifications
 
 
 VALID_CPF = "52998224725"
@@ -109,7 +106,8 @@ def test_acceptance_queues_notifications_atomically(contract_client, monkeypatch
     assert response.status_code == 201, response.text
     with Session() as db:
         rows = db.query(SignupNotification).all()
-        assert len(rows) >= 2
+        assert len(rows) == 1
+        assert rows[0].id.endswith(":email")
         assert all(row.status == "pending" for row in rows)
         assert all(payload["phone"] not in row.payload_encrypted for row in rows)
         count = len(rows)
@@ -117,84 +115,3 @@ def test_acceptance_queues_notifications_atomically(contract_client, monkeypatch
     assert duplicate.status_code == 409
     with Session() as db:
         assert db.query(SignupNotification).count() == count
-
-
-def test_provider_failure_never_escapes_notification_boundary(monkeypatch):
-    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", True)
-    monkeypatch.setattr(contract_notifications.time, "sleep", lambda _seconds: None)
-
-    attempts = 0
-
-    def fail_send(*args, **kwargs):
-        nonlocal attempts
-        attempts += 1
-        raise RuntimeError("provider down")
-
-    monkeypatch.setattr(contract_notifications, "enviar_texto_whatsapp_detalhado", fail_send)
-
-    delivered = contract_notifications.notify_customer_contract_accepted(
-        phone="85999999999",
-        representative_name="Responsável",
-        restaurant_name="Restaurante",
-        plan="pocket",
-        protocol="KOMA-CTR-20260906-ABCDEF123456",
-    )
-    assert delivered is False
-    assert attempts == 3
-
-
-def test_activation_token_is_used_for_delivery_but_never_logged(monkeypatch, caplog):
-    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", True)
-    sent: list[tuple[str, str, str]] = []
-
-    def fake_send(phone: str, message: str, *, contexto: str):
-        sent.append((phone, message, contexto))
-        return SimpleNamespace(
-            sucesso=True,
-            provider="evolution",
-            message_id="msg-safe",
-            error_message=None,
-        )
-
-    monkeypatch.setattr(contract_notifications, "enviar_texto_whatsapp_detalhado", fake_send)
-    token = "invite-token-must-stay-private"
-
-    with caplog.at_level(logging.INFO, logger="koma.contract_notifications"):
-        delivered = contract_notifications.notify_customer_activation(
-            phone="85999999999",
-            representative_name="Responsável",
-            restaurant_name="Restaurante",
-            protocol="KOMA-CTR-20260906-ABCDEF123456",
-            invitation_token=token,
-            invitation_ttl_hours=72,
-        )
-
-    assert delivered is True
-    assert len(sent) == 1
-    assert token in sent[0][1]
-    assert "/ativar#token=" in sent[0][1]
-    assert "/ativar?token=" not in sent[0][1]
-    assert token not in caplog.text
-    assert "85999999999" not in caplog.text
-
-
-def test_owner_notification_requires_private_runtime_phone(monkeypatch):
-    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", True)
-    monkeypatch.delenv("KOMA_OWNER_WHATSAPP_PHONE", raising=False)
-    called = False
-
-    def fake_send(*args, **kwargs):
-        nonlocal called
-        called = True
-        raise AssertionError("sender should not be called without owner phone")
-
-    monkeypatch.setattr(contract_notifications, "enviar_texto_whatsapp_detalhado", fake_send)
-
-    assert contract_notifications.notify_owner_new_contract(
-        restaurant_name="Restaurante",
-        representative_name="Responsável",
-        plan="pocket",
-        billing_cycle="mensal",
-        protocol="KOMA-CTR-20260906-ABCDEF123456",
-    ) is False
-    assert called is False

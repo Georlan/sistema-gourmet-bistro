@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/onboarding-readiness-targeted.yml'
+      - 'backend/alembic/versions/x4b5c6d7e8f9_email_delivery_receipts.py'
+      - 'scripts/check-team-invite-status.py'
       - 'backend/alembic/versions/n3c4d5e6f7a8_add_canonical_modes_and_onboarding_test.py'
       - 'backend/alembic/versions/o4d5e6f7a8b9_auto_accept_and_fulfillment_conversion.py'
       - 'backend/app/models.py'

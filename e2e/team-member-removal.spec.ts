@@ -57,7 +57,7 @@ test('convite antigo recebe e-mail e mostra envio pelo Resend', async ({ page })
   await page.route('**/auth/usuarios/pending-email/reenviar-convite', async route => {
     expect(route.request().postDataJSON()).toEqual({ email: 'equipe@example.test' });
     email = 'equipe@example.test';
-    status = 'enviado';
+    status = 'entregue';
     await route.fulfill({ json: { message: 'Convite colocado na fila de envio por e-mail.' } });
   });
   await page.goto('/?view=caixa');
@@ -68,6 +68,6 @@ test('convite antigo recebe e-mail e mostra envio pelo Resend', async ({ page })
   await expect(page.getByRole('button', { name: 'Reenviar convite' })).toBeDisabled();
   await page.getByRole('textbox', { name: 'E-mail de Convite Antigo' }).fill('equipe@example.test');
   await page.getByRole('button', { name: 'Reenviar convite' }).click();
-  await expect(page.getByText('E-mail enviado ao Resend. Confira também o spam.', { exact: true })).toBeVisible();
+  await expect(page.getByText('E-mail entregue. Abra o convite para ativar o acesso.', { exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'E-mail de Convite Antigo' })).toHaveValue('equipe@example.test');
 });
