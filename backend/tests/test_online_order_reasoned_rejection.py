@@ -324,3 +324,34 @@ def test_rejection_can_block_future_orders_and_secure_tracking_explains_why():
     expired = client.get(f"/api/cardapio/pedidos/acompanhar/{tracking_token}")
     assert expired.status_code == 200, expired.text
     assert expired.json()["ordering_block"] is None
+
+
+def test_canonical_cancellation_cannot_touch_another_tenant_order():
+    _reset()
+    _order("cancel-tenant-boundary")
+    with SessionLocal() as db:
+        with tenant_session_scope(db, RID):
+            order = db.query(Comanda).filter(Comanda.id == "cancel-tenant-boundary").one()
+            order.delivery_status = "pronto"
+            db.commit()
+        with tenant_session_scope(db, RID + 1):
+            if db.query(Restaurante).filter(Restaurante.id == RID + 1).first() is None:
+                db.add(Restaurante(id=RID + 1, nome="Other Tenant", plano="pro"))
+            if db.query(Usuario).filter(Usuario.id == "cancel-other-admin").first() is None:
+                db.add(Usuario(id="cancel-other-admin", restaurante_id=RID + 1,
+                    nome="Other Admin", email="other-cancel@koma.test",
+                    cargo="admin", role="admin", status="ativo"))
+            db.commit()
+    token = create_access_token(subject="cancel-other-admin", restaurante_id=RID + 1, role="admin")
+    response = client.put(
+        "/comandas/cancel-tenant-boundary/delivery/status",
+        params={"status_novo": "recusado"},
+        headers={"Authorization": f"Bearer {token}"},
+        json={"reason": "Cancelar pedido de outro restaurante"},
+    )
+    assert response.status_code == 404, response.text
+    with SessionLocal() as db:
+        with tenant_session_scope(db, RID):
+            order = db.query(Comanda).filter(Comanda.id == "cancel-tenant-boundary").one()
+            assert order.delivery_status == "pronto"
+            assert order.fechada is False
