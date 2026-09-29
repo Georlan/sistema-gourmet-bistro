@@ -199,16 +199,21 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   }, [loadSnapshot]);
 
   useEffect(() => {
-    if (
-      snapshot?.onboarding?.mode !== 'commercial'
-      || snapshot.onboarding.releaseState !== 'awaiting_koma'
-    ) return;
+    const shouldWatchRelease = snapshot?.onboarding
+      ? snapshot.onboarding.mode === 'commercial' && snapshot.onboarding.releaseState === 'awaiting_koma'
+      : Boolean(snapshot?.readyForRelease);
+    if (!shouldWatchRelease) return;
 
     const timer = window.setInterval(() => {
       if (!document.hidden) void loadSnapshot();
     }, 8000);
     return () => window.clearInterval(timer);
-  }, [loadSnapshot, snapshot?.onboarding?.mode, snapshot?.onboarding?.releaseState]);
+  }, [
+    loadSnapshot,
+    snapshot?.onboarding?.mode,
+    snapshot?.onboarding?.releaseState,
+    snapshot?.readyForRelease,
+  ]);
 
   const openCashierAt = (tab: string, subTab: string, setupMode = true) => {
     try {
