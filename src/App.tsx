@@ -406,7 +406,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       const searchParams = new URLSearchParams(window.location.search);
       const viewParam = searchParams.get('view');
       const hash = window.location.hash;
-      let newPortal: 'caixa' | 'garcom' = (viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') ? 'caixa' : 'garcom';
+      const newPortal: OperationalPortal = initialPortal || ((viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') ? 'caixa' : 'garcom');
 
       setPortal(newPortal);
 
@@ -447,7 +447,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       window.removeEventListener('popstate', handleUrlChange);
       window.removeEventListener('hashchange', handleUrlChange);
     };
-  }, [portal]);
+  }, [portal, initialPortal]);
 
   // Toast notification system
   interface Toast { id: number; message: string; type: 'success' | 'error' | 'info'; }
@@ -608,20 +608,13 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         console.error('Error loading tab settings', e);
       }
     }
-    const searchParams = new URLSearchParams(window.location.search);
-    const viewParam = searchParams.get('view');
-    const hash = window.location.hash;
-    const isCaixa = viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia';
+    const isCaixa = portal === 'caixa';
     return { exibirImagens: isCaixa, exibirDescricoes: isCaixa };
   });
 
   // 4. Modal focus state
   const [selectedTableId, setSelectedTableId] = useState<number | null>(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const viewParam = searchParams.get('view');
-    const hash = window.location.hash;
-    const initialPortal = (viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') ? 'caixa' : 'garcom';
-    const saved = sessionStorage.getItem(`koma_${initialPortal}_selected_table_v3`);
+    const saved = sessionStorage.getItem(`koma_${portal}_selected_table_v3`);
     return saved ? parseInt(saved, 10) : null;
   });
 

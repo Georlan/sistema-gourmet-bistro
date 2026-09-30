@@ -326,6 +326,8 @@ test('duas abas de Caixa em restaurantes diferentes e uma de Garçom isolam toke
     await submitLogin(tabs[index],`staff-${index}@example.test`,'local-test');
     await expect.poll(()=>observed[index].length).toBeGreaterThan(0);
   }
+  await Promise.all(tabs.map(tab=>tab.evaluate(()=>{window.dispatchEvent(new Event('popstate'));window.dispatchEvent(new Event('hashchange'));})));
+  for (const tab of tabs) await expect(tab.getByLabel('E-MAIL')).toHaveCount(0);
   await Promise.all(tabs.map(tab=>tab.reload()));
   for(let index=0;index<tabs.length;index++) {
     await tabs[index].bringToFront();
