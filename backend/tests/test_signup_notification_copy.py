@@ -90,6 +90,7 @@ def test_release_required_message_describes_authorization_not_payment(monkeypatc
         restaurant_name="Restaurante QA",
         plan="pro",
         billing_cycle="mensal",
+        payment_method_type="credit_card",
     )
 
     assert len(calls) == 1
@@ -121,3 +122,32 @@ def test_activation_message_marks_trial_start_and_next_steps(monkeypatch):
     assert "dados do restaurante, horários, cardápio e modalidades de operação" in message
     assert "4 itens essenciais" in message
     assert "https://komafood.com.br/ativar#token=invite-token" in message
+
+
+def test_pix_annual_release_notice_does_not_claim_recurring_authorization(monkeypatch):
+    calls = _capture_enqueue(monkeypatch)
+    signup_notifications.enqueue_release_required(
+        object(), protocol="pix-contract", restaurant_name="Pizzaria", plan="pro",
+        billing_cycle="annual", payment_method_type="pix",
+    )
+    message = calls[0]["message"]
+    assert "Pix anual selecionado" in message
+    assert "Não há débito automático" in message
+    assert "QR Code" in message
+    assert "Nenhuma mensalidade fixa foi cobrada hoje" in message
+    assert "7 dias grátis só começarão depois dos 4 itens essenciais" in message
+    assert "recorrente" not in message
+    assert "recorrência" not in message
+
+
+def test_no_fixed_release_notice_does_not_promise_trial_or_authorization(monkeypatch):
+    calls = _capture_enqueue(monkeypatch)
+    signup_notifications.enqueue_release_required(
+        object(), protocol="free-contract", restaurant_name="Restaurante", plan="free",
+        billing_cycle="monthly", payment_method_type="no_fixed",
+    )
+    message = calls[0]["message"]
+    assert "Contrato sem mensalidade fixa" in message
+    assert "Nenhuma autorização recorrente é necessária" in message
+    assert "confirmada" not in message
+    assert "7 dias" not in message

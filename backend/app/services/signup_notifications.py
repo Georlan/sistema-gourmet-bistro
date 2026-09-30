@@ -198,13 +198,30 @@ def enqueue_activation(
     )
 
 
-def enqueue_release_required(db, *, protocol, restaurant_name, plan, billing_cycle):
-    """Avisa o operador uma única vez quando uma autorização aguarda liberação manual."""
+def enqueue_release_required(db, *, protocol, restaurant_name, plan, billing_cycle, payment_method_type):
+    """Describe the selected billing method without claiming an upfront payment."""
+    if payment_method_type == "pix":
+        billing_message = (
+            "Pix anual selecionado. Nenhuma mensalidade fixa foi cobrada hoje. "
+            "Depois da implantação e dos 7 dias grátis, será gerado um único QR Code "
+            "e Pix Copia e Cola do valor anual. Não há débito automático. "
+        )
+        next_steps = (
+            "Revise e libere o acesso. Os 7 dias grátis só começarão depois dos 4 itens "
+            "essenciais e da liberação pelo SuperAdmin: "
+        )
+    elif payment_method_type == "no_fixed":
+        billing_message = "Contrato sem mensalidade fixa. Nenhuma autorização recorrente é necessária. "
+        next_steps = "Revise e libere o acesso para a implantação pelo SuperAdmin: "
+    else:
+        billing_message = "Autorização recorrente confirmada. Nenhuma mensalidade fixa foi cobrada hoje. "
+        next_steps = (
+            "Revise e libere o acesso. A recorrência ficará pausada durante a implantação e os 7 dias "
+            "grátis só começarão depois dos 4 itens essenciais e da liberação pelo SuperAdmin: "
+        )
     message = (
-        f"Autorização recorrente confirmada para {restaurant_name}. Protocolo: {protocol}. "
-        f"Plano: {plan} ({billing_cycle}). Nenhuma mensalidade fixa foi cobrada hoje. "
-        "Revise e libere o acesso. A recorrência ficará pausada durante a implantação e os 7 dias "
-        "grátis só começarão depois dos 4 itens essenciais e da liberação pelo SuperAdmin: "
+        f"Restaurante aguardando liberação: {restaurant_name}. Protocolo: {protocol}. "
+        f"Plano: {plan} ({billing_cycle}). {billing_message}{next_steps}"
         f"{settings.KOMA_PUBLIC_APP_URL}/super-admin"
     )
     enqueue(
