@@ -44,8 +44,7 @@ def normalize_neighborhood_fee_table(raw: Sequence[object] | object) -> tuple[di
             raise ValueError(f"O bairro '{display_name}' está duplicado na tabela de entrega.")
         seen.add(key)
         normalized.append({"bairro": display_name, "taxa": float(validate_delivery_fee(item.get("taxa")))})
-    if not normalized:
-        raise ValueError("Cadastre pelo menos um bairro para usar a cobrança por bairro.")
+    # Bairros são exceções opcionais; uma tabela vazia usa a taxa padrão.
     return tuple(normalized)
 
 
