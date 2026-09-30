@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { cashierConfig, mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
-test('cadastro único reaproveita G e configura P/M na mesma categoria com preço e escolhas', async ({ page }) => {
+test('Produtos cadastra preços e Complementos concentra escolhas sem duplicar G, P e M', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.addInitScript(() => {
@@ -39,18 +39,30 @@ test('cadastro único reaproveita G e configura P/M na mesma categoria com preç
   await page.goto('/?view=caixa');
   const panel = page.getByRole('region', { name: 'Cadastro de marmitas' });
   await expect(panel).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Novo Grupo', exact: true })).toHaveCount(0);
+  const choicesPanel = page.getByRole('region', { name: 'Escolhas das marmitas' });
   await expect(panel.getByRole('button', { name: 'Configurar marmita G', exact: true })).toHaveText(/10,00/);
   for (const [size, price, count] of [['G', '2800', 2], ['P', '1200', 1], ['M', '2000', 2]] as const) {
     await panel.getByRole('button', { name: `${size === 'G' ? 'Configurar' : 'Cadastrar'} marmita ${size}`, exact: true }).click();
     await panel.getByLabel('Preço da marmita').fill(price);
-    for (const [index, choices] of [[0, count], [1, 3]]) {
-      await panel.getByRole('button', { name: 'Adicionar escolhas' }).click();
-      await panel.getByLabel(`Grupo ${index + 1}`, { exact: true }).selectOption(`group-${index}`);
-      await panel.getByLabel(`Quantidade do grupo ${index + 1}`).fill(String(choices));
-    }
-    await panel.getByLabel('Disponível para venda').check();
+    await expect(panel.getByRole('button', { name: 'Adicionar escolhas' })).toHaveCount(0);
+    await panel.getByLabel('Disponível para venda').uncheck();
     await panel.getByRole('button', { name: 'Salvar marmita' }).click();
     await expect(panel.getByRole('form')).toHaveCount(0);
+    const name = size === 'G' ? 'Quentinha G' : `Marmita ${size}`;
+    await panel.getByRole('button', { name: `Configurar escolhas de ${name}`, exact: true }).click();
+    await expect(choicesPanel.getByRole('form')).toBeVisible();
+    await expect(choicesPanel.getByLabel('Preço da marmita')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Cadastrar marmita/ })).toHaveCount(0);
+    for (const [index, choices] of [[0, count], [1, 3]]) {
+      await choicesPanel.getByRole('button', { name: 'Adicionar escolhas' }).click();
+      await choicesPanel.getByLabel(`Grupo ${index + 1}`, { exact: true }).selectOption(`group-${index}`);
+      await choicesPanel.getByLabel(`Quantidade do grupo ${index + 1}`).fill(String(choices));
+    }
+    await choicesPanel.getByLabel('Disponível para venda').check();
+    await choicesPanel.getByRole('button', { name: 'Salvar escolhas' }).click();
+    await expect(choicesPanel.getByRole('form')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Produtos', exact: true }).last().click();
     await expect(panel.getByRole('button', { name: `Configurar marmita ${size}`, exact: true })).toBeEnabled();
   }
   expect(requests[0]).toEqual({ method: 'PUT', id: 'original-g' });
@@ -62,15 +74,22 @@ test('cadastro único reaproveita G e configura P/M na mesma categoria com preç
     { grupo_id: 'group-0', minimo: 2, maximo: 2, modo_selecao: 'tipos' },
     { grupo_id: 'group-1', minimo: 3, maximo: 3, modo_selecao: 'tipos' },
   ]);
-  await panel.getByRole('button', { name: 'Configurar marmita G', exact: true }).click();
-  await panel.getByLabel('Permitir repetir grupo 1').check();
+  await panel.getByRole('button', { name: 'Configurar escolhas de Quentinha G', exact: true }).click();
+  await choicesPanel.getByLabel('Permitir repetir grupo 1').check();
   failNext = true;
-  await panel.getByRole('button', { name: 'Salvar marmita' }).click();
-  await expect(panel.getByRole('alert')).toHaveText('Este tamanho já está cadastrado. Edite a marmita existente.');
-  await expect(panel.getByLabel('Preço da marmita')).toHaveValue(/28/);
+  await choicesPanel.getByRole('button', { name: 'Salvar escolhas' }).click();
+  await expect(choicesPanel.getByRole('alert')).toHaveText('Este tamanho já está cadastrado. Edite a marmita existente.');
+  await expect(choicesPanel.getByLabel('Permitir repetir grupo 1')).toBeChecked();
+  expect(sizes.find(size => size.id === 'original-g')?.preco).toBe(28);
+  await choicesPanel.getByRole('button', { name: 'Salvar escolhas' }).click();
+  await expect(choicesPanel.getByRole('form')).toHaveCount(0);
+  expect(products).toHaveLength(3);
+  await page.getByRole('button', { name: 'Produtos', exact: true }).last().click();
+  await panel.getByRole('button', { name: 'Configurar marmita G', exact: true }).click();
+  await panel.getByLabel('Preço da marmita').fill('3000');
   await panel.getByRole('button', { name: 'Salvar marmita' }).click();
   await expect(panel.getByRole('form')).toHaveCount(0);
-  expect(products).toHaveLength(3);
+  expect(sizes.find(size => size.id === 'original-g')).toMatchObject({ preco: 30, regras: [{ grupo_id: 'group-0', minimo: 2, maximo: 2, modo_selecao: 'porcoes' }, { grupo_id: 'group-1', minimo: 3, maximo: 3, modo_selecao: 'tipos' }] });
   // Fotos e descrição continuam editando o mesmo produto, sem outro cadastro.
   await panel.getByRole('button', { name: 'Foto e descrição de Quentinha G', exact: true }).click();
   const details = page.getByRole('dialog', { name: 'Foto e descrição da marmita' });
@@ -82,6 +101,8 @@ test('cadastro único reaproveita G e configura P/M na mesma categoria com preç
   expect(widths[1]).toBeLessThanOrEqual(widths[0] + 1);
   await page.getByRole('button', { name: 'Complementos', exact: true }).last().click();
   await expect(panel).toHaveCount(0);
+  await expect(choicesPanel).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Novo Grupo', exact: true })).toHaveCount(1);
   await expect(page.getByRole('button', { name: /Cadastrar marmita/ })).toHaveCount(0);
 });
 
