@@ -102,6 +102,8 @@ async function mockPublicMenuBackend(
           ...options.menu,
           restaurante: {
             ...basePublicMenuPayload.restaurante,
+            aceitando_pedidos: options.statusOverride !== "Forçado Fechado",
+            origem_disponibilidade: options.statusOverride === "Forçado Fechado" ? "forced_closed" : "cash_open",
             ...options.restaurant,
             status_override: options.statusOverride ?? basePublicMenuPayload.restaurante.status_override,
           },
@@ -536,25 +538,23 @@ test('loja pausada mantém catálogo consultável e bloqueia criação de pedido
   expect(capturedOrders).toHaveLength(0);
 });
 
-test('modo automático mostra estabelecimento fechado e informa quando abre novamente', async ({ page }) => {
+test('caixa fechado mantém catálogo consultável e bloqueia pedidos', async ({ page }) => {
   const capturedOrders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, capturedOrders, {
     statusOverride: 'Automático',
     restaurant: {
       aceitando_pedidos: false,
-      motivo_indisponibilidade: 'O estabelecimento está fechado neste horário.',
-      origem_disponibilidade: 'schedule',
-      proxima_abertura: '2026-09-18T18:00:00-03:00',
-      proxima_abertura_texto: 'hoje às 18:00',
+      motivo_indisponibilidade: 'O estabelecimento está fechado até a abertura do caixa.',
+      origem_disponibilidade: 'cash_closed',
     },
   });
 
   await page.goto('/cardapio?restaurante_id=2');
-  await expect(page.locator('#brand-banner-hero').getByText('Estabelecimento fechado · abre hoje às 18:00', { exact: true })).toBeVisible();
-  await expect(page.getByText('Estabelecimento fechado. Abre hoje às 18:00.', { exact: false })).toBeVisible();
+  await expect(page.locator('#brand-banner-hero').getByText('Estabelecimento fechado · aguardando abertura do caixa', { exact: true })).toBeVisible();
+  await expect(page.getByText('Estabelecimento fechado. Aguardando abertura do caixa.', { exact: false })).toBeVisible();
   await expect(page.getByText('Pizza Margherita', { exact: true })).toBeVisible();
   await page.locator('#btn-fast-add-101').click();
-  await expect(page.getByRole('status')).toContainText('O estabelecimento está fechado neste horário.');
+  await expect(page.getByRole('status')).toContainText('O estabelecimento está fechado até a abertura do caixa.');
   await expect(page.locator('#floating-cart-trigger')).toHaveCount(0);
   expect(capturedOrders).toHaveLength(0);
 });
