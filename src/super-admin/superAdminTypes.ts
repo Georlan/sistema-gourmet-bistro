@@ -32,6 +32,11 @@ export interface CredentialsStatus {
 }
 
 export interface IntegrationsHealthStatus {
+  runtime?: {
+    status: string;
+    environment?: string;
+    source?: string;
+  };
   database?: {
     status: "available" | "unavailable" | "unknown";
     latency_ms?: number;
@@ -43,7 +48,15 @@ export interface IntegrationsHealthStatus {
   github?: { status: string };
   mercado_pago?: { status: string };
   telegram?: { status: string };
-  evolution?: { status: string; details?: unknown };
+  evolution?: {
+    status: "available" | "degraded" | "unavailable" | "not_configured" | string;
+    details?: {
+      configured?: boolean;
+      connected?: boolean;
+      status?: string;
+      details?: string;
+    };
+  };
 }
 
 export interface SuperAdminAuditLogEntry {

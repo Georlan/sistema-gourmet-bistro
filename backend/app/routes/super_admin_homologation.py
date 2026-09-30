@@ -110,8 +110,11 @@ def get_homologation_readiness(
     test_credentials_ready = bool(access_token) if is_homologation else bool(access_token and not access_token.startswith("TEST-"))
     email_ready = bool(settings.RESEND_API_KEY.strip() and settings.EMAIL_FROM.strip())
     owner_email_ready = bool(settings.KOMA_OWNER_EMAIL.strip())
-    whatsapp_enabled = bool(settings.KOMA_WHATSAPP_AUTOMATION_ENABLED)
-    owner_whatsapp_ready = bool(os.getenv("KOMA_OWNER_WHATSAPP_PHONE", "").strip())
+    telegram_ready = bool(
+        os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+        and os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    )
+    admin_alert_ready = owner_email_ready or telegram_ready
 
     access_token_var = "KOMA_SAAS_MERCADO_PAGO_TEST_ACCESS_TOKEN" if is_homologation else "KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN"
     public_key_var = "KOMA_SAAS_MERCADO_PAGO_TEST_PUBLIC_KEY" if is_homologation else "KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY"
@@ -193,24 +196,16 @@ def get_homologation_readiness(
             scope="delivery",
         ),
         _check(
-            "owner-email",
-            "E-mail do operador KÔMA",
-            owner_email_ready,
-            "Pronto: e-mail configurado" if owner_email_ready else "Falta KOMA_OWNER_EMAIL",
-            scope="delivery",
-        ),
-        _check(
-            "whatsapp-automation",
-            "Automação WhatsApp",
-            whatsapp_enabled,
-            "Pronto: automação ativa" if whatsapp_enabled else "Pendente: defina KOMA_WHATSAPP_AUTOMATION_ENABLED=true",
-            scope="delivery",
-        ),
-        _check(
-            "owner-whatsapp",
-            "WhatsApp do operador KÔMA",
-            owner_whatsapp_ready,
-            "Pronto: telefone configurado" if owner_whatsapp_ready else "Falta KOMA_OWNER_WHATSAPP_PHONE",
+            "admin-alert-channel",
+            "Alertas administrativos KÔMA",
+            admin_alert_ready,
+            (
+                "Pronto: Telegram configurado"
+                if telegram_ready
+                else "Pronto: e-mail do operador configurado"
+                if owner_email_ready
+                else "Falta TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID ou KOMA_OWNER_EMAIL"
+            ),
             scope="delivery",
         ),
     ]

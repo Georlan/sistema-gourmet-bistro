@@ -52,6 +52,49 @@ function notifyAuthenticationRequired(): void {
   window.dispatchEvent(new Event(SUPER_ADMIN_AUTH_REQUIRED_EVENT));
 }
 
+function formatErrorDetail(value: unknown): string | null {
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    return normalized || null;
+  }
+
+  if (Array.isArray(value)) {
+    const messages = value
+      .map(item => {
+        if (!item || typeof item !== "object") return null;
+        const record = item as Record<string, unknown>;
+        const message = typeof record.msg === "string" ? record.msg.trim() : "";
+        const location = Array.isArray(record.loc)
+          ? record.loc
+              .filter(part => typeof part === "string" || typeof part === "number")
+              .map(String)
+              .filter(part => part !== "body")
+              .join(".")
+          : "";
+        if (location && message) return `${location}: ${message}`;
+        return message || null;
+      })
+      .filter((message): message is string => Boolean(message));
+
+    if (messages.length > 0) {
+      const visible = messages.slice(0, 3);
+      const suffix = messages.length > visible.length
+        ? ` • +${messages.length - visible.length} erro(s)`
+        : "";
+      return `${visible.join(" • ")}${suffix}`;
+    }
+    return null;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.msg === "string" && record.msg.trim()) return record.msg.trim();
+    if (typeof record.message === "string" && record.message.trim()) return record.message.trim();
+  }
+
+  return null;
+}
+
 export function clearSuperAdminSession(options: { notify?: boolean } = {}): void {
   try {
     window.sessionStorage.removeItem(SUPER_ADMIN_TOKEN_KEY);
@@ -73,7 +116,8 @@ async function responseError(response: Response): Promise<SuperAdminApiError> {
   }
 
   const detail = [payload.detail, payload.error, payload.message]
-    .find(value => typeof value === "string" && value.trim()) as string | undefined;
+    .map(formatErrorDetail)
+    .find((value): value is string => Boolean(value));
 
   if (response.status === 501 || response.status === 503) {
     return new SuperAdminApiError(

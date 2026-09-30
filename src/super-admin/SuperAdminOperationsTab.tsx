@@ -158,7 +158,7 @@ export function SuperAdminOperationsTab({
         {operationNotice && <div className="p-3 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-koma-secondary">{operationNotice}</div>}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
           <div className="flex items-center justify-between"><span className="text-xs font-medium text-koma-muted">Backend API</span><Server className="w-4 h-4 text-[#00b894]" /></div>
           <div className="flex items-center gap-2">
@@ -187,6 +187,26 @@ export function SuperAdminOperationsTab({
             {dnsRecords.length > 0 ? <><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span className="font-bold text-sm text-koma-foreground">API respondeu</span></> : <><HelpCircle className="w-4 h-4 text-zinc-500" /><span className="font-bold text-sm text-koma-muted">{configuredLabel(integrationsHealth?.cloudflare?.status)}</span></>}
           </div>
           <p className="text-[11px] text-koma-subtle">{dnsRecords.length > 0 ? `${dnsRecords.length} registro(s) retornado(s)` : "Sem resposta de DNS carregada"}</p>
+        </div>
+
+        <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between"><span className="text-xs font-medium text-koma-muted">Evolution / WhatsApp operacional</span><Globe className="w-4 h-4 text-koma-subtle" /></div>
+          <div className="flex items-center gap-2">
+            {integrationsHealth?.evolution?.status === "available" ? (
+              <><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span className="font-bold text-sm text-koma-foreground">Conectado</span></>
+            ) : integrationsHealth?.evolution?.status === "degraded" ? (
+              <><AlertTriangle className="w-4 h-4 text-amber-400" /><span className="font-bold text-sm text-amber-300">Degradado</span></>
+            ) : integrationsHealth?.evolution?.status === "unavailable" ? (
+              <><AlertTriangle className="w-4 h-4 text-rose-400" /><span className="font-bold text-sm text-rose-300">Indisponível</span></>
+            ) : integrationsHealth?.evolution?.status === "not_configured" ? (
+              <><HelpCircle className="w-4 h-4 text-zinc-500" /><span className="font-bold text-sm text-koma-muted">Não configurado</span></>
+            ) : (
+              <><HelpCircle className="w-4 h-4 text-zinc-500" /><span className="font-bold text-sm text-koma-muted">Não verificado</span></>
+            )}
+          </div>
+          <p className="text-[11px] text-koma-subtle">
+            {integrationsHealth?.evolution?.details?.details || "Sem diagnóstico de conexão carregado"}
+          </p>
         </div>
       </div>
 

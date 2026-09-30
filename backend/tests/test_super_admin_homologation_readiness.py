@@ -31,7 +31,8 @@ def test_readiness_reports_complete_homologation_without_exposing_secrets(monkey
     monkeypatch.setenv("ENVIRONMENT", "homologation")
     monkeypatch.setenv("KOMA_SAAS_CHECKOUT_ENABLED", "true")
     monkeypatch.setenv("ENABLE_OUTBOX_WORKER", "true")
-    monkeypatch.setenv("KOMA_OWNER_WHATSAPP_PHONE", "5585999999999")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-bot-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "owner-chat")
     monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN", access_token)
     monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY", public_key)
     monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET", webhook_secret)
@@ -41,14 +42,17 @@ def test_readiness_reports_complete_homologation_without_exposing_secrets(monkey
     monkeypatch.setattr(settings, "RESEND_API_KEY", resend_key)
     monkeypatch.setattr(settings, "EMAIL_FROM", "KOMA <noreply@example.test>")
     monkeypatch.setattr(settings, "KOMA_OWNER_EMAIL", "owner@example.test")
-    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", True)
-
+ 
     result = get_homologation_readiness(_request(), admin={"user": "qa"})
 
     assert result["readyForPayments"] is True
     assert result["readyForEndToEnd"] is True
     assert result["paymentBlockers"] == []
     assert result["deliveryBlockers"] == []
+    check_ids = {item["id"] for item in result["checks"]}
+    assert "admin-alert-channel" in check_ids
+    assert "whatsapp-automation" not in check_ids
+    assert "owner-whatsapp" not in check_ids
     assert result["publicApiUrl"] == "https://api-homologacao.example.test"
     assert result["webhookPath"] == "/api/integrations/saas-billing/mercado-pago/webhook"
     assert result["webhookUrl"] == "https://api-homologacao.example.test/api/integrations/saas-billing/mercado-pago/webhook"

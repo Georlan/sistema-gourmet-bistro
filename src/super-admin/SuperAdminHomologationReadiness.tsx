@@ -232,7 +232,7 @@ export function SuperAdminHomologationReadiness() {
             >
               {data.readyForEndToEnd
                 ? 'Ponta a ponta pronto'
-                : `${data.deliveryBlockers.length} bloqueio(s) em notificações`}
+                : `${data.deliveryBlockers.length} bloqueio(s) em e-mail/alertas`}
             </span>
             <span className="rounded-full bg-zinc-900 px-2.5 py-1 text-zinc-300">
               Ambiente: {data.environment}
@@ -281,7 +281,7 @@ export function SuperAdminHomologationReadiness() {
 
           <div className="grid gap-3 lg:grid-cols-2">
             <ReadinessGroup title="1. Cobrança e liberação" checks={paymentChecks} />
-            <ReadinessGroup title="2. Convites e avisos" checks={deliveryChecks} />
+            <ReadinessGroup title="2. E-mail e alertas administrativos" checks={deliveryChecks} />
           </div>
 
           <div className="mt-3 space-y-3 rounded-xl border border-zinc-800 bg-koma-page/50 p-4 text-sm">
