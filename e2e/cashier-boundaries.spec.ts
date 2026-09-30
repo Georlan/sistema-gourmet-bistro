@@ -139,3 +139,19 @@ test('taxa compartilhada preserva o percentual entre telas e não altera permiss
   await test.info().attach('shared-service-tax', { body: await page.screenshot(), contentType: 'image/png' });
   expect(updates).toHaveLength(1);
 });
+
+
+test('atalho do turno abre a conferência sem fechar o caixa', async ({ page }) => {
+  await open(page);
+  const mutations: string[] = [];
+  page.on('request', request => {
+    if (request.method() !== 'GET' && /turnos/.test(request.url())) mutations.push(request.url());
+  });
+  const sidebar = page.locator('.cashier-sidebar:visible');
+  if (!await sidebar.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+  await sidebar.getByRole('button', { name: 'Fechar caixa', exact: true }).click();
+  await expect(page.getByText('Como você quer conferir?', { exact: true })).toBeVisible();
+  await expect(page.getByText('Conferência rápida', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Menu principal' })).toHaveCount(0);
+  expect(mutations).toEqual([]);
+});

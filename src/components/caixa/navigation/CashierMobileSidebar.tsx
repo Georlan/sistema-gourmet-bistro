@@ -113,6 +113,15 @@ export function CashierMobileSidebar({
                       <strong>{shiftLabel}</strong>
                     </span>
                   </div>
+                  {shiftOpen && (
+                    <button
+                      type="button"
+                      onClick={() => handleSidebarNavigation('caixa_fechamento', true)}
+                      className="cashier-shift-card__action is-close"
+                    >
+                      Fechar caixa
+                    </button>
+                  )}
                   {shiftClosed && (
                     <button
                       onClick={() => {
