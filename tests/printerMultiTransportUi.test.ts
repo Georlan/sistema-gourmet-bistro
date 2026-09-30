@@ -87,3 +87,12 @@ test('paired bluetooth stays dispatchable without pretending to be connected', (
   assert.match(monitor, /configurada; desconectada agora/);
   assert.match(monitor, /Bluetooth fica ocioso sem conexão persistente/);
 });
+
+
+test('prepare printing ignores rapid duplicate launcher triggers in the same tab', () => {
+  assert.match(monitor, /startingAgentRef = useRef\(false\)/);
+  assert.match(monitor, /if \(startingAgentRef\.current\) return/);
+  assert.match(monitor, /startingAgentRef\.current = true/);
+  assert.match(monitor, /startingAgentRef\.current = false/);
+  assert.match(monitor, /launcher\.href = 'koma-print:\/\/start'/);
+});
