@@ -12,6 +12,7 @@ test("onboarding do Super Admin oferece perfil operacional explícito", () => {
   assert.match(modal, /Pizzaria/);
   assert.match(modal, /Açaí/);
   assert.match(modal, /Churrasco/);
+  assert.match(modal, /Marmitaria/);
   assert.match(modal, /operation_profile: operationProfile/);
   assert.match(modal, /\/api\/super-admin\/restaurantes\/provisionar/);
 });
@@ -35,8 +36,9 @@ test("restaurante existente pode consultar e alterar apenas os tipos suportados"
   assert.match(tenantsTab, /Pizzaria/);
   assert.match(tenantsTab, /Açaí/);
   assert.match(tenantsTab, /Churrasco/);
+  assert.match(tenantsTab, /Marmitaria/);
 
-  assert.match(backend, /SUPPORTED_OPERATION_PROFILES = \("generic", "pizzaria", "acai", "churrasco"\)/);
+  assert.match(backend, /SUPPORTED_OPERATION_PROFILES = \("generic", "pizzaria", "acai", "churrasco", "marmitaria"\)/);
   assert.match(backend, /@router\.get\("\/restaurantes\/\{tenant_id\}\/operation-profile"\)/);
   assert.match(backend, /@router\.patch\("\/restaurantes\/\{tenant_id\}\/operation-profile"\)/);
 });

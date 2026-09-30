@@ -21,6 +21,9 @@ isso na contratação antes de conceder qualquer benefício.
 | [ ] | Acompanhar primeiro turno | Nenhum pedido perdido, duplicado ou recebimento sem destino |
 | [ ] | [Guardar evidências e decidir aceite](evidence-and-support.md) | Relatório completo e nenhum bloqueio aplicável aberto |
 
+Para uma operação de quentinhas, siga também o [guia de marmitaria](marmitaria.md),
+com tamanhos livres, composição e pausa diária de produtos e complementos.
+
 ## Cliente pronto para operar
 
 - [ ] Contratação e cobrança SaaS conferidas; processo fiscal atual confirmado.
