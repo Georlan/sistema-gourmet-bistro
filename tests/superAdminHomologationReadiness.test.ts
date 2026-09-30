@@ -26,6 +26,9 @@ test('SuperAdmin exposes actionable SaaS diagnostics', () => {
   assert.match(readiness, /Roteiro manual/);
   assert.match(readiness, /Ações necessárias \(bloqueadores\)/);
   assert.match(readiness, /KOMA_SAAS_CHECKOUT_ENABLED=false/);
+  assert.match(readiness, /E-mail e alertas administrativos/);
+  assert.doesNotMatch(readiness, /Automação WhatsApp/);
+  assert.doesNotMatch(readiness, /WhatsApp do operador KÔMA/);
 });
 
 test('Signups tab mounts diagnostics before manual release operations', () => {
