@@ -9,12 +9,14 @@ from app.routes.super_admin import get_current_admin
 from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
 from app.services import signup_notifications
 from app.services.onboarding_trial import ensure_trial_started_after_onboarding
+from app.services.restaurant_provisioning import _operation_profile_for_contract
 from app.services.saas_mercadopago import SaasMercadoPagoError, default_saas_mp_service
 from app.signup_models import RestaurantSignup, SignupNotification
 from test_saas_billing_checkout import client_and_session, _contract_payload
 
 DATA = {
     "restaurant_name": "Novo Bistrô",
+    "operation_profile": "generic",
     "responsible_name": "Ana Silva",
     "email": "ana@example.com",
     "phone": "85999999999",
@@ -48,6 +50,27 @@ def test_signup_is_persisted_before_payment_and_resume_requires_secret(signup_cl
     assert resumed.status_code == 200
     assert resumed.json()["data"] == DATA
     assert resumed.headers["cache-control"] == "no-store"
+
+
+def test_commercial_signup_keeps_operation_profile_until_contract_release(signup_client):
+    client, Session = signup_client
+    pizza_data = {**DATA, "operation_profile": "pizzaria"}
+    saved = client.post("/api/signups", json=pizza_data).json()
+
+    resumed = client.get(
+        "/api/signups/current",
+        headers={"X-Signup-Token": saved["token"]},
+    )
+    assert resumed.status_code == 200, resumed.text
+    assert resumed.json()["data"]["operation_profile"] == "pizzaria"
+
+    payload = _contract_payload()
+    payload.update(request_id=saved["id"], signup_token=saved["token"])
+    accepted = client.post("/api/contracts/accept", json=payload)
+    assert accepted.status_code == 201, accepted.text
+
+    with Session() as db:
+        assert _operation_profile_for_contract(db, accepted.json()["protocol"]) == "pizzaria"
 
 
 def test_new_signup_queues_owner_notice_once_before_acceptance(signup_client, monkeypatch):
