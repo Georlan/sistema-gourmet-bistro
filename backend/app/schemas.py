@@ -102,6 +102,7 @@ class AtivarContaRequest(BaseModel):
 
 # ----------------- CATEGORY & OBSERVATION -----------------
 class CategoriaResponse(BaseModel):
+    marmitaria_tamanho: bool = False
     id: str
     nome: str
     destino_impressao: str
@@ -154,6 +155,7 @@ class ProdutoUpdate(BaseModel):
     ativo: Optional[bool] = None
 
 class ProdutoResponse(ProdutoBase):
+    marmitaria_tamanho: Optional[str] = None
     categoria: Optional[CategoriaResponse] = None
     model_config = ConfigDict(from_attributes=True)
 

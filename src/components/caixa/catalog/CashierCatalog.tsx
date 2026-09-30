@@ -52,6 +52,7 @@ export default function CashierCatalog({
   onRefreshCategorias,
 }: Props) {
   const isMarmitaria = restauranteConfig?.operation_profile === 'marmitaria';
+  const [focusMarmitaId, setFocusMarmitaId] = useState<string | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -127,17 +128,31 @@ export default function CashierCatalog({
   const productImagePreview = prodFormImagePreview
     || (!prodFormImageRemoveRequested ? prodFormImagem : '');
 
-  const quentinhasCategory = apiCategorias.find(category => category.nome.trim().toLowerCase() === 'quentinhas');
-  const startProduct = (size?: string) => {
+  const isMarmitaCategory = (category: CatalogCategory) => /^(marmitas?|quentinhas?)$/i.test(category.nome.trim()) || Boolean(category.marmitaria_tamanho);
+  const isMarmita = (product: Product) => Boolean(product.marmitaria_tamanho) || apiCategorias.some(category => category.id === product.categoria_id && isMarmitaCategory(category));
+  const startProduct = () => {
     setEditingProduct(null);
     setProdFormId(suggestedProductCode);
-    setProdFormNome(size ? `Quentinha ${size}` : '');
+    setProdFormNome('');
     setProdFormPreco('');
-    setProdFormCategoriaId(isMarmitaria ? quentinhasCategory?.id || '' : apiCategorias[0]?.id || '');
+    setProdFormCategoriaId((isMarmitaria ? apiCategorias.find(category => !isMarmitaCategory(category)) : apiCategorias[0])?.id || '');
     setProdFormDescricao('');
     resetProductImageState('');
     setProdFormAtivo(true);
     setShowProductModal(true);
+  };
+
+  const editProductDetails = (product: Product) => {
+              setEditingProduct(product);
+              setProdFormId(product.id);
+              setProdFormNome(product.nome);
+              setProdFormPreco(Number(product.preco) || 0);
+              setProdFormCategoriaId(product.categoria_id || '');
+              setProdFormDescricao(product.descricao || '');
+              const gallery = product.imagens_galeria || [];
+              resetProductImageState(product.imagem || gallery[0] || '');
+              setProdFormAtivo(product.ativo !== false);
+              setShowProductModal(true);
   };
 
   return (
@@ -163,26 +178,17 @@ export default function CashierCatalog({
               { label: 'categorias', value: apiCategorias.length },
             ]}
           />
-          {isMarmitaria && (
-            <section aria-label="Configurar Quentinhas P, M e G" className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
-              <h3 className="font-bold text-koma-foreground">Quentinhas · P, M e G</h3>
-              <p className="text-sm text-koma-muted">Uma categoria para as quentinhas. Cada tamanho tem seu próprio preço e pode ter limites de complementos diferentes.</p>
-              {!quentinhasCategory && <button type="button" onClick={() => setShowCategoryModal(true)} className="font-bold text-emerald-600 dark:text-emerald-400">1. Criar categoria Quentinhas</button>}
-              <div className="grid grid-cols-3 gap-2">
-                {(['P', 'M', 'G'] as const).map(size => {
-                  const product = apiProdutos.find(item => item.categoria_id === quentinhasCategory?.id && item.nome.trim().toLowerCase() === `quentinha ${size.toLowerCase()}`);
-                  return <button key={size} type="button" disabled={!quentinhasCategory || Boolean(product)} onClick={() => startProduct(size)} className="rounded-xl border border-koma-border p-3 text-koma-foreground disabled:opacity-60">
-                    <strong className="block">Quentinha {size}</strong>
-                    <span className="text-xs">{product ? `Cadastrada · ${Number(product.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : 'Cadastrar preço'}</span>
-                  </button>;
-                })}
-              </div>
-              <p className="text-xs text-koma-muted">Depois, em Complementos, vincule os grupos a cada produto e configure suas escolhas. Cadastre somente os tamanhos vendidos.</p>
-            </section>
-          )}
+          {isMarmitaria && <ComplementosTab
+            apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} produtos={apiProdutos}
+            onEditDetails={id => { const product = apiProdutos.find(item => item.id === id); if (product) editProductDetails(product); }}
+            marmitariaCadastro focusProductId={focusMarmitaId} onFocusHandled={() => setFocusMarmitaId(null)}
+            catalogVersion={JSON.stringify(apiProdutos.map(product => [product.id, product.nome, product.preco, product.ativo]))}
+            onShowNotification={showToast} onCatalogChanged={async () => { await fetchProdutos(); await fetchCategorias(); }}
+          />}
+          {isMarmitaria && <h3 className="font-bold text-koma-foreground">Sobremesas e bebidas</h3>}
           <CardapioProdutosTab
-            produtos={apiProdutos}
-            categorias={apiCategorias}
+            produtos={isMarmitaria ? apiProdutos.filter(product => !isMarmita(product)) : apiProdutos}
+            categorias={isMarmitaria ? apiCategorias.filter(category => !isMarmitaCategory(category)) : apiCategorias}
             catalogReady={catalogReady || apiProdutos.length > 0 || apiCategorias.length > 0}
             previewUrl={
               hasOnlineMenu && restauranteConfig?.restaurante_id
@@ -191,18 +197,11 @@ export default function CashierCatalog({
             }
             onCreateProduct={() => startProduct()}
             onEditProduct={(product) => {
-              setEditingProduct(product);
-              setProdFormId(product.id);
-              setProdFormNome(product.nome);
-              setProdFormPreco(Number(product.preco) || 0);
-              setProdFormCategoriaId(product.categoria_id || '');
-              setProdFormDescricao(product.descricao || '');
-              const gallery = product.imagens_galeria || [];
-              resetProductImageState(product.imagem || gallery[0] || '');
-              setProdFormAtivo(product.ativo !== false);
-              setShowProductModal(true);
+              if (isMarmitaria && isMarmita(product)) { setFocusMarmitaId(product.id); return; }
+              editProductDetails(product);
             }}
             onDuplicateProduct={(product) => {
+              if (isMarmitaria && isMarmita(product)) { showToast('Cada tamanho tem um único cadastro. Configure P, M ou G em Marmitas.', 'error'); return; }
               setEditingProduct(null);
               setProdFormId(suggestedProductCode);
               setProdFormNome(`${product.nome} (Cópia)`);
@@ -345,7 +344,7 @@ export default function CashierCatalog({
               <div>
                 <div className="flex items-center gap-2">
                   <h3 id="product-modal-title" className="text-base font-bold text-koma-foreground">
-                    {editingProduct ? 'Editar produto' : 'Novo produto'}
+                    {editingProduct ? (isMarmitaria && isMarmita(editingProduct) ? 'Foto e descrição da marmita' : 'Editar produto') : 'Novo produto'}
                   </h3>
                   {editingProduct && (
                     <span className="rounded-full border border-koma-border bg-koma-raised px-2 py-0.5 font-mono text-[9px] text-koma-muted">
@@ -476,7 +475,7 @@ export default function CashierCatalog({
             >
               {apiCategorias.length === 0 && (
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-[10px] text-amber-800 dark:text-amber-200">
-                  <span>{isMarmitaria ? 'Crie uma categoria, como Quentinhas, antes de salvar o primeiro produto.' : 'Crie uma categoria antes de salvar o primeiro produto.'}</span>
+                  <span>{isMarmitaria ? 'Crie uma categoria, como Sobremesas ou Bebidas, para este produto.' : 'Crie uma categoria antes de salvar o primeiro produto.'}</span>
                   <button
                     type="button"
                     onClick={() => setShowCategoryModal(true)}
@@ -487,29 +486,7 @@ export default function CashierCatalog({
                 </div>
               )}
 
-              {isMarmitaria && (
-                <div className="rounded-xl border border-koma-border bg-koma-panel p-3 text-koma-secondary">
-                  <p className="font-bold">Monte o cardápio da sua marmitaria</p>
-                  <p className="mt-1 text-[10px] text-koma-muted">
-                    Use uma categoria Quentinhas com os produtos Quentinha P, Quentinha M e Quentinha G, cada um com seu próprio preço.
-                    Depois, em Complementos, configure as proteínas, guarnições e saladas,
-                    os limites de escolha e os valores extras, e vincule os grupos aos produtos.
-                  </p>
-                </div>
-              )}
-
-              {isMarmitaria && !editingProduct && (
-                <fieldset className="space-y-2">
-                  <legend className="text-[10px] font-bold text-koma-secondary">Tamanho da quentinha</legend>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['P', 'M', 'G'] as const).map(size => {
-                      const exists = apiProdutos.some(product => product.categoria_id === prodFormCategoriaId && product.nome.trim().toLowerCase() === `quentinha ${size.toLowerCase()}`);
-                      return <button key={size} type="button" disabled={exists} aria-pressed={prodFormNome === `Quentinha ${size}`} onClick={() => setProdFormNome(`Quentinha ${size}`)} className={`rounded-xl border p-3 font-bold disabled:opacity-50 ${prodFormNome === `Quentinha ${size}` ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' : 'border-koma-border text-koma-foreground'}`}>{size}{exists ? ' · cadastrada' : ''}</button>;
-                    })}
-                  </div>
-                </fieldset>
-              )}
-
+              {isMarmitaria && <p className="text-sm text-koma-muted">{editingProduct && isMarmita(editingProduct) ? 'Atualize a foto e a descrição. Preço e escolhas ficam no cadastro de Marmitas.' : 'Cadastre aqui sobremesas e bebidas. Os tamanhos e escolhas ficam no cadastro de Marmitas.'}</p>}
               <div className="space-y-1.5">
                 <label
                   htmlFor="product-name"
@@ -520,8 +497,9 @@ export default function CashierCatalog({
                 <input
                   type="text"
                   id="product-name"
+                  readOnly={isMarmitaria && Boolean(editingProduct) && isMarmita(editingProduct)}
                   required
-                  placeholder={isMarmitaria ? 'Ex: Quentinha média' : 'Ex: Cheeseburger Duplo'}
+                  placeholder={isMarmitaria ? 'Ex: Pudim ou refrigerante' : 'Ex: Cheeseburger Duplo'}
                   value={prodFormNome}
                   onChange={(e) => setProdFormNome(e.target.value)}
                   className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"}
@@ -534,10 +512,11 @@ export default function CashierCatalog({
                     htmlFor="product-price"
                     className={"text-[10px] font-bold text-koma-secondary block"}
                   >
-                    {isMarmitaria ? 'Preço deste tamanho' : 'Preço de venda'}
+                    Preço de venda
                   </label>
                   <MoneyInput
                     id="product-price"
+                    readOnly={isMarmitaria && Boolean(editingProduct) && isMarmita(editingProduct)}
                     required
                     placeholder="25.90"
                     value={prodFormPreco}
@@ -555,6 +534,7 @@ export default function CashierCatalog({
                   <div className={"flex gap-1.5"}>
                     <select
                       id="product-category"
+                      disabled={isMarmitaria && Boolean(editingProduct) && isMarmita(editingProduct)}
                       required
                       value={prodFormCategoriaId}
                       onChange={(e) => setProdFormCategoriaId(e.target.value)}
@@ -563,7 +543,7 @@ export default function CashierCatalog({
                       <option value="" disabled>
                         Selecione...
                       </option>
-                      {apiCategorias.map((cat) => (
+                      {apiCategorias.filter(cat => !isMarmitaria || !isMarmitaCategory(cat) || editingProduct?.categoria_id === cat.id).map((cat) => (
                         <option key={cat.id} value={cat.id}>
                           {cat.nome}
                         </option>
@@ -591,14 +571,14 @@ export default function CashierCatalog({
                 </label>
                 <textarea
                   id="product-description"
-                  placeholder={isMarmitaria ? 'Ex: Quentinha média com arroz, feijão e opções de proteína e guarnição.' : 'Hambúrguer bovino 150g, queijo cheddar derretido...'}
+                  placeholder={isMarmitaria ? 'Ex: Pudim caseiro, fatia individual.' : 'Hambúrguer bovino 150g, queijo cheddar derretido...'}
                   value={prodFormDescricao}
                   onChange={(e) => setProdFormDescricao(e.target.value)}
                   rows={2}
                   className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
                 <p className="text-[9px] text-koma-muted">
-                  {isMarmitaria ? 'Descreva o que está incluído neste tamanho. Configure as opções e quantidades em Complementos.' : 'Use uma frase curta com os principais ingredientes. Ela também ajuda na busca.'}
+                  {isMarmitaria ? 'Descreva o produto que o cliente vai receber.' : 'Use uma frase curta com os principais ingredientes. Ela também ajuda na busca.'}
                 </p>
               </div>
 
@@ -756,7 +736,7 @@ export default function CashierCatalog({
       )}
       <CategoriaModal
         isOpen={showCategoryModal}
-        suggestedName={isMarmitaria ? 'Quentinhas' : undefined}
+        suggestedName={isMarmitaria ? 'Sobremesas' : undefined}
         onClose={() => setShowCategoryModal(false)}
         apiBaseUrl={apiBaseUrl}
         authHeaders={authHeaders}

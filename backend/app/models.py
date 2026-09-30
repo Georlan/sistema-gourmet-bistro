@@ -166,6 +166,7 @@ class Produto(Base):
     __tablename__ = "produtos"
     __table_args__ = (
         UniqueConstraint('restaurante_id', 'id', name='uq_produtos_restaurante_id_negocio'),
+        UniqueConstraint('restaurante_id', 'marmitaria_tamanho', name='uq_produtos_tenant_marmitaria_tamanho'),
         ForeignKeyConstraint(
             ['restaurante_id', 'categoria_id'],
             ['categorias.restaurante_id', 'categorias.id'],
@@ -196,6 +197,7 @@ class Produto(Base):
     
     # Relationships
     categoria = relationship("Categoria", back_populates="produtos")
+    marmitaria_tamanho = Column(String(100), nullable=True)
     ficha_tecnica = relationship(
         "ProdutoInsumo",
         back_populates="produto",
@@ -1137,6 +1139,9 @@ class ProdutoGrupoModificador(Base):
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     produto_id = Column(String, nullable=False)
     grupo_id = Column(String, ForeignKey("grupo_modificadores.id"), nullable=False)
+    min_selecoes = Column(Integer, nullable=True)
+    max_selecoes = Column(Integer, nullable=True)
+    modo_selecao = Column(String(16), nullable=True)
 
 
 class ItemModificador(Base):

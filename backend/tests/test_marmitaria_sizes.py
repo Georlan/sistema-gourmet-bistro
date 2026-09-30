@@ -74,6 +74,7 @@ def test_shared_options_have_distinct_size_limits_and_backend_validation(catalog
     headers, group = catalog
     medium, _ = create_size(headers, group, 'Marmita média', 1)
     large, payload = create_size(headers, group, 'Marmita grande', 2)
+    assert medium['categoria_id'] == large['categoria_id']
     options = [o['id'] for o in group['opcoes']]
     public = client.get(f'/api/cardapio-digital/public?restaurante_id={TENANT}').json()
     products = {p['id']: p for p in public['produtos']}
@@ -108,7 +109,7 @@ def test_size_setup_requires_profile_auth_and_atomic_valid_data(catalog):
     assert client.post('/cardapio/marmitaria/tamanhos', json=payload).status_code == 401
     waiter = create_access_token(subject='marmitaria-sizes-waiter', restaurante_id=TENANT, role='garcom')
     assert client.post('/cardapio/marmitaria/tamanhos', headers={'Authorization': f'Bearer {waiter}'}, json=payload).status_code == 403
-    for invalid in [{'preco': -1}, {'preco': 'NaN'}, {'nome': '   '}, {'regras': []}, {'regras': [{'grupo_id': group['id'], 'minimo': 3, 'maximo': 1}]}]:
+    for invalid in [{'preco': -1}, {'preco': 'NaN'}, {'nome': '   '}, {'regras': [{'grupo_id': group['id'], 'minimo': 1, 'maximo': 1, 'modo_selecao': 'invalido'}]}, {'regras': [{'grupo_id': group['id'], 'minimo': 3, 'maximo': 1}]}]:
         assert client.post('/cardapio/marmitaria/tamanhos', headers=headers, json={**payload, **invalid}).status_code == 422
     assert client.post('/cardapio/marmitaria/tamanhos', headers=headers, json={**payload, 'regras': [{'grupo_id': 'foreign-group', 'minimo': 0, 'maximo': 1}]}).status_code == 422
     assert client.put('/cardapio/marmitaria/tamanhos/foreign-product', headers=headers, json=payload).status_code == 404
@@ -149,7 +150,7 @@ def test_group_edit_preserves_size_limits_and_cannot_silently_remove_them(catalo
     validate(size, [o['id'] for o in group['opcoes'][:2]])
     with pytest.raises(ModifierSelectionLimitError):
         validate(size, [group['opcoes'][0]['id']])
-    assert client.put(f"/cardapio/modificadores/grupos/{group['id']}", headers=headers, json={**body, 'categoria_ids': []}).status_code == 422
+    assert client.put(f"/cardapio/modificadores/grupos/{group['id']}", headers=headers, json={**body, 'produto_ids': []}).status_code == 422
     assert client.delete(f"/cardapio/modificadores/grupos/{group['id']}", headers=headers).status_code == 409
     # Pausas podem ser salvas, mas um tamanho ativo exige opções suficientes.
     for option in group['opcoes']:
@@ -203,3 +204,158 @@ def test_foreign_group_cannot_be_linked_and_creates_no_partial_category(catalog)
     finally:
         current_restaurante_id.reset(token)
         db.close()
+
+
+def test_unified_catalog_adopts_manual_product_preserves_id_and_blocks_duplicate(catalog):
+    headers, group = catalog
+    db = SessionLocal()
+    token = current_restaurante_id.set(TENANT)
+    try:
+        db.add(Categoria(id='quentinhas-manual', restaurante_id=TENANT, nome='Quentinhas', destino_impressao='COZINHA'))
+        db.flush()
+        db.add(Produto(id='quentinha-g-original', restaurante_id=TENANT, nome='Quentinha G', categoria_id='quentinhas-manual', preco=10, ativo=True, descricao='Descrição antiga', imagem='/original.png'))
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+    sizes = client.get('/cardapio/marmitaria/tamanhos', headers=headers).json()['tamanhos']
+    assert sizes[0]['id'] == 'quentinha-g-original'
+    assert sizes[0]['tamanho'] == 'G'
+    assert sizes[0]['preco'] == 10
+    payload = {'tamanho': 'G', 'nome': 'Marmita grande', 'preco': 28, 'ativo': True,
+               'regras': [{'grupo_id': group['id'], 'minimo': 2, 'maximo': 2, 'modo_selecao': 'tipos'}]}
+    assert client.post('/cardapio/marmitaria/tamanhos', headers=headers, json=payload).status_code == 409
+    adopted = client.put('/cardapio/marmitaria/tamanhos/quentinha-g-original', headers=headers, json=payload)
+    assert adopted.status_code == 200, adopted.text
+    assert adopted.json()['id'] == 'quentinha-g-original'
+    assert adopted.json()['categoria_id'] == 'quentinhas-manual'
+    assert adopted.json()['configurado'] is True
+    small = client.post('/cardapio/marmitaria/tamanhos', headers=headers, json={**payload, 'tamanho': 'P', 'nome': 'Marmita P'})
+    assert small.status_code == 201, small.text
+    assert small.json()['categoria_id'] == adopted.json()['categoria_id']
+    assert client.post('/cardapio/marmitaria/tamanhos', headers=headers, json={**payload, 'tamanho': None, 'nome': 'Quentinha grande'}).status_code == 409
+    assert client.post('/produtos/', headers=headers, json={'id': 'duplicate-g', 'nome': 'Quentinha G (Cópia)', 'categoria_id': 'quentinhas-manual', 'preco': 28}).status_code == 409
+    db = SessionLocal()
+    token = current_restaurante_id.set(TENANT)
+    try:
+        product = db.query(Produto).filter_by(restaurante_id=TENANT, id='quentinha-g-original').one()
+        assert product.descricao == 'Descrição antiga'
+        assert product.imagem == '/original.png'
+        assert db.query(Categoria).filter_by(restaurante_id=TENANT).count() == 1
+        assert db.query(Produto).filter_by(restaurante_id=TENANT).count() == 2
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+    validate(adopted.json(), [o['id'] for o in group['opcoes'][:2]])
+
+
+def test_price_can_be_saved_paused_before_choices_exist(catalog):
+    headers, _ = catalog
+    payload = {'tamanho': 'P', 'nome': 'Marmita P', 'preco': 12, 'ativo': False, 'regras': []}
+    created = client.post('/cardapio/marmitaria/tamanhos', headers=headers, json=payload)
+    assert created.status_code == 201, created.text
+    assert created.json()['regras'] == []
+    assert client.put(f"/cardapio/marmitaria/tamanhos/{created.json()['id']}", headers=headers, json={**payload, 'ativo': True}).status_code == 422
+
+
+def test_old_size_category_remains_readable_and_is_adopted_without_recreating_product(catalog):
+    from app.catalog_addons import CategoriaGrupoModificador
+    headers, group = catalog
+    db = SessionLocal()
+    token = current_restaurante_id.set(TENANT)
+    try:
+        db.add(Categoria(id='legacy-size-category', restaurante_id=TENANT, nome='Marmita média', destino_impressao='COZINHA', marmitaria_tamanho=True))
+        db.flush()
+        db.add(Produto(id='legacy-size-product', restaurante_id=TENANT, nome='Marmita média', categoria_id='legacy-size-category', preco=20, ativo=True))
+        db.add(CategoriaGrupoModificador(restaurante_id=TENANT, categoria_id='legacy-size-category', grupo_id=group['id'], min_selecoes=1, max_selecoes=1, modo_selecao='porcoes'))
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+    old = client.get('/cardapio/marmitaria/tamanhos', headers=headers).json()['tamanhos'][0]
+    assert old['tamanho'] == 'M'
+    assert old['regras'][0]['modo_selecao'] == 'porcoes'
+    validate(old, [group['opcoes'][0]['id']])
+    response = client.put('/cardapio/marmitaria/tamanhos/legacy-size-product', headers=headers,
+                          json={key: old[key] for key in ['tamanho', 'nome', 'preco', 'ativo', 'regras']})
+    assert response.status_code == 200, response.text
+    assert response.json()['id'] == old['id']
+    assert response.json()['categoria_id'] != old['categoria_id']
+    validate(response.json(), [group['opcoes'][0]['id']])
+    assert client.post('/cardapio/marmitaria/tamanhos', headers=headers,
+                       json={'nome': 'Quentinha M', 'preco': 20, 'ativo': False, 'regras': []}).status_code == 409
+
+
+def test_configured_product_rules_are_authoritative_over_shared_category(catalog):
+    from app.catalog_addons import CategoriaGrupoModificador
+    headers, group = catalog
+    size, payload = create_size(headers, group, 'Marmita P', 1)
+    another = client.post('/cardapio/modificadores/grupos', headers=headers, json={
+        'nome': 'Saladas herdadas', 'tipo': 'opcional', 'min_selecoes': 0, 'max_selecoes': 1,
+        'opcoes': [{'nome': 'Alface', 'ativo': True, 'preco_adicional': 0}],
+    }).json()
+    db = SessionLocal()
+    token = current_restaurante_id.set(TENANT)
+    try:
+        db.add(CategoriaGrupoModificador(restaurante_id=TENANT, categoria_id=size['categoria_id'], grupo_id=another['id']))
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+    loaded = client.get('/cardapio/marmitaria/tamanhos', headers=headers).json()['tamanhos'][0]
+    assert [rule['grupo_id'] for rule in loaded['regras']] == [group['id']]
+    changed = client.put(f"/cardapio/marmitaria/tamanhos/{size['id']}", headers=headers,
+                         json={**payload, 'ativo': False, 'regras': []})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()['regras'] == []
+    assert client.put(f"/produtos/{size['id']}", headers=headers, json={'ativo': True}).status_code == 409
+    assert client.patch('/produtos/disponibilidade', headers=headers, json={'produto_ids': [size['id']], 'ativo': True}).status_code == 409
+    assert client.patch('/produtos/edicao-lote', headers=headers, json={'produto_ids': [size['id']], 'categoria_id': size['categoria_id']}).status_code == 409
+
+
+def test_size_identity_constraint_is_tenant_scoped_and_prevents_races(catalog):
+    from sqlalchemy.exc import IntegrityError
+    headers, group = catalog
+    size, _ = create_size(headers, group, 'Marmita P', 1)
+    db = SessionLocal()
+    token = current_restaurante_id.set(TENANT)
+    try:
+        db.add(Produto(id='race-duplicate-p', restaurante_id=TENANT, nome='Outro nome', categoria_id=size['categoria_id'], preco=10, marmitaria_tamanho='p'))
+        with pytest.raises(IntegrityError):
+            db.commit()
+        db.rollback()
+        assert db.query(Produto).filter_by(restaurante_id=TENANT, marmitaria_tamanho='p').count() == 1
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+
+
+def test_shared_category_can_be_renamed_without_splitting_the_catalog(catalog):
+    headers, group = catalog
+    small, _ = create_size(headers, group, 'Marmita P', 1)
+    renamed = client.put(f"/produtos/categorias/{small['categoria_id']}", headers=headers, json={'nome': 'Quentinhas da casa'})
+    assert renamed.status_code == 200
+    medium, _ = create_size(headers, group, 'Marmita M', 1)
+    assert medium['categoria_id'] == small['categoria_id']
+    assert client.post('/produtos/', headers=headers, json={'id': 'manual-copy', 'nome': 'P (Cópia)', 'categoria_id': small['categoria_id'], 'preco': 20}).status_code == 409
+
+
+@pytest.mark.skipif(__import__('os').getenv('KOMA_PYTEST_USE_EXTERNAL_DATABASE') != 'true', reason='Concorrência real exige PostgreSQL isolado.')
+def test_two_simultaneous_size_creations_produce_one_product(catalog):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    headers, group = catalog
+    barrier = Barrier(2)
+    payload = {'tamanho': 'P', 'nome': 'Marmita P', 'preco': 12, 'ativo': True,
+               'regras': [{'grupo_id': group['id'], 'minimo': 1, 'maximo': 1, 'modo_selecao': 'tipos'}]}
+
+    def create():
+        barrier.wait(timeout=5)
+        return client.post('/cardapio/marmitaria/tamanhos', headers=headers, json=payload).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        statuses = list(executor.map(lambda _: create(), range(2)))
+    assert sorted(statuses) == [201, 409]
+    sizes = client.get('/cardapio/marmitaria/tamanhos', headers=headers).json()['tamanhos']
+    assert len(sizes) == 1
+    assert sizes[0]['tamanho'] == 'P'

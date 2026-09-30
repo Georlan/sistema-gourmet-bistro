@@ -8,6 +8,7 @@ export interface Product {
   nome: string;
   categoria: string;
   categoria_id?: string;
+  marmitaria_tamanho?: string | null;
   preco: number;
   descricao: string;
   imagem?: string;
