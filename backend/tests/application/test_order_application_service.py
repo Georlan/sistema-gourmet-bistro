@@ -324,7 +324,8 @@ class TestOrderApplicationServicePhase31:
         finally:
             db.close()
 
-    def test_checkout_context_fields_persisted_on_comanda(self, char_setup):
+    @pytest.mark.parametrize("change_for,expected", [("R$ 50,00", 50.0), ("50.0", 50.0), ("50.00", 50.0), ("50.25", 50.25), ("R$ 1.250,50", 1250.5)])
+    def test_checkout_context_fields_persisted_on_comanda(self, char_setup, change_for, expected):
         """Preserva bairro, forma de pagamento e troco na comanda."""
         db: Session = SessionLocal()
         try:
@@ -336,7 +337,7 @@ class TestOrderApplicationServicePhase31:
                 customer=CustomerInput(name="Ana Pagamento", phone="11999990005"),
                 delivery=DeliveryInput(address="Rua B, 20", neighborhood="Jardins"),
                 payment_method="Dinheiro",
-                change_for="R$ 50,00",
+                change_for=change_for,
             )
 
             dto = OrderApplicationService.create_order(db, cmd)
@@ -344,7 +345,7 @@ class TestOrderApplicationServicePhase31:
             comanda = db.query(Comanda).filter(Comanda.id == dto.comanda_id).first()
             assert comanda.delivery_bairro == "Jardins"
             assert comanda.delivery_forma_pagamento == "Dinheiro"
-            assert comanda.delivery_troco_para == 50.0
+            assert comanda.delivery_troco_para == expected
         finally:
             db.close()
 
