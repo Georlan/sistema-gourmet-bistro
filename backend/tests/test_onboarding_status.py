@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.routes.onboarding import (
+    _operations_step_is_complete,
     _profile_is_configured,
     _required_progress,
     _trial_status_payload,
@@ -207,3 +208,27 @@ def test_delivery_requires_existing_delivery_configuration_only_when_selected():
     assert blocked["ready"] is False
     assert "delivery_configuration" in blocked["blockers"]
     assert pickup["ready"] is True
+
+
+def test_saved_delivery_completes_modalities_step_while_delivery_setup_is_pending():
+    operations = evaluate_operation_readiness(
+        config=_config(tipos_pedido_ativos=["delivery"], delivery_ativo=False),
+        restaurant=_restaurant(),
+        table_count=0,
+        legacy_policy_allowed=False,
+    )
+
+    assert operations["configured"] is True
+    assert operations["ready"] is False
+    assert "delivery_configuration" in operations["blockers"]
+    assert _operations_step_is_complete(operations) is True
+
+    steps = {
+        "profile": True,
+        "hours": True,
+        "catalog": True,
+        "operations": _operations_step_is_complete(operations),
+        "mercadoPago": False,
+        "firstOrder": False,
+    }
+    assert _required_progress(steps) == {"completed": 4, "total": 4, "percent": 100}

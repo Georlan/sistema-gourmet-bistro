@@ -126,6 +126,16 @@ def _required_progress(steps: dict[str, bool]) -> dict[str, int]:
     }
 
 
+def _operations_step_is_complete(operations: dict[str, Any]) -> bool:
+    """Modalidades salvas concluem o passo; prontidão operacional fica separada.
+
+    Bloqueios de configuração específica, como taxa/cobertura do delivery,
+    mapa de mesas ou taxa de serviço, continuam expostos em operations.ready
+    e operations.blockers sem reabrir o passo obrigatório de modalidades.
+    """
+    return bool(operations.get("configured"))
+
+
 def _require_onboarding_role(current_user: Usuario) -> None:
     role = str(current_user.cargo or current_user.role or "").strip().lower()
     if role not in {"admin", "gerente"}:
@@ -385,7 +395,7 @@ def _build_onboarding_status(
         "profile": _profile_is_configured(restaurant),
         "hours": _structured_has_items(restaurant.horarios_funcionamento),
         "catalog": active_product_count > 0,
-        "operations": bool(operations["ready"]),
+        "operations": _operations_step_is_complete(operations),
         "mercadoPago": mercado_pago_connected,
         "firstOrder": test_order_detected,
     }
