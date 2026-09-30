@@ -191,13 +191,17 @@ export default function CardapioPage() {
     }
   }, []);
 
-  const loadRestaurantData = useCallback(async () => {
-    setIsLoading(true);
-    setErrorMsg("");
+  const loadRestaurantData = useCallback(async (background = false) => {
+    if (!background) {
+      setIsLoading(true);
+      setErrorMsg("");
+    }
     const identifier = getRestaurantIdentifier();
     if (!identifier) {
-      setErrorMsg("Cardápio não encontrado ou ainda não publicado.");
-      setIsLoading(false);
+      if (!background) {
+        setErrorMsg("Cardápio não encontrado ou ainda não publicado.");
+        setIsLoading(false);
+      }
       return;
     }
 
@@ -376,15 +380,19 @@ export default function CardapioPage() {
         }
       }
     } catch (error) {
-      console.error("Falha ao carregar cardápio público:", error);
-      setActiveBrand(null);
-      setErrorMsg(
-        error instanceof Error && error.message === "CARDAPIO_NOT_FOUND"
-          ? "Cardápio não encontrado ou ainda não publicado."
-          : "O cardápio está temporariamente indisponível. Tente novamente.",
-      );
+      if (background) {
+        console.warn("Falha ao atualizar cardápio público em segundo plano; mantendo snapshot atual:", error);
+      } else {
+        console.error("Falha ao carregar cardápio público:", error);
+        setActiveBrand(null);
+        setErrorMsg(
+          error instanceof Error && error.message === "CARDAPIO_NOT_FOUND"
+            ? "Cardápio não encontrado ou ainda não publicado."
+            : "O cardápio está temporariamente indisponível. Tente novamente.",
+        );
+      }
     } finally {
-      setIsLoading(false);
+      if (!background) setIsLoading(false);
     }
   }, [checkActiveOrders]);
 
@@ -504,7 +512,7 @@ export default function CardapioPage() {
       ws = socket;
       socket.onopen = () => {
         delay = 2000;
-        void loadRestaurantData();
+        void loadRestaurantData(true);
         if (reconnectTimer) {
           clearTimeout(reconnectTimer);
           reconnectTimer = undefined;
@@ -516,7 +524,7 @@ export default function CardapioPage() {
           const eventName = data.event || data.type;
           if (["catalog_updated", "config_updated", "store_status_changed"].includes(eventName)) {
             if (refreshTimer) clearTimeout(refreshTimer);
-            refreshTimer = setTimeout(() => void loadRestaurantData(), 100);
+            refreshTimer = setTimeout(() => void loadRestaurantData(true), 100);
           }
         } catch {
           // Mensagem inválida do socket não interrompe o cardápio.
@@ -533,7 +541,7 @@ export default function CardapioPage() {
 
     const handleVisibility = () => {
       if (document.hidden || stopped) return;
-      void loadRestaurantData();
+      void loadRestaurantData(true);
       if (!ws || ws.readyState === WebSocket.CLOSED) connect();
     };
 
