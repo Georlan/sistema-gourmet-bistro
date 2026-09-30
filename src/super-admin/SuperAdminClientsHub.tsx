@@ -39,7 +39,7 @@ interface SuperAdminClientsHubProps {
   contractsAvailable: boolean;
   isLoadingContracts: boolean;
   pendingContractsCount: number;
-  refreshContracts: () => void;
+  refreshContracts: () => Promise<void>;
   activeView: ClientsView;
   onChangeView: (view: ClientsView) => void;
   activeNewClientsView: NewClientsView;
