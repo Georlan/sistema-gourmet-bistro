@@ -16,7 +16,7 @@ export interface DeliveryOrderView {
   quantidadeItens: number;
   modalidade: 'delivery' | 'retirada' | 'dine_in';
   pago: boolean;
-  status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
+  status: 'pendente' | 'analise' | 'aceito' | 'producao' | 'pronto' | 'transito';
   endereco?: string;
   paymentMethod?: string | null;
   onlinePaymentStatus?: string | null;

@@ -50,7 +50,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
 
     orders.forEach((order) => {
       // Pedidos online só chegam à cozinha depois que o caixa os aceita.
-      if (order.deliveryStatus === 'pendente' || order.deliveryStatus === 'recusado') {
+      if (order.deliveryStatus === 'aceito' || order.deliveryStatus === 'pendente' || order.deliveryStatus === 'recusado') {
         return;
       }
       order.itens.forEach((item) => {

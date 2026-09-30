@@ -451,7 +451,9 @@ export function KanbanOrderDetails({
               >
                 <Check size={15} />
                 <span>
-                  {selectedIsReadyDelivery
+                  {selectedKanbanOrder.deliveryStatus === 'aceito'
+                    ? 'Iniciar preparo'
+                    : selectedIsReadyDelivery
                     ? 'Saiu para entrega'
                     : selectedIsDelivery
                       ? 'Marcar pronto para sair'

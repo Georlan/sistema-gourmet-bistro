@@ -512,7 +512,7 @@ export function CaixaPanel({
   const activeKitchenItems = orders.flatMap((order) =>
     order.itens
       .filter((item) => item.status === 'preparando' || item.status === 'pronto')
-      .filter(() => order.deliveryStatus !== 'pendente' && order.deliveryStatus !== 'recusado')
+      .filter(() => order.deliveryStatus !== 'aceito' && order.deliveryStatus !== 'pendente' && order.deliveryStatus !== 'recusado')
       .map((item) => ({
         ...item,
         orderId: order.id,
@@ -575,7 +575,7 @@ export function CaixaPanel({
 
   const filteredDigitalProduction = useMemo(() => {
     return deliveryOrders
-      .filter((o) => projectCashierDeliveryState(o.status).inProduction)
+      .filter((o) => projectCashierDeliveryState(o.status, o.modalidade).inProduction)
       .filter((order) => matchesSearchQuery(order, searchQuery));
   }, [deliveryOrders, searchQuery, matchesSearchQuery]);
 
@@ -585,7 +585,7 @@ export function CaixaPanel({
 
   const filteredDeliveryFinalization = useMemo(() => {
     return deliveryOrders
-      .filter((o) => projectCashierDeliveryState(o.status).inFinalization)
+      .filter((o) => projectCashierDeliveryState(o.status, o.modalidade).inFinalization)
       .filter((order) => matchesSearchQuery(order, searchQuery));
   }, [deliveryOrders, searchQuery, matchesSearchQuery]);
 

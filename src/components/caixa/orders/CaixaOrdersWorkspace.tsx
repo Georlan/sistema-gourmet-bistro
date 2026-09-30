@@ -180,9 +180,8 @@ export function CaixaOrdersWorkspace({
   };
 
   const renderCourierControl = (order: DeliveryOrderView, orderNumber: string) => {
-    if (order.modalidade !== 'delivery') return null;
+    if (order.modalidade !== 'delivery' || order.status === 'transito') return null;
     const selectedCourierId = courierSelection(order);
-    const inTransit = order.status === 'transito';
 
     return (
       <div
@@ -192,23 +191,8 @@ export function CaixaOrdersWorkspace({
       >
         <div className="mb-1 flex items-center justify-between gap-2 text-[9px]">
           <span className="font-bold uppercase tracking-wide text-koma-muted">Entregador</span>
-          {inTransit && <span className="font-bold text-sky-500">Em rota</span>}
         </div>
-        {inTransit ? (
-          <div className="flex items-center justify-between gap-2">
-            <strong className="min-w-0 flex-1 truncate text-[11px] text-koma-foreground">
-              {courierName(order.motoboyId) || (order.motoboyId ? `#${order.motoboyId}` : 'Não identificado')}
-            </strong>
-            <button
-              type="button"
-              onClick={() => couriers.onRequestReassignment(order)}
-              className="shrink-0 rounded-md border border-amber-500/30 px-2 py-1 text-[8px] font-extrabold uppercase text-amber-500 hover:bg-amber-500/10"
-            >
-              Trocar entregador
-            </button>
-          </div>
-        ) : (
-          <select
+        <select
             aria-label={`Entregador do pedido ${orderNumber}`}
             value={selectedCourierId}
             disabled={couriers.loadState !== 'loaded'}
@@ -226,7 +210,6 @@ export function CaixaOrdersWorkspace({
                 </option>
               ))}
           </select>
-        )}
       </div>
     );
   };
@@ -646,8 +629,11 @@ export function CaixaOrdersWorkspace({
                   const kitchenProgress = getDigitalKitchenProgress(order);
                   const badgeText = deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
                   const isMutating = acceptance.pendingOrderIds.has(String(order.id));
+                  const selectedCourierId = courierSelection(order);
                   const capability = getDigitalOrderActionCapability(order, {
                     isPendingMutation: isMutating,
+                    selectedCourierId,
+                    couriersLoaded: couriers.loadState === 'loaded',
                   });
                   const buttonText = capability.label;
                   const tableBlockLabel = getDigitalOrderTableBlockLabel(order);
@@ -761,7 +747,8 @@ export function CaixaOrdersWorkspace({
                         onClick={(e) => {
                           e.stopPropagation();
                           if (!capability.isAllowed) return;
-                          actions.advanceDigitalOrder(order);
+                          if (capability.action === 'dispatch') actions.dispatchDelivery(String(order.id), selectedCourierId);
+                          else actions.advanceDigitalOrder(order);
                         }}
                         className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"}
                       >
@@ -1016,15 +1003,16 @@ export function CaixaOrdersWorkspace({
                           <span className="truncate">{order.endereco}</span>
                         </span>
                       )}
-                      {renderCourierControl(order, orderNumber)}
+                      {isDeliveryOrder && order.motoboyId && (
+                        <span className="text-xs text-koma-subtle">Entregador: {courierName(order.motoboyId) || `#${order.motoboyId}`}</span>
+                      )}
                       <button
                         type="button"
                         disabled={!capability.isAllowed}
                         onClick={(e) => {
                           e.stopPropagation();
                           if (!capability.isAllowed) return;
-                          if (capability.action === 'dispatch') actions.dispatchDelivery(String(order.id), selectedCourierId);
-                          else if (capability.action === 'finalize') actions.finalizeDigitalOrder(order);
+                          if (capability.action === 'finalize') actions.finalizeDigitalOrder(order);
                         }}
                         className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"}
                       >

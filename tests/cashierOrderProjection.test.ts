@@ -185,7 +185,7 @@ test('delivery mantém colunas, labels e alias legado sem inferir financeiro', (
   assert.equal(projectCashierDeliveryState('analise').awaitingAcceptance, true);
   assert.equal(projectCashierDeliveryState('producao').inProduction, true);
   assert.equal(projectCashierDeliveryState('pronto', 'retirada').label, 'Pronto para retirada');
-  assert.equal(projectCashierDeliveryState('pronto', 'delivery').label, 'Pronto para envio');
+  assert.equal(projectCashierDeliveryState('pronto', 'delivery').label, 'Pronto para sair');
   assert.equal(projectCashierDeliveryState('transito', 'delivery').label, 'Em rota');
   assert.equal(projectCashierDeliveryState('transito', 'retirada').label, 'Aguardando retirada');
   assert.equal(projectCashierDeliveryState('saiu_para_entrega').inFinalization, true);
@@ -313,3 +313,21 @@ test('getDigitalOrderActionCapability define capacidade canônica por status e m
   assert.equal(mutatingReady.label, 'Finalizando…');
 });
 
+
+test('delivery pronto permanece no meio até o despacho, independente do pagamento', () => {
+  assert.equal(projectCashierDeliveryState('pronto', 'delivery').inProduction, true);
+  assert.equal(projectCashierDeliveryState('pronto', 'delivery').inFinalization, false);
+  assert.equal(projectCashierDeliveryState('transito', 'delivery').inProduction, false);
+  assert.equal(projectCashierDeliveryState('transito', 'delivery').inFinalization, true);
+  assert.equal(projectCashierDeliveryState('pronto', 'retirada').inFinalization, true);
+});
+
+test('aceite de delivery preserva etapa explícita para iniciar preparo', () => {
+  const accepted = getDigitalOrderActionCapability({ id: 'delivery', status: 'pendente', modalidade: 'delivery' });
+  assert.equal(accepted.targetStatus, 'aceito');
+  const start = getDigitalOrderActionCapability({ id: 'delivery', status: 'aceito', modalidade: 'delivery' });
+  assert.equal(start.action, 'start_preparation');
+  assert.equal(start.targetStatus, 'producao');
+  assert.equal(start.label, 'Iniciar preparo');
+  assert.equal(projectCashierDeliveryState('aceito', 'delivery').inProduction, true);
+});

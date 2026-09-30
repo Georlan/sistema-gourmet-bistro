@@ -6,6 +6,7 @@ import type { DeliveryOrderView } from './cashierWorkspaceTypes';
 const ACTIVE_DIGITAL_STATUSES = new Set<DeliveryOrderView['status']>([
   'pendente',
   'analise',
+  'aceito',
   'producao',
   'pronto',
   'transito',
@@ -249,7 +250,7 @@ export function bucketCourierDeliveryOrders(
   orders.forEach((order) => {
     if (order.modalidade !== 'delivery') return;
 
-    if (order.status === 'analise' || order.status === 'pendente' || order.status === 'producao') {
+    if (order.status === 'analise' || order.status === 'pendente' || order.status === 'aceito' || order.status === 'producao') {
       buckets.preparing.push(order);
     } else if (order.status === 'pronto') {
       buckets.ready.push(order);

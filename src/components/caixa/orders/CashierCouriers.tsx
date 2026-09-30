@@ -316,7 +316,7 @@ export function CashierCouriers({
                         onClick={() => void runOrderAction(order.id, () => handleAdvanceDigitalOrder(order))}
                         className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-[9px] font-extrabold text-emerald-500 disabled:opacity-50"
                       >
-                        {pending ? 'Atualizando…' : 'Marcar pronto para sair'}
+                        {pending ? 'Atualizando…' : order.status === 'aceito' ? 'Iniciar preparo' : 'Marcar pronto para sair'}
                       </button>
                     )}
                   </div>

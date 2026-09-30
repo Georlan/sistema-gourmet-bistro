@@ -79,7 +79,7 @@ export interface Order {
   valorPago?: number;
   identificador?: string;
   statusComanda?: 'aguardando_pagamento' | null; // Adicionado para compatibilidade com o fluxo do caixa
-  deliveryStatus?: 'pendente' | 'producao' | 'pronto' | 'transito' | 'finalizado' | 'recusado' | null;
+  deliveryStatus?: 'pendente' | 'aceito' | 'producao' | 'pronto' | 'transito' | 'finalizado' | 'recusado' | null;
   /** Dados de fulfillment preservados no snapshot compartilhado para hidratar o Caixa sem uma segunda leitura bloqueante. */
   deliveryTax?: number;
   discountTotal?: number;
@@ -259,7 +259,7 @@ export interface SimulatedDeliveryOrder {
   itens: string;
   total: number;
   canal: 'ifood' | 'site' | 'whats';
-  status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
+  status: 'pendente' | 'analise' | 'aceito' | 'producao' | 'pronto' | 'transito';
   endereco?: string;
   criadoEm: string;
   pagoOnline?: boolean;
