@@ -15,9 +15,10 @@ const saasMp = readFileSync(
   'utf8',
 );
 
-test('SuperAdmin exposes an actionable SaaS homologation cockpit', () => {
+test('SuperAdmin exposes actionable SaaS diagnostics', () => {
   assert.match(readiness, /\/api\/super-admin\/homologation\/readiness/);
-  assert.match(readiness, /Prontidão da homologação SaaS/);
+  assert.match(readiness, /Diagnóstico operacional SaaS/);
+  assert.match(readiness, /Diagnóstico SaaS/);
   assert.match(readiness, /Abrir checkout Pro anual/);
   assert.match(readiness, /\/contratar\/pro\?cobranca=anual/);
   assert.match(readiness, /Webhook SaaS/);
@@ -27,12 +28,13 @@ test('SuperAdmin exposes an actionable SaaS homologation cockpit', () => {
   assert.match(readiness, /KOMA_SAAS_CHECKOUT_ENABLED=false/);
 });
 
-test('Signups tab mounts readiness before manual release operations', () => {
+test('Signups tab mounts diagnostics before manual release operations', () => {
   assert.match(signups, /SuperAdminHomologationReadiness/);
   assert.match(signups, /<SuperAdminHomologationReadiness \/>/);
   assert.match(signups, /awaiting_release/);
   assert.match(signups, /Liberar acesso/);
-  assert.match(signups, /Confira o painel de Homologação SaaS acima/);
+  assert.match(signups, /Confira o Diagnóstico SaaS acima/);
+  assert.doesNotMatch(signups, /e-mail\/WhatsApp/);
 });
 
 test('PlanContractPage explains why checkout is paused when test gateway is unconfigured', () => {
@@ -44,7 +46,8 @@ test('PlanContractPage explains why checkout is paused when test gateway is unco
   assert.match(contractPage, /credenciais TEST do gateway/);
 });
 
-test('Homologation cockpit protects canonical SaaS webhook, required events, and KOMA_PUBLIC_API_URL', () => {
+test('SaaS diagnostics protects canonical webhook, required events, and KOMA_PUBLIC_API_URL', () => {
+  assert.match(readiness, /Backend de produção/);
   assert.match(readiness, /Backend de homologação/);
   assert.match(readiness, /KOMA_PUBLIC_API_URL/);
   assert.match(readiness, /Webhook SaaS/);
@@ -60,17 +63,17 @@ test('Homologation cockpit protects canonical SaaS webhook, required events, and
   assert.match(saasMp, /\/api\/integrations\/saas-billing\/mercado-pago\/webhook/);
 });
 
-test('Homologation cockpit exposes the live recurring checkout policy instead of generic Pix wording', () => {
+test('SaaS diagnostics describes annual Pix separately from recurring methods', () => {
   assert.match(readiness, /publicApiFetch/);
   assert.match(readiness, /\/api\/contracts\/payment-methods/);
   assert.match(readiness, /Política ativa do checkout/);
-  assert.match(readiness, /Cartão, Pix Automático e Saldo Mercado Pago seguem a mesma regra recorrente/);
+  assert.match(readiness, /A cobrança depende do meio escolhido no contrato/);
+  assert.match(readiness, /Pix anual é uma cobrança única/);
+  assert.match(readiness, /sem débito automático/);
+  assert.match(readiness, /Pix Automático/);
   assert.match(readiness, /Saldo Mercado Pago/);
-  assert.match(readiness, /R\$ 0 de mensalidade fixa hoje/);
-  assert.match(readiness, /primeira cobrança automática no D\+7/);
-  assert.match(readiness, /Pix avulso:/);
+  assert.match(readiness, /capabilities\.pix !== false/);
   assert.match(readiness, /upfrontPaymentAllowed/);
-  assert.match(readiness, /repita com Pix Automático e Saldo Mercado Pago/);
-  assert.doesNotMatch(readiness, /repita com Pix →/);
+  assert.match(readiness, /Em homologação, use credenciais de teste; em produção, não simule cobranças em clientes reais/);
+  assert.doesNotMatch(readiness, /todos.*mesma regra recorrente/i);
 });
-
