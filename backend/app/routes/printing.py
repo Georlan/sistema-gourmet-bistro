@@ -17,7 +17,7 @@ from ..application.printing import (
 from ..application.printing.comanda_renderer import ComandaVariant, render_canonical_comanda
 from ..database import get_db, require_tenant_id
 from ..domain.printing import PrintItem
-from ..models import PrintJob, Usuario
+from ..models import PrintAgentToken, PrintJob, Usuario
 from ..security import ensure_permission, get_current_user, require_permission
 from ..services.printing import get_print_preferences
 from ..services.plan_entitlements import (
@@ -150,12 +150,30 @@ def imprimir_universal(
     status_code=status.HTTP_200_OK,
 )
 def imprimir_teste_extremo_cardapio(
+    agent_id: str,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("impressao:administrar")),
 ):
     """Enfileira uma comanda extrema sintética sem criar pedido ou movimentação real."""
     restaurante_id = require_tenant_id()
     _require_physical_printing(db, restaurante_id)
+    agent_id_clean = agent_id.strip()
+    if not agent_id_clean:
+        raise HTTPException(status_code=400, detail="Computador de impressão não identificado.")
+    local_agent = (
+        db.query(PrintAgentToken)
+        .filter(
+            PrintAgentToken.restaurante_id == restaurante_id,
+            PrintAgentToken.agent_id == agent_id_clean,
+            PrintAgentToken.ativo == True,
+        )
+        .first()
+    )
+    if not local_agent:
+        raise HTTPException(
+            status_code=404,
+            detail="O KÔMA Print deste computador não está registrado neste restaurante.",
+        )
     preferences = get_print_preferences(db, restaurante_id)
     items = [
         PrintItem(
@@ -252,6 +270,7 @@ def imprimir_teste_extremo_cardapio(
         source_id=source_id,
         payload_text=safe_payload,
         status="pending",
+        agent_id=agent_id_clean,
         idempotency_key=f"teste-extremo-cardapio:{source_id}",
     )
     db.add(job)
