@@ -5,10 +5,14 @@ import os
 import secrets
 import threading
 import webbrowser
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
+
+if os.name != "nt":
+    import fcntl
 
 
 KOMA_WEB_URL = os.getenv(
@@ -20,6 +24,43 @@ ALLOWED_ORIGINS = {
     "https://app.komafood.com.br",
     "https://sistema-gourmet-bistro.pages.dev",
 }
+
+PAIRING_LOCK_HELD_ENV = "KOMA_PAIRING_LOCK_HELD"
+
+
+def _pairing_lock_path() -> Path:
+    runtime_dir = Path(os.getenv("XDG_RUNTIME_DIR") or "/tmp")
+    user_suffix = str(os.getuid()) if hasattr(os, "getuid") else "user"
+    return runtime_dir / f"koma-print-pairing-{user_suffix}.lock"
+
+
+@contextmanager
+def pairing_lock():
+    """Garante uma única tentativa de pareamento por usuário no Linux."""
+
+    if os.name == "nt" or os.getenv(PAIRING_LOCK_HELD_ENV) == "1":
+        yield True
+        return
+
+    lock_path = _pairing_lock_path()
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+", encoding="utf-8")
+    try:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        try:
+            os.chmod(lock_path, 0o600)
+        except OSError:
+            pass
+        try:
+            yield True
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
 
 
 def credentials_path() -> Path:
@@ -63,6 +104,15 @@ def save_stored_token(token: str) -> None:
 
 def pair_agent(timeout_seconds: int = 180) -> Optional[str]:
     """Abre o Kôma e recebe a credencial autorizada via localhost."""
+
+    with pairing_lock() as acquired:
+        if not acquired:
+            print("[PAREAMENTO] Já existe uma autorização em andamento neste computador.")
+            return None
+        return _pair_agent_once(timeout_seconds)
+
+
+def _pair_agent_once(timeout_seconds: int) -> Optional[str]:
     nonce = secrets.token_urlsafe(32)
     completed = threading.Event()
     state = {"token": ""}
@@ -77,7 +127,7 @@ def pair_agent(timeout_seconds: int = 180) -> Optional[str]:
                 self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
             # Chromium/Brave envia este preflight quando uma página HTTPS acessa
             # o servidor loopback. Mantemos a permissão restrita às origens acima.
             self.send_header("Access-Control-Allow-Private-Network", "true")
