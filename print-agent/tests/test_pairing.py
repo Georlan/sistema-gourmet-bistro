@@ -1,9 +1,8 @@
 import json
 import sys
 from pathlib import Path
-from urllib.error import HTTPError
+from http.client import HTTPConnection
 from urllib.parse import parse_qs, urlparse
-from urllib.request import Request, urlopen
 
 import pytest
 
@@ -25,51 +24,54 @@ def test_pair_agent_accepts_browser_callback_and_rejects_bad_requests(tmp_path, 
         params = parse_qs(parsed.query)
         nonce = params["pair_print_agent"][0]
         port = int(params["agent_port"][0])
-        endpoint = f"http://127.0.0.1:{port}/pair"
+        def request(method: str, *, origin: str, payload: dict | None = None, headers: dict | None = None):
+            connection = HTTPConnection("127.0.0.1", port, timeout=2)
+            request_headers = {"Origin": origin, **(headers or {})}
+            body = None
+            if payload is not None:
+                body = json.dumps(payload)
+                request_headers["Content-Type"] = "application/json"
+            connection.request(method, "/pair", body=body, headers=request_headers)
+            response = connection.getresponse()
+            response.read()
+            response_headers = dict(response.headers.items())
+            status = response.status
+            connection.close()
+            return status, response_headers
 
-        preflight = Request(
-            endpoint,
-            method="OPTIONS",
+        status, headers = request(
+            "OPTIONS",
+            origin=pairing.ALLOWED_ORIGIN,
             headers={
-                "Origin": pairing.ALLOWED_ORIGIN,
                 "Access-Control-Request-Method": "POST",
                 "Access-Control-Request-Headers": "content-type",
                 "Access-Control-Request-Private-Network": "true",
             },
         )
-        with urlopen(preflight, timeout=2) as response:
-            assert response.status == 204
-            assert response.headers["Access-Control-Allow-Origin"] == pairing.ALLOWED_ORIGIN
-            assert response.headers["Access-Control-Allow-Private-Network"] == "true"
+        assert status == 204
+        assert headers["Access-Control-Allow-Origin"] == pairing.ALLOWED_ORIGIN
+        assert headers["Access-Control-Allow-Private-Network"] == "true"
 
-        untrusted = Request(
-            endpoint,
-            method="POST",
-            headers={"Origin": "https://example.invalid", "Content-Type": "application/json"},
-            data=json.dumps({"nonce": nonce, "token": token}).encode(),
+        status, _ = request(
+            "POST",
+            origin="https://example.invalid",
+            payload={"nonce": nonce, "token": token},
         )
-        with pytest.raises(HTTPError) as error:
-            urlopen(untrusted, timeout=2)
-        assert error.value.code == 403
+        assert status == 403
 
-        wrong_nonce = Request(
-            endpoint,
-            method="POST",
-            headers={"Origin": pairing.ALLOWED_ORIGIN, "Content-Type": "application/json"},
-            data=json.dumps({"nonce": "wrong", "token": token}).encode(),
+        status, _ = request(
+            "POST",
+            origin=pairing.ALLOWED_ORIGIN,
+            payload={"nonce": "wrong", "token": token},
         )
-        with pytest.raises(HTTPError) as error:
-            urlopen(wrong_nonce, timeout=2)
-        assert error.value.code == 403
+        assert status == 403
 
-        callback = Request(
-            endpoint,
-            method="POST",
-            headers={"Origin": pairing.ALLOWED_ORIGIN, "Content-Type": "application/json"},
-            data=json.dumps({"nonce": nonce, "token": token}).encode(),
+        status, _ = request(
+            "POST",
+            origin=pairing.ALLOWED_ORIGIN,
+            payload={"nonce": nonce, "token": token},
         )
-        with urlopen(callback, timeout=2) as response:
-            assert response.status == 204
+        assert status == 204
         return True
 
     monkeypatch.setattr(pairing.webbrowser, "open", open_pairing_url)
