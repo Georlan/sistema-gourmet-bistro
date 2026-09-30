@@ -613,7 +613,7 @@ export function PrintMonitorPanel({
             agentId: agent.agent_id
           }))
       ))
-  ), [agentHasFreshDiagnostics, monitorData]);
+  ), [agentHasFreshDiagnostics, localAgents]);
 
   const bluetoothPrinters = useMemo(() => (
     localAgents
@@ -627,7 +627,7 @@ export function PrintMonitorPanel({
             supportsBluetoothTest: agent.supports_bluetooth_test === true
           }))
       ))
-  ), [agentHasFreshDiagnostics, monitorData]);
+  ), [agentHasFreshDiagnostics, localAgents]);
 
   const networkPrinters = useMemo(() => (
     localAgents
@@ -640,13 +640,13 @@ export function PrintMonitorPanel({
             agentId: agent.agent_id
           }))
       ))
-  ), [agentHasFreshDiagnostics, monitorData]);
+  ), [agentHasFreshDiagnostics, localAgents]);
 
   const configuredEndpoints = useMemo(() => (
     localAgents
       .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap(agent => agent.printer_diagnostics?.endpoints || [])
-  ), [agentHasFreshDiagnostics, monitorData]);
+  ), [agentHasFreshDiagnostics, localAgents]);
 
   const configuredDestinations = useMemo(() => {
     const map: Record<string, string> = {};
@@ -700,6 +700,10 @@ export function PrintMonitorPanel({
     setActionMessage('');
     setActionSuccessful(null);
     try {
+      const targetAgentId = agentId || localAgentId;
+      if (!targetAgentId) {
+        throw new Error('Este computador ainda não foi identificado pelo KÔMA Print.');
+      }
       const response = await fetch(
         `${apiBaseUrl}/api/print-agents/actions/connect-usb`,
         {
@@ -709,7 +713,7 @@ export function PrintMonitorPanel({
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            agent_id: agentId || controlAgent?.agent_id || null,
+            agent_id: targetAgentId,
             printer_name: printer?.name || null,
             printer_uri: printer?.uri || null
           })
@@ -794,6 +798,7 @@ export function PrintMonitorPanel({
     window.setTimeout(() => {
       startingAgentRef.current = false;
       setStartingAgent(false);
+      void refreshLocalAgentIdentity();
       void loadMonitor(false);
     }, 3_000);
   };
