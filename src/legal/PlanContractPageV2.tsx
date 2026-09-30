@@ -730,8 +730,13 @@ export default function PlanContractPageV2() {
                   </div>
                   <small>Isso adapta o cadastro do cardápio ao seu negócio. Ex.: pizzaria pode ter tamanhos, sabores e meio a meio; marmitaria usa composição por tamanho.</small>
                 </label>
-                {(['responsibleName', 'email', 'phone'] as const).map(field => (
-                  <label key={field} className="koma-sub-field"><span>{{ responsibleName: 'Seu nome', email: 'E-mail', phone: 'WhatsApp' }[field]}</span><div><input required minLength={field === 'phone' ? 10 : 2} type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'} value={form[field]} onChange={event => updateField(field, event.target.value)} /></div></label>
+                <label className="koma-sub-field">
+                  <span>E-mail de acesso do administrador</span>
+                  <div><Mail size={16} /><input required minLength={3} type="email" value={form.email} onChange={event => updateField('email', event.target.value)} /></div>
+                  <small>Este e-mail será usado para entrar no KÔMA e receber o convite para criar a senha. Use um endereço que o responsável pela operação consiga acessar.</small>
+                </label>
+                {(['responsibleName', 'phone'] as const).map(field => (
+                  <label key={field} className="koma-sub-field"><span>{{ responsibleName: 'Seu nome', phone: 'WhatsApp' }[field]}</span><div><input required minLength={field === 'phone' ? 10 : 2} type={field === 'phone' ? 'tel' : 'text'} value={form[field]} onChange={event => updateField(field, event.target.value)} /></div></label>
                 ))}
               </form>
             </>
