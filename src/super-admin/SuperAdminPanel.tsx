@@ -405,7 +405,7 @@ export default function SuperAdminPanel() {
           {activeTab === "billing" && <SuperAdminBillingTab tenants={tenants} tenantsAvailable={tenantsAvailable} />}
           </>}
           {activeTab === "operations" && <SuperAdminOperationsTab onAddLog={addAuditLog} onTriggerTelegramAlert={triggerTelegramAlert} />}
-          {activeTab === "audit" && <SuperAdminAuditTab logs={auditLogs} onClearLogs={() => setAuditLogs([])} />}
+          {activeTab === "audit" && <SuperAdminAuditTab />}
           {activeTab === "settings" && <SuperAdminSettingsTab onAddLog={addAuditLog} onTriggerTelegramAlert={triggerTelegramAlert} />}
         </main>
       </div>
