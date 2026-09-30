@@ -129,7 +129,7 @@ export function SuperAdminHomologationReadiness() {
     setLoading(true);
     try {
       const response = await superAdminFetch('/api/super-admin/homologation/readiness', { signal });
-      if (!response.ok) throw new Error('Não foi possível verificar a prontidão da homologação.');
+      if (!response.ok) throw new Error('Não foi possível verificar a prontidão SaaS.');
       setData(await response.json());
       setError('');
 
@@ -140,7 +140,7 @@ export function SuperAdminHomologationReadiness() {
         if (!signal?.aborted) setCapabilities(null);
       }
     } catch (err) {
-      if (!signal?.aborted) setError(err instanceof Error ? err.message : 'Falha ao verificar a homologação.');
+      if (!signal?.aborted) setError(err instanceof Error ? err.message : 'Falha ao verificar a prontidão SaaS.');
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
@@ -183,13 +183,13 @@ export function SuperAdminHomologationReadiness() {
   return (
     <section
       className="my-4 rounded-2xl border border-emerald-900/60 bg-emerald-950/10 p-4"
-      aria-label="Prontidão da homologação SaaS"
+      aria-label="Diagnóstico operacional SaaS"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="max-w-xl">
-          <h3 className="text-lg font-bold text-zinc-100">Homologação SaaS</h3>
+          <h3 className="text-lg font-bold text-zinc-100">Diagnóstico SaaS</h3>
           <p className="text-sm text-koma-muted">
-            Use este painel como fonte de verdade antes de simular cartão, Pix Automático, liberação e primeiro acesso.
+            Use este painel para conferir a infraestrutura real de cobrança, liberação e notificações do ambiente atual.
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -241,7 +241,7 @@ export function SuperAdminHomologationReadiness() {
 
           {!data.readyForPayments && (
             <div className="mb-3 rounded-xl border border-amber-800/40 bg-amber-950/20 p-3 text-xs text-amber-200">
-              <strong>Aviso operacional:</strong> O checkout está pausado porque o gateway TEST ainda não está disponível (<code className="font-mono text-amber-100">KOMA_SAAS_CHECKOUT_ENABLED=false</code>). O botão acima permite inspecionar o fluxo contratual até a etapa de pagamento, onde a trava é comunicada honestamente ao usuário.
+              <strong>Aviso operacional:</strong> O checkout está pausado neste ambiente (<code className="font-mono text-amber-100">KOMA_SAAS_CHECKOUT_ENABLED=false</code>). Revise a configuração antes de iniciar uma contratação real.
             </div>
           )}
 
@@ -250,7 +250,7 @@ export function SuperAdminHomologationReadiness() {
               <div>
                 <p className="text-sm font-bold text-zinc-100">Política ativa do checkout</p>
                 <p className="mt-1 text-xs text-koma-muted">
-                  Cartão, Pix Automático e Saldo Mercado Pago seguem a mesma regra recorrente: R$ 0 de mensalidade fixa hoje, 7 dias grátis e primeira cobrança automática no D+7.
+                  A cobrança depende do meio escolhido no contrato. Pix anual é uma cobrança única após implantação e 7 dias grátis, sem débito automático; meios recorrentes seguem a autorização específica do gateway.
                 </p>
               </div>
               {capabilities && (
@@ -266,9 +266,7 @@ export function SuperAdminHomologationReadiness() {
                   <CapabilityBadge label="Cartão" ready={capabilities.credit_card} />
                   <CapabilityBadge label="Pix Automático" ready={capabilities.pix_automatic} />
                   <CapabilityBadge label="Saldo Mercado Pago" ready={Boolean(capabilities.account_money)} />
-                  <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs font-bold text-zinc-400">
-                    Pix avulso: {capabilities.pix === false ? 'desativado' : 'não deve ser usado'}
-                  </span>
+                  <CapabilityBadge label="Pix anual" ready={capabilities.pix !== false} />
                 </div>
                 <p className="text-xs text-zinc-400">
                   Trial informado pela API: <strong className="text-zinc-200">{capabilities.trialDays} dias</strong> · cobrança antecipada: <strong className="text-zinc-200">{capabilities.upfrontPaymentAllowed ? 'permitida' : 'proibida'}</strong>.
@@ -290,7 +288,7 @@ export function SuperAdminHomologationReadiness() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1 space-y-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Backend de homologação</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">{data.environment === 'production' ? 'Backend de produção' : 'Backend de homologação'}</p>
                   <p className="mt-0.5 font-mono text-xs text-zinc-200">
                     <span className="text-koma-muted">KOMA_PUBLIC_API_URL: </span>
                     {data.publicApiUrl ? (
@@ -345,7 +343,7 @@ export function SuperAdminHomologationReadiness() {
           <div className="mt-3 rounded-xl border border-zinc-800 p-3 text-sm">
             <p className="font-bold text-zinc-200">Roteiro manual</p>
             <p className="mt-1 text-koma-muted">
-              1. Deixe pagamentos prontos → 2. autorize cartão sandbox → 3. confirme R$ 0 hoje e Aguardando liberação → 4. libere aqui no SuperAdmin → 5. ative o primeiro acesso → 6. repita com Pix Automático e Saldo Mercado Pago → 7. valide subscription_authorized_payment e a primeira cobrança no D+7 → 8. valide e-mail e WhatsApp.
+              1. Conclua a contratação → 2. confirme o meio escolhido e R$ 0 hoje → 3. libere o acesso no SuperAdmin → 4. ative o primeiro acesso → 5. conclua os 4 itens essenciais → 6. libere a operação e inicie o trial → 7. valide a cobrança prevista para o meio escolhido → 8. confira os recibos de e-mail. Em homologação, use credenciais de teste; em produção, não simule cobranças em clientes reais.
             </p>
           </div>
         </>
