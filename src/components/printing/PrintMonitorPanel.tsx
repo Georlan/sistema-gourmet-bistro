@@ -451,7 +451,7 @@ export function PrintMonitorPanel({
     [localAgentId, monitorData]
   );
 
-  const activePendingCommand = (monitorData?.agents || [])
+  const activePendingCommand = localAgents
     .map(agent => ({
       command: agent.pending_command,
       requestedAt: agent.command_requested_at
@@ -490,7 +490,7 @@ export function PrintMonitorPanel({
 
   useEffect(() => {
     if (!monitorData) return;
-    const completedResults = (monitorData.agents || [])
+    const completedResults = localAgents
       .map(agent => agent.last_command_result)
       .filter((result): result is AgentCommandResult => Boolean(result))
       .sort((left, right) => (
@@ -514,7 +514,7 @@ export function PrintMonitorPanel({
     setActionMessage(completed.message);
     setActionSuccessful(completed.success);
     setPendingCommandId(null);
-  }, [monitorData, pendingCommandId]);
+  }, [localAgents, monitorData, pendingCommandId]);
 
   useEffect(() => {
     if (!hasPendingCommand || commandRunning) return;
@@ -581,7 +581,7 @@ export function PrintMonitorPanel({
   };
 
   const allDetectedPrinters = useMemo(() => (
-    (monitorData?.agents || [])
+    localAgents
       .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap((agent, agentIndex) => (
         (agent.printer_diagnostics?.printers || []).map(printer => ({
@@ -591,7 +591,7 @@ export function PrintMonitorPanel({
           supportsBluetoothTest: agent.supports_bluetooth_test === true
         }))
       ))
-  ), [agentHasFreshDiagnostics, monitorData]);
+  ), [agentHasFreshDiagnostics, localAgents]);
 
   const readyPrinters = useMemo(() => (
     allDetectedPrinters.filter(isPrinterReady)
@@ -602,7 +602,7 @@ export function PrintMonitorPanel({
   ), [allDetectedPrinters]);
 
   const usbPrinters = useMemo(() => (
-    (monitorData?.agents || [])
+    localAgents
       .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap((agent, agentIndex) => (
         (agent.printer_diagnostics?.printers || [])
@@ -616,7 +616,7 @@ export function PrintMonitorPanel({
   ), [agentHasFreshDiagnostics, monitorData]);
 
   const bluetoothPrinters = useMemo(() => (
-    (monitorData?.agents || [])
+    localAgents
       .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap(agent => (
         (agent.printer_diagnostics?.printers || [])
@@ -630,7 +630,7 @@ export function PrintMonitorPanel({
   ), [agentHasFreshDiagnostics, monitorData]);
 
   const networkPrinters = useMemo(() => (
-    (monitorData?.agents || [])
+    localAgents
       .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap(agent => (
         (agent.printer_diagnostics?.printers || [])
@@ -643,20 +643,20 @@ export function PrintMonitorPanel({
   ), [agentHasFreshDiagnostics, monitorData]);
 
   const configuredEndpoints = useMemo(() => (
-    (monitorData?.agents || [])
+    localAgents
       .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap(agent => agent.printer_diagnostics?.endpoints || [])
   ), [agentHasFreshDiagnostics, monitorData]);
 
   const configuredDestinations = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const agent of monitorData?.agents || []) {
+    for (const agent of localAgents) {
       if (agentHasFreshDiagnostics(agent) && agent.printer_diagnostics?.destinations) {
         Object.assign(map, agent.printer_diagnostics.destinations);
       }
     }
     return map;
-  }, [agentHasFreshDiagnostics, monitorData]);
+  }, [agentHasFreshDiagnostics, localAgents]);
 
   const readyUsbPrinters = usbPrinters.filter(
     printer => (
@@ -668,7 +668,7 @@ export function PrintMonitorPanel({
   const presentUsbPrinters = usbPrinters.filter(
     printer => printer.present === true
   );
-  const onlineAgents = (monitorData?.agents || []).filter(agent => agent.online);
+  const onlineAgents = localAgents.filter(agent => agent.online);
   const controlAgent = (
     onlineAgents.find(
       agent => agent.printer_ready && agent.supports_usb_commands
@@ -684,12 +684,11 @@ export function PrintMonitorPanel({
   const hasReadyPrinter = (
     readyPrinters.length > 0
     || readyUsbPrinters.length > 0
-    || (monitorData?.summary?.printer_ready ?? false)
-    || (monitorData?.agents || []).some(agent => agent.printer_ready)
+    || localAgents.some(agent => agent.printer_ready)
   );
   const hasDispatchablePrinter = dispatchablePrinters.length > 0;
   const hasFreshPrinterDiagnostics = Boolean(
-    (monitorData?.agents || []).some(agent => agentHasFreshDiagnostics(agent))
+    localAgents.some(agent => agentHasFreshDiagnostics(agent))
   );
   const latestJob = monitorData?.queue_jobs?.[0] || monitorData?.jobs?.[0] || null;
 
