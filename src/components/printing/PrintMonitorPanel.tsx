@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Bluetooth,
@@ -326,6 +326,7 @@ export function PrintMonitorPanel({
   const [actionSuccessful, setActionSuccessful] = useState<boolean | null>(null);
   const [pendingCommandId, setPendingCommandId] = useState<string | null>(null);
   const [startingAgent, setStartingAgent] = useState(false);
+  const startingAgentRef = useRef(false);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
@@ -713,6 +714,10 @@ export function PrintMonitorPanel({
   };
 
   const startLocalAgent = () => {
+    // O ref fecha a janela entre o clique e o próximo render do React.
+    // Assim double-click/rajadas no mesmo tab disparam o protocolo uma única vez.
+    if (startingAgentRef.current) return;
+    startingAgentRef.current = true;
     setStartingAgent(true);
     setActionMessage('Preparando a impressão neste computador…');
     setActionSuccessful(null);
@@ -720,6 +725,7 @@ export function PrintMonitorPanel({
     launcher.href = 'koma-print://start';
     launcher.click();
     window.setTimeout(() => {
+      startingAgentRef.current = false;
       setStartingAgent(false);
       void loadMonitor(false);
     }, 3_000);

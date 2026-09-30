@@ -6,6 +6,8 @@ from http.client import HTTPConnection
 from urllib.parse import parse_qs, urlparse
 
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import main as agent_main
@@ -51,6 +53,8 @@ def test_pair_agent_accepts_browser_callback_and_rejects_bad_requests(tmp_path, 
         assert status == 204
         assert headers["Access-Control-Allow-Origin"] == pairing.ALLOWED_ORIGIN
         assert headers["Access-Control-Allow-Private-Network"] == "true"
+        assert "Authorization" in headers["Access-Control-Allow-Headers"]
+        assert "X-Requested-With" in headers["Access-Control-Allow-Headers"]
 
         status, _ = request(
             "POST",
@@ -82,11 +86,32 @@ def test_pair_agent_accepts_browser_callback_and_rejects_bad_requests(tmp_path, 
         assert credentials.stat().st_mode & 0o777 == 0o600
 
 
-def test_service_timeout_uses_non_restarting_exit_code(monkeypatch):
-    monkeypatch.setattr(pairing, "pair_agent", lambda: None)
+def test_service_without_credentials_waits_for_explicit_pairing(monkeypatch):
+    pairing_calls = 0
+
+    def fake_pair_agent():
+        nonlocal pairing_calls
+        pairing_calls += 1
+        return None
+
+    monkeypatch.setattr(pairing, "pair_agent", fake_pair_agent)
 
     service_config = AgentConfig(agent_token="", pair_only=False)
     installer_config = AgentConfig(agent_token="", pair_only=True)
 
-    assert agent_main.run(service_config) == agent_main.PAIRING_NOT_COMPLETED_EXIT == 75
+    assert agent_main.run(service_config) == agent_main.PAIRING_REQUIRED_EXIT == 2
+    assert pairing_calls == 0
+
     assert agent_main.run(installer_config) == 1
+    assert pairing_calls == 1
+
+
+@pytest.mark.skipif(os.name == "nt", reason="flock é proteção específica do launcher Linux")
+def test_pairing_lock_is_single_flight(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.delenv(pairing.PAIRING_LOCK_HELD_ENV, raising=False)
+
+    with pairing.pairing_lock() as first:
+        assert first is True
+        with pairing.pairing_lock() as second:
+            assert second is False
