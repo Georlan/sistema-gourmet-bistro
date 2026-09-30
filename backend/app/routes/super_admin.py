@@ -755,7 +755,12 @@ def get_integrations_health(admin: dict = Depends(get_current_admin)):
     )
 
     return {
-        "environment": os.getenv("ENVIRONMENT", "production").strip().lower() or "production",
+        "runtime": {
+            "status": "reported",
+            "environment": os.getenv("ENVIRONMENT", "production").strip().lower() or "production",
+            "source": "environment",
+            "simulated": False,
+        },
         "database": {
             "status": database_status,
             "latency_ms": round((time.perf_counter() - database_started) * 1000, 2),
