@@ -20,15 +20,25 @@ _signup_rate_limiter = IPRateLimiter(requests_per_minute=20)
 router = APIRouter(prefix="/api/signups", tags=["Inscrições"])
 admin_router = APIRouter(prefix="/signups", tags=["SuperAdmin"])
 _CONTRACT_PROTOCOL_RE = re.compile(r"^KOMA-CTR-\d{8}-[A-F0-9]{12}$")
+_SUPPORTED_OPERATION_PROFILES = {"generic", "pizzaria", "acai", "churrasco", "marmitaria"}
 
 class SignupInput(BaseModel):
     restaurant_name: str = Field(min_length=2, max_length=255)
+    operation_profile: str = "generic"
     responsible_name: str = Field(min_length=2, max_length=100)
     email: str = Field(min_length=3, max_length=100)
     phone: str = Field(min_length=10, max_length=30)
     plan: str
     billing_cycle: str
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("operation_profile")
+    @classmethod
+    def operation_profile_valid(cls, value):
+        normalized = value.strip().lower()
+        if normalized not in _SUPPORTED_OPERATION_PROFILES:
+            raise ValueError("Tipo de operação inválido")
+        return normalized
 
     @field_validator("email")
     @classmethod
