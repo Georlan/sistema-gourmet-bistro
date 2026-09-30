@@ -22,7 +22,7 @@ from .customer_auth import hash_public_rate_key
 
 # Estados que ainda ocupam a capacidade operacional do restaurante.
 # ``transito`` já saiu da cozinha; finalizado/recusado também não contam.
-ACTIVE_OPERATIONAL_STATUSES = ("analise", "pendente", "producao", "pronto")
+ACTIVE_OPERATIONAL_STATUSES = ("analise", "pendente", "aceito", "producao", "pronto")
 
 logger = logging.getLogger("koma.online_order_control")
 
@@ -349,7 +349,7 @@ def auto_accept_online_order_if_enabled(
         db,
         restaurant_id=restaurante_id,
         comanda_id=comanda.id,
-        target_status="producao",
+        target_status="aceito" if str(comanda.tipo or "").lower() in {"entrega", "delivery"} else "producao",
         operator_user_id=operator_user_id or getattr(comanda, "garcom_id", None),
         commit=False,
     )
@@ -388,7 +388,7 @@ def auto_accept_online_order_if_enabled(
         action="online_order_auto_accepted",
         reason="Pedido online aceito automaticamente pela política do restaurante",
         before_data={"comanda_id": comanda.id, "status": before_status},
-        after_data={"comanda_id": comanda.id, "status": "producao"},
+        after_data={"comanda_id": comanda.id, "status": comanda.delivery_status},
     )
     db.flush()
     return True

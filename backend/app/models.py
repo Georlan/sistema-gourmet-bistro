@@ -344,7 +344,7 @@ class Comanda(Base):
         ),
         CheckConstraint(
             "delivery_status IS NULL OR delivery_status IN "
-            "('analise', 'pendente', 'producao', 'pronto', 'transito', 'finalizado', 'recusado')",
+            "('analise', 'pendente', 'aceito', 'producao', 'pronto', 'transito', 'finalizado', 'recusado')",
             name="ck_comandas_delivery_status",
         ),
         CheckConstraint(

@@ -43,7 +43,7 @@ def test_domain_state_machine_is_the_dependency_owner():
 @pytest.mark.parametrize(
     ("current", "order_type", "expected"),
     [
-        (None, "delivery", {"producao", "recusado"}),
+        (None, "delivery", {"aceito", "producao", "recusado"}),
         ("producao", "delivery", {"pronto", "recusado"}),
         ("pronto", "delivery", {"transito", "recusado"}),
         ("pronto", "retirada", {"finalizado", "recusado"}),
@@ -96,7 +96,7 @@ def test_legacy_invalid_transition_keeps_old_error_shape():
     exc = exc_info.value
     assert exc.current == "pendente"
     assert exc.target == "finalizado"
-    assert exc.allowed == ("producao", "recusado")
+    assert exc.allowed == ("aceito", "producao", "recusado")
     assert "Transição de status inválida" in str(exc)
 
 
@@ -112,7 +112,7 @@ def test_canonical_cancel_intent_uses_rejection_edge_without_losing_semantics():
     assert transition.is_terminal is True
 
 
-def test_canonical_accepted_alias_has_same_operational_targets_as_preparing():
+def test_canonical_accepted_requires_starting_preparation_before_ready():
     accepted_targets = OrderStateMachine.get_allowed_targets(
         OrderStatus.ACCEPTED,
         FulfillmentType.DELIVERY,
@@ -122,10 +122,8 @@ def test_canonical_accepted_alias_has_same_operational_targets_as_preparing():
         FulfillmentType.DELIVERY,
     )
 
-    assert accepted_targets == preparing_targets == (
-        OrderStatus.READY,
-        OrderStatus.REJECTED,
-    )
+    assert accepted_targets == (OrderStatus.PREPARING, OrderStatus.REJECTED)
+    assert preparing_targets == (OrderStatus.READY, OrderStatus.REJECTED)
 
 
 def test_canonical_invalid_transition_reports_canonical_allowed_targets():
@@ -139,4 +137,4 @@ def test_canonical_invalid_transition_reports_canonical_allowed_targets():
     exc = exc_info.value
     assert exc.current_status == "pending"
     assert exc.target_status == "completed"
-    assert exc.allowed_targets == ("preparing", "rejected")
+    assert exc.allowed_targets == ("accepted", "preparing", "rejected")

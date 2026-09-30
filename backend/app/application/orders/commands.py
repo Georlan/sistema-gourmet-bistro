@@ -250,6 +250,7 @@ class AcceptOrderCommand:
     order_id: str | int
     operator_user_id: Optional[str | int] = None
     estimated_prep_minutes: Optional[int] = None
+    start_preparation: bool = True
 
 
 @dataclass(frozen=True)

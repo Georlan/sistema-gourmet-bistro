@@ -193,7 +193,7 @@ class OrderLifecycleCoordinator:
 
         has_first_accept = transition.first_accept or any(
             order_current == OrderStatus.PENDING
-            and target in {OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.DISPATCHED}
+            and target in {OrderStatus.ACCEPTED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.DISPATCHED}
             for _, order_current in pending_transitions
         )
 
@@ -344,10 +344,10 @@ class OrderLifecycleCoordinator:
             "operator_user_id": operator_user_id,
         }
 
-        if target_status == OrderStatus.PREPARING:
+        if target_status in {OrderStatus.ACCEPTED, OrderStatus.PREPARING}:
             OrderApplicationService.accept_order(
                 db,
-                AcceptOrderCommand(**common),
+                AcceptOrderCommand(**common, start_preparation=target_status == OrderStatus.PREPARING),
                 commit=False,
             )
             return

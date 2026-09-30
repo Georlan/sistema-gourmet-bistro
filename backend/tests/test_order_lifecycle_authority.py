@@ -643,3 +643,32 @@ def test_unaccepted_pending_comanda_rejects_direct_transition_to_ready(char_clie
     assert "pendente" in jump.text
     assert "pronto" in jump.text
 
+
+
+def test_delivery_acceptance_is_persisted_then_preparation_emits_separate_event(char_client, char_setup):
+    _clear_outbox()
+    headers = char_setup["headers"]
+    check_id = _create_internal_digital_dine_in()
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        check = db.query(Comanda).filter(Comanda.id == check_id).one()
+        check.tipo = "Delivery"
+        db.commit()
+    finally:
+        db.close()
+    def advance(status):
+        return char_client.put(f"/comandas/{check_id}/delivery/status", params={"status_novo": status}, headers=headers)
+    accepted = advance("aceito")
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["delivery_status"] == "aceito"
+    assert advance("pronto").status_code == 409
+    assert advance("aceito").status_code == 200
+    started = advance("producao")
+    assert started.status_code == 200, started.text
+    assert started.json()["delivery_status"] == "producao"
+    assert advance("producao").status_code == 200
+    assert advance("pronto").status_code == 200
+    assert advance("transito").status_code == 409
+    names = _event_names_for_check(check_id)
+    assert names.count("koma.order.accepted") == 1
+    assert names.count("koma.order.preparing") == 1

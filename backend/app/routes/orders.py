@@ -241,7 +241,7 @@ def atualizar_status_delivery(
             detail="Vincule um motoboy usando a ação de despacho antes de iniciar a entrega.",
         )
 
-    if current_status == OrderStatus.PENDING and target_status == OrderStatus.PREPARING:
+    if current_status == OrderStatus.PENDING and target_status in {OrderStatus.ACCEPTED, OrderStatus.PREPARING}:
         require_open_cash_shift(db, rid)
 
     status_anterior = to_legacy_order_status(current_status)
@@ -267,7 +267,7 @@ def atualizar_status_delivery(
 
     estoque_alertas = (
         alertas_estoque_dos_itens(db, comanda.itens or [])
-        if target_status == OrderStatus.PREPARING
+        if target_status in {OrderStatus.ACCEPTED, OrderStatus.PREPARING}
         else []
     )
 

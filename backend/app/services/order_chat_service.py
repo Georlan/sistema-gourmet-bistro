@@ -26,6 +26,7 @@ from .order_financials import payable_total
 
 CANONICAL_STATUS_MESSAGES = {
     "pendente": "Seu pedido foi recebido pelo restaurante.",
+    "aceito": "Seu pedido foi aceito e aguarda o início do preparo.",
     "producao": "Seu pedido foi confirmado e está em preparo.",
     "pronto": "Seu pedido está pronto!",
     "transito": "Seu pedido saiu para entrega.",
