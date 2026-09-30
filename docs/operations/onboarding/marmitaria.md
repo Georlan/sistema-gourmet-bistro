@@ -45,6 +45,22 @@ cópia dos produtos para experimentar o assistente; não há migração automát
 Os vínculos de grupos usados pelo assistente devem ser removidos em **Configurar**
 no tamanho, antes de excluir o grupo. Editar as opções preserva os limites dos tamanhos.
 
+## Cadastro manual já existente
+
+Em **Cardápio → Produtos**, o guia **Quentinhas · P, M e G** continua permitindo
+criar a categoria **Quentinhas** e cadastrar os tamanhos dentro dela. Para o
+Quentinha Caseira, os nomes previstos são **Quentinha P**, **Quentinha M** e
+**Quentinha G**, com preços definidos pela cliente. Para outras marmitarias,
+cadastre somente os tamanhos vendidos. Os atalhos mostram os produtos existentes;
+use a lista para editar preços ou pausar vendas.
+
+Nesse fluxo manual, mantenha os tamanhos dentro de **Quentinhas**. Ele não cria
+os limites por tamanho do assistente acima: os grupos seguem seus vínculos e
+limites gerais. Se o catálogo já estiver cadastrado assim, confira os vínculos
+antes de mudar a composição; não duplique os produtos. Para um catálogo novo
+com composições diferentes por tamanho e opções compartilhadas, use
+**Tamanhos de marmita**, que cria uma categoria e um produto por tamanho.
+
 Não avance com composição ambígua, preço faltante ou escolha obrigatória sem
 opções disponíveis. Não cadastre produtos fictícios para completar três tamanhos.
 
