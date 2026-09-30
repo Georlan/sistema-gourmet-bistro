@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { formatCardapioApiError } from '../../../cardapio/orderApiErrors';
 import type { PaymentMethod } from '../../../cardapio/paymentMethods';
 import type { CatalogCategory } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
@@ -478,9 +479,9 @@ export function useCashierPdv({
           window.dispatchEvent(new Event('koma_orders_updated'));
         });
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => null);
         clearOptimisticOrder();
-        showToast(`Erro ao registrar venda: ${err.detail || 'Falha no servidor'}`, 'error');
+        showToast(`Erro ao registrar venda: ${formatCardapioApiError(err, 'Falha no servidor')}`, 'error');
         setPdvCart((prev) => (prev.length > 0 ? prev : cartItems));
         setPdvCustomerName(customerName);
         setPdvCustomerPhone(customerPhone);

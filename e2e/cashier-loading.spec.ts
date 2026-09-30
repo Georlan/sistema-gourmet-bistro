@@ -8,6 +8,11 @@ async function navigate(page: Page, label: string) {
 }
 
 function cashierSubnavButton(page: Page, name: string) {
+  if (name === 'Novo pedido') {
+    return page.locator('.cashier-subnav').getByRole('button', { name, exact: true })
+      .or(page.getByRole('navigation', { name: 'Navegação móvel principal' }).getByRole('button', { name: '+ Pedido', exact: true }))
+      .filter({ visible: true });
+  }
   return page.locator('.cashier-subnav').getByRole('button', { name, exact: true });
 }
 
@@ -57,7 +62,7 @@ test('abertura não baixa módulos administrativos e atraso de módulo não bloq
 test('rascunho administrativo e carrinho sobrevivem à navegação entre módulos', async ({ page }) => {
   await open(page);
   await cashierSubnavButton(page, 'Novo pedido').click();
-  await page.getByTitle('Adicionar Risoto da casa', { exact: true }).click();
+  await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
   await showCart(page);
   await page.locator('#pdv-customer-name-input').fill('Cliente do rascunho');
   await navigate(page, 'Cardápio');
@@ -82,7 +87,7 @@ test('falha ao carregar relatórios fica isolada e preserva o carrinho', async (
   await page.route('**/*CashierReports*', route => route.abort('failed'), { times: 1 });
   await open(page);
   await cashierSubnavButton(page, 'Novo pedido').click();
-  await page.getByTitle('Adicionar Risoto da casa', { exact: true }).click();
+  await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
   await navigate(page, 'Relatórios');
   await expect(page.getByRole('alert').filter({ hasText: 'Não foi possível abrir Relatórios' })).toBeVisible();
   await navigate(page, 'Vendas');
@@ -110,16 +115,16 @@ test('falha ao carregar relatórios fica isolada e preserva o carrinho', async (
 test('PDV preserva tentativa e carrinho após falha mesmo fora da tela', async ({ page }) => {
   const sales: { body: unknown; key: unknown }[] = [];
   await open(page);
-  await page.route('**/comandas/venda-direta', async route => {
+  await page.route('**/cardapio/modificadores/venda-direta', async route => {
     const body = route.request().postDataJSON();
     sales.push({ body, key: body.idempotency_key });
     await route.fulfill({ status: sales.length === 1 ? 503 : 200, contentType: 'application/json',
       body: JSON.stringify(sales.length === 1 ? { detail: 'Falha controlada' } : { id: 'sale-confirmed' }) });
   });
   await cashierSubnavButton(page, 'Novo pedido').click();
-  await page.getByTitle('Adicionar Risoto da casa', { exact: true }).click();
+  await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
   await showCart(page);
-  await page.getByRole('button', { name: 'Mesa', exact: true }).click();
+  await page.getByRole('button', { name: 'Consumo local', exact: true }).click();
   await page.locator('#pdv-target-table').selectOption('10');
   await page.locator('#pdv-submit-btn').click();
   await expect(page.locator('.orders-board')).toBeVisible();
@@ -134,3 +139,41 @@ test('PDV preserva tentativa e carrinho após falha mesmo fora da tela', async (
   expect(sales).toHaveLength(2);
   expect(sales[1]).toEqual(sales[0]);
 });
+
+for (const invalidBody of [false, true]) {
+  test(`PDV restaura carrinho após ${invalidBody ? 'resposta não JSON' : 'validação 422'}`, async ({ page }) => {
+    const keys: string[] = [];
+    await open(page);
+    await page.route('**/cardapio/modificadores/venda-direta', async route => {
+      const body = route.request().postDataJSON();
+      keys.push(body.idempotency_key);
+      await route.fulfill({
+        status: keys.length === 1 ? (invalidBody ? 502 : 422) : 200,
+        contentType: keys.length === 1 && invalidBody ? 'text/html' : 'application/json',
+        body: keys.length > 1 ? JSON.stringify({ id: 'sale-confirmed' })
+          : invalidBody ? '<html>Bad gateway</html>'
+          : JSON.stringify({ detail: [
+            { loc: ['body', 'itens', 0, 'produto_id'], type: 'string_type', msg: 'Input should be a valid string' },
+            { loc: ['body', 'itens', 0, 'modificador_ids', 0], type: 'string_type', msg: 'Input should be a valid string' },
+            { loc: ['body', 'delivery_forma_pagamento'], type: 'literal_error', msg: 'Invalid payment' },
+          ] }),
+      });
+    });
+    await cashierSubnavButton(page, 'Novo pedido').click();
+    await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
+    await showCart(page);
+    await page.locator('#pdv-submit-btn').click();
+    await expect(page.getByText(invalidBody
+      ? 'Erro ao registrar venda: Falha no servidor'
+      : 'Erro ao registrar venda: Revise os dados do pedido: Item 1 — Produto: valor inválido. Item 1 — Complementos: valor inválido. Forma de pagamento: opção inválida.', { exact: true })).toBeVisible();
+    await expect(page.getByText('[object Object]', { exact: false })).toHaveCount(0);
+    await expect(page.getByText('A rede falhou.', { exact: false })).toHaveCount(0);
+    await cashierSubnavButton(page, 'Novo pedido').click();
+    await showCart(page);
+    await expect(page.locator('#pdv-submit-btn').locator('..').getByText('R$ 42,00', { exact: true })).toBeVisible();
+    await page.locator('#pdv-submit-btn').click();
+    await expect(page.getByText('Pedido confirmado e enviado à cozinha.', { exact: true })).toBeVisible();
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe(keys[0]);
+  });
+}

@@ -6,6 +6,15 @@ type ValidationIssue = {
 
 const FIELD_LABELS: Record<string, string> = {
   restaurante_id: 'Restaurante',
+  cliente_id: 'Cliente',
+  mesa_id: 'Mesa',
+  identificador: 'Nome',
+  delivery_telefone: 'Telefone',
+  delivery_endereco: 'Endereço',
+  delivery_taxa: 'Taxa de entrega',
+  delivery_forma_pagamento: 'Forma de pagamento',
+  delivery_troco_para: 'Troco',
+  modificador_ids: 'Complementos',
   cliente_nome: 'Nome',
   cliente_telefone: 'Telefone',
   cliente_email: 'E-mail',
@@ -43,7 +52,9 @@ const labelForLocation = (raw: unknown): string => {
   const itemIndex = location.findIndex((part) => part === 'itens');
   if (itemIndex >= 0 && typeof location[itemIndex + 1] === 'number') {
     const itemNumber = Number(location[itemIndex + 1]) + 1;
-    const leaf = String(location[location.length - 1]);
+    const leaf = location.includes('modificador_ids')
+      ? 'modificador_ids'
+      : String(location[location.length - 1]);
     const leafLabel = FIELD_LABELS[leaf] || 'Dados';
     return `Item ${itemNumber} — ${leafLabel}`;
   }

@@ -46,3 +46,13 @@ test('checkout uses the formatter for failed order submissions', () => {
   assert.match(source, /authRequestErrorMessage/);
   assert.doesNotMatch(source, /error instanceof Error\s*\? error\.message/);
 });
+
+test('formats cashier fields and nested modifier validation without exposing values', () => {
+  const message = formatCardapioApiError({ detail: [
+    { loc: ['body', 'itens', 0, 'modificador_ids', 2], type: 'string_type', input: 123 },
+    { loc: ['body', 'delivery_forma_pagamento'], type: 'literal_error' },
+    { loc: ['body', 'delivery_telefone'], type: 'string_too_short', input: 'private-phone' },
+  ] });
+  assert.equal(message, 'Revise os dados do pedido: Item 1 — Complementos: valor inválido. Forma de pagamento: opção inválida. Telefone: preenchimento incompleto.');
+  assert.doesNotMatch(message, /private-phone|123|\[object Object\]/);
+});
