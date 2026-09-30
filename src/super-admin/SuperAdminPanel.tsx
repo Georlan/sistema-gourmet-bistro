@@ -74,6 +74,7 @@ export default function SuperAdminPanel() {
   const [pendingContractsCount, setPendingContractsCount] = useState(0);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [runtimeHealth, setRuntimeHealth] = useState<{ status: "ok" | "unavailable"; commit?: string | null; version?: string } | null>(null);
+  const [runtimeEnvironment, setRuntimeEnvironment] = useState<string | null>(null);
   const [apiNotice, setApiNotice] = useState<string | null>(null);
 
   const reportApiError = (context: string, error: unknown) => {
@@ -175,6 +176,15 @@ export default function SuperAdminPanel() {
         version: data.version,
       }))
       .catch(() => setRuntimeHealth({ status: "unavailable" }));
+
+    superAdminFetch("/api/super-admin/integrations/health")
+      .then(res => res.json())
+      .then(data => setRuntimeEnvironment(
+        typeof data.environment === "string" && data.environment.trim()
+          ? data.environment.trim().toLowerCase()
+          : null,
+      ))
+      .catch(() => setRuntimeEnvironment(null));
 
     void fetchTenants();
     void fetchContracts();
@@ -289,8 +299,10 @@ export default function SuperAdminPanel() {
 
         <div className="flex items-center gap-3">
           <div className="hidden lg:flex flex-col items-end text-[11px] text-koma-muted font-mono">
-            <span className="text-koma-foreground font-semibold">BE {runtimeHealth?.commit || "desconhecido"} • FE {frontendBuildSha}</span>
-            <span className="text-[10px] text-koma-subtle">ambiente operacional</span>
+            <span className="text-koma-foreground font-semibold">BE {runtimeHealth?.commit || "não informado"} • FE {frontendBuildSha}</span>
+            <span className="text-[10px] text-koma-subtle">
+              ambiente: {runtimeEnvironment || "não verificado"}
+            </span>
           </div>
           <div className="h-6 w-px bg-zinc-800 hidden lg:block"></div>
           <div className="flex items-center gap-2">
