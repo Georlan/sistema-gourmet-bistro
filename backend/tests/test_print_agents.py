@@ -1517,8 +1517,27 @@ def test_usb_connection_action_is_tenant_scoped_and_rejects_waiter():
     assert waiter.status_code == 403
 
 
-def test_print_monitor_shows_only_the_latest_20_jobs_from_today():
-    now = datetime.datetime.now(datetime.timezone.utc)
+@pytest.fixture
+def print_history_noon(monkeypatch):
+    # O cenário de 20 registros do mesmo dia não deve atravessar meia-noite.
+    now = datetime.datetime(2026, 1, 15, 15, tzinfo=datetime.timezone.utc)
+
+    class FixedDateTime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now.astimezone(tz) if tz else now.replace(tzinfo=None)
+
+    monkeypatch.setattr(print_agents_route, "datetime", SimpleNamespace(
+        datetime=FixedDateTime,
+        timezone=datetime.timezone,
+        timedelta=datetime.timedelta,
+        time=datetime.time,
+    ))
+    return now
+
+
+def test_print_monitor_shows_only_the_latest_20_jobs_from_today(print_history_noon):
+    now = print_history_noon
     tenant_token = current_restaurante_id.set(2)
     try:
         db = TestingSessionLocal()
@@ -1687,8 +1706,8 @@ def test_retry_batch_reuses_failed_job_without_creating_duplicate():
         current_restaurante_id.reset(tenant_token)
 
 
-def test_history_maintenance_compacts_old_payloads_but_keeps_queue():
-    now = datetime.datetime.now(datetime.timezone.utc)
+def test_history_maintenance_compacts_old_payloads_but_keeps_queue(print_history_noon):
+    now = print_history_noon
     tenant_token = current_restaurante_id.set(2)
     try:
         db = TestingSessionLocal()
@@ -2094,5 +2113,4 @@ def test_heartbeat_accepts_structured_endpoints_and_destinations():
     assert state["printer_ready"] is True
     assert len(base_agent.printer_diagnostics["endpoints"]) == 2
     assert base_agent.printer_diagnostics["destinations"]["COZINHA"] == "ep-ka1445-bt"
-
 
