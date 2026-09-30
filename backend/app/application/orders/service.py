@@ -121,7 +121,11 @@ def _parse_troco_para_float(val: Any) -> float | None:
         return None
     if isinstance(val, (int, float, Decimal)):
         return float(val)
-    raw = str(val).replace("R$", "").replace(" ", "").replace(".", "").replace(",", ".").strip()
+    raw = str(val).replace("R$", "").replace(" ", "").strip()
+    # Numeric API values arrive as strings such as "50.0". Only remove
+    # thousands separators when a Brazilian decimal comma is present.
+    if "," in raw:
+        raw = raw.replace(".", "").replace(",", ".")
     try:
         return float(raw)
     except ValueError:
