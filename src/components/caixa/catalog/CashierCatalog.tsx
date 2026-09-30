@@ -8,6 +8,7 @@ import { CardapioProdutosTab } from '../../cardapio/CardapioProdutosTab';
 import { CategoriaModal } from '../../cardapio/CategoriaModal';
 import ComplementosTab from '../../cardapio/ComplementosTab';
 import MoneyInput from '../../MoneyInput';
+import MarmitariaTamanhos from '../../cardapio/MarmitariaTamanhos';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 
@@ -178,12 +179,12 @@ export default function CashierCatalog({
               { label: 'categorias', value: apiCategorias.length },
             ]}
           />
-          {isMarmitaria && <ComplementosTab
-            apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} produtos={apiProdutos}
+          {isMarmitaria && <MarmitariaTamanhos
+            apiBaseUrl={apiBaseUrl} authHeaders={authHeaders}
             onEditDetails={id => { const product = apiProdutos.find(item => item.id === id); if (product) editProductDetails(product); }}
-            marmitariaCadastro focusProductId={focusMarmitaId} onFocusHandled={() => setFocusMarmitaId(null)}
+            mode="products" onConfigureChoices={id => { setFocusMarmitaId(id); setActiveSubTab('complementos'); }} focusProductId={focusMarmitaId} onFocusHandled={() => setFocusMarmitaId(null)}
             catalogVersion={JSON.stringify(apiProdutos.map(product => [product.id, product.nome, product.preco, product.ativo]))}
-            onShowNotification={showToast} onCatalogChanged={async () => { await fetchProdutos(); await fetchCategorias(); }}
+            notify={showToast} onSaved={async () => { await fetchProdutos(); await fetchCategorias(); }}
           />}
           {isMarmitaria && <h3 className="font-bold text-koma-foreground">Sobremesas e bebidas</h3>}
           <CardapioProdutosTab
@@ -322,6 +323,8 @@ export default function CashierCatalog({
             apiBaseUrl={apiBaseUrl}
             authHeaders={authHeaders}
             produtos={apiProdutos}
+            marmitariaCadastro={isMarmitaria} focusProductId={focusMarmitaId} onFocusHandled={() => setFocusMarmitaId(null)}
+            catalogVersion={JSON.stringify(apiProdutos.map(product => [product.id, product.nome, product.preco, product.ativo]))}
             onCatalogChanged={async () => { await Promise.all([fetchProdutos(), fetchCategorias()]); }}
             onShowNotification={(msg, type) => showToast(msg, type === 'error' ? 'error' : 'success')}
           />
@@ -486,7 +489,7 @@ export default function CashierCatalog({
                 </div>
               )}
 
-              {isMarmitaria && <p className="text-sm text-koma-muted">{editingProduct && isMarmita(editingProduct) ? 'Atualize a foto e a descrição. Preço e escolhas ficam no cadastro de Marmitas.' : 'Cadastre aqui sobremesas e bebidas. Os tamanhos e escolhas ficam no cadastro de Marmitas.'}</p>}
+              {isMarmitaria && <p className="text-sm text-koma-muted">{editingProduct && isMarmita(editingProduct) ? 'Atualize a foto e a descrição. Preço fica em Produtos e escolhas em Complementos.' : 'Cadastre aqui sobremesas e bebidas. Os tamanhos ficam em Marmitas e as escolhas em Complementos.'}</p>}
               <div className="space-y-1.5">
                 <label
                   htmlFor="product-name"
