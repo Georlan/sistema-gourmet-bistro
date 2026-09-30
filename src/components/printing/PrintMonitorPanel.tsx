@@ -161,6 +161,14 @@ interface PrintMonitorResponse {
   } | null;
 }
 
+interface LocalAgentIdentity {
+  status: string;
+  service: string;
+  agent_id: string;
+  adapter?: string;
+  platform?: string;
+}
+
 interface PrintMonitorPanelProps {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
@@ -171,6 +179,38 @@ interface PrintMonitorPanelProps {
 }
 
 type DiagnosticTone = 'success' | 'warning' | 'danger' | 'neutral';
+
+const LOCAL_AGENT_PORTS = Array.from({ length: 11 }, (_, index) => 17654 + index);
+
+async function discoverLocalAgentIdentity(): Promise<LocalAgentIdentity | null> {
+  const attempts = LOCAL_AGENT_PORTS.map(async port => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 450);
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${port}/agent/identity`,
+        { signal: controller.signal, cache: 'no-store' }
+      );
+      if (!response.ok) return null;
+      const payload = await response.json().catch(() => null) as LocalAgentIdentity | null;
+      if (
+        payload?.service !== 'koma-print-agent'
+        || payload.status !== 'ready'
+        || !payload.agent_id?.trim()
+      ) {
+        return null;
+      }
+      return payload;
+    } catch {
+      return null;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  });
+
+  const results = await Promise.all(attempts);
+  return results.find((item): item is LocalAgentIdentity => Boolean(item)) || null;
+}
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Na fila',
@@ -327,12 +367,31 @@ export function PrintMonitorPanel({
   const [pendingCommandId, setPendingCommandId] = useState<string | null>(null);
   const [startingAgent, setStartingAgent] = useState(false);
   const startingAgentRef = useRef(false);
+  const [localAgentId, setLocalAgentId] = useState<string | null>(null);
+  const [localAgentResolved, setLocalAgentResolved] = useState(false);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const authorization = authHeaders.Authorization || authHeaders.authorization || '';
+
+  const refreshLocalAgentIdentity = useCallback(async () => {
+    const identity = await discoverLocalAgentIdentity();
+    setLocalAgentId(identity?.agent_id || null);
+    setLocalAgentResolved(true);
+    return identity?.agent_id || null;
+  }, []);
+
+  useEffect(() => {
+    void refreshLocalAgentIdentity();
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void refreshLocalAgentIdentity();
+      }
+    }, 5_000);
+    return () => window.clearInterval(intervalId);
+  }, [refreshLocalAgentIdentity]);
 
   const loadMonitor = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
@@ -382,6 +441,15 @@ export function PrintMonitorPanel({
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, [loadMonitor]);
+
+  const localAgents = useMemo(
+    () => (
+      localAgentId
+        ? (monitorData?.agents || []).filter(agent => agent.agent_id === localAgentId)
+        : []
+    ),
+    [localAgentId, monitorData]
+  );
 
   const activePendingCommand = (monitorData?.agents || [])
     .map(agent => ({
