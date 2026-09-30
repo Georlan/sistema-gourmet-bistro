@@ -18,6 +18,7 @@ from app.crypt import decrypt_field, encrypt_field
 from app.database import get_db
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
+from app.restaurant_profile_models import RestauranteOperationProfile
 from app.routes import contracts, saas_billing, saas_pix
 from app.routes.super_admin_onboarding import restaurant_trials
 from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
@@ -71,6 +72,7 @@ def client_and_session(monkeypatch):
         poolclass=StaticPool,
     )
     Restaurante.__table__.create(engine)
+    RestauranteOperationProfile.__table__.create(engine)
     ConfiguracaoRestaurante.__table__.create(engine)
     Usuario.__table__.create(engine)
     SuperAdminAuditLog.__table__.create(engine)
