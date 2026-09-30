@@ -18,6 +18,8 @@ def test_linux_installer_has_persistence_update_and_uninstall():
     assert "WantedBy=default.target" in installer
     assert "Restart=always" in installer
     assert "RestartSec=3" in installer
+    assert "RestartPreventExitStatus=75" in installer
+    assert "SuccessExitStatus=75" in installer
 
     # Silent background & non-interactive behavior
     assert "systemctl --user enable --now koma-print-agent.service" in installer
