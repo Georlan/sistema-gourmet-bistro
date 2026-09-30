@@ -12,6 +12,7 @@ interface CategoriaModalProps {
   isOpen: boolean;
   onClose: () => void;
   categoryToEdit?: CategoryData | null;
+  suggestedName?: string;
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
   onSuccess: (category: CategoryData) => Promise<void>;
@@ -22,6 +23,7 @@ export function CategoriaModal({
   isOpen,
   onClose,
   categoryToEdit,
+  suggestedName = '',
   apiBaseUrl,
   authHeaders,
   onSuccess,
@@ -43,12 +45,12 @@ export function CategoriaModal({
         const dest = (categoryToEdit.destino_impressao || 'COZINHA').toUpperCase();
         setDestino(dest === 'BAR' ? 'BAR' : dest === 'NENHUM' ? 'NENHUM' : 'COZINHA');
       } else {
-        setNome('');
-        setId('');
+        setNome(suggestedName);
+        setId(suggestedName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''));
         setDestino('COZINHA');
       }
     }
-  }, [isOpen, categoryToEdit]);
+  }, [isOpen, categoryToEdit, suggestedName]);
 
   // Auto-generate ID slug from Name when creating
   const handleNomeChange = (val: string) => {

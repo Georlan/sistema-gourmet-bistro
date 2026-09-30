@@ -10,9 +10,13 @@ selecioná-lo não cria produtos, preços ou limites automaticamente.
    opções com valor extra e quantidade permitida por grupo. Não presuma P, M e G.
 2. No Super Admin, abra **Restaurantes → Editar** e selecione o perfil
    **Marmitaria**. Preserve o plano contratado e os benefícios individuais.
-3. No restaurante, entre em **Cardápio → Produtos**. Cadastre cada tamanho
-   realmente vendido como produto, com nome claro e preço definido pela cliente.
-   Exemplo de nome: “Quentinha média”; o exemplo não determina preço ou tamanho.
+3. No restaurante, entre em **Cardápio → Produtos**. O guia **Quentinhas · P,
+   M e G** permite criar a categoria **Quentinhas** e cadastrar os tamanhos
+   dentro dela. Para o Quentinha Caseira, use **Quentinha P**, **Quentinha M** e
+   **Quentinha G**, cada produto com seu preço definido pela cliente. Os atalhos
+   mostram os tamanhos já cadastrados na categoria; use a lista de produtos para
+   editar preços ou pausar vendas. Não crie uma categoria separada por tamanho.
+   Para outras marmitarias, cadastre somente os tamanhos realmente vendidos.
 4. Em **Cardápio → Complementos**, crie os grupos necessários: **Proteínas**,
    **Guarnições** e **Saladas**. Arroz pode ser uma opção se o consumidor escolhe
    o tipo; se já é fixo na composição, explique na descrição do produto.
