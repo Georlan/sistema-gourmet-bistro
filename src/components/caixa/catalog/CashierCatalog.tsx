@@ -51,6 +51,7 @@ export default function CashierCatalog({
   restauranteConfig,
   onRefreshCategorias,
 }: Props) {
+  const isMarmitaria = restauranteConfig?.nicho === 'marmitaria';
   const [showProductModal, setShowProductModal] = useState(false);
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -454,7 +455,7 @@ export default function CashierCatalog({
             >
               {apiCategorias.length === 0 && (
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-[10px] text-amber-800 dark:text-amber-200">
-                  <span>Crie uma categoria antes de salvar o primeiro produto.</span>
+                  <span>{isMarmitaria ? 'Crie uma categoria, como Quentinhas, antes de salvar o primeiro produto.' : 'Crie uma categoria antes de salvar o primeiro produto.'}</span>
                   <button
                     type="button"
                     onClick={() => setShowCategoryModal(true)}
@@ -462,6 +463,17 @@ export default function CashierCatalog({
                   >
                     Criar categoria
                   </button>
+                </div>
+              )}
+
+              {isMarmitaria && (
+                <div className="rounded-xl border border-koma-border bg-koma-panel p-3 text-koma-secondary">
+                  <p className="font-bold">Monte o cardápio da sua marmitaria</p>
+                  <p className="mt-1 text-[10px] text-koma-muted">
+                    Cadastre cada tamanho vendido como um produto, com seu próprio preço.
+                    Depois, em Complementos, configure as proteínas, guarnições e saladas,
+                    os limites de escolha e os valores extras, e vincule os grupos aos produtos.
+                  </p>
                 </div>
               )}
 
@@ -476,7 +488,7 @@ export default function CashierCatalog({
                   type="text"
                   id="product-name"
                   required
-                  placeholder="Ex: Cheeseburger Duplo"
+                  placeholder={isMarmitaria ? 'Ex: Quentinha média' : 'Ex: Cheeseburger Duplo'}
                   value={prodFormNome}
                   onChange={(e) => setProdFormNome(e.target.value)}
                   className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"}
@@ -489,7 +501,7 @@ export default function CashierCatalog({
                     htmlFor="product-price"
                     className={"text-[10px] font-bold text-koma-secondary block"}
                   >
-                    Preço de venda
+                    {isMarmitaria ? 'Preço deste tamanho' : 'Preço de venda'}
                   </label>
                   <MoneyInput
                     id="product-price"
@@ -546,14 +558,14 @@ export default function CashierCatalog({
                 </label>
                 <textarea
                   id="product-description"
-                  placeholder="Hambúrguer bovino 150g, queijo cheddar derretido..."
+                  placeholder={isMarmitaria ? 'Ex: Quentinha média com arroz, feijão e opções de proteína e guarnição.' : 'Hambúrguer bovino 150g, queijo cheddar derretido...'}
                   value={prodFormDescricao}
                   onChange={(e) => setProdFormDescricao(e.target.value)}
                   rows={2}
                   className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
                 <p className="text-[9px] text-koma-muted">
-                  Use uma frase curta com os principais ingredientes. Ela também ajuda na busca.
+                  {isMarmitaria ? 'Descreva o que está incluído neste tamanho. Configure as opções e quantidades em Complementos.' : 'Use uma frase curta com os principais ingredientes. Ela também ajuda na busca.'}
                 </p>
               </div>
 
