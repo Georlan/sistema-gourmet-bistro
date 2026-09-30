@@ -15,9 +15,9 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-# EX_TEMPFAIL: o pareamento exige uma ação humana. O serviço systemd usa este
-# código para encerrar sem entrar em um ciclo que reabre o navegador a cada
-# poucos segundos quando a autorização não é concluída.
+# O código 2 significa "pareamento explícito necessário". No Linux, a unit
+# systemd usa RestartPreventExitStatus=2 para não abrir/reabrir o navegador em
+# loop quando a autorização precisa de ação humana.
 PAIRING_REQUIRED_EXIT = 2
 
 
@@ -32,7 +32,7 @@ def main() -> int:
         return 0
 
 
-def rudef run(config: AgentConfig) -> int:
+def run(config: AgentConfig) -> int:
 
     while True:
         if not config.agent_token:
@@ -97,5 +97,8 @@ def rudef run(config: AgentConfig) -> int:
                 "[PAREAMENTO] A autorização deste computador foi revogada. "
                 "O serviço foi pausado sem abrir navegador; use 'Preparar impressão'."
             )
-            return PAIRING_REQUIRED_EXIT_name__ == "__main__":
+            return PAIRING_REQUIRED_EXIT
+
+
+if __name__ == "__main__":
     sys.exit(main())
