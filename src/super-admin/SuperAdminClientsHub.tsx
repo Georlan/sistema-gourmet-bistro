@@ -1,11 +1,8 @@
 import React from "react";
 import {
+  ArrowLeft,
   ClipboardList,
-  CreditCard,
-  ReceiptText,
-  Sparkles,
   Store,
-  UsersRound,
 } from "lucide-react";
 import type { Tenant } from "./superAdminTypes";
 import {
@@ -49,13 +46,6 @@ interface SuperAdminClientsHubProps {
 const clientViews = [
   { id: "new" as const, label: "Novos clientes", icon: ClipboardList },
   { id: "restaurants" as const, label: "Restaurantes", icon: Store },
-];
-
-const restaurantTools = [
-  { id: "trials" as const, label: "Períodos grátis", icon: Sparkles },
-  { id: "access" as const, label: "Equipe e acessos", icon: UsersRound },
-  { id: "payments" as const, label: "Pagamentos", icon: CreditCard },
-  { id: "billing" as const, label: "Planos", icon: ReceiptText },
 ];
 
 export function SuperAdminClientsHub({
@@ -117,37 +107,16 @@ export function SuperAdminClientsHub({
           </div>
         </div>
 
-        {isRestaurantContext && (
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-800 pt-4">
+        {isRestaurantContext && activeView !== "restaurants" && (
+          <div className="mt-4 border-t border-zinc-800 pt-4">
             <button
               type="button"
               onClick={() => onChangeView("restaurants")}
-              className={`rounded-lg border px-3 py-1.5 text-[11px] font-bold ${
-                activeView === "restaurants"
-                  ? "border-[#00b894]/60 bg-[#00b894]/10 text-[#00b894]"
-                  : "border-zinc-800 text-koma-muted hover:text-koma-foreground"
-              }`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 px-3 py-1.5 text-[11px] font-bold text-koma-muted hover:text-koma-foreground"
             >
-              Lista de restaurantes
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Voltar para restaurantes
             </button>
-            {restaurantTools.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onChangeView(item.id)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-bold ${
-                    activeView === item.id
-                      ? "border-[#00b894]/60 bg-[#00b894]/10 text-[#00b894]"
-                      : "border-zinc-800 text-koma-muted hover:text-koma-foreground"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {item.label}
-                </button>
-              );
-            })}
           </div>
         )}
       </div>
@@ -201,6 +170,9 @@ export function SuperAdminClientsHub({
           isLoading={isLoadingTenants}
           refreshTenants={refreshTenants}
           globalSearch={globalSearch}
+          contracts={contracts}
+          contractsAvailable={contractsAvailable}
+          onOpenTeamControls={() => onChangeView("access")}
         />
       )}
       {activeView === "trials" && (

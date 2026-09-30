@@ -15,11 +15,12 @@ const accessTab = readFileSync(
   'utf8',
 );
 
-test('Super Admin mantém Acessos e equipe no contexto de Clientes', () => {
+test('Super Admin mantém o controle global de acessos como rota contextual fora do menu principal', () => {
   assert.match(panel, /<SuperAdminClientsHub/);
-  assert.match(clientsHub, /label: "Equipe e acessos"/);
   assert.match(clientsHub, /<SuperAdminAccessTab globalSearch=/);
   assert.match(clientsHub, /activeView === "access"/);
+  assert.match(clientsHub, /Voltar para restaurantes/);
+  assert.doesNotMatch(clientsHub, /label: "Equipe e acessos"/);
 });
 
 test('central usa somente endpoints administrativos reais e exige motivo', () => {

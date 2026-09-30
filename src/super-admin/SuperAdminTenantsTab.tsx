@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   AlertTriangle,
-  CreditCard,
   Edit3,
   ExternalLink,
   Eye,
@@ -22,6 +21,8 @@ import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 import { SuperAdminNewTenantModal } from "./SuperAdminNewTenantModal";
 import { SuperAdminSupportModal } from "./SuperAdminSupportModal";
 import { SuperAdminCapabilitiesModal } from "./SuperAdminCapabilitiesModal";
+import { SuperAdminRestaurant360 } from "./SuperAdminRestaurant360";
+import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import type { Tenant } from "./superAdminTypes";
 
 interface SuperAdminTenantsTabProps {
@@ -30,6 +31,9 @@ interface SuperAdminTenantsTabProps {
   isLoading: boolean;
   refreshTenants: () => void;
   globalSearch: string;
+  contracts: ContractInboxItem[];
+  contractsAvailable: boolean;
+  onOpenTeamControls: () => void;
 }
 
 const OPERATION_PROFILES = [
@@ -64,9 +68,14 @@ export function SuperAdminTenantsTab({
   isLoading,
   refreshTenants,
   globalSearch,
+  contracts,
+  contractsAvailable,
+  onOpenTeamControls,
 }: SuperAdminTenantsTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("ALL");
+  const [selectedStatus, setSelectedStatus] = useState("ALL");
+  const [selectedPayment, setSelectedPayment] = useState("ALL");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [benefitsTenant, setBenefitsTenant] = useState<Tenant | null>(null);
   const [supportTenant, setSupportTenant] = useState<Tenant | null>(null);
@@ -95,7 +104,10 @@ export function SuperAdminTenantsTab({
       || Boolean(tenant.subdomain?.toLowerCase().includes(effectiveSearch))
       || Boolean(tenant.plan?.toLowerCase().includes(effectiveSearch));
     const matchesPlan = selectedPlan === "ALL" || tenant.plan?.toLowerCase() === selectedPlan;
-    return matchesSearch && matchesPlan;
+    const normalizedStatus = tenant.status?.toUpperCase() || "ACTIVE";
+    const matchesStatus = selectedStatus === "ALL" || normalizedStatus === selectedStatus;
+    const matchesPayment = selectedPayment === "ALL" || tenant.onlinePaymentStatus === selectedPayment;
+    return matchesSearch && matchesPlan && matchesStatus && matchesPayment;
   });
 
   const loadOperationProfile = async (tenant: Tenant) => {
@@ -244,10 +256,24 @@ export function SuperAdminTenantsTab({
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-subtle" />
             <input type="text" placeholder="Buscar por nome, ID, slug ou plano..." value={searchTerm} onChange={event => setSearchTerm(event.target.value)} disabled={!tenantsAvailable} className="w-full rounded-lg border border-zinc-800 bg-koma-page py-2 pl-9 pr-3 text-xs text-koma-foreground placeholder:text-koma-subtle focus:border-[#00b894] focus:outline-none disabled:opacity-50" />
           </div>
-          <select value={selectedPlan} onChange={event => setSelectedPlan(event.target.value)} disabled={!tenantsAvailable} className="rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-xs text-koma-foreground focus:border-[#00b894] focus:outline-none disabled:opacity-50">
-            <option value="ALL">Todos os planos</option>
-            {SUBSCRIPTION_PLANS.map(plan => <option key={plan.id} value={plan.id}>{plan.name}</option>)}
-          </select>
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <select value={selectedPlan} onChange={event => setSelectedPlan(event.target.value)} disabled={!tenantsAvailable} className="rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-xs text-koma-foreground focus:border-[#00b894] focus:outline-none disabled:opacity-50">
+              <option value="ALL">Todos os planos</option>
+              {SUBSCRIPTION_PLANS.map(plan => <option key={plan.id} value={plan.id}>{plan.name}</option>)}
+            </select>
+            <select value={selectedStatus} onChange={event => setSelectedStatus(event.target.value)} disabled={!tenantsAvailable} className="rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-xs text-koma-foreground focus:border-[#00b894] focus:outline-none disabled:opacity-50">
+              <option value="ALL">Todos os status</option>
+              <option value="ACTIVE">Ativos</option>
+              <option value="SUSPENDED">Suspensos</option>
+              <option value="PENDING">Pendentes</option>
+            </select>
+            <select value={selectedPayment} onChange={event => setSelectedPayment(event.target.value)} disabled={!tenantsAvailable} className="rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-xs text-koma-foreground focus:border-[#00b894] focus:outline-none disabled:opacity-50">
+              <option value="ALL">Todo pagamento online</option>
+              <option value="connected">Mercado Pago conectado</option>
+              <option value="disconnected">Mercado Pago desconectado</option>
+              <option value="pending">Mercado Pago pendente</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -296,11 +322,8 @@ export function SuperAdminTenantsTab({
                     <td className="px-4 py-3.5 text-koma-foreground">{tenant.monthlyBilling != null ? formatCurrency(tenant.monthlyBilling) : "—"}</td>
                     <td className="px-4 py-3.5 text-koma-muted">{formatActivity(tenant.lastActivity)}</td>
                     <td className="px-4 py-3.5 text-right"><div className="inline-flex items-center gap-1.5">
-                      <button type="button" onClick={() => setBenefitsTenant(tenant)} className="rounded border border-zinc-700 px-2 py-1 text-koma-secondary">Recursos/Benefícios</button>
-                      <button type="button" onClick={() => setSupportTenant(tenant)} className="flex items-center gap-1 rounded border border-amber-800/60 bg-amber-950/40 px-2 py-1 text-amber-300 hover:bg-amber-900/60 hover:text-amber-100" title="Acessar estabelecimento em Modo Suporte auditado"><Headphones className="h-3 w-3" /> Suporte</button>
-                      <button type="button" onClick={() => setSelectedTenant(tenant)} className="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-koma-secondary hover:bg-zinc-800 hover:text-koma-foreground" title="Ver detalhes"><Eye className="h-3 w-3" /> Detalhes</button>
-                      <button type="button" onClick={() => openEditModal(tenant)} className="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-koma-secondary hover:bg-zinc-800 hover:text-koma-foreground" title="Editar cadastro e tipo de operação"><Edit3 className="h-3 w-3" /> Editar</button>
-                      <button type="button" onClick={() => openStatusModal(tenant)} className={`rounded border p-1.5 ${isSuspended ? "border-emerald-800/50 bg-emerald-950/40 text-emerald-400 hover:bg-emerald-900/60" : "border-rose-800/50 bg-rose-950/40 text-rose-400 hover:bg-rose-900/60"}`} title={isSuspended ? "Reativar restaurante" : "Suspender restaurante"}>{isSuspended ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}</button>
+                      <button type="button" onClick={() => setSelectedTenant(tenant)} className="flex items-center gap-1 rounded bg-[#00b894] px-2.5 py-1.5 font-bold text-black hover:bg-[#00c9a3]" title="Abrir ficha operacional completa"><Eye className="h-3 w-3" /> Abrir 360°</button>
+                      <button type="button" onClick={() => setSupportTenant(tenant)} className="flex items-center gap-1 rounded border border-amber-800/60 bg-amber-950/40 px-2 py-1.5 text-amber-300 hover:bg-amber-900/60 hover:text-amber-100" title="Acessar estabelecimento em Modo Suporte auditado"><Headphones className="h-3 w-3" /> Suporte</button>
                     </div></td>
                   </tr>
                 );
@@ -311,36 +334,18 @@ export function SuperAdminTenantsTab({
       </div>
 
       {selectedTenant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg space-y-5 rounded-xl border border-[#1e293b] bg-koma-card p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3"><div className="flex items-center gap-2"><Store className="h-5 w-5 text-[#00b894]" /><h3 className="text-base font-bold text-koma-foreground">{selectedTenant.name}</h3></div><button type="button" onClick={() => setSelectedTenant(null)} className="text-koma-subtle hover:text-koma-foreground"><X className="h-5 w-5" /></button></div>
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div className="rounded-lg border border-zinc-800 bg-koma-page p-3"><span className="text-koma-muted">Tenant</span><p className="mt-1 font-mono font-bold text-koma-foreground">#{selectedTenant.id}</p></div>
-              <div className="rounded-lg border border-zinc-800 bg-koma-page p-3"><span className="text-koma-muted">Status</span><p className="mt-1 font-bold text-koma-foreground">{selectedTenant.status?.toUpperCase() === "SUSPENDED" ? "Suspenso" : "Ativo"}</p></div>
-              <div className="rounded-lg border border-zinc-800 bg-koma-page p-3"><span className="text-koma-muted">Plano</span><p className="mt-1 font-bold text-koma-foreground">{officialPlan(selectedTenant.plan)?.name || selectedTenant.plan}</p></div>
-              <div className="rounded-lg border border-zinc-800 bg-koma-page p-3"><span className="text-koma-muted">Pagamento online</span><p className="mt-1 font-semibold text-koma-foreground">{paymentStatusLabel(selectedTenant.onlinePaymentStatus)}</p></div>
-            </div>
-            <div className="space-y-2 rounded-lg border border-zinc-800 bg-koma-page p-4 text-xs">
-              <h4 className="flex items-center gap-1.5 font-bold text-koma-foreground"><CreditCard className="h-4 w-4 text-[#00b894]" /> Autoridade comercial</h4>
-              <p className="text-koma-muted">Plano de recursos: <strong className="text-koma-secondary">{officialPlan(selectedTenant.plan)?.name || selectedTenant.plan || "Não disponível"}</strong></p>
-              <p className="text-[10px] leading-relaxed text-koma-subtle">Mensalidade e taxa transacional efetivas não são inferidas pelo slug do plano. Consulte o aceite vinculado em <strong>Contratações</strong> para ver os termos comerciais congelados deste tenant.</p>
-            </div>
-            <div className="flex justify-end gap-2 border-t border-zinc-800 pt-3">
-              <button type="button" onClick={() => { const t = selectedTenant; setSelectedTenant(null); setSupportTenant(t); }} className="flex items-center gap-1.5 rounded-lg border border-amber-600/60 bg-amber-950/60 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-900/80"><Headphones className="h-3.5 w-3.5" /> Entrar em Modo Suporte</button>
-              {selectedTenant.subdomain && (
-                <a
-                  href={`https://${selectedTenant.subdomain}.komafood.com.br/`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-koma-secondary hover:text-[#00b894]"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" /> Abrir cardápio
-                </a>
-              )}
-              <button type="button" onClick={() => setSelectedTenant(null)} className="rounded-lg bg-[#00b894] px-4 py-1.5 text-xs font-bold text-black">Fechar</button>
-            </div>
-          </div>
-        </div>
+        <SuperAdminRestaurant360
+          tenant={tenants.find(item => item.id === selectedTenant.id) || selectedTenant}
+          contracts={contracts}
+          contractsAvailable={contractsAvailable}
+          onBack={() => setSelectedTenant(null)}
+          onRefreshTenant={refreshTenants}
+          onEdit={(tenant) => openEditModal(tenant)}
+          onSupport={(tenant) => setSupportTenant(tenant)}
+          onStatus={(tenant) => openStatusModal(tenant)}
+          onBenefits={(tenant) => setBenefitsTenant(tenant)}
+          onOpenTeamControls={onOpenTeamControls}
+        />
       )}
 
       {editingTenant && (
