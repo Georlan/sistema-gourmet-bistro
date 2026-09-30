@@ -5,6 +5,7 @@ const DEFAULT_CENTRAL_URL = 'https://central.komafood.com.br';
 const DEFAULT_API_URL = 'https://sistema-gourmet-bistro-production.up.railway.app';
 const DEFAULT_CORS_PATH = '/cardapio/pedidos';
 const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_DEPLOY_WAIT_MS = 5 * 60_000;
 const CONTRACT_PATHS = ['/contratar/pocket', '/contratar/pro', '/contratar/premium'];
 
 function normalizeBaseUrl(value, fallback) {
@@ -32,18 +33,29 @@ function hasCorsValue(actual, expected) {
   return values.includes('*') || values.includes(expected.toLowerCase());
 }
 
-async function request(url, options = {}) {
-  const controller = new AbortController();
-  const timeoutMs = Number(process.env.KOMA_SMOKE_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, {
-      redirect: 'follow',
-      ...options,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
+async function request(url, options = {}, retries = 2) {
+  for (let attempt = 1; attempt <= retries + 1; attempt++) {
+    const controller = new AbortController();
+    const timeoutMs = Number(process.env.KOMA_SMOKE_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, {
+        redirect: 'follow',
+        ...options,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (attempt <= retries) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      const cause = error && typeof error === 'object' && 'cause' in error && error.cause
+        ? ` [cause: ${error.cause}]`
+        : '';
+      throw new Error(`fetch failed for ${url}${cause}`);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 
@@ -63,16 +75,51 @@ async function checkHtml(url, label) {
   console.log(`✓ ${label} ${response.status} — ${url}`);
 }
 
+async function waitForFrontendDeployment(frontendUrl, expectedSha) {
+  if (!expectedSha) return;
+
+  const expected = expectedSha.slice(0, 12);
+  const waitMs = Number(process.env.KOMA_FRONTEND_DEPLOY_WAIT_MS || DEFAULT_DEPLOY_WAIT_MS);
+  const deadline = Date.now() + waitMs;
+  let lastSeen = 'indisponível';
+
+  while (Date.now() < deadline) {
+    try {
+      const metaUrl = `${frontendUrl}/meta.json?probe=${Date.now()}`;
+      const response = await request(metaUrl, {
+        method: 'GET',
+        headers: { 'Cache-Control': 'no-cache' },
+      }, 0);
+      if (response.ok) {
+        const payload = await response.json();
+        lastSeen = String(payload?.sha || 'ausente');
+        if (lastSeen === expected) {
+          console.log(`✓ Frontend deploy ativo — ${expected}`);
+          return;
+        }
+      }
+    } catch {
+      // Cloudflare may still be switching deployments. Retry until the deadline.
+    }
+    await new Promise(resolve => setTimeout(resolve, 10_000));
+  }
+
+  throw new Error(
+    `Frontend deploy: commit esperado ${expected} não ficou ativo a tempo (último observado: ${lastSeen})`,
+  );
+}
+
 async function checkApiReadiness(apiUrl) {
   const liveUrl = `${apiUrl}/health/live`;
   const liveResponse = await request(liveUrl, { method: 'GET' });
   assertOk(liveResponse, 'Backend liveness');
   console.log(`✓ Backend liveness ${liveResponse.status} — ${liveUrl}`);
-  const url = `${apiUrl}/health/ready`;
-  const response = await request(url, { method: 'GET' });
+
+  const readyUrl = `${apiUrl}/health/ready`;
+  const response = await request(readyUrl, { method: 'GET' });
   assertOk(response, 'Backend readiness');
   const body = await response.text();
-  console.log(`✓ Backend readiness ${response.status} — ${url}${body ? ` — ${body.slice(0, 180)}` : ''}`);
+  console.log(`✓ Backend readiness ${response.status} — ${readyUrl}${body ? ` — ${body.slice(0, 180)}` : ''}`);
 }
 
 async function checkContractReadiness(apiUrl, expectedApiSha) {
@@ -107,7 +154,72 @@ async function checkContractReadiness(apiUrl, expectedApiSha) {
 }
 
 async function checkFrontend(frontendUrl) {
-  await checkHtml(frontendUrl, 'Frontend');
+  const response = await request(frontendUrl, { method: 'GET' });
+  assertOk(response, 'Frontend HTML');
+  const contentType = (response.headers.get('content-type') || '').toLowerCase();
+  if (!contentType.includes('text/html')) {
+    throw new Error(`Frontend: content-type inesperado: ${contentType || '(ausente)'}`);
+  }
+  const cacheControl = (response.headers.get('cache-control') || '').toLowerCase();
+  if (!cacheControl.includes('no-store') && !cacheControl.includes('no-cache')) {
+    throw new Error(`Frontend HTML: cache-control inseguro para version skew: ${cacheControl || '(ausente)'}`);
+  }
+
+  const html = await response.text();
+  console.log(`✓ Frontend shell ${response.status} — ${frontendUrl}`);
+
+  const scriptRegex = /<script\b[^>]*src=["']([^"']+\.js)["']/gi;
+  const linkCssRegex = /<link\b[^>]*href=["']([^"']+\.css)["']/gi;
+  const assets = new Set();
+  let match;
+  while ((match = scriptRegex.exec(html)) !== null) {
+    if (match[1].startsWith('/assets/')) assets.add(match[1]);
+  }
+  while ((match = linkCssRegex.exec(html)) !== null) {
+    if (match[1].startsWith('/assets/')) assets.add(match[1]);
+  }
+
+  if (assets.size === 0) {
+    throw new Error('Frontend: nenhum asset hashed (/assets/*) encontrado no HTML inicial.');
+  }
+
+  for (const assetPath of assets) {
+    const assetUrl = `${frontendUrl}${assetPath}`;
+    const assetRes = await request(assetUrl, { method: 'GET' });
+    assertOk(assetRes, `Asset ${assetPath}`);
+    const type = (assetRes.headers.get('content-type') || '').toLowerCase();
+    if (type.includes('text/html')) {
+      throw new Error(`Asset ${assetPath}: retornou text/html; possível fallback SPA/version skew.`);
+    }
+    if (assetPath.endsWith('.js') && !type.includes('javascript')) {
+      throw new Error(`Asset ${assetPath}: esperado JavaScript, recebido ${type || '(ausente)'}`);
+    }
+    if (assetPath.endsWith('.css') && !type.includes('text/css')) {
+      throw new Error(`Asset ${assetPath}: esperado CSS, recebido ${type || '(ausente)'}`);
+    }
+    console.log(`✓ Asset íntegro [${type.split(';')[0]}] — ${assetPath}`);
+  }
+
+  const fakeAssetUrl = `${frontendUrl}/assets/__koma_skew_test_nonexistent__.js?probe=${Date.now()}`;
+  const fakeRes = await request(fakeAssetUrl, {
+    method: 'GET',
+    headers: { 'Cache-Control': 'no-cache' },
+  });
+  const fakeType = (fakeRes.headers.get('content-type') || '').toLowerCase();
+  const fakeCache = (fakeRes.headers.get('cache-control') || '').toLowerCase();
+
+  if (fakeRes.status !== 404) {
+    throw new Error(
+      `Asset inexistente deve retornar 404 real; recebeu ${fakeRes.status} (${fakeType || 'sem content-type'})`,
+    );
+  }
+  if (fakeType.includes('text/html')) {
+    throw new Error('Asset inexistente retornou HTML; fallback SPA ainda está mascarando o 404.');
+  }
+  if (!fakeCache.includes('no-store')) {
+    throw new Error(`Asset inexistente deve ser no-store; recebeu ${fakeCache || '(ausente)'}`);
+  }
+  console.log('✓ Asset inexistente retorna 404 real + no-store');
 }
 
 async function checkContractPages(frontendUrl) {
@@ -155,14 +267,13 @@ async function main() {
   const apiUrl = normalizeBaseUrl(process.env.KOMA_API_URL, DEFAULT_API_URL);
   const corsPath = (process.env.KOMA_CORS_PATH || DEFAULT_CORS_PATH).trim();
   const expectedApiSha = (process.env.KOMA_EXPECTED_API_SHA || '').trim();
+  const expectedFrontendSha = (process.env.KOMA_EXPECTED_FRONTEND_SHA || '').trim();
 
   console.log('KÔMA production smoke (somente GET/OPTIONS; nenhuma mutação)');
   console.log(`Frontend: ${frontendUrl}`);
   console.log(`API: ${apiUrl}`);
-  if (expectedApiSha) {
-    console.log(`Commit esperado no backend: ${expectedApiSha.slice(0, 12)}`);
-  }
 
+  await waitForFrontendDeployment(frontendUrl, expectedFrontendSha);
   await checkApiReadiness(apiUrl);
   await checkContractReadiness(apiUrl, expectedApiSha);
   await checkFrontend(frontendUrl);
