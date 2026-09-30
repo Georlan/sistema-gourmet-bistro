@@ -132,6 +132,11 @@ test('onboarding uses canonical server progress, canonical modes and optional Me
   assert.match(onboarding, /order_types/);
   assert.match(onboarding, /Mercado Pago não conectado/);
   assert.match(onboarding, /pagamentos no atendimento sem Mercado Pago/);
+  assert.match(onboarding, /Novos pedidos online dependem do caixa aberto/);
+  assert.match(onboarding, /a agenda não bloqueia pedidos sozinha/);
+  assert.match(onboarding, /pagamentos online dos clientes pelo KÔMA/);
+  assert.match(onboarding, /separado da cobrança da sua assinatura KÔMA/);
+  assert.match(onboarding, /Pix anual escolhido na contratação/);
   assert.match(onboarding, /pedido de teste continua disponível como validação opcional/);
 });
 
