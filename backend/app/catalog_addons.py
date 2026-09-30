@@ -101,6 +101,9 @@ class CategoriaGrupoModificador(Base):
         nullable=False,
     )
     incluir_subcategorias = Column(Boolean, nullable=False, default=True)
+    min_selecoes = Column(Integer, nullable=True)
+    max_selecoes = Column(Integer, nullable=True)
+    modo_selecao = Column(String(16), nullable=True)
 
 
 def normalize_catalog_name(value: str) -> str:
@@ -210,6 +213,29 @@ def effective_modifier_group_ids_by_product(
     )
 
 
+def modifier_limits_by_product(db: Session, restaurante_id: int, products: Sequence[Produto]) -> dict[str, dict[str, tuple[int, int, str]]]:
+    """Limites explícitos por categoria; o vínculo mais próximo prevalece."""
+    links = db.query(CategoriaGrupoModificador).filter(
+        CategoriaGrupoModificador.restaurante_id == restaurante_id,
+        CategoriaGrupoModificador.min_selecoes.isnot(None),
+        CategoriaGrupoModificador.max_selecoes.isnot(None),
+    ).all()
+    by_category: dict[str, list[CategoriaGrupoModificador]] = {}
+    for link in links:
+        by_category.setdefault(str(link.categoria_id), []).append(link)
+    parents = category_parent_map(db, restaurante_id)
+    result = {}
+    for product in products:
+        limits = {}
+        for index, category in enumerate(category_lineage(str(product.categoria_id), parents)):
+            for link in by_category.get(category, []):
+                if index and not link.incluir_subcategorias:
+                    continue
+                limits.setdefault(str(link.grupo_id), (int(link.min_selecoes), int(link.max_selecoes), link.modo_selecao or "tipos"))
+        result[str(product.id)] = limits
+    return result
+
+
 def effective_modifier_payloads_by_product(
     db: Session,
     restaurante_id: int,
@@ -286,12 +312,18 @@ def effective_modifier_payloads_by_product(
         for group in groups
     }
 
+    limits_by_product = modifier_limits_by_product(db, restaurante_id, products)
     payloads: dict[str, list[dict]] = {}
     for product in products:
         recommended_ids = set(recommended_by_product.get(str(product.id), ()))
         payloads[str(product.id)] = [
             {
                 **group_payload[group_id],
+                **({"min_selecoes": limits_by_product[str(product.id)][group_id][0],
+                    "max_selecoes": limits_by_product[str(product.id)][group_id][1],
+                    "modo_selecao": limits_by_product[str(product.id)][group_id][2],
+                    "tipo": "obrigatorio" if limits_by_product[str(product.id)][group_id][0] else "opcional"}
+                   if group_id in limits_by_product[str(product.id)] else {}),
                 "recomendado": group_id in recommended_ids,
             }
             for group_id in groups_by_product.get(str(product.id), ())
@@ -321,19 +353,24 @@ def replace_category_links_for_group(
         if existing_count != len(normalized_ids):
             raise ValueError("Uma ou mais categorias não pertencem ao restaurante ativo.")
 
-    db.query(CategoriaGrupoModificador).filter(
+    existing = db.query(CategoriaGrupoModificador).filter(
         CategoriaGrupoModificador.restaurante_id == restaurante_id,
         CategoriaGrupoModificador.grupo_id == grupo_id,
-    ).delete(synchronize_session=False)
+    ).all()
+    by_category = {str(link.categoria_id): link for link in existing}
+    for link in existing:
+        if str(link.categoria_id) not in normalized_ids:
+            if link.min_selecoes is not None:
+                raise ValueError("Remova o grupo na configuração do tamanho de marmita, preservando sua composição.")
+            db.delete(link)
     for category_id in normalized_ids:
-        db.add(
-            CategoriaGrupoModificador(
-                restaurante_id=restaurante_id,
-                categoria_id=category_id,
-                grupo_id=grupo_id,
-                incluir_subcategorias=incluir_subcategorias,
-            )
-        )
+        if category_id in by_category:
+            by_category[category_id].incluir_subcategorias = incluir_subcategorias
+        else:
+            db.add(CategoriaGrupoModificador(
+                restaurante_id=restaurante_id, categoria_id=category_id,
+                grupo_id=grupo_id, incluir_subcategorias=incluir_subcategorias,
+            ))
 
 
 def category_hierarchy_payload(db: Session, restaurante_id: int) -> list[dict]:

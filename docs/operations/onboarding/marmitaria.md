@@ -10,24 +10,56 @@ selecioná-lo não cria produtos, preços ou limites automaticamente.
    opções com valor extra e quantidade permitida por grupo. Não presuma P, M e G.
 2. No Super Admin, abra **Restaurantes → Editar** e selecione o perfil
    **Marmitaria**. Preserve o plano contratado e os benefícios individuais.
-3. No restaurante, entre em **Cardápio → Produtos**. O guia **Quentinhas · P,
-   M e G** permite criar a categoria **Quentinhas** e cadastrar os tamanhos
-   dentro dela. Para o Quentinha Caseira, use **Quentinha P**, **Quentinha M** e
-   **Quentinha G**, cada produto com seu preço definido pela cliente. Os atalhos
-   mostram os tamanhos já cadastrados na categoria; use a lista de produtos para
-   editar preços ou pausar vendas. Não crie uma categoria separada por tamanho.
-   Para outras marmitarias, cadastre somente os tamanhos realmente vendidos.
-4. Em **Cardápio → Complementos**, crie os grupos necessários: **Proteínas**,
-   **Guarnições** e **Saladas**. Arroz pode ser uma opção se o consumidor escolhe
-   o tipo; se já é fixo na composição, explique na descrição do produto.
-5. Configure mínimo e máximo de escolhas conforme a operação real. Use valor
-   adicional zero apenas para escolhas incluídas no preço. Cadastre os extras
-   cobrados com seu valor real.
-6. Vincule os grupos à categoria ou aos produtos. Se tamanhos têm limites
-   diferentes, use grupos separados e confira cada vínculo; não associe um
-   mesmo grupo com limites incompatíveis a todos os tamanhos.
-7. Abra o link público e simule cada tamanho: composição, limites, preço final
-   e adicionais devem corresponder ao que a cozinha vai entregar.
+3. No restaurante, entre em **Cardápio → Complementos** e cadastre uma única
+   lista de opções em cada grupo: **Proteínas**, **Guarnições**, **Saladas**.
+   Arroz pode ser um grupo se o consumidor escolhe o tipo. Se já é fixo na
+   composição, explique depois na descrição do produto.
+4. Use valor adicional zero apenas para escolhas incluídas no preço. Cadastre
+   os extras cobrados com seu valor real. Os limites gerais do grupo continuam
+   atendendo outros produtos; cada tamanho terá seus próprios limites.
+5. Na mesma aba, em **Tamanhos de marmita**, clique **Adicionar tamanho**.
+   Informe nome e preço reais. Clique **Adicionar grupo de escolhas**, escolha
+   um grupo e preencha mínimo/máximo. Repita para os demais grupos usados.
+   Não é necessário duplicar as proteínas para cada tamanho.
+6. Em **Como contar as escolhas**, decida por grupo:
+   - **Porções — pode repetir a mesma opção:** mínimo 2 e máximo 2 aceita duas
+     porções de Frango ou uma de Frango e uma de Carne; não aceita uma terceira.
+   - **Tipos diferentes — uma escolha de cada:** mínimo 2 e máximo 2 exige
+     duas opções diferentes e não permite repetir a mesma.
+   Mínimo 0 e máximo 1 em Saladas permite deixar sem salada. A cliente define
+   esses limites; as combinações acima são exemplos, não condições comerciais.
+7. Marque **Disponível para venda** somente quando houver opções suficientes
+   para cumprir os mínimos; caso contrário salve pausado. Clique **Salvar tamanho**.
+   O sistema cria a categoria e o produto desse tamanho com destino **Cozinha**;
+   confira esse destino em **Cardápio → Categorias** durante a homologação.
+8. Para mudar preço ou limites, clique **Configurar** no tamanho. Para foto,
+   descrição e demais dados do produto, use **Cardápio → Produtos**.
+9. Abra o link público e simule cada tamanho: composição, limites, preço final
+   e adicionais devem corresponder ao que a cozinha vai entregar. O backend
+   também confere mínimo/máximo por tamanho ao receber o pedido.
+
+O tipo de operação é definido pelo Super Admin, não pelo dono do restaurante.
+Mudar o perfil não converte nem preenche o catálogo automaticamente. Um catálogo
+montado anteriormente pelo fluxo geral continua válido: não cadastre uma segunda
+cópia dos produtos para experimentar o assistente; não há migração automática.
+Os vínculos de grupos usados pelo assistente devem ser removidos em **Configurar**
+no tamanho, antes de excluir o grupo. Editar as opções preserva os limites dos tamanhos.
+
+## Cadastro manual já existente
+
+Em **Cardápio → Produtos**, o guia **Quentinhas · P, M e G** continua permitindo
+criar a categoria **Quentinhas** e cadastrar os tamanhos dentro dela. Para o
+Quentinha Caseira, os nomes previstos são **Quentinha P**, **Quentinha M** e
+**Quentinha G**, com preços definidos pela cliente. Para outras marmitarias,
+cadastre somente os tamanhos vendidos. Os atalhos mostram os produtos existentes;
+use a lista para editar preços ou pausar vendas.
+
+Nesse fluxo manual, mantenha os tamanhos dentro de **Quentinhas**. Ele não cria
+os limites por tamanho do assistente acima: os grupos seguem seus vínculos e
+limites gerais. Se o catálogo já estiver cadastrado assim, confira os vínculos
+antes de mudar a composição; não duplique os produtos. Para um catálogo novo
+com composições diferentes por tamanho e opções compartilhadas, use
+**Tamanhos de marmita**, que cria uma categoria e um produto por tamanho.
 
 Não avance com composição ambígua, preço faltante ou escolha obrigatória sem
 opções disponíveis. Não cadastre produtos fictícios para completar três tamanhos.

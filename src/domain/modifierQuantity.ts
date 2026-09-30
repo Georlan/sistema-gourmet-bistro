@@ -4,6 +4,7 @@ export type ModifierQuantityRules = {
   optionIds: readonly string[];
   minSelection?: number;
   maxSelection?: number;
+  selectionMode?: 'porcoes' | 'tipos';
 };
 
 const normalizedRules = (rules: ModifierQuantityRules) => ({
@@ -20,6 +21,12 @@ export const selectionTypeCount = (
   return new Set(selectedIds.filter((id) => optionIds.has(id))).size;
 };
 
+export const selectionCount = (rules: ModifierQuantityRules, selectedIds: readonly string[]) => {
+  if (rules.selectionMode !== 'porcoes') return selectionTypeCount(rules, selectedIds);
+  const { optionIds } = normalizedRules(rules);
+  return selectedIds.filter(id => optionIds.has(id)).length;
+};
+
 export const modifierOptionQuantity = (selectedIds: readonly string[], optionId: string) =>
   selectedIds.filter((id) => id === optionId).length;
 
@@ -28,8 +35,12 @@ export const selectionWithinRules = (
   selectedIds: readonly string[],
 ) => {
   const { min, max } = normalizedRules(rules);
-  const selectedTypes = selectionTypeCount(rules, selectedIds);
-  return selectedTypes >= min && selectedTypes <= max;
+  const count = selectionCount(rules, selectedIds);
+  if (rules.selectionMode === 'tipos') {
+    const { optionIds } = normalizedRules(rules);
+    if (selectedIds.filter(id => optionIds.has(id)).length !== count) return false;
+  }
+  return count >= min && count <= max;
 };
 
 export const canIncrementSelectionQuantity = (
@@ -45,6 +56,8 @@ export const canIncrementSelectionQuantity = (
   // Escolha única continua exclusiva. Para grupos com múltiplos tipos,
   // repetir o mesmo adicional não consome uma nova vaga do grupo.
   if (max === 1) return currentQuantity === 0;
+  if (rules.selectionMode === 'porcoes') return selectionCount(rules, selectedIds) < max;
+  if (rules.selectionMode === 'tipos' && currentQuantity > 0) return false;
   if (currentQuantity > 0) return true;
 
   return selectionTypeCount(rules, selectedIds) < max;
@@ -73,7 +86,7 @@ export const changeSelectionQuantity = (
     return [...current.filter((id) => !optionIds.has(id)), optionId];
   }
 
-  if (currentQuantity === 0 && selectionTypeCount(rules, current) >= max) return current;
+  if (!canIncrementSelectionQuantity(rules, current, optionId)) return current;
   return [...current, optionId];
 };
 
@@ -84,10 +97,11 @@ const catalogRules = (group: CatalogModifierGroup): ModifierQuantityRules => ({
   optionIds: activeOptionIds(group),
   minSelection: Number(group.min_selecoes || 0),
   maxSelection: Number(group.max_selecoes || 1),
+  selectionMode: group.modo_selecao,
 });
 
 export const modifierTypeCount = (group: CatalogModifierGroup, selectedIds: readonly string[]) =>
-  selectionTypeCount(catalogRules(group), selectedIds);
+  selectionCount(catalogRules(group), selectedIds);
 
 export const modifierGroupSelectionValid = (
   group: CatalogModifierGroup,

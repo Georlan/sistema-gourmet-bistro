@@ -1519,20 +1519,18 @@ def test_usb_connection_action_is_tenant_scoped_and_rejects_waiter():
 
 @pytest.fixture
 def print_history_noon(monkeypatch):
-    # O cenário de 20 registros do mesmo dia não deve atravessar meia-noite.
+    # The rolling minute fixtures must stay inside one operational day,
+    # including when CI runs immediately after midnight in São Paulo.
     now = datetime.datetime(2026, 1, 15, 15, tzinfo=datetime.timezone.utc)
 
-    class FixedDateTime(datetime.datetime):
+    class HistoryDateTime(datetime.datetime):
         @classmethod
         def now(cls, tz=None):
             return now.astimezone(tz) if tz else now.replace(tzinfo=None)
 
-    monkeypatch.setattr(print_agents_route, "datetime", SimpleNamespace(
-        datetime=FixedDateTime,
-        timezone=datetime.timezone,
-        timedelta=datetime.timedelta,
-        time=datetime.time,
-    ))
+    clock = SimpleNamespace(**vars(datetime))
+    clock.datetime = HistoryDateTime
+    monkeypatch.setattr(print_agents_route, "datetime", clock)
     return now
 
 
@@ -2113,4 +2111,5 @@ def test_heartbeat_accepts_structured_endpoints_and_destinations():
     assert state["printer_ready"] is True
     assert len(base_agent.printer_diagnostics["endpoints"]) == 2
     assert base_agent.printer_diagnostics["destinations"]["COZINHA"] == "ep-ka1445-bt"
+
 

@@ -690,7 +690,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               <div className="text-right"><span className="block text-[10px] uppercase font-bold text-koma-muted">Total configurado</span><span className="font-mono text-lg font-bold text-emerald-400">R$ {money(configUnitTotal * configQty)}</span>{modifierTotal > 0 && <span className="block text-[9px] text-koma-subtle">+ R$ {money(modifierTotal)} por unidade</span>}</div>
             </div>
 
-            {currentGroups.length > 0 && <div className="space-y-3 border-t border-koma-border pt-4"><div><h5 className="text-xs font-bold text-koma-foreground">Complementos</h5><p className="text-[10px] text-koma-muted">Ajuste quantidades; o limite do grupo conta tipos diferentes.</p></div><ModifierPicker key={`${selectedProductToConfigure.id}-${editingDraftItemId || 'new'}`} groups={currentGroups} selectedIds={selectedModifierIds} onQuantityChange={changeModifierQuantity} /></div>}
+            {currentGroups.length > 0 && <div className="space-y-3 border-t border-koma-border pt-4"><div><h5 className="text-xs font-bold text-koma-foreground">Complementos</h5><p className="text-[10px] text-koma-muted">{currentGroups.some(group => group.modo_selecao) ? 'Siga os limites de porções ou tipos definidos para cada grupo.' : 'Ajuste quantidades; o limite do grupo conta tipos diferentes.'}</p></div><ModifierPicker key={`${selectedProductToConfigure.id}-${editingDraftItemId || 'new'}`} groups={currentGroups} selectedIds={selectedModifierIds} onQuantityChange={changeModifierQuantity} /></div>}
 
             <div className="space-y-2 border-t border-koma-border pt-4">
               <label htmlFor="config-item-obs" className="text-[10px] uppercase font-bold text-koma-muted">Observação de preparo</label>

@@ -323,6 +323,7 @@ export default function CashierCatalog({
             apiBaseUrl={apiBaseUrl}
             authHeaders={authHeaders}
             produtos={apiProdutos}
+            onCatalogChanged={async () => { await Promise.all([fetchProdutos(), fetchCategorias()]); }}
             onShowNotification={(msg, type) => showToast(msg, type === 'error' ? 'error' : 'success')}
           />
         </div>
