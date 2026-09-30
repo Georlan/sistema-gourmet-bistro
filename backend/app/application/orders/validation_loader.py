@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Sequence
 from sqlalchemy.orm import Session
 
-from ...catalog_addons import effective_modifier_group_ids_by_product
+from ...catalog_addons import effective_modifier_group_ids_by_product, modifier_limits_by_product
 from ...domain.orders.pricing import to_money_decimal
 from ...domain.orders.types import FulfillmentType, normalize_to_fulfillment
 from ...domain.orders.validation import (
@@ -79,6 +79,7 @@ class ValidationDataLoader:
                 prods,
             )
 
+            limits_by_product = modifier_limits_by_product(db, restaurante_id, prods)
             for p in prods:
                 catalog_products[str(p.id)] = ValidationProduct(
                     id=p.id,
@@ -87,6 +88,7 @@ class ValidationDataLoader:
                     price=to_money_decimal(p.preco),
                     is_active=bool(p.ativo),
                     allowed_modifier_group_ids=tuple(grupos_by_prod.get(str(p.id), ())),
+                    modifier_selection_limits=tuple((group, *limits) for group, limits in limits_by_product.get(str(p.id), {}).items()),
                 )
 
         # 3. Carregar Modificadores

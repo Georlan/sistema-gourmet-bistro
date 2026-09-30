@@ -137,3 +137,9 @@ class IdempotencyConflictError(OrderValidationError):
         message: str = "A chave idempotente já foi usada com outro conteúdo de pedido.",
     ) -> None:
         super().__init__(message)
+
+
+class ModifierSelectionLimitError(OrderValidationError):
+    """Quantidade de escolhas incompatível com a composição do tamanho."""
+    def __init__(self, product_name: str, minimum: int, maximum: int) -> None:
+        super().__init__(f"{product_name}: escolha entre {minimum} e {maximum} opções no grupo de complementos.")

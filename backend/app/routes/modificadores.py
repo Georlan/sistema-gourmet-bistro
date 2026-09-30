@@ -409,6 +409,12 @@ def deletar_grupo(
     ).first()
     if not grupo:
         raise HTTPException(status_code=404, detail="Grupo não encontrado.")
+    if db.query(CategoriaGrupoModificador).filter(
+        CategoriaGrupoModificador.restaurante_id == rest_id,
+        CategoriaGrupoModificador.grupo_id == grupo_id,
+        CategoriaGrupoModificador.min_selecoes.isnot(None),
+    ).first():
+        raise HTTPException(409, "Grupo usado por tamanhos de marmita. Remova-o na configuração dos tamanhos antes de excluir.")
     db.query(ProdutoGrupoModificador).filter(
         ProdutoGrupoModificador.restaurante_id == rest_id,
         ProdutoGrupoModificador.grupo_id == grupo_id,

@@ -443,6 +443,8 @@ app.include_router(cardapio_clientes.router)
 app.include_router(cupons.router)
 app.include_router(cupons.public_router)
 app.include_router(modificadores.router)
+from .routes import marmitaria
+app.include_router(marmitaria.router)
 app.include_router(print_agents.router)
 app.include_router(printing.router)
 app.include_router(cardapio_digital.router)

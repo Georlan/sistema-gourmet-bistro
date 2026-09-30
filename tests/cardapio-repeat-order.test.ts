@@ -172,3 +172,22 @@ test('repeat order aggregates equal historical lines into one cart item', () => 
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].quantity, 2);
 });
+
+test('repetir marmita respeita modo e limite atuais, avisando sobre escolhas descartadas', () => {
+  const historical = order({ itens: [{ produto_id: 'size-g', nome: 'Marmita G', quantidade: 1, preco_unitario: 25,
+    modificadores: Array.from({ length: 3 }, () => ({ grupo_id: 'proteins', opcao_id: 'chicken', opcao_nome: 'Frango', preco_aplicado: 0 })),
+  }] });
+  const size: Product = { id: 'size-g', name: 'Marmita G', description: '', price: 25, image: '', category: 'Marmita G', isAvailable: true,
+    modifierGroups: [{ id: 'proteins', name: 'Proteínas', type: 'obrigatorio', minSelection: 2, maxSelection: 2, selectionMode: 'porcoes',
+      options: [{ id: 'chicken', name: 'Frango', extraPrice: 0, active: true }, { id: 'beef', name: 'Carne', extraPrice: 0, active: true }],
+    }],
+  };
+  const portions = rebuildOrderFromCurrentCatalog(historical, [size]);
+  assert.equal(portions.items.length, 1);
+  assert.equal(portions.items[0].selectedOptions.proteins.length, 2);
+  assert.ok(portions.issues.length > 0);
+  const distinct: Product = { ...size, modifierGroups: size.modifierGroups!.map(group => ({ ...group, selectionMode: 'tipos' })) };
+  const types = rebuildOrderFromCurrentCatalog(historical, [distinct]);
+  assert.equal(types.items.length, 0);
+  assert.ok(types.issues.some(issue => issue.includes('precisa escolher novamente')));
+});

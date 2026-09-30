@@ -17,6 +17,7 @@ from .errors import (
     InvalidItemQuantityError,
     MinimumOrderAmountNotMetError,
     ModifierGroupMismatchError,
+    ModifierSelectionLimitError,
     ModifierInactiveError,
     ModifierNotFoundError,
     ProductInactiveError,
@@ -44,6 +45,7 @@ class ValidationProduct:
     price: Decimal
     is_active: bool
     allowed_modifier_group_ids: tuple[str, ...] = ()
+    modifier_selection_limits: tuple[tuple[str, int, int, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -270,6 +272,14 @@ class OrderValidationService:
                         price=mod_price,
                     )
                 )
+
+            for group_id, minimum, maximum, mode in prod.modifier_selection_limits:
+                selected = [str(mid) for mid in raw_item.modifier_ids
+                            if context.catalog_modifiers[str(mid)].group_id == group_id]
+                count = len(selected) if mode == "porcoes" else len(set(selected))
+                repeated_type = mode == "tipos" and len(selected) != len(set(selected))
+                if repeated_type or not minimum <= count <= maximum:
+                    raise ModifierSelectionLimitError(prod.name, minimum, maximum)
 
             unit_price = to_money_decimal(base_price + item_modifiers_sum)
             item_subtotal = to_money_decimal(unit_price * qty)

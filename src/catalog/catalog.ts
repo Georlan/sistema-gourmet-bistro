@@ -21,6 +21,7 @@ export interface CatalogModifierGroup {
   max_selecoes: number;
   tipo: 'obrigatorio' | 'opcional' | 'meio_a_meio' | string;
   recomendado?: boolean;
+  modo_selecao?: 'porcoes' | 'tipos';
   opcoes: CatalogModifierOption[];
 }
 
@@ -48,13 +49,14 @@ function normalizeModifierGroups(value: unknown): CatalogModifierGroup[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((group): group is Record<string, unknown> => Boolean(group) && typeof group === 'object')
-    .map((group) => ({
+    .map((group): CatalogModifierGroup => ({
       id: String(group.id ?? ''),
       nome: String(group.nome ?? ''),
       min_selecoes: Math.max(0, Number(group.min_selecoes ?? 0)),
       max_selecoes: Math.max(1, Number(group.max_selecoes ?? 1)),
       tipo: String(group.tipo ?? 'opcional'),
       recomendado: group.recomendado !== false,
+      modo_selecao: group.modo_selecao === 'porcoes' || group.modo_selecao === 'tipos' ? group.modo_selecao : undefined,
       opcoes: (Array.isArray(group.opcoes) ? group.opcoes : [])
         .filter((option): option is Record<string, unknown> => Boolean(option) && typeof option === 'object')
         .map((option) => ({

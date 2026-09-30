@@ -97,3 +97,22 @@ test('contrato genérico usado pelo cardápio público replica a mesma semântic
   assert.equal(canIncrementSelectionQuantity(rules, selected, 'cebola'), false);
   assert.equal(canIncrementSelectionQuantity(rules, selected, 'catupiry'), true);
 });
+
+test('marmitaria por porções permite repetir e limita o total', () => {
+  const rules = { optionIds: ['chicken', 'beef', 'fish'], minSelection: 2, maxSelection: 2, selectionMode: 'porcoes' as const };
+  assert.equal(selectionWithinRules(rules, ['chicken']), false);
+  assert.equal(selectionWithinRules(rules, ['chicken', 'chicken']), true);
+  assert.equal(selectionWithinRules(rules, ['chicken', 'beef']), true);
+  assert.equal(selectionWithinRules(rules, ['chicken', 'chicken', 'beef']), false);
+  assert.equal(canIncrementSelectionQuantity(rules, ['chicken', 'chicken'], 'beef'), false);
+  assert.deepEqual(changeSelectionQuantity(rules, ['chicken', 'chicken'], 'chicken', 1), ['chicken', 'chicken']);
+});
+
+test('marmitaria por tipos exige opções diferentes sem repetição', () => {
+  const rules = { optionIds: ['chicken', 'beef', 'fish'], minSelection: 2, maxSelection: 2, selectionMode: 'tipos' as const };
+  assert.equal(selectionWithinRules(rules, ['chicken', 'chicken']), false);
+  assert.equal(selectionWithinRules(rules, ['chicken', 'beef']), true);
+  assert.equal(canIncrementSelectionQuantity(rules, ['chicken'], 'chicken'), false);
+  assert.equal(canIncrementSelectionQuantity(rules, ['chicken', 'beef'], 'fish'), false);
+  assert.deepEqual(changeSelectionQuantity(rules, ['chicken'], 'chicken', 1), ['chicken']);
+});

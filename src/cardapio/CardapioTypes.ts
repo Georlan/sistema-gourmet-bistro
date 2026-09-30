@@ -19,6 +19,7 @@ export interface ModifierOption {
 }
 
 export interface ModifierGroup {
+  selectionMode?: 'porcoes' | 'tipos';
   id: string;
   name: string;
   minSelection: number;
@@ -28,6 +29,7 @@ export interface ModifierGroup {
 }
 
 export interface ProductModifier {
+  selectionMode?: 'porcoes' | 'tipos';
   id: string;
   title: string;
   required: boolean;

@@ -18,7 +18,7 @@ import {
   canIncrementSelectionQuantity,
   changeSelectionQuantity,
   modifierOptionQuantity,
-  selectionTypeCount,
+  selectionCount,
   selectionWithinRules,
   type ModifierQuantityRules,
 } from "../../domain/modifierQuantity";
@@ -52,6 +52,7 @@ const rulesForModifier = (modifier: QuantityModifier): ModifierQuantityRules => 
   optionIds: modifier.options.map((option) => option.id),
   minSelection: modifier.minSelection ?? (modifier.required ? 1 : 0),
   maxSelection: Math.max(1, Number(modifier.maxSelection || 1)),
+  selectionMode: modifier.selectionMode,
 });
 
 export default function CardapioProductModal({
@@ -87,6 +88,7 @@ export default function CardapioProductModal({
         required: g.type === "obrigatorio" || g.minSelection > 0,
         maxSelection: g.maxSelection,
         minSelection: g.minSelection,
+        selectionMode: g.selectionMode,
         options: g.options
           .filter((option) => option.active !== false)
           .map((o) => ({
@@ -302,7 +304,7 @@ export default function CardapioProductModal({
                 const selections = selectedOptions[modifier.id] || [];
                 const selectedIds = selections.map((selection) => selection.id);
                 const rules = rulesForModifier(modifier);
-                const selectedTypes = selectionTypeCount(rules, selectedIds);
+                const selectedTypes = selectionCount(rules, selectedIds);
                 const max = Math.max(1, Number(modifier.maxSelection || 1));
 
                 return (
@@ -311,12 +313,12 @@ export default function CardapioProductModal({
                       <div>
                         <h3 className="text-sm font-black text-koma-foreground">{modifier.title}</h3>
                         <p className="mt-0.5 text-xs text-koma-muted">
-                          {max === 1 ? "Escolha uma opção" : `Até ${max} tipos · quantidade livre por adicional`}
+                          {modifier.selectionMode ? `Escolha de ${modifier.minSelection || 0} até ${max} ${modifier.selectionMode === "porcoes" ? "porções (pode repetir)" : "tipos diferentes"}` : max === 1 ? "Escolha uma opção" : `Até ${max} tipos · quantidade livre por adicional`}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
                         {max > 1 && (
-                          <span className="text-[10px] font-black text-emerald-400">{selectedTypes}/{max} tipos</span>
+                          <span className="text-[10px] font-black text-emerald-400">{selectedTypes}/{max} {modifier.selectionMode === "porcoes" ? "porções" : "tipos"}</span>
                         )}
                         <span className={modifier.required
                           ? "rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-400"
