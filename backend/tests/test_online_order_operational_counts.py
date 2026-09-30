@@ -108,7 +108,8 @@ def test_operational_counts_ignore_online_payments_not_released_to_operation():
             assert counts == {
                 "analise": 1,
                 "pendente": 1,
-                "producao": 0,
+                "aceito": 0,
+        "producao": 0,
                 "pronto": 1,
                 "active": 3,
             }
@@ -141,7 +142,22 @@ def test_operational_control_endpoint_uses_the_same_filtered_counts():
     assert response.json()["counts"] == {
         "analise": 0,
         "pendente": 1,
+        "aceito": 0,
         "producao": 0,
         "pronto": 0,
         "active": 1,
     }
+
+
+def test_accepted_orders_still_reserve_operational_capacity():
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, RID):
+            _add_order(db, order_id="accepted-count", delivery_status="aceito", online_payment_status="approved")
+            _add_order(db, order_id="accepted-unpaid", delivery_status="aceito", online_payment_status="pending")
+            db.commit()
+            counts = operational_counts(db, RID)
+            assert counts["aceito"] == 1
+            assert counts["active"] == 1
+    finally:
+        db.close()

@@ -171,7 +171,7 @@ async function mockFulfillmentBackend(
     if (pathname.endsWith('/delivery/status') && request.method() === 'PUT') {
       const id = pathname.split('/')[2];
       const next = url.searchParams.get('status_novo') || 'pendente';
-      if (next === 'producao') acceptCalls += 1;
+      if (next === 'aceito' || (next === 'producao' && (id === pickup.id ? pickup.delivery_status : delivery.delivery_status) !== 'aceito')) acceptCalls += 1;
       if (id === pickup.id) pickup = { ...pickup, delivery_status: next };
       if (id === delivery.id) delivery = { ...delivery, delivery_status: next };
       const updated = id === pickup.id ? pickup : delivery;
@@ -361,6 +361,8 @@ test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Ka
     (element as HTMLButtonElement).click();
   });
   await expect.poll(state.getAcceptCalls).toBe(2);
+  await expect(deliveries.getByRole('button', { name: 'Iniciar preparo' })).toBeVisible();
+  await deliveries.getByRole('button', { name: 'Iniciar preparo' }).click();
   await expect(deliveries).toContainText('Em preparo');
 
   const courierSelect = deliveries.getByRole('combobox', { name: /Entregador do pedido 5002/i });
@@ -414,27 +416,27 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   await expect(courierSelect).toHaveValue('7');
 
   await productionCard.getByRole('button', { name: /Pronto para sair/i }).click();
-
-  await page.locator('.orders-mobile-stages__button').filter({ hasText: 'Concluir' }).evaluate((element) => {
-    (element as HTMLButtonElement).click();
-  });
-  const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
+  const readyCard = page.locator('.orders-card--digital').filter({ hasText: 'Bruno Delivery' });
   await expect(readyCard).toBeVisible();
-  await expect(readyCard).toContainText('PRONTO PARA ENVIO');
+  await expect(readyCard).toContainText('PRONTO PARA SAIR');
   const readyCourierSelect = readyCard.getByRole('combobox', { name: /Entregador do pedido 5002/i });
   await expect(readyCourierSelect).toHaveValue('7');
-
   const dispatch = readyCard.getByRole('button', { name: 'Saiu para entrega' });
   await expect(dispatch).toBeEnabled();
   await dispatch.click();
   await expect.poll(state.getDispatchCalls).toBe(1);
-
+  await page.locator('.orders-mobile-stages__button').filter({ hasText: 'Concluir' }).evaluate((element) => {
+    (element as HTMLButtonElement).click();
+  });
   const inRouteCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
   await expect(inRouteCard).toContainText('EM ROTA');
   await expect(inRouteCard).toContainText('Pedro Entregador');
   await expect(inRouteCard.getByRole('combobox', { name: /Entregador do pedido 5002/i })).toHaveCount(0);
 
-  await inRouteCard.getByRole('button', { name: 'Trocar entregador' }).click();
+  await expect(inRouteCard.getByRole('button', { name: 'Trocar entregador' })).toHaveCount(0);
+  await page.locator('.cashier-subnav__button').filter({ hasText: 'Entregas' }).click();
+  const deliveryWorkspace = page.locator('#cashier-deliveries-workspace');
+  await deliveryWorkspace.getByRole('button', { name: 'Trocar entregador' }).click();
   const reassignmentDialog = page.getByRole('dialog', { name: 'Trocar entregador' });
   await expect(reassignmentDialog).toBeVisible();
   await expect(reassignmentDialog).toContainText('Pedro Entregador');
@@ -443,8 +445,8 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   await reassignmentDialog.getByRole('button', { name: 'Confirmar troca' }).click();
   await expect.poll(state.getReassignmentCalls).toBe(1);
   await expect(reassignmentDialog).toBeHidden();
-  await expect(inRouteCard).toContainText('Lia Entregas');
-  await expect(inRouteCard).toContainText('EM ROTA');
+  await expect(deliveryWorkspace).toContainText('Lia Entregas');
+  await expect(deliveryWorkspace).toContainText('Em rota');
   await expectNoHorizontalOverflow(page);
 });
 
@@ -978,13 +980,11 @@ test('sessão recupera estado atualizado de pedidos após reconexão de WebSocke
   // Ao reconectar, o evento koma_orders_updated disparado na reconexão refaz a busca autoritativa
   await page.evaluate(() => window.dispatchEvent(new Event('koma_orders_updated')));
 
-  const concluirTab = page.locator('.orders-mobile-stages__button').filter({ hasText: 'Concluir' });
-  await concluirTab.waitFor({ state: 'attached' });
-  await concluirTab.evaluate((element) => { (element as HTMLButtonElement).click(); });
-
-  const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Cliente Reconexao' });
+  const readyCard = page.locator('.orders-card--digital').filter({ hasText: 'Cliente Reconexao' });
   await expect(readyCard).toBeVisible();
-  await expect(readyCard).toContainText(/Pronto/i);
+  await expect(readyCard).toContainText(/Pronto para sair/i);
+  await expect(readyCard.getByRole('button', { name: 'Saiu para entrega' })).toBeDisabled();
+  await expect(page.locator('.orders-card--closing').filter({ hasText: 'Cliente Reconexao' })).toHaveCount(0);
 });
 
 
