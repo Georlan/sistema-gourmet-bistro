@@ -43,10 +43,13 @@ test('configured restaurants prioritize function search and can resume setup fro
   assert.match(cashierSettings, /removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
 });
 
-test('required onboarding persists and waits for explicit SuperAdmin release', () => {
-  assert.match(onboarding, /Conclua os quatro itens mínimos/);
+test('required onboarding persists and waits for explicit KÔMA release', () => {
+  assert.match(onboarding, /Complete os quatro itens essenciais/);
   assert.match(onboarding, /configurationComplete/);
-  assert.match(onboarding, /aguardando liberação KÔMA/);
+  assert.match(onboarding, /Sua parte está concluída/);
+  assert.match(onboarding, /Aguardando KÔMA/);
+  assert.match(onboarding, /status será atualizado automaticamente/);
+  assert.match(onboarding, /setInterval/);
   assert.doesNotMatch(onboarding, /\/api\/onboarding\/start-trial/);
   assert.match(onboarding, /sessionStorage\.setItem\(ONBOARDING_SETUP_MODE_KEY, '1'\)/);
   assert.match(onboarding, /sessionStorage\.removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
@@ -78,7 +81,7 @@ test('setup mode exposes canonical configuration and fiscal without exposing nor
 test('initial setup reuses the same cashier online-menu screens and Mercado Pago integration owner', () => {
   assert.match(onboarding, /subTab: 'cardapio_perfil'/);
   assert.match(onboarding, /subTab: 'cardapio_pedidos'/);
-  assert.match(onboarding, /subTab: 'cardapio_pagamentos'/);
+  assert.match(onboarding, /openCashierAt\('cardapio_digital', 'cardapio_pagamentos', true\)/);
   assert.match(onlineMenu, /cardapio_perfil: 'perfil'/);
   assert.match(onlineMenu, /cardapio_pedidos: 'pedidos'/);
   assert.match(onlineMenu, /cardapio_pagamentos: 'pagamentos'/);
@@ -118,16 +121,18 @@ test('onboarding uses canonical server progress, canonical modes and optional Me
     'Complete os dados do restaurante',
     'Defina os horários de funcionamento',
     'Publique o primeiro produto',
-    'Conecte o Mercado Pago para Pix online',
-    'Valide com um pedido de teste',
+    'Pode configurar depois',
+    'Validação antes do primeiro turno',
   ]) {
     assert.match(onboarding, new RegExp(label));
   }
   assert.match(onboarding, /daysRemaining/);
   assert.match(onboarding, /Salvar modalidades/);
+  assert.match(onboarding, /Modalidades salvas/);
   assert.match(onboarding, /order_types/);
-  assert.match(onboarding, /Cardápio Online funciona com pagamento no atendimento sem Mercado Pago/);
-  assert.match(onboarding, /Depois de iniciar/);
+  assert.match(onboarding, /Mercado Pago não conectado/);
+  assert.match(onboarding, /pagamentos no atendimento sem Mercado Pago/);
+  assert.match(onboarding, /pedido de teste continua disponível como validação opcional/);
 });
 
 test('onboarding route is composed once into the existing root router', () => {
