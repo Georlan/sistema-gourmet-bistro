@@ -87,6 +87,8 @@ async function openShell(page: Page, session: ShellSession = 'garcom') {
       body = [order];
     } else if (key === 'GET /comandas/check-shell-e2e') {
       body = order;
+    } else if (key === 'GET /produtos/categorias') {
+      body = [{id:'meals',nome:'Pratos',destino_impressao:'COZINHA'}];
     } else if (key === 'GET /caixa/configuracoes') {
       body = { perm_garcom_status: true, perm_garcom_editar: true, perm_garcom_print: true };
     } else if (key === 'GET /caixa/pagamentos/pendentes') {
@@ -123,7 +125,7 @@ async function openDrawer(page: Page) {
 test('drawer abre, fecha pelo botão e backdrop, restaurando scroll e disponibilidade', async ({ page }) => {
   const state = await openShell(page);
   await openDrawer(page);
-  await expect(page.getByText('1 p/ servir', { exact: true })).toBeVisible();
+  await expect(page.getByText('p/ servir', { exact: true }).locator('..')).toContainText('1');
   await page.getByRole('button', { name: 'Disponível no Salão', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Ocupado / Em Atendimento', exact: true })).toBeVisible();
   await page.locator('#close-sidebar-btn').click();
@@ -152,11 +154,11 @@ test('sincronizar salão fecha o drawer e atualiza pedidos e mesas', async ({ pa
   expect(state.unexpectedRequests).toEqual([]);
 });
 
-test('tema e preferências persistem ao reabrir; logout mantém dados não autenticadores', async ({ page }) => {
+test('tema e preferências persistem ao reabrir; logout limpa contexto da aba e mantém tema', async ({ page }) => {
   const state = await openShell(page);
   await openDrawer(page);
-  await page.locator('#sidebar-toggle-images').uncheck();
-  await page.locator('#sidebar-toggle-descriptions').uncheck();
+  await page.locator('label').filter({has:page.locator('#sidebar-toggle-images')}).click();
+  await page.locator('label').filter({has:page.locator('#sidebar-toggle-descriptions')}).click();
   await page.getByRole('button', { name: 'Escuro', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'light');
   await page.locator('#close-sidebar-btn').click();
@@ -175,7 +177,7 @@ test('tema e preferências persistem ao reabrir; logout mantém dados não auten
     settings: JSON.parse(sessionStorage.getItem(settingsKey) || '{}'),
     unrelated: localStorage.getItem('shell-unrelated-data'),
   }), SETTINGS_KEY);
-  expect(persisted).toEqual({ token: null, user: null, theme: 'light', settings: { exibirImagens: false, exibirDescricoes: false }, unrelated: 'preserve-me' });
+  expect(persisted).toEqual({ token: null, user: null, theme: 'light', settings: {}, unrelated: 'preserve-me' });
   expect(state.unexpectedRequests).toEqual([]);
 });
 
