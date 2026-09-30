@@ -10,6 +10,10 @@ const audit = readFileSync(
   new URL('../src/super-admin/SuperAdminAuditTab.tsx', import.meta.url),
   'utf8',
 );
+const platformHub = readFileSync(
+  new URL('../src/super-admin/SuperAdminPlatformHub.tsx', import.meta.url),
+  'utf8',
+);
 const operations = readFileSync(
   new URL('../src/super-admin/SuperAdminOperationsTab.tsx', import.meta.url),
   'utf8',
@@ -34,8 +38,9 @@ test('Auditoria usa apenas trilha persistente e oferece filtros a partir das aç
   assert.match(audit, /Array\.from\(new Set\(auditLogs\.map\(log => log\.action\)\)\)/);
   assert.match(audit, /actionOptions\.map/);
   assert.match(audit, /Auditoria indisponível/);
-  assert.match(panel, /<SuperAdminAuditTab \/>/);
-  assert.doesNotMatch(panel, /<SuperAdminAuditTab logs=/);
+  assert.match(panel, /<SuperAdminPlatformHub/);
+  assert.match(platformHub, /<SuperAdminAuditTab \/>/);
+  assert.doesNotMatch(platformHub, /<SuperAdminAuditTab logs=/);
 });
 
 test('Erros estruturados da API preservam localização e mensagem sem serializar payload de entrada', () => {

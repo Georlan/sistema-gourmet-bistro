@@ -6,6 +6,10 @@ const panel = readFileSync(
   new URL('../src/super-admin/SuperAdminPanel.tsx', import.meta.url),
   'utf8',
 );
+const clientsHub = readFileSync(
+  new URL('../src/super-admin/SuperAdminClientsHub.tsx', import.meta.url),
+  'utf8',
+);
 const trialsTab = readFileSync(
   new URL('../src/super-admin/SuperAdminTrialsTab.tsx', import.meta.url),
   'utf8',
@@ -15,10 +19,11 @@ const trialModal = readFileSync(
   'utf8',
 );
 
-test('Super Admin expõe a central de períodos grátis na navegação principal', () => {
-  assert.match(panel, /SuperAdminTrialsTab/);
-  assert.match(panel, /id: "trials" as TabId, label: "Períodos grátis"/);
-  assert.match(panel, /activeTab === "trials"/);
+test('Super Admin mantém períodos grátis como ferramenta contextual de Clientes', () => {
+  assert.match(panel, /<SuperAdminClientsHub/);
+  assert.match(clientsHub, /label: "Períodos grátis"/);
+  assert.match(clientsHub, /<SuperAdminTrialsTab/);
+  assert.match(clientsHub, /activeView === "trials"/);
 });
 
 test('central consulta a fonte real de trials e não inventa cobrança SaaS', () => {
