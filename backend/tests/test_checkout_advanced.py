@@ -139,3 +139,27 @@ def test_taxa_por_bairro_e_frete_gratis_e_cupom():
     data = res.json()
     assert data["status"] == "success"
     assert data["total"] == 110.0
+
+
+@pytest.mark.parametrize("change_for", [50, 50.0, 50.25, 100.0, 200.0])
+def test_cash_change_value_from_public_order_is_preserved(change_for):
+    response = client.post("/cardapio/pedidos", json={
+        "restaurante_id": 998,
+        "cliente_nome": "Cliente Troco",
+        "cliente_telefone": "81999995678",
+        "endereco_entrega": "Rua Centro, 50",
+        "bairro": "Centro",
+        "tipo_pedido": "delivery",
+        "forma_pagamento_detalhe": "dinheiro",
+        "troco_para": change_for,
+        "itens": [{"produto_id": "prod-chk-1", "quantidade": 2}],
+    })
+    assert response.status_code == 201, response.text
+    db = SessionLocal()
+    tenant_token = current_restaurante_id.set(998)
+    try:
+        order = db.query(Comanda).filter(Comanda.id == response.json()["comanda_id"]).one()
+        assert order.delivery_troco_para == change_for
+    finally:
+        db.close()
+        current_restaurante_id.reset(tenant_token)
