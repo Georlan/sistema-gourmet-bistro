@@ -173,6 +173,10 @@ def _recommended_modifier_group_ids_by_product(
                 seen.add(group_id)
                 ordered.append(group_id)
 
+        if product.marmitaria_tamanho:
+            resolved[str(product.id)] = tuple(ordered)
+            continue
+
         lineage = category_lineage(str(product.categoria_id), parents)
         for index, category_id in enumerate(lineage):
             for link in links_by_category.get(category_id, []):
@@ -214,7 +218,7 @@ def effective_modifier_group_ids_by_product(
 
 
 def modifier_limits_by_product(db: Session, restaurante_id: int, products: Sequence[Produto]) -> dict[str, dict[str, tuple[int, int, str]]]:
-    """Limites explícitos por categoria; o vínculo mais próximo prevalece."""
+    """Limites do produto prevalecem sobre categoria e ancestrais."""
     links = db.query(CategoriaGrupoModificador).filter(
         CategoriaGrupoModificador.restaurante_id == restaurante_id,
         CategoriaGrupoModificador.min_selecoes.isnot(None),
@@ -223,11 +227,18 @@ def modifier_limits_by_product(db: Session, restaurante_id: int, products: Seque
     by_category: dict[str, list[CategoriaGrupoModificador]] = {}
     for link in links:
         by_category.setdefault(str(link.categoria_id), []).append(link)
+    direct = db.query(ProdutoGrupoModificador).filter(
+        ProdutoGrupoModificador.restaurante_id == restaurante_id,
+        ProdutoGrupoModificador.produto_id.in_([p.id for p in products]),
+        ProdutoGrupoModificador.min_selecoes.isnot(None),
+        ProdutoGrupoModificador.max_selecoes.isnot(None),
+    ).all()
     parents = category_parent_map(db, restaurante_id)
     result = {}
     for product in products:
-        limits = {}
-        for index, category in enumerate(category_lineage(str(product.categoria_id), parents)):
+        limits = {str(link.grupo_id): (int(link.min_selecoes), int(link.max_selecoes), link.modo_selecao or "tipos")
+                  for link in direct if link.produto_id == product.id}
+        for index, category in enumerate(() if product.marmitaria_tamanho else category_lineage(str(product.categoria_id), parents)):
             for link in by_category.get(category, []):
                 if index and not link.incluir_subcategorias:
                     continue

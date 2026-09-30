@@ -1,0 +1,69 @@
+name: Marmitaria Catalog Targeted
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/marmitaria-catalog-targeted.yml'
+      - 'backend/app/marmitaria_catalog.py'
+      - 'backend/app/routes/marmitaria.py'
+      - 'backend/app/routes/modificadores.py'
+      - 'backend/app/routes/products.py'
+      - 'backend/app/catalog_addons.py'
+      - 'backend/app/models.py'
+      - 'backend/alembic/versions/*marmitaria*.py'
+      - 'backend/tests/test_marmitaria*.py'
+  workflow_dispatch:
+
+concurrency:
+  group: marmitaria-catalog-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-catalog:
+    name: Marmitaria PostgreSQL catalog and size race
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: marmitas_test
+          POSTGRES_PASSWORD: marmitas_test
+          POSTGRES_DB: marmitas_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U marmitas_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: marmitaria-catalog-ci-test-only-secret
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      DATABASE_URL: postgresql://marmitas_test:marmitas_test@127.0.0.1:5432/marmitas_test
+      MIGRATION_DATABASE_URL: postgresql://marmitas_test:marmitas_test@127.0.0.1:5432/marmitas_test
+      KOMA_PYTEST_USE_EXTERNAL_DATABASE: 'true'
+      PYTHONPATH: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.15'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+      - name: Migrate isolated PostgreSQL database
+        working-directory: backend
+        run: |
+          test "$(python -m alembic heads | wc -l)" -eq 1
+          python -m alembic upgrade head
+      - name: Verify adoption, composition, migration and simultaneous creation
+        run: >-
+          python -m pytest backend/tests/test_marmitaria_sizes.py
+          backend/tests/test_marmitaria_size_migration.py -q -ra

@@ -372,11 +372,16 @@ def atualizar_grupo(
                 preco_adicional=op.preco_adicional or 0.0, ativo=op.ativo,
             ))
     if payload.produto_ids is not None:
-        db.query(ProdutoGrupoModificador).filter(
-            ProdutoGrupoModificador.restaurante_id == rest_id,
-            ProdutoGrupoModificador.grupo_id == grupo_id,
-        ).delete()
-        for pid in dict.fromkeys(payload.produto_ids):
+        product_ids = set(payload.produto_ids)
+        links = db.query(ProdutoGrupoModificador).filter_by(restaurante_id=rest_id, grupo_id=grupo_id).all()
+        by_product = {link.produto_id: link for link in links}
+        if any(link.min_selecoes is not None and link.produto_id not in product_ids for link in links):
+            db.rollback()
+            raise HTTPException(422, "Remova o grupo na configuração da marmita antes de desvincular.")
+        for link in links:
+            if link.produto_id not in product_ids:
+                db.delete(link)
+        for pid in product_ids - by_product.keys():
             db.add(ProdutoGrupoModificador(restaurante_id=rest_id, produto_id=pid, grupo_id=grupo_id))
     try:
         replace_category_links_for_group(
@@ -409,7 +414,7 @@ def deletar_grupo(
     ).first()
     if not grupo:
         raise HTTPException(status_code=404, detail="Grupo não encontrado.")
-    if db.query(CategoriaGrupoModificador).filter(
+    if db.query(ProdutoGrupoModificador).filter_by(restaurante_id=rest_id, grupo_id=grupo_id).filter(ProdutoGrupoModificador.min_selecoes.isnot(None)).first() or db.query(CategoriaGrupoModificador).filter(
         CategoriaGrupoModificador.restaurante_id == rest_id,
         CategoriaGrupoModificador.grupo_id == grupo_id,
         CategoriaGrupoModificador.min_selecoes.isnot(None),

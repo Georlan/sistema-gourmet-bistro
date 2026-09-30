@@ -47,3 +47,32 @@ O editor geral preserva overrides nos vínculos mantidos. Remover vínculo/exclu
 usado em tamanhos exige ajustar a composição no assistente. Pausar uma opção continua
 usando o registro original, ocultando-a em todos os tamanhos que compartilham o grupo.
 Não migra catálogos existentes nem aplica programação semanal, plano ou pagamentos.
+
+## Cadastro unificado de marmitaria — 30/09/2026
+
+A direção anterior de categoria por tamanho foi substituída pelo escopo aprovado
+pelo usuário: uma categoria Marmitas/Quentinhas com P, M e G e limites por produto.
+O único formulário está em Cardápio → Produtos → Marmitas; Complementos mantém
+apenas grupos/opções. O modelo antigo permanece legível por compatibilidade.
+
+`Produto.marmitaria_tamanho` armazena a identidade normalizada do tamanho, única
+por restaurante. Registros manuais reconhecidos e categorias do assistente antigo
+são mostrados na leitura sem criar/converter dados. Configurar um registro existente
+preserva seu ID e metadados, passa-o à categoria compartilhada e grava overrides em
+`ProdutoGrupoModificador.min_selecoes/max_selecoes/modo_selecao`.
+
+Produtos configurados usam exclusivamente seus vínculos diretos de composição;
+produtos legados mantêm herança por categoria. A resolução canônica atende
+Cardápio Online, Caixa, Garçom, repetir pedido e validação do Order Core.
+Escritas de tamanhos bloqueiam o restaurante durante a transação, detectam
+aliases P/pequena, M/média, G/grande e duplicados antigos, com índice único como
+última proteção contra concorrência. Cadastro, importação e movimentação genéricos
+não criam novos tamanhos paralelos; foto/descrição e pausa continuam disponíveis.
+A edição de grupos preserva overrides por produto e exige removê-los pela marmita
+antes de desvincular/excluir. Sem regras, é permitido salvar apenas pausado;
+ativação genérica e em lote também verifica a composição.
+
+Migration aditiva z6d7e8f9a0b1; não converte dados nem elimina categorias antigas.
+Configuração explícita reaproveita a categoria Quentinhas/Marmitas existente,
+preservando nomes/IDs dos pedidos históricos. Duplicados antigos exigem resolução
+explícita; nenhum produto ou pedido real é excluído pela atualização.
