@@ -12,17 +12,18 @@ selecioná-lo não cria produtos, preços ou limites automaticamente.
    cadastre somente os vendidos. Os já existentes abrem para configuração.
 3. Clique no tamanho e informe o nome no cardápio e o preço real. É possível
    salvar pausado antes de cadastrar as opções, sem publicar composição incompleta.
-4. Na seção **Proteínas, guarnições e outras opções**, cadastre os grupos e as
+4. Em **Cardápio → Complementos → Proteínas, guarnições e saladas**, cadastre os grupos e as
    opções uma única vez. Use adicional zero para escolhas incluídas; extras
    cobrados mantêm o valor real. A mesma opção atende vários tamanhos.
-5. Na marmita, clique **Adicionar escolhas**, selecione Proteínas ou Guarnições
+5. Na aba **Complementos**, abra a marmita em **Escolhas por tamanho**, clique
+   **Adicionar escolhas**, selecione Proteínas ou Guarnições
    e informe **Quantidade de escolhas**. **Escolha obrigatória** exige esse
    total; desmarcada permite de zero até a quantidade informada. Por exemplo,
    G pode exigir duas proteínas e três guarnições, com valores definidos pela cliente.
 6. **Permitir repetir a mesma opção** aceita duas porções de Frango. Desmarcada,
    exige opções diferentes. A regra é própria de cada tamanho.
 7. Marque **Disponível para venda** quando a composição estiver completa e
-   houver opções suficientes. Clique **Salvar marmita**. A configuração usa
+   houver opções suficientes. Clique **Salvar escolhas**. A configuração usa
    uma categoria compartilhada **Marmitas**, reaproveitando **Quentinhas** se existente.
    Confira o destino de impressão em **Preparo** durante a homologação.
 8. Para atualizar foto e descrição, use **Foto e descrição** no próprio cadastro.
@@ -31,8 +32,10 @@ selecioná-lo não cria produtos, preços ou limites automaticamente.
    e impressão devem corresponder à configuração. O servidor valida os limites
    por produto e bloqueia pedidos incompletos ou excedentes.
 
-**Complementos** gerencia grupos e disponibilidade; não possui outro cadastro
-de tamanhos. Cada tamanho possui uma identidade única por restaurante, com
+**Produtos** concentra tamanho, preço, foto e descrição. **Complementos**
+concentra os grupos, disponibilidade de opções e regras de escolha por tamanho;
+não permite criar outro tamanho. O atalho **Configurar escolhas** em Produtos abre
+a marmita existente em Complementos. Cada tamanho possui uma identidade única por restaurante, com
 proteção também no banco. Criar P novamente exige editar o cadastro existente.
 
 ## Cadastros existentes
