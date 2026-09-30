@@ -1000,13 +1000,13 @@ class HeartbeatRequest(BaseModel):
 
 
 class ConnectUsbPrinterRequest(BaseModel):
-    agent_id: Optional[str] = Field(default=None, max_length=200)
+    agent_id: str = Field(min_length=1, max_length=200)
     printer_name: Optional[str] = Field(default=None, max_length=200)
     printer_uri: Optional[str] = Field(default=None, max_length=300)
 
 
 class TestBluetoothPrinterRequest(BaseModel):
-    agent_id: Optional[str] = Field(default=None, max_length=200)
+    agent_id: str = Field(min_length=1, max_length=200)
     printer_name: Optional[str] = Field(default=None, max_length=200)
     printer_uri: Optional[str] = Field(default=None, max_length=300)
 
@@ -1635,17 +1635,15 @@ def request_usb_printer_connection(
             detail="Restaurante não selecionado",
         )
 
-    query = db.query(PrintAgentToken).filter(
-        PrintAgentToken.restaurante_id == rest_id,
-        PrintAgentToken.ativo == True,
-    )
-    if req.agent_id:
-        query = query.filter(
-            PrintAgentToken.agent_id == req.agent_id.strip()
+    agent = (
+        db.query(PrintAgentToken)
+        .filter(
+            PrintAgentToken.restaurante_id == rest_id,
+            PrintAgentToken.ativo == True,
+            PrintAgentToken.agent_id == req.agent_id.strip(),
         )
-    agent = query.order_by(
-        PrintAgentToken.last_seen_at.desc()
-    ).first()
+        .first()
+    )
     if not agent:
         raise HTTPException(
             status_code=404,
@@ -1736,17 +1734,15 @@ def request_bluetooth_printer_test(
             detail="Restaurante não selecionado",
         )
 
-    query = db.query(PrintAgentToken).filter(
-        PrintAgentToken.restaurante_id == rest_id,
-        PrintAgentToken.ativo == True,
-    )
-    if req.agent_id:
-        query = query.filter(
-            PrintAgentToken.agent_id == req.agent_id.strip()
+    agent = (
+        db.query(PrintAgentToken)
+        .filter(
+            PrintAgentToken.restaurante_id == rest_id,
+            PrintAgentToken.ativo == True,
+            PrintAgentToken.agent_id == req.agent_id.strip(),
         )
-    agent = query.order_by(
-        PrintAgentToken.last_seen_at.desc()
-    ).first()
+        .first()
+    )
     if not agent:
         raise HTTPException(
             status_code=404,
