@@ -100,6 +100,15 @@ export function CashierDesktopSidebar({
                 <strong>{shiftLabel}</strong>
               </span>
             </div>
+            {shiftOpen && (
+              <button
+                type="button"
+                onClick={() => handleSidebarNavigation('caixa_fechamento')}
+                className="cashier-shift-card__action is-close"
+              >
+                Fechar caixa
+              </button>
+            )}
             {shiftClosed && (
               <button onClick={() => setShowAbrirModal(true)} className="cashier-shift-card__action is-open">
                 Abrir caixa
