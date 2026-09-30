@@ -13,13 +13,23 @@ VENV_DIR="$INSTALL_DIR/.venv"
 CREDENTIALS_FILE="$CONFIG_HOME/koma-print-agent/credentials.json"
 LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/koma-print-pairing-${UID}.lock"
 
+has_local_credential() {
+    [[ -x "$VENV_DIR/bin/python" && -f "$INSTALL_DIR/pairing.py" ]] || return 1
+    (
+        cd "$INSTALL_DIR"
+        "$VENV_DIR/bin/python" -c \
+            'from pairing import load_stored_token; raise SystemExit(0 if load_stored_token() else 1)' \
+            >/dev/null 2>&1
+    )
+}
+
 service_state="$(systemctl --user show koma-print-agent.service -p ActiveState --value 2>/dev/null || true)"
 if [[ "$service_state" == "active" || "$service_state" == "activating" ]]; then
     exit 0
 fi
 
 # Com credencial local, nunca abrimos navegador: apenas reativamos o worker.
-if [[ -s "$CREDENTIALS_FILE" ]]; then
+if has_local_credential; then
     systemctl --user start koma-print-agent.service
     exit 0
 fi
@@ -41,7 +51,7 @@ service_state="$(systemctl --user show koma-print-agent.service -p ActiveState -
 if [[ "$service_state" == "active" || "$service_state" == "activating" ]]; then
     exit 0
 fi
-if [[ -s "$CREDENTIALS_FILE" ]]; then
+if has_local_credential; then
     systemctl --user start koma-print-agent.service
     exit 0
 fi
@@ -59,6 +69,6 @@ export KOMA_PAIRING_LOCK_HELD=1
     "$VENV_DIR/bin/python" main.py --pair-only
 )
 
-if [[ -s "$CREDENTIALS_FILE" ]]; then
+if has_local_credential; then
     systemctl --user start koma-print-agent.service
 fi
