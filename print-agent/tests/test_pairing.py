@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 from pathlib import Path
 from http.client import HTTPConnection
@@ -77,7 +78,8 @@ def test_pair_agent_accepts_browser_callback_and_rejects_bad_requests(tmp_path, 
 
     assert pairing.pair_agent(timeout_seconds=2) == token
     assert pairing.load_stored_token() == token
-    assert credentials.stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert credentials.stat().st_mode & 0o777 == 0o600
 
 
 def test_service_timeout_uses_non_restarting_exit_code(monkeypatch):
