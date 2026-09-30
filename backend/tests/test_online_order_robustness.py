@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from app.database import Base, SessionLocal, current_restaurante_id, engine
 from app.main import app
 from app.models import (
+    CaixaTurno,
     Categoria,
     Comanda,
     ConfiguracaoRestaurante,
@@ -104,6 +105,10 @@ def setup_online_order_restaurant():
             usuario.cargo = "admin"
             usuario.status = "ativo"
         db.commit()
+        if db.query(CaixaTurno).filter_by(restaurante_id=RESTAURANTE_ID, status="aberto").first() is None:
+            db.add(CaixaTurno(restaurante_id=RESTAURANTE_ID, aberto_por_id=USUARIO_ID,
+                             saldo_inicial=0, status="aberto"))
+            db.commit()
         yield
     finally:
         db.rollback()

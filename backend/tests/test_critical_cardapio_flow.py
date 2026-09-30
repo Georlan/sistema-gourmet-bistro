@@ -744,7 +744,7 @@ def test_pedido_online_nao_inventa_usuario_para_tenant_sem_equipe():
 
     assert response.status_code == 409
     assert response.json()["detail"] == (
-        "Restaurante ainda não está pronto para receber pedidos online."
+        "O estabelecimento está fechado até a abertura do caixa."
     )
 
 

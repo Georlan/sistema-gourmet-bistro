@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
 from app.routes.auth import create_access_token
-from app.models import ConfiguracaoRestaurante, Restaurante, Usuario
+from app.models import CaixaTurno, ConfiguracaoRestaurante, Restaurante, Usuario
 
 client = TestClient(app)
 
@@ -95,6 +95,11 @@ def test_setup():
             user.cargo = "admin"
             user.status = "ativo"
         db.commit()
+
+        shift = db.query(CaixaTurno).filter_by(restaurante_id=999, status="aberto").first()
+        if shift is None:
+            db.add(CaixaTurno(restaurante_id=999, aberto_por_id=user.id, saldo_inicial=0, status="aberto"))
+            db.commit()
 
         auth_token = create_access_token(subject=user.id, restaurante_id=999, role="admin")
         yield {"user": user, "token": auth_token, "rest_id": 999}
