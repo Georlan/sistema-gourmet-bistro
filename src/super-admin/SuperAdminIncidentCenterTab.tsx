@@ -160,10 +160,13 @@ export function SuperAdminIncidentCenterTab({
       if (summaryRes.ok) {
         const summaryData = await summaryRes.json();
         setSummary(summaryData);
+      } else {
+        setSummary(null);
       }
     } catch (err: any) {
       setErrorNotice(err?.message || "Erro de conexão ao carregar Central de Incidentes.");
       setIncidents([]);
+      setSummary(null);
     } finally {
       setIsLoading(false);
     }
@@ -393,6 +396,23 @@ export function SuperAdminIncidentCenterTab({
             <RefreshCw className="h-8 w-8 animate-spin text-[#00b894]" />
             <p className="mt-3 text-xs">Diagnosticando subsistemas em tempo real...</p>
           </div>
+        ) : errorNotice ? (
+          <div className="rounded-xl border border-rose-800/60 bg-rose-950/20 p-10 text-center" role="alert">
+            <AlertCircle className="mx-auto h-10 w-10 text-rose-400" />
+            <h3 className="mt-3 text-sm font-bold text-rose-200">
+              Diagnóstico indisponível
+            </h3>
+            <p className="mx-auto mt-1 max-w-lg text-xs text-rose-200/80">
+              A consulta às fontes monitoradas falhou. O Super Admin não pode afirmar que não há incidentes enquanto o diagnóstico estiver indisponível.
+            </p>
+            <button
+              type="button"
+              onClick={fetchIncidents}
+              className="mt-4 rounded-lg border border-rose-700/70 bg-rose-950/40 px-3 py-2 text-xs font-bold text-rose-200 hover:bg-rose-900/50"
+            >
+              Tentar diagnóstico novamente
+            </button>
+          </div>
         ) : filteredIncidents.length === 0 ? (
           <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-12 text-center">
             <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-400/80" />
@@ -400,7 +420,7 @@ export function SuperAdminIncidentCenterTab({
               Nenhum incidente detectado nas fontes monitoradas.
             </h3>
             <p className="mx-auto mt-1 max-w-md text-xs text-zinc-500">
-              Nenhum erro ativo foi encontrado na fila do Outbox, webhooks do Mercado Pago,
+              Consulta concluída sem erro ativo na fila do Outbox, webhooks do Mercado Pago,
               agentes de impressão ou integridade de equipe para os filtros selecionados.
             </p>
           </div>

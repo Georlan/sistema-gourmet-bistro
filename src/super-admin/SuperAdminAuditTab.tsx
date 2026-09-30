@@ -21,12 +21,7 @@ export interface AuditLogItem {
   message: string;
 }
 
-export interface SuperAdminAuditTabProps {
-  logs?: AuditLogItem[];
-  onClearLogs?: () => void;
-}
-
-export function SuperAdminAuditTab({ }: SuperAdminAuditTabProps) {
+export function SuperAdminAuditTab() {
   const [auditLogs, setAuditLogs] = useState<SuperAdminAuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +61,8 @@ export function SuperAdminAuditTab({ }: SuperAdminAuditTabProps) {
     if (actionFilter === "ALL") return true;
     return log.action === actionFilter;
   });
+
+  const actionOptions = Array.from(new Set(auditLogs.map(log => log.action))).sort();
 
   const toggleExpand = (id: string) => {
     setExpandedLogId(prev => (prev === id ? null : id));
@@ -128,9 +125,9 @@ export function SuperAdminAuditTab({ }: SuperAdminAuditTabProps) {
               className="bg-koma-page border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-koma-foreground focus:outline-none focus:border-[#00b894]"
             >
               <option value="ALL">Todas as Ações</option>
-              <option value="SUPERADMIN_TENANT_UPDATE">Edições de Cadastro</option>
-              <option value="SUPERADMIN_TENANT_SUSPEND">Suspensões</option>
-              <option value="SUPERADMIN_TENANT_REACTIVATE">Reativações</option>
+              {actionOptions.map(action => (
+                <option key={action} value={action}>{action}</option>
+              ))}
             </select>
 
             <button
@@ -157,12 +154,24 @@ export function SuperAdminAuditTab({ }: SuperAdminAuditTabProps) {
       <div className="bg-koma-card border border-[#1e293b] rounded-xl p-5 shadow-sm">
         {filteredLogs.length === 0 ? (
           <div className="py-12 text-center space-y-2">
-            <ShieldCheck className="w-8 h-8 text-[#00b894] mx-auto opacity-80" />
+            {error ? (
+              <AlertCircle className="w-8 h-8 text-rose-400 mx-auto opacity-90" />
+            ) : (
+              <ShieldCheck className="w-8 h-8 text-[#00b894] mx-auto opacity-80" />
+            )}
             <p className="text-xs font-semibold text-koma-foreground">
-              {isLoading ? "Carregando auditoria..." : "Nenhum registro de auditoria encontrado"}
+              {isLoading
+                ? "Carregando auditoria..."
+                : error
+                  ? "Auditoria indisponível"
+                  : actionFilter !== "ALL"
+                    ? "Nenhum registro para a ação selecionada"
+                    : "Nenhum registro de auditoria encontrado"}
             </p>
             <p className="text-[11px] text-koma-muted">
-              Mutações administrativas realizadas no Super Admin são persistidas no banco e exibidas aqui.
+              {error
+                ? "A consulta falhou; ausência de registros não deve ser interpretada como ausência de ações administrativas."
+                : "Mutações administrativas realizadas no Super Admin são persistidas no banco e exibidas aqui."}
             </p>
           </div>
         ) : (
