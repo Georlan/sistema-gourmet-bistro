@@ -275,6 +275,7 @@ const SETUP_ALLOWED_CHILD_IDS = new Set([
   'online_divulgacao',
   'equipe_pessoas',
   'equipe_funcoes_acessos',
+  'config_aparencia',
   'config_impressao',
   'config_mesas',
   'config_garcom',
@@ -311,7 +312,7 @@ export function isCashierSetupTargetAllowed(tab: CashierTab, subTab: string): bo
     return subTab !== 'cardapio_bloqueios';
   }
   if (tab === 'impressao_salao') {
-    return ['impressao', 'mesas', 'garcom', 'taxa', 'integracoes'].includes(subTab);
+    return ['aparencia', 'impressao', 'mesas', 'garcom', 'taxa', 'integracoes'].includes(subTab);
   }
   return false;
 }
