@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 import logging
 import re
 import unicodedata
@@ -8,11 +9,15 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from ..contract_models import RestaurantContractAcceptance
+from ..contract_models import ContractAcceptance, RestaurantContractAcceptance
+from ..crypt import decrypt_field
 from ..database import tenant_session_scope
 from ..models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
+from ..restaurant_profile_models import RestauranteOperationProfile
+from ..signup_models import RestaurantSignup
 from ..routes.super_admin_onboarding import (
     DEFAULT_TRIAL_DAYS,
     _lock_onboarding_transaction,
@@ -36,6 +41,42 @@ from .saas_mercadopago import SaasMercadoPagoError
 logger = logging.getLogger("koma.services.restaurant_provisioning")
 
 INVITATION_TTL_HOURS = 72
+_SUPPORTED_OPERATION_PROFILES = {"generic", "pizzaria", "acai", "churrasco", "marmitaria"}
+
+
+def _operation_profile_for_contract(db: Session, protocol: str) -> str:
+    encrypted_payload = None
+    normalized = protocol.strip().upper()
+    if db.get_bind().dialect.name == "postgresql":
+        encrypted_payload = db.execute(
+            text("SELECT koma_internal.signup_payload_for_contract(:protocol)"),
+            {"protocol": normalized},
+        ).scalar_one_or_none()
+    else:
+        acceptance = (
+            db.query(ContractAcceptance)
+            .filter(ContractAcceptance.protocol == normalized)
+            .one_or_none()
+        )
+        if acceptance is not None:
+            signup = (
+                db.query(RestaurantSignup)
+                .filter(RestaurantSignup.id == acceptance.request_id)
+                .one_or_none()
+            )
+            encrypted_payload = signup.payload_encrypted if signup is not None else None
+
+    if not encrypted_payload:
+        return "generic"
+
+    try:
+        payload = json.loads(decrypt_field(encrypted_payload))
+    except Exception:
+        logger.warning("Signup profile payload could not be decoded for %s", normalized)
+        return "generic"
+
+    profile = str(payload.get("operation_profile") or "generic").strip().lower()
+    return profile if profile in _SUPPORTED_OPERATION_PROFILES else "generic"
 
 
 def resolve_activation_acceptance(db: Session, protocol: str) -> dict[str, Any] | None:
@@ -156,6 +197,7 @@ def provision_restaurant_for_contract(
             ),
         )
     plan = str(acceptance.get("plan") or "").strip().lower()
+    operation_profile = _operation_profile_for_contract(db, protocol)
     fixed_billing_required = contract_fixed_billing_required(db, protocol)
     if plan not in VALID_SUBSCRIPTION_PLANS:
         raise HTTPException(
@@ -276,6 +318,13 @@ def provision_restaurant_for_contract(
         db.flush()
 
         db.add(
+            RestauranteOperationProfile(
+                restaurante_id=tenant_id,
+                profile_key=operation_profile,
+            )
+        )
+
+        db.add(
             ConfiguracaoRestaurante(
                 restaurante_id=tenant_id,
                 impressao_nome_restaurante=restaurant_name,
@@ -350,6 +399,7 @@ def provision_restaurant_for_contract(
                     "restaurante_id": tenant_id,
                     "slug": slug,
                     "plan": plan,
+                    "operation_profile": operation_profile,
                     "billing_cycle": acceptance.get("billing_cycle") or "monthly",
                     "billing_status": (
                         billing_setup.status
