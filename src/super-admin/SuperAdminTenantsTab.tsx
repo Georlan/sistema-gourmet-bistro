@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   AlertTriangle,
-  CreditCard,
   Edit3,
   ExternalLink,
   Eye,
@@ -75,6 +74,8 @@ export function SuperAdminTenantsTab({
 }: SuperAdminTenantsTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("ALL");
+  const [selectedStatus, setSelectedStatus] = useState("ALL");
+  const [selectedPayment, setSelectedPayment] = useState("ALL");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [benefitsTenant, setBenefitsTenant] = useState<Tenant | null>(null);
   const [supportTenant, setSupportTenant] = useState<Tenant | null>(null);
@@ -103,7 +104,10 @@ export function SuperAdminTenantsTab({
       || Boolean(tenant.subdomain?.toLowerCase().includes(effectiveSearch))
       || Boolean(tenant.plan?.toLowerCase().includes(effectiveSearch));
     const matchesPlan = selectedPlan === "ALL" || tenant.plan?.toLowerCase() === selectedPlan;
-    return matchesSearch && matchesPlan;
+    const normalizedStatus = tenant.status?.toUpperCase() || "ACTIVE";
+    const matchesStatus = selectedStatus === "ALL" || normalizedStatus === selectedStatus;
+    const matchesPayment = selectedPayment === "ALL" || tenant.onlinePaymentStatus === selectedPayment;
+    return matchesSearch && matchesPlan && matchesStatus && matchesPayment;
   });
 
   const loadOperationProfile = async (tenant: Tenant) => {
@@ -252,10 +256,24 @@ export function SuperAdminTenantsTab({
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-subtle" />
             <input type="text" placeholder="Buscar por nome, ID, slug ou plano..." value={searchTerm} onChange={event => setSearchTerm(event.target.value)} disabled={!tenantsAvailable} className="w-full rounded-lg border border-zinc-800 bg-koma-page py-2 pl-9 pr-3 text-xs text-koma-foreground placeholder:text-koma-subtle focus:border-[#00b894] focus:outline-none disabled:opacity-50" />
           </div>
-          <select value={selectedPlan} onChange={event => setSelectedPlan(event.target.value)} disabled={!tenantsAvailable} className="rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-xs text-koma-foreground focus:border-[#00b894] focus:outline-none disabled:opacity-50">
-            <option value="ALL">Todos os planos</option>
-            {SUBSCRIPTION_PLANS.map(plan => <option key={plan.id} value={plan.id}>{plan.name}</option>)}
-          </select>
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <select value={selectedPlan} onChange={event => setSelectedPlan(event.target.value)} disabled={!tenantsAvailable} className="rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-xs text-koma-foreground focus:border-[#00b894] focus:outline-none disabled:opacity-50">
+              <option value="ALL">Todos os planos</option>
+              {SUBSCRIPTION_PLANS.map(plan => <option key={plan.id} value={plan.id}>{plan.name}</option>)}
+            </select>
+            <select value={selectedStatus} onChange={event => setSelectedStatus(event.target.value)} disabled={!tenantsAvailable} className="rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-xs text-koma-foreground focus:border-[#00b894] focus:outline-none disabled:opacity-50">
+              <option value="ALL">Todos os status</option>
+              <option value="ACTIVE">Ativos</option>
+              <option value="SUSPENDED">Suspensos</option>
+              <option value="PENDING">Pendentes</option>
+            </select>
+            <select value={selectedPayment} onChange={event => setSelectedPayment(event.target.value)} disabled={!tenantsAvailable} className="rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-xs text-koma-foreground focus:border-[#00b894] focus:outline-none disabled:opacity-50">
+              <option value="ALL">Todo pagamento online</option>
+              <option value="connected">Mercado Pago conectado</option>
+              <option value="disconnected">Mercado Pago desconectado</option>
+              <option value="pending">Mercado Pago pendente</option>
+            </select>
+          </div>
         </div>
       </div>
 
