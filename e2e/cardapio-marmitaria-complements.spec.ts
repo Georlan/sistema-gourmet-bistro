@@ -25,6 +25,7 @@ test('pausa e reativa complemento do dia, preservando estado em falha', async ({
     await route.fulfill({ json: option });
   });
   await page.goto('/?view=caixa');
+  await expect(page.locator('.cashier-sidebar:visible').or(page.getByRole('button', { name: 'Abrir menu principal' }))).toBeVisible();
   if (!await page.locator('.cashier-sidebar:visible').isVisible()) {
     await page.getByRole('button', { name: 'Abrir menu principal' }).click();
   }
