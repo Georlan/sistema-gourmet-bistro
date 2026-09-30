@@ -168,6 +168,8 @@ fi
         "ExecStart=$VENV_DIR/bin/python $INSTALL_DIR/main.py" \
         'Restart=always' \
         'RestartSec=3' \
+        'RestartPreventExitStatus=75' \
+        'SuccessExitStatus=75' \
         'TimeoutStopSec=15' \
         'NoNewPrivileges=true' \
         'PrivateTmp=true' \
