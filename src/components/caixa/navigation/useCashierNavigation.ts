@@ -10,6 +10,7 @@ import {
   getCashierNavigationAction,
   getCashierNavigationTarget,
   isCashierNavigationActive,
+  isCashierSetupTargetAllowed,
   normalizeCashierNavigationState,
   normalizeCashierTargetForEntitlements,
 } from './cashierNavigation';
@@ -21,19 +22,11 @@ type BoundaryProps = {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 };
 
-const SETUP_DIRECT_TABS = new Set<CashierTab>(['cardapio', 'cardapio_digital']);
-
 /**
- * A implantação reutiliza as telas canônicas do Caixa, mas só libera os
- * destinos necessários para configurar o restaurante. Integrações técnicas
- * são permitidas apenas na tela dedicada (ex.: Mercado Pago); o restante da
- * operação continua bloqueado até os 4 itens essenciais e o início do período grátis.
+ * A implantação reutiliza telas canônicas de cadastro/configuração, mas não
+ * libera vendas, caixa, relatórios ou outras rotinas operacionais antes da
+ * liberação comercial.
  */
-function setupAllowsState(tab: CashierTab, subTab: string): boolean {
-  return SETUP_DIRECT_TABS.has(tab)
-    || (tab === 'impressao_salao' && subTab === 'integracoes');
-}
-
 function readSetupMode(): boolean {
   try {
     return sessionStorage.getItem(ONBOARDING_SETUP_MODE_KEY) === '1';
@@ -52,7 +45,7 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
       sessionStorage.getItem('koma_active_tab'),
       sessionStorage.getItem('koma_active_subtab'),
     ));
-    if (setupMode && !setupAllowsState(restored.tab, restored.subTab)) {
+    if (setupMode && !isCashierSetupTargetAllowed(restored.tab, restored.subTab)) {
       return { tab: 'cardapio_digital' as CashierTab, subTab: 'cardapio_perfil' };
     }
     return restored;
@@ -87,7 +80,7 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
   }, [isMobileSidebarOpen]);
 
   useEffect(() => {
-    if (setupMode && !setupAllowsState(activeTab, activeSubTab)) {
+    if (setupMode && !isCashierSetupTargetAllowed(activeTab, activeSubTab)) {
       setActiveTab('cardapio_digital');
       setActiveSubTab('cardapio_perfil');
       return;
@@ -101,14 +94,14 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
   }, [activeSubTab, activeTab, setupMode, planId, entitlements]);
 
   const setupAllowsTarget = (tab: CashierTab, subTab: string) =>
-    !setupMode || setupAllowsState(tab, subTab);
+    !setupMode || isCashierSetupTargetAllowed(tab, subTab);
 
   const applyNavigationTarget = (navigationId: string) => {
     const rawTarget = getCashierNavigationTarget(navigationId);
     if (rawTarget) {
       const target = normalizePlanTarget(rawTarget);
       if (!setupAllowsTarget(target.tab, target.subTab)) {
-        showToast('Finalize a implantação inicial antes de acessar a operação.', 'info');
+        showToast('Esta área será liberada depois da implantação inicial.', 'info');
         return false;
       }
       setActiveTab(target.tab);
@@ -132,11 +125,13 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
   };
 
   const handleTabChange = (tabId: string) => {
-    if (setupMode && !SETUP_DIRECT_TABS.has(tabId as CashierTab)) {
-      showToast('Finalize a implantação inicial antes de acessar a operação.', 'info');
+    if (applyNavigationTarget(tabId)) return;
+    const candidate = normalizePlanTarget(normalizeCashierNavigationState(tabId, ''));
+    if (setupMode && !isCashierSetupTargetAllowed(candidate.tab, candidate.subTab)) {
+      showToast('Esta área será liberada depois da implantação inicial.', 'info');
       return;
     }
-    if (!applyNavigationTarget(tabId)) setActiveTab(tabId as CashierTab);
+    setActiveTab(tabId as CashierTab);
   };
 
   const isSidebarTabActive = (tabId: string) => {

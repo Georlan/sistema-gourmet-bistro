@@ -7,16 +7,27 @@ import {
   CheckCircle2,
   Circle,
   CreditCard,
+  Percent,
+  Printer,
   RefreshCw,
+  ShieldCheck,
   ShoppingBag,
   Sparkles,
   Store,
   Table2,
+  Truck,
+  Users,
   UtensilsCrossed,
+  WalletCards,
 } from 'lucide-react';
 
 import { API_BASE_URL } from '../../config/api';
-import { getSubscriptionPlan, type SubscriptionPlanId } from '../../config/subscriptionPlans';
+import {
+  getSubscriptionPlan,
+  normalizeSubscriptionPlan,
+  subscriptionHasFeature,
+  type SubscriptionPlanId,
+} from '../../config/subscriptionPlans';
 
 export const ONBOARDING_SETUP_MODE_KEY = 'koma_onboarding_setup_mode';
 const ONBOARDING_TEST_ORDER_KEY = 'koma_onboarding_test_order';
@@ -106,6 +117,17 @@ type SetupStep = {
   tab: string;
   subTab: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
+};
+
+type PracticalSetupAction = {
+  id: string;
+  title: string;
+  description: string;
+  actionLabel: string;
+  tab: string;
+  subTab: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  context: string;
 };
 
 const ONBOARDING_LOAD_TIMEOUT_MS = 10_000;
@@ -379,6 +401,82 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       tab: 'cardapio',
       subTab: 'produtos',
       icon: UtensilsCrossed,
+    },
+  ] : [];
+
+  const planId = snapshot ? normalizeSubscriptionPlan(snapshot.restaurant.plan) : 'pocket';
+  const dineInEnabled = Boolean(snapshot?.operations.orderTypes.includes('consumo_local'));
+  const deliveryEnabled = Boolean(snapshot?.operations.orderTypes.includes('delivery'));
+  const practicalSetupActions: PracticalSetupAction[] = snapshot ? [
+    {
+      id: 'team',
+      title: 'Equipe e acessos',
+      description: 'Convide gerente, caixa, garçom e demais pessoas e revise o que cada função pode acessar.',
+      actionLabel: 'Configurar equipe',
+      tab: 'permissoes_cargos',
+      subTab: 'pessoas',
+      icon: Users,
+      context: 'Primeiro turno',
+    },
+    ...(dineInEnabled && subscriptionHasFeature(planId, 'waiter_app') ? [{
+      id: 'waiter',
+      title: 'App do Garçom',
+      description: 'Revise permissões do atendimento no salão antes de colocar a equipe para usar mesas e comandas.',
+      actionLabel: 'Configurar garçom',
+      tab: 'impressao_salao',
+      subTab: 'garcom',
+      icon: ShieldCheck,
+      context: 'Salão',
+    }] : []),
+    ...(dineInEnabled ? [{
+      id: 'service-tax',
+      title: 'Taxa de serviço',
+      description: 'Defina se o salão cobra serviço e qual percentual será sugerido no fechamento.',
+      actionLabel: 'Configurar taxa',
+      tab: 'impressao_salao',
+      subTab: 'taxa',
+      icon: Percent,
+      context: 'Salão',
+    }] : []),
+    ...(deliveryEnabled ? [{
+      id: 'delivery',
+      title: 'Entrega',
+      description: 'Defina taxa padrão, bairros atendidos, pedido mínimo e frete grátis antes de abrir o delivery.',
+      actionLabel: 'Configurar entrega',
+      tab: 'cardapio_digital',
+      subTab: 'cardapio_entrega',
+      icon: Truck,
+      context: snapshot.operations.blockers.includes('delivery_configuration') ? 'Pendente' : 'Delivery',
+    }] : []),
+    {
+      id: 'payments',
+      title: 'Formas de pagamento',
+      description: 'Marque Pix, dinheiro, crédito e débito que o restaurante aceita no pedido e no atendimento.',
+      actionLabel: 'Configurar pagamentos',
+      tab: 'cardapio_digital',
+      subTab: 'cardapio_pagamentos',
+      icon: WalletCards,
+      context: 'Checkout',
+    },
+    ...(subscriptionHasFeature(planId, 'printing') ? [{
+      id: 'printing',
+      title: 'Impressão',
+      description: 'Instale, pareie e teste a impressora que será usada no balcão ou na cozinha.',
+      actionLabel: 'Configurar impressão',
+      tab: 'impressao_salao',
+      subTab: 'impressao',
+      icon: Printer,
+      context: 'Plano com impressão',
+    }] : []),
+    {
+      id: 'integrations',
+      title: 'Fiscal e integrações',
+      description: 'Revise integrações técnicas necessárias para a operação antes da liberação do primeiro turno.',
+      actionLabel: 'Abrir integrações',
+      tab: 'impressao_salao',
+      subTab: 'integracoes',
+      icon: CreditCard,
+      context: 'Opcional',
     },
   ] : [];
 
@@ -747,6 +845,47 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 );
               })}
             </div>
+
+            <section className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4 sm:p-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.16em] text-emerald-400">Preparar a operação</p>
+                  <h2 className="mt-1 text-base font-black">Deixe o primeiro turno pronto</h2>
+                  <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted">
+                    Estes atalhos não liberam vendas antes da hora. Eles permitem adiantar equipe, salão, entrega, pagamentos, impressão e integrações durante a implantação.
+                  </p>
+                </div>
+                <span className="text-[9px] font-bold text-koma-subtle">Mostramos apenas o que faz sentido para as modalidades e o plano escolhidos.</span>
+              </div>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {practicalSetupActions.map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => openCashierAt(action.tab, action.subTab, true)}
+                      className="group rounded-2xl border border-koma-border bg-koma-page p-4 text-left transition hover:border-emerald-500/35 hover:bg-emerald-500/[0.04]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-raised text-emerald-400">
+                          <Icon size={16} />
+                        </span>
+                        <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">
+                          {action.context}
+                        </span>
+                      </div>
+                      <h3 className="mt-3 text-sm font-black">{action.title}</h3>
+                      <p className="mt-1 min-h-[34px] text-[10px] leading-relaxed text-koma-muted">{action.description}</p>
+                      <span className="mt-3 inline-flex items-center gap-1 text-[10px] font-black text-emerald-400">
+                        {action.actionLabel} <ArrowRight size={11} className="transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
 
             <section className="mt-6 rounded-2xl border border-koma-border bg-koma-raised/20 p-4">
               <div className="flex items-start gap-3">

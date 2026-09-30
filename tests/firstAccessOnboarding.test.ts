@@ -59,18 +59,16 @@ test('required onboarding persists and waits for explicit KÔMA release', () => 
   assert.match(gateHook, /\/api\/onboarding\/status/);
 });
 
-test('setup mode exposes canonical configuration and fiscal without exposing normal operation', () => {
-  assert.match(navigation, /SETUP_DIRECT_TABS/);
-  assert.match(navigation, /'cardapio'/);
-  assert.match(navigation, /'cardapio_digital'/);
-  assert.match(navigation, /tab === 'impressao_salao' && subTab === 'integracoes'/);
-  assert.match(navigation, /Finalize a implantação inicial antes de acessar a operação/);
-  assert.match(desktopSidebar, /setupMode \?/);
+test('setup mode exposes practical configuration without exposing normal operation', () => {
+  assert.match(navigation, /isCashierSetupTargetAllowed/);
+  assert.match(navigation, /Esta área será liberada depois da implantação inicial/);
+  assert.doesNotMatch(navigation, /SETUP_DIRECT_TABS/);
+  assert.match(desktopSidebar, /getCashierSetupSidebarGroupsForPlan/);
+  assert.match(desktopSidebar, /Configure o que o restaurante precisa para o primeiro turno/);
   assert.match(desktopSidebar, /<CashierOnboardingShortcut/);
-  assert.match(desktopSidebar, /Conclua dados do restaurante, horários e cardápio/);
+  assert.match(mobileSidebar, /getCashierSetupSidebarGroupsForPlan/);
+  assert.match(mobileSidebar, /Configure o essencial para o primeiro turno/);
   assert.match(mobileSidebar, /<CashierOnboardingShortcut mobile/);
-  assert.match(mobileSidebar, /Você está na implantação inicial/);
-  assert.match(mobileSidebar, /!setupMode &&/);
   assert.match(onboardingShortcut, /Abrir configuração fiscal/);
   assert.match(onboardingShortcut, /setItem\('koma_active_tab', 'impressao_salao'\)/);
   assert.match(onboardingShortcut, /setItem\('koma_active_subtab', 'integracoes'\)/);
@@ -146,6 +144,22 @@ test('Super Admin release cockpit can perform the same audited salon bootstrap',
   assert.match(releaseModal, /CRIAR \/ COMPLETAR MESAS/);
   assert.match(releaseModal, /Mesas cadastradas:/);
   assert.match(releaseModal, /Tipo de operação:/);
+});
+
+test('onboarding offers practical first-turn setup shortcuts based on context', () => {
+  assert.match(onboarding, /Preparar a operação/);
+  assert.match(onboarding, /Deixe o primeiro turno pronto/);
+  assert.match(onboarding, /Equipe e acessos/);
+  assert.match(onboarding, /App do Garçom/);
+  assert.match(onboarding, /Taxa de serviço/);
+  assert.match(onboarding, /Formas de pagamento/);
+  assert.match(onboarding, /Configurar entrega/);
+  assert.match(onboarding, /Configurar impressão/);
+  assert.match(onboarding, /Fiscal e integrações/);
+  assert.match(onboarding, /dineInEnabled/);
+  assert.match(onboarding, /deliveryEnabled/);
+  assert.match(onboarding, /subscriptionHasFeature\(planId, 'printing'\)/);
+  assert.match(onboarding, /openCashierAt\(action\.tab, action\.subTab, true\)/);
 });
 
 test('onboarding uses canonical server progress, canonical modes and optional Mercado Pago', () => {

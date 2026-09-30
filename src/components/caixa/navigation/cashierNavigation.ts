@@ -256,6 +256,67 @@ export function getCashierSidebarGroupsForPlan(
     .filter((group) => group.items.length > 0);
 }
 
+const SETUP_ALLOWED_PARENT_IDS = new Set([
+  'cardapio',
+  'cardapio_digital',
+  'permissoes_cargos',
+  'impressao_salao',
+]);
+
+const SETUP_ALLOWED_CHILD_IDS = new Set([
+  'cardapio_produtos',
+  'cardapio_complementos',
+  'cardapio_preparo',
+  'online_perfil',
+  'online_marca',
+  'online_pedidos',
+  'online_entrega',
+  'online_pagamentos',
+  'online_divulgacao',
+  'equipe_pessoas',
+  'equipe_funcoes_acessos',
+  'config_aparencia',
+  'config_impressao',
+  'config_mesas',
+  'config_garcom',
+  'config_taxa',
+  'config_integracoes',
+]);
+
+/**
+ * A implantação expõe somente configuração e cadastro. Operação, caixa,
+ * relatórios e rotinas do dia a dia continuam bloqueados até a liberação.
+ */
+export function getCashierSetupSidebarGroupsForPlan(
+  planId: SubscriptionPlanId,
+  entitlements?: SubscriptionEntitlements,
+): readonly CashierNavigationGroup[] {
+  return getCashierSidebarGroupsForPlan(planId, entitlements)
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .filter((item) => SETUP_ALLOWED_PARENT_IDS.has(item.id))
+        .map((item) => ({
+          ...item,
+          children: item.children?.filter((child) => SETUP_ALLOWED_CHILD_IDS.has(child.id)),
+        }))
+        .filter((item) => !item.children || item.children.length > 0),
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
+export function isCashierSetupTargetAllowed(tab: CashierTab, subTab: string): boolean {
+  if (tab === 'cardapio') return true;
+  if (tab === 'permissoes_cargos') return true;
+  if (tab === 'cardapio_digital') {
+    return subTab !== 'cardapio_bloqueios';
+  }
+  if (tab === 'impressao_salao') {
+    return ['aparencia', 'impressao', 'mesas', 'garcom', 'taxa', 'integracoes'].includes(subTab);
+  }
+  return false;
+}
+
 const CASHIER_PARENT_ITEMS = CASHIER_SIDEBAR_GROUPS.flatMap((group) => group.items);
 const CASHIER_CHILD_ITEMS = CASHIER_PARENT_ITEMS.flatMap((parent) =>
   (parent.children ?? []).map((child) => ({ parentId: parent.id, child })),

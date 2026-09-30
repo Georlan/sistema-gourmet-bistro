@@ -12,7 +12,7 @@ import {
 } from '../../ui/sidebar';
 import { OnlineOrderEmergencyControl } from '../online-menu/OnlineOrderEmergencyControl';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
-import { getCashierSidebarGroupsForPlan } from './cashierNavigation';
+import { getCashierSetupSidebarGroupsForPlan, getCashierSidebarGroupsForPlan } from './cashierNavigation';
 import { CashierOnboardingShortcut } from './CashierOnboardingShortcut';
 import { CashierSidebarFooter } from './CashierSidebarFooter';
 import { CashierSidebarNavigation } from './CashierSidebarNavigation';
@@ -130,19 +130,20 @@ export function CashierDesktopSidebar({
             />
           )}
         </div>
-        {setupMode ? (
-          <div className="rounded-xl border border-koma-border bg-koma-raised/40 p-3 text-[10px] leading-relaxed text-koma-muted group-data-[collapsible=icon]:hidden">
-            Conclua dados do restaurante, horários e cardápio. A operação será liberada depois desses 3 passos.
+        {setupMode && (
+          <div className="mb-2 rounded-xl border border-koma-border bg-koma-raised/40 p-3 text-[10px] leading-relaxed text-koma-muted group-data-[collapsible=icon]:hidden">
+            Configure o que o restaurante precisa para o primeiro turno. Vendas e caixa continuam bloqueados até a liberação.
           </div>
-        ) : (
-          <CashierSidebarNavigation
-            groups={getCashierSidebarGroupsForPlan(planId, entitlements)}
-            hasOnlineMenu={hasOnlineMenu}
-            isSidebarTabActive={isSidebarTabActive}
-            sidebarOrderCount={sidebarOrderCount}
-            handleSidebarNavigation={handleSidebarNavigation}
-          />
         )}
+        <CashierSidebarNavigation
+          groups={setupMode
+            ? getCashierSetupSidebarGroupsForPlan(planId, entitlements)
+            : getCashierSidebarGroupsForPlan(planId, entitlements)}
+          hasOnlineMenu={hasOnlineMenu}
+          isSidebarTabActive={isSidebarTabActive}
+          sidebarOrderCount={sidebarOrderCount}
+          handleSidebarNavigation={handleSidebarNavigation}
+        />
       </SidebarContent>
 
       <SidebarFooter className="cashier-sidebar__footer p-3 flex flex-col gap-2">

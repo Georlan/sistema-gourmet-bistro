@@ -6,7 +6,7 @@ import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboardin
 import { SidebarContent, SidebarFooter, SidebarHeader } from '../../ui/sidebar';
 import { OnlineOrderEmergencyControl } from '../online-menu/OnlineOrderEmergencyControl';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
-import { getCashierSidebarGroupsForPlan } from './cashierNavigation';
+import { getCashierSetupSidebarGroupsForPlan, getCashierSidebarGroupsForPlan } from './cashierNavigation';
 import { CashierOnboardingShortcut } from './CashierOnboardingShortcut';
 import { CashierSidebarFooter } from './CashierSidebarFooter';
 import { CashierSidebarNavigation } from './CashierSidebarNavigation';
@@ -150,21 +150,22 @@ export function CashierMobileSidebar({
                   />
                 )}
               </div>
-              {setupMode ? (
-                <div className="rounded-xl border border-koma-border bg-koma-raised/40 p-3 text-xs leading-relaxed text-koma-muted">
-                  Você está na implantação inicial. Conclua dados, horários e cardápio antes de liberar a operação.
+              {setupMode && (
+                <div className="mb-2 rounded-xl border border-koma-border bg-koma-raised/40 p-3 text-xs leading-relaxed text-koma-muted">
+                  Configure o essencial para o primeiro turno. Vendas e caixa ficam bloqueados até a liberação.
                 </div>
-              ) : (
-                <CashierSidebarNavigation
-                  groups={getCashierSidebarGroupsForPlan(planId, entitlements)}
-                  closeMobile
-                  expandActiveChildren={false}
-                  hasOnlineMenu={hasOnlineMenu}
-                  isSidebarTabActive={isSidebarTabActive}
-                  sidebarOrderCount={sidebarOrderCount}
-                  handleSidebarNavigation={handleSidebarNavigation}
-                />
               )}
+              <CashierSidebarNavigation
+                groups={setupMode
+                  ? getCashierSetupSidebarGroupsForPlan(planId, entitlements)
+                  : getCashierSidebarGroupsForPlan(planId, entitlements)}
+                closeMobile
+                expandActiveChildren={false}
+                hasOnlineMenu={hasOnlineMenu}
+                isSidebarTabActive={isSidebarTabActive}
+                sidebarOrderCount={sidebarOrderCount}
+                handleSidebarNavigation={handleSidebarNavigation}
+              />
             </SidebarContent>
 
             <SidebarFooter className="cashier-sidebar__footer cashier-sidebar__footer--mobile p-3 flex flex-col gap-2">
