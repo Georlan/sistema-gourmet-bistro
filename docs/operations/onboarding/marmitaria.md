@@ -8,9 +8,11 @@ selecioná-lo não cria produtos, preços ou limites automaticamente.
 
 1. No Super Admin, selecione o perfil **Marmitaria**, preservando plano e benefícios.
    O perfil não cria produtos nem define preços automaticamente.
-2. Entre em **Cardápio → Produtos → Marmitas**. P, M e G aparecem como tamanhos;
-   cadastre somente os vendidos. Os já existentes abrem para configuração.
-3. Clique no tamanho e informe o nome no cardápio e o preço real. É possível
+2. Entre em **Cardápio → Produtos**. Marmitas, sobremesas e bebidas aparecem
+   na mesma lista, com busca e filtro por categoria. Use **Editar** no cartão.
+3. Para adicionar uma marmita, clique **Novo produto → Marmita**, escolha P, M ou G
+   e informe o nome no cardápio e o preço real. Tamanhos já cadastrados ficam bloqueados
+   nesse assistente; edite o produto existente na lista. É possível
    salvar pausado antes de cadastrar as opções, sem publicar composição incompleta.
 4. Em **Cardápio → Complementos → Proteínas, guarnições e saladas**, cadastre os grupos e as
    opções uma única vez. Use adicional zero para escolhas incluídas; extras
@@ -26,16 +28,17 @@ selecioná-lo não cria produtos, preços ou limites automaticamente.
    houver opções suficientes. Clique **Salvar escolhas**. A configuração usa
    uma categoria compartilhada **Marmitas**, reaproveitando **Quentinhas** se existente.
    Confira o destino de impressão em **Preparo** durante a homologação.
-8. Para atualizar foto e descrição, use **Foto e descrição** no próprio cadastro.
-   Sobremesas e bebidas continuam como produtos comuns na seção abaixo.
+8. Use **Editar** no cartão para atualizar preço, foto e descrição. Para adicionar
+   outros itens, escolha **Novo produto → Sobremesa** ou **Bebida**: a categoria
+   correspondente é reaproveitada ou preparada automaticamente.
 9. Simule cada tamanho no link público: preço, escolhas, repetição, adicionais
    e impressão devem corresponder à configuração. O servidor valida os limites
    por produto e bloqueia pedidos incompletos ou excedentes.
 
-**Produtos** concentra tamanho, preço, foto e descrição. **Complementos**
+**Produtos** concentra uma única lista de marmitas, sobremesas e bebidas. **Complementos**
 concentra os grupos, disponibilidade de opções e regras de escolha por tamanho;
-não permite criar outro tamanho. O atalho **Configurar escolhas** em Produtos abre
-a marmita existente em Complementos. Cada tamanho possui uma identidade única por restaurante, com
+não permite criar outro tamanho. **Salvar e configurar escolhas em Complementos** salva as alterações e abre
+a mesma marmita em Complementos. Cada tamanho possui uma identidade única por restaurante, com
 proteção também no banco. Criar P novamente exige editar o cadastro existente.
 
 ## Cadastros existentes
