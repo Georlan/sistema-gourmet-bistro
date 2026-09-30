@@ -294,6 +294,7 @@ def abrir_turno(
         {"event": "cash_updated", "detail": {"type": "turno_aberto"}},
         rest_id,
     )
+    background_tasks.add_task(manager.broadcast, {"event": "store_status_changed"}, rest_id)
     return novo_turno
 
 

@@ -298,9 +298,7 @@ export default function CardapioPage() {
         });
       }
 
-      const statusOverride = String(restaurant.status_override || "Automático").toLocaleLowerCase("pt-BR");
-      const hasServerAvailability = typeof restaurant.aceitando_pedidos === "boolean";
-      const acceptingOrders = restaurant.aceitando_pedidos !== false;
+      const acceptingOrders = restaurant.aceitando_pedidos === true;
       const brand: BrandConfig = {
         id: String(restaurant.id),
         name: String(restaurant.nome || "Restaurante"),
@@ -354,13 +352,7 @@ export default function CardapioPage() {
             }))
           : [],
         taxaEntregaPadrao: Number(restaurant.taxa_entrega_fixa ?? restaurant.taxa_entrega_padrao ?? 0),
-        storeStatus: hasServerAvailability
-          ? acceptingOrders ? "open" : "closed"
-          : statusOverride.includes("fech")
-            ? "closed"
-            : statusOverride.includes("abert")
-              ? "open"
-              : "automatic",
+        storeStatus: acceptingOrders ? "open" : "closed",
         acceptingOrders,
         orderingMessage: String(restaurant.motivo_indisponibilidade || ""),
         availabilitySource: String(restaurant.origem_disponibilidade || "automatic"),
@@ -512,6 +504,7 @@ export default function CardapioPage() {
       ws = socket;
       socket.onopen = () => {
         delay = 2000;
+        void loadRestaurantData();
         if (reconnectTimer) {
           clearTimeout(reconnectTimer);
           reconnectTimer = undefined;
@@ -540,6 +533,7 @@ export default function CardapioPage() {
 
     const handleVisibility = () => {
       if (document.hidden || stopped) return;
+      void loadRestaurantData();
       if (!ws || ws.readyState === WebSocket.CLOSED) connect();
     };
 

@@ -78,7 +78,7 @@ test('Pedidos online keeps hours as restaurant setup and does not own payment or
   assert.match(orders, /horarios_funcionamento/);
   assert.match(orders, /ONBOARDING_SETUP_MODE_KEY/);
   assert.match(orders, /Horário do estabelecimento/);
-  assert.match(orders, /O cardápio só aceita pedidos quando o caixa estiver aberto e o horário cadastrado permitir/);
+  assert.match(orders, /O cardápio só aceita pedidos quando o caixa estiver aberto e sincronizado/);
   assert.doesNotMatch(orders, /formas_pagamento_aceitas/);
   assert.doesNotMatch(orders, /tabela_taxas_bairros/);
   assert.doesNotMatch(orders, /\/caixa\/configuracoes/);

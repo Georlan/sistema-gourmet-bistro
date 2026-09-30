@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import SessionLocal, current_restaurante_id
-from app.models import Restaurante, Usuario, Categoria, Produto, ConfiguracaoRestaurante, Cupom, Cliente, Comanda
+from app.models import CaixaTurno, Restaurante, Usuario, Categoria, Produto, ConfiguracaoRestaurante, Cupom, Cliente, Comanda
 from app.routes.auth import create_access_token
 
 client = TestClient(app)
@@ -30,6 +30,10 @@ def setup_checkout_test():
                 status="ativo",
             )
             db.add(user)
+            db.commit()
+
+        if db.query(CaixaTurno).filter_by(restaurante_id=998, status="aberto").first() is None:
+            db.add(CaixaTurno(restaurante_id=998, aberto_por_id=user.id, saldo_inicial=0, status="aberto"))
             db.commit()
 
         config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == 998).first()
