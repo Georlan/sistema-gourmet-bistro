@@ -19,11 +19,17 @@ const trialModal = readFileSync(
   'utf8',
 );
 
-test('Super Admin mantém períodos grátis como ferramenta contextual de Clientes', () => {
+test('Super Admin preserva a central global de trials como rota contextual, mas o gerenciamento principal vive no Restaurante 360', () => {
+  const restaurant360 = readFileSync(
+    new URL('../src/super-admin/SuperAdminRestaurant360.tsx', import.meta.url),
+    'utf8',
+  );
   assert.match(panel, /<SuperAdminClientsHub/);
-  assert.match(clientsHub, /label: "Períodos grátis"/);
   assert.match(clientsHub, /<SuperAdminTrialsTab/);
   assert.match(clientsHub, /activeView === "trials"/);
+  assert.doesNotMatch(clientsHub, /label: "Períodos grátis"/);
+  assert.match(restaurant360, /<SuperAdminTrialModal/);
+  assert.match(restaurant360, /Implantação & liberação/);
 });
 
 test('central consulta a fonte real de trials e não inventa cobrança SaaS', () => {

@@ -6,6 +6,10 @@ const tenantsTab = readFileSync(
   new URL('../src/super-admin/SuperAdminTenantsTab.tsx', import.meta.url),
   'utf8',
 );
+const restaurant360 = readFileSync(
+  new URL('../src/super-admin/SuperAdminRestaurant360.tsx', import.meta.url),
+  'utf8',
+);
 const supportModal = readFileSync(
   new URL('../src/super-admin/SuperAdminSupportModal.tsx', import.meta.url),
   'utf8',
@@ -23,11 +27,12 @@ const main = readFileSync(
   'utf8',
 );
 
-test('Super Admin expõe Modo Suporte na listagem e nos detalhes do estabelecimento', () => {
+test('Super Admin expõe Modo Suporte na listagem e na ficha 360 do estabelecimento', () => {
   assert.match(tenantsTab, /SuperAdminSupportModal/);
   assert.match(tenantsTab, /setSupportTenant\(tenant\)/);
   assert.match(tenantsTab, /Acessar estabelecimento em Modo Suporte auditado/);
-  assert.match(tenantsTab, /Entrar em Modo Suporte/);
+  assert.match(restaurant360, /Modo suporte/);
+  assert.match(restaurant360, /onSupport\(tenant\)/);
   assert.match(tenantsTab, /supportTenant &&/);
 });
 

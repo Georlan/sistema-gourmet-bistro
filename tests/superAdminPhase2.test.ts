@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { SUBSCRIPTION_PLANS } from "../src/config/subscriptionPlans";
 
 const tenantsTab = readFileSync("src/super-admin/SuperAdminTenantsTab.tsx", "utf8");
+const restaurant360 = readFileSync("src/super-admin/SuperAdminRestaurant360.tsx", "utf8");
 const onboardingModal = readFileSync("src/super-admin/SuperAdminNewTenantModal.tsx", "utf8");
 
 test("Super Admin Phase 2 usa o endpoint canônico de onboarding", () => {
@@ -56,8 +57,9 @@ test("Gestão de restaurantes não oferece mutação direta de plano comercial",
   assert.doesNotMatch(tenantsTab, /plan:\s*editPlan/);
   assert.doesNotMatch(tenantsTab, /Plano Comercial<\/span><select/);
   assert.match(tenantsTab, /Mudança de plano não é permitida por esta edição genérica/);
-  assert.match(tenantsTab, /Mensalidade e taxa transacional efetivas não são inferidas pelo slug do plano/);
-  assert.match(tenantsTab, /Consulte o aceite vinculado em <strong>Contratações<\/strong>/);
+  assert.match(restaurant360, /Condições contratadas/);
+  assert.match(restaurant360, /Inbox de contratações indisponível; termos não são inferidos pelo plano/);
+  assert.match(restaurant360, /Benefícios individuais não alteram automaticamente cobrança/);
 });
 
 test("Provisionamento manual é administrativo e não finge contratação comercial", () => {

@@ -123,10 +123,17 @@ describe('Super Admin Hardening & Integrity', () => {
       path.join(process.cwd(), 'src/super-admin/SuperAdminTenantsTab.tsx'),
       'utf-8'
     );
+    const restaurant360 = fs.readFileSync(
+      path.join(process.cwd(), 'src/super-admin/SuperAdminRestaurant360.tsx'),
+      'utf-8'
+    );
     assert.equal(tenantsTab.includes('plan: editPlan'), false);
     assert.equal(tenantsTab.includes('Comercial Oficial'), false);
-    assert.ok(tenantsTab.includes('Autoridade comercial'));
-    assert.ok(tenantsTab.includes('termos comerciais congelados deste tenant'));
+    assert.ok(restaurant360.includes('Plano de recursos atual'));
+    assert.ok(restaurant360.includes('Condições contratadas'));
+    assert.ok(restaurant360.includes('Mensalidade congelada'));
+    assert.ok(restaurant360.includes('Taxa online congelada'));
+    assert.ok(restaurant360.includes('Benefícios individuais não alteram automaticamente cobrança'));
     assert.ok(tenantsTab.includes('Mudança de plano não é permitida por esta edição genérica'));
   });
 

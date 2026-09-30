@@ -14,6 +14,14 @@ const platformHub = readFileSync(
   new URL('../src/super-admin/SuperAdminPlatformHub.tsx', import.meta.url),
   'utf8',
 );
+const tenantsTab = readFileSync(
+  new URL('../src/super-admin/SuperAdminTenantsTab.tsx', import.meta.url),
+  'utf8',
+);
+const restaurant360 = readFileSync(
+  new URL('../src/super-admin/SuperAdminRestaurant360.tsx', import.meta.url),
+  'utf8',
+);
 
 test('Super Admin reduz a navegação principal para quatro contextos operacionais', () => {
   assert.match(panel, /label: "Início"/);
@@ -29,18 +37,24 @@ test('Super Admin reduz a navegação principal para quatro contextos operaciona
   assert.doesNotMatch(panel, /label: "Operações e manutenção"/);
 });
 
-test('Clientes concentra aquisição e ferramentas globais de restaurantes sem remover capacidades', () => {
+test('Clientes prioriza Novos clientes e a ficha Restaurante 360 sem espalhar ferramentas no menu', () => {
   assert.match(clientsHub, /Novos clientes/);
   assert.match(clientsHub, /Restaurantes/);
   assert.match(clientsHub, /Inscrições/);
   assert.match(clientsHub, /Contratações/);
-  assert.match(clientsHub, /Períodos grátis/);
-  assert.match(clientsHub, /Equipe e acessos/);
-  assert.match(clientsHub, /Pagamentos/);
-  assert.match(clientsHub, /Planos/);
   assert.match(clientsHub, /<SuperAdminSignupsTab/);
   assert.match(clientsHub, /<SuperAdminContractsTab/);
   assert.match(clientsHub, /<SuperAdminTenantsTab/);
+  assert.doesNotMatch(clientsHub, /const restaurantTools/);
+  assert.match(tenantsTab, /Abrir 360°/);
+  assert.match(tenantsTab, /<SuperAdminRestaurant360/);
+  assert.match(restaurant360, /Resumo/);
+  assert.match(restaurant360, /Implantação/);
+  assert.match(restaurant360, /Plano & benefícios/);
+  assert.match(restaurant360, /Equipe/);
+  assert.match(restaurant360, /Pagamentos/);
+  assert.match(restaurant360, /Operação/);
+  assert.match(restaurant360, /Histórico/);
 });
 
 test('Plataforma reúne saúde, integrações e auditoria preservando fontes reais', () => {
