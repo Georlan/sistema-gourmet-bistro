@@ -205,7 +205,7 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
                 </h2>
                 <p className="mt-1.5 text-xs leading-relaxed text-zinc-400">
                   {statusData.paused
-                    ? 'O cardápio online voltará a aceitar novas compras conforme horários e demais regras. Caixa e operação do restaurante não são alterados.'
+                    ? 'O cardápio online voltará a aceitar novas compras quando o caixa estiver aberto e sincronizado. Caixa e operação do restaurante não são alterados.'
                     : 'O restaurante continua operando normalmente. Caixa, pedidos já recebidos, acompanhamento e chat continuam ativos. Só novas compras pelo cardápio online serão bloqueadas.'}
                 </p>
               </div>

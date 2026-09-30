@@ -345,6 +345,7 @@ def fechar_turno_reconciliado(
         {"event": "cash_updated", "detail": {"type": "turno_fechado"}},
         rest_id,
     )
+    background_tasks.add_task(manager.broadcast, {"event": "store_status_changed"}, rest_id)
     return {
         "turno_id": shift.id,
         "status": "fechado",

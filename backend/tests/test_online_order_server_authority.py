@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.database import Base, SessionLocal, current_restaurante_id, engine
 from app.main import app
 from app.models import (
+    CaixaTurno,
     Categoria,
     Comanda,
     ConfiguracaoRestaurante,
@@ -123,9 +124,15 @@ def setup_restaurant_authority():
         usuario.role = "admin"
         usuario.cargo = "admin"
         db.commit()
+        db.query(CaixaTurno).filter_by(restaurante_id=RESTAURANTE_ID).delete()
+        db.add(CaixaTurno(restaurante_id=RESTAURANTE_ID, aberto_por_id=USUARIO_ID,
+                         saldo_inicial=0, status="aberto"))
+        db.commit()
         yield
     finally:
         db.rollback()
+        db.query(CaixaTurno).filter_by(restaurante_id=RESTAURANTE_ID).delete()
+        db.commit()
         current_restaurante_id.reset(tenant)
         db.close()
 
@@ -176,13 +183,13 @@ def test_proxima_abertura_e_comunicada_a_partir_da_mesma_agenda():
     assert next_schedule_opening_label(schedule, now=now) == "hoje às 18:00"
 
 
-def test_agenda_ausente_preserva_compatibilidade_mas_horario_fechado_e_autoritativo():
+def test_agenda_informativa_nao_substitui_caixa_aberto():
     restaurant = SimpleNamespace(
         status_override="Automático",
         horarios_funcionamento=None,
     )
     config = SimpleNamespace(delivery_ativo=True)
-    assert evaluate_online_order_policy(restaurant, config, modalidade="delivery").accepting_orders is True
+    assert evaluate_online_order_policy(restaurant, config, modalidade="delivery").accepting_orders is False
 
     restaurant.status_override = "Forçado Aberto"
     restaurant.horarios_funcionamento = [
@@ -190,7 +197,7 @@ def test_agenda_ausente_preserva_compatibilidade_mas_horario_fechado_e_autoritat
     ]
     policy = evaluate_online_order_policy(restaurant, config, modalidade="delivery")
     assert policy.accepting_orders is False
-    assert policy.source == "schedule"
+    assert policy.source == "cash_closed"
 
 
 def test_cliente_nao_controla_taxa_de_delivery():
@@ -299,7 +306,7 @@ def test_cartao_fisico_nao_configurado_e_rejeitado():
     )
 
 
-def test_horario_automatico_fechado_e_bloqueado_no_backend():
+def test_horario_informativo_fechado_com_caixa_aberto_aceita_no_backend():
     db = SessionLocal()
     tenant = current_restaurante_id.set(RESTAURANTE_ID)
     try:
@@ -317,8 +324,7 @@ def test_horario_automatico_fechado_e_bloqueado_no_backend():
         json=_payload("authority-hours-off-0001"),
     )
 
-    assert response.status_code == 409
-    assert response.json()["detail"] == "O estabelecimento está fechado neste horário."
+    assert response.status_code == 201, response.text
 
 
 def test_replay_idempotente_nao_quebra_se_loja_fechar_depois():
@@ -429,11 +435,11 @@ def test_cash_only_order_works_without_online_account():
     assert response.json()['pagamento']['cobranca_online'] is False
 
 
-def test_closed_schedule_keeps_catalog_and_blocks_new_order():
+def test_cash_closed_keeps_catalog_and_blocks_new_order():
     db = SessionLocal()
     tenant = current_restaurante_id.set(RESTAURANTE_ID)
     try:
-        db.query(Restaurante).filter_by(id=RESTAURANTE_ID).one().horarios_funcionamento = [{'days': 'Segunda a Domingo', 'hours': 'Fechado'}]
+        db.query(CaixaTurno).filter_by(restaurante_id=RESTAURANTE_ID).update({'status': 'fechado'})
         db.commit()
     finally:
         current_restaurante_id.reset(tenant)
@@ -441,7 +447,7 @@ def test_closed_schedule_keeps_catalog_and_blocks_new_order():
     catalog = client.get(f'/api/cardapio-digital/public?restaurante_id={RESTAURANTE_ID}')
     assert catalog.status_code == 200
     assert catalog.json()['restaurante']['aceitando_pedidos'] is False
-    assert catalog.json()['restaurante']['origem_disponibilidade'] == 'schedule'
+    assert catalog.json()['restaurante']['origem_disponibilidade'] == 'cash_closed'
     assert any(product['id'] == PRODUTO_ID for product in catalog.json()['produtos'])
     response = client.post('/cardapio/pedidos', json=_payload('closed-catalog'))
     assert response.status_code == 409

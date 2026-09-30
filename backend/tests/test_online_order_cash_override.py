@@ -35,11 +35,11 @@ def test_fora_do_horario_com_caixa_fechado_continua_bloqueado():
     )
 
     assert policy.accepting_orders is False
-    assert policy.source == "schedule"
-    assert policy.reason == "O estabelecimento está fechado neste horário."
+    assert policy.source == "cash_closed"
+    assert policy.reason == "O estabelecimento está fechado até a abertura do caixa."
 
 
-def test_fora_do_horario_com_caixa_aberto_continua_fechado():
+def test_fora_do_horario_com_caixa_aberto_aceita():
     policy = evaluate_online_order_policy(
         _restaurant(),
         _config(),
@@ -47,8 +47,8 @@ def test_fora_do_horario_com_caixa_aberto_continua_fechado():
         cash_open=True,
     )
 
-    assert policy.accepting_orders is False
-    assert policy.source == "schedule"
+    assert policy.accepting_orders is True
+    assert policy.source == "cash_open"
 
 
 def test_forcado_fechado_tem_precedencia_sobre_caixa_aberto():
@@ -107,7 +107,7 @@ def test_dentro_do_horario_com_caixa_aberto_aceita():
     )
 
     assert policy.accepting_orders is True
-    assert policy.source == "schedule_cash"
+    assert policy.source == "cash_open"
 
 
 def test_caixa_aberto_nao_reativa_delivery_desligado():
@@ -185,8 +185,8 @@ def test_restaurante_anexado_a_sessao_detecta_turno_de_caixa_aberto():
             modalidade="retirada",
         )
 
-        assert policy.accepting_orders is False
-        assert policy.source == "schedule"
+        assert policy.accepting_orders is True
+        assert policy.source == "cash_open"
     finally:
         db.rollback()
         db.query(CaixaTurno).filter(
@@ -207,3 +207,14 @@ def test_caixa_aberto_preserva_compatibilidade_quando_nao_ha_agenda_interpretave
 
     assert policy.accepting_orders is True
     assert policy.source == "cash_open"
+
+
+def test_sem_agenda_ou_override_aberto_exige_caixa():
+    for override in ("Automático", "Forçado Aberto"):
+        for schedule in ([], CLOSED_SCHEDULE):
+            policy = evaluate_online_order_policy(
+                _restaurant(status_override=override, schedule=schedule),
+                _config(), cash_open=False,
+            )
+            assert not policy.accepting_orders
+            assert policy.source == "cash_closed"
