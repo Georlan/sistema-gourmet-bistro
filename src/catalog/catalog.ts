@@ -2,6 +2,7 @@ import type { Product } from '../types';
 
 export interface CatalogCategory {
   id: string;
+  marmitaria_tamanho?: boolean;
   nome: string;
   destino_impressao: 'COZINHA' | 'BAR' | 'NENHUM' | string;
 }
@@ -84,6 +85,7 @@ export function normalizeCatalogSnapshot(payload: unknown): CatalogSnapshot {
       id: String(item.id ?? ''),
       nome: String(item.nome ?? ''),
       destino_impressao: String(item.destino_impressao ?? 'COZINHA'),
+      marmitaria_tamanho: item.marmitaria_tamanho === true,
     }))
     .filter((item) => item.id && item.nome);
 
@@ -103,6 +105,7 @@ export function normalizeCatalogSnapshot(payload: unknown): CatalogSnapshot {
 
       return {
         id: String(item.id ?? ''),
+        marmitaria_tamanho: typeof item.marmitaria_tamanho === 'string' ? item.marmitaria_tamanho : null,
         nome: String(item.nome ?? ''),
         categoria_id: categoriaId,
         categoria: categoria?.nome ?? '',

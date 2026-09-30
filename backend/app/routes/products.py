@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Union, Literal
 from ..catalog_addons import effective_modifier_payloads_by_product
+from ..marmitaria_catalog import enabled as marmitaria_enabled, size_category, size_key
 from ..database import get_db, require_tenant_id
 from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario
 from ..security import get_current_user, require_permission
@@ -28,6 +29,23 @@ def notify_catalog_update(
         {"event": "catalog_updated", "message": message},
         restaurante_id,
     )
+
+def ensure_marmitas_available(db, tenant, products):
+    configured = [p for p in products if p.marmitaria_tamanho]
+    if not configured:
+        return
+    effective = effective_modifier_payloads_by_product(db, tenant, configured)
+    for product in configured:
+        groups = effective.get(product.id, [])
+        if not groups:
+            raise HTTPException(409, "Configure as escolhas da marmita antes de disponibilizar para venda.")
+        for group in groups:
+            available = sum(option['ativo'] for option in group['opcoes'])
+            minimum = group['min_selecoes']
+            required = minimum if group.get('modo_selecao') == 'tipos' else min(minimum, 1)
+            if available < required:
+                raise HTTPException(409, "Faltam opções disponíveis para a composição da marmita.")
+
 
 # ─── SCHEMAS (inline para evitar circular imports) ────────────────────────────
 class CategoriaUpdate(BaseModel):
@@ -310,6 +328,8 @@ def update_disponibilidade_lote(
             detail="Informe ao menos um produto válido.",
         )
 
+    if data.ativo:
+        ensure_marmitas_available(db, rest_id, db.query(Produto).filter(Produto.restaurante_id == rest_id, Produto.id.in_(product_ids)).all())
     updated = (
         db.query(Produto)
         .filter(
@@ -369,6 +389,9 @@ def update_produtos_lote(
         Produto.id.in_(product_ids),
     ).all()
 
+    if data.categoria_id and marmitaria_enabled(db, rest_id):
+        if size_category(category) or any(product.marmitaria_tamanho for product in products):
+            raise HTTPException(409, "Os tamanhos ficam na categoria de Marmitas. Configure-os no cadastro de Marmitas.")
     if data.reajuste_percentual is not None:
         factor = Decimal("1") + (Decimal(str(data.reajuste_percentual)) / Decimal("100"))
         for product in products:
@@ -412,6 +435,9 @@ def create_produto(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A categoria informada não existe"
         )
+
+    if marmitaria_enabled(db, rest_id) and (size_category(categoria) or size_key(produto_data.nome) in {'p', 'm', 'g'}):
+        raise HTTPException(409, "Cadastre ou edite este tamanho em Marmitas, junto com o preço e as escolhas.")
 
     existente = db.query(Produto).filter(
         Produto.restaurante_id == rest_id,
@@ -466,6 +492,16 @@ def update_produto(
                 detail="A categoria informada não existe"
             )
 
+    if marmitaria_enabled(db, rest_id):
+        category = db.query(Categoria).filter_by(restaurante_id=rest_id, id=db_produto.categoria_id).first()
+        if db_produto.marmitaria_tamanho or size_category(category):
+            if any(key in data and data[key] != getattr(db_produto, key) for key in ('nome', 'categoria_id')):
+                raise HTTPException(409, "Configure nome e tamanho no cadastro de Marmitas.")
+        elif ("categoria_id" in data and size_category(categoria)) or ("nome" in data and size_key(data["nome"] or '') in {'p', 'm', 'g'}):
+            raise HTTPException(409, "Configure este produto no cadastro de Marmitas.")
+
+    if data.get('ativo'):
+        ensure_marmitas_available(db, rest_id, [db_produto])
     for key, value in data.items():
         setattr(db_produto, key, value)
 
@@ -616,6 +652,10 @@ def importar_cardapio(
             Produto.restaurante_id == rest_id,
             Produto.id == item.id,
         ).first()
+        if marmitaria_enabled(db, rest_id) and (size_category(cat) or size_key(item.nome) in {'p', 'm', 'g'} or (existente and existente.marmitaria_tamanho)):
+            if not existente or item.nome != existente.nome or item.categoria_id != existente.categoria_id:
+                db.rollback()
+                raise HTTPException(409, "Cadastre ou edite tamanhos no cadastro de Marmitas. Nenhum item foi importado.")
         if existente:
             existente.nome = item.nome
             existente.preco = item.preco
@@ -644,6 +684,7 @@ def importar_cardapio(
             imported_products.append(novo)
 
     db.flush()
+    ensure_marmitas_available(db, rest_id, [p for p in imported_products if p.ativo])
 
     categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
     for c in categorias:

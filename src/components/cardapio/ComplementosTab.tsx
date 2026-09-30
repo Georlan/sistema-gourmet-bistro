@@ -36,6 +36,11 @@ interface ComplementosTabProps {
   produtos: Array<{ id: string; nome: string; preco: number; categoria_id?: string }>;
   onShowNotification?: (msg: string, type?: 'success' | 'error') => void;
   onCatalogChanged?: () => Promise<void>;
+  marmitariaCadastro?: boolean;
+  focusProductId?: string | null;
+  onFocusHandled?: () => void;
+  catalogVersion?: string;
+  onEditDetails?: (id: string) => void;
 }
 
 export default function ComplementosTab({
@@ -44,6 +49,11 @@ export default function ComplementosTab({
   produtos,
   onShowNotification,
   onCatalogChanged,
+  marmitariaCadastro = false,
+  focusProductId,
+  onFocusHandled,
+  catalogVersion,
+  onEditDetails,
 }: ComplementosTabProps) {
   const [grupos, setGrupos] = useState<GrupoModificador[]>([]);
   const [categorias, setCategorias] = useState<CategoriaHierarquia[]>([]);
@@ -315,7 +325,9 @@ export default function ComplementosTab({
 
   return (
     <div className="space-y-6">
-      <MarmitariaTamanhos apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} grupos={grupos} notify={onShowNotification} onSaved={async () => { await fetchCatalogBindings(); await onCatalogChanged?.(); }} />
+      {marmitariaCadastro && <MarmitariaTamanhos apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} grupos={grupos} notify={onShowNotification} focusProductId={focusProductId} onFocusHandled={onFocusHandled} catalogVersion={catalogVersion} onEditDetails={onEditDetails} onSaved={async () => { await fetchCatalogBindings(); await onCatalogChanged?.(); }} />}
+      <details open={marmitariaCadastro ? grupos.length === 0 : true} className="space-y-4">
+        <summary className="cursor-pointer font-bold text-koma-foreground">{marmitariaCadastro ? 'Proteínas, guarnições e outras opções' : 'Complementos e adicionais'}</summary>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-koma-card border border-koma-border p-5 rounded-2xl">
         <div>
           <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm">
@@ -434,6 +446,7 @@ export default function ComplementosTab({
         </div>
       )}
 
+      </details>
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-fade-in overflow-y-auto">
           <div className="bg-koma-panel border border-koma-border rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-5 my-8 max-h-[92vh] flex flex-col animate-scale-up">
