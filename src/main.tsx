@@ -151,6 +151,26 @@ if (isPublicMenuRoute()) {
   initializeKomaTheme();
 }
 
+if (typeof window !== "undefined") {
+  (window as unknown as { __KOMA_BUILD__?: unknown }).__KOMA_BUILD__ = {
+    sha: import.meta.env.VITE_BUILD_SHA,
+    builtAt: import.meta.env.VITE_BUILD_TIME,
+  };
+
+  window.addEventListener("vite:preloadError", (event) => {
+    console.warn("[koma-loader] Erro de pré-carregamento de módulo Vite detectado:", event);
+    const CHUNK_RELOAD_KEY = "koma_chunk_reload_attempt";
+    const now = Date.now();
+    const lastAttempt = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
+    if (now - lastAttempt > 15000) {
+      sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+      const url = new URL(window.location.href);
+      url.searchParams.set("__koma_refresh", String(now));
+      window.location.replace(url.toString());
+    }
+  });
+}
+
 // O service worker não possui fetch/cache handler: registrá-lo globalmente é
 // seguro para o Vite e não solicita permissão. A permissão de notificação só é
 // pedida depois de gesto explícito do cliente no acompanhamento do pedido.

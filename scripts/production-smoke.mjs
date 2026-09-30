@@ -32,18 +32,27 @@ function hasCorsValue(actual, expected) {
   return values.includes('*') || values.includes(expected.toLowerCase());
 }
 
-async function request(url, options = {}) {
-  const controller = new AbortController();
-  const timeoutMs = Number(process.env.KOMA_SMOKE_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, {
-      redirect: 'follow',
-      ...options,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
+async function request(url, options = {}, retries = 2) {
+  for (let attempt = 1; attempt <= retries + 1; attempt++) {
+    const controller = new AbortController();
+    const timeoutMs = Number(process.env.KOMA_SMOKE_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, {
+        redirect: 'follow',
+        ...options,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (attempt <= retries) {
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
+      }
+      const cause = err && typeof err === 'object' && 'cause' in err && err.cause ? ` [cause: ${err.cause}]` : '';
+      throw new Error(`fetch failed for ${url}${cause}`);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 
@@ -107,7 +116,63 @@ async function checkContractReadiness(apiUrl, expectedApiSha) {
 }
 
 async function checkFrontend(frontendUrl) {
-  await checkHtml(frontendUrl, 'Frontend');
+  const response = await request(frontendUrl, { method: 'GET' });
+  assertOk(response, 'Frontend HTML');
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.toLowerCase().includes('text/html')) {
+    throw new Error(`Frontend: content-type inesperado: ${contentType || '(ausente)'}`);
+  }
+  const html = await response.text();
+  console.log(`✓ Frontend shell ${response.status} — ${frontendUrl}`);
+
+  // 1. Extrair e verificar integridade de todos os assets hashed do HTML
+  const scriptRegex = /<script\b[^>]*src=["']([^"']+\.js)["']/gi;
+  const linkCssRegex = /<link\b[^>]*href=["']([^"']+\.css)["']/gi;
+  const assets = new Set();
+  let match;
+  while ((match = scriptRegex.exec(html)) !== null) {
+    if (match[1].startsWith('/assets/')) assets.add(match[1]);
+  }
+  while ((match = linkCssRegex.exec(html)) !== null) {
+    if (match[1].startsWith('/assets/')) assets.add(match[1]);
+  }
+
+  if (assets.size === 0) {
+    throw new Error(`Frontend: nenhum asset hashed (/assets/*) encontrado no HTML inicial.`);
+  }
+
+  for (const assetPath of assets) {
+    const assetUrl = `${frontendUrl}${assetPath}`;
+    const assetRes = await request(assetUrl, { method: 'GET' });
+    assertOk(assetRes, `Asset ${assetPath}`);
+    const ct = (assetRes.headers.get('content-type') || '').toLowerCase();
+    if (ct.includes('text/html')) {
+      throw new Error(`Asset ${assetPath}: retornou text/html (mascarando asset perdido via fallback SPA)!`);
+    }
+    if (assetPath.endsWith('.js') && !ct.includes('javascript')) {
+      throw new Error(`Asset ${assetPath}: esperado JavaScript, recebido ${ct}`);
+    }
+    if (assetPath.endsWith('.css') && !ct.includes('text/css')) {
+      throw new Error(`Asset ${assetPath}: esperado CSS, recebido ${ct}`);
+    }
+    console.log(`✓ Asset íntegro [${ct.split(';')[0]}] — ${assetPath}`);
+  }
+
+  // 2. Testar que asset inexistente em /assets/* não mascara 404 como 200 HTML
+  const fakeAssetUrl = `${frontendUrl}/assets/__koma_skew_test_nonexistent__.js`;
+  const fakeRes = await request(fakeAssetUrl, { method: 'GET' });
+  const fakeCt = (fakeRes.headers.get('content-type') || '').toLowerCase();
+  const requireStrict404 = process.env.KOMA_REQUIRE_ASSET_404 === 'true';
+
+  if (fakeRes.status === 200 && fakeCt.includes('text/html')) {
+    const msg = `Alerta de version skew: ${fakeAssetUrl} retornou 200 text/html (SPA fallback mascara assets perdidos no deploy).`;
+    if (requireStrict404) {
+      throw new Error(msg);
+    }
+    console.warn(`⚠ ${msg}`);
+  } else {
+    console.log(`✓ Asset inexistente tratado corretamente (status=${fakeRes.status}, type=${fakeCt || 'none'})`);
+  }
 }
 
 async function checkContractPages(frontendUrl) {

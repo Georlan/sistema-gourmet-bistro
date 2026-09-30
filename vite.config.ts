@@ -10,13 +10,49 @@ export default defineConfig(() => {
     || process.env.GIT_COMMIT_SHA
     || ""
   ).slice(0, 12);
+  const buildTime = new Date().toISOString();
+
   return {
     // Worktrees may share node_modules, but must not share the E2E optimizer cache.
     cacheDir: process.env.KOMA_E2E === 'true' ? path.resolve(__dirname, '.vite/e2e') : undefined,
     define: {
       "import.meta.env.VITE_BUILD_SHA": JSON.stringify(buildSha || "não informado"),
+      "import.meta.env.VITE_BUILD_TIME": JSON.stringify(buildTime),
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        name: 'koma-build-metadata',
+        transformIndexHtml(html: string) {
+          const metaTags = [
+            `<meta name="koma-build-sha" content="${buildSha || 'development'}" />`,
+            `<meta name="koma-build-time" content="${buildTime}" />`,
+          ].join('\n    ');
+          return html.replace('</head>', `    ${metaTags}\n  </head>`);
+        },
+        generateBundle() {
+          const payload = JSON.stringify(
+            {
+              sha: buildSha || 'development',
+              builtAt: buildTime,
+            },
+            null,
+            2,
+          );
+          this.emitFile({
+            type: 'asset',
+            fileName: 'meta.json',
+            source: payload,
+          });
+          this.emitFile({
+            type: 'asset',
+            fileName: 'build-info.json',
+            source: payload,
+          });
+        },
+      },
+    ],
     build: { manifest: true },
     resolve: {
       alias: {
