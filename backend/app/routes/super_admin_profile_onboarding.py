@@ -28,7 +28,7 @@ logger = logging.getLogger("koma.super_admin.profile_onboarding")
 router = APIRouter()
 
 _PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
-SUPPORTED_OPERATION_PROFILES = ("generic", "pizzaria", "acai", "churrasco")
+SUPPORTED_OPERATION_PROFILES = ("generic", "pizzaria", "acai", "churrasco", "marmitaria")
 
 
 def _normalize_operation_profile(value: str | None) -> str | None:
@@ -43,7 +43,7 @@ def _normalize_operation_profile(value: str | None) -> str | None:
         )
     if normalized not in SUPPORTED_OPERATION_PROFILES:
         raise ValueError(
-            "Tipo de operação indisponível. Escolha entre: Outro, Pizzaria, Açaí ou Churrasco."
+            "Tipo de operação indisponível. Escolha entre: Outro, Pizzaria, Açaí, Churrasco ou Marmitaria."
         )
     return normalized
 

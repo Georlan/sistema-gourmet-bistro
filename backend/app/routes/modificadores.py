@@ -2,7 +2,7 @@ import uuid
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from sqlalchemy.orm import Session, joinedload
 
 from ..adapters.orders.pos_adapter import PosAdapter
@@ -302,6 +302,40 @@ def criar_grupo(
     db.refresh(novo_grupo)
     _notify_catalog_update(background_tasks, rest_id, "Grupo de complementos criado.")
     return _serialize_grupo(novo_grupo, db)
+
+
+class OpcaoDisponibilidadeUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ativo: StrictBool
+
+
+@router.patch("/opcoes/{opcao_id}/disponibilidade", response_model=OpcaoModificadorResponse)
+def atualizar_disponibilidade_opcao(
+    opcao_id: str,
+    payload: OpcaoDisponibilidadeUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Pausa/reativa uma opção sem recriar grupo, vínculos ou IDs históricos."""
+    del current_user
+    rest_id = require_tenant_id()
+    opcao = db.query(OpcaoModificador).join(
+        GrupoModificador,
+        (GrupoModificador.id == OpcaoModificador.grupo_id)
+        & (GrupoModificador.restaurante_id == OpcaoModificador.restaurante_id),
+    ).filter(
+        OpcaoModificador.id == opcao_id,
+        OpcaoModificador.restaurante_id == rest_id,
+        GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
+    ).one_or_none()
+    if opcao is None:
+        raise HTTPException(status_code=404, detail="Opção não encontrada.")
+    opcao.ativo = payload.ativo
+    db.commit()
+    db.refresh(opcao)
+    _notify_catalog_update(background_tasks, rest_id, "Disponibilidade de complemento atualizada.")
+    return opcao
 
 
 @router.put("/grupos/{grupo_id}", response_model=GrupoModificadorResponseV2)

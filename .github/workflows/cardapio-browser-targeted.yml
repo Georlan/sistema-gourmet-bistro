@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'src/cardapio/**'
+      - 'src/components/cardapio/**'
       - 'tests/cardapio*.test.ts'
       - 'tests/publicMenu*.test.ts'
       - 'e2e/cardapio-*.spec.ts'
@@ -50,6 +51,7 @@ jobs:
           npm run test:e2e --
           e2e/cardapio-canonical-modal-entrypoints.spec.ts
           e2e/cardapio-benefits.spec.ts
+          e2e/cardapio-marmitaria-complements.spec.ts
           e2e/public-menu-order.spec.ts
           e2e/order-tracking-chat.spec.ts
           e2e/cardapio-chat-viewports.spec.ts
