@@ -19,12 +19,17 @@ test('main routes every canonical staff URL through the unified operational entr
   assert.doesNotMatch(main, /resolvedHost\.surface === ["']caixa["']/);
 });
 
-test('canonical app entry strips hidden legacy path and query before mounting', () => {
+test('canonical app entry preserves only a valid print-agent pairing context through login', () => {
   const main = source('../src/main.tsx');
   assert.match(main, /isUnifiedOperationalRoute[\s\S]*isOperationalAppHost\(\)[\s\S]*window\.location\.pathname !== "\/"/);
-  assert.match(main, /window\.location\.search/);
-  assert.match(main, /window\.location\.hash/);
-  assert.match(main, /window\.history\.replaceState\(window\.history\.state, "", "\/"\)/);
+  assert.match(main, /currentParams\.get\("pair_print_agent"\)/);
+  assert.match(main, /currentParams\.get\("agent_port"\)/);
+  assert.match(main, /pairingPort >= 17654/);
+  assert.match(main, /pairingPort <= 17664/);
+  assert.match(main, /canonicalParams\.set\("pair_print_agent", pairingNonce\)/);
+  assert.match(main, /canonicalParams\.set\("agent_port", String\(pairingPort\)\)/);
+  assert.match(main, /canonicalSearch \? `\/\?\$\{canonicalSearch\}` : "\/"/);
+  assert.doesNotMatch(main, /window\.history\.replaceState\(window\.history\.state, "", "\/"\)/);
 });
 
 test('legacy cashier and waiter tenant hosts converge to the canonical team entry', () => {

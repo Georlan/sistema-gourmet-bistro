@@ -15,6 +15,11 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
+# EX_TEMPFAIL: o pareamento exige uma ação humana. O serviço systemd usa este
+# código para encerrar sem entrar em um ciclo que reabre o navegador a cada
+# poucos segundos quando a autorização não é concluída.
+PAIRING_NOT_COMPLETED_EXIT = 75
+
 
 def main() -> int:
     config = parse_cli_args(AgentConfig.load())
@@ -37,10 +42,11 @@ def run(config: AgentConfig) -> int:
             paired_token = pair_agent()
             if not paired_token:
                 print(
-                    "[ERRO] Pareamento não concluído. "
-                    "Entre no Kôma e execute o instalador novamente."
+                    "[PAREAMENTO] Autorização não concluída. "
+                    "O navegador não será reaberto em loop; use 'Preparar impressão' "
+                    "ou execute o instalador novamente quando estiver pronto."
                 )
-                return 1
+                return 1 if config.pair_only else PAIRING_NOT_COMPLETED_EXIT
             config.agent_token = paired_token
             print("[PAREAMENTO] Computador conectado com sucesso.")
 
