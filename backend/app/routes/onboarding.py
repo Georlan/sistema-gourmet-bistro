@@ -31,6 +31,7 @@ from ..models import (
     Restaurante,
     Usuario,
 )
+from ..restaurant_profile_models import RestauranteOperationProfile
 from ..saas_billing_models import SaaSSubscription
 from ..security import get_current_user
 from ..services.onboarding_readiness import evaluate_operation_readiness
@@ -42,6 +43,12 @@ router = APIRouter(prefix="/api/onboarding", tags=["Onboarding"])
 
 class OnboardingOperationsRequest(BaseModel):
     order_types: list[Literal["consumo_local", "retirada", "delivery"]] = Field(min_length=1)
+
+    model_config = {"extra": "forbid"}
+
+
+class OnboardingOperationProfileRequest(BaseModel):
+    operation_profile: Literal["generic", "pizzaria", "acai", "churrasco", "marmitaria"]
 
     model_config = {"extra": "forbid"}
 
@@ -275,6 +282,12 @@ def _build_onboarding_status(
             detail="Restaurante não encontrado.",
         )
 
+    profile = (
+        db.query(RestauranteOperationProfile)
+        .filter(RestauranteOperationProfile.restaurante_id == tenant_id)
+        .one_or_none()
+    )
+    operation_profile = str(profile.profile_key) if profile else "generic"
     config = (
         db.query(ConfiguracaoRestaurante)
         .filter(ConfiguracaoRestaurante.restaurante_id == tenant_id)
@@ -429,6 +442,7 @@ def _build_onboarding_status(
             "name": str(restaurant.nome or "Seu restaurante"),
             "slug": str(restaurant.slug or ""),
             "plan": str(restaurant.plano or ""),
+            "operationProfile": operation_profile,
         },
         "trial": trial_snapshot,
         "onboarding": {
@@ -474,6 +488,71 @@ def get_onboarding_status(
 ):
     """Read-only projection. Never starts trial or mutates onboarding state."""
     _require_onboarding_role(current_user)
+    return _build_onboarding_status(db, current_user=current_user)
+
+
+@router.put("/operation-profile")
+def update_onboarding_operation_profile(
+    payload: OnboardingOperationProfileRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Confirma o tipo operacional do próprio tenant sem alterar catálogo ou preços."""
+    _require_onboarding_role(current_user)
+    if getattr(current_user, "is_support_mode", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Modo Suporte pode consultar, mas não alterar o onboarding do cliente.",
+        )
+
+    tenant_id = require_tenant_id()
+    restaurant = (
+        db.query(Restaurante)
+        .filter(Restaurante.id == tenant_id)
+        .with_for_update()
+        .one_or_none()
+    )
+    if restaurant is None:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+
+    profile = (
+        db.query(RestauranteOperationProfile)
+        .filter(RestauranteOperationProfile.restaurante_id == tenant_id)
+        .with_for_update()
+        .one_or_none()
+    )
+    previous = str(profile.profile_key) if profile else "generic"
+    next_profile = payload.operation_profile
+
+    if previous != next_profile:
+        if profile is None:
+            db.add(
+                RestauranteOperationProfile(
+                    restaurante_id=tenant_id,
+                    profile_key=next_profile,
+                )
+            )
+        else:
+            profile.profile_key = next_profile
+
+        db.add(
+            ActivityLog(
+                restaurante_id=tenant_id,
+                garcom_id=current_user.id,
+                action="ONBOARDING_OPERATION_PROFILE_UPDATE",
+                details=json.dumps(
+                    {
+                        "before": previous,
+                        "after": next_profile,
+                        "catalog_changed": False,
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+            )
+        )
+        db.commit()
+
     return _build_onboarding_status(db, current_user=current_user)
 
 
