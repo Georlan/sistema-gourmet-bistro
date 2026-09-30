@@ -74,7 +74,6 @@ type ContractReceipt = {
     restaurantName: string;
     email: string;
     phone: string;
-    operation_profile?: OperationProfile;
   };
   representative: { name: string; taxId: string; role: string };
   commercial: {
@@ -119,6 +118,7 @@ type SavedSignup = {
     plan: SubscriptionPlanId;
     billing_cycle: BillingCycle;
     restaurant_name: string;
+    operation_profile?: OperationProfile;
     responsible_name: string;
     email: string;
     phone: string;
