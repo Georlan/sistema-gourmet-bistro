@@ -2,20 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard,
   Store,
-  CreditCard,
-  ReceiptText,
-  Wrench,
-  History,
   Settings,
   LogOut,
   Search,
   ChevronRight,
   Menu,
-  Sparkles,
-  UsersRound,
   X,
   AlertOctagon,
-  ClipboardList,
 } from "lucide-react";
 import type { Tenant } from "./superAdminTypes";
 import {
@@ -27,38 +20,26 @@ import {
 } from "./superAdminApi";
 import { SuperAdminOverviewTab } from "./SuperAdminOverviewTab";
 import { SuperAdminIncidentCenterTab } from "./SuperAdminIncidentCenterTab";
-import { SuperAdminTenantsTab } from "./SuperAdminTenantsTab";
 import {
-  SuperAdminContractsTab,
-  type ContractInboxItem,
-} from "./SuperAdminContractsTab";
-import { SuperAdminTrialsTab } from "./SuperAdminTrialsTab";
-import { SuperAdminAccessTab } from "./SuperAdminAccessTab";
-import { SuperAdminPaymentsTab } from "./SuperAdminPaymentsTab";
-import { SuperAdminBillingTab } from "./SuperAdminBillingTab";
-import { SuperAdminOperationsTab } from "./SuperAdminOperationsTab";
-import { SuperAdminAuditTab, type AuditLogItem } from "./SuperAdminAuditTab";
-import { SuperAdminSettingsTab } from "./SuperAdminSettingsTab";
+  SuperAdminClientsHub,
+  type ClientsView,
+  type NewClientsView,
+} from "./SuperAdminClientsHub";
+import {
+  SuperAdminPlatformHub,
+  type PlatformView,
+} from "./SuperAdminPlatformHub";
+import type { ContractInboxItem } from "./SuperAdminContractsTab";
+import type { AuditLogItem } from "./SuperAdminAuditTab";
 
-import { SuperAdminSignupsTab } from "./SuperAdminSignupsTab";
-
-type TabId =
-  | "signups"
-  | "overview"
-  | "incidents"
-  | "tenants"
-  | "contracts"
-  | "trials"
-  | "access"
-  | "payments"
-  | "billing"
-  | "operations"
-  | "audit"
-  | "settings";
+type TabId = "overview" | "clients" | "incidents" | "platform";
 
 export default function SuperAdminPanel() {
   const frontendBuildSha = import.meta.env.VITE_BUILD_SHA || "desconhecido";
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [clientsView, setClientsView] = useState<ClientsView>("restaurants");
+  const [newClientsView, setNewClientsView] = useState<NewClientsView>("signups");
+  const [platformView, setPlatformView] = useState<PlatformView>("health");
   const [globalSearch, setGlobalSearch] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [tenantSnapshot, setTenantSnapshot] = useState<{ data: Tenant[]; hasSnapshot: boolean; status: "loading" | "ready" | "refreshing" | "error" }>({ data: [], hasSnapshot: false, status: "loading" });
@@ -244,22 +225,45 @@ export default function SuperAdminPanel() {
   };
 
   const navItems = [
-    { id: "signups" as TabId, label: "Inscrições", icon: ClipboardList, badge: 0 },
-    { id: "overview" as TabId, label: "Visão geral", icon: LayoutDashboard, badge: 0 },
-    { id: "incidents" as TabId, label: "Central de incidentes", icon: AlertOctagon, badge: 0 },
-    { id: "tenants" as TabId, label: "Restaurantes", icon: Store, badge: 0 },
-    { id: "contracts" as TabId, label: "Contratações", icon: ClipboardList, badge: pendingContractsCount },
-    { id: "trials" as TabId, label: "Períodos grátis", icon: Sparkles, badge: 0 },
-    { id: "access" as TabId, label: "Acessos e equipe", icon: UsersRound, badge: 0 },
-    { id: "payments" as TabId, label: "Pagamentos online", icon: CreditCard, badge: 0 },
-    { id: "billing" as TabId, label: "Planos e cobrança", icon: ReceiptText, badge: 0 },
-    { id: "operations" as TabId, label: "Operações e manutenção", icon: Wrench, badge: 0 },
-    { id: "audit" as TabId, label: "Auditoria", icon: History, badge: 0 },
-    { id: "settings" as TabId, label: "Configurações", icon: Settings, badge: 0 },
+    { id: "overview" as TabId, label: "Início", icon: LayoutDashboard, badge: 0 },
+    { id: "clients" as TabId, label: "Clientes", icon: Store, badge: pendingContractsCount },
+    { id: "incidents" as TabId, label: "Incidentes", icon: AlertOctagon, badge: 0 },
+    { id: "platform" as TabId, label: "Plataforma", icon: Settings, badge: 0 },
   ];
 
+  const navigateFromOverview = (
+    target: "incidents" | "tenants" | "payments" | "billing" | "operations" | "audit" | "settings",
+  ) => {
+    if (target === "incidents") {
+      setActiveTab("incidents");
+      return;
+    }
+    if (target === "operations" || target === "audit" || target === "settings") {
+      setActiveTab("platform");
+      setPlatformView(
+        target === "operations"
+          ? "health"
+          : target === "settings"
+            ? "integrations"
+            : "audit",
+      );
+      return;
+    }
+
+    setActiveTab("clients");
+    setClientsView(
+      target === "payments"
+        ? "payments"
+        : target === "billing"
+          ? "billing"
+          : "restaurants",
+    );
+  };
+
   const backendIsOnline = runtimeHealth?.status === "ok";
-  const tenantTab = ["overview", "incidents", "tenants", "trials", "payments", "billing"].includes(activeTab);
+  const requiresTenants = activeTab === "overview"
+    || activeTab === "incidents"
+    || (activeTab === "clients" && clientsView !== "new");
 
   return (
     <div className="min-h-screen bg-koma-page text-koma-foreground flex flex-col font-sans antialiased" id="superadmin-root">
@@ -339,28 +343,28 @@ export default function SuperAdminPanel() {
             </nav>
           </div>
           <div className="p-4 border-t border-zinc-800/80 bg-koma-page/40 text-[11px] text-koma-muted space-y-1">
-            <div className="flex items-center justify-between"><span className="font-semibold text-koma-foreground">KÔMA SaaS Platform</span><span className="text-[#00b894] font-bold">v3.5</span></div>
+            <div className="flex items-center justify-between gap-2"><span className="font-semibold text-koma-foreground">KÔMA SaaS Platform</span><span className="text-right text-[#00b894] font-bold">{runtimeHealth?.version || "versão não informada"}</span></div>
             <p className="text-[10px] text-koma-subtle">Operação multi-tenant</p>
           </div>
         </aside>
 
         <main className="flex-1 bg-koma-page p-6 overflow-y-auto" id="superadmin-content">
-          {tenantTab && !tenantsAvailable && (
+          {requiresTenants && !tenantsAvailable && (
             <div className="rounded-xl border border-zinc-800 bg-koma-card p-8 text-center" role={tenantSnapshot.status === "error" ? "alert" : "status"}>
               <p className="font-bold">{tenantSnapshot.status === "error" ? "Não foi possível carregar os restaurantes" : "Carregando restaurantes…"}</p>
               {tenantSnapshot.status === "error" && <button type="button" className="mt-4 rounded-lg border border-zinc-700 px-4 py-2 text-sm" onClick={() => void fetchTenants()}>Tentar novamente</button>}
             </div>
           )}
-          {tenantTab && tenantsAvailable && tenantSnapshot.status === "refreshing" && <p role="status" className="mb-3 text-xs text-koma-muted">Atualizando restaurantes…</p>}
-          {tenantTab && tenantsAvailable && tenantSnapshot.status === "error" && <div role="alert" className="mb-3 rounded-lg border border-amber-700 p-3 text-xs text-amber-300">Mostrando os últimos restaurantes carregados. <button type="button" className="underline" onClick={() => void fetchTenants()}>Tentar novamente</button></div>}
-          {(!tenantTab || tenantsAvailable) && <>
+          {requiresTenants && tenantsAvailable && tenantSnapshot.status === "refreshing" && <p role="status" className="mb-3 text-xs text-koma-muted">Atualizando restaurantes…</p>}
+          {requiresTenants && tenantsAvailable && tenantSnapshot.status === "error" && <div role="alert" className="mb-3 rounded-lg border border-amber-700 p-3 text-xs text-amber-300">Mostrando os últimos restaurantes carregados. <button type="button" className="underline" onClick={() => void fetchTenants()}>Tentar novamente</button></div>}
+          {(!requiresTenants || tenantsAvailable) && <>
           {activeTab === "overview" && (
             <SuperAdminOverviewTab
               tenants={tenants}
               tenantsAvailable={tenantsAvailable}
               isLoadingTenants={isLoadingTenants}
               refreshTenants={fetchTenants}
-              onNavigateToTab={(tab) => setActiveTab(tab)}
+              onNavigateToTab={navigateFromOverview}
               onToggleStatus={handleToggleTenantStatus}
               globalSearch={globalSearch}
               runtimeHealth={runtimeHealth}
@@ -372,41 +376,33 @@ export default function SuperAdminPanel() {
               globalSearch={globalSearch}
             />
           )}
-          {activeTab === "tenants" && (
-            <SuperAdminTenantsTab
+          {activeTab === "clients" && (
+            <SuperAdminClientsHub
               tenants={tenants}
               tenantsAvailable={tenantsAvailable}
-              isLoading={isLoadingTenants}
+              isLoadingTenants={isLoadingTenants}
               refreshTenants={fetchTenants}
               globalSearch={globalSearch}
-            />
-          )}
-          {activeTab === "signups" && <SuperAdminSignupsTab globalSearch={globalSearch} />}
-          {activeTab === "contracts" && (
-            <SuperAdminContractsTab
-              items={contracts}
-              isLoading={isLoadingContracts}
-              available={contractsAvailable}
-              globalSearch={globalSearch}
+              contracts={contracts}
+              contractsAvailable={contractsAvailable}
+              isLoadingContracts={isLoadingContracts}
+              pendingContractsCount={pendingContractsCount}
               refreshContracts={fetchContracts}
+              activeView={clientsView}
+              onChangeView={setClientsView}
+              activeNewClientsView={newClientsView}
+              onChangeNewClientsView={setNewClientsView}
             />
           )}
-          {activeTab === "trials" && (
-            <SuperAdminTrialsTab
-              tenants={tenants}
-              globalSearch={globalSearch}
-              refreshTenants={fetchTenants}
-            />
-          )}
-          {activeTab === "access" && <SuperAdminAccessTab globalSearch={globalSearch} />}
-          {activeTab === "payments" && (
-            <SuperAdminPaymentsTab tenants={tenants} tenantsAvailable={tenantsAvailable} />
-          )}
-          {activeTab === "billing" && <SuperAdminBillingTab tenants={tenants} tenantsAvailable={tenantsAvailable} />}
           </>}
-          {activeTab === "operations" && <SuperAdminOperationsTab onAddLog={addAuditLog} onTriggerTelegramAlert={triggerTelegramAlert} />}
-          {activeTab === "audit" && <SuperAdminAuditTab />}
-          {activeTab === "settings" && <SuperAdminSettingsTab onAddLog={addAuditLog} onTriggerTelegramAlert={triggerTelegramAlert} />}
+          {activeTab === "platform" && (
+            <SuperAdminPlatformHub
+              activeView={platformView}
+              onChangeView={setPlatformView}
+              onAddLog={addAuditLog}
+              onTriggerTelegramAlert={triggerTelegramAlert}
+            />
+          )}
         </main>
       </div>
     </div>
