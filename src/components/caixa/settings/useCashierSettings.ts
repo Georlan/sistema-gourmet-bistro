@@ -115,15 +115,18 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
     }
   };
 
-  const handleTestPrinter = async () => {
+  const handleTestPrinter = async (agentId: string) => {
     if (isTestingPrinterRef.current) return;
     isTestingPrinterRef.current = true;
     setIsTestingPrinter(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/impressao/teste-extremo-cardapio`, {
-        method: 'POST',
-        headers: authHeaders,
-      });
+      const res = await fetch(
+        `${apiBaseUrl}/impressao/teste-extremo-cardapio?agent_id=${encodeURIComponent(agentId)}`,
+        {
+          method: 'POST',
+          headers: authHeaders,
+        }
+      );
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         throw new Error(data?.detail || 'Erro ao colocar o teste extremo na fila.');
