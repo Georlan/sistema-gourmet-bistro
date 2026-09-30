@@ -1,5 +1,11 @@
 import React from 'react';
 
+function reloadFreshAppEntry() {
+  const url = new URL(window.location.href);
+  url.searchParams.set('__koma_refresh', Date.now().toString());
+  window.location.replace(url.toString());
+}
+
 /** Loaded with the entry bundle, so recovery does not depend on a missing chunk. */
 export class AppRecoveryBoundary extends React.Component<React.PropsWithChildren, { failed: boolean }> {
   state = { failed: false };
@@ -21,7 +27,7 @@ export class AppRecoveryBoundary extends React.Component<React.PropsWithChildren
           <p>Não foi possível carregar esta tela. Confira sua conexão e tente novamente.</p>
           <p className="text-sm">Pedidos já enviados continuam no sistema. Ao voltar, confira o pedido antes de enviá-lo outra vez.</p>
           <button type="button" className="rounded-lg bg-koma-accent px-5 py-3 font-semibold text-koma-page"
-            onClick={() => window.location.reload()}>Reabrir Kôma</button>
+            onClick={reloadFreshAppEntry}>Reabrir Kôma</button>
         </section>
       </main>
     );

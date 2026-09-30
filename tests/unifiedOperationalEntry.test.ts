@@ -48,7 +48,16 @@ test('canonical app shell bypasses stale browser/service-worker caches', () => {
   const headers = source('../public/_headers');
   assert.match(headers, /\/index\.html[\s\S]*Cache-Control: no-store, no-cache, must-revalidate, max-age=0/);
   assert.match(headers, /\/koma-sw\.js[\s\S]*Cache-Control: no-store, no-cache, must-revalidate, max-age=0/);
+  assert.match(headers, /\/ativar[\s\S]*Cache-Control: no-store, no-cache, must-revalidate, max-age=0/);
+  assert.match(headers, /\/super-admin[\s\S]*Cache-Control: no-store, no-cache, must-revalidate, max-age=0/);
+  assert.match(headers, /\/cardapio[\s\S]*Cache-Control: no-store, no-cache, must-revalidate, max-age=0/);
   assert.match(headers, /\/assets\/\*[\s\S]*Cache-Control: public, max-age=31536000, immutable/);
+
+  const recovery = source('../src/components/auth/AppRecoveryBoundary.tsx');
+  assert.match(recovery, /__koma_refresh/);
+  assert.match(recovery, /Date\.now\(\)/);
+  assert.match(recovery, /window\.location\.replace\(url\.toString\(\)\)/);
+  assert.doesNotMatch(recovery, /window\.location\.reload\(\)/);
 });
 
 test('canonical app restores a valid persisted staff session only in the tab that owns its portal', () => {
