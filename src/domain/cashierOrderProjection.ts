@@ -9,8 +9,8 @@ import { getOrderDisplayNumber } from './orderIdentity';
 export function projectCashierDeliveryState(status?: string, modalidade?: string) {
   return {
     awaitingAcceptance: status === 'pendente' || status === 'analise',
-    inProduction: status === 'aceito' || status === 'producao' || (status === 'pronto' && modalidade === 'delivery'),
-    inFinalization: (status === 'pronto' && modalidade !== 'delivery') || ['transito', 'saiu_para_entrega'].includes(status || ''),
+    inProduction: status === 'aceito' || status === 'producao',
+    inFinalization: status === 'pronto' || ['transito', 'saiu_para_entrega'].includes(status || ''),
     active: ['pendente', 'analise', 'aceito', 'producao', 'pronto', 'transito'].includes(status || ''),
     label: getCashierDeliveryStatusLabel(status, modalidade),
   };
@@ -470,7 +470,7 @@ export function getDigitalOrderActionCapability(
   }
 
   if (status === 'transito' || status === 'saiu_para_entrega') {
-    const finalizeLabel = order.pago ? 'Finalizar pedido' : 'Receber e finalizar';
+    const finalizeLabel = order.pago ? 'Finalizar pedido' : isDelivery ? 'Fechar e pagar' : 'Receber e finalizar';
     return {
       action: 'finalize',
       targetStatus: 'finalizado',

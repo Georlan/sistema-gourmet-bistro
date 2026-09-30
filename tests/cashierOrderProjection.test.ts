@@ -314,9 +314,9 @@ test('getDigitalOrderActionCapability define capacidade canônica por status e m
 });
 
 
-test('delivery pronto permanece no meio até o despacho, independente do pagamento', () => {
-  assert.equal(projectCashierDeliveryState('pronto', 'delivery').inProduction, true);
-  assert.equal(projectCashierDeliveryState('pronto', 'delivery').inFinalization, false);
+test('delivery pronto avança para fechamento antes do despacho, independente do pagamento', () => {
+  assert.equal(projectCashierDeliveryState('pronto', 'delivery').inProduction, false);
+  assert.equal(projectCashierDeliveryState('pronto', 'delivery').inFinalization, true);
   assert.equal(projectCashierDeliveryState('transito', 'delivery').inProduction, false);
   assert.equal(projectCashierDeliveryState('transito', 'delivery').inFinalization, true);
   assert.equal(projectCashierDeliveryState('pronto', 'retirada').inFinalization, true);

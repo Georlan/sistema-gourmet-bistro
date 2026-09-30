@@ -139,8 +139,8 @@ test('kanban separa preparo, despacho e finalização de delivery', () => {
     ...base,
     columns: {
       ...base.columns,
-      digitalProduction: [production, ready],
-      digitalFinalization: [transit],
+      digitalProduction: [production],
+      digitalFinalization: [ready, transit],
     },
     couriers: {
       options: [{ id: 7, nome: 'Pedro Silva', ativo: true }],
@@ -160,7 +160,7 @@ test('kanban separa preparo, despacho e finalização de delivery', () => {
   invoke(button(view, 'Pronto para sair'), 'onClick', { stopPropagation: noop });
   invoke(button(view, 'Saiu para entrega'), 'onClick', { stopPropagation: noop });
   assert.equal(elements(view).filter(e => e.type === 'button' && textOf(e).includes('Trocar entregador')).length, 0);
-  invoke(button(view, 'Receber e finalizar'), 'onClick', { stopPropagation: noop });
+  invoke(button(view, 'Fechar e pagar'), 'onClick', { stopPropagation: noop });
 
   assert.deepEqual(calls, [
     'advance:delivery-production',

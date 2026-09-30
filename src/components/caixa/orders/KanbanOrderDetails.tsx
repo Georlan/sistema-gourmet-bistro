@@ -181,7 +181,7 @@ export function KanbanOrderDetails({
   const selectedIsReadyDelivery = selectedIsDelivery && selectedDeliveryStatus === 'pronto';
   const selectedCanAssignCourier = selectedIsDelivery
     && Boolean(selectedKanbanOrder.courierAssignment)
-    && !['transito', 'finalizado', 'recusado'].includes(selectedDeliveryStatus);
+    && selectedDeliveryStatus === 'pronto';
   const selectedCanConvertDeliveryToPickup = selectedIsDelivery
     && !['transito', 'finalizado', 'recusado', 'cancelado'].includes(selectedDeliveryStatus);
   const selectedCourierId = selectedKanbanOrder.courierAssignment?.value
@@ -383,7 +383,7 @@ export function KanbanOrderDetails({
               </div>
             );
           })()}
-          {selectedIsDelivery && selectedKanbanOrder.courierAssignment && (
+          {selectedIsDelivery && ['pronto', 'transito'].includes(selectedDeliveryStatus) && selectedKanbanOrder.courierAssignment && (
             <div className="rounded-xl border border-koma-border bg-koma-panel/60 p-3 space-y-2">
               <div className="orders-detail-modal__section-title">
                 <span>Entregador</span>
@@ -408,9 +408,6 @@ export function KanbanOrderDetails({
                 <p className="text-xs font-bold text-koma-secondary">
                   {selectedCourierName || 'Entregador não identificado'}
                 </p>
-              )}
-              {selectedDeliveryStatus === 'producao' && (
-                <p className="text-[10px] text-koma-muted">Você pode definir o entregador agora; o pedido só entra em rota depois de ficar pronto.</p>
               )}
             </div>
           )}

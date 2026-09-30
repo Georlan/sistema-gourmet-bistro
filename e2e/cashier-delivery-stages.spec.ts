@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
-test('delivery só sai do meio após despacho com entregador e fecha na última coluna', async ({ page }) => {
+test('delivery pronto avança à última coluna, despacha e permanece até fechar e pagar', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   let currentStatus = 'pendente';
@@ -15,7 +15,7 @@ test('delivery só sai do meio após despacho com entregador e fecha na última 
     delivery_telefone: '85999999999', delivery_forma_pagamento: 'dinheiro',
     motoboy_id: courier, criado_em: new Date().toISOString(),
     lancamentos: [{ id: 'launch-stages', origem: 'cardapio', status: currentStatus }],
-    itens: [{ id: 'item-stages', produto_id: '101', produto: { nome: 'Risoto da casa' },
+    itens: [{ id: 'item-stages', produto_id: '101', produto: { nome: 'Quentinha G' }, observacao: 'Opções: Bisteca, Costela, Baião, Arroz, Salada verde',
       preco_unit: 42, pago: false, status: currentStatus === 'pronto' || currentStatus === 'transito' ? 'pronto' : 'preparando', lancamento_id: 'launch-stages' }],
   });
   await page.route('**/comandas/delivery/ativos', route => route.fulfill({ json: [check()] }));
@@ -51,18 +51,26 @@ test('delivery só sai do meio após despacho com entregador e fecha na última 
   await expect(digital.getByRole('button', { name: 'Iniciar preparo', exact: true })).toBeVisible();
   await expect(closing.locator('.orders-card--closing')).toHaveCount(0);
   await digital.getByRole('button', { name: 'Iniciar preparo', exact: true }).click();
+  await expect(digital.getByRole('combobox')).toHaveCount(0);
+  await expect(digital).toContainText('Opções: Bisteca, Costela, Baião, Arroz, Salada verde');
+  await expect(digital).not.toContainText('Cozinha');
+  await digital.locator('.orders-card--digital').click();
+  await expect(page.locator('.orders-detail-modal').getByRole('combobox', { name: 'Entregador do pedido' })).toHaveCount(0);
+  await page.locator('.orders-detail-modal').getByRole('button', { name: 'Fechar detalhes' }).click();
   await digital.getByRole('button', { name: 'Pronto para sair', exact: true }).click();
-  await expect(digital.getByRole('button', { name: 'Saiu para entrega', exact: true })).toBeDisabled();
-  await expect(closing.locator('.orders-card--closing')).toHaveCount(0);
-  await digital.getByRole('combobox', { name: 'Entregador do pedido 87' }).selectOption('7');
-  await expect(digital.getByText('R$ 47,00', { exact: true })).toBeVisible();
-  await expect(digital.getByText('Risoto da casa', { exact: false })).toBeVisible();
-  await expect(digital.getByRole('button', { name: 'Saiu para entrega', exact: true })).toBeEnabled();
-  await digital.getByRole('button', { name: 'Saiu para entrega', exact: true }).click();
+  await expect(digital.locator('.orders-card--digital')).toHaveCount(0);
   const closingTab = page.getByRole('tab', { name: /^Concluir/ });
   if (await closingTab.isVisible()) await closingTab.click();
-  await expect(digital.locator('.orders-card--digital')).toHaveCount(0);
-  await expect(closing.getByRole('button', { name: 'Receber e finalizar', exact: true })).toBeVisible();
+  await expect(closing.getByRole('button', { name: 'Saiu para entrega', exact: true })).toBeDisabled();
+  await closing.getByRole('combobox', { name: 'Entregador do pedido 87' }).selectOption('7');
+  await expect(closing.getByText('R$ 47,00', { exact: true })).toBeVisible();
+  await expect(closing).toContainText('Quentinha G');
+  await expect(closing).toContainText('Opções: Bisteca, Costela, Baião, Arroz, Salada verde');
+  await expect(closing.getByRole('button', { name: 'Saiu para entrega', exact: true })).toBeEnabled();
+  await closing.getByRole('button', { name: 'Saiu para entrega', exact: true }).click();
+  await expect(closing.locator('.orders-card--closing')).toHaveCount(1);
+  await expect(closing).toContainText('EM ROTA');
+  await expect(closing.getByRole('button', { name: 'Fechar e pagar', exact: true })).toBeVisible();
   await expect(closing.getByRole('combobox')).toHaveCount(0);
   await expect(closing.getByRole('button', { name: 'Trocar entregador', exact: true })).toHaveCount(0);
   await expect(closing.getByRole('button', { name: 'Saiu para entrega', exact: true })).toHaveCount(0);

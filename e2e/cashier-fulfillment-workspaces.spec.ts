@@ -409,17 +409,15 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   const productionCard = page.locator('.orders-card--digital').filter({ hasText: 'Bruno Delivery' });
   await expect(productionCard).toBeVisible();
 
-  const courierSelect = productionCard.getByRole('combobox', { name: /Entregador do pedido 5002/i });
-  await expect(courierSelect).toBeVisible();
-  await courierSelect.selectOption('7');
-  await expect.poll(state.getAssignmentCalls).toBe(1);
-  await expect(courierSelect).toHaveValue('7');
-
+  await expect(productionCard.getByRole('combobox', { name: /Entregador do pedido 5002/i })).toHaveCount(0);
   await productionCard.getByRole('button', { name: /Pronto para sair/i }).click();
-  const readyCard = page.locator('.orders-card--digital').filter({ hasText: 'Bruno Delivery' });
+  await showStage(page, 'Concluir');
+  const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
   await expect(readyCard).toBeVisible();
   await expect(readyCard).toContainText('PRONTO PARA SAIR');
   const readyCourierSelect = readyCard.getByRole('combobox', { name: /Entregador do pedido 5002/i });
+  await readyCourierSelect.selectOption('7');
+  await expect.poll(state.getAssignmentCalls).toBe(1);
   await expect(readyCourierSelect).toHaveValue('7');
   const dispatch = readyCard.getByRole('button', { name: 'Saiu para entrega' });
   await expect(dispatch).toBeEnabled();
@@ -698,13 +696,11 @@ test('Pedidos, Cozinha e Entregas convergem entre três terminais sem refresh ma
 
   const deliveryCourier = deliveries.getByRole('combobox', { name: /Entregador do pedido 5100/i });
   await deliveryCourier.selectOption('7');
-  await expect(
-    ordersCard.getByRole('combobox', { name: /Entregador do pedido 5100/i }),
-  ).toHaveValue('7');
+  await expect(ordersCard.getByRole('combobox')).toHaveCount(0);
 
   await kitchenPage.getByRole('button', { name: /Marcar como pronto: Pizza Delivery/i }).click();
-  await expect(ordersCard).toContainText('Cozinha concluída');
-  await expect(ordersCard).toContainText('Aguarda avanço do pedido');
+  await expect(ordersCard).not.toContainText('Cozinha');
+  await expect(ordersCard).toContainText('EM PREPARO');
   await expect(deliveries).toContainText('Em preparo');
 
   await ordersCard.getByRole('button', { name: /Pronto para sair/i }).click();
@@ -980,11 +976,12 @@ test('sessão recupera estado atualizado de pedidos após reconexão de WebSocke
   // Ao reconectar, o evento koma_orders_updated disparado na reconexão refaz a busca autoritativa
   await page.evaluate(() => window.dispatchEvent(new Event('koma_orders_updated')));
 
-  const readyCard = page.locator('.orders-card--digital').filter({ hasText: 'Cliente Reconexao' });
+  await showStage(page, 'Concluir');
+  const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Cliente Reconexao' });
   await expect(readyCard).toBeVisible();
   await expect(readyCard).toContainText(/Pronto para sair/i);
   await expect(readyCard.getByRole('button', { name: 'Saiu para entrega' })).toBeDisabled();
-  await expect(page.locator('.orders-card--closing').filter({ hasText: 'Cliente Reconexao' })).toHaveCount(0);
+  await expect(page.locator('.orders-card--digital').filter({ hasText: 'Cliente Reconexao' })).toHaveCount(0);
 });
 
 
