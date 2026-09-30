@@ -190,16 +190,36 @@ const hasCustomerSupportSurface =
   && (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isSmartPosRoute);
 
 // O Chrome mobile pode esconder path/query na barra e fazer links legados
-// parecerem o domínio puro. Em produção, antes de montar o shell, convertemos
-// toda entrada operacional canônica para exatamente https://app.komafood.com.br/.
-// Em loopback preservamos ?view=operacional para que reload continue no mesmo
-// shell durante os testes de concorrência entre abas.
+// parecerem o domínio puro. Em produção, antes de montar o shell, removemos
+// rota/query legadas. A única exceção são os parâmetros efêmeros de pareamento
+// do Print Agent: eles precisam sobreviver ao login unificado para que o App
+// consiga devolver a credencial ao servidor localhost do agente.
 if (
   isUnifiedOperationalRoute
   && isOperationalAppHost()
   && (window.location.pathname !== "/" || window.location.search || window.location.hash)
 ) {
-  window.history.replaceState(window.history.state, "", "/");
+  const currentParams = new URLSearchParams(window.location.search);
+  const pairingNonce = currentParams.get("pair_print_agent")?.trim() || "";
+  const pairingPortText = currentParams.get("agent_port")?.trim() || "";
+  const pairingPort = Number(pairingPortText);
+  const hasValidPrintPairingContext = Boolean(pairingNonce)
+    && Number.isInteger(pairingPort)
+    && pairingPort >= 17654
+    && pairingPort <= 17664;
+
+  const canonicalParams = new URLSearchParams();
+  if (hasValidPrintPairingContext) {
+    canonicalParams.set("pair_print_agent", pairingNonce);
+    canonicalParams.set("agent_port", String(pairingPort));
+  }
+
+  const canonicalSearch = canonicalParams.toString();
+  window.history.replaceState(
+    window.history.state,
+    "",
+    canonicalSearch ? `/?${canonicalSearch}` : "/",
+  );
 }
 
 const RootApp = React.lazy(
