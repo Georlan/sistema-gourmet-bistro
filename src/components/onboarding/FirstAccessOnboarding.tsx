@@ -21,6 +21,7 @@ export const ONBOARDING_SETUP_MODE_KEY = 'koma_onboarding_setup_mode';
 const ONBOARDING_TEST_ORDER_KEY = 'koma_onboarding_test_order';
 
 type OrderType = 'consumo_local' | 'retirada' | 'delivery';
+type OperationProfile = 'generic' | 'pizzaria' | 'acai' | 'churrasco' | 'marmitaria';
 
 type Props = {
   accessToken: string;
@@ -33,6 +34,7 @@ type OnboardingStatus = {
     name: string;
     slug: string;
     plan: string;
+    operationProfile: OperationProfile;
   };
   trial: {
     status: string;
@@ -106,6 +108,14 @@ type SetupStep = {
 };
 
 const ONBOARDING_LOAD_TIMEOUT_MS = 10_000;
+const OPERATION_PROFILE_OPTIONS: Array<{ value: OperationProfile; label: string; description: string }> = [
+  { value: 'pizzaria', label: 'Pizzaria', description: 'Tamanhos, sabores, meio a meio, bordas e adicionais.' },
+  { value: 'marmitaria', label: 'Marmitaria / Quentinhas', description: 'Tamanhos e composição de proteínas, guarnições e acompanhamentos.' },
+  { value: 'acai', label: 'Açaí', description: 'Tamanhos, complementos e montagem do produto.' },
+  { value: 'churrasco', label: 'Churrasco', description: 'Cortes, porções, pontos e acompanhamentos.' },
+  { value: 'generic', label: 'Outro tipo de operação', description: 'Experiência neutra, sem atalhos específicos.' },
+];
+
 const ORDER_TYPE_OPTIONS: Array<{ value: OrderType; label: string; description: string }> = [
   { value: 'retirada', label: 'Retirada', description: 'Pedidos retirados no balcão.' },
   { value: 'consumo_local', label: 'Consumo no local', description: 'Pode operar com ou sem mapa de mesas.' },
@@ -150,6 +160,10 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const [savingOperations, setSavingOperations] = useState(false);
   const [operationError, setOperationError] = useState('');
   const [operationNotice, setOperationNotice] = useState('');
+  const [operationProfile, setOperationProfile] = useState<OperationProfile>('generic');
+  const [savingOperationProfile, setSavingOperationProfile] = useState(false);
+  const [operationProfileError, setOperationProfileError] = useState('');
+  const [operationProfileNotice, setOperationProfileNotice] = useState('');
 
   const headers = useMemo(() => ({
     Authorization: `Bearer ${accessToken}`,
@@ -158,6 +172,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
 
   const applySnapshot = useCallback((next: OnboardingStatus) => {
     setSnapshot(next);
+    setOperationProfile(next.restaurant.operationProfile || 'generic');
     if (next.operations.orderTypes.length > 0) {
       setOrderTypes(next.operations.orderTypes);
     }
@@ -236,6 +251,30 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     );
   };
 
+  const saveOperationProfile = async () => {
+    setSavingOperationProfile(true);
+    setOperationProfileError('');
+    setOperationProfileNotice('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/onboarding/operation-profile`, {
+        method: 'PUT',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operation_profile: operationProfile }),
+      });
+      if (!response.ok) {
+        throw new Error(await responseDetail(response, 'Não foi possível salvar o tipo de operação.'));
+      }
+      const next = await response.json() as OnboardingStatus;
+      applySnapshot(next);
+      const label = OPERATION_PROFILE_OPTIONS.find((option) => option.value === next.restaurant.operationProfile)?.label || next.restaurant.operationProfile;
+      setOperationProfileNotice(`Tipo de operação confirmado ✓: ${label}`);
+    } catch (error) {
+      setOperationProfileError(error instanceof Error ? error.message : 'Não foi possível salvar o tipo de operação.');
+    } finally {
+      setSavingOperationProfile(false);
+    }
+  };
+
   const saveOperations = async () => {
     if (orderTypes.length === 0) {
       setOperationError('Escolha ao menos uma modalidade de pedido.');
@@ -280,7 +319,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     {
       id: 'hours',
       title: 'Defina os horários de funcionamento',
-      description: 'A agenda controla quando o restaurante aparece como aberto e orienta pedidos online.',
+      description: 'Os horários informam sua rotina ao cliente. Novos pedidos online dependem do caixa aberto; a agenda não bloqueia pedidos sozinha.',
       done: snapshot.steps.hours,
       actionLabel: snapshot.steps.hours ? 'Revisar horários' : 'Configurar horários',
       tab: 'cardapio_digital',
@@ -445,6 +484,59 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2">
+                    <Store size={18} className="text-emerald-400" />
+                    <h2 className="text-sm font-black">Confirme o tipo de operação</h2>
+                  </div>
+                  <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted">
+                    Esta escolha adapta sugestões e atalhos do cardápio. Ela não cria, apaga nem altera produtos, preços ou adicionais automaticamente.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={savingOperationProfile}
+                  onClick={() => void saveOperationProfile()}
+                  className="rounded-xl bg-emerald-500 px-4 py-2.5 text-[10px] font-black text-zinc-950 disabled:opacity-60"
+                >
+                  {savingOperationProfile ? 'Salvando…' : operationProfileNotice ? 'Confirmado ✓' : 'Confirmar tipo'}
+                </button>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                {OPERATION_PROFILE_OPTIONS.map((option) => {
+                  const selected = operationProfile === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => {
+                        setOperationProfile(option.value);
+                        setOperationProfileNotice('');
+                        setOperationProfileError('');
+                      }}
+                      className={`rounded-xl border px-3 py-3 text-left transition ${selected ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-raised'}`}
+                    >
+                      <span className="block text-xs font-black">{option.label}</span>
+                      <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">{option.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {operationProfileNotice && (
+                <p role="status" className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-[10px] font-bold text-emerald-300">
+                  {operationProfileNotice}
+                </p>
+              )}
+              {operationProfileError && (
+                <p role="alert" className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-[10px] font-bold text-rose-300">
+                  {operationProfileError}
+                </p>
+              )}
+            </section>
+
+            <section className="mt-5 rounded-2xl border border-koma-border bg-koma-page p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
                     {snapshot.steps.operations ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
                     <h2 className="text-sm font-black">Como o restaurante recebe pedidos?</h2>
                   </div>
@@ -538,7 +630,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                     <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">Opcional</span>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
-                    O restaurante pode operar e receber pagamentos no atendimento sem Mercado Pago. Conecte somente se quiser liberar Pix ou outros pagamentos online pelo KÔMA.
+                    O restaurante pode operar e receber pagamentos no atendimento sem Mercado Pago. Conecte somente se quiser receber Pix ou outros pagamentos online dos clientes pelo KÔMA. Isso é separado da cobrança da sua assinatura KÔMA, inclusive do Pix anual escolhido na contratação.
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <span className={`text-[10px] font-bold ${snapshot.steps.mercadoPago ? 'text-emerald-400' : 'text-koma-subtle'}`}>
