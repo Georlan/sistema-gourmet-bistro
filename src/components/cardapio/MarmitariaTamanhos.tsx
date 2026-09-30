@@ -10,6 +10,7 @@ interface Props {
   authHeaders: Record<string, string>;
   grupos?: GrupoModificador[];
   mode?: 'products' | 'choices';
+  createOnly?: boolean;
   onConfigureChoices?: (id: string) => void;
   onSaved?: () => Promise<void>;
   notify?: (message: string, type?: 'success' | 'error') => void;
@@ -19,7 +20,7 @@ interface Props {
   onEditDetails?: (id: string) => void;
 }
 
-export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos = [], mode = 'products', onConfigureChoices, onSaved, notify, focusProductId, onFocusHandled, catalogVersion, onEditDetails }: Props) {
+export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos = [], mode = 'products', createOnly = false, onConfigureChoices, onSaved, notify, focusProductId, onFocusHandled, catalogVersion, onEditDetails }: Props) {
   const [enabled, setEnabled] = useState(false);
   const [sizes, setSizes] = useState<Tamanho[]>([]);
   const [editing, setEditing] = useState<Tamanho | null>(null);
@@ -84,20 +85,20 @@ export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos = [
   };
   return <section ref={panelRef} className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-4" aria-label={mode === 'choices' ? 'Escolhas das marmitas' : 'Cadastro de marmitas'}>
     <div><h3 className="font-bold text-koma-foreground">{mode === 'choices' ? 'Escolhas por tamanho' : 'Marmitas'}</h3>
-      <p className="text-sm text-koma-muted">{mode === 'choices' ? 'Defina o que o cliente pode escolher depois de selecionar a marmita no cardápio online.' : 'Cadastre P, M e G e configure o preço. As proteínas, guarnições e saladas ficam na aba Complementos.'}</p></div>
+      <p className="text-sm text-koma-muted">{mode === 'choices' ? 'Defina o que o cliente pode escolher depois de selecionar a marmita no cardápio online.' : 'Cadastre somente os tamanhos vendidos. Os já cadastrados são editados na lista de produtos. As escolhas ficam em Complementos.'}</p></div>
     {mode === 'products' && <div className="grid grid-cols-3 gap-2">
       {(['P', 'M', 'G'] as const).map(tamanho => {
         const size = sizes.find(item => item.tamanho === tamanho);
-        return <button key={tamanho} type="button" disabled={saving || !!editing || loading}
+        return <button key={tamanho} type="button" disabled={saving || !!editing || loading || (createOnly && !!size)}
           aria-label={size ? `Configurar marmita ${tamanho}` : `Cadastrar marmita ${tamanho}`}
           className="rounded-xl border border-koma-border p-3 text-koma-foreground disabled:opacity-50"
           onClick={() => { setError(''); setEditing(size ? { ...size, regras: size.regras.map(rule => ({ ...rule })) } : { tamanho, nome: `Marmita ${tamanho}`, preco: 0, ativo: false, regras: [] }); }}>
-          <strong className="block">{tamanho}</strong><span className="text-xs">{size ? size.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'Cadastrar'}</span>
+          <strong className="block">{tamanho}</strong><span className="text-xs">{size ? (createOnly ? 'Já cadastrada' : size.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })) : 'Cadastrar'}</span>
         </button>;
       })}
     </div>}
     {mode === 'choices' && sizes.length === 0 && <p className="text-sm text-koma-muted">Cadastre primeiro os tamanhos na aba Produtos.</p>}
-    {sizes.map(size => <div key={size.id} className="rounded-xl border border-koma-border p-3 space-y-1">
+    {!createOnly && sizes.map(size => <div key={size.id} className="rounded-xl border border-koma-border p-3 space-y-1">
       <div className="flex items-center justify-between gap-2"><strong>{size.nome}</strong>
         <button type="button" className="text-sm font-bold text-emerald-500" disabled={saving || !!editing || loading} aria-label={`Configurar ${size.nome}`} onClick={() => { setError(''); setEditing({ ...size, regras: size.regras.map(rule => ({ ...rule })) }); }}>Configurar</button></div>
       {mode === 'products' && size.id && onEditDetails && <button type="button" disabled={saving || !!editing} className="text-xs text-koma-muted underline" onClick={() => onEditDetails(size.id!)}>Foto e descrição de {size.nome}</button>}

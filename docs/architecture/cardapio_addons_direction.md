@@ -52,9 +52,12 @@ Não migra catálogos existentes nem aplica programação semanal, plano ou paga
 
 A direção anterior de categoria por tamanho foi substituída pelo escopo aprovado
 pelo usuário: uma categoria Marmitas/Quentinhas com P, M e G e limites por produto.
-Tamanho, preço, foto e descrição ficam em Cardápio → Produtos → Marmitas.
+Todos os itens ficam na mesma lista em Cardápio → Produtos. Novo produto oferece
+Marmita, Sobremesa e Bebida; o assistente de tamanho só aparece ao criar uma marmita.
+Editar no cartão permite alterar preço, foto e descrição.
 Grupos e regras de escolha por tamanho ficam exclusivamente em Complementos.
-O atalho em Produtos abre o mesmo produto em Complementos; não cria outro tamanho.
+Salvar e configurar escolhas preserva as alterações e abre o mesmo produto
+em Complementos; não cria outro tamanho.
 O modelo antigo permanece legível por compatibilidade.
 
 `Produto.marmitaria_tamanho` armazena a identidade normalizada do tamanho, única
