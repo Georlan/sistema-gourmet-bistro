@@ -6,15 +6,20 @@ const panel = readFileSync(
   new URL('../src/super-admin/SuperAdminPanel.tsx', import.meta.url),
   'utf8',
 );
+const clientsHub = readFileSync(
+  new URL('../src/super-admin/SuperAdminClientsHub.tsx', import.meta.url),
+  'utf8',
+);
 const accessTab = readFileSync(
   new URL('../src/super-admin/SuperAdminAccessTab.tsx', import.meta.url),
   'utf8',
 );
 
-test('Super Admin expõe Acessos e equipe como ferramenta do control plane', () => {
-  assert.match(panel, /SuperAdminAccessTab/);
-  assert.match(panel, /id: "access" as TabId, label: "Acessos e equipe"/);
-  assert.match(panel, /activeTab === "access"/);
+test('Super Admin mantém Acessos e equipe no contexto de Clientes', () => {
+  assert.match(panel, /<SuperAdminClientsHub/);
+  assert.match(clientsHub, /label: "Equipe e acessos"/);
+  assert.match(clientsHub, /<SuperAdminAccessTab globalSearch=/);
+  assert.match(clientsHub, /activeView === "access"/);
 });
 
 test('central usa somente endpoints administrativos reais e exige motivo', () => {
