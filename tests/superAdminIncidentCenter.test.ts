@@ -13,7 +13,7 @@ const incidentTab = readFileSync(
 
 test('Super Admin integra Central de Incidentes na navegação principal', () => {
   assert.match(panel, /SuperAdminIncidentCenterTab/);
-  assert.match(panel, /id: "incidents" as TabId, label: "Central de incidentes"/);
+  assert.match(panel, /id: "incidents" as TabId, label: "Incidentes"/);
   assert.match(panel, /activeTab === "incidents"/);
 });
 
