@@ -216,6 +216,7 @@ def activate_contract_without_fixed_billing(
             restaurant_name=str(acceptance.get("restaurant_name") or "Restaurante"),
             plan=plan,
             billing_cycle=canonical_cycle,
+            payment_method_type="no_fixed",
         )
         db.commit()
         return {
@@ -334,6 +335,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
                 restaurant_name=str(acceptance.get("restaurant_name") or "Restaurante"),
                 plan=plan,
                 billing_cycle=canonical_cycle,
+                payment_method_type=existing.payment_method_type,
             )
             db.commit()
             return {

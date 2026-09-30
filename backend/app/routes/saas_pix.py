@@ -175,6 +175,7 @@ def select_contract_pix(protocol: str, db: Session = Depends(get_db)):
             restaurant_name=str(acceptance.get("restaurant_name") or "Restaurante"),
             plan=plan,
             billing_cycle=canonical_cycle,
+            payment_method_type="pix",
         )
         db.commit()
         return {
