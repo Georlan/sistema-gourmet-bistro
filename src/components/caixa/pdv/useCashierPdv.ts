@@ -12,6 +12,7 @@ import {
 } from '../../../domain/deliveryAddress';
 import { smartSearchMatch } from '../../../domain/search';
 import { Product } from '../../../types';
+import { formatApiError } from '../../../utils/apiError';
 import { makeOperationKey, operationalFetch } from '../../../utils/operationalRequest';
 import type { CaixaPanelProps, CashierNotice, CashierTab } from '../cashierContracts';
 import { formatCompactCurrency } from '../cashierPresentation';
@@ -478,9 +479,9 @@ export function useCashierPdv({
           window.dispatchEvent(new Event('koma_orders_updated'));
         });
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => null);
         clearOptimisticOrder();
-        showToast(`Erro ao registrar venda: ${err.detail || 'Falha no servidor'}`, 'error');
+        showToast(`Erro ao registrar venda: ${formatApiError(err, 'Falha no servidor. Tente novamente.')}`, 'error');
         setPdvCart((prev) => (prev.length > 0 ? prev : cartItems));
         setPdvCustomerName(customerName);
         setPdvCustomerPhone(customerPhone);
