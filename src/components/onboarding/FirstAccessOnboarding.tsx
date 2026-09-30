@@ -483,12 +483,15 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
             <section className="mt-5 rounded-2xl border border-koma-border bg-koma-page p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Store size={18} className="text-emerald-400" />
                     <h2 className="text-sm font-black">Confirme o tipo de operação</h2>
+                    <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[9px] font-black text-emerald-300">
+                      Tipo atual: {OPERATION_PROFILE_OPTIONS.find((option) => option.value === snapshot.restaurant.operationProfile)?.label || snapshot.restaurant.operationProfile}
+                    </span>
                   </div>
                   <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted">
-                    Esta escolha adapta sugestões e atalhos do cardápio. Ela não cria, apaga nem altera produtos, preços ou adicionais automaticamente.
+                    O KÔMA já recebeu esta classificação durante a contratação ou implantação. Confirme se está correta ou escolha outro tipo antes de montar o cardápio. A alteração não cria, apaga nem muda produtos, preços ou adicionais automaticamente.
                   </p>
                 </div>
                 <button
