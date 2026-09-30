@@ -1,6 +1,6 @@
 import {
   canIncrementSelectionQuantity,
-  selectionTypeCount,
+  selectionCount,
   type ModifierQuantityRules,
 } from "../domain/modifierQuantity";
 import type { Product, ProductOption } from "./CardapioTypes";
@@ -18,6 +18,7 @@ type CurrentGroup = {
   title: string;
   minSelection: number;
   maxSelection: number;
+  selectionMode?: 'porcoes' | 'tipos';
   options: Array<ProductOption & { active?: boolean }>;
 };
 
@@ -28,6 +29,7 @@ function currentGroups(product: Product): CurrentGroup[] {
       title: group.name,
       minSelection: Math.max(group.minSelection || 0, group.type === "obrigatorio" ? 1 : 0),
       maxSelection: Math.max(group.maxSelection || 1, 1),
+      selectionMode: group.selectionMode,
       options: group.options.map((option) => ({
         id: option.id,
         name: option.name,
@@ -42,6 +44,7 @@ function currentGroups(product: Product): CurrentGroup[] {
     title: modifier.title,
     minSelection: modifier.required ? 1 : 0,
     maxSelection: Math.max(modifier.maxSelection || 1, 1),
+    selectionMode: modifier.selectionMode,
     options: modifier.options,
   }));
 }
@@ -50,6 +53,7 @@ const rulesForGroup = (group: CurrentGroup): ModifierQuantityRules => ({
   optionIds: group.options.filter((option) => option.active !== false).map((option) => option.id),
   minSelection: group.minSelection,
   maxSelection: group.maxSelection,
+  selectionMode: group.selectionMode,
 });
 
 export function rebuildOrderFromCurrentCatalog(
@@ -91,13 +95,13 @@ export function rebuildOrderFromCurrentCatalog(
       const currentSelection = selectedOptions[group.id] || [];
       const selectedIds = currentSelection.map((option) => option.id);
       const rules = rulesForGroup(group);
-      const selectedTypes = selectionTypeCount(rules, selectedIds);
+      const selectedTypes = selectionCount(rules, selectedIds);
       const optionAlreadySelected = selectedIds.includes(currentOption.id);
 
       if (!canIncrementSelectionQuantity(rules, selectedIds, currentOption.id)) {
         // Em grupos exclusivos, histórico duplicado da mesma opção não deve virar quantidade.
-        // Nos demais grupos, somente um novo tipo acima do limite é descartado.
-        if (!optionAlreadySelected || group.maxSelection === 1) {
+        // No modo configurado da marmitaria, descartar porção/tipo excedente também exige aviso.
+        if (!optionAlreadySelected || group.maxSelection === 1 || group.selectionMode) {
           issues.push(`${product.name}: o limite atual de “${group.title}” foi reduzido.`);
         }
         continue;
@@ -110,13 +114,13 @@ export function rebuildOrderFromCurrentCatalog(
       }];
 
       // Evita variável aparentemente sem uso em transpilers mais estritos e documenta a regra:
-      // quantidade repetida não altera o número de tipos selecionados.
+      // o modo atual decide se contamos porções ou tipos.
       void selectedTypes;
     }
 
     const unsatisfied = groups.filter((group) => {
       const selectedIds = (selectedOptions[group.id] || []).map((option) => option.id);
-      return selectionTypeCount(rulesForGroup(group), selectedIds) < group.minSelection;
+      return selectionCount(rulesForGroup(group), selectedIds) < group.minSelection;
     });
     if (unsatisfied.length > 0) {
       skippedItems += Math.max(1, Number(historicalItem.quantidade) || 1);

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Edit3, Layers, Plus, Search, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
+import MarmitariaTamanhos from './MarmitariaTamanhos';
 
 export interface OpcaoModificador {
   id?: string;
@@ -34,6 +35,7 @@ interface ComplementosTabProps {
   authHeaders: Record<string, string>;
   produtos: Array<{ id: string; nome: string; preco: number; categoria_id?: string }>;
   onShowNotification?: (msg: string, type?: 'success' | 'error') => void;
+  onCatalogChanged?: () => Promise<void>;
 }
 
 export default function ComplementosTab({
@@ -41,6 +43,7 @@ export default function ComplementosTab({
   authHeaders,
   produtos,
   onShowNotification,
+  onCatalogChanged,
 }: ComplementosTabProps) {
   const [grupos, setGrupos] = useState<GrupoModificador[]>([]);
   const [categorias, setCategorias] = useState<CategoriaHierarquia[]>([]);
@@ -312,6 +315,7 @@ export default function ComplementosTab({
 
   return (
     <div className="space-y-6">
+      <MarmitariaTamanhos apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} grupos={grupos} notify={onShowNotification} onSaved={async () => { await fetchCatalogBindings(); await onCatalogChanged?.(); }} />
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-koma-card border border-koma-border p-5 rounded-2xl">
         <div>
           <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm">

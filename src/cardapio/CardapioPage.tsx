@@ -240,6 +240,7 @@ export default function CardapioPage() {
               name: String(g.nome || ""),
               minSelection: Number(g.min_selecoes || 0),
               maxSelection: Number(g.max_selecoes || 1),
+              selectionMode: g.modo_selecao === 'porcoes' || g.modo_selecao === 'tipos' ? g.modo_selecao : undefined,
               type: g.tipo || "opcional",
               options: Array.isArray(g.opcoes)
                 ? g.opcoes.map((o: any) => ({

@@ -1517,8 +1517,25 @@ def test_usb_connection_action_is_tenant_scoped_and_rejects_waiter():
     assert waiter.status_code == 403
 
 
-def test_print_monitor_shows_only_the_latest_20_jobs_from_today():
-    now = datetime.datetime.now(datetime.timezone.utc)
+@pytest.fixture
+def print_history_noon(monkeypatch):
+    # The rolling minute fixtures must stay inside one operational day,
+    # including when CI runs immediately after midnight in São Paulo.
+    now = datetime.datetime(2026, 1, 15, 15, tzinfo=datetime.timezone.utc)
+
+    class HistoryDateTime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now.astimezone(tz) if tz else now.replace(tzinfo=None)
+
+    clock = SimpleNamespace(**vars(datetime))
+    clock.datetime = HistoryDateTime
+    monkeypatch.setattr(print_agents_route, "datetime", clock)
+    return now
+
+
+def test_print_monitor_shows_only_the_latest_20_jobs_from_today(print_history_noon):
+    now = print_history_noon
     tenant_token = current_restaurante_id.set(2)
     try:
         db = TestingSessionLocal()
@@ -1687,8 +1704,8 @@ def test_retry_batch_reuses_failed_job_without_creating_duplicate():
         current_restaurante_id.reset(tenant_token)
 
 
-def test_history_maintenance_compacts_old_payloads_but_keeps_queue():
-    now = datetime.datetime.now(datetime.timezone.utc)
+def test_history_maintenance_compacts_old_payloads_but_keeps_queue(print_history_noon):
+    now = print_history_noon
     tenant_token = current_restaurante_id.set(2)
     try:
         db = TestingSessionLocal()

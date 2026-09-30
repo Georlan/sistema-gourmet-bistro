@@ -154,6 +154,7 @@ class Categoria(Base):
     id = Column(String, nullable=False, index=True)  # Chave de negócio, ex: "cat-hamburgueres-bovinos"
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     nome = Column(String, nullable=False)
+    marmitaria_tamanho = Column(Boolean, nullable=False, default=False, server_default="false")
     destino_impressao = Column(String, default="COZINHA")  # "COZINHA" | "BAR" | "NENHUM"
     
     # Relationships

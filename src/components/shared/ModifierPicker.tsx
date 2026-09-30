@@ -117,7 +117,9 @@ export default function ModifierPicker({
                     )}
                   </div>
                   <span className="block text-[9px] text-koma-muted">
-                    {quantityMode
+                    {group.modo_selecao
+                      ? `Escolha de ${min} até ${max} ${group.modo_selecao === "porcoes" ? "porções (pode repetir)" : "tipos diferentes"}`
+                      : quantityMode
                       ? max === 1
                         ? 'Escolha uma opção'
                         : min > 0
@@ -129,7 +131,7 @@ export default function ModifierPicker({
                   </span>
                 </div>
                 <span className={`text-[9px] font-bold ${valid ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  {quantityMode && max > 1 ? `${selectedCount}/${max} tipos` : `${selectedCount}/${max}`}
+                  {quantityMode && max > 1 ? `${selectedCount}/${max} ${group.modo_selecao === "porcoes" ? "porções" : "tipos"}` : `${selectedCount}/${max}`}
                 </span>
               </div>
 

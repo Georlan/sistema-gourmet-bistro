@@ -156,3 +156,28 @@ test('Complete seu pedido abre o mesmo modal canônico do produto recomendado', 
   const recommendationSnapshot = await modalSnapshot(page, 'Vinho Tinto Sangiovese (Taça)');
   expect(recommendationSnapshot).toBe(traditionalSnapshot);
 });
+
+for (const mode of ['tipos', 'porcoes'] as const) {
+test(`marmita grande respeita contagem por ${mode} e limita a duas escolhas`, async ({ page }) => {
+  await mockCardapio(page);
+  await page.route('**/api/cardapio-digital/public?**', route => route.fulfill({ json: {
+    ...publicMenuPayload,
+    produtos: [{ ...publicMenuPayload.produtos[0], nome: 'Marmita grande', grupos_modificadores: [{
+      id: 'proteins', nome: 'Proteínas', min_selecoes: 2, max_selecoes: 2, tipo: 'obrigatorio', modo_selecao: mode,
+      opcoes: ['Frango', 'Carne', 'Peixe'].map((nome, index) => ({ id: `protein-${index}`, nome, ativo: true, preco_adicional: 0 })),
+    }] }],
+  } }));
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#product-card-101').getByRole('button', { name: /Marmita grande.*ver detalhes/ }).click();
+  const modal = page.locator('#product-details-modal');
+  await modal.getByRole('button', { name: 'Adicionar uma unidade de Frango', exact: true }).click();
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal.getByText('Selecione as opções obrigatórias em Proteínas antes de adicionar.', { exact: true })).toBeVisible();
+  if (mode === 'tipos') await expect(modal.getByRole('button', { name: 'Adicionar uma unidade de Frango', exact: true })).toBeDisabled();
+  await modal.getByRole('button', { name: `Adicionar uma unidade de ${mode === 'porcoes' ? 'Frango' : 'Carne'}`, exact: true }).click();
+  await expect(modal.getByRole('button', { name: 'Adicionar uma unidade de Peixe', exact: true })).toBeDisabled();
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toHaveCount(0);
+});
+
+}

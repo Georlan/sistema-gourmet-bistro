@@ -23,3 +23,27 @@ Decisão informada pelo usuário em 30/08/2026, durante a correção da sacola p
 - Compatibilidade/migração dos modificadores existentes, preservando IDs, isolamento por restaurante e preços dos pedidos já registrados.
 
 Não criar cadastros duplicados para os dois usos nem inventar regras de preço sem definir esses pontos na etapa de adicionais.
+
+
+## Tamanhos de marmita — 29/09/2026
+
+Escopo aprovado: configuração assistida por tamanho, mantendo opções do dia
+compartilhadas. O Super Admin define `profile_key=marmitaria`; selecionar o perfil
+não cria catálogo. O dono configura explicitamente em Cardápio → Complementos.
+
+Cada tamanho criado pelo assistente tem uma categoria marcada `marmitaria_tamanho`
+e um produto com preço próprio. Os grupos/opções continuam canônicos e compartilhados.
+`CategoriaGrupoModificador.min_selecoes/max_selecoes/modo_selecao` são overrides opcionais de
+composição; null mantém o comportamento anterior. A categoria mais próxima prevalece
+na herança. `effective_modifier_payloads_by_product` aplica esses limites nos canais;
+`modifier_limits_by_product` alimenta a validação do Order Core para os vínculos com
+limites explícitos. Por grupo/tamanho, o dono escolhe `porcoes` (conta unidades,
+permite repetir até o teto) ou `tipos` (uma escolha por opção, limita tipos diferentes).
+O picker compartilhado, o cardápio público, a repetição de pedido e o backend usam
+esse modo. Vínculos legados sem override mantêm quantidades livres por adicional
+com limite de tipos; não recebem novos limites automaticamente.
+
+O editor geral preserva overrides nos vínculos mantidos. Remover vínculo/excluir grupo
+usado em tamanhos exige ajustar a composição no assistente. Pausar uma opção continua
+usando o registro original, ocultando-a em todos os tamanhos que compartilham o grupo.
+Não migra catálogos existentes nem aplica programação semanal, plano ou pagamentos.
