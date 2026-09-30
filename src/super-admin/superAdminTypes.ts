@@ -32,6 +32,7 @@ export interface CredentialsStatus {
 }
 
 export interface IntegrationsHealthStatus {
+  environment?: string;
   database?: {
     status: "available" | "unavailable" | "unknown";
     latency_ms?: number;
