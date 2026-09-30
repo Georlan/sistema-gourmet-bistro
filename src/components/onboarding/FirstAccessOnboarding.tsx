@@ -11,6 +11,7 @@ import {
   ShoppingBag,
   Sparkles,
   Store,
+  Table2,
   UtensilsCrossed,
 } from 'lucide-react';
 
@@ -164,6 +165,11 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const [savingOperationProfile, setSavingOperationProfile] = useState(false);
   const [operationProfileError, setOperationProfileError] = useState('');
   const [operationProfileNotice, setOperationProfileNotice] = useState('');
+  const [tableCountInput, setTableCountInput] = useState('');
+  const [tableCapacityInput, setTableCapacityInput] = useState('4');
+  const [savingTables, setSavingTables] = useState(false);
+  const [tableSetupError, setTableSetupError] = useState('');
+  const [tableSetupNotice, setTableSetupNotice] = useState('');
 
   const headers = useMemo(() => ({
     Authorization: `Bearer ${accessToken}`,
@@ -173,6 +179,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const applySnapshot = useCallback((next: OnboardingStatus) => {
     setSnapshot(next);
     setOperationProfile(next.restaurant.operationProfile || 'generic');
+    setTableCountInput((current) => current || (next.counts.tables > 0 ? String(next.counts.tables) : ''));
     if (next.operations.orderTypes.length > 0) {
       setOrderTypes(next.operations.orderTypes);
     }
@@ -302,6 +309,43 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       setOperationError(error instanceof Error ? error.message : 'Não foi possível salvar as modalidades.');
     } finally {
       setSavingOperations(false);
+    }
+  };
+
+  const bootstrapTables = async () => {
+    const count = Number.parseInt(tableCountInput, 10);
+    const defaultCapacity = Number.parseInt(tableCapacityInput, 10);
+    if (!Number.isFinite(count) || count < 1 || count > 300) {
+      setTableSetupError('Informe uma quantidade entre 1 e 300 mesas.');
+      return;
+    }
+    if (!Number.isFinite(defaultCapacity) || defaultCapacity < 1 || defaultCapacity > 50) {
+      setTableSetupError('Informe uma capacidade padrão entre 1 e 50 lugares.');
+      return;
+    }
+
+    setSavingTables(true);
+    setTableSetupError('');
+    setTableSetupNotice('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/onboarding/tables/bootstrap`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count, default_capacity: defaultCapacity }),
+      });
+      if (!response.ok) {
+        throw new Error(await responseDetail(response, 'Não foi possível preparar as mesas do salão.'));
+      }
+      const next = await response.json() as OnboardingStatus;
+      applySnapshot(next);
+      setTableCountInput(String(count));
+      setTableSetupNotice(
+        `Salão preparado ✓: ${next.counts.tables} mesa(s) cadastrada(s). Nenhuma mesa existente foi removida.`,
+      );
+    } catch (error) {
+      setTableSetupError(error instanceof Error ? error.message : 'Não foi possível preparar as mesas do salão.');
+    } finally {
+      setSavingTables(false);
     }
   };
 
@@ -589,6 +633,88 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               )}
               {operationError && <p role="alert" className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-[10px] font-bold text-rose-300">{operationError}</p>}
             </section>
+
+            {snapshot.operations.orderTypes.includes('consumo_local') && (
+              <section className="mt-5 rounded-2xl border border-koma-border bg-koma-page p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Table2 size={18} className="text-emerald-400" />
+                      <h2 className="text-sm font-black">Configure o salão</h2>
+                      <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">
+                        {snapshot.counts.tables} mesa(s) hoje
+                      </span>
+                    </div>
+                    <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted">
+                      Informe quantas mesas o restaurante possui e o KÔMA cria Mesa 1, Mesa 2 e assim por diante. Mesas já existentes são preservadas e nenhuma mesa é apagada por este atalho.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openCashierAt('impressao_salao', 'mesas', true)}
+                    className="rounded-xl border border-koma-border bg-koma-raised px-3 py-2 text-[10px] font-black transition hover:border-emerald-500/35 hover:text-emerald-400"
+                  >
+                    Editar individualmente <ArrowRight size={12} className="inline" />
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                  <label className="block">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-koma-subtle">Quantidade de mesas</span>
+                    <input
+                      inputMode="numeric"
+                      min={1}
+                      max={300}
+                      value={tableCountInput}
+                      onChange={(event) => {
+                        setTableCountInput(event.target.value);
+                        setTableSetupNotice('');
+                        setTableSetupError('');
+                      }}
+                      placeholder="Ex.: 30"
+                      className="mt-1 w-full rounded-xl border border-koma-border bg-koma-raised px-3 py-2.5 text-sm font-bold outline-none focus:border-emerald-500/40"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-koma-subtle">Lugares por mesa</span>
+                    <input
+                      inputMode="numeric"
+                      min={1}
+                      max={50}
+                      value={tableCapacityInput}
+                      onChange={(event) => {
+                        setTableCapacityInput(event.target.value);
+                        setTableSetupNotice('');
+                        setTableSetupError('');
+                      }}
+                      className="mt-1 w-full rounded-xl border border-koma-border bg-koma-raised px-3 py-2.5 text-sm font-bold outline-none focus:border-emerald-500/40"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={savingTables}
+                    onClick={() => void bootstrapTables()}
+                    className="min-h-[42px] rounded-xl bg-emerald-500 px-4 py-2.5 text-[10px] font-black text-zinc-950 disabled:opacity-60"
+                  >
+                    {savingTables ? 'Criando…' : snapshot.counts.tables > 0 ? 'Completar mesas' : 'Criar mesas'}
+                  </button>
+                </div>
+
+                <p className="mt-2 text-[9px] leading-relaxed text-koma-muted">
+                  Exemplo: 30 cria as mesas padronizadas de 1 a 30. Se já existirem 1 a 8, somente 9 a 30 serão criadas.
+                </p>
+                {tableSetupNotice && (
+                  <p role="status" className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-[10px] font-bold text-emerald-300">
+                    {tableSetupNotice}
+                  </p>
+                )}
+                {tableSetupError && (
+                  <p role="alert" className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-[10px] font-bold text-rose-300">
+                    {tableSetupError}
+                  </p>
+                )}
+              </section>
+            )}
 
             <div className="mt-5 space-y-3">
               {steps.map((step) => {

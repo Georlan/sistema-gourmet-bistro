@@ -25,6 +25,7 @@ from ..models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, U
 from ..saas_billing_models import SaaSSubscription
 from ..security import get_password_hash
 from ..subscription import VALID_SUBSCRIPTION_PLANS
+from ..services.table_bootstrap import bootstrap_standard_tables
 from .super_admin import _discover_restaurant_ids, get_current_admin
 
 logger = logging.getLogger("koma.super_admin.onboarding")
@@ -118,6 +119,14 @@ class TrialActionRequest(BaseModel):
         if normalized not in {"start", "extend", "end", "renew"}:
             raise ValueError("Ação inválida. Use start, extend, end ou renew.")
         return normalized
+
+
+class SuperAdminTableBootstrapRequest(BaseModel):
+    count: int = Field(ge=1, le=300)
+    default_capacity: int = Field(default=4, ge=1, le=50)
+    reason: str = Field(min_length=3, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
 def _normalize_payload(payload: TenantOnboardingRequest) -> dict[str, str]:
@@ -346,6 +355,8 @@ def _commercial_release_preview(db, tenant_id: int) -> dict[str, Any]:
         },
         "steps": {key: snapshot["steps"][key] for key in ("profile", "hours", "catalog", "operations")},
         "operations": snapshot["operations"],
+        "counts": snapshot["counts"],
+        "catalogAssistance": snapshot["catalogAssistance"],
         "readyForRelease": snapshot["readyForRelease"],
         "trialStarted": snapshot["readiness"]["trialStarted"],
     }
@@ -360,6 +371,55 @@ def preview_commercial_release(
     db = SessionLocal()
     try:
         with tenant_session_scope(db, tenant_id_int):
+            return _commercial_release_preview(db, tenant_id_int)
+    finally:
+        db.close()
+
+
+@router.post("/onboarding/restaurantes/{tenant_id}/tables/bootstrap")
+def super_admin_bootstrap_tables(
+    tenant_id: str,
+    payload: SuperAdminTableBootstrapRequest,
+    admin: dict[str, Any] = Depends(get_current_admin),
+):
+    """Atalho auditável de implantação para criar/completar mesas do salão."""
+    tenant_id_int = _parse_tenant_id(tenant_id)
+    actor = str(admin.get("user") or "superadmin")
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id_int):
+            try:
+                result = bootstrap_standard_tables(
+                    db,
+                    tenant_id=tenant_id_int,
+                    count=payload.count,
+                    default_capacity=payload.default_capacity,
+                )
+            except LookupError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+            db.add(
+                SuperAdminAuditLog(
+                    restaurante_id=tenant_id_int,
+                    actor=f"superadmin:{actor}",
+                    action="SUPERADMIN_ONBOARDING_TABLES_BOOTSTRAP",
+                    reason=payload.reason,
+                    before_data={
+                        "tables": result.existing_before,
+                    },
+                    after_data={
+                        "requested_count": result.requested_count,
+                        "default_capacity": result.default_capacity,
+                        "created_ids": list(result.created_ids),
+                        "tables": result.total_after,
+                        "table_map_enabled": result.table_map_enabled,
+                        "destructive": False,
+                    },
+                )
+            )
+            db.commit()
             return _commercial_release_preview(db, tenant_id_int)
     finally:
         db.close()
