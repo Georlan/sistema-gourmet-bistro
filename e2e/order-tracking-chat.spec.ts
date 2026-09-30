@@ -356,10 +356,11 @@ async function setupChatRoutes(page: Page) {
 
 async function seedCashierSession(page: Page) {
   await page.addInitScript(() => {
-    localStorage.setItem('koma_caixa_token', 'playwright-chat-token');
-    localStorage.setItem('koma_caixa_id', 'caixa-e2e');
-    localStorage.setItem('koma_caixa_name', 'Caixa E2E');
-    localStorage.setItem('koma_caixa_role', 'caixa');
+    sessionStorage.setItem('koma_caixa_token', 'playwright-chat-token');
+    sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+    sessionStorage.setItem('koma_caixa_id', 'caixa-e2e');
+    sessionStorage.setItem('koma_caixa_name', 'Caixa E2E');
+    sessionStorage.setItem('koma_caixa_role', 'caixa');
     localStorage.setItem('token', 'playwright-chat-token');
     sessionStorage.setItem('koma_active_tab', 'operacao');
     sessionStorage.setItem('koma_active_subtab', 'pedidos');

@@ -50,7 +50,7 @@ function clearOperationalAuthentication() {
     'koma_user_id',
     'koma_user_name',
   ]) {
-    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
   }
 }
 

@@ -42,10 +42,11 @@ async function openWaiterTable(page: Page) {
   };
 
   await page.addInitScript(() => {
-    localStorage.setItem('koma_waiter_token', 'waiter-escape-token');
-    localStorage.setItem('koma_waiter_id', 'waiter-escape');
-    localStorage.setItem('koma_waiter_name', 'Garçom Escape');
-    localStorage.setItem('koma_user_role', 'garcom');
+    sessionStorage.setItem('koma_waiter_token', 'waiter-escape-token');
+    sessionStorage.setItem('koma_active_operational_portal', 'garcom');
+    sessionStorage.setItem('koma_waiter_id', 'waiter-escape');
+    sessionStorage.setItem('koma_waiter_name', 'Garçom Escape');
+    sessionStorage.setItem('koma_user_role', 'garcom');
   });
 
   await page.routeWebSocket(/\/ws\//, socket => {

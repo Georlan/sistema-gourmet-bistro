@@ -40,19 +40,21 @@ async function openShell(page: Page, session: ShellSession = 'garcom') {
     const fixtureSeedKey = '__koma_shell_fixture_seeded_v1';
     if (!sessionStorage.getItem(fixtureSeedKey)) {
       localStorage.setItem('@koma:theme', 'dark');
-      localStorage.setItem(settingsKey, JSON.stringify({ exibirImagens: true, exibirDescricoes: true }));
-      localStorage.setItem('koma_restaurant_name_v3', 'Restaurante Shell E2E');
+      sessionStorage.setItem(settingsKey, JSON.stringify({ exibirImagens: true, exibirDescricoes: true }));
+      sessionStorage.setItem('koma_restaurant_name_v3', 'Restaurante Shell E2E');
       localStorage.setItem('shell-unrelated-data', 'preserve-me');
       if (session === 'garcom') {
-        localStorage.setItem('koma_waiter_token', 'waiter-shell-fixture-token');
-        localStorage.setItem('koma_waiter_id', 'waiter-shell-e2e');
-        localStorage.setItem('koma_waiter_name', 'Garçom Shell E2E');
-        localStorage.setItem('koma_user_role', 'garcom');
+        sessionStorage.setItem('koma_waiter_token', 'waiter-shell-fixture-token');
+        sessionStorage.setItem('koma_active_operational_portal', 'garcom');
+        sessionStorage.setItem('koma_waiter_id', 'waiter-shell-e2e');
+        sessionStorage.setItem('koma_waiter_name', 'Garçom Shell E2E');
+        sessionStorage.setItem('koma_user_role', 'garcom');
       } else if (session === 'cozinha') {
-        localStorage.setItem('koma_caixa_token', 'kitchen-shell-fixture-token');
-        localStorage.setItem('koma_caixa_id', 'kitchen-shell-e2e');
-        localStorage.setItem('koma_caixa_name', 'Cozinha Shell E2E');
-        localStorage.setItem('koma_caixa_role', 'cozinha');
+        sessionStorage.setItem('koma_caixa_token', 'kitchen-shell-fixture-token');
+        sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+        sessionStorage.setItem('koma_caixa_id', 'kitchen-shell-e2e');
+        sessionStorage.setItem('koma_caixa_name', 'Cozinha Shell E2E');
+        sessionStorage.setItem('koma_caixa_role', 'cozinha');
       }
       sessionStorage.setItem(fixtureSeedKey, '1');
     }
@@ -167,10 +169,10 @@ test('tema e preferências persistem ao reabrir; logout mantém dados não auten
   await expect(page.locator('#sidebar-backdrop')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
   const persisted = await page.evaluate(settingsKey => ({
-    token: localStorage.getItem('koma_waiter_token'),
-    user: localStorage.getItem('koma_waiter_id'),
+    token: sessionStorage.getItem('koma_waiter_token'),
+    user: sessionStorage.getItem('koma_waiter_id'),
     theme: localStorage.getItem('@koma:theme'),
-    settings: JSON.parse(localStorage.getItem(settingsKey) || '{}'),
+    settings: JSON.parse(sessionStorage.getItem(settingsKey) || '{}'),
     unrelated: localStorage.getItem('shell-unrelated-data'),
   }), SETTINGS_KEY);
   expect(persisted).toEqual({ token: null, user: null, theme: 'light', settings: { exibirImagens: false, exibirDescricoes: false }, unrelated: 'preserve-me' });
@@ -199,10 +201,10 @@ test('logout seguido de novo login renova sessão, refaz fluxo de dados e persis
   await page.getByRole('button', { name: 'LOGOUT / SAIR', exact: true }).click();
   await expect(page.getByLabel('E-MAIL')).toBeVisible();
   await expect.poll(() => page.evaluate(() => ({
-    token: localStorage.getItem('koma_waiter_token'),
-    user: localStorage.getItem('koma_waiter_id'),
-    name: localStorage.getItem('koma_waiter_name'),
-    role: localStorage.getItem('koma_user_role'),
+    token: sessionStorage.getItem('koma_waiter_token'),
+    user: sessionStorage.getItem('koma_waiter_id'),
+    name: sessionStorage.getItem('koma_waiter_name'),
+    role: sessionStorage.getItem('koma_user_role'),
     unrelated: localStorage.getItem('shell-unrelated-data'),
   }))).toEqual({ token: null, user: null, name: null, role: null, unrelated: 'preserve-me' });
 
@@ -212,10 +214,10 @@ test('logout seguido de novo login renova sessão, refaz fluxo de dados e persis
 
   await expect(page.locator('#mesa-card-7')).toBeVisible();
   await expect.poll(() => page.evaluate(() => ({
-    token: localStorage.getItem('koma_waiter_token'),
-    user: localStorage.getItem('koma_waiter_id'),
-    name: localStorage.getItem('koma_waiter_name'),
-    role: localStorage.getItem('koma_user_role'),
+    token: sessionStorage.getItem('koma_waiter_token'),
+    user: sessionStorage.getItem('koma_waiter_id'),
+    name: sessionStorage.getItem('koma_waiter_name'),
+    role: sessionStorage.getItem('koma_user_role'),
   }))).toEqual({
     token: 'waiter-shell-login-fixture-token',
     user: 'waiter-shell-e2e',
@@ -229,7 +231,7 @@ test('logout seguido de novo login renova sessão, refaz fluxo de dados e persis
   await page.reload();
   await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
   await expect(page.locator('#mesa-card-7')).toBeVisible();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_waiter_token'))).toBe('waiter-shell-login-fixture-token');
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('koma_waiter_token'))).toBe('waiter-shell-login-fixture-token');
   expect(await page.evaluate(() => localStorage.getItem('shell-unrelated-data'))).toBe('preserve-me');
   expect(state.unexpectedRequests).toEqual([]);
 });

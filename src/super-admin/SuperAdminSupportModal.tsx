@@ -92,6 +92,7 @@ export function SuperAdminSupportModal({
         id: `support:${data.operator}`,
         nome: `Suporte KÔMA (${data.operator})`,
         role: "admin",
+        restaurante_id: data.restaurant_id,
       });
 
       if (onSessionStarted) {

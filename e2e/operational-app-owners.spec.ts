@@ -11,10 +11,11 @@ async function setup(page: Page, withDrafts = true, onSocket?: (socket: WebSocke
     if (sessionStorage.getItem('app-owner-fixture')) return;
     sessionStorage.setItem('app-owner-fixture', '1');
     sessionStorage.setItem('koma_active_operational_portal', 'garcom');
-    localStorage.setItem('koma_waiter_token', 'app-owner-fixture-token');
-    localStorage.setItem('koma_waiter_id', 'waiter-app-owner');
-    localStorage.setItem('koma_waiter_name', 'Operador de teste');
-    localStorage.setItem('koma_operator_session_garcom', JSON.stringify({
+    sessionStorage.setItem('koma_waiter_token', 'app-owner-fixture-token');
+    sessionStorage.setItem('koma_active_operational_portal', 'garcom');
+    sessionStorage.setItem('koma_waiter_id', 'waiter-app-owner');
+    sessionStorage.setItem('koma_waiter_name', 'Operador de teste');
+    sessionStorage.setItem('koma_operator_session_garcom', JSON.stringify({
       token: 'app-owner-fixture-token',
       user: {
         id: 'waiter-app-owner',

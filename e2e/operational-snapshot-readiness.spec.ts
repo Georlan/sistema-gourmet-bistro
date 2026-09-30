@@ -10,10 +10,11 @@ test('bootstrap nunca projeta mesas livres antes do snapshot completo de comanda
   let orderReads = 0;
 
   await page.addInitScript(() => {
-    localStorage.setItem('koma_waiter_token', 'snapshot-readiness-token');
-    localStorage.setItem('koma_waiter_id', 'snapshot-readiness-waiter');
-    localStorage.setItem('koma_waiter_name', 'Garçom Snapshot');
-    localStorage.setItem('koma_user_role', 'garcom');
+    sessionStorage.setItem('koma_waiter_token', 'snapshot-readiness-token');
+    sessionStorage.setItem('koma_active_operational_portal', 'garcom');
+    sessionStorage.setItem('koma_waiter_id', 'snapshot-readiness-waiter');
+    sessionStorage.setItem('koma_waiter_name', 'Garçom Snapshot');
+    sessionStorage.setItem('koma_user_role', 'garcom');
   });
 
   await page.routeWebSocket(/\/ws\//, socket => {

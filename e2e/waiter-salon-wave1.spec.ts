@@ -97,10 +97,11 @@ const mockOrders = [
 async function setupWaiterWave1(page: Page) {
   await page.clock.setFixedTime(NOW);
   await page.addInitScript(() => {
-    localStorage.setItem('koma_waiter_token', 'waiter-wave1-test-token');
-    localStorage.setItem('koma_waiter_id', 'waiter-phase7');
-    localStorage.setItem('koma_waiter_name', 'Garçom Wave 1');
-    localStorage.setItem('koma_user_role', 'garcom');
+    sessionStorage.setItem('koma_waiter_token', 'waiter-wave1-test-token');
+    sessionStorage.setItem('koma_active_operational_portal', 'garcom');
+    sessionStorage.setItem('koma_waiter_id', 'waiter-phase7');
+    sessionStorage.setItem('koma_waiter_name', 'Garçom Wave 1');
+    sessionStorage.setItem('koma_user_role', 'garcom');
   });
 
   await page.routeWebSocket(/\/ws\//, socket => {

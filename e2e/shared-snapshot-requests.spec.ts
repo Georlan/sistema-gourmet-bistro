@@ -133,8 +133,13 @@ test('nova sessão de Caixa não reaproveita clientes da sessão anterior', asyn
   await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
   await expect(page.getByText('Cliente da sessão antiga', { exact: true }).last()).toBeVisible();
   await page.evaluate(() => {
-    localStorage.setItem('koma_caixa_token', 'session-new-fixture');
-    localStorage.setItem('koma_caixa_id', 'operator-new-fixture');
+    sessionStorage.setItem('koma_caixa_token', 'session-new-fixture');
+    sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+    sessionStorage.setItem('koma_caixa_id', 'operator-new-fixture');
+    const previous = JSON.parse(sessionStorage.getItem('koma_operator_session_caixa') || '{}');
+    sessionStorage.setItem('koma_operator_session_caixa', JSON.stringify({
+      ...previous, token:'session-new-fixture', user:{...previous.user,id:'operator-new-fixture'},
+    }));
     window.dispatchEvent(new Event('popstate'));
   });
   await expect(page.getByText('Cliente da nova sessão', { exact: true }).last()).toBeVisible();

@@ -95,10 +95,11 @@ async function openWaiterScenario(
 
   await page.clock.setFixedTime(NOW);
   await page.addInitScript(() => {
-    localStorage.setItem('koma_waiter_token', 'waiter-phase7-fixture-token');
-    localStorage.setItem('koma_waiter_id', 'waiter-phase7');
-    localStorage.setItem('koma_waiter_name', 'Garçom Fase 7');
-    localStorage.setItem('koma_user_role', 'garcom');
+    sessionStorage.setItem('koma_waiter_token', 'waiter-phase7-fixture-token');
+    sessionStorage.setItem('koma_active_operational_portal', 'garcom');
+    sessionStorage.setItem('koma_waiter_id', 'waiter-phase7');
+    sessionStorage.setItem('koma_waiter_name', 'Garçom Fase 7');
+    sessionStorage.setItem('koma_user_role', 'garcom');
   });
 
   // The operational socket is fully mocked, never connected to a backend.
