@@ -117,11 +117,13 @@ test('onboarding status request cannot trap first access in infinite loading', (
 
 test('first access confirms the tenant operation profile without mutating catalog automatically', () => {
   assert.match(onboarding, /Confirme o tipo de operação/);
+  assert.match(onboarding, /Tipo atual:/);
+  assert.match(onboarding, /já recebeu esta classificação durante a contratação ou implantação/);
   assert.match(onboarding, /\/api\/onboarding\/operation-profile/);
   assert.match(onboarding, /Pizzaria/);
   assert.match(onboarding, /Marmitaria \/ Quentinhas/);
   assert.match(onboarding, /Tamanhos, sabores, meio a meio, bordas e adicionais/);
-  assert.match(onboarding, /não cria, apaga nem altera produtos, preços ou adicionais automaticamente/);
+  assert.match(onboarding, /não cria, apaga nem muda produtos, preços ou adicionais automaticamente/);
   assert.match(onboarding, /operation_profile: operationProfile/);
 });
 
