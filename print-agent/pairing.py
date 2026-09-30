@@ -68,6 +68,9 @@ def pair_agent(timeout_seconds: int = 180) -> Optional[str]:
     state = {"token": ""}
 
     class PairingHandler(BaseHTTPRequestHandler):
+        def _origin_allowed(self) -> bool:
+            return self.headers.get("Origin", "") in ALLOWED_ORIGINS
+
         def _cors(self) -> None:
             origin = self.headers.get("Origin", "")
             if origin in ALLOWED_ORIGINS:
@@ -75,19 +78,31 @@ def pair_agent(timeout_seconds: int = 180) -> Optional[str]:
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            # Chromium/Brave envia este preflight quando uma página HTTPS acessa
+            # o servidor loopback. Mantemos a permissão restrita às origens acima.
             self.send_header("Access-Control-Allow-Private-Network", "true")
 
-        def do_OPTIONS(self) -> None:
-            self.send_response(204)
+        def _send_empty(self, status: int) -> None:
+            self.send_response(status)
             self._cors()
+            self.send_header("Content-Length", "0")
             self.end_headers()
+
+        def do_OPTIONS(self) -> None:
+            self._send_empty(204 if self._origin_allowed() else 403)
 
         def do_POST(self) -> None:
             if self.path != "/pair":
-                self.send_error(404)
+                self._send_empty(404)
+                return
+            if not self._origin_allowed():
+                self._send_empty(403)
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
+                if length <= 0 or length > 16_384:
+                    self._send_empty(400)
+                    return
                 payload = json.loads(self.rfile.read(length).decode("utf-8"))
                 token = str(payload.get("token", "")).strip()
                 received_nonce = str(payload.get("nonce", ""))
@@ -95,20 +110,14 @@ def pair_agent(timeout_seconds: int = 180) -> Optional[str]:
                     not secrets.compare_digest(received_nonce, nonce)
                     or not token.startswith("koma_ag_")
                 ):
-                    self.send_response(403)
-                    self._cors()
-                    self.end_headers()
+                    self._send_empty(403)
                     return
                 save_stored_token(token)
                 state["token"] = token
-                self.send_response(204)
-                self._cors()
-                self.end_headers()
+                self._send_empty(204)
                 completed.set()
             except (OSError, ValueError, TypeError):
-                self.send_response(400)
-                self._cors()
-                self.end_headers()
+                self._send_empty(400)
 
         def log_message(self, format: str, *args) -> None:
             return
@@ -123,6 +132,7 @@ def pair_agent(timeout_seconds: int = 180) -> Optional[str]:
     if server is None:
         return None
 
+    server.daemon_threads = True
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     query = urlencode(
@@ -132,9 +142,15 @@ def pair_agent(timeout_seconds: int = 180) -> Optional[str]:
             "agent_port": port,
         }
     )
-    webbrowser.open(f"{KOMA_WEB_URL}?{query}")
-    print("[PAREAMENTO] Autorize este computador na janela do Kôma que foi aberta.")
-    completed.wait(timeout_seconds)
-    server.shutdown()
-    server.server_close()
+    pairing_url = f"{KOMA_WEB_URL}?{query}"
+    webbrowser.open(pairing_url)
+    print(
+        "[PAREAMENTO] Autorize este computador na janela do Kôma que foi aberta. "
+        f"Aguardando por até {timeout_seconds} segundos."
+    )
+    try:
+        completed.wait(timeout_seconds)
+    finally:
+        server.shutdown()
+        server.server_close()
     return state["token"] or None
