@@ -42,6 +42,15 @@ import './paymentOptionsCatalog.css';
 
 type BillingMethod = 'credit_card' | 'pix' | 'account_money';
 type BillingCycle = 'mensal' | 'anual';
+type OperationProfile = 'generic' | 'pizzaria' | 'acai' | 'churrasco' | 'marmitaria';
+
+const OPERATION_PROFILE_OPTIONS: Array<{ value: OperationProfile; label: string }> = [
+  { value: 'pizzaria', label: 'Pizzaria' },
+  { value: 'marmitaria', label: 'Marmitaria / Quentinhas' },
+  { value: 'acai', label: 'Açaí' },
+  { value: 'churrasco', label: 'Churrasco' },
+  { value: 'generic', label: 'Outro tipo de operação' },
+];
 
 type ContractForm = {
   contractingPartyName: string;
@@ -52,6 +61,7 @@ type ContractForm = {
   email: string;
   phone: string;
   restaurantName: string;
+  operationProfile: OperationProfile | '';
 };
 
 type ContractReceipt = {
@@ -64,6 +74,7 @@ type ContractReceipt = {
     restaurantName: string;
     email: string;
     phone: string;
+    operation_profile?: OperationProfile;
   };
   representative: { name: string; taxId: string; role: string };
   commercial: {
@@ -125,6 +136,7 @@ const EMPTY_FORM: ContractForm = {
   email: '',
   phone: '',
   restaurantName: '',
+  operationProfile: '',
 };
 
 function resolvePlanId(): SubscriptionPlanId {
@@ -244,6 +256,7 @@ export default function PlanContractPageV2() {
     form.contractingPartyName.trim().length >= 2
     && Boolean(contractingTaxKind)
     && form.restaurantName.trim().length >= 2
+    && Boolean(form.operationProfile)
     && form.email.includes('@')
     && form.phone.replace(/\D/g, '').length >= 8;
   const cardFieldsValid =
@@ -331,6 +344,7 @@ export default function PlanContractPageV2() {
     setForm(previous => ({
       ...previous,
       restaurantName: saved.data.restaurant_name,
+      operationProfile: saved.data.operation_profile || '',
       responsibleName: saved.data.responsible_name,
       contractingPartyName: saved.receipt?.contractingParty.name || saved.data.responsible_name,
       taxId: saved.receipt?.contractingParty.taxId || '',
@@ -460,6 +474,7 @@ export default function PlanContractPageV2() {
         },
         body: JSON.stringify({
           restaurant_name: form.restaurantName,
+          operation_profile: form.operationProfile,
           responsible_name: form.responsibleName,
           email: form.email,
           phone: form.phone,
@@ -488,6 +503,7 @@ export default function PlanContractPageV2() {
         headers: { 'Content-Type': 'application/json', 'X-Signup-Token': signupToken },
         body: JSON.stringify({
           restaurant_name: form.restaurantName,
+          operation_profile: form.operationProfile,
           responsible_name: representativeName,
           email: form.email,
           phone: form.phone,
@@ -699,8 +715,23 @@ export default function PlanContractPageV2() {
               <div className="koma-sub-heading"><span className="koma-sub-eyebrow">02 · SEU RESTAURANTE</span><h1>Vamos começar.</h1><p>Salve seus dados para continuar agora ou retomar depois.</p></div>
               {error && <div role="alert" className="koma-sub-error">{error}</div>}
               <form id="koma-signup-form" className="koma-sub-form" onSubmit={saveSignup}>
-                {(['restaurantName', 'responsibleName', 'email', 'phone'] as const).map(field => (
-                  <label key={field} className="koma-sub-field"><span>{{ restaurantName: 'Nome do restaurante', responsibleName: 'Seu nome', email: 'E-mail', phone: 'WhatsApp' }[field]}</span><div><input required minLength={field === 'phone' ? 10 : 2} type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'} value={form[field]} onChange={event => updateField(field, event.target.value)} /></div></label>
+                <label className="koma-sub-field">
+                  <span>Nome do restaurante</span>
+                  <div><Store size={16} /><input required minLength={2} value={form.restaurantName} onChange={event => updateField('restaurantName', event.target.value)} /></div>
+                </label>
+                <label className="koma-sub-field">
+                  <span>Tipo de operação</span>
+                  <div>
+                    <Store size={16} />
+                    <select required value={form.operationProfile} onChange={event => updateField('operationProfile', event.target.value)}>
+                      <option value="" disabled>Selecione o tipo</option>
+                      {OPERATION_PROFILE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </div>
+                  <small>Isso adapta o cadastro do cardápio ao seu negócio. Ex.: pizzaria pode ter tamanhos, sabores e meio a meio; marmitaria usa composição por tamanho.</small>
+                </label>
+                {(['responsibleName', 'email', 'phone'] as const).map(field => (
+                  <label key={field} className="koma-sub-field"><span>{{ responsibleName: 'Seu nome', email: 'E-mail', phone: 'WhatsApp' }[field]}</span><div><input required minLength={field === 'phone' ? 10 : 2} type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'} value={form[field]} onChange={event => updateField(field, event.target.value)} /></div></label>
                 ))}
               </form>
             </>
