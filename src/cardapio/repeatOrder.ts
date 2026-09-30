@@ -100,7 +100,7 @@ export function rebuildOrderFromCurrentCatalog(
 
       if (!canIncrementSelectionQuantity(rules, selectedIds, currentOption.id)) {
         // Em grupos exclusivos, histórico duplicado da mesma opção não deve virar quantidade.
-        // Nos demais grupos, somente um novo tipo acima do limite é descartado.
+        // No modo configurado da marmitaria, descartar porção/tipo excedente também exige aviso.
         if (!optionAlreadySelected || group.maxSelection === 1 || group.selectionMode) {
           issues.push(`${product.name}: o limite atual de “${group.title}” foi reduzido.`);
         }
@@ -114,7 +114,7 @@ export function rebuildOrderFromCurrentCatalog(
       }];
 
       // Evita variável aparentemente sem uso em transpilers mais estritos e documenta a regra:
-      // quantidade repetida não altera o número de tipos selecionados.
+      // o modo atual decide se contamos porções ou tipos.
       void selectedTypes;
     }
 

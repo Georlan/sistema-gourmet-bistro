@@ -165,7 +165,9 @@ export default function CardapioProductModal({
       if (max === 1) {
         // Em grupos exclusivos, o + de outra opção substitui a seleção atual.
       } else {
-        setFeedback(`Você pode escolher até ${max} tipos diferentes em ${modifier.title}. A quantidade de cada adicional continua livre.`);
+        setFeedback(modifier.selectionMode
+          ? `Respeite o limite de ${max} ${modifier.selectionMode === "porcoes" ? "porções" : "tipos diferentes, sem repetir"} em ${modifier.title}.`
+          : `Você pode escolher até ${max} tipos diferentes em ${modifier.title}. A quantidade de cada adicional continua livre.`);
         return;
       }
     }
