@@ -352,4 +352,4 @@ async function seedCashierSession(page: Page) {
   });
 }
 
-export { mockCashierBackend, seedCashierSession, commands, DESKTOP_BREAKPOINT };
+export { mockCashierBackend, seedCashierSession, commands, DESKTOP_BREAKPOINT, cashierConfig };
