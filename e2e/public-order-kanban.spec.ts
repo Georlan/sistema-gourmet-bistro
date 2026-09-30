@@ -92,6 +92,8 @@ async function mockCashierWithOnlineOrder(page: Page) {
 
     if (pathname === '/comandas/delivery/ativos' || pathname === '/comandas/detalhes/todos') {
       body = [{ ...onlineOrder, delivery_status: deliveryStatus }];
+    } else if (pathname === '/comandas/delivery/pendentes') {
+      body = deliveryStatus === 'pendente' ? [{ ...onlineOrder, delivery_status: deliveryStatus }] : [];
     } else if (pathname === '/comandas/c-online-e2e/delivery/status' && request.method() === 'PUT') {
       const next = url.searchParams.get('status_novo') || deliveryStatus;
       if (next === 'producao') acceptCalls += 1;
@@ -179,7 +181,7 @@ test('pedido do cardápio é aceito uma vez e surge no kanban com contexto útil
   const viewport = page.viewportSize();
   if (!viewport) throw new Error('Viewport não configurado.');
   if (viewport.width < DESKTOP_BREAKPOINT) {
-    const digitalStageTab = page.getByRole('tab', { name: /Balcão/ });
+    const digitalStageTab = page.getByRole('tab', { name: /Digitais/ });
     await expect(digitalStageTab).toBeVisible();
     await digitalStageTab.tap();
     await expect(digitalStageTab).toHaveAttribute('aria-selected', 'true');
@@ -191,7 +193,7 @@ test('pedido do cardápio é aceito uma vez e surge no kanban com contexto útil
   await expect(digitalColumn).toContainText('Retirada');
   await expect(digitalColumn).toContainText('85999999999');
   await expect(digitalColumn).toContainText('Pizza Margherita');
-  await expect(digitalColumn).toContainText('Cardápio online');
+  await expect(digitalColumn).toContainText('Online');
   await expect(digitalColumn).toContainText(/R\$\s*48,00/);
   await expect(digitalColumn).toContainText(/EM PREPARO/i);
 
@@ -220,5 +222,5 @@ test('pedido do cardápio é aceito uma vez e surge no kanban com contexto útil
   await expect(page.getByText('CHECKOUT / CAIXA')).toBeVisible();
   await expect(page.getByText('Pizza Margherita', { exact: true })).toBeVisible();
   await expect(page.getByText(/Em preparo · avance na cozinha/i)).not.toBeVisible();
-  await expect(page.getByRole('button', { name: /(Receber itens selecionados|Lançar pagamento)/i })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /(Receber itens selecionados|Receber saldo total)/i })).toBeEnabled();
 });
