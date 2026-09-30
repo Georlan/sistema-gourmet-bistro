@@ -10,6 +10,12 @@ const migration = readFileSync(
   'utf8',
 );
 
+test('commercial signup makes the administrator login email explicit', () => {
+  assert.match(contractPage, /E-mail de acesso do administrador/);
+  assert.match(contractPage, /será usado para entrar no KÔMA e receber o convite para criar a senha/);
+  assert.doesNotMatch(contractPage, /email: 'E-mail'/);
+});
+
 test('commercial signup requires an explicit restaurant operation type', () => {
   assert.match(contractPage, /Tipo de operação/);
   assert.match(contractPage, /Pizzaria/);
