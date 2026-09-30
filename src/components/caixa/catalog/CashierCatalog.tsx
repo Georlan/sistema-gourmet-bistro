@@ -127,6 +127,19 @@ export default function CashierCatalog({
   const productImagePreview = prodFormImagePreview
     || (!prodFormImageRemoveRequested ? prodFormImagem : '');
 
+  const quentinhasCategory = apiCategorias.find(category => category.nome.trim().toLowerCase() === 'quentinhas');
+  const startProduct = (size?: string) => {
+    setEditingProduct(null);
+    setProdFormId(suggestedProductCode);
+    setProdFormNome(size ? `Quentinha ${size}` : '');
+    setProdFormPreco('');
+    setProdFormCategoriaId(isMarmitaria ? quentinhasCategory?.id || '' : apiCategorias[0]?.id || '');
+    setProdFormDescricao('');
+    resetProductImageState('');
+    setProdFormAtivo(true);
+    setShowProductModal(true);
+  };
+
   return (
     <>
       {activeTab === 'cardapio' && activeSubTab === 'produtos' && (
@@ -150,6 +163,23 @@ export default function CashierCatalog({
               { label: 'categorias', value: apiCategorias.length },
             ]}
           />
+          {isMarmitaria && (
+            <section aria-label="Configurar Quentinhas P, M e G" className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
+              <h3 className="font-bold text-koma-foreground">Quentinhas · P, M e G</h3>
+              <p className="text-sm text-koma-muted">Uma categoria para as quentinhas. Cada tamanho tem seu próprio preço e pode ter limites de complementos diferentes.</p>
+              {!quentinhasCategory && <button type="button" onClick={() => setShowCategoryModal(true)} className="font-bold text-emerald-600 dark:text-emerald-400">1. Criar categoria Quentinhas</button>}
+              <div className="grid grid-cols-3 gap-2">
+                {(['P', 'M', 'G'] as const).map(size => {
+                  const product = apiProdutos.find(item => item.categoria_id === quentinhasCategory?.id && item.nome.trim().toLowerCase() === `quentinha ${size.toLowerCase()}`);
+                  return <button key={size} type="button" disabled={!quentinhasCategory || Boolean(product)} onClick={() => startProduct(size)} className="rounded-xl border border-koma-border p-3 text-koma-foreground disabled:opacity-60">
+                    <strong className="block">Quentinha {size}</strong>
+                    <span className="text-xs">{product ? `Cadastrada · ${Number(product.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : 'Cadastrar preço'}</span>
+                  </button>;
+                })}
+              </div>
+              <p className="text-xs text-koma-muted">Depois, em Complementos, vincule os grupos a cada produto e configure suas escolhas. Cadastre somente os tamanhos vendidos.</p>
+            </section>
+          )}
           <CardapioProdutosTab
             produtos={apiProdutos}
             categorias={apiCategorias}
@@ -159,17 +189,7 @@ export default function CashierCatalog({
                 ? `${window.location.origin}/cardapio?restaurante_id=${encodeURIComponent(String(restauranteConfig.restaurante_id))}`
                 : undefined
             }
-            onCreateProduct={() => {
-              setEditingProduct(null);
-              setProdFormId(suggestedProductCode);
-              setProdFormNome('');
-              setProdFormPreco('');
-              setProdFormCategoriaId(apiCategorias[0]?.id || '');
-              setProdFormDescricao('');
-              resetProductImageState('');
-              setProdFormAtivo(true);
-              setShowProductModal(true);
-            }}
+            onCreateProduct={() => startProduct()}
             onEditProduct={(product) => {
               setEditingProduct(product);
               setProdFormId(product.id);
@@ -470,11 +490,23 @@ export default function CashierCatalog({
                 <div className="rounded-xl border border-koma-border bg-koma-panel p-3 text-koma-secondary">
                   <p className="font-bold">Monte o cardápio da sua marmitaria</p>
                   <p className="mt-1 text-[10px] text-koma-muted">
-                    Cadastre cada tamanho vendido como um produto, com seu próprio preço.
+                    Use uma categoria Quentinhas com os produtos Quentinha P, Quentinha M e Quentinha G, cada um com seu próprio preço.
                     Depois, em Complementos, configure as proteínas, guarnições e saladas,
                     os limites de escolha e os valores extras, e vincule os grupos aos produtos.
                   </p>
                 </div>
+              )}
+
+              {isMarmitaria && !editingProduct && (
+                <fieldset className="space-y-2">
+                  <legend className="text-[10px] font-bold text-koma-secondary">Tamanho da quentinha</legend>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['P', 'M', 'G'] as const).map(size => {
+                      const exists = apiProdutos.some(product => product.categoria_id === prodFormCategoriaId && product.nome.trim().toLowerCase() === `quentinha ${size.toLowerCase()}`);
+                      return <button key={size} type="button" disabled={exists} aria-pressed={prodFormNome === `Quentinha ${size}`} onClick={() => setProdFormNome(`Quentinha ${size}`)} className={`rounded-xl border p-3 font-bold disabled:opacity-50 ${prodFormNome === `Quentinha ${size}` ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' : 'border-koma-border text-koma-foreground'}`}>{size}{exists ? ' · cadastrada' : ''}</button>;
+                    })}
+                  </div>
+                </fieldset>
               )}
 
               <div className="space-y-1.5">
@@ -723,6 +755,7 @@ export default function CashierCatalog({
       )}
       <CategoriaModal
         isOpen={showCategoryModal}
+        suggestedName={isMarmitaria ? 'Quentinhas' : undefined}
         onClose={() => setShowCategoryModal(false)}
         apiBaseUrl={apiBaseUrl}
         authHeaders={authHeaders}
