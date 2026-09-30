@@ -133,6 +133,12 @@ export function useCashShift({
       throw new Error(err.detail || 'Erro ao fechar caixa.');
     }
     const resultData = await res.json();
+    // A confirmação do servidor é autoritativa; invalida leituras anteriores
+    // para que uma resposta atrasada não restaure o turno já encerrado.
+    ++turnoRequestIdRef.current;
+    setTurno(null);
+    setTurnoLoadState('loaded');
+    setIsLoading(false);
     setFechamentoResult(resultData);
     showToast('Turno de caixa encerrado com sucesso!');
     await fetchTurnoResumo();

@@ -155,3 +155,29 @@ test('atalho do turno abre a conferência sem fechar o caixa', async ({ page }) 
   await expect(page.getByRole('dialog', { name: 'Menu principal' })).toHaveCount(0);
   expect(mutations).toEqual([]);
 });
+
+
+test('fechamento confirmado atualiza o turno mesmo se a leitura do resumo falhar', async ({ page }) => {
+  await open(page);
+  const sidebar = page.locator('.cashier-sidebar:visible');
+  if (!await sidebar.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+  await sidebar.getByRole('button', { name: 'Fechar caixa', exact: true }).click();
+  await expect(page.getByText('R$ 100,00', { exact: true }).first()).toBeVisible();
+  await page.locator('#closing-cash').fill('10000');
+  await expect(page.locator('#closing-cash')).toHaveValue('100,00');
+  await page.getByRole('button', { name: 'Revisar fechamento' }).click();
+  await page.getByRole('heading', { name: 'Confirmar fechamento?' }).waitFor();
+  await page.route('**/caixa/fechamento', route => route.fulfill({ json: {
+    turno_id: 1, status: 'fechado', fechado_em: new Date().toISOString(), fechado_por_nome: 'Caixa E2E',
+    declarado_dinheiro: 100, esperado_dinheiro: 100, diferenca_dinheiro: 0,
+    declarado_cartao: 0, esperado_cartao: 0, diferenca_cartao: 0,
+    declarado_pix: 0, esperado_pix: 0, diferenca_pix: 0,
+    total_declarado: 100, total_esperado: 100, diferenca_total: 0,
+  }}));
+  await page.route('**/caixa/turno-atual/resumo', route => route.fulfill({ status: 503, json: { detail: 'Resumo indisponível' } }));
+  await page.getByRole('button', { name: 'Fechar caixa', exact: true }).last().click();
+  if (!await sidebar.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+  await expect(sidebar).toContainText('Caixa Fechado');
+  await expect(sidebar.getByRole('button', { name: 'Abrir caixa', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'Fechar caixa', exact: true })).toHaveCount(0);
+});
