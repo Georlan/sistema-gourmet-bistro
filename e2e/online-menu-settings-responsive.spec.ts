@@ -184,3 +184,31 @@ test('cardápio online mantém abas verticais e horizontais no notebook', async 
   await expect(page.getByRole('heading', { name: 'Entrega', exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
+
+test('implantação usa o slug salvo no link, na abertura e no QR de divulgação', async ({ page }) => {
+  await setup(page, 'dark');
+  await page.route('**/api/cardapio-digital/config?restaurante_id=*', route => route.fulfill({
+    json: { ...profile, slug: 'quentinha-caseira' },
+  }));
+  await page.addInitScript(() => {
+    const token = `e2e.${btoa(JSON.stringify({ restaurante_id: 2 }))}.signature`;
+    sessionStorage.setItem('koma_caixa_token', token);
+    sessionStorage.setItem('token', token);
+  });
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.cashier-topbar')).toBeVisible();
+  await navigate(page, 'Cardápio online');
+  await navigateHorizontal(page, 'Divulgação');
+  await expect(page.locator('code')).toHaveText(/\/c\/quentinha-caseira$/);
+  await expect(page.getByRole('link', { name: 'Abrir cardápio' })).toHaveAttribute('href', /\/c\/quentinha-caseira$/);
+  const svgBefore = await page.locator('svg').filter({ has: page.locator('title', { hasText: 'QR Code do cardápio Kôma' }) }).innerHTML();
+  await navigateHorizontal(page, 'Perfil');
+  await page.route('**/api/cardapio-digital/config?restaurante_id=*', route => route.fulfill({ json: profile }));
+  await page.reload();
+  await expect(page.locator('.cashier-topbar')).toBeVisible();
+  await navigate(page, 'Cardápio online');
+  await navigateHorizontal(page, 'Divulgação');
+  await expect(page.locator('code')).toHaveText(/cardapio\?restaurante_id=2$/);
+  const svgAfter = await page.locator('svg').filter({ has: page.locator('title', { hasText: 'QR Code do cardápio Kôma' }) }).innerHTML();
+  expect(svgBefore).not.toEqual(svgAfter);
+});

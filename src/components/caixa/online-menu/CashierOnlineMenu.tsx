@@ -1,3 +1,4 @@
+import { usePublicMenuSlug } from './usePublicMenuSlug';
 import { ChevronDown, Gift, Lock } from 'lucide-react';
 import { CardapioDigitalSettingsPanel } from '../../cardapio/CardapioDigitalSettingsPanel';
 import type { CashierTab } from '../cashierContracts';
@@ -54,6 +55,10 @@ type OnlineMenuSection = (typeof sectionBySubTab)[keyof typeof sectionBySubTab];
 export default function CashierOnlineMenu({
   apiBaseUrl, authHeaders, activeSubTab, setActiveSubTab, setActiveTab, hasOnlineMenu, hasLoyalty, hasCoupons,
 }: Props) {
+  const authorization = authHeaders.Authorization || authHeaders.authorization;
+  const restaurantId = readRestaurantIdFromAuthorization(authorization);
+  const configuredSlug = usePublicMenuSlug(apiBaseUrl, authorization, restaurantId, hasOnlineMenu);
+
   if (!hasOnlineMenu) return (
         <div
           className={"bg-koma-card border border-amber-500/20 rounded-3xl p-8 text-center max-w-xl mx-auto space-y-3"}
@@ -77,9 +82,10 @@ export default function CashierOnlineMenu({
         </div>
   );
 
-  const restaurantId = readRestaurantIdFromAuthorization(authHeaders.Authorization || authHeaders.authorization);
   const resolvedHost = resolveKomaHost();
-  const publicMenuUrl = resolvedHost.kind === 'tenant' && resolvedHost.tenantSlug
+  const publicMenuUrl = configuredSlug
+    ? `/c/${encodeURIComponent(configuredSlug)}`
+    : resolvedHost.kind === 'tenant' && resolvedHost.tenantSlug
     ? getTenantPublicMenuUrl(resolvedHost.tenantSlug)
     : restaurantId
       ? `/cardapio?restaurante_id=${restaurantId}`
