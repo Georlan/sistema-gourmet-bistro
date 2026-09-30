@@ -151,6 +151,39 @@ if (isPublicMenuRoute()) {
   initializeKomaTheme();
 }
 
+if (typeof window !== "undefined") {
+  (window as unknown as { __KOMA_BUILD__?: unknown }).__KOMA_BUILD__ = {
+    sha: import.meta.env.VITE_BUILD_SHA,
+    builtAt: import.meta.env.VITE_BUILD_TIME,
+  };
+
+  window.addEventListener("vite:preloadError", (event) => {
+    const CHUNK_RELOAD_KEY = "koma_chunk_reload_attempt";
+    const now = Date.now();
+    let lastAttempt = 0;
+    try {
+      lastAttempt = Number(window.sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
+    } catch {
+      lastAttempt = 0;
+    }
+
+    // Vite documenta que preventDefault() impede que o erro de import seja
+    // relançado. Fazemos isso somente quando realmente iniciaremos o reload;
+    // uma segunda falha dentro do throttle continua disponível ao ErrorBoundary.
+    if (now - lastAttempt > 15000) {
+      event.preventDefault();
+      try {
+        window.sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+      } catch {
+        // Se sessionStorage estiver indisponível, ainda é melhor tentar um reload.
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.set("__koma_refresh", String(now));
+      window.location.replace(url.toString());
+    }
+  });
+}
+
 // O service worker não possui fetch/cache handler: registrá-lo globalmente é
 // seguro para o Vite e não solicita permissão. A permissão de notificação só é
 // pedida depois de gesto explícito do cliente no acompanhamento do pedido.

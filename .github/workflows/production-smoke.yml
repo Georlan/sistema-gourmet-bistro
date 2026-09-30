@@ -1,6 +1,9 @@
 name: Production smoke (non-destructive)
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       frontend_url:
@@ -28,10 +31,11 @@ jobs:
   smoke:
     name: Production health + contract + checkout CORS
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 8
     env:
       KOMA_FRONTEND_URL: ${{ github.event.inputs.frontend_url || vars.KOMA_PRODUCTION_FRONTEND_URL || 'https://app.komafood.com.br' }}
       KOMA_API_URL: ${{ github.event.inputs.api_url || vars.KOMA_PRODUCTION_API_URL || 'https://sistema-gourmet-bistro-production.up.railway.app' }}
+      KOMA_EXPECTED_FRONTEND_SHA: ${{ github.event_name == 'push' && github.sha || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
