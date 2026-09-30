@@ -325,9 +325,9 @@ export default function ComplementosTab({
 
   return (
     <div className="space-y-6">
-      {marmitariaCadastro && <MarmitariaTamanhos apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} grupos={grupos} notify={onShowNotification} focusProductId={focusProductId} onFocusHandled={onFocusHandled} catalogVersion={catalogVersion} onEditDetails={onEditDetails} onSaved={async () => { await fetchCatalogBindings(); await onCatalogChanged?.(); }} />}
-      <details open={marmitariaCadastro ? grupos.length === 0 : true} className="space-y-4">
-        <summary className="cursor-pointer font-bold text-koma-foreground">{marmitariaCadastro ? 'Proteínas, guarnições e outras opções' : 'Complementos e adicionais'}</summary>
+      {marmitariaCadastro && <MarmitariaTamanhos mode="choices" apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} grupos={grupos} notify={onShowNotification} focusProductId={focusProductId} onFocusHandled={onFocusHandled} catalogVersion={catalogVersion} onEditDetails={onEditDetails} onSaved={async () => { await fetchCatalogBindings(); await onCatalogChanged?.(); }} />}
+      <details open className="space-y-4">
+        <summary className="cursor-pointer font-bold text-koma-foreground">{marmitariaCadastro ? 'Proteínas, guarnições e saladas' : 'Complementos e adicionais'}</summary>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-koma-card border border-koma-border p-5 rounded-2xl">
         <div>
           <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm">

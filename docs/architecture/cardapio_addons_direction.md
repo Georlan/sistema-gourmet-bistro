@@ -52,8 +52,10 @@ Não migra catálogos existentes nem aplica programação semanal, plano ou paga
 
 A direção anterior de categoria por tamanho foi substituída pelo escopo aprovado
 pelo usuário: uma categoria Marmitas/Quentinhas com P, M e G e limites por produto.
-O único formulário está em Cardápio → Produtos → Marmitas; Complementos mantém
-apenas grupos/opções. O modelo antigo permanece legível por compatibilidade.
+Tamanho, preço, foto e descrição ficam em Cardápio → Produtos → Marmitas.
+Grupos e regras de escolha por tamanho ficam exclusivamente em Complementos.
+O atalho em Produtos abre o mesmo produto em Complementos; não cria outro tamanho.
+O modelo antigo permanece legível por compatibilidade.
 
 `Produto.marmitaria_tamanho` armazena a identidade normalizada do tamanho, única
 por restaurante. Registros manuais reconhecidos e categorias do assistente antigo

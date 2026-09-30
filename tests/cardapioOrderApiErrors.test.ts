@@ -46,3 +46,14 @@ test('checkout uses the formatter for failed order submissions', () => {
   assert.match(source, /authRequestErrorMessage/);
   assert.doesNotMatch(source, /error instanceof Error\s*\? error\.message/);
 });
+
+
+test('shared sale formatter identifies address fields without object coercion', () => {
+  const message = formatCardapioApiError({ detail: [
+    { loc: ['body', 'address_snapshot', 'cidade'], type: 'string_too_short' },
+    { loc: ['body', 'address_snapshot', 'uf'], type: 'string_too_short' },
+  ] });
+  assert.match(message, /Cidade: preenchimento incompleto/);
+  assert.match(message, /UF: preenchimento incompleto/);
+  assert.doesNotMatch(message, /object Object/);
+});

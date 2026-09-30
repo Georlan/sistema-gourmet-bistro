@@ -79,12 +79,12 @@ const statusOptions = [
   {
     value: 'Automático',
     label: 'Automático',
-    helper: 'Segue os horários cadastrados.',
+    helper: 'Acompanha o caixa aberto.',
   },
   {
     value: 'Forçado Aberto',
     label: 'Aberto agora',
-    helper: 'Aceita pedidos independentemente do horário.',
+    helper: 'Exige caixa aberto; horário informativo.',
   },
   {
     value: 'Forçado Fechado',
@@ -673,7 +673,7 @@ export function CardapioDigitalSettingsPanel({
               <>
                 <SettingsSection
                   title="Recebimento de pedidos"
-                  description="Escolha como o cardápio deve se comportar agora. O modo automático usa os horários logo abaixo."
+                  description="Escolha como o cardápio deve se comportar agora. A aceitação de pedidos exige caixa aberto. Os horários abaixo são informativos."
                 >
                   <div className="grid gap-2.5 md:grid-cols-3">
                     {statusOptions.map((option) => {
@@ -703,7 +703,7 @@ export function CardapioDigitalSettingsPanel({
                   {config.status_override === 'Automático' && config.horarios_funcionamento.length === 0 && (
                     <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.08] p-3 text-[10px] text-amber-700 dark:text-amber-300">
                       <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                      <span><strong>Automático sem horários.</strong> Cadastre pelo menos um período para o cliente saber quando os pedidos estão disponíveis.</span>
+                      <span><strong>Automático sem horários.</strong> Cadastre os horários para consulta. Os pedidos acompanham o caixa aberto.</span>
                     </div>
                   )}
                 </SettingsSection>

@@ -286,9 +286,9 @@ class DeliveryAddressSnapshotSchema(BaseModel):
     logradouro: str = Field(min_length=1, max_length=180)
     numero: str = Field(min_length=1, max_length=32)
     complemento: Optional[str] = Field(default=None, max_length=120)
-    bairro: str = Field(min_length=1, max_length=100)
-    cidade: str = Field(min_length=1, max_length=100)
-    uf: str = Field(min_length=2, max_length=2)
+    bairro: str = Field(default="", max_length=100)
+    cidade: str = Field(default="", max_length=100)
+    uf: str = Field(default="", max_length=2)
     cep: str = Field(default="", max_length=10)
     referencia: Optional[str] = Field(default=None, max_length=180)
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
@@ -313,7 +313,7 @@ class DeliveryAddressSnapshotSchema(BaseModel):
     @classmethod
     def normalize_state(cls, value: str) -> str:
         state = value.strip().upper()
-        if len(state) != 2 or not state.isalpha():
+        if state and (len(state) != 2 or not state.isalpha()):
             raise ValueError("UF deve conter 2 letras.")
         return state
 

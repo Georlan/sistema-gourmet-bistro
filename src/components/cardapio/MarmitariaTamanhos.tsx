@@ -8,7 +8,9 @@ const inputClass = 'w-full rounded-xl border border-koma-border bg-koma-card px-
 interface Props {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
-  grupos: GrupoModificador[];
+  grupos?: GrupoModificador[];
+  mode?: 'products' | 'choices';
+  onConfigureChoices?: (id: string) => void;
   onSaved?: () => Promise<void>;
   notify?: (message: string, type?: 'success' | 'error') => void;
   focusProductId?: string | null;
@@ -17,7 +19,7 @@ interface Props {
   onEditDetails?: (id: string) => void;
 }
 
-export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos, onSaved, notify, focusProductId, onFocusHandled, catalogVersion, onEditDetails }: Props) {
+export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos = [], mode = 'products', onConfigureChoices, onSaved, notify, focusProductId, onFocusHandled, catalogVersion, onEditDetails }: Props) {
   const [enabled, setEnabled] = useState(false);
   const [sizes, setSizes] = useState<Tamanho[]>([]);
   const [editing, setEditing] = useState<Tamanho | null>(null);
@@ -69,7 +71,7 @@ export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos, on
       if (!response.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : 'Confira preço e quantidade de escolhas.');
       setSizes(previous => [...previous.filter(size => size.id !== data.id), data]);
       setEditing(null);
-      notify?.('Marmita salva com preço e escolhas.', 'success');
+      notify?.(mode === 'choices' ? 'Escolhas da marmita salvas.' : 'Marmita salva.', 'success');
       await onSaved?.();
     } catch (err) { setError(err instanceof Error ? err.message : 'Falha ao salvar marmita.'); }
     finally { setSaving(false); }
@@ -80,10 +82,10 @@ export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos, on
   const updateRule = (index: number, update: Partial<Regra>) => {
     if (editing) setEditing({ ...editing, regras: editing.regras.map((rule, i) => i === index ? { ...rule, ...update } : rule) });
   };
-  return <section ref={panelRef} className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-4" aria-label="Cadastro de marmitas">
-    <div><h3 className="font-bold text-koma-foreground">Marmitas</h3>
-      <p className="text-sm text-koma-muted">Configure preço e escolhas de P, M e G aqui. Cadastre somente os tamanhos que você vende.</p></div>
-    <div className="grid grid-cols-3 gap-2">
+  return <section ref={panelRef} className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-4" aria-label={mode === 'choices' ? 'Escolhas das marmitas' : 'Cadastro de marmitas'}>
+    <div><h3 className="font-bold text-koma-foreground">{mode === 'choices' ? 'Escolhas por tamanho' : 'Marmitas'}</h3>
+      <p className="text-sm text-koma-muted">{mode === 'choices' ? 'Defina o que o cliente pode escolher depois de selecionar a marmita no cardápio online.' : 'Cadastre P, M e G e configure o preço. As proteínas, guarnições e saladas ficam na aba Complementos.'}</p></div>
+    {mode === 'products' && <div className="grid grid-cols-3 gap-2">
       {(['P', 'M', 'G'] as const).map(tamanho => {
         const size = sizes.find(item => item.tamanho === tamanho);
         return <button key={tamanho} type="button" disabled={saving || !!editing || loading}
@@ -93,22 +95,25 @@ export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos, on
           <strong className="block">{tamanho}</strong><span className="text-xs">{size ? size.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'Cadastrar'}</span>
         </button>;
       })}
-    </div>
+    </div>}
+    {mode === 'choices' && sizes.length === 0 && <p className="text-sm text-koma-muted">Cadastre primeiro os tamanhos na aba Produtos.</p>}
     {sizes.map(size => <div key={size.id} className="rounded-xl border border-koma-border p-3 space-y-1">
       <div className="flex items-center justify-between gap-2"><strong>{size.nome}</strong>
         <button type="button" className="text-sm font-bold text-emerald-500" disabled={saving || !!editing || loading} aria-label={`Configurar ${size.nome}`} onClick={() => { setError(''); setEditing({ ...size, regras: size.regras.map(rule => ({ ...rule })) }); }}>Configurar</button></div>
-      {size.id && onEditDetails && <button type="button" disabled={saving || !!editing} className="text-xs text-koma-muted underline" onClick={() => onEditDetails(size.id!)}>Foto e descrição de {size.nome}</button>}
+      {mode === 'products' && size.id && onEditDetails && <button type="button" disabled={saving || !!editing} className="text-xs text-koma-muted underline" onClick={() => onEditDetails(size.id!)}>Foto e descrição de {size.nome}</button>}
       <p className="text-sm text-koma-muted">{size.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · {size.ativo ? 'Disponível' : 'Pausada'}{!size.configurado ? ' · Confira as escolhas' : ''}</p>
-      {size.regras.map(rule => <p key={rule.grupo_id} className="text-sm text-koma-muted">{grupos.find(group => group.id === rule.grupo_id)?.nome || 'Grupo removido'}: {rule.minimo === rule.maximo ? `escolha ${rule.maximo}` : `de ${rule.minimo} até ${rule.maximo}`} · {rule.modo_selecao === 'porcoes' ? 'pode repetir' : 'opções diferentes'}</p>)}
+      {mode === 'products' && size.id && onConfigureChoices && <button type="button" disabled={saving || !!editing || loading} className="text-sm font-bold text-emerald-500" onClick={() => onConfigureChoices(size.id!)}>Configurar escolhas de {size.nome}</button>}
+      {mode === 'choices' && size.regras.map(rule => <p key={rule.grupo_id} className="text-sm text-koma-muted">{grupos.find(group => group.id === rule.grupo_id)?.nome || 'Grupo removido'}: {rule.minimo === rule.maximo ? `escolha ${rule.maximo}` : `de ${rule.minimo} até ${rule.maximo}`} · {rule.modo_selecao === 'porcoes' ? 'pode repetir' : 'opções diferentes'}</p>)}
     </div>)}
     {error && !editing && <p role="alert" className="text-sm text-rose-500">{error}</p>}
     {editing && <form onSubmit={save} className="space-y-4 rounded-xl border border-koma-border p-3" aria-label="Configurar marmita">
       <fieldset disabled={saving} className="space-y-4">
         <p className="font-bold">{editing.tamanho ? `Marmita ${editing.tamanho}` : editing.nome}</p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        {mode === 'products' && <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">Nome no cardápio<input required maxLength={100} className={inputClass} value={editing.nome} onChange={event => setEditing({ ...editing, nome: event.target.value })} /></label>
           <label className="text-sm">Preço (R$)<MoneyInput required aria-label="Preço da marmita" className={inputClass} value={editing.preco} onValueChange={price => setEditing({ ...editing, preco: price === '' ? 0 : price })} /></label>
-        </div>
+        </div>}
+        {mode === 'choices' && <>
         <p className="text-sm text-koma-muted">Defina quantas proteínas, guarnições e outras opções o cliente pode escolher.</p>
         {editing.regras.map((rule, index) => <div key={index} className="space-y-2 rounded-xl bg-koma-raised p-3">
           <label className="block text-sm">Opções<select required className={inputClass} aria-label={`Grupo ${index + 1}`} value={rule.grupo_id} onChange={event => updateRule(index, { grupo_id: event.target.value })}>
@@ -121,11 +126,13 @@ export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos, on
           <button type="button" className="text-sm text-rose-500" onClick={() => setEditing({ ...editing, ativo: editing.regras.length > 1 && editing.ativo, regras: editing.regras.filter((_, i) => i !== index) })}>Remover estas escolhas</button>
         </div>)}
         <button type="button" className="text-sm font-bold text-emerald-500" disabled={editing.regras.length >= grupos.length || editing.regras.length >= 20} onClick={() => setEditing({ ...editing, regras: [...editing.regras, { grupo_id: '', minimo: 1, maximo: 1, modo_selecao: 'tipos' }] })}>Adicionar escolhas</button>
-        {grupos.length === 0 && <p className="text-sm text-amber-500">Cadastre as proteínas e guarnições na seção de opções abaixo. Você pode salvar o preço agora e configurar as escolhas depois.</p>}
+        {grupos.length === 0 && <p className="text-sm text-amber-500">Cadastre as proteínas, guarnições e saladas abaixo para configurar as escolhas deste tamanho.</p>}
+        </>}
+        {mode === 'products' && editing.regras.length === 0 && <p className="text-sm text-koma-muted">Salve o preço e configure as escolhas na aba Complementos antes de colocar a marmita à venda.</p>}
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={editing.regras.length === 0 && !editing.ativo} checked={editing.ativo} onChange={event => setEditing({ ...editing, ativo: event.target.checked })} />Disponível para venda</label>
         <p className="text-xs text-koma-muted">Pausar uma opção vale para todos os tamanhos que usam essa opção.</p>
         {error && <p role="alert" className="text-sm text-rose-500">{error}</p>}
-        <div className="flex gap-3"><button type="submit" className="rounded-xl bg-emerald-500 px-4 py-2 font-bold text-black">{saving ? 'Salvando…' : 'Salvar marmita'}</button><button type="button" onClick={() => { setEditing(null); setError(''); }}>Cancelar</button></div>
+        <div className="flex gap-3"><button type="submit" className="rounded-xl bg-emerald-500 px-4 py-2 font-bold text-black">{saving ? 'Salvando…' : mode === 'choices' ? 'Salvar escolhas' : 'Salvar marmita'}</button><button type="button" onClick={() => { setEditing(null); setError(''); }}>Cancelar</button></div>
       </fieldset>
     </form>}
   </section>;

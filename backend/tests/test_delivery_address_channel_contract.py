@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from copy import deepcopy
 
 from app.application.orders.addressing import delivery_address_from_payload
@@ -115,3 +117,23 @@ def test_snapshot_normalization_is_stable_for_semantically_equal_payloads():
     right = _cardapio_payload(equivalent)
 
     assert compute_fingerprint_for_public_payload(left).fingerprint == compute_fingerprint_for_public_payload(right).fingerprint
+
+
+@pytest.mark.parametrize("geography", [{}, {"bairro": "Centro", "cidade": "", "uf": ""}])
+def test_simplified_address_matches_form_and_domain(geography):
+    from app.schemas import DeliveryAddressSnapshotSchema
+    payload = {"logradouro": "Rua das Flores", "numero": "123", **geography}
+    snapshot = DeliveryAddressSnapshotSchema(**payload)
+    command = delivery_address_from_payload(snapshot)
+    assert command is not None
+    assert command.city == ""
+    assert command.state == ""
+    assert command.to_legacy_address().startswith("Rua das Flores, 123")
+
+
+@pytest.mark.parametrize("uf", ["C", "123", "C1"])
+def test_optional_state_still_rejects_invalid_values(uf):
+    from app.schemas import DeliveryAddressSnapshotSchema
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        DeliveryAddressSnapshotSchema(logradouro="Rua A", numero="10", uf=uf)

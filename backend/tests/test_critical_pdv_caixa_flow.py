@@ -1014,3 +1014,39 @@ def test_pending_cash_item_scope_is_preserved_and_revalidated_on_approval():
         assert item_b.pago is False
     finally:
         db.close()
+
+
+def test_delivery_new_order_accepts_simplified_address_snapshot():
+    db = SessionLocal()
+    tenant = current_restaurante_id.set(777)
+    try:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=777).one()
+        config.tipo_taxa_entrega = "fixa"
+        config.taxa_entrega_fixa = 5
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(tenant)
+    headers = get_pdv_auth_headers()
+    opened = client.post("/caixa/turno/abrir", headers=headers, json={"saldo_inicial": 0})
+    assert opened.status_code in (200, 201), opened.text
+    response = client.post("/cardapio/modificadores/venda-direta", headers=headers, json={
+        "tipo": "Entrega", "identificador": "Cliente Delivery",
+        "delivery_telefone": "85999991234", "delivery_status": "producao",
+        "delivery_forma_pagamento": "dinheiro", "delivery_taxa": 5,
+        "address_snapshot": {"logradouro": "Rua das Flores", "numero": "123",
+                             "bairro": "Centro", "cidade": "", "uf": "", "cep": ""},
+        "itens": [{"produto_id": "prod-pdv-777", "modificador_ids": []}],
+    })
+    assert response.status_code in (200, 201), response.text
+    db = SessionLocal()
+    token = current_restaurante_id.set(777)
+    try:
+        order = db.query(Comanda).filter_by(id=response.json()["id"], restaurante_id=777).one()
+        assert order.tipo == "Entrega"
+        assert order.delivery_endereco == "Rua das Flores, 123, Centro"
+        assert float(order.delivery_taxa) == 5
+        assert db.query(Item).filter_by(comanda_id=order.id).count() == 1
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)

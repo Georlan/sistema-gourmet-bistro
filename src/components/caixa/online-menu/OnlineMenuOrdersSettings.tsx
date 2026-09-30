@@ -238,7 +238,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
         <div className="min-w-0">
           <h2 className="text-base font-black text-koma-foreground">Pedidos online</h2>
           <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-            O cardápio acompanha o caixa e respeita o horário geral do estabelecimento. Fora do horário, aparece como fechado e informa a próxima abertura.
+            O cardápio fica disponível para consulta e aceita pedidos quando o caixa está aberto e sincronizado. O horário cadastrado é apenas informativo.
           </p>
         </div>
         {publicMenuUrl && (
@@ -258,7 +258,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
           <div className="flex items-start gap-2 text-[10px] text-amber-700 dark:text-amber-300">
             <AlertCircle size={14} className="mt-0.5 shrink-0" />
             <span>
-              Há uma exceção antiga ativa: <strong>{config.status_override}</strong>. O fluxo atual usa horários automáticos e a pausa operacional dedicada.
+              Há uma exceção antiga ativa: <strong>{config.status_override}</strong>. O fluxo atual acompanha o caixa e a pausa operacional dedicada.
             </span>
           </div>
           <button
@@ -274,7 +274,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
       {automaticWithoutHours && (
         <div className="flex items-start gap-2 rounded-2xl border border-amber-500/25 bg-amber-500/[0.08] p-3.5 text-[10px] text-amber-700 dark:text-amber-300">
           <AlertCircle size={14} className="mt-0.5 shrink-0" />
-          <span><strong>Horários ainda não configurados.</strong> Defina o funcionamento na implantação para o cardápio saber quando abrir e fechar.</span>
+          <span><strong>Horários ainda não configurados.</strong> Informe os horários na implantação para consulta dos clientes. A abertura para pedidos acompanha o caixa.</span>
         </div>
       )}
 
@@ -287,7 +287,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
             <div>
               <h3 className="text-sm font-black text-koma-foreground">Horário do estabelecimento</h3>
               <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-                Esta é uma configuração geral do restaurante, não apenas do cardápio online. O cardápio só aceita pedidos quando o caixa estiver aberto e o horário cadastrado permitir.
+                Os horários são informativos para os clientes. O cardápio só aceita pedidos quando o caixa estiver aberto e sincronizado.
               </p>
             </div>
           </div>
