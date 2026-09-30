@@ -225,14 +225,20 @@ class AgentConfig:
                 "mantendo os valores configurados."
             )
 
-        # 3. Reutilizar a credencial pareada localmente, sem exigir cópia manual.
-        if not config.agent_token:
-            try:
-                from pairing import load_stored_token
+        # 3. Reutilizar a identidade/credencial pareada localmente, sem exigir
+        # cópia manual. O agent_id salvo junto do token é a identidade real
+        # registrada no backend e permite ao navegador distinguir máquinas do
+        # mesmo restaurante sem expor o token.
+        try:
+            from pairing import load_stored_agent_id, load_stored_token
 
+            if not config.agent_token:
                 config.agent_token = load_stored_token()
-            except ImportError:
-                pass
+            stored_agent_id = load_stored_agent_id()
+            if stored_agent_id:
+                config.agent_id = stored_agent_id
+        except ImportError:
+            pass
 
         return config
 
