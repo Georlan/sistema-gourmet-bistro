@@ -18,8 +18,9 @@ def test_linux_installer_has_persistence_update_and_uninstall():
     assert "WantedBy=default.target" in installer
     assert "Restart=always" in installer
     assert "RestartSec=3" in installer
-    assert "RestartPreventExitStatus=75" in installer
-    assert "SuccessExitStatus=75" in installer
+    assert "RestartPreventExitStatus=2" in installer
+    assert "SuccessExitStatus=2" in installer
+    assert "flock" in installer
 
     # Silent background & non-interactive behavior
     assert "systemctl --user enable --now koma-print-agent.service" in installer
@@ -31,6 +32,19 @@ def test_linux_installer_has_persistence_update_and_uninstall():
     assert "endpoints.py" in installer
     assert "printer_profiles.py" in installer
     assert "transports.py" in installer
+
+
+def test_linux_launcher_is_idempotent_and_single_flight():
+    launcher = (ROOT / "koma-print-launcher.sh").read_text(encoding="utf-8")
+
+    assert 'ActiveState' in launcher
+    assert '"active"' in launcher
+    assert '"activating"' in launcher
+    assert 'credentials.json' in launcher
+    assert 'flock -n 9' in launcher
+    assert 'KOMA_PAIRING_LOCK_HELD=1' in launcher
+    assert 'main.py --pair-only' in launcher
+    assert 'systemctl --user start koma-print-agent.service' in launcher
 
 
 def test_windows_installer_has_persistence_update_and_uninstall():
