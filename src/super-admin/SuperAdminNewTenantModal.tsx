@@ -11,6 +11,7 @@ const OPERATION_PROFILES = [
   { id: "pizzaria", label: "Pizzaria" },
   { id: "acai", label: "Açaí" },
   { id: "churrasco", label: "Churrasco" },
+  { id: "marmitaria", label: "Marmitaria" },
 ] as const;
 
 type OnboardingResponse = {

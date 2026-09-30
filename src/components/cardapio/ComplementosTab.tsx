@@ -60,6 +60,7 @@ export default function ComplementosTab({
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [includeSubcategories, setIncludeSubcategories] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pendingOptionId, setPendingOptionId] = useState<string | null>(null);
 
   const fetchCatalogBindings = async () => {
     try {
@@ -284,6 +285,26 @@ export default function ComplementosTab({
     }
   };
 
+  const toggleOptionAvailability = async (option: OpcaoModificador) => {
+    if (!option.id || pendingOptionId) return;
+    setPendingOptionId(option.id);
+    try {
+      const response = await fetch(`${apiBaseUrl}/cardapio/modificadores/opcoes/${encodeURIComponent(option.id)}/disponibilidade`, {
+        method: 'PATCH',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ativo: option.ativo === false }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || typeof data?.ativo !== 'boolean') {
+        throw new Error(data?.detail || 'Não foi possível atualizar a disponibilidade.');
+      }
+      setGrupos(previous => previous.map(group => ({ ...group, opcoes: group.opcoes.map(item => item.id === option.id ? { ...item, ativo: data.ativo } : item) })));
+      onShowNotification?.(data.ativo ? 'Complemento disponível.' : 'Complemento pausado e oculto do cardápio online.', 'success');
+    } catch (err) {
+      onShowNotification?.(err instanceof Error ? err.message : 'Falha ao atualizar complemento.', 'error');
+    } finally { setPendingOptionId(null); }
+  };
+
   const filteredGrupos = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('pt-BR');
     return grupos.filter((group) => group.nome.toLocaleLowerCase('pt-BR').includes(query));
@@ -298,7 +319,7 @@ export default function ComplementosTab({
             <span>Grupos de Complementos & Adicionais</span>
           </div>
           <p className="text-xs text-koma-muted mt-1 max-w-2xl">
-            Vincule um grupo à categoria principal e ele será herdado pelas subcategorias. Produtos específicos continuam disponíveis para exceções.
+            Vincule grupos às categorias e subcategorias, ou a produtos específicos. Pause as opções que não serão servidas hoje.
           </p>
         </div>
 
@@ -379,10 +400,13 @@ export default function ComplementosTab({
                 <div className="mt-3 space-y-1.5 max-h-36 overflow-y-auto pr-1">
                   {group.opcoes.map((option) => (
                     <div key={option.id || option.nome} className="flex items-center justify-between text-xs bg-koma-raised/60 px-2.5 py-1.5 rounded-lg">
-                      <span className="text-koma-foreground font-medium">{option.nome}</span>
+                      <span className="text-koma-foreground font-medium">{option.nome}{option.ativo === false && <small className="ml-2 text-amber-500">Pausado</small>}</span>
                       <span className="text-koma-muted font-mono font-semibold">
                         {option.preco_adicional > 0 ? `+ R$ ${Number(option.preco_adicional).toFixed(2).replace('.', ',')}` : 'Grátis'}
                       </span>
+                      {option.id && <button type="button" disabled={pendingOptionId !== null} onClick={() => void toggleOptionAvailability(option)} aria-label={`${option.ativo === false ? 'Reativar' : 'Pausar'} ${option.nome}`} className="ml-2 rounded border border-koma-border px-2 py-1 font-bold text-koma-secondary disabled:opacity-50">
+                        {pendingOptionId === option.id ? 'Salvando...' : option.ativo === false ? 'Reativar' : 'Pausar'}
+                      </button>}
                     </div>
                   ))}
                 </div>

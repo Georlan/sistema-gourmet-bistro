@@ -151,3 +151,97 @@ def test_listar_grupos_publico_has_constant_query_count():
     finally:
         current_restaurante_id.reset(token)
         db.close()
+
+
+def test_pause_option_preserves_ids_and_bindings_and_hides_public_choice():
+    response = client.post('/cardapio/modificadores/grupos', headers=_auth_headers(), json={
+        'nome': 'Proteínas do dia', 'min_selecoes': 1, 'max_selecoes': 1, 'tipo': 'obrigatorio',
+        'opcoes': [{'nome': 'Frango', 'preco_adicional': 0, 'ativo': True}, {'nome': 'Carne', 'preco_adicional': 3, 'ativo': True}],
+        'produto_ids': ['prod-burger-1'],
+    })
+    assert response.status_code == 201, response.text
+    group = response.json()
+    option = group['opcoes'][0]
+    url = f"/cardapio/modificadores/opcoes/{option['id']}/disponibilidade"
+    assert client.patch(url, json={'ativo': False}).status_code == 401
+    db = SessionLocal()
+    tenant_token = current_restaurante_id.set(999)
+    try:
+        db.add(Usuario(id='usr-waiter-marmitaria', restaurante_id=999, nome='Garçom', email='waiter-marmitaria@koma.test', cargo='garcom', status='ativo'))
+        db.commit()
+    finally:
+        current_restaurante_id.reset(tenant_token)
+        db.close()
+    waiter_token = create_access_token(subject='usr-waiter-marmitaria', restaurante_id=999, role='garcom')
+    assert client.patch(url, headers={'Authorization': f'Bearer {waiter_token}'}, json={'ativo': False}).status_code == 403
+    assert client.patch(url, headers=_auth_headers(), json={'ativo': 'false'}).status_code == 422
+    assert client.patch(url, headers=_auth_headers(), json={'ativo': False, 'preco_adicional': 99}).status_code == 422
+    for active in [False, True]:
+        changed = client.patch(url, headers=_auth_headers(), json={'ativo': active})
+        assert changed.status_code == 200, changed.text
+        assert changed.json() == {**option, 'ativo': active}
+        public = client.get('/api/cardapio-digital/public?restaurante_id=999').json()
+        product = next(p for p in public['produtos'] if p['id'] == 'prod-burger-1')
+        modifier = next(g for g in product['grupos_modificadores'] if g['id'] == group['id'])
+        assert (option['id'] in {o['id'] for o in modifier['opcoes']}) is active
+        internal = client.get('/cardapio/modificadores/grupos', headers=_auth_headers()).json()
+        saved = next(g for g in internal if g['id'] == group['id'])
+        assert {o['id'] for o in saved['opcoes']} == {o['id'] for o in group['opcoes']}
+        assert saved['produto_ids'] == group['produto_ids']
+        assert saved['min_selecoes'] == 1 and saved['max_selecoes'] == 1
+    assert client.patch('/cardapio/modificadores/opcoes/does-not-exist/disponibilidade', headers=_auth_headers(), json={'ativo': False}).status_code == 404
+
+
+def test_option_availability_rejects_cross_tenant_access_and_archived_groups():
+    from app.routes.modificadores import ARCHIVED_MODIFIER_TYPE
+
+    db = SessionLocal()
+    token = current_restaurante_id.set(998)
+    try:
+        if not db.query(Restaurante).filter_by(id=998).first():
+            db.add(Restaurante(id=998, nome='Outra marmitaria', slug='other-marmitaria-998'))
+            db.commit()
+        db.add(GrupoModificador(id='other-proteins', restaurante_id=998, nome='Proteínas', tipo='opcional', min_selecoes=0, max_selecoes=1))
+        db.flush()
+        db.add(OpcaoModificador(id='other-chicken', restaurante_id=998, grupo_id='other-proteins', nome='Frango', preco_adicional=0, ativo=True))
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+    assert client.patch('/cardapio/modificadores/opcoes/other-chicken/disponibilidade', headers=_auth_headers(), json={'ativo': False}).status_code == 404
+    db = SessionLocal()
+    token = current_restaurante_id.set(998)
+    try:
+        assert db.query(OpcaoModificador).filter_by(id='other-chicken').one().ativo is True
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+    response = client.post('/cardapio/modificadores/grupos', headers=_auth_headers(), json={
+        'nome': 'Grupo arquivado', 'min_selecoes': 0, 'max_selecoes': 1, 'tipo': 'opcional',
+        'opcoes': [{'nome': 'Salada', 'preco_adicional': 0, 'ativo': True}], 'produto_ids': [],
+    })
+    assert response.status_code == 201
+    group = response.json()
+    db = SessionLocal()
+    token = current_restaurante_id.set(999)
+    try:
+        db.query(GrupoModificador).filter_by(id=group['id']).one().tipo = ARCHIVED_MODIFIER_TYPE
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+    assert client.patch(f"/cardapio/modificadores/opcoes/{group['opcoes'][0]['id']}/disponibilidade", headers=_auth_headers(), json={'ativo': False}).status_code == 404
+
+
+def test_paused_product_is_hidden_and_returns_without_recreating_it():
+    url = '/produtos/prod-burger-1'
+    try:
+        for active in [False, True]:
+            response = client.put(url, headers=_auth_headers(), json={'ativo': active})
+            assert response.status_code == 200, response.text
+            assert response.json()['id'] == 'prod-burger-1'
+            public = client.get('/api/cardapio-digital/public?restaurante_id=999')
+            assert public.status_code == 200
+            assert ('prod-burger-1' in {p['id'] for p in public.json()['produtos']}) is active
+    finally:
+        client.put(url, headers=_auth_headers(), json={'ativo': True})

@@ -167,3 +167,26 @@ def test_profiled_onboarding_rejects_invalid_profile_keys(invalid_profile: str):
         json=payload,
     )
     assert response.status_code == 422, response.text
+
+
+def test_marmitaria_profile_is_supported_without_creating_sizes_or_prices():
+    payload = _payload('marmitaria')
+    tenant_id = None
+    try:
+        response = client.post('/api/super-admin/restaurantes/provisionar', headers=_superadmin_headers(), json=payload)
+        assert response.status_code == 201, response.text
+        body = response.json()
+        tenant_id = int(body['id'])
+        profile = client.get(f'/api/super-admin/restaurantes/{tenant_id}/operation-profile', headers=_superadmin_headers())
+        assert profile.status_code == 200
+        assert profile.json()['operationProfile'] == 'marmitaria'
+        assert profile.json()['behaviorApplied'] is False
+        db = SessionLocal()
+        try:
+            with tenant_session_scope(db, tenant_id):
+                assert db.query(Produto).filter_by(restaurante_id=tenant_id).count() == 0
+                assert db.query(Categoria).filter_by(restaurante_id=tenant_id).count() == 0
+        finally:
+            db.close()
+    finally:
+        _cleanup_tenant(tenant_id)
