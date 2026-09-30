@@ -20,6 +20,7 @@ const onboardingShortcut = source('../src/components/caixa/navigation/CashierOnb
 const sidebarSearch = source('../src/components/caixa/navigation/CashierSidebarSearch.tsx');
 const cashierSettings = source('../src/components/caixa/settings/CashierSettings.tsx');
 const integrationsSettings = source('../src/components/caixa/settings/CashierIntegrationsSettings.tsx');
+const releaseModal = source('../src/super-admin/SuperAdminReleaseModal.tsx');
 
 test('new admin activation enters guided onboarding instead of raw cashier', () => {
   assert.match(activation, /userRole === 'admin'/);
@@ -125,6 +126,26 @@ test('first access confirms the tenant operation profile without mutating catalo
   assert.match(onboarding, /Tamanhos, sabores, meio a meio, bordas e adicionais/);
   assert.match(onboarding, /não cria, apaga nem muda produtos, preços ou adicionais automaticamente/);
   assert.match(onboarding, /operation_profile: operationProfile/);
+});
+
+test('dine-in setup can bootstrap standard tables without destructive synchronization', () => {
+  assert.match(onboarding, /Configure o salão/);
+  assert.match(onboarding, /\/api\/onboarding\/tables\/bootstrap/);
+  assert.match(onboarding, /Quantidade de mesas/);
+  assert.match(onboarding, /Lugares por mesa/);
+  assert.match(onboarding, /Mesa 1, Mesa 2 e assim por diante/);
+  assert.match(onboarding, /nenhuma mesa é apagada por este atalho/);
+  assert.match(onboarding, /openCashierAt\('impressao_salao', 'mesas', true\)/);
+  assert.match(onboarding, /snapshot\.operations\.orderTypes\.includes\('consumo_local'\)/);
+});
+
+test('Super Admin release cockpit can perform the same audited salon bootstrap', () => {
+  assert.match(releaseModal, /Atalho de implantação do salão/);
+  assert.match(releaseModal, /\/tables\/bootstrap/);
+  assert.match(releaseModal, /Motivo da alteração/);
+  assert.match(releaseModal, /CRIAR \/ COMPLETAR MESAS/);
+  assert.match(releaseModal, /Mesas cadastradas:/);
+  assert.match(releaseModal, /Tipo de operação:/);
 });
 
 test('onboarding uses canonical server progress, canonical modes and optional Mercado Pago', () => {
