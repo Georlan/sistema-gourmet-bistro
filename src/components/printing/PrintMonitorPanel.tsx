@@ -172,7 +172,7 @@ interface LocalAgentIdentity {
 interface PrintMonitorPanelProps {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
-  onTestPrint?: () => void | Promise<void>;
+  onTestPrint?: (agentId: string) => void | Promise<void>;
   testInProgress?: boolean;
   children?: React.ReactNode | ((context: { activePaperWidthMm?: number }) => React.ReactNode);
   advancedTestsSlot?: React.ReactNode;
@@ -1181,14 +1181,18 @@ export function PrintMonitorPanel({
               {onTestPrint && (
                 <button
                   type="button"
-                  onClick={() => void onTestPrint()}
-                  disabled={testInProgress || !hasDispatchablePrinter}
+                  onClick={() => {
+                    if (localAgentId) void onTestPrint(localAgentId);
+                  }}
+                  disabled={testInProgress || !hasDispatchablePrinter || !localAgentId}
                   title={
-                    hasReadyPrinter
-                      ? 'Enviar um cupom real para a impressora pronta'
-                      : hasDispatchablePrinter
-                        ? 'A impressora Bluetooth será conectada somente durante o envio'
-                        : 'Conecte ou configure uma impressora primeiro'
+                    !localAgentId
+                      ? 'Este computador ainda não foi identificado pelo KÔMA Print'
+                      : hasReadyPrinter
+                        ? 'Enviar um cupom real para a impressora deste computador'
+                        : hasDispatchablePrinter
+                          ? 'A impressora Bluetooth será conectada somente durante o envio'
+                          : 'Conecte ou configure uma impressora primeiro'
                   }
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-panel px-5 py-2.5 text-xs font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer shadow-xs"
                 >
