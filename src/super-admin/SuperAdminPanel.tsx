@@ -180,8 +180,8 @@ export default function SuperAdminPanel() {
     superAdminFetch("/api/super-admin/integrations/health")
       .then(res => res.json())
       .then(data => setRuntimeEnvironment(
-        typeof data.environment === "string" && data.environment.trim()
-          ? data.environment.trim().toLowerCase()
+        typeof data.runtime?.environment === "string" && data.runtime.environment.trim()
+          ? data.runtime.environment.trim().toLowerCase()
           : null,
       ))
       .catch(() => setRuntimeEnvironment(null));
