@@ -18,7 +18,7 @@ logging.basicConfig(
 # EX_TEMPFAIL: o pareamento exige uma ação humana. O serviço systemd usa este
 # código para encerrar sem entrar em um ciclo que reabre o navegador a cada
 # poucos segundos quando a autorização não é concluída.
-PAIRING_NOT_COMPLETED_EXIT = 75
+PAIRING_REQUIRED_EXIT = 2
 
 
 def main() -> int:
@@ -32,10 +32,17 @@ def main() -> int:
         return 0
 
 
-def run(config: AgentConfig) -> int:
+def rudef run(config: AgentConfig) -> int:
 
     while True:
         if not config.agent_token:
+            if not config.pair_only:
+                print(
+                    "[PAREAMENTO] Este computador precisa ser autorizado. "
+                    "Use 'Preparar impressão' no Kôma para iniciar uma única conexão segura."
+                )
+                return PAIRING_REQUIRED_EXIT
+
             from pairing import pair_agent
 
             print("[PAREAMENTO] Nenhuma credencial local encontrada. Abrindo o Kôma...")
@@ -43,10 +50,9 @@ def run(config: AgentConfig) -> int:
             if not paired_token:
                 print(
                     "[PAREAMENTO] Autorização não concluída. "
-                    "O navegador não será reaberto em loop; use 'Preparar impressão' "
-                    "ou execute o instalador novamente quando estiver pronto."
+                    "Tente novamente por 'Preparar impressão' quando estiver pronto."
                 )
-                return 1 if config.pair_only else PAIRING_NOT_COMPLETED_EXIT
+                return 1
             config.agent_token = paired_token
             print("[PAREAMENTO] Computador conectado com sucesso.")
 
@@ -63,11 +69,17 @@ def run(config: AgentConfig) -> int:
 
             clear_stored_token()
             config.agent_token = ""
+            if config.pair_only:
+                print(
+                    "[PAREAMENTO] A autorização anterior foi revogada. "
+                    "Solicitando uma nova conexão segura..."
+                )
+                continue
             print(
                 "[PAREAMENTO] A autorização anterior foi revogada. "
-                "Solicitando uma nova conexão segura..."
+                "Use 'Preparar impressão' para autorizar este computador novamente."
             )
-            continue
+            return PAIRING_REQUIRED_EXIT
 
         if config.pair_only:
             print("[PAREAMENTO] Credencial local pronta. Nenhum token precisa ser copiado.")
@@ -82,10 +94,8 @@ def run(config: AgentConfig) -> int:
             clear_stored_token()
             config.agent_token = ""
             print(
-                "[PAREAMENTO] A autorização anterior foi revogada. "
-                "Reconectando este computador sem apagar a fila local..."
+                "[PAREAMENTO] A autorização deste computador foi revogada. "
+                "O serviço foi pausado sem abrir navegador; use 'Preparar impressão'."
             )
-
-
-if __name__ == "__main__":
+            return PAIRING_REQUIRED_EXIT_name__ == "__main__":
     sys.exit(main())
