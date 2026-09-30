@@ -145,7 +145,7 @@ test('atalho do turno abre a conferência sem fechar o caixa', async ({ page }) 
   await open(page);
   const mutations: string[] = [];
   page.on('request', request => {
-    if (request.method() !== 'GET' && /turnos/.test(request.url())) mutations.push(request.url());
+    if (request.method() !== 'GET' && /\/caixa\/turno/.test(request.url())) mutations.push(request.url());
   });
   const sidebar = page.locator('.cashier-sidebar:visible');
   if (!await sidebar.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
