@@ -62,7 +62,7 @@ if [[ ! -f "$SCRIPT_DIR/main.py" ]]; then
     SCRIPT_DIR="$DOWNLOAD_TMP/print-agent"
 fi
 
-required_commands=("$PYTHON_BIN" systemctl install)
+required_commands=("$PYTHON_BIN" systemctl install flock)
 for command_name in "${required_commands[@]}"; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
         echo "[ERRO] Comando obrigatório não encontrado: $command_name" >&2
@@ -168,8 +168,8 @@ fi
         "ExecStart=$VENV_DIR/bin/python $INSTALL_DIR/main.py" \
         'Restart=always' \
         'RestartSec=3' \
-        'RestartPreventExitStatus=75' \
-        'SuccessExitStatus=75' \
+        'RestartPreventExitStatus=2' \
+        'SuccessExitStatus=2' \
         'TimeoutStopSec=15' \
         'NoNewPrivileges=true' \
         'PrivateTmp=true' \
