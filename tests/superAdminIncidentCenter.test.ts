@@ -37,7 +37,10 @@ test('Central exibe cartões KPI de severidade e filtros operacionais', () => {
 
 test('Central exibe estado vazio honesto sem inventar falsa saúde', () => {
   assert.match(incidentTab, /Nenhum incidente detectado nas fontes monitoradas/);
-  assert.match(incidentTab, /Nenhum erro ativo foi encontrado na fila do Outbox/);
+  assert.match(incidentTab, /Consulta concluída sem erro ativo na fila do Outbox/);
+  assert.match(incidentTab, /Diagnóstico indisponível/);
+  assert.match(incidentTab, /não pode afirmar que não há incidentes/);
+  assert.match(incidentTab, /errorNotice \? \(/);
 });
 
 test('Ações corretivas exigem motivo obrigatório para auditoria', () => {
