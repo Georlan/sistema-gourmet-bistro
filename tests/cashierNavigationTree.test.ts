@@ -5,10 +5,12 @@ import test from 'node:test';
 import {
   CASHIER_SIDEBAR_GROUPS,
   getCashierSidebarGroupsForPlan,
+  getCashierSetupSidebarGroupsForPlan,
   getCashierNavigationAction,
   getCashierNavigationParentId,
   getCashierNavigationTarget,
   isCashierNavigationActive,
+  isCashierSetupTargetAllowed,
   normalizeCashierNavigationState,
   normalizeCashierTargetForEntitlements,
 } from '../src/components/caixa/navigation/cashierNavigation';
@@ -430,6 +432,47 @@ test('restrições de plano vivem na árvore canônica, não em listas paralelas
     new URL('../src/components/caixa/navigation/cashierNavigation.ts', import.meta.url), 'utf8',
   );
   assert.doesNotMatch(source, /hiddenPocketItems|hiddenPocketChildren/);
+});
+
+test('implantação expõe somente cadastros e configurações práticas do primeiro turno', () => {
+  const setupGroups = getCashierSetupSidebarGroupsForPlan('pro', proEntitlements);
+  const setupItems = setupGroups.flatMap((group) => group.items);
+  assert.deepEqual(setupItems.map((item) => item.id), [
+    'cardapio',
+    'cardapio_digital',
+    'permissoes_cargos',
+    'impressao_salao',
+  ]);
+  assert.equal(setupItems.some((item) => item.id === 'operacao'), false);
+  assert.equal(setupItems.some((item) => item.id === 'financeiro'), false);
+  assert.equal(setupItems.some((item) => item.id === 'relatorios'), false);
+
+  const online = setupItems.find((item) => item.id === 'cardapio_digital');
+  assert.deepEqual(online?.children?.map((child) => child.id), [
+    'online_perfil',
+    'online_marca',
+    'online_pedidos',
+    'online_entrega',
+    'online_pagamentos',
+    'online_divulgacao',
+  ]);
+
+  const settings = setupItems.find((item) => item.id === 'impressao_salao');
+  assert.deepEqual(settings?.children?.map((child) => child.id), [
+    'config_aparencia',
+    'config_impressao',
+    'config_mesas',
+    'config_garcom',
+    'config_taxa',
+    'config_integracoes',
+  ]);
+
+  assert.equal(isCashierSetupTargetAllowed('permissoes_cargos', 'pessoas'), true);
+  assert.equal(isCashierSetupTargetAllowed('impressao_salao', 'mesas'), true);
+  assert.equal(isCashierSetupTargetAllowed('cardapio_digital', 'cardapio_entrega'), true);
+  assert.equal(isCashierSetupTargetAllowed('financeiro', 'turno_atual'), false);
+  assert.equal(isCashierSetupTargetAllowed('operacao', 'pedidos'), false);
+  assert.equal(isCashierSetupTargetAllowed('cardapio_digital', 'cardapio_bloqueios'), false);
 });
 
 test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redução', () => {
