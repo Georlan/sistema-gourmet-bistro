@@ -122,6 +122,8 @@ def _save(payload, db, tenant, background_tasks, product_id=None):
     product.nome = payload.nome
     product.preco = payload.preco
     product.ativo = payload.ativo
+    # Os vínculos têm FK composta: grave o produto antes de inserir suas regras.
+    db.flush()
     existing = db.query(ProdutoGrupoModificador).filter_by(restaurante_id=tenant, produto_id=product.id).all()
     # O grupo existe uma única vez; apenas a regra muda conforme o tamanho.
     for link in existing:

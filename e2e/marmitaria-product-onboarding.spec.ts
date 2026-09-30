@@ -106,3 +106,27 @@ test('salva preço pausado sem grupos e permite continuar o cadastro depois', as
   await expect(panel.getByRole('form')).toHaveCount(0);
   expect(saved).toMatchObject({ tamanho: 'P', preco: 15, ativo: false, regras: [] });
 });
+
+test('marmita antiga ativa sem escolhas pode ser pausada pelo cadastro único', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => { sessionStorage.setItem('koma_active_tab', 'cardapio'); sessionStorage.setItem('koma_active_subtab', 'produtos'); });
+  await page.route('**/caixa/configuracoes', route => route.fulfill({ json: { ...cashierConfig, operation_profile: 'marmitaria' } }));
+  await page.route('**/cardapio/modificadores/grupos', route => route.fulfill({ json: [] }));
+  let saved = { id: 'old-g', tamanho: 'G', nome: 'Quentinha G', preco: 10, ativo: true, regras: [] };
+  await page.route('**/cardapio/marmitaria/tamanhos**', async route => {
+    if (route.request().method() === 'GET') { await route.fulfill({ json: { enabled: true, tamanhos: [saved] } }); return; }
+    expect(route.request().method()).toBe('PUT');
+    expect(route.request().url()).toMatch(/old-g$/);
+    saved = { ...saved, ...route.request().postDataJSON() };
+    await route.fulfill({ json: saved });
+  });
+  await page.goto('/?view=caixa');
+  const panel = page.getByRole('region', { name: 'Cadastro de marmitas' });
+  await panel.getByRole('button', { name: 'Configurar marmita G', exact: true }).click();
+  await expect(panel.getByLabel('Disponível para venda')).toBeEnabled();
+  await panel.getByLabel('Disponível para venda').uncheck();
+  await panel.getByRole('button', { name: 'Salvar marmita' }).click();
+  await expect(panel.getByRole('form')).toHaveCount(0);
+  expect(saved.ativo).toBe(false);
+});

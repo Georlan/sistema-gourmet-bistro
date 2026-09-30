@@ -122,7 +122,7 @@ export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos, on
         </div>)}
         <button type="button" className="text-sm font-bold text-emerald-500" disabled={editing.regras.length >= grupos.length || editing.regras.length >= 20} onClick={() => setEditing({ ...editing, regras: [...editing.regras, { grupo_id: '', minimo: 1, maximo: 1, modo_selecao: 'tipos' }] })}>Adicionar escolhas</button>
         {grupos.length === 0 && <p className="text-sm text-amber-500">Cadastre as proteínas e guarnições na seção de opções abaixo. Você pode salvar o preço agora e configurar as escolhas depois.</p>}
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={editing.regras.length === 0} checked={editing.ativo} onChange={event => setEditing({ ...editing, ativo: event.target.checked })} />Disponível para venda</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={editing.regras.length === 0 && !editing.ativo} checked={editing.ativo} onChange={event => setEditing({ ...editing, ativo: event.target.checked })} />Disponível para venda</label>
         <p className="text-xs text-koma-muted">Pausar uma opção vale para todos os tamanhos que usam essa opção.</p>
         {error && <p role="alert" className="text-sm text-rose-500">{error}</p>}
         <div className="flex gap-3"><button type="submit" className="rounded-xl bg-emerald-500 px-4 py-2 font-bold text-black">{saving ? 'Salvando…' : 'Salvar marmita'}</button><button type="button" onClick={() => { setEditing(null); setError(''); }}>Cancelar</button></div>
