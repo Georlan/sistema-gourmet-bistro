@@ -156,9 +156,12 @@ test("falha de suspensão não possui mutação local e o painel não simula fee
 
 test("painel expõe inbox real e ativação contratual sem revelar credenciais", () => {
   const panel = readFileSync(new URL("../src/super-admin/SuperAdminPanel.tsx", import.meta.url), "utf8");
+  const clientsHub = readFileSync(new URL("../src/super-admin/SuperAdminClientsHub.tsx", import.meta.url), "utf8");
   const inbox = readFileSync(new URL("../src/super-admin/SuperAdminContractsTab.tsx", import.meta.url), "utf8");
 
-  assert.match(panel, /label: "Contratações"/);
+  assert.match(panel, /<SuperAdminClientsHub/);
+  assert.match(clientsHub, /Contratações/);
+  assert.match(clientsHub, /<SuperAdminContractsTab/);
   assert.match(panel, /\/api\/super-admin\/contracts\?status=all&limit=200/);
   assert.match(panel, /pendingContractsCount/);
   assert.match(panel, /30_000/);
