@@ -41,6 +41,7 @@ def test_linux_launcher_is_idempotent_and_single_flight():
     assert '"active"' in launcher
     assert '"activating"' in launcher
     assert 'credentials.json' in launcher
+    assert 'load_stored_token' in launcher
     assert 'flock -n 9' in launcher
     assert 'KOMA_PAIRING_LOCK_HELD=1' in launcher
     assert 'main.py --pair-only' in launcher
