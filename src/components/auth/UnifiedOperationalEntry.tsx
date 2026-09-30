@@ -66,7 +66,7 @@ export default function UnifiedOperationalEntry() {
     if (!activePortal) return;
     const tokenKey = activePortal === 'caixa' ? 'koma_caixa_token' : 'koma_waiter_token';
     const timer = window.setInterval(() => {
-      if (!localStorage.getItem(tokenKey)) {
+      if (!sessionStorage.getItem(tokenKey)) {
         // O App legado ainda remove primeiro o alias do portal atual ao sair.
         // Finalizamos somente essa sessão, preservando o outro portal em outra aba.
         clearOperatorSession(activePortal);
@@ -157,8 +157,7 @@ export default function UnifiedOperationalEntry() {
         return;
       }
 
-      // Não limpamos a outra área operacional aqui. saveOperatorSession substitui
-      // apenas a sessão do portal autenticado e vincula esta aba a ele.
+      // O login substitui a identidade apenas desta aba e vincula seu portal.
       saveOperatorSession(data.access_token, { ...data.usuario, role });
 
       setUsername('');

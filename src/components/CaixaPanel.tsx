@@ -461,11 +461,11 @@ export function CaixaPanel({
 
   const handleLogoutOperator = () => {
     clearOperatorSession();
-    localStorage.removeItem('koma_token');
-    localStorage.removeItem('koma_user_id');
-    localStorage.removeItem('koma_user_name');
-    localStorage.removeItem('koma_user_role');
-    localStorage.removeItem('koma_auth_token');
+    sessionStorage.removeItem('koma_token');
+    sessionStorage.removeItem('koma_user_id');
+    sessionStorage.removeItem('koma_user_name');
+    sessionStorage.removeItem('koma_user_role');
+    sessionStorage.removeItem('koma_auth_token');
     window.location.reload();
   };
 

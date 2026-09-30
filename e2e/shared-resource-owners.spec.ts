@@ -196,15 +196,20 @@ test('401 antigo não encerra nova sessão, mas 401 da sessão atual retorna ao 
   await page.evaluate(() => window.dispatchEvent(new Event('koma-sync-all')));
   await expect.poll(() => oldReads).toBe(1);
   await page.evaluate(() => {
-    localStorage.setItem('koma_caixa_token', 'session-new-fixture');
-    localStorage.setItem('koma_caixa_id', 'operator-new-fixture');
+    sessionStorage.setItem('koma_caixa_token', 'session-new-fixture');
+    sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+    sessionStorage.setItem('koma_caixa_id', 'operator-new-fixture');
+    const previous = JSON.parse(sessionStorage.getItem('koma_operator_session_caixa') || '{}');
+    sessionStorage.setItem('koma_operator_session_caixa', JSON.stringify({
+      ...previous, token:'session-new-fixture', user:{...previous.user,id:'operator-new-fixture'},
+    }));
     window.dispatchEvent(new Event('popstate'));
   });
   await expect(page.getByText('Catálogo da nova sessão', { exact: true })).toBeVisible();
   release();
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await expect(page.getByText('Catálogo da nova sessão', { exact: true })).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem('koma_caixa_token'))).toBe('session-new-fixture');
+  expect(await page.evaluate(() => sessionStorage.getItem('koma_caixa_token'))).toBe('session-new-fixture');
   await page.route('**/produtos/catalogo', route => route.fulfill({ status: 401, json: { detail: 'Sessão atual expirada' } }));
   await page.evaluate(() => window.dispatchEvent(new Event('koma-sync-all')));
   await expect(page.getByRole('button', { name: /Entrar/ })).toBeVisible();

@@ -65,11 +65,11 @@ export function OperationalLogin({
 
     if (
       portal === 'garcom'
-      && (localStorage.getItem('koma_waiter_token') || localStorage.getItem('authToken'))
+      && (sessionStorage.getItem('koma_waiter_token') || sessionStorage.getItem('authToken'))
     ) {
       sessionStorage.setItem('koma_active_operational_portal', 'garcom');
       sessionStorage.removeItem('koma_operational_logged_out');
-    } else if (portal === 'caixa' && localStorage.getItem('koma_caixa_token')) {
+    } else if (portal === 'caixa' && sessionStorage.getItem('koma_caixa_token')) {
       sessionStorage.setItem('koma_active_operational_portal', 'caixa');
       sessionStorage.removeItem('koma_operational_logged_out');
     }

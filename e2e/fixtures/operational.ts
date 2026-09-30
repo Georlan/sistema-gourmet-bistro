@@ -67,11 +67,12 @@ export async function openOperationalScenario(page: Page, scenario: Scenario = {
   const actions: { path: string; query: string; method: string; body: unknown }[] = [];
 
   await page.addInitScript(({ subtab }) => {
-    localStorage.setItem('koma_caixa_token', 'phase7-fixture-token');
-    localStorage.setItem('koma_caixa_id', 'cashier-phase7');
-    localStorage.setItem('koma_caixa_name', 'Operador Fase 7');
-    localStorage.setItem('koma_caixa_role', 'caixa');
-    localStorage.setItem('token', 'phase7-fixture-token');
+    sessionStorage.setItem('koma_caixa_token', 'phase7-fixture-token');
+    sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+    sessionStorage.setItem('koma_caixa_id', 'cashier-phase7');
+    sessionStorage.setItem('koma_caixa_name', 'Operador Fase 7');
+    sessionStorage.setItem('koma_caixa_role', 'caixa');
+    sessionStorage.setItem('token', 'phase7-fixture-token');
     sessionStorage.setItem('koma_active_tab', 'operacao');
     sessionStorage.setItem('koma_active_subtab', subtab);
   }, { subtab: scenario.subtab ?? 'pedidos' });

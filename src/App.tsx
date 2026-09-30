@@ -28,7 +28,7 @@ import { countWaiterSalonTables, projectWaiterSalonTables } from './domain/waite
 import { isCentralSupportOperationalBridge, resolveKomaHost } from './domain/komaHost';
 import { AppRole, AppSettings, CaixaTurnoResumo } from './types';
 import { authFetch, authRequestErrorMessage } from './utils/authRequest';
-import { getOperatorSession, saveOperatorSession, type OperationalPortal } from './utils/authSession';
+import { clearOperatorSession, getOperatorSession, saveOperatorSession, type OperationalPortal } from './utils/authSession';
 import { openAuthenticatedWebSocket } from './utils/authenticatedWebSocket';
 import { operationalFetch } from './utils/operationalRequest';
 import { aplicarMascaraTelefoneInput } from './utils/phonePresentation';
@@ -54,8 +54,8 @@ const CashierLoading = () => (
   </div>
 );
 
-const LOCAL_STORAGE_SETTINGS_KEY = 'koma_settings_vFinal_v3';
-const LOCAL_STORAGE_RESTAURANT_NAME_KEY = 'koma_restaurant_name_v3';
+const TAB_SETTINGS_KEY = 'koma_settings_vFinal_v3';
+const TAB_RESTAURANT_NAME_KEY = 'koma_restaurant_name_v3';
 const LOCAL_STORAGE_HIST_CLIENTS_KEY = 'koma_historic_clients_v3';
 
 const SUPPORT_SESSION_STORAGE_KEY = 'koma_support_session';
@@ -106,7 +106,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   }
 
   // Detect KÔMA Landing Page (/landing or ?view=landing or apex komafood.com.br)
-  if (hostConfig.surface === 'landing') {
+  if (!initialPortal && hostConfig.surface === 'landing') {
     return <AppRouteBoundary label="apresentação"><LandingPage /></AppRouteBoundary>;
   }
 
@@ -145,24 +145,24 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     const key = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-    return !!localStorage.getItem(key);
+    return !!sessionStorage.getItem(key);
   });
   const [activeWaiterId, setActiveWaiterId] = useState<string>(() => {
     const key = portal === 'caixa' ? "koma_caixa_id" : "koma_waiter_id";
-    const storedId = localStorage.getItem(key);
+    const storedId = sessionStorage.getItem(key);
     if (storedId || portal !== 'caixa') return storedId || "";
     return String(getOperatorSession()?.user?.id || "");
   });
   const [activeWaiterNome, setActiveWaiterNome] = useState<string>(() => {
     const key = portal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
-    const storedName = localStorage.getItem(key);
+    const storedName = sessionStorage.getItem(key);
     if (storedName || portal !== 'caixa') return storedName || "";
     return String(getOperatorSession()?.user?.nome || "");
   });
   const activeWaiter = { id: activeWaiterId, nome: activeWaiterNome };
   const [activeRole, setActiveRole] = useState<AppRole>(() => {
     if (portal === 'caixa') {
-      return (localStorage.getItem("koma_caixa_role") as AppRole)
+      return (sessionStorage.getItem("koma_caixa_role") as AppRole)
         || (getOperatorSession()?.user?.role as AppRole)
         || 'caixa';
     }
@@ -200,7 +200,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       headers["Content-Type"] = contentType;
     }
     const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-    const token = localStorage.getItem(tokenKey);
+    const token = sessionStorage.getItem(tokenKey);
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
@@ -228,7 +228,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     printPairingStartedRef.current = true;
 
     const authorizePrintAgent = async () => {
-      const jwt = localStorage.getItem('koma_caixa_token');
+      const jwt = sessionStorage.getItem('koma_caixa_token');
       if (!jwt) {
         printPairingStartedRef.current = false;
         return;
@@ -288,7 +288,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     if (!requestScopeKey) return;
     try {
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-      const token = localStorage.getItem(tokenKey);
+      const token = sessionStorage.getItem(tokenKey);
       if (!token) return;
 
       const res = await fetch(`${API_BASE_URL}/caixa/pagamentos/pendentes`, {
@@ -315,7 +315,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
     try {
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-      const token = localStorage.getItem(tokenKey);
+      const token = sessionStorage.getItem(tokenKey);
       if (!token) return;
 
       const requestRestaurantId = activeRestaurantId;
@@ -329,7 +329,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         // A configuração é tenant-scoped no backend, mas ainda protegemos a UI
         // contra respostas atrasadas de uma sessão/restaurante anterior.
         if (requestScopeKey !== operationalScopeKeyRef.current) return;
-        if (localStorage.getItem(tokenKey) !== token) return;
+        if (sessionStorage.getItem(tokenKey) !== token) return;
         if (
           requestRestaurantId > 0
           && responseRestaurantId > 0
@@ -353,7 +353,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
   const fetchTurnoResumo = useCallback(async () => {
     const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-    if (!isAuthenticated || !localStorage.getItem(tokenKey)) {
+    if (!isAuthenticated || !sessionStorage.getItem(tokenKey)) {
       setTurnoResumo(null);
       setIsTurnoResumoLoading(false);
       return;
@@ -406,7 +406,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       const searchParams = new URLSearchParams(window.location.search);
       const viewParam = searchParams.get('view');
       const hash = window.location.hash;
-      let newPortal: 'caixa' | 'garcom' = (viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') ? 'caixa' : 'garcom';
+      const newPortal: OperationalPortal = initialPortal || ((viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') ? 'caixa' : 'garcom');
 
       setPortal(newPortal);
 
@@ -415,20 +415,20 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       const nameKey = newPortal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
       const roleKey = newPortal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
 
-      setIsAuthenticated(!!localStorage.getItem(tokenKey));
+      setIsAuthenticated(!!sessionStorage.getItem(tokenKey));
       const operatorSession = getOperatorSession(newPortal);
       setActiveWaiterId(
-        localStorage.getItem(idKey)
+        sessionStorage.getItem(idKey)
         || String(operatorSession?.user?.id || "")
       );
       setActiveWaiterNome(
-        localStorage.getItem(nameKey)
+        sessionStorage.getItem(nameKey)
         || String(operatorSession?.user?.nome || "")
       );
 
       if (newPortal === 'caixa') {
         setActiveRole(
-          (localStorage.getItem(roleKey) as AppRole)
+          (sessionStorage.getItem(roleKey) as AppRole)
           || (operatorSession?.user?.role as AppRole)
           || 'caixa'
         );
@@ -437,7 +437,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       }
 
       const tableKey = `koma_${newPortal}_selected_table_v3`;
-      const savedTable = localStorage.getItem(tableKey);
+      const savedTable = sessionStorage.getItem(tableKey);
       setSelectedTableId(savedTable ? parseInt(savedTable, 10) : null);
     };
 
@@ -447,7 +447,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       window.removeEventListener('popstate', handleUrlChange);
       window.removeEventListener('hashchange', handleUrlChange);
     };
-  }, [portal]);
+  }, [portal, initialPortal]);
 
   // Toast notification system
   interface Toast { id: number; message: string; type: 'success' | 'error' | 'info'; }
@@ -470,15 +470,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
   // Logout handler
   const handleLogout = useCallback(() => {
-    const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-    const idKey = portal === 'caixa' ? "koma_caixa_id" : "koma_waiter_id";
-    const nameKey = portal === 'caixa' ? "koma_caixa_name" : "koma_waiter_name";
-    const roleKey = portal === 'caixa' ? "koma_caixa_role" : "koma_user_role";
-
-    localStorage.removeItem(tokenKey);
-    localStorage.removeItem(idKey);
-    localStorage.removeItem(nameKey);
-    localStorage.removeItem(roleKey);
+    clearOperatorSession(portal);
 
     setIsAuthenticated(false);
     setActiveWaiterId("");
@@ -562,7 +554,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
   // Editable Restaurant Name State
   const [restaurantName, setRestaurantName] = useState<string>(() => {
-    return localStorage.getItem(LOCAL_STORAGE_RESTAURANT_NAME_KEY) || RESTAURANT_CONFIG.nomePadrao;
+    return sessionStorage.getItem(TAB_RESTAURANT_NAME_KEY) || RESTAURANT_CONFIG.nomePadrao;
   });
 
   // Table filter state
@@ -608,28 +600,21 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
   // 3. App View Settings
   const [settings, setSettings] = useState<AppSettings>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_SETTINGS_KEY);
+    const saved = sessionStorage.getItem(TAB_SETTINGS_KEY);
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch (e) {
-        console.error('Error loading settings from localStorage', e);
+        console.error('Error loading tab settings', e);
       }
     }
-    const searchParams = new URLSearchParams(window.location.search);
-    const viewParam = searchParams.get('view');
-    const hash = window.location.hash;
-    const isCaixa = viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia';
+    const isCaixa = portal === 'caixa';
     return { exibirImagens: isCaixa, exibirDescricoes: isCaixa };
   });
 
   // 4. Modal focus state
   const [selectedTableId, setSelectedTableId] = useState<number | null>(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const viewParam = searchParams.get('view');
-    const hash = window.location.hash;
-    const initialPortal = (viewParam === 'caixa' || viewParam === 'gerencia' || hash === '#caixa' || hash === '#gerencia') ? 'caixa' : 'garcom';
-    const saved = localStorage.getItem(`koma_${initialPortal}_selected_table_v3`);
+    const saved = sessionStorage.getItem(`koma_${portal}_selected_table_v3`);
     return saved ? parseInt(saved, 10) : null;
   });
 
@@ -646,9 +631,9 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   useEffect(() => {
     const key = `koma_${portal}_selected_table_v3`;
     if (selectedTableId !== null) {
-      localStorage.setItem(key, selectedTableId.toString());
+      sessionStorage.setItem(key, selectedTableId.toString());
     } else {
-      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
     }
   }, [selectedTableId, portal]);
 
@@ -758,7 +743,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
       const wsBase = WS_BASE_URL.replace(/\/+$/, '');
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-      const token = localStorage.getItem(tokenKey) || "";
+      const token = sessionStorage.getItem(tokenKey) || "";
       const wsIdentity = readJwtSubject(token) || activeWaiterId;
       if (!token || !wsIdentity) return;
       const wsUrl = `${wsBase}/ws/${encodeURIComponent(wsIdentity)}`;
@@ -1010,11 +995,11 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   // Synchronized via polling instead of localStorage
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_SETTINGS_KEY, JSON.stringify(settings));
+    sessionStorage.setItem(TAB_SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_RESTAURANT_NAME_KEY, restaurantName);
+    sessionStorage.setItem(TAB_RESTAURANT_NAME_KEY, restaurantName);
   }, [restaurantName]);
 
   // Lock body scroll when sidebar/drawer is open
@@ -1167,19 +1152,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         return;
       }
 
-      if (portal === 'garcom' && role === 'admin') {
-        // Compatibilidade do acesso administrativo ao portal de salão: o helper
-        // canônico classificaria admin como Caixa. Mantemos os aliases do Garçom
-        // neste caso raro sem usá-los como fonte de autorização de tenant.
-        localStorage.setItem("koma_waiter_token", data.access_token);
-        localStorage.setItem("koma_waiter_id", data.usuario.id);
-        localStorage.setItem("koma_waiter_name", data.usuario.nome);
-        localStorage.setItem("koma_user_role", role);
-      } else {
-        // Para garçons reais, a sessão canônica preserva restaurante_id e
-        // continua preenchendo os aliases legados usados pelo App.
-        saveOperatorSession(data.access_token, { ...data.usuario, role });
-      }
+      saveOperatorSession(data.access_token, { ...data.usuario, role }, portal);
 
       setActiveWaiterId(data.usuario.id);
       setActiveWaiterNome(data.usuario.nome);

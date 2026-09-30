@@ -4,10 +4,11 @@ import { mockCashierBackend, seedCashierSession, commands, DESKTOP_BREAKPOINT } 
 
 async function seedReportSession(page: Page) {
   await page.addInitScript(() => {
-    localStorage.setItem('koma_caixa_token', 'playwright-e2e-token');
-    localStorage.setItem('koma_caixa_id', 'caixa-e2e');
-    localStorage.setItem('koma_caixa_name', 'Caixa E2E');
-    localStorage.setItem('koma_caixa_role', 'caixa');
+    sessionStorage.setItem('koma_caixa_token', 'playwright-e2e-token');
+    sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+    sessionStorage.setItem('koma_caixa_id', 'caixa-e2e');
+    sessionStorage.setItem('koma_caixa_name', 'Caixa E2E');
+    sessionStorage.setItem('koma_caixa_role', 'caixa');
     localStorage.setItem('token', 'playwright-e2e-token');
     sessionStorage.setItem('koma_active_tab', 'relatorios');
     sessionStorage.setItem('koma_active_subtab', 'visao_geral');
@@ -16,10 +17,11 @@ async function seedReportSession(page: Page) {
 
 async function seedTeamSession(page: Page) {
   await page.addInitScript(() => {
-    localStorage.setItem('koma_caixa_token', 'playwright-e2e-token');
-    localStorage.setItem('koma_caixa_id', 'caixa-e2e');
-    localStorage.setItem('koma_caixa_name', 'Caixa E2E');
-    localStorage.setItem('koma_caixa_role', 'caixa');
+    sessionStorage.setItem('koma_caixa_token', 'playwright-e2e-token');
+    sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+    sessionStorage.setItem('koma_caixa_id', 'caixa-e2e');
+    sessionStorage.setItem('koma_caixa_name', 'Caixa E2E');
+    sessionStorage.setItem('koma_caixa_role', 'caixa');
     localStorage.setItem('token', 'playwright-e2e-token');
     sessionStorage.setItem('koma_active_tab', 'permissoes_cargos');
     sessionStorage.setItem('koma_active_subtab', 'pessoas');
@@ -28,10 +30,11 @@ async function seedTeamSession(page: Page) {
 
 async function seedCatalogSession(page: Page) {
   await page.addInitScript(() => {
-    localStorage.setItem('koma_caixa_token', 'playwright-e2e-token');
-    localStorage.setItem('koma_caixa_id', 'caixa-e2e');
-    localStorage.setItem('koma_caixa_name', 'Caixa E2E');
-    localStorage.setItem('koma_caixa_role', 'caixa');
+    sessionStorage.setItem('koma_caixa_token', 'playwright-e2e-token');
+    sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+    sessionStorage.setItem('koma_caixa_id', 'caixa-e2e');
+    sessionStorage.setItem('koma_caixa_name', 'Caixa E2E');
+    sessionStorage.setItem('koma_caixa_role', 'caixa');
     localStorage.setItem('token', 'playwright-e2e-token');
     sessionStorage.setItem('koma_active_tab', 'cardapio');
     sessionStorage.setItem('koma_active_subtab', 'produtos');
@@ -46,15 +49,16 @@ async function seedKitchenSession(page: Page) {
       nome: 'Cozinha E2E',
       role: 'cozinha',
     };
-    localStorage.setItem('koma_operator_session', JSON.stringify({
+    sessionStorage.setItem('koma_operator_session_caixa', JSON.stringify({
       token,
       user,
       expiresAt: Date.now() + 60_000,
     }));
-    localStorage.setItem('koma_caixa_token', token);
-    localStorage.setItem('koma_caixa_id', user.id);
-    localStorage.setItem('koma_caixa_name', user.nome);
-    localStorage.setItem('koma_caixa_role', user.role);
+    sessionStorage.setItem('koma_caixa_token', token);
+    sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+    sessionStorage.setItem('koma_caixa_id', user.id);
+    sessionStorage.setItem('koma_caixa_name', user.nome);
+    sessionStorage.setItem('koma_caixa_role', user.role);
   });
 }
 

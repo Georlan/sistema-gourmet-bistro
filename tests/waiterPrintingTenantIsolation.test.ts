@@ -13,7 +13,7 @@ test('waiter printing capability is isolated by authenticated restaurant scope',
   assert.match(app, /\$\{portal\}:\$\{activeRestaurantId \|\| 'legacy'\}:\$\{activeRole\}:\$\{activeWaiterId\}/);
   assert.match(app, /const requestScopeKey = operationalScopeKey/);
   assert.match(app, /requestScopeKey !== operationalScopeKeyRef\.current/);
-  assert.match(app, /localStorage\.getItem\(tokenKey\) !== token/);
+  assert.match(app, /sessionStorage\.getItem\(tokenKey\) !== token/);
   assert.match(app, /responseRestaurantId !== requestRestaurantId/);
   assert.match(app, /const activeRestaurantId = Number\.isInteger\(sessionRestaurantId\)/);
   assert.match(app, /setRestauranteConfig\(null\);[\s\S]*setIsConfigLoaded\(false\)/);

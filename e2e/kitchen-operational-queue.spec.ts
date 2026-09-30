@@ -4,7 +4,7 @@ import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 test('cozinha mostra identidade de cada lançamento e mantém FIFO e conclusão por item', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
-  await page.addInitScript(() => localStorage.setItem('koma_caixa_role', 'cozinha'));
+  await page.addInitScript(() => sessionStorage.setItem('koma_caixa_role', 'cozinha'));
   const now = Date.now();
   const orders = [{ id: 'check-kitchen', numero_pedido: 81, mesa_id: 0, tipo: 'Retirada',
     garcom_id: 'cashier', criada_por: { nome: 'Caixa Demo' }, criado_em: new Date(now - 30 * 60000).toISOString(),

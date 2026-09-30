@@ -6,7 +6,7 @@ const CANONICAL_OPERATIONAL_PATH = '/?view=operacional';
 
 type LoginReply = (route: Route, body: Record<string, unknown>) => Promise<void>;
 
-async function installOperationalApi(page: Page, loginReply: LoginReply) {
+async function installOperationalApi(page: Page, loginReply: LoginReply, authorization: string[] = []) {
   await page.routeWebSocket(/\/ws\//, socket => { socket.onMessage(() => {}); });
   await page.route('**/*', async route => {
     const request = route.request();
@@ -20,10 +20,14 @@ async function installOperationalApi(page: Page, loginReply: LoginReply) {
       return;
     }
 
+    const bearer = request.headers().authorization;
+    if (bearer) authorization.push(bearer);
     let body: unknown = {};
     if (key === 'GET /mesas/' || key === 'GET /comandas/detalhes/todos' || key === 'GET /caixa/pagamentos/pendentes') body = [];
     else if (key === 'GET /produtos/catalogo') body = { categorias: [], produtos: [] };
     else if (key === 'GET /caixa/configuracoes') body = {};
+    else if (key === 'GET /caixa/turno-atual') body = null;
+    else if (key === 'GET /api/onboarding/status') body = {progress:{completed:5,total:5},trial:{status:'active'}};
     else if (key === 'GET /caixa/turno-atual/resumo') body = { total_vendas: 0, comandas_abertas_count: 0 };
     else if (request.method() === 'GET') body = [];
 
@@ -42,7 +46,7 @@ async function removePortalAlias(page: Page, portal: 'garcom' | 'caixa') {
     const keys = selectedPortal === 'garcom'
       ? ['koma_waiter_token', 'koma_waiter_id', 'koma_waiter_name', 'koma_user_role']
       : ['koma_caixa_token', 'koma_caixa_id', 'koma_caixa_name', 'koma_caixa_user_id', 'koma_caixa_user_name', 'koma_caixa_role'];
-    for (const key of keys) localStorage.removeItem(key);
+    for (const key of keys) sessionStorage.removeItem(key);
   }, portal);
 }
 
@@ -59,7 +63,7 @@ test('garçom persiste na própria aba e nova aba continua livre para outro logi
 
   await page.goto(CANONICAL_OPERATIONAL_PATH);
   await submitLogin(page, 'GARCOM@KOMA.TEST', 'senha-teste');
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_waiter_token'))).toBe('waiter-persist-token');
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('koma_waiter_token'))).toBe('waiter-persist-token');
   expect(bodies).toEqual([{ username: 'garcom@koma.test', password: 'senha-teste' }]);
   await page.reload();
   await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
@@ -69,7 +73,7 @@ test('garçom persiste na própria aba e nova aba continua livre para outro logi
   await installOperationalApi(secondPage, waiterReply);
   await secondPage.goto(CANONICAL_OPERATIONAL_PATH);
   await expect(secondPage.getByLabel('E-MAIL')).toBeVisible();
-  expect(await secondPage.evaluate(() => localStorage.getItem('koma_waiter_token'))).toBe('waiter-persist-token');
+  expect(await secondPage.evaluate(() => sessionStorage.getItem('koma_waiter_token'))).toBeNull();
   expect(await secondPage.evaluate(() => sessionStorage.getItem('koma_active_operational_portal'))).toBeNull();
 });
 
@@ -85,9 +89,9 @@ test('caixa normaliza role legado pelo cargo, persiste sessão e não vaza para 
   await page.goto(CANONICAL_OPERATIONAL_PATH);
   await submitLogin(page, 'caixa@koma.test', 'senha-teste');
   await expect.poll(() => page.evaluate(() => ({
-    token: localStorage.getItem('koma_caixa_token'),
-    role: localStorage.getItem('koma_caixa_role'),
-    operatorRole: JSON.parse(localStorage.getItem('koma_operator_session_caixa') || 'null')?.user?.role ?? null,
+    token: sessionStorage.getItem('koma_caixa_token'),
+    role: sessionStorage.getItem('koma_caixa_role'),
+    operatorRole: JSON.parse(sessionStorage.getItem('koma_operator_session_caixa') || 'null')?.user?.role ?? null,
     tabPortal: sessionStorage.getItem('koma_active_operational_portal'),
   }))).toEqual({
     token: 'cashier-persist-token',
@@ -102,7 +106,7 @@ test('caixa normaliza role legado pelo cargo, persiste sessão e não vaza para 
   await installOperationalApi(secondPage, cashierReply);
   await secondPage.goto(CANONICAL_OPERATIONAL_PATH);
   await expect(secondPage.getByLabel('E-MAIL')).toBeVisible();
-  expect(await secondPage.evaluate(() => localStorage.getItem('koma_caixa_token'))).toBe('cashier-persist-token');
+  expect(await secondPage.evaluate(() => sessionStorage.getItem('koma_caixa_token'))).toBeNull();
   expect(await secondPage.evaluate(() => sessionStorage.getItem('koma_active_operational_portal'))).toBeNull();
 });
 
@@ -135,15 +139,15 @@ test('garçom e caixa permanecem autenticados em abas paralelas com reload e log
   await expect.poll(() => cashierPage.evaluate(() => sessionStorage.getItem('koma_active_operational_portal'))).toBe('caixa');
 
   expect(await page.evaluate(() => ({
-    waiter: localStorage.getItem('koma_waiter_token'),
-    cashier: localStorage.getItem('koma_caixa_token'),
+    waiter: sessionStorage.getItem('koma_waiter_token'),
+    cashier: sessionStorage.getItem('koma_caixa_token'),
     portal: sessionStorage.getItem('koma_active_operational_portal'),
-  }))).toEqual({ waiter: 'waiter-concurrent-token', cashier: 'cashier-concurrent-token', portal: 'garcom' });
+  }))).toEqual({ waiter: 'waiter-concurrent-token', cashier: null, portal: 'garcom' });
   expect(await cashierPage.evaluate(() => ({
-    waiter: localStorage.getItem('koma_waiter_token'),
-    cashier: localStorage.getItem('koma_caixa_token'),
+    waiter: sessionStorage.getItem('koma_waiter_token'),
+    cashier: sessionStorage.getItem('koma_caixa_token'),
     portal: sessionStorage.getItem('koma_active_operational_portal'),
-  }))).toEqual({ waiter: 'waiter-concurrent-token', cashier: 'cashier-concurrent-token', portal: 'caixa' });
+  }))).toEqual({ waiter: null, cashier: 'cashier-concurrent-token', portal: 'caixa' });
 
   await Promise.all([page.reload(), cashierPage.reload()]);
   await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
@@ -155,14 +159,14 @@ test('garçom e caixa permanecem autenticados em abas paralelas com reload e log
   await expect(thirdPage.getByLabel('E-MAIL')).toBeVisible();
   expect(await thirdPage.evaluate(() => sessionStorage.getItem('koma_active_operational_portal'))).toBeNull();
   expect(await thirdPage.evaluate(() => ({
-    waiter: localStorage.getItem('koma_waiter_token'),
-    cashier: localStorage.getItem('koma_caixa_token'),
-  }))).toEqual({ waiter: 'waiter-concurrent-token', cashier: 'cashier-concurrent-token' });
+    waiter: sessionStorage.getItem('koma_waiter_token'),
+    cashier: sessionStorage.getItem('koma_caixa_token'),
+  }))).toEqual({ waiter: null, cashier: null });
 
   await removePortalAlias(page, 'garcom');
   await expect(page.getByLabel('E-MAIL')).toBeVisible();
   await expect(cashierPage.getByLabel('E-MAIL')).toHaveCount(0);
-  expect(await cashierPage.evaluate(() => localStorage.getItem('koma_caixa_token'))).toBe('cashier-concurrent-token');
+  expect(await cashierPage.evaluate(() => sessionStorage.getItem('koma_caixa_token'))).toBe('cashier-concurrent-token');
 
   await submitLogin(page, 'garcom@koma.test', 'senha-teste');
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('koma_active_operational_portal'))).toBe('garcom');
@@ -170,7 +174,7 @@ test('garçom e caixa permanecem autenticados em abas paralelas com reload e log
   await removePortalAlias(cashierPage, 'caixa');
   await expect(cashierPage.getByLabel('E-MAIL')).toBeVisible();
   await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
-  expect(await page.evaluate(() => localStorage.getItem('koma_waiter_token'))).toBe('waiter-concurrent-token');
+  expect(await page.evaluate(() => sessionStorage.getItem('koma_waiter_token'))).toBe('waiter-concurrent-token');
 });
 
 test('login duplicado pede estabelecimento e repete com restaurante_id explícito', async ({ page }) => {
@@ -202,7 +206,7 @@ test('login duplicado pede estabelecimento e repete com restaurante_id explícit
   await expect(page.getByLabel('Estabelecimento')).toBeVisible();
   await page.getByLabel('Estabelecimento').selectOption('2');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_waiter_token'))).toBe('tenant-two-token');
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('koma_waiter_token'))).toBe('tenant-two-token');
   expect(bodies).toEqual([
     { username: 'duplicado@koma.test', password: 'senha-compartilhada' },
     { username: 'duplicado@koma.test', password: 'senha-compartilhada', restaurante_id: 2 },
@@ -272,4 +276,89 @@ test('Cardápio migra sessão legada para a aba e a restaura em reloads', async 
   await expect.poll(() => profileReads).toBeGreaterThan(beforeReload);
   await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('koma_customer_session:1') || 'null')?.token)).toBe('customer-persist-token');
   expect(await page.evaluate(() => localStorage.getItem('koma_customer_session:1'))).toBeNull();
+});
+
+test('duas abas de Caixa em restaurantes diferentes e uma de Garçom isolam tokens após reload e saída', async ({page,context}) => {
+  const tabs = [page, await context.newPage(), await context.newPage()];
+  const identities = [
+    {id:'admin-five',nome:'Admin Restaurante 5',role:'admin',restaurante_id:5},
+    {id:'admin-two',nome:'Admin Restaurante Demo',role:'admin',restaurante_id:2},
+    {id:'waiter-one',nome:'Garçom Restaurante 1',role:'garcom',restaurante_id:1},
+  ];
+  const observed: string[][] = [[],[],[]];
+  const mutations: string[] = [];
+  for (let index=0;index<tabs.length;index++) {
+    const token = `isolated-token-${index}`;
+    await tabs[index].addInitScript(() => {
+      (window as any).__operationalSocketProtocols = [];
+      const wrap = (OriginalWebSocket: typeof WebSocket) => class extends OriginalWebSocket {
+        constructor(url: string | URL, protocols?: string | string[]) {
+          super(url, protocols);
+          (window as any).__operationalSocketProtocols.push(protocols);
+        }
+      };
+      let socketConstructor = wrap(window.WebSocket);
+      // Preserva a observação quando Playwright instala seu mock de WebSocket.
+      Object.defineProperty(window, 'WebSocket', {
+        configurable: true,
+        get: () => socketConstructor,
+        set: (original: typeof WebSocket) => { socketConstructor = wrap(original); },
+      });
+    });
+    await installOperationalApi(tabs[index],async route=>{
+      await route.fulfill({json:{access_token:token,usuario:identities[index]}});
+    },observed[index]);
+    if (index < 2) {
+      let memberExists = true;
+      await tabs[index].route('**/caixa/funcionarios', route => route.fulfill({json:memberExists ? [{
+        id:`member-${index}`,nome:`Pessoa Teste ${index}`,cargo:'cozinha',status:'inativo',
+      }] : []}));
+      await tabs[index].route(`**/auth/usuarios/member-${index}?remover_cadastro=true`, async route => {
+        expect(route.request().method()).toBe('DELETE');
+        expect(route.request().headers().authorization).toBe(`Bearer ${token}`);
+        memberExists = false;
+        mutations.push(token);
+        await route.fulfill({status:204});
+      });
+    }
+    await tabs[index].goto(CANONICAL_OPERATIONAL_PATH);
+    await expect(tabs[index].getByLabel('E-MAIL')).toBeVisible();
+    await submitLogin(tabs[index],`staff-${index}@example.test`,'local-test');
+    await expect.poll(()=>observed[index].length).toBeGreaterThan(0);
+  }
+  await Promise.all(tabs.map(tab=>tab.evaluate(()=>{window.dispatchEvent(new Event('popstate'));window.dispatchEvent(new Event('hashchange'));})));
+  for (const tab of tabs) await expect(tab.getByLabel('E-MAIL')).toHaveCount(0);
+  await Promise.all(tabs.map(tab=>tab.reload()));
+  for(let index=0;index<tabs.length;index++) {
+    await tabs[index].bringToFront();
+    const portal=index===2?'garcom':'caixa';
+    await expect.poll(()=>tabs[index].evaluate(selected=>JSON.parse(sessionStorage.getItem(`koma_operator_session_${selected}`)||'null')?.user,portal)).toEqual(identities[index]);
+    await expect(tabs[index].getByLabel('E-MAIL')).toHaveCount(0);
+    expect(new Set(observed[index])).toEqual(new Set([`Bearer isolated-token-${index}`]));
+    await expect.poll(()=>tabs[index].evaluate(()=>(window as any).__operationalSocketProtocols)).toContainEqual(['koma-auth',`isolated-token-${index}`]);
+    expect(await tabs[index].evaluate(()=>localStorage.getItem('koma_caixa_token'))).toBeNull();
+  }
+  // Ações reais da UI enviam o bearer do restaurante da própria aba.
+  for (let index=0;index<2;index++) {
+    await tabs[index].bringToFront();
+    if (test.info().project.name.startsWith('mobile')) await tabs[index].getByRole('button',{name:'Abrir menu principal'}).click();
+    await tabs[index].getByRole('button',{name:'Equipe',exact:true}).click();
+    await expect(tabs[index].getByRole('heading',{name:`Pessoa Teste ${index}`})).toBeVisible();
+    tabs[index].once('dialog',dialog=>dialog.accept());
+    await tabs[index].getByRole('button',{name:`Remover Pessoa Teste ${index} da equipe`}).click();
+    await expect(tabs[index].getByRole('heading',{name:`Pessoa Teste ${index}`})).toHaveCount(0);
+  }
+  expect(mutations).toEqual(['isolated-token-0','isolated-token-1']);
+  // O logout real do painel limpa somente a aba, sem editar storage de outras abas.
+  await tabs[1].bringToFront();
+  if (test.info().project.name.startsWith('mobile')) await tabs[1].getByRole('button',{name:'Abrir menu principal'}).click();
+  await expect(tabs[1].getByRole('button',{name:'Abrir conta e preferências',exact:true})).toBeVisible();
+  await tabs[1].getByRole('button',{name:'Abrir conta e preferências',exact:true}).click();
+  await tabs[1].getByRole('button',{name:'LOGOUT / TROCAR OPERADOR'}).click();
+  await expect(tabs[1].getByLabel('E-MAIL')).toBeVisible();
+  await Promise.all([tabs[0].reload(),tabs[2].reload()]);
+  await expect(tabs[0].getByLabel('E-MAIL')).toHaveCount(0);
+  await expect(tabs[2].getByLabel('E-MAIL')).toHaveCount(0);
+  expect(new Set(observed[0])).toEqual(new Set(['Bearer isolated-token-0']));
+  expect(new Set(observed[2])).toEqual(new Set(['Bearer isolated-token-2']));
 });

@@ -61,7 +61,7 @@ test('logout from resolved portal clears only that portal and returns its tab to
   const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
   const login = source('../src/components/auth/OperationalLogin.tsx');
 
-  assert.match(entry, /if \(!localStorage\.getItem\(tokenKey\)\) \{[\s\S]*clearOperatorSession\(activePortal\);[\s\S]*setActivePortal\(null\)/);
+  assert.match(entry, /if \(!sessionStorage\.getItem\(tokenKey\)\) \{[\s\S]*clearOperatorSession\(activePortal\);[\s\S]*setActivePortal\(null\)/);
   assert.match(entry, /250\)/);
   assert.match(login, /portal !== 'unified' && isOperationalAppHost\(\)/);
   assert.match(login, /Retornando ao acesso da equipe/);

@@ -10,10 +10,11 @@ for (const viewport of [
   test(`garçom sai do loading silencioso quando mesas travam no ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.addInitScript(() => {
-      localStorage.setItem('koma_waiter_token', 'waiter-timeout-token');
-      localStorage.setItem('koma_waiter_id', 'waiter-timeout');
-      localStorage.setItem('koma_waiter_name', 'Garçom Timeout');
-      localStorage.setItem('koma_user_role', 'garcom');
+      sessionStorage.setItem('koma_waiter_token', 'waiter-timeout-token');
+      sessionStorage.setItem('koma_active_operational_portal', 'garcom');
+      sessionStorage.setItem('koma_waiter_id', 'waiter-timeout');
+      sessionStorage.setItem('koma_waiter_name', 'Garçom Timeout');
+      sessionStorage.setItem('koma_user_role', 'garcom');
     });
 
     await page.routeWebSocket(/\/ws\//, socket => {
