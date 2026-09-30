@@ -115,6 +115,16 @@ test('onboarding status request cannot trap first access in infinite loading', (
   assert.match(gateHook, /clearTimeout\(timeoutId\)/);
 });
 
+test('first access confirms the tenant operation profile without mutating catalog automatically', () => {
+  assert.match(onboarding, /Confirme o tipo de operação/);
+  assert.match(onboarding, /\/api\/onboarding\/operation-profile/);
+  assert.match(onboarding, /Pizzaria/);
+  assert.match(onboarding, /Marmitaria \/ Quentinhas/);
+  assert.match(onboarding, /Tamanhos, sabores, meio a meio, bordas e adicionais/);
+  assert.match(onboarding, /não cria, apaga nem altera produtos, preços ou adicionais automaticamente/);
+  assert.match(onboarding, /operation_profile: operationProfile/);
+});
+
 test('onboarding uses canonical server progress, canonical modes and optional Mercado Pago', () => {
   assert.match(onboarding, /\/api\/onboarding\/status/);
   for (const label of [
@@ -132,6 +142,8 @@ test('onboarding uses canonical server progress, canonical modes and optional Me
   assert.match(onboarding, /order_types/);
   assert.match(onboarding, /Mercado Pago não conectado/);
   assert.match(onboarding, /pagamentos no atendimento sem Mercado Pago/);
+  assert.match(onboarding, /Novos pedidos online dependem do caixa aberto/);
+  assert.match(onboarding, /separado da cobrança da sua assinatura KÔMA/);
   assert.match(onboarding, /pedido de teste continua disponível como validação opcional/);
 });
 
