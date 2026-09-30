@@ -27,6 +27,7 @@ def test_onboarding_routes_are_registered_once():
     openapi_paths = app.openapi().get("paths", {})
     assert "get" in openapi_paths["/api/onboarding/status"]
     assert "put" in openapi_paths["/api/onboarding/operations"]
+    assert "put" in openapi_paths["/api/onboarding/operation-profile"]
     assert "post" in openapi_paths["/api/onboarding/start-trial"]
     assert "get" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/release"]
     assert "post" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/release"]
@@ -34,6 +35,7 @@ def test_onboarding_routes_are_registered_once():
     with TestClient(app) as client:
         assert client.get("/api/onboarding/status").status_code == 401
         assert client.put("/api/onboarding/operations", json={"order_types": ["retirada"]}).status_code == 401
+        assert client.put("/api/onboarding/operation-profile", json={"operation_profile": "pizzaria"}).status_code == 401
         assert client.post("/api/onboarding/start-trial").status_code == 401
         assert client.get("/api/super-admin/onboarding/restaurantes/1/release").status_code == 401
         assert client.post("/api/super-admin/onboarding/restaurantes/1/release").status_code == 401
