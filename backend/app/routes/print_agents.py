@@ -734,6 +734,10 @@ def _claim_pending_jobs(
                     FROM print_jobs AS candidate
                     WHERE candidate.restaurante_id = :restaurante_id
                       AND candidate.status = 'pending'
+                      AND (
+                        candidate.agent_id IS NULL
+                        OR candidate.agent_id = :agent_id
+                      )
                     ORDER BY candidate.created_at ASC
                     FOR UPDATE SKIP LOCKED
                     LIMIT :claim_limit
@@ -785,6 +789,10 @@ def _claim_pending_jobs(
             .filter(
                 PrintJob.restaurante_id == agent.restaurante_id,
                 PrintJob.status == "pending",
+                or_(
+                    PrintJob.agent_id.is_(None),
+                    PrintJob.agent_id == agent.agent_id,
+                ),
             )
             .order_by(PrintJob.created_at.asc())
             .first()
@@ -2159,7 +2167,11 @@ def claim_job(
     rows_updated = db.query(PrintJob).filter(
         PrintJob.id == job_id,
         PrintJob.restaurante_id == agent.restaurante_id,
-        PrintJob.status == "pending"
+        PrintJob.status == "pending",
+        or_(
+            PrintJob.agent_id.is_(None),
+            PrintJob.agent_id == agent.agent_id,
+        ),
     ).update({
         "status": "claimed",
         "claimed_at": now,
