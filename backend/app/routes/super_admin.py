@@ -743,6 +743,17 @@ def get_integrations_health(admin: dict = Depends(get_current_admin)):
             "simulated": False,
         }
 
+    evolution_details = obter_status_evolution()
+    evolution_status = (
+        "available"
+        if evolution_details.get("configured") and evolution_details.get("connected")
+        else "degraded"
+        if evolution_details.get("configured") and evolution_details.get("status") == "yellow"
+        else "unavailable"
+        if evolution_details.get("configured")
+        else "not_configured"
+    )
+
     return {
         "environment": os.getenv("ENVIRONMENT", "production").strip().lower() or "production",
         "database": {
@@ -762,8 +773,9 @@ def get_integrations_health(admin: dict = Depends(get_current_admin)):
         ),
         "telegram": configured("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
         "evolution": {
-            "status": "configured_unverified",
-            "details": obter_status_evolution(),
+            "status": evolution_status,
+            "details": evolution_details,
+            "source": "evolution_connection_state",
             "simulated": False,
         },
     }
