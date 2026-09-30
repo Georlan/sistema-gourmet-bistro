@@ -11,7 +11,7 @@ test('cadastre P, M e G na mesma categoria sem duplicar tamanhos existentes', as
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
   const categories: Record<string, unknown>[] = [];
   const products: Record<string, unknown>[] = [];
-  await page.route('**/caixa/configuracoes', route => route.fulfill({ json: { ...cashierConfig, nicho: 'marmitaria' } }));
+  await page.route('**/caixa/configuracoes', route => route.fulfill({ json: { ...cashierConfig, nicho: 'generico', operation_profile: 'marmitaria' } }));
   await page.route('**/produtos/catalogo', route => route.fulfill({ json: { categorias: categories, produtos: products } }));
   await page.route('**/produtos/categorias', async route => {
     if (route.request().method() === 'GET') {

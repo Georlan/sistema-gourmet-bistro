@@ -51,7 +51,7 @@ export default function CashierCatalog({
   restauranteConfig,
   onRefreshCategorias,
 }: Props) {
-  const isMarmitaria = restauranteConfig?.nicho === 'marmitaria';
+  const isMarmitaria = restauranteConfig?.operation_profile === 'marmitaria';
   const [showProductModal, setShowProductModal] = useState(false);
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);

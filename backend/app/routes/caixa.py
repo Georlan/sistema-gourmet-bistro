@@ -1720,7 +1720,13 @@ from sqlalchemy.orm import joinedload
 
 
 def _serializar_configuracoes(db: Session, config: ConfiguracaoRestaurante) -> dict:
+    from ..restaurant_profile_models import RestauranteOperationProfile
+
     payload = ConfiguracaoRestauranteResponse.model_validate(config).model_dump()
+    profile = db.query(RestauranteOperationProfile).filter(
+        RestauranteOperationProfile.restaurante_id == config.restaurante_id
+    ).one_or_none()
+    payload["operation_profile"] = profile.profile_key if profile else "generic"
     payload["delivery_origin_configured"] = bool(
         config.restaurante
         and config.restaurante.latitude is not None

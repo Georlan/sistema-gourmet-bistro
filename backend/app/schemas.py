@@ -551,6 +551,7 @@ class CaixaTurnoDetalhe(CaixaTurnoResponse):
 
 # ----------------- WHITE-LABEL CONFIGURATION -----------------
 class ConfiguracaoRestauranteResponse(BaseModel):
+    operation_profile: str = "generic"
     id: int
     restaurante_id: int
     nicho: str
