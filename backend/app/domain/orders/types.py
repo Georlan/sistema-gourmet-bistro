@@ -115,7 +115,7 @@ _LEGACY_STATUS_TO_CANONICAL = {
 
 _CANONICAL_STATUS_TO_LEGACY = {
     OrderStatus.PENDING: "pendente",
-    OrderStatus.ACCEPTED: "producao",
+    OrderStatus.ACCEPTED: "aceito",
     OrderStatus.PREPARING: "producao",
     OrderStatus.READY: "pronto",
     OrderStatus.DISPATCHED: "transito",

@@ -20,6 +20,7 @@ from ..domain.orders.types import (
 
 CANONICAL_ORDER_STATUSES = frozenset({
     "pendente",
+    "aceito",
     "producao",
     "pronto",
     "transito",

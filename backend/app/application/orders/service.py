@@ -886,26 +886,37 @@ class OrderApplicationService:
 
         OrderStateMachine.validate_transition(
             current_status=current_status,
-            target_status=OrderStatus.PREPARING,
+            target_status=OrderStatus.PREPARING if cmd.start_preparation else OrderStatus.ACCEPTED,
             fulfillment=fulfillment,
         )
 
         if lancamento:
-            lancamento.status = "producao"
+            lancamento.status = "producao" if cmd.start_preparation else "aceito"
 
-        comanda.delivery_status = "producao"
+        comanda.delivery_status = "producao" if cmd.start_preparation else "aceito"
 
         target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
         consumir_estoque_dos_itens(db, target_items, liberar_pendente=True)
         eid = cls._event_identity_kwargs(db, lancamento, comanda)
-        event = OrderAccepted(
-            restaurant_id=cmd.restaurant_id,
-            order_id=eid["order_id"],
-            check_id=eid["check_id"],
-            display_number=eid["display_number"],
-            check_number=eid["check_number"],
-            operator_user_id=cmd.operator_user_id,
-            estimated_prep_minutes=cmd.estimated_prep_minutes,
+        event = (
+            OrderPreparing(
+                restaurant_id=cmd.restaurant_id,
+                order_id=eid["order_id"],
+                check_id=eid["check_id"],
+                display_number=eid["display_number"],
+                check_number=eid["check_number"],
+                operator_user_id=cmd.operator_user_id,
+            )
+            if current_status == OrderStatus.ACCEPTED
+            else OrderAccepted(
+                restaurant_id=cmd.restaurant_id,
+                order_id=eid["order_id"],
+                check_id=eid["check_id"],
+                display_number=eid["display_number"],
+                check_number=eid["check_number"],
+                operator_user_id=cmd.operator_user_id,
+                estimated_prep_minutes=cmd.estimated_prep_minutes,
+            )
         )
         enqueue_outbox_event_in_session(
             db,

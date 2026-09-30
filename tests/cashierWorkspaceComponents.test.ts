@@ -175,14 +175,14 @@ test('digital actions and compact expansion are controlled without changing supp
   assert.match(renderToStaticMarkup(createElement(CaixaOrdersWorkspace, expanded)), /Último ingrediente/);
 });
 
-test('digital production card separates kitchen completion from order readiness', () => {
+test('digital cards show choices per item without kitchen counters', () => {
   const base = workspace([]);
   const partial = digital({
     id: 'digital-kitchen-partial',
     numeroPedido: 31,
     detailItems: [
-      { id: 'item-1', nome: 'Burger', status: 'pronto' },
-      { id: 'item-2', nome: 'Batata', status: 'preparando' },
+      { id: 'item-1', nome: 'Quentinha G', observacao: 'Opções: Bisteca, Baião', status: 'pronto' },
+      { id: 'item-2', nome: 'Quentinha G', observacao: 'Opções: Frango, Arroz', status: 'preparando' },
     ],
   });
   const complete = digital({
@@ -202,12 +202,9 @@ test('digital production card separates kitchen completion from order readiness'
   };
 
   const markup = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, props));
-  assert.match(markup, /Cozinha 1\/2 prontos/);
-  assert.match(markup, /Cozinha concluída/);
-  assert.match(markup, /Aguarda avanço do pedido/);
-  assert.match(markup, /data-kitchen-progress="partial"/);
-  assert.match(markup, /data-kitchen-progress="complete"/);
-
+  assert.doesNotMatch(markup, /Cozinha|Aguarda avanço|data-kitchen-progress/);
+  assert.match(markup, /1x<\/strong> Quentinha G<\/span><span[^>]*>Opções: Bisteca, Baião/);
+  assert.match(markup, /1x<\/strong> Quentinha G<\/span><span[^>]*>Opções: Frango, Arroz/);
   const view = CaixaOrdersWorkspace(props);
   const readyButtons = elements(view).filter(
     element => element.type === 'button'

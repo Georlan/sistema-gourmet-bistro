@@ -601,10 +601,10 @@ export function useCashierOrders({
       const serverMotoboyId = data?.motoboy_id ? String(data.motoboy_id) : '';
       const confirmedSelection = { ...selectedMotoboysRef.current, [orderKey]: serverMotoboyId };
       applySelectedMotoboysState(confirmedSelection);
-      const projected = mapComandaToDeliveryView(data);
-      if (projected) {
-        setDeliveryOrders((current) => current.map((order) => String(order.id) === orderKey ? projected : order));
-      }
+      // Assignment responses contain the check header, not its items or totals.
+      setDeliveryOrders((current) => current.map((order) => String(order.id) === orderKey
+        ? { ...order, motoboyId: data?.motoboy_id ?? null }
+        : order));
       setSelectedKanbanOrder((current: any) => {
         if (!current || String(current.id) !== orderKey || !current.courierAssignment) return current;
         return {
@@ -836,7 +836,7 @@ export function useCashierOrders({
       if (optimisticStatus !== 'pendente') {
         setPendingAcceptanceOrders((current) => current.filter((order) => String(order.id) !== orderKey));
       }
-      if (optimisticStatus === 'producao') {
+      if ((optimisticStatus === 'producao' || optimisticStatus === 'aceito')) {
         setDeliveryOrders((current) =>
           current.map((order) => String(order.id) === orderKey ? { ...order, status: optimisticStatus } : order)
         );
@@ -857,7 +857,7 @@ export function useCashierOrders({
 
     const rollbackCurrentMutation = () => {
       if (!finishCurrentMutation()) return false;
-      if (previousOrder && optimisticStatus === 'producao') {
+      if (previousOrder && (optimisticStatus === 'producao' || optimisticStatus === 'aceito')) {
         setDeliveryOrders((current) => {
           const existingIndex = current.findIndex((order) => String(order.id) === orderKey);
           if (existingIndex >= 0) {
@@ -941,10 +941,9 @@ export function useCashierOrders({
       if (res.ok) {
         const data = await res.json().catch(() => null);
         if (data) {
-          const projected = mapComandaToDeliveryView(data);
-          if (projected) {
-            setDeliveryOrders((current) => current.map((order) => String(order.id) === String(orderId) ? projected : order));
-          }
+          setDeliveryOrders((current) => current.map((order) => String(order.id) === String(orderId)
+            ? { ...order, status: 'transito', motoboyId: data.motoboy_id ?? Number(selectedMotoboyId) }
+            : order));
           const confirmedSelection = {
             ...selectedMotoboysRef.current,
             [String(orderId)]: data.motoboy_id ? String(data.motoboy_id) : selectedMotoboyId,
@@ -1102,7 +1101,7 @@ export function useCashierOrders({
   };
 
   const handleAcceptPendingDeliveryOrder = async (order: DeliveryOrderView) => {
-    const accepted = await handleUpdateDeliveryStatus(order.id, 'producao');
+    const accepted = await handleUpdateDeliveryStatus(order.id, order.modalidade === 'delivery' ? 'aceito' : 'producao');
     if (accepted && pendingAcceptanceOrders.length <= 1) setIsDrawerOpen(false);
   };
 
@@ -1133,8 +1132,8 @@ export function useCashierOrders({
     const capability = getDigitalOrderActionCapability(order, {
       isPendingMutation: false,
     });
-    if (!capability.isAllowed || capability.action !== 'mark_ready') return;
-    await handleUpdateDeliveryStatus(order.id, 'pronto');
+    if (!capability.isAllowed || !['start_preparation', 'mark_ready'].includes(capability.action)) return;
+    await handleUpdateDeliveryStatus(order.id, capability.targetStatus!);
   };
 
   const handleAdvanceSelectedKanbanOrder = async (selectedMotoboyId?: string) => {
@@ -1154,6 +1153,11 @@ export function useCashierOrders({
       return;
     }
 
+    if (currentStatus === 'aceito') {
+      const updated = await handleUpdateDeliveryStatus(selectedKanbanOrder.id, 'producao');
+      if (updated) setSelectedKanbanOrder(null);
+      return;
+    }
     if (currentStatus !== 'producao') return;
     const updated = await handleUpdateDeliveryStatus(selectedKanbanOrder.id, 'pronto');
     if (updated) setSelectedKanbanOrder(null);

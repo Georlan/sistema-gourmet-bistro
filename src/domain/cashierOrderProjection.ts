@@ -9,17 +9,18 @@ import { getOrderDisplayNumber } from './orderIdentity';
 export function projectCashierDeliveryState(status?: string, modalidade?: string) {
   return {
     awaitingAcceptance: status === 'pendente' || status === 'analise',
-    inProduction: status === 'producao',
-    inFinalization: ['pronto', 'transito', 'saiu_para_entrega'].includes(status || ''),
-    active: ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(status || ''),
+    inProduction: status === 'aceito' || status === 'producao',
+    inFinalization: status === 'pronto' || ['transito', 'saiu_para_entrega'].includes(status || ''),
+    active: ['pendente', 'analise', 'aceito', 'producao', 'pronto', 'transito'].includes(status || ''),
     label: getCashierDeliveryStatusLabel(status, modalidade),
   };
 }
 
 export function getCashierDeliveryStatusLabel(status?: string, modalidade?: string): string {
+  if (status === 'aceito') return 'Aceito · aguardando preparo';
   if (status === 'producao') return 'Em preparo';
   if (status === 'pronto') {
-    if (modalidade === 'delivery') return 'Pronto para envio';
+    if (modalidade === 'delivery') return 'Pronto para sair';
     if (modalidade === 'dine_in') return 'Pronto para servir';
     return 'Pronto para retirada';
   }
@@ -68,7 +69,7 @@ export const isCashierTableOrder = (order: Order | null | undefined) => {
   // localização e deliveryStatus é somente ciclo operacional. O fallback por
   // status fica restrito a snapshots legados sem origem conhecida.
   const origin = String(order.origemOperacional || '').trim().toLowerCase();
-  const hasOperationalLifecycle = ['pendente', 'analise', 'producao', 'pronto', 'transito']
+  const hasOperationalLifecycle = ['pendente', 'analise', 'aceito', 'producao', 'pronto', 'transito']
     .includes(String(order.deliveryStatus || '').toLowerCase());
 
   if (origin === 'cardapio') return false;
@@ -385,8 +386,8 @@ export const formatCashierOldestAge = (values: unknown[], now: number) => {
 };
 
 export interface DigitalOrderActionCapability {
-  action: 'accept' | 'mark_ready' | 'dispatch' | 'finalize' | 'none';
-  targetStatus?: 'producao' | 'pronto' | 'transito' | 'finalizado';
+  action: 'accept' | 'start_preparation' | 'mark_ready' | 'dispatch' | 'finalize' | 'none';
+  targetStatus?: 'aceito' | 'producao' | 'pronto' | 'transito' | 'finalizado';
   label: string;
   isAllowed: boolean;
   disabledReason?: string;
@@ -414,11 +415,15 @@ export function getDigitalOrderActionCapability(
   if (status === 'pendente' || status === 'analise') {
     return {
       action: 'accept',
-      targetStatus: 'producao',
+      targetStatus: isDelivery ? 'aceito' : 'producao',
       label: isPending ? 'Aceitando…' : 'Aceitar pedido',
       isAllowed: !isPending,
       disabledReason: isPending ? 'Aceitando pedido…' : undefined,
     };
+  }
+
+  if (status === 'aceito') {
+    return { action: 'start_preparation', targetStatus: 'producao', label: isPending ? 'Iniciando…' : 'Iniciar preparo', isAllowed: !isPending };
   }
 
   if (status === 'producao') {
@@ -465,7 +470,7 @@ export function getDigitalOrderActionCapability(
   }
 
   if (status === 'transito' || status === 'saiu_para_entrega') {
-    const finalizeLabel = order.pago ? 'Finalizar pedido' : 'Receber e finalizar';
+    const finalizeLabel = order.pago ? 'Finalizar pedido' : isDelivery ? 'Fechar e pagar' : 'Receber e finalizar';
     return {
       action: 'finalize',
       targetStatus: 'finalizado',

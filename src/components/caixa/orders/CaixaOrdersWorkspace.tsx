@@ -83,37 +83,26 @@ const digitalOrderIcon = (order: DeliveryOrderView) => {
   return <Globe size={15} />;
 };
 
-const getDigitalKitchenProgress = (order: DeliveryOrderView) => {
-  const activeItems = (order.detailItems || []).filter((item) => item.status !== 'cancelado');
-  if (activeItems.length === 0) return null;
-
-  const readyCount = activeItems.filter(
-    (item) => item.status === 'pronto' || item.status === 'entregue',
-  ).length;
-
-  return {
-    readyCount,
-    totalCount: activeItems.length,
-    complete: readyCount === activeItems.length,
-  };
-};
-
 // Renderizador compacto de itens de alta densidade
 const renderCompactItemsList = (
-  items: string | readonly { nome?: string }[],
+  items: string | readonly { nome?: string; produto?: { nome?: string }; observacao?: string; status?: string }[],
   cardId: string,
   isExpanded: boolean,
   onToggle: (cardId: string, e: React.MouseEvent) => void
 ) => {
-  let itemList: { name: string; qty: number }[] = [];
+  let itemList: { name: string; qty: number; observation?: string }[] = [];
 
   if (Array.isArray(items)) {
-    const counts: Record<string, number> = {};
-    items.forEach(it => {
-      const name = it.nome || 'Item';
-      counts[name] = (counts[name] || 0) + 1;
+    const groups = new Map<string, { name: string; qty: number; observation: string }>();
+    items.filter(it => it.status !== 'cancelado').forEach(it => {
+      const name = it.nome || it.produto?.nome || 'Item';
+      const observation = it.observacao || '';
+      const key = JSON.stringify([name, observation]);
+      const group = groups.get(key);
+      if (group) group.qty += 1;
+      else groups.set(key, { name, qty: 1, observation });
     });
-    itemList = Object.entries(counts).map(([name, qty]) => ({ name, qty }));
+    itemList = Array.from(groups.values());
   } else if (typeof items === 'string') {
     const parts = items.split(/\+|\,/);
     itemList = parts.map(p => {
@@ -136,10 +125,11 @@ const renderCompactItemsList = (
   return (
     <div className={"orders-card__items p-2 rounded-lg space-y-1"}>
       {visibleItems.map((it, idx) => (
-        <div key={`${it.name}-${idx}`} className={"flex justify-between items-center text-xs"}>
-          <span className={"font-semibold text-koma-foreground font-sans truncate"}>
+        <div key={`${it.name}-${idx}`} className="text-xs">
+          <span className={"block font-semibold text-koma-foreground font-sans break-words"}>
             <strong className={"orders-card__item-qty font-mono mr-1"}>{it.qty}x</strong> {it.name}
           </span>
+          {it.observation && <span className="block whitespace-pre-wrap break-words text-[11px] text-emerald-700 dark:text-emerald-400">{it.observation}</span>}
         </div>
       ))}
       {itemList.length > 3 && (
@@ -180,9 +170,8 @@ export function CaixaOrdersWorkspace({
   };
 
   const renderCourierControl = (order: DeliveryOrderView, orderNumber: string) => {
-    if (order.modalidade !== 'delivery') return null;
+    if (order.modalidade !== 'delivery' || order.status !== 'pronto') return null;
     const selectedCourierId = courierSelection(order);
-    const inTransit = order.status === 'transito';
 
     return (
       <div
@@ -192,23 +181,8 @@ export function CaixaOrdersWorkspace({
       >
         <div className="mb-1 flex items-center justify-between gap-2 text-[9px]">
           <span className="font-bold uppercase tracking-wide text-koma-muted">Entregador</span>
-          {inTransit && <span className="font-bold text-sky-500">Em rota</span>}
         </div>
-        {inTransit ? (
-          <div className="flex items-center justify-between gap-2">
-            <strong className="min-w-0 flex-1 truncate text-[11px] text-koma-foreground">
-              {courierName(order.motoboyId) || (order.motoboyId ? `#${order.motoboyId}` : 'Não identificado')}
-            </strong>
-            <button
-              type="button"
-              onClick={() => couriers.onRequestReassignment(order)}
-              className="shrink-0 rounded-md border border-amber-500/30 px-2 py-1 text-[8px] font-extrabold uppercase text-amber-500 hover:bg-amber-500/10"
-            >
-              Trocar entregador
-            </button>
-          </div>
-        ) : (
-          <select
+        <select
             aria-label={`Entregador do pedido ${orderNumber}`}
             value={selectedCourierId}
             disabled={couriers.loadState !== 'loaded'}
@@ -226,7 +200,6 @@ export function CaixaOrdersWorkspace({
                 </option>
               ))}
           </select>
-        )}
       </div>
     );
   };
@@ -643,11 +616,13 @@ export function CaixaOrdersWorkspace({
                   const sla = getOrderSlaData(order, nowTimestamp);
                   const isExpanded = !!expandedCardIds[cardId];
                   const isDeliveryOrder = order.modalidade === 'delivery';
-                  const kitchenProgress = getDigitalKitchenProgress(order);
                   const badgeText = deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
                   const isMutating = acceptance.pendingOrderIds.has(String(order.id));
+                  const selectedCourierId = courierSelection(order);
                   const capability = getDigitalOrderActionCapability(order, {
                     isPendingMutation: isMutating,
+                    selectedCourierId,
+                    couriersLoaded: couriers.loadState === 'loaded',
                   });
                   const buttonText = capability.label;
                   const tableBlockLabel = getDigitalOrderTableBlockLabel(order);
@@ -725,43 +700,21 @@ export function CaixaOrdersWorkspace({
                           </div>
                         </div>
                       </div>
-                      {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
-                      {kitchenProgress && (
-                        <div
-                          data-kitchen-progress={kitchenProgress.complete ? 'complete' : 'partial'}
-                          className={clsx(
-                            'flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-[10px] font-bold',
-                            kitchenProgress.complete
-                              ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-500'
-                              : 'border-koma-border bg-koma-panel/55 text-koma-muted',
-                          )}
-                        >
-                          <span>
-                            {kitchenProgress.complete
-                              ? 'Cozinha concluída'
-                              : `Cozinha ${kitchenProgress.readyCount}/${kitchenProgress.totalCount} prontos`}
-                          </span>
-                          {kitchenProgress.complete && (
-                            <span className="text-[9px] font-semibold text-koma-muted">
-                              Aguarda avanço do pedido
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, cardId, isExpanded, toggleCardExpansion)}
                       {isDeliveryOrder && order.endereco && (
                         <span className={"font-normal text-xs text-koma-subtle flex items-center gap-1 truncate"}>
                           <MapPin size={11} className={"shrink-0 text-emerald-600 dark:text-emerald-300/80"} />
                           <span className="truncate">{order.endereco}</span>
                         </span>
                       )}
-                      {renderCourierControl(order, orderNumber)}
                       <button
                         type="button"
                         disabled={!capability.isAllowed}
                         onClick={(e) => {
                           e.stopPropagation();
                           if (!capability.isAllowed) return;
-                          actions.advanceDigitalOrder(order);
+                          if (capability.action === 'dispatch') actions.dispatchDelivery(String(order.id), selectedCourierId);
+                          else actions.advanceDigitalOrder(order);
                         }}
                         className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"}
                       >
@@ -1009,7 +962,7 @@ export function CaixaOrdersWorkspace({
                           </div>
                         </div>
                       </div>
-                      {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
+                      {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, cardId, isExpanded, toggleCardExpansion)}
                       {isDeliveryOrder && order.endereco && (
                         <span className={"font-normal text-xs text-koma-subtle flex items-center gap-1 truncate"}>
                           <MapPin size={11} className={"shrink-0 text-emerald-600 dark:text-emerald-300/80"} />
@@ -1017,6 +970,9 @@ export function CaixaOrdersWorkspace({
                         </span>
                       )}
                       {renderCourierControl(order, orderNumber)}
+                      {isDeliveryOrder && !isReadyDelivery && order.motoboyId && (
+                        <span className="text-xs text-koma-subtle">Entregador: {courierName(order.motoboyId) || `#${order.motoboyId}`}</span>
+                      )}
                       <button
                         type="button"
                         disabled={!capability.isAllowed}

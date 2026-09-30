@@ -33,13 +33,10 @@ class OrderTransitionResult:
 def _effective_transition_status(status: OrderStatus) -> OrderStatus:
     """Colapsa aliases semânticos que persistem no mesmo estado legado.
 
-    ``ACCEPTED`` e ``PREPARING`` compartilham ``producao`` no banco atual.
     ``CANCELLED`` e ``REJECTED`` compartilham ``recusado``. A API canônica pode
     distinguir a intenção/evento sem criar uma segunda aresta de transição.
     """
 
-    if status == OrderStatus.ACCEPTED:
-        return OrderStatus.PREPARING
     if status == OrderStatus.CANCELLED:
         return OrderStatus.REJECTED
     return status
@@ -66,6 +63,8 @@ class OrderStateMachine:
         kind = normalize_to_fulfillment(fulfillment)
 
         if current == OrderStatus.PENDING:
+            allowed = {OrderStatus.ACCEPTED, OrderStatus.PREPARING, OrderStatus.REJECTED}
+        elif current == OrderStatus.ACCEPTED:
             allowed = {OrderStatus.PREPARING, OrderStatus.REJECTED}
         elif current == OrderStatus.PREPARING:
             allowed = {OrderStatus.READY, OrderStatus.REJECTED}
@@ -133,7 +132,7 @@ class OrderStateMachine:
             changed=True,
             first_accept=(
                 effective_current == OrderStatus.PENDING
-                and effective_target == OrderStatus.PREPARING
+                and effective_target in {OrderStatus.ACCEPTED, OrderStatus.PREPARING}
             ),
             is_terminal=effective_target
             in {OrderStatus.COMPLETED, OrderStatus.REJECTED},
