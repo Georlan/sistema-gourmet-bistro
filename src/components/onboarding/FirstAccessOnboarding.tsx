@@ -280,7 +280,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     {
       id: 'hours',
       title: 'Defina os horários de funcionamento',
-      description: 'A agenda controla quando o restaurante aparece como aberto e orienta pedidos online.',
+      description: 'Os horários informam sua rotina ao cliente. Novos pedidos online dependem do caixa aberto; a agenda não bloqueia pedidos sozinha.',
       done: snapshot.steps.hours,
       actionLabel: snapshot.steps.hours ? 'Revisar horários' : 'Configurar horários',
       tab: 'cardapio_digital',
@@ -538,7 +538,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                     <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">Opcional</span>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
-                    O restaurante pode operar e receber pagamentos no atendimento sem Mercado Pago. Conecte somente se quiser liberar Pix ou outros pagamentos online pelo KÔMA.
+                    O restaurante pode operar e receber pagamentos no atendimento sem Mercado Pago. Conecte somente se quiser receber Pix ou outros pagamentos online dos clientes pelo KÔMA. Isso é separado da cobrança da sua assinatura KÔMA, inclusive do Pix anual escolhido na contratação.
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <span className={`text-[10px] font-bold ${snapshot.steps.mercadoPago ? 'text-emerald-400' : 'text-koma-subtle'}`}>
