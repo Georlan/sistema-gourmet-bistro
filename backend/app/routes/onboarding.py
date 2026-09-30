@@ -36,6 +36,7 @@ from ..saas_billing_models import SaaSSubscription
 from ..security import get_current_user
 from ..services.onboarding_readiness import evaluate_operation_readiness
 from ..services.operational_modes import explicit_order_types
+from ..services.table_bootstrap import bootstrap_standard_tables
 from .super_admin_onboarding import DEFAULT_TRIAL_DAYS, restaurant_trials
 
 
@@ -52,6 +53,12 @@ class OnboardingOperationProfileRequest(BaseModel):
 
     model_config = {"extra": "forbid"}
 
+
+class OnboardingTableBootstrapRequest(BaseModel):
+    count: int = Field(ge=1, le=300)
+    default_capacity: int = Field(default=4, ge=1, le=50)
+
+    model_config = {"extra": "forbid"}
 
 
 def _as_utc(value: datetime.datetime | None) -> datetime.datetime | None:
@@ -553,6 +560,67 @@ def update_onboarding_operation_profile(
         )
         db.commit()
 
+    return _build_onboarding_status(db, current_user=current_user)
+
+
+@router.post("/tables/bootstrap")
+def bootstrap_onboarding_tables(
+    payload: OnboardingTableBootstrapRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Cria em lote as mesas padronizadas faltantes para o salão."""
+    _require_onboarding_role(current_user)
+    if getattr(current_user, "is_support_mode", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Modo Suporte pode consultar, mas não alterar o onboarding do cliente.",
+        )
+
+    tenant_id = require_tenant_id()
+    config = (
+        db.query(ConfiguracaoRestaurante)
+        .filter(ConfiguracaoRestaurante.restaurante_id == tenant_id)
+        .one_or_none()
+    )
+    if "consumo_local" not in explicit_order_types(config):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ative Consumo no local antes de configurar as mesas do salão.",
+        )
+
+    try:
+        result = bootstrap_standard_tables(
+            db,
+            tenant_id=tenant_id,
+            count=payload.count,
+            default_capacity=payload.default_capacity,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    db.add(
+        ActivityLog(
+            restaurante_id=tenant_id,
+            garcom_id=current_user.id,
+            action="ONBOARDING_TABLES_BOOTSTRAP",
+            details=json.dumps(
+                {
+                    "requested_count": result.requested_count,
+                    "default_capacity": result.default_capacity,
+                    "existing_before": result.existing_before,
+                    "created_ids": list(result.created_ids),
+                    "total_after": result.total_after,
+                    "destructive": False,
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+        )
+    )
+    db.commit()
     return _build_onboarding_status(db, current_user=current_user)
 
 
