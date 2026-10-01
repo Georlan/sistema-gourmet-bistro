@@ -210,6 +210,7 @@ export function SuperAdminRestaurant360({
   const [access, setAccess] = useState<AccessDetail | null>(null);
   const [audit, setAudit] = useState<SuperAdminAuditLogEntry[]>([]);
   const [incidents, setIncidents] = useState<TenantIncident[]>([]);
+  const [incidentsAvailable, setIncidentsAvailable] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [trialOpen, setTrialOpen] = useState(false);
@@ -289,9 +290,12 @@ export function SuperAdminRestaurant360({
       nextErrors.push("Histórico: " + superAdminErrorMessage(results[3].reason));
     }
 
-    if (results[4].status === "fulfilled") setIncidents(results[4].value as TenantIncident[]);
-    else {
+    if (results[4].status === "fulfilled") {
+      setIncidents(results[4].value as TenantIncident[]);
+      setIncidentsAvailable(true);
+    } else {
       setIncidents([]);
+      setIncidentsAvailable(false);
       nextErrors.push("Incidentes: " + superAdminErrorMessage(results[4].reason));
     }
 
@@ -644,7 +648,7 @@ export function SuperAdminRestaurant360({
                     <p className="mt-1 opacity-80">{item.recommended_action}</p>
                   </div>
                 ))}
-                {incidents.length === 0 && (access?.diagnostics?.length ? access.diagnostics.slice(0, 2).map(item => (
+                {incidentsAvailable && incidents.length === 0 && (access?.diagnostics?.length ? access.diagnostics.slice(0, 2).map(item => (
                   <div key={item.code} className={
                     "rounded-lg border p-3 text-[11px] " +
                     (item.severity === "critical"
@@ -661,6 +665,7 @@ export function SuperAdminRestaurant360({
                     {access ? "Nenhum incidente operacional ou alerta de acesso identificado." : "Diagnóstico operacional indisponível."}
                   </div>
                 ))}
+                {!incidentsAvailable && <div className="rounded-lg border border-zinc-800 bg-koma-page p-3 text-[11px] text-koma-muted">Diagnóstico de incidentes indisponível; nenhum estado saudável foi presumido.</div>}
                 {incidents.length > 3 && <p className="text-[10px] text-koma-muted">+ {incidents.length - 3} incidente(s) na aba Operação.</p>}
               </div>
             </div>
@@ -890,20 +895,26 @@ export function SuperAdminRestaurant360({
             </div>
             <span className={
               "rounded-full border px-2.5 py-1 text-[10px] font-black " +
-              (criticalIncidentCount > 0
-                ? "border-rose-800/60 bg-rose-950/30 text-rose-300"
-                : incidents.length > 0
+              (!incidentsAvailable
+                ? "border-zinc-700 bg-zinc-900 text-koma-muted"
+                : criticalIncidentCount > 0
+                  ? "border-rose-800/60 bg-rose-950/30 text-rose-300"
+                  : incidents.length > 0
                   ? "border-amber-800/60 bg-amber-950/30 text-amber-300"
                   : "border-emerald-800/60 bg-emerald-950/30 text-emerald-300")
             }>
-              {criticalIncidentCount > 0
-                ? criticalIncidentCount + " crítico(s)/alto(s)"
-                : incidents.length > 0
-                  ? incidents.length + " incidente(s)"
-                  : "Sem incidentes"}
+              {!incidentsAvailable
+                ? "Indisponível"
+                : criticalIncidentCount > 0
+                  ? criticalIncidentCount + " crítico(s)/alto(s)"
+                  : incidents.length > 0
+                    ? incidents.length + " incidente(s)"
+                    : "Sem incidentes"}
             </span>
           </div>
-          {incidents.length === 0 ? (
+          {!incidentsAvailable ? (
+            <div className="p-6 text-xs text-koma-muted">A fonte de incidentes está indisponível. O painel não presume que o restaurante esteja saudável.</div>
+          ) : incidents.length === 0 ? (
             <div className="p-6 text-xs text-emerald-300">Nenhum incidente foi detectado pelas fontes operacionais atuais.</div>
           ) : (
             <div className="divide-y divide-zinc-800/60">
