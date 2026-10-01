@@ -912,6 +912,53 @@ def test_worker_auto_binds_single_ready_windows_usb(temp_dir):
     )
 
 
+def test_windows_get71840_pos80_queue_is_detected_and_ready():
+    adapter = WindowsPrinterAdapter()
+    spooler = MagicMock()
+    spooler.PRINTER_ENUM_LOCAL = 2
+    spooler.PRINTER_ENUM_CONNECTIONS = 4
+    spooler.PRINTER_STATUS_OFFLINE = 0x80
+    spooler.PRINTER_STATUS_ERROR = 0x2
+    spooler.GetDefaultPrinter.side_effect = Exception("sem impressora padrão")
+    spooler.EnumPrinters.return_value = [
+        (0, None, "POS80 Printer", None),
+    ]
+    spooler.OpenPrinter.return_value = "printer-handle"
+    spooler.GetPrinter.return_value = {
+        "pPortName": "USB001",
+        "Status": 0,
+    }
+    adapter._win32print = spooler
+
+    physical = [
+        {
+            "name": "GET 71840",
+            "instance_id": r"USBPRINT\GET71840\7&278D47C8&0&USB001",
+            "status": "OK",
+        }
+    ]
+    with (
+        patch("adapters.windows.sys.platform", "win32"),
+        patch(
+            "adapters.windows._present_windows_usb_printers",
+            return_value=physical,
+        ),
+    ):
+        diagnostics = adapter.get_diagnostics()
+
+    assert diagnostics["printers"] == [
+        {
+            "name": "POS80 Printer",
+            "connection": "usb",
+            "uri": "USB001",
+            "is_default": False,
+            "available": True,
+            "present": True,
+            "configured": True,
+        }
+    ]
+
+
 def test_windows_connect_does_not_change_system_default():
     adapter = WindowsPrinterAdapter()
     spooler = MagicMock()
