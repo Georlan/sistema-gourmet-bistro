@@ -35,6 +35,7 @@ def test_onboarding_routes_are_registered_once():
     assert "get" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/release"]
     assert "post" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/release"]
     assert "post" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/tables/bootstrap"]
+    assert "put" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/operations"]
 
     with TestClient(app) as client:
         assert client.get("/api/onboarding/status").status_code == 401
@@ -47,6 +48,10 @@ def test_onboarding_routes_are_registered_once():
         assert client.post(
             "/api/super-admin/onboarding/restaurantes/1/tables/bootstrap",
             json={"count": 30, "default_capacity": 4, "reason": "implantação"},
+        ).status_code == 401
+        assert client.put(
+            "/api/super-admin/onboarding/restaurantes/1/operations",
+            json={"order_types": ["retirada", "delivery"], "reason": "correção administrativa"},
         ).status_code == 401
 
 
