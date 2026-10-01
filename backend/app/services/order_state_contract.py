@@ -20,7 +20,7 @@ _REJECTED = {OrderStatus.REJECTED, OrderStatus.CANCELLED}
 def _base_phase(status: OrderStatus) -> str:
     return {
         OrderStatus.PENDING: "received",
-        OrderStatus.ACCEPTED: "preparing",
+        OrderStatus.ACCEPTED: "accepted",
         OrderStatus.PREPARING: "preparing",
         OrderStatus.READY: "ready",
         OrderStatus.DISPATCHED: "dispatched",
@@ -36,6 +36,7 @@ def _label(phase: str) -> str:
         "payment_failed": "Pagamento não gerado",
         "scheduled": "Pedido agendado",
         "received": "Aguardando aceite",
+        "accepted": "Aceito · aguardando preparo",
         "preparing": "Em preparo",
         "ready": "Pronto",
         "dispatched": "Saiu para entrega",
@@ -49,7 +50,7 @@ def _progress(phase: str, fulfillment: FulfillmentType) -> tuple[int, int]:
     total = 5 if fulfillment == FulfillmentType.DELIVERY else 4
     if phase in {"rejected", "cancelled", "payment_failed"}:
         return 0, total
-    if phase in {"payment_pending", "scheduled", "received"}:
+    if phase in {"payment_pending", "scheduled", "received", "accepted"}:
         return 1, total
     if phase == "preparing":
         return 2, total

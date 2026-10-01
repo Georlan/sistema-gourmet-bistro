@@ -129,6 +129,9 @@ export default function CardapioCartDrawer({
   orderingMessage = "Pedidos temporariamente pausados.",
 }: CardapioCartDrawerProps) {
   const [deliveryMethod, setDeliveryMethod] = useState<CardapioFulfillment>("pickup");
+  const couponsEnabled = brandConfig?.benefits?.coupons === true;
+  const cashbackEnabled = brandConfig?.benefits?.cashback === true;
+  const showDiscounts = couponsEnabled || cashbackEnabled;
   const explicitOrderTypes = brandConfig?.activeOrderTypes;
   const pickupEnabled = !explicitOrderTypes || explicitOrderTypes.includes("retirada");
   const dineInEnabled = !explicitOrderTypes || explicitOrderTypes.includes("consumo_local");
@@ -208,6 +211,13 @@ export default function CardapioCartDrawer({
 
   // Cashback state
   const [useCashback, setUseCashback] = useState(false);
+
+  useEffect(() => {
+    setAppliedCoupon(null);
+    appliedCouponFingerprintRef.current = null;
+    setUseCashback(false);
+    setCouponError("");
+  }, [restaurantId, couponsEnabled, cashbackEnabled]);
 
   useEffect(() => {
     const applyStoredAddress = (storedAddress: string) => {
@@ -297,7 +307,7 @@ export default function CardapioCartDrawer({
   }, 0), [cart]);
 
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const couponValidationFingerprint = `${subtotal.toFixed(2)}:${normalizeBrazilianPhone(user?.phone || guestPhone)}`;
+  const couponValidationFingerprint = `${restaurantId}:${couponsEnabled}:${subtotal.toFixed(2)}:${normalizeBrazilianPhone(user?.phone || guestPhone)}`;
   const couponFingerprintRef = useRef(couponValidationFingerprint);
   const appliedCouponFingerprintRef = useRef<string | null>(null);
   couponFingerprintRef.current = couponValidationFingerprint;
@@ -337,16 +347,16 @@ export default function CardapioCartDrawer({
   }, [deliveryEnabled, deliveryMethod, dineInEnabled, pickupEnabled]);
 
   // Cashback deduction calculation
-  const userCashbackBalance = Number(user?.saldo_cashback || 0);
+  const userCashbackBalance = cashbackEnabled ? Number(user?.cashback ?? user?.saldo_cashback ?? 0) : 0;
   const cashbackDiscount = useMemo(() => {
     if (!useCashback || userCashbackBalance <= 0) return 0;
     // Cap at subtotal - coupon discount
-    const availableTotal = Math.max(0, subtotal - (appliedCoupon?.desconto || 0));
+    const availableTotal = Math.max(0, subtotal - (couponsEnabled ? appliedCoupon?.desconto || 0 : 0));
     return Math.min(userCashbackBalance, availableTotal);
-  }, [useCashback, userCashbackBalance, subtotal, appliedCoupon]);
+  }, [useCashback, userCashbackBalance, subtotal, appliedCoupon, couponsEnabled]);
 
   // Total calculation
-  const couponDiscount = appliedCoupon?.desconto || 0;
+  const couponDiscount = couponsEnabled ? appliedCoupon?.desconto || 0 : 0;
   const total = Math.max(0, subtotal + deliveryFee - couponDiscount - cashbackDiscount);
 
   // Troco calculation
@@ -365,7 +375,7 @@ export default function CardapioCartDrawer({
   // Handle Coupon Validation
   const handleApplyCoupon = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!couponCode.trim()) return;
+    if (!couponsEnabled || !couponCode.trim()) return;
     if (!user && !isCompleteBrazilianPhone(guestPhone)) {
       reportValidationError("Informe seu celular em Contato para conferir este cupom.", "input-guest-phone");
       return;
@@ -510,7 +520,7 @@ export default function CardapioCartDrawer({
       paymentMethodDetail: paymentDetail,
       trocoPara: paymentDetail === "dinheiro" && precisaTroco && trocoValorNum > 0 ? trocoValorNum : undefined,
       bairro: addressSnapshot?.bairro || undefined,
-      cupomCodigo: appliedCoupon?.codigo,
+      cupomCodigo: couponsEnabled ? appliedCoupon?.codigo : undefined,
       descontoCupom: couponDiscount > 0 ? couponDiscount : undefined,
       usarCashback: useCashback && cashbackDiscount > 0,
       descontoCashback: cashbackDiscount > 0 ? cashbackDiscount : undefined,
@@ -843,11 +853,11 @@ export default function CardapioCartDrawer({
               </section>
 
               {/* Section 3: Cupons & Descontos */}
-              <section className="border-t border-koma-border pt-5" id="cart-discounts" tabIndex={-1}>
+              {showDiscounts && <section className="border-t border-koma-border pt-5" id="cart-discounts" tabIndex={-1}>
                 <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted mb-2.5">3. Descontos & Benefícios</h3>
                 
                 {/* Coupon Box */}
-                {appliedCoupon ? (
+                {couponsEnabled && (appliedCoupon ? (
                   <div className="flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs">
                     <div className="flex items-center gap-2">
                       <Ticket className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -889,8 +899,8 @@ export default function CardapioCartDrawer({
                       {validatingCoupon ? "..." : "Aplicar"}
                     </button>
                   </form>
-                )}
-                {couponError && (
+                ))}
+                {couponsEnabled && couponError && (
                   <p className="text-[10px] text-rose-400 font-semibold mt-1.5 flex items-center gap-1">
                     <AlertCircle className="w-3 h-3" /> {couponError}
                   </p>
@@ -917,12 +927,12 @@ export default function CardapioCartDrawer({
                     </label>
                   </div>
                 )}
-              </section>
+              </section>}
 
               {/* Section 4: Forma de Pagamento & Troco */}
               <section className="border-t border-koma-border pt-5" id="cart-payment-methods" tabIndex={-1} aria-describedby={invalidField === "cart-payment-methods" ? "cart-checkout-error" : undefined}>
-                <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">4. Como quer pagar?</h3>
-                <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">Pix é pago agora e só libera o pedido após confirmação. Dinheiro e cartão são pagos pessoalmente {deliveryMethod === "delivery" ? "na entrega" : "na retirada"}.</p>
+                <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">{showDiscounts ? 4 : 3}. Como quer pagar?</h3>
+                <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">{availablePayments.includes("pix") && "Pix é pago agora e só libera o pedido após confirmação. "}Dinheiro e cartão habilitados são pagos pessoalmente {deliveryMethod === "delivery" ? "na entrega" : deliveryMethod === "dine_in" ? "no restaurante" : "na retirada"}.</p>
                 
                 <CardapioPaymentOptions available={availablePayments} selected={paymentDetail} onSelect={selectPayment} />
 
@@ -1000,7 +1010,7 @@ export default function CardapioCartDrawer({
 
               {/* Section 5: Identification */}
               <section className="border-t border-koma-border pt-5" id="cart-identification" tabIndex={-1}>
-                <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">5. Identificação</h3>
+                <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">{showDiscounts ? 5 : 4}. Identificação</h3>
                 {user ? (
                   <div className="mt-3 flex items-start gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-3.5">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
@@ -1049,7 +1059,7 @@ export default function CardapioCartDrawer({
                         <span className="relative block"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="text" autoComplete="name" maxLength={100} placeholder="Como devemos chamar você?" value={guestName} onChange={(event) => { setGuestName(event.target.value); clearValidation("input-guest-name"); }} aria-invalid={invalidField === "input-guest-name"} aria-describedby={invalidField === "input-guest-name" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-xl border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500 ${invalidField === "input-guest-name" ? "border-rose-500" : "border-koma-border"}`} id="input-guest-name" /></span>
                       </label>
                     )}
-                    {onAuthClick && <button type="button" onClick={onAuthClick} className="text-left text-xs font-semibold leading-relaxed text-koma-muted transition hover:text-emerald-400">Quer acumular pontos de fidelidade? <strong className="text-emerald-400">Entrar na conta.</strong></button>}
+                    {onAuthClick && <button type="button" onClick={onAuthClick} className="text-left text-xs font-semibold leading-relaxed text-koma-muted transition hover:text-emerald-400">{brandConfig?.benefits?.loyalty ? "Quer acompanhar seus benefícios? " : "Já tem cadastro? "}<strong className="text-emerald-400">Entrar na conta.</strong></button>}
                   </div>
                 )}
                 {paymentDetail === "pix" && (

@@ -179,7 +179,7 @@ export default function CardapioHeader({
               >
                 <KomaShareIcon size={16} aria-hidden="true" />
               </button>
-              <button
+              {(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty) && <button
                 type="button"
                 onClick={onBenefitsClick}
                 className="cardapio-public-account-button"
@@ -189,7 +189,7 @@ export default function CardapioHeader({
               >
                 <Gift size={15} aria-hidden="true" />
                 <span>Benefícios</span>
-              </button>
+              </button>}
               {ordersCount > 0 && onOrdersClick && (
                 <button
                   type="button"

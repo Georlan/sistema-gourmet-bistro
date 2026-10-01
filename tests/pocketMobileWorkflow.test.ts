@@ -225,7 +225,7 @@ test('mobile menu avoids duplicated owner shortcuts and keeps the compact touch-
 test('mobile order stage names match the columns they actually project', () => {
   const ordersWorkspace = readFileSync(new URL('../src/components/caixa/orders/CaixaOrdersWorkspace.tsx', import.meta.url), 'utf8');
 
-  assert.match(ordersWorkspace, /id: 'digital' as const, label: 'Digitais'/);
+  assert.match(ordersWorkspace, /id: 'digital' as const, label: compactMarmitaria \? 'Preparo' : 'Digitais'/);
   assert.doesNotMatch(ordersWorkspace, /id: 'digital' as const, label: 'Balcão'/);
 });
 

@@ -428,13 +428,13 @@ export function getDigitalOrderActionCapability(
 
   if (status === 'producao') {
     let defaultLabel = 'Pronto para retirada';
-    if (isDelivery) defaultLabel = 'Pronto para sair';
+    if (isDelivery) defaultLabel = 'Marcar como pronto';
     else if (modalidade === 'dine_in') defaultLabel = 'Pronto para servir';
 
     return {
       action: 'mark_ready',
       targetStatus: 'pronto',
-      label: isPending ? 'Avançando…' : defaultLabel,
+      label: isPending ? 'Marcando como pronto…' : defaultLabel,
       isAllowed: !isPending,
       disabledReason: isPending ? 'Avançando pedido…' : undefined,
     };
@@ -453,7 +453,7 @@ export function getDigitalOrderActionCapability(
       return {
         action: 'dispatch',
         targetStatus: 'transito',
-        label: isPending ? 'Despachando…' : 'Saiu para entrega',
+        label: isPending ? 'Despachando…' : 'Despachar pedido',
         isAllowed: canDispatch,
         disabledReason,
       };

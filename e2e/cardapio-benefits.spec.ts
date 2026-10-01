@@ -33,7 +33,7 @@ const publicMenuPayload = {
   ],
 };
 
-async function mockCardapio(page: Page, benefits: unknown | (() => unknown)) {
+async function mockCardapio(page: Page, benefits: any | (() => any), enabled = true) {
   await page.route(`${API_ORIGIN}/**`, async (route) => {
     const { pathname } = new URL(route.request().url());
 
@@ -41,7 +41,10 @@ async function mockCardapio(page: Page, benefits: unknown | (() => unknown)) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(publicMenuPayload),
+        body: JSON.stringify({ ...publicMenuPayload, restaurante: {
+          ...publicMenuPayload.restaurante, aceitando_pedidos: true,
+          beneficios: { coupons: enabled, loyalty: enabled, cashback: enabled },
+        } }),
       });
       return;
     }
@@ -126,9 +129,7 @@ test('Cardápio expõe oferta e regra de cashback sem vazar a matemática intern
   await expect(page.locator('#cardapio-benefits-credit')).toContainText('4,25%');
 
   await drawer.getByRole('button', { name: 'Pontos' }).click();
-  const inactivePoints = page.locator('#cardapio-benefits-points');
-  await expect(inactivePoints).toContainText('O restaurante está usando outra modalidade de vantagem no momento.');
-  await expect(inactivePoints).not.toContainText('Cada R$ 1 elegível gera');
+  await expect(page.locator('#cardapio-benefits-points')).toContainText('Seus pontos anteriores permanecem');
 
   await expect(drawer).not.toContainText('Split KÔMA');
   await expect(drawer).not.toContainText('Teto calculado');
@@ -155,7 +156,23 @@ test('Cardápio explica a regra de pontos configurada pelo restaurante', async (
   await expect(points).toContainText(/R\$\s*0,05/);
 
   await drawer.getByRole('button', { name: 'Créditos' }).click();
-  const inactiveCredit = page.locator('#cardapio-benefits-credit');
-  await expect(inactiveCredit).toContainText('O restaurante não está acumulando novos créditos por compra neste momento.');
-  await expect(inactiveCredit).not.toContainText('1%');
+  await expect(page.locator('#cardapio-benefits-credit')).toContainText('não está acumulando');
+});
+
+
+test('sem benefícios habilitados não mostra acesso nem cupom na sacola', async ({ page }) => {
+  let benefitRequests = 0;
+  await mockCardapio(page, { cupons: [], programa: null }, false);
+  page.on('request', request => { if (request.url().includes('/cupons/')) benefitRequests++; });
+  await page.goto('/cardapio?restaurante_id=2');
+  await expect(page.locator('#btn-benefits-header, #mobile-nav-benefits')).toHaveCount(0);
+  await page.locator('.cardapio-product-card__details-hitbox').first().click();
+  await page.locator('#product-details-modal').getByRole('button', { name: /Adicionar/ }).click();
+  if (!(await page.locator('#cart-drawer-container').isVisible())) {
+    await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
+  }
+  await expect(page.locator('#cart-drawer-container')).toBeVisible();
+  await expect(page.locator('#cart-discounts')).toHaveCount(0);
+  await expect(page.getByLabel('Código do cupom')).toHaveCount(0);
+  expect(benefitRequests).toBe(0);
 });

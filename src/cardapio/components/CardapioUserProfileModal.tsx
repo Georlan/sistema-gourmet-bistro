@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Coins, LogOut, Mail, MapPin, Phone, ShieldCheck, User, X } from "lucide-react";
+import type { BrandConfig } from "../CardapioTypes";
 import { API_BASE_URL } from "../../config/api";
 import {
   CustomerProfile,
@@ -17,6 +18,7 @@ interface CardapioUserProfileModalProps {
   onClose: () => void;
   user: CustomerProfile | null;
   customerToken: string | null;
+  benefits?: BrandConfig["benefits"];
   onProfileUpdate: (profile: CustomerProfile) => void;
   onLogout: () => void;
   onRepeatOrder?: (order: CustomerHistoryOrder) => void;
@@ -26,6 +28,7 @@ export default function CardapioUserProfileModal({
   onClose,
   user,
   customerToken,
+  benefits,
   onProfileUpdate,
   onLogout,
   onRepeatOrder,
@@ -57,7 +60,7 @@ export default function CardapioUserProfileModal({
       if (response.ok && data?.id) onProfileUpdate(mapCustomerProfile(data));
     }).catch((error) => {
       if ((error as Error).name !== "AbortError") {
-        setErrorMessage("Não foi possível atualizar os pontos agora.");
+        setErrorMessage("Não foi possível atualizar seu cadastro agora.");
       }
     });
     return () => controller.abort();
@@ -240,7 +243,7 @@ export default function CardapioUserProfileModal({
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              {benefits?.loyalty && <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-2xl border border-primary/15 bg-primary/5 p-3">
                   <Coins className="h-4 w-4 text-primary mb-1" />
                   <p className="text-[9px] uppercase text-koma-muted font-bold">Pontos</p>
@@ -252,7 +255,7 @@ export default function CardapioUserProfileModal({
                     {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(user.cashback)}
                   </p>
                 </div>
-              </div>
+              </div>}
 
               <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 space-y-3">
                 {user.email && (

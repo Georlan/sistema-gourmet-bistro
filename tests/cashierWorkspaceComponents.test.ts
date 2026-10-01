@@ -70,6 +70,57 @@ test('fila de aceite usa status confirmado e bloqueia ações durante a transiç
   assert.doesNotMatch(acceptedMarkup, /orders-pending-card p-4/);
 });
 
+test('aceite reaproveita composição persistida e preserva personalizações diferentes', () => {
+  const base = workspace([]);
+  const pending = digital({ status: 'pendente', itens: '2x Quentinha G', detailItems: [
+    { nome: 'Quentinha G', observacao: 'Sem cebola - Opções: 2x Bisteca, Baião, Salada verde' },
+    { nome: 'Quentinha G', observacao: 'Opções: Frango, Costela, Arroz, Vinagrete' },
+    { nome: 'Cancelado', status: 'cancelado', observacao: 'Não produzir' },
+  ] });
+  const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
+    ...base, acceptance: { ...base.acceptance, drawerOpen: true, orders: [pending] },
+  }));
+  assert.match(html, /Sem cebola - Opções: 2x Bisteca, Baião, Salada verde/);
+  assert.match(html, /Opções: Frango, Costela, Arroz, Vinagrete/);
+  assert.doesNotMatch(html, /Não produzir|Cancelado/);
+});
+
+test('Marmitaria sem consumo local tem duas etapas e inicia no preparo no mobile', () => {
+  const base = workspace([]);
+  const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
+    ...base, restaurantConfig: { operation_profile: 'marmitaria', tipos_pedido_ativos: ['delivery'] },
+  }));
+  assert.doesNotMatch(html, /orders-column--salon|Mesas em Atendimento/);
+  assert.match(html, /orders-board--marmitaria/);
+  assert.match(html, /orders-column--digital[^"<]*is-mobile-active/);
+  assert.match(html, /Entrega e recebimento/);
+  assert.match(html, /grid-template-columns:repeat\(2, minmax\(0, 1fr\)\)/);
+});
+
+test('busca sem resultados não esconde um atendimento local ainda ativo', () => {
+  const base = workspace([]);
+  const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
+    ...base, hasLocalServiceWork: true, search: { query: 'inexistente', onChange: noop },
+    restaurantConfig: { operation_profile: 'marmitaria', tipos_pedido_ativos: ['delivery'] },
+  }));
+  assert.match(html, /orders-column--salon/);
+});
+
+test('outros perfis e Marmitaria com consumo local ou mesas ativas preservam o salão', () => {
+  const cases = [
+    { base: workspace([]), config: { operation_profile: 'pizzaria', tipos_pedido_ativos: ['delivery'] } },
+    { base: workspace([]), config: { operation_profile: 'generic', tipos_pedido_ativos: ['delivery'] } },
+    { base: workspace([]), config: { operation_profile: 'marmitaria', tipos_pedido_ativos: ['delivery', 'consumo_local'] } },
+    { base: workspace(), config: { operation_profile: 'marmitaria', tipos_pedido_ativos: ['delivery'] } },
+    { base: workspace([]), config: { operation_profile: 'marmitaria' } },
+  ];
+  for (const { base, config } of cases) {
+    const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, { ...base, restaurantConfig: config }));
+    assert.match(html, /orders-column--salon/);
+    assert.doesNotMatch(html, /orders-board--marmitaria/);
+  }
+});
+
 type ViewElement = React.ReactElement<Record<string, unknown>>;
 function elements(node: ReactNode): ViewElement[] {
   if (Array.isArray(node)) return node.flatMap(elements);
