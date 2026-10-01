@@ -61,15 +61,22 @@ export function CashierPrintingSettings({
     return null;
   }
 
-  const handleTestWaiterPrinter = async () => {
+  const handleTestWaiterPrinter = async (agentId: string | null) => {
     if (isTestingWaiterPrinter) return;
+    if (!agentId) {
+      setWaiterTestFeedback('Este computador ainda não foi identificado pelo KÔMA Print.');
+      return;
+    }
     setIsTestingWaiterPrinter(true);
     setWaiterTestFeedback('');
     try {
-      const response = await fetch(`${apiBaseUrl}/impressao/teste-extremo-garcom`, {
-        method: 'POST',
-        headers: authHeaders,
-      });
+      const response = await fetch(
+        `${apiBaseUrl}/impressao/teste-extremo-garcom?agent_id=${encodeURIComponent(agentId)}`,
+        {
+          method: 'POST',
+          headers: authHeaders,
+        }
+      );
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         throw new Error(payload?.detail || 'Não foi possível enviar o teste extremo do garçom.');
@@ -124,7 +131,7 @@ export function CashierPrintingSettings({
             authHeaders={authHeaders}
             onTestPrint={handleTestPrinter}
             testInProgress={isTestingPrinter}
-            advancedTestsSlot={
+            advancedTestsSlot={({ localAgentId }) => (
               <div className="overflow-hidden rounded-2xl border border-koma-border bg-koma-panel shadow-xs">
                 <button
                   type="button"
@@ -157,7 +164,7 @@ export function CashierPrintingSettings({
                     <button
                       type="button"
                       disabled={isTestingWaiterPrinter}
-                      onClick={() => void handleTestWaiterPrinter()}
+                      onClick={() => void handleTestWaiterPrinter(localAgentId)}
                       className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 text-xs font-bold text-koma-foreground transition hover:border-emerald-500/40 hover:text-emerald-600 disabled:cursor-wait disabled:opacity-60 dark:hover:text-emerald-300 cursor-pointer"
                     >
                       {isTestingWaiterPrinter ? (
@@ -170,7 +177,7 @@ export function CashierPrintingSettings({
                   </div>
                 )}
               </div>
-            }
+            )}
           >
             {({ activePaperWidthMm }) => (
               <>
