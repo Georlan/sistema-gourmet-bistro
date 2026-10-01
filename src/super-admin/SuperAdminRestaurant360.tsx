@@ -822,6 +822,11 @@ export function SuperAdminRestaurant360({
                           Corrigir modalidades
                         </button>
                       )}
+                      {item.key === "catalog" && release.catalogAssistance && (
+                        <button type="button" onClick={onOpenCatalogAssistance} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                          Abrir fila de cardápios
+                        </button>
+                      )}
                       {item.key === "operation-profile" && (
                         <button type="button" onClick={() => onEdit(tenant)} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
                           Corrigir tipo
@@ -830,11 +835,6 @@ export function SuperAdminRestaurant360({
                       {item.key === "access" && (
                         <button type="button" onClick={onOpenTeamControls} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
                           Gerenciar acessos
-                        </button>
-                      )}
-                      {item.key === "catalog" && release.catalogAssistance && (
-                        <button type="button" onClick={onOpenCatalogAssistance} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
-                          Abrir fila de cardápios
                         </button>
                       )}
                       {supportTargetForCockpit(item.key) && (
