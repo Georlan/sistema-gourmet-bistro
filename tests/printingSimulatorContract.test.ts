@@ -30,7 +30,7 @@ test("local simulator reuses production ESC POS builder without physical writes"
   assert.match(simulator, /build_escpos_payload\(payload_text, encoding="cp860"\)/);
   assert.match(simulator, /physical_usb_write": False/);
   assert.match(simulator, /physical_print_time_ms": None/);
-  assert.match(worker, /start_simulator_server\(type\(adapter\)\.__name__\)/);
+  assert.match(worker, /start_simulator_server\([\s\S]*type\(adapter\)\.__name__[\s\S]*agent_id_provider/);
 });
 
 test("simulator is internal support tooling, not a restaurant feature", () => {
@@ -80,4 +80,13 @@ test("simulator surfaces print origin instead of hiding reprints among normal jo
   assert.match(routes, /"origin_label": _print_job_origin\(job\)\["label"\]/);
   assert.match(page, /Origem da impressão/);
   assert.match(page, /item\.origin_label \|\| item\.source_type/);
+});
+
+
+test("local bridge exposes agent identity without exposing credentials", () => {
+  assert.match(simulator, /\/agent\/identity/);
+  assert.match(simulator, /"service": "koma-print-agent"/);
+  assert.match(simulator, /"agent_id": agent_id/);
+  assert.doesNotMatch(simulator, /agent_token.*agent\/identity|agent\/identity.*agent_token/);
+  assert.match(worker, /resolved_agent_id/);
 });
