@@ -239,6 +239,11 @@ export function SuperAdminRestaurant360({
   const [operationBusy, setOperationBusy] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [operationNotice, setOperationNotice] = useState<string | null>(null);
+  const [incidentAction, setIncidentAction] = useState<TenantIncident | null>(null);
+  const [incidentReason, setIncidentReason] = useState("");
+  const [incidentBusy, setIncidentBusy] = useState(false);
+  const [incidentActionError, setIncidentActionError] = useState<string | null>(null);
+  const [incidentActionNotice, setIncidentActionNotice] = useState<string | null>(null);
 
   const linkedContract = useMemo(
     () => contracts.find(item => item.linkedRestaurantId === tenant.id) || null,
@@ -409,6 +414,41 @@ export function SuperAdminRestaurant360({
       setOperationError(superAdminErrorMessage(error));
     } finally {
       setOperationBusy(false);
+    }
+  };
+
+  const executeIncidentAction = async () => {
+    if (!incidentAction?.action_available || !incidentAction.action_type || !incidentAction.action_target_id || incidentBusy) return;
+    if (incidentReason.trim().length < 3) {
+      setIncidentActionError("Informe um motivo administrativo com pelo menos 3 caracteres.");
+      return;
+    }
+
+    setIncidentBusy(true);
+    setIncidentActionError(null);
+    setIncidentActionNotice(null);
+    try {
+      const response = await superAdminFetch("/api/super-admin/incidents/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: incidentAction.tenant_id,
+          action_type: incidentAction.action_type,
+          target_id: incidentAction.action_target_id,
+          reason: incidentReason.trim(),
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.detail || "Não foi possível executar a ação corretiva.");
+
+      setIncidentActionNotice(body?.message || "Ação corretiva executada e auditada.");
+      setIncidentReason("");
+      setIncidentAction(null);
+      await loadData();
+    } catch (error) {
+      setIncidentActionError(superAdminErrorMessage(error));
+    } finally {
+      setIncidentBusy(false);
     }
   };
 
@@ -822,11 +862,6 @@ export function SuperAdminRestaurant360({
                           Corrigir modalidades
                         </button>
                       )}
-                      {item.key === "catalog" && release.catalogAssistance && (
-                        <button type="button" onClick={onOpenCatalogAssistance} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
-                          Abrir fila de cardápios
-                        </button>
-                      )}
                       {item.key === "operation-profile" && (
                         <button type="button" onClick={() => onEdit(tenant)} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
                           Corrigir tipo
@@ -835,6 +870,11 @@ export function SuperAdminRestaurant360({
                       {item.key === "access" && (
                         <button type="button" onClick={onOpenTeamControls} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
                           Gerenciar acessos
+                        </button>
+                      )}
+                      {item.key === "catalog" && release.catalogAssistance && (
+                        <button type="button" onClick={onOpenCatalogAssistance} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                          Abrir fila de cardápios
                         </button>
                       )}
                       {supportTargetForCockpit(item.key) && (
@@ -1133,12 +1173,31 @@ export function SuperAdminRestaurant360({
                     <strong className="text-koma-foreground">Próximo passo</strong>
                     <p className="mt-1 text-koma-muted">{item.recommended_action}</p>
                     {item.last_seen_at && <p className="mt-1 text-[10px] text-koma-subtle">Último sinal: {formatDate(item.last_seen_at)}</p>}
+                    {item.action_available && item.action_type && item.action_target_id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIncidentAction(item);
+                          setIncidentReason("");
+                          setIncidentActionError(null);
+                          setIncidentActionNotice(null);
+                        }}
+                        className="mt-3 rounded-lg bg-[#00b894] px-3 py-1.5 text-[10px] font-black text-black"
+                      >
+                        Resolver com ação auditada
+                      </button>
+                    )}
                   </div>
                 </article>
               ))}
             </div>
           )}
           </div>
+          {incidentActionNotice && (
+            <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3 text-xs text-emerald-300">
+              {incidentActionNotice}
+            </div>
+          )}
         </div>
       )}
 
@@ -1156,6 +1215,41 @@ export function SuperAdminRestaurant360({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {incidentAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label="Resolver incidente">
+          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-koma-card p-5 shadow-2xl">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wide text-[#00b894]">Ação corretiva auditada</span>
+              <h3 className="mt-1 text-base font-bold text-koma-foreground">{incidentAction.title}</h3>
+              <p className="mt-2 text-xs text-koma-muted">{incidentAction.recommended_action}</p>
+            </div>
+            <div className="mt-4 rounded-lg border border-zinc-800 bg-koma-page p-3 text-[11px] text-koma-muted">
+              <p><strong className="text-koma-secondary">Ação:</strong> {incidentAction.action_type}</p>
+              <p className="mt-1"><strong className="text-koma-secondary">Alvo:</strong> {incidentAction.action_target_id}</p>
+              <p className="mt-1">A execução fica restrita ao tenant #{tenant.id} e registrada na auditoria persistente.</p>
+            </div>
+            <label className="mt-4 block text-xs text-koma-muted">
+              Motivo obrigatório
+              <textarea
+                rows={3}
+                value={incidentReason}
+                onChange={event => setIncidentReason(event.target.value)}
+                disabled={incidentBusy}
+                placeholder="Ex.: agente voltou a operar; reenviando o documento retido."
+                className="mt-1 w-full resize-none rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-koma-foreground"
+              />
+            </label>
+            {incidentActionError && <div className="mt-3 rounded-lg border border-rose-900/50 bg-rose-950/20 p-3 text-xs text-rose-300">{incidentActionError}</div>}
+            <div className="mt-4 flex justify-end gap-2 border-t border-zinc-800 pt-4">
+              <button type="button" onClick={() => setIncidentAction(null)} disabled={incidentBusy} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-koma-secondary">Cancelar</button>
+              <button type="button" onClick={() => void executeIncidentAction()} disabled={incidentBusy} className="rounded-lg bg-[#00b894] px-4 py-2 text-xs font-black text-black disabled:opacity-50">
+                {incidentBusy ? "Executando…" : "Confirmar e executar"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
