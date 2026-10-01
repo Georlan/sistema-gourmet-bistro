@@ -4,8 +4,15 @@ import { superAdminFetch } from "./superAdminApi";
 import type { Tenant } from "./superAdminTypes";
 import { saveOperatorSession } from "../utils/authSession";
 
+export interface SupportNavigationTarget {
+  tab: string;
+  subTab: string;
+  label?: string;
+}
+
 interface SuperAdminSupportModalProps {
   tenant: Tenant;
+  target?: SupportNavigationTarget | null;
   onClose: () => void;
   onSessionStarted?: (tenantId: string) => void;
 }
@@ -23,6 +30,7 @@ export interface StoredSupportSession {
 
 export function SuperAdminSupportModal({
   tenant,
+  target,
   onClose,
   onSessionStarted,
 }: SuperAdminSupportModalProps) {
@@ -85,8 +93,8 @@ export function SuperAdminSupportModal({
       // Modo Suporte inspeciona o tenant no estado real e nunca herda o
       // modo restrito de implantação deixado por uma sessão anterior.
       sessionStorage.removeItem("koma_onboarding_setup_mode");
-      sessionStorage.setItem("koma_active_tab", "operacao");
-      sessionStorage.setItem("koma_active_subtab", "pedidos");
+      sessionStorage.setItem("koma_active_tab", target?.tab || "operacao");
+      sessionStorage.setItem("koma_active_subtab", target?.subTab || "pedidos");
 
       saveOperatorSession(data.access_token, {
         id: `support:${data.operator}`,
@@ -139,6 +147,11 @@ export function SuperAdminSupportModal({
                 revelada. O início, o motivo, a duração e o encerramento desta sessão
                 ficam registrados na auditoria administrativa.
               </p>
+              {target?.label && (
+                <p className="pt-1 text-amber-100">
+                  Destino após entrar: <strong>{target.label}</strong>.
+                </p>
+              )}
             </div>
           </div>
         </div>
