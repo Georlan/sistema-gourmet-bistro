@@ -188,9 +188,9 @@ def enqueue_activation(
         kind=kind,
         email=email,
         phone=phone,
-        subject="Seu KÔMA foi liberado — crie sua senha",
+        subject="Seu acesso ao KÔMA está pronto — crie sua senha",
         message=(
-            f"Olá, {representative_name}! O {restaurant_name} foi liberado. Crie sua senha para o "
+            f"Olá, {representative_name}! O acesso administrativo do {restaurant_name} está pronto. Crie sua senha para o "
             f"primeiro acesso: {link} . O link é pessoal e válido por 72 horas. Depois do login, "
             "conclua dados do restaurante, horários, cardápio e modalidades de operação. Seus 7 dias grátis ainda não estão "
             "correndo: depois dos 4 itens essenciais, a equipe KÔMA liberará a operação e iniciará o período grátis."
