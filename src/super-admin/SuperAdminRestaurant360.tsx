@@ -52,8 +52,35 @@ type ReleasePreview = {
     trialEndsAt: string | null;
   };
   steps: Record<"profile" | "hours" | "catalog" | "operations", boolean>;
-  operations?: { orderTypes?: string[]; blockers?: string[] };
+  operations?: {
+    configured?: boolean;
+    ready?: boolean;
+    orderTypes?: string[];
+    tableMapEnabled?: boolean;
+    blockers?: string[];
+    capabilities?: {
+      dineIn?: { enabled?: boolean; ready?: boolean };
+      pickup?: { enabled?: boolean; ready?: boolean };
+      delivery?: { enabled?: boolean; ready?: boolean };
+    };
+  };
   counts?: { tables?: number; activeProducts?: number };
+  catalogAssistance?: { status?: string; filename?: string } | null;
+  progress?: { completed?: number; total?: number };
+  payments?: { mercadoPagoConnected?: boolean; pixOnlineAvailable?: boolean };
+  onboarding?: {
+    mode?: string;
+    releaseState?: string;
+    operationReleased?: boolean;
+    requiresKomaRelease?: boolean;
+  };
+  readiness?: {
+    configurationComplete?: boolean;
+    trialStarted?: boolean;
+    operationReleased?: boolean;
+    readyToOperate?: boolean;
+    blockers?: string[];
+  };
   readyForRelease: boolean;
   trialStarted: boolean;
 };
@@ -169,6 +196,9 @@ export function SuperAdminRestaurant360({
   const [loading, setLoading] = useState(true);
   const [trialOpen, setTrialOpen] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const linkedContract = useMemo(
     () => contracts.find(item => item.linkedRestaurantId === tenant.id) || null,
@@ -248,6 +278,181 @@ export function SuperAdminRestaurant360({
   };
 
   const readySteps = release ? Object.values(release.steps).filter(Boolean).length : null;
+
+  const reissueActivationInvite = async () => {
+    if (!linkedContract || inviteBusy) return;
+    setInviteBusy(true);
+    setInviteNotice(null);
+    setInviteError(null);
+    try {
+      const response = await superAdminFetch(
+        "/api/super-admin/signups/" + encodeURIComponent(linkedContract.protocol) + "/activation-invite",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reason: "Reemissão do convite inicial pela ficha Restaurante 360",
+          }),
+        },
+      );
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.detail || "Não foi possível reemitir o convite inicial.");
+      setInviteNotice("Novo convite agendado. O link anterior foi invalidado.");
+      await loadData();
+    } catch (error) {
+      setInviteError(superAdminErrorMessage(error));
+    } finally {
+      setInviteBusy(false);
+    }
+  };
+
+  const cockpitItems = release ? [
+    {
+      key: "access",
+      label: "Acesso",
+      state: access ? (access.activeAdmins > 0 ? "ready" : "blocked") : "unknown",
+      detail: access
+        ? (access.activeAdmins > 0
+          ? access.activeAdmins + " administrador(es) ativo(s)"
+          : access.pendingUsers > 0
+            ? access.pendingUsers + " convite(s) pendente(s)"
+            : "Sem administrador ativo")
+        : "Fonte de acesso indisponível",
+      evidence: access ? access.totalUsers + " usuário(s) no tenant" : "—",
+      owner: access && access.activeAdmins === 0 ? "KÔMA / cliente" : "—",
+    },
+    {
+      key: "operation-profile",
+      label: "Tipo de operação",
+      state: release.restaurant.operationProfile ? "ready" : "unknown",
+      detail: release.restaurant.operationProfile || "Não informado",
+      evidence: "Metadado operacional do tenant",
+      owner: "KÔMA pode corrigir",
+    },
+    {
+      key: "profile",
+      label: "Dados do restaurante",
+      state: release.steps.profile ? "ready" : "pending",
+      detail: release.steps.profile ? "Dados essenciais preenchidos" : "Dados essenciais pendentes",
+      evidence: "Readiness canônico do onboarding",
+      owner: release.steps.profile ? "—" : "Cliente",
+    },
+    {
+      key: "hours",
+      label: "Horários",
+      state: release.steps.hours ? "ready" : "pending",
+      detail: release.steps.hours ? "Horários estruturados" : "Horários pendentes",
+      evidence: "Readiness canônico do onboarding",
+      owner: release.steps.hours ? "—" : "Cliente",
+    },
+    {
+      key: "catalog",
+      label: "Cardápio",
+      state: release.steps.catalog
+        ? "ready"
+        : release.catalogAssistance?.status
+          ? "waiting"
+          : "pending",
+      detail: release.steps.catalog
+        ? String(release.counts?.activeProducts ?? 0) + " produto(s) ativo(s)"
+        : release.catalogAssistance?.status === "processing"
+          ? "Fonte recebida · em preparação"
+          : release.catalogAssistance?.status
+            ? "Fonte recebida · aguardando estruturação"
+            : "Nenhum produto ativo nem fonte assistida",
+      evidence: release.catalogAssistance?.filename || "Catálogo do tenant",
+      owner: release.steps.catalog ? "—" : release.catalogAssistance?.status ? "KÔMA" : "Cliente",
+    },
+    {
+      key: "operations",
+      label: "Modalidades",
+      state: release.operations?.configured
+        ? (release.operations?.ready ? "ready" : "blocked")
+        : "pending",
+      detail: release.operations?.orderTypes?.length
+        ? release.operations.orderTypes.join(", ")
+        : "Não configuradas",
+      evidence: release.operations?.blockers?.length
+        ? "Blockers: " + release.operations.blockers.join(", ")
+        : "Política canônica de modalidades",
+      owner: release.operations?.configured ? (release.operations?.ready ? "—" : "Cliente / KÔMA") : "Cliente",
+    },
+    {
+      key: "dine-in",
+      label: "Salão / mesas",
+      state: release.operations?.capabilities?.dineIn?.enabled
+        ? (release.operations?.tableMapEnabled
+          ? (release.operations?.capabilities?.dineIn?.ready ? "ready" : "blocked")
+          : "optional")
+        : "optional",
+      detail: release.operations?.capabilities?.dineIn?.enabled
+        ? (release.operations?.tableMapEnabled
+          ? String(release.counts?.tables ?? 0) + " mesa(s) cadastrada(s)"
+          : "Consumo local ativo · mapa de mesas desativado")
+        : "Consumo local não está ativo",
+      evidence: "Readiness operacional do salão",
+      owner: release.operations?.capabilities?.dineIn?.enabled && release.operations?.tableMapEnabled && !release.operations?.capabilities?.dineIn?.ready ? "KÔMA / cliente" : "—",
+    },
+    {
+      key: "delivery",
+      label: "Delivery",
+      state: release.operations?.capabilities?.delivery?.enabled
+        ? (release.operations?.capabilities?.delivery?.ready ? "ready" : "blocked")
+        : "optional",
+      detail: release.operations?.capabilities?.delivery?.enabled
+        ? (release.operations?.capabilities?.delivery?.ready
+          ? "Configuração de entrega válida"
+          : "Configuração de entrega incompleta")
+        : "Delivery não está ativo",
+      evidence: "Taxa/tabela/localização conforme modo configurado",
+      owner: release.operations?.capabilities?.delivery?.enabled && !release.operations?.capabilities?.delivery?.ready ? "Cliente / KÔMA" : "—",
+    },
+    {
+      key: "payment",
+      label: "Pagamento online",
+      state: release.payments?.mercadoPagoConnected ? "ready" : "optional",
+      detail: release.payments?.mercadoPagoConnected
+        ? "Mercado Pago conectado"
+        : "Mercado Pago não conectado",
+      evidence: "Conta de pagamento do Cardápio Online",
+      owner: release.payments?.mercadoPagoConnected ? "—" : "Cliente quando quiser pagamento online",
+    },
+    {
+      key: "release",
+      label: "Liberação / trial",
+      state: release.readiness?.trialStarted
+        ? "ready"
+        : release.readyForRelease
+          ? "waiting"
+          : "blocked",
+      detail: release.readiness?.trialStarted
+        ? "Operação liberada · trial iniciado"
+        : release.readyForRelease
+          ? "Implantação essencial pronta · aguardando KÔMA"
+          : "Ainda há blockers de implantação",
+      evidence: release.readiness?.blockers?.length
+        ? "Blockers: " + release.readiness.blockers.join(", ")
+        : "Readiness canônico do onboarding",
+      owner: release.readiness?.trialStarted ? "—" : release.readyForRelease ? "KÔMA" : "Cliente / KÔMA",
+    },
+  ] as const : [];
+
+  const cockpitTone = (state: string) => {
+    if (state === "ready") return "border-emerald-900/50 bg-emerald-950/20 text-emerald-200";
+    if (state === "blocked") return "border-rose-900/50 bg-rose-950/20 text-rose-200";
+    if (state === "waiting") return "border-amber-900/50 bg-amber-950/20 text-amber-200";
+    if (state === "optional") return "border-zinc-800 bg-koma-page text-koma-muted";
+    return "border-zinc-800 bg-koma-page text-koma-secondary";
+  };
+
+  const cockpitStateLabel = (state: string) => {
+    if (state === "ready") return "Pronto";
+    if (state === "blocked") return "Bloqueado";
+    if (state === "waiting") return "Aguardando";
+    if (state === "optional") return "Opcional";
+    if (state === "pending") return "Pendente";
+    return "Indisponível";
+  };
 
   return (
     <section className="space-y-5" data-testid="superadmin-restaurant-360">
@@ -406,14 +611,60 @@ export function SuperAdminRestaurant360({
       )}
 
       {section === "implementation" && (
-        <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="space-y-5">
           <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><h3 className="text-base font-bold text-koma-foreground">Implantação & liberação</h3><p className="mt-1 text-xs text-koma-muted">O trial comercial começa após a liberação explícita da operação.</p></div>
-              <button type="button" onClick={() => setReleaseOpen(true)} className="rounded-lg bg-[#00b894] px-3 py-2 text-xs font-black text-black">Ver implantação e liberar</button>
+              <div>
+                <h3 className="text-base font-bold text-koma-foreground">Cockpit de implantação</h3>
+                <p className="mt-1 text-xs text-koma-muted">Estados e blockers vêm das projeções canônicas do backend; a ficha apenas organiza a evidência operacional.</p>
+              </div>
+              <button type="button" onClick={() => setReleaseOpen(true)} className="rounded-lg bg-[#00b894] px-3 py-2 text-xs font-black text-black">Revisar e liberar</button>
             </div>
+
             {release ? (
               <>
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  {cockpitItems.map(item => (
+                    <div key={item.key} className={"rounded-xl border p-4 " + cockpitTone(item.state)}>
+                      <div className="flex items-start justify-between gap-3">
+                        <strong className="text-sm">{item.label}</strong>
+                        <span className="rounded-full border border-current/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide">
+                          {cockpitStateLabel(item.state)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs">{item.detail}</p>
+                      <div className="mt-3 grid gap-1 text-[10px] opacity-80">
+                        <p><strong>Evidência:</strong> {item.evidence}</p>
+                        <p><strong>Quem age:</strong> {item.owner}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-xl border border-zinc-800 bg-koma-page p-4 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong className="text-koma-foreground">Readiness de liberação</strong>
+                    <span className={release.readyForRelease ? "font-bold text-emerald-300" : "font-bold text-amber-300"}>
+                      {release.readiness?.trialStarted
+                        ? "Liberado"
+                        : release.readyForRelease
+                          ? "Pronto para revisão KÔMA"
+                          : "Ainda bloqueado"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-koma-muted">
+                    {release.readiness?.blockers?.length
+                      ? "Blockers canônicos: " + release.readiness.blockers.join(", ")
+                      : "Nenhum blocker canônico pendente antes da liberação."}
+                  </p>
+                </div>
+              </>
+            ) : <p className="mt-4 text-xs text-koma-muted">Fonte de implantação indisponível.</p>}
+          </div>
+
+          <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
+              <h3 className="text-sm font-bold text-koma-foreground">Resumo essencial</h3>
+              {release ? (
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   {(Object.keys(release.steps) as Array<keyof ReleasePreview["steps"]>).map(key => (
                     <div key={key} className={
@@ -426,25 +677,20 @@ export function SuperAdminRestaurant360({
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 grid gap-3 border-t border-zinc-800 pt-4 sm:grid-cols-3 text-xs">
-                  <div><span className="text-koma-muted">Modalidades</span><strong className="mt-1 block text-koma-foreground">{release.operations?.orderTypes?.length ? release.operations.orderTypes.join(", ") : "Não configuradas"}</strong></div>
-                  <div><span className="text-koma-muted">Mesas</span><strong className="mt-1 block text-koma-foreground">{release.counts?.tables ?? 0}</strong></div>
-                  <div><span className="text-koma-muted">Produtos ativos</span><strong className="mt-1 block text-koma-foreground">{release.counts?.activeProducts ?? 0}</strong></div>
-                </div>
-              </>
-            ) : <p className="mt-4 text-xs text-koma-muted">Fonte de implantação indisponível.</p>}
-          </div>
-
-          <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div><h3 className="flex items-center gap-2 text-sm font-bold text-koma-foreground"><CalendarClock className="h-4 w-4 text-violet-300" /> Período grátis</h3><p className="mt-1 text-xs text-koma-muted">Separado de suspensão, cobrança SaaS e Mercado Pago.</p></div>
-              <button type="button" onClick={() => setTrialOpen(true)} className="rounded-lg border border-violet-800/60 bg-violet-950/30 px-3 py-2 text-xs font-bold text-violet-200">Gerenciar trial</button>
+              ) : <p className="mt-4 text-xs text-koma-muted">Fonte de implantação indisponível.</p>}
             </div>
-            <div className="mt-4 rounded-xl border border-zinc-800 bg-koma-page p-4">
-              <strong className="block text-xl text-koma-foreground">{trialStatusLabel(trial?.trialStatus)}</strong>
-              <p className="mt-2 text-xs text-koma-muted">Início: {formatDate(trial?.trialStartedAt)}</p>
-              <p className="mt-1 text-xs text-koma-muted">Fim: {formatDate(trial?.trialEndsAt)}</p>
-              {trial?.trialStatus === "active" && <p className="mt-1 text-xs font-bold text-violet-200">{trial.daysRemaining} dia(s) restante(s)</p>}
+
+            <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div><h3 className="flex items-center gap-2 text-sm font-bold text-koma-foreground"><CalendarClock className="h-4 w-4 text-violet-300" /> Período grátis</h3><p className="mt-1 text-xs text-koma-muted">Só começa após a liberação comercial; é separado de suspensão, cobrança SaaS e Mercado Pago.</p></div>
+                <button type="button" onClick={() => setTrialOpen(true)} className="rounded-lg border border-violet-800/60 bg-violet-950/30 px-3 py-2 text-xs font-bold text-violet-200">Gerenciar trial</button>
+              </div>
+              <div className="mt-4 rounded-xl border border-zinc-800 bg-koma-page p-4">
+                <strong className="block text-xl text-koma-foreground">{trialStatusLabel(trial?.trialStatus)}</strong>
+                <p className="mt-2 text-xs text-koma-muted">Início: {formatDate(trial?.trialStartedAt)}</p>
+                <p className="mt-1 text-xs text-koma-muted">Fim: {formatDate(trial?.trialEndsAt)}</p>
+                {trial?.trialStatus === "active" && <p className="mt-1 text-xs font-bold text-violet-200">{trial.daysRemaining} dia(s) restante(s)</p>}
+              </div>
             </div>
           </div>
         </div>
@@ -505,8 +751,17 @@ export function SuperAdminRestaurant360({
           <div className="overflow-hidden rounded-xl border border-zinc-800 bg-koma-card">
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-800 p-4">
               <div><h3 className="text-sm font-bold text-koma-foreground">Equipe do restaurante</h3><p className="mt-1 text-[11px] text-koma-muted">A ficha mostra somente a equipe deste tenant; o controle auditável existente continua disponível sem expor credenciais.</p></div>
-              <button type="button" onClick={onOpenTeamControls} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-koma-secondary">Gerenciar acessos</button>
+              <div className="flex flex-wrap gap-2">
+                {linkedContract && access && access.pendingUsers > 0 && (
+                  <button type="button" onClick={() => void reissueActivationInvite()} disabled={inviteBusy} className="rounded-lg border border-amber-800/60 bg-amber-950/20 px-3 py-2 text-xs font-bold text-amber-300 disabled:opacity-50">
+                    {inviteBusy ? "Reemitindo…" : "Reemitir convite inicial"}
+                  </button>
+                )}
+                <button type="button" onClick={onOpenTeamControls} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-koma-secondary">Gerenciar acessos</button>
+              </div>
             </div>
+            {inviteNotice && <div className="border-b border-emerald-900/40 bg-emerald-950/20 px-4 py-3 text-xs text-emerald-300">{inviteNotice}</div>}
+            {inviteError && <div className="border-b border-rose-900/40 bg-rose-950/20 px-4 py-3 text-xs text-rose-300">{inviteError}</div>}
             {access ? (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[700px] text-left text-xs">
