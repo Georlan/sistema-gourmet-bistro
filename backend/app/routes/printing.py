@@ -39,6 +39,33 @@ def _require_physical_printing(db: Session, restaurante_id: int) -> None:
     )
 
 
+def _require_local_print_agent(
+    db: Session,
+    restaurante_id: int,
+    agent_id: str,
+) -> str:
+    agent_id_clean = (agent_id or "").strip()
+    if not agent_id_clean:
+        raise HTTPException(
+            status_code=400,
+            detail="Computador de impressão não identificado.",
+        )
+    local_agent = (
+        db.query(PrintAgentToken)
+        .filter(
+            PrintAgentToken.restaurante_id == restaurante_id,
+            PrintAgentToken.agent_id == agent_id_clean,
+            PrintAgentToken.ativo == True,
+        )
+        .first()
+    )
+    if not local_agent:
+        raise HTTPException(
+            status_code=404,
+            detail="O KÔMA Print deste computador não está registrado neste restaurante.",
+        )
+    return agent_id_clean
+
 
 class UniversalPrintRequest(BaseModel):
     source_type: PrintSourceType
@@ -157,23 +184,7 @@ def imprimir_teste_extremo_cardapio(
     """Enfileira uma comanda extrema sintética sem criar pedido ou movimentação real."""
     restaurante_id = require_tenant_id()
     _require_physical_printing(db, restaurante_id)
-    agent_id_clean = agent_id.strip()
-    if not agent_id_clean:
-        raise HTTPException(status_code=400, detail="Computador de impressão não identificado.")
-    local_agent = (
-        db.query(PrintAgentToken)
-        .filter(
-            PrintAgentToken.restaurante_id == restaurante_id,
-            PrintAgentToken.agent_id == agent_id_clean,
-            PrintAgentToken.ativo == True,
-        )
-        .first()
-    )
-    if not local_agent:
-        raise HTTPException(
-            status_code=404,
-            detail="O KÔMA Print deste computador não está registrado neste restaurante.",
-        )
+    agent_id_clean = _require_local_print_agent(db, restaurante_id, agent_id)
     preferences = get_print_preferences(db, restaurante_id)
     items = [
         PrintItem(
@@ -291,12 +302,14 @@ def imprimir_teste_extremo_cardapio(
     status_code=status.HTTP_200_OK,
 )
 def imprimir_teste_extremo_garcom(
+    agent_id: str,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("impressao:administrar")),
 ):
     """Enfileira uma comanda extrema sintética do App do Garçom sem criar pedido real."""
     restaurante_id = require_tenant_id()
     _require_physical_printing(db, restaurante_id)
+    agent_id_clean = _require_local_print_agent(db, restaurante_id, agent_id)
     preferences = get_print_preferences(db, restaurante_id)
     items = [
         PrintItem(
@@ -372,6 +385,7 @@ def imprimir_teste_extremo_garcom(
         source_id=source_id,
         payload_text=safe_payload,
         status="pending",
+        agent_id=agent_id_clean,
         idempotency_key=f"teste-extremo-garcom:{source_id}",
     )
     db.add(job)
