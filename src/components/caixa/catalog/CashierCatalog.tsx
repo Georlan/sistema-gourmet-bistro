@@ -317,9 +317,7 @@ export default function CashierCatalog({
             apiBaseUrl={apiBaseUrl}
             authHeaders={authHeaders}
             produtos={apiProdutos}
-            marmitariaCadastro={isMarmitaria} focusProductId={focusMarmitaId} onFocusHandled={() => setFocusMarmitaId(null)}
-            catalogVersion={JSON.stringify(apiProdutos.map(product => [product.id, product.nome, product.preco, product.ativo]))}
-            onCatalogChanged={async () => { await Promise.all([fetchProdutos(), fetchCategorias()]); }}
+            marmitariaCadastro={isMarmitaria}
             onShowNotification={(msg, type) => showToast(msg, type === 'error' ? 'error' : 'success')}
           />
         </div>
@@ -328,7 +326,7 @@ export default function CashierCatalog({
         <div role="dialog" aria-modal="true" aria-label="Novo produto" className="w-full max-w-md rounded-2xl border border-koma-border bg-koma-card p-5 space-y-4">
           <h3 className="font-bold">O que você quer adicionar?</h3>
           <div className="grid gap-3">
-            <button disabled={creatingType} type="button" className="rounded-xl border border-koma-border p-3 text-left" onClick={() => { setShowProductType(false); setShowMarmitaCreate(true); }}>Marmita<span className="block text-sm text-koma-muted">Escolha P, M ou G e informe o preço.</span></button>
+            <button disabled={creatingType} type="button" className="rounded-xl border border-koma-border p-3 text-left" onClick={() => { setFocusMarmitaId(null); setShowProductType(false); setShowMarmitaCreate(true); }}>Marmita<span className="block text-sm text-koma-muted">Escolha P, M ou G, informe o preço e defina a composição deste tamanho.</span></button>
             {(['Sobremesas', 'Bebidas'] as const).map(kind => <button key={kind} disabled={creatingType} type="button" className="rounded-xl border border-koma-border p-3 text-left" onClick={async () => {
               setCreatingType(true);
               try {
@@ -352,7 +350,7 @@ export default function CashierCatalog({
       </div>}
       {showMarmitaCreate && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
         <div role="dialog" aria-modal="true" aria-label="Nova marmita" className="w-full max-w-xl max-h-[90dvh] overflow-y-auto rounded-2xl border border-koma-border bg-koma-card p-4 space-y-3">
-          <MarmitariaTamanhos createOnly apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} notify={showToast} onSaved={async () => { await Promise.all([fetchProdutos(), fetchCategorias()]); setShowMarmitaCreate(false); }} />
+          <MarmitariaTamanhos createOnly apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} notify={showToast} focusProductId={focusMarmitaId} onFocusHandled={() => setFocusMarmitaId(null)} catalogVersion={JSON.stringify(apiProdutos.map(product => [product.id, product.nome, product.preco, product.ativo]))} onSaved={async () => { await Promise.all([fetchProdutos(), fetchCategorias()]); setShowMarmitaCreate(false); }} />
           <button type="button" onClick={() => setShowMarmitaCreate(false)}>Fechar</button>
         </div>
       </div>}
@@ -399,7 +397,7 @@ export default function CashierCatalog({
               onSubmit={async (e) => {
                 e.preventDefault();
                 const submitter = (e.nativeEvent as SubmitEvent).submitter;
-                const openChoices = submitter instanceof HTMLButtonElement && submitter.value === 'choices';
+                const openComposition = submitter instanceof HTMLButtonElement && submitter.value === 'composition';
                 if (isLoading) return;
                 setIsLoading(true);
                 try {
@@ -495,7 +493,7 @@ export default function CashierCatalog({
                   await fetchProdutos();
                   setShowProductModal(false);
                   showToast(editingProduct ? 'Produto atualizado.' : 'Produto criado.');
-                  if (openChoices) { setFocusMarmitaId(savedProductId); setActiveSubTab('complementos'); }
+                  if (openComposition) { setFocusMarmitaId(savedProductId); setShowMarmitaCreate(true); }
                 } catch (err) {
                   console.error(err);
                   showToast('Erro de conexão ao salvar produto.', 'error');
@@ -518,8 +516,8 @@ export default function CashierCatalog({
                 </div>
               )}
 
-              {isMarmitaria && <p className="text-sm text-koma-muted">{editingProduct && isMarmita(editingProduct) ? 'Edite preço, foto e descrição aqui. As escolhas ficam na aba Complementos.' : 'Cadastre aqui sobremesas e bebidas. Todos aparecem na mesma lista de produtos.'}</p>}
-              {isMarmitaria && editingProduct && isMarmita(editingProduct) && <button type="submit" name="nextAction" value="choices" disabled={isLoading} className="text-sm font-bold text-emerald-500">Salvar e configurar escolhas em Complementos</button>}
+              {isMarmitaria && <p className="text-sm text-koma-muted">{editingProduct && isMarmita(editingProduct) ? 'Edite preço, foto e descrição aqui. A quantidade de proteínas, guarnições e saladas é configurada nesta quentinha, em Produtos.' : 'Cadastre aqui sobremesas e bebidas. Todos aparecem na mesma lista de produtos.'}</p>}
+              {isMarmitaria && editingProduct && isMarmita(editingProduct) && <button type="submit" name="nextAction" value="composition" disabled={isLoading} className="text-sm font-bold text-emerald-500">Salvar e configurar composição da quentinha</button>}
               <div className="space-y-1.5">
                 <label
                   htmlFor="product-name"
