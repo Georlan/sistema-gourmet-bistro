@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.routes import onboarding as onboarding_routes
 from app.routes.onboarding import (
     _operations_step_is_complete,
     _profile_is_configured,
@@ -15,6 +16,7 @@ from app.routes.onboarding import (
     _trial_status_payload,
     start_trial_after_readiness,
 )
+from app.routes.super_admin_onboarding import _commercial_release_preview
 from app.services.onboarding_readiness import evaluate_operation_readiness
 from app.services.operational_modes import (
     explicit_order_types,
@@ -241,3 +243,74 @@ def test_saved_delivery_completes_modalities_step_while_delivery_setup_is_pendin
         "firstOrder": False,
     }
     assert _required_progress(steps) == {"completed": 4, "total": 4, "percent": 100}
+
+
+
+def test_superadmin_release_preview_reuses_canonical_onboarding_projection(monkeypatch):
+    snapshot = {
+        "restaurant": {"id": "7", "name": "Pizzaria QA", "plan": "pro", "operationProfile": "pizzaria"},
+        "steps": {"profile": True, "hours": False, "catalog": False, "operations": True, "mercadoPago": False, "firstOrder": False},
+        "operations": {
+            "configured": True,
+            "ready": False,
+            "orderTypes": ["retirada", "delivery"],
+            "tableMapEnabled": False,
+            "capabilities": {
+                "dineIn": {"enabled": False, "ready": True},
+                "pickup": {"enabled": True, "ready": True},
+                "delivery": {"enabled": True, "ready": False},
+            },
+            "blockers": ["delivery_configuration"],
+        },
+        "counts": {"products": 0, "activeProducts": 0, "orders": 0, "tables": 0},
+        "catalogAssistance": {"status": "processing", "filename": "menu.pdf"},
+        "progress": {"completed": 2, "total": 4, "percent": 50},
+        "payments": {"mercadoPagoConnected": False, "pixOnlineAvailable": False},
+        "onboarding": {"mode": "commercial", "releaseState": "configuring", "operationReleased": False, "requiresKomaRelease": True},
+        "trial": {"status": "not_started", "startsAt": None, "endsAt": None, "daysRemaining": 0},
+        "readiness": {
+            "configurationComplete": False,
+            "trialStarted": False,
+            "operationReleased": False,
+            "readyToOperate": False,
+            "blockers": ["hours", "catalog"],
+        },
+        "readyForRelease": False,
+    }
+
+    monkeypatch.setattr(
+        onboarding_routes,
+        "_build_onboarding_status",
+        lambda db, current_user: snapshot,
+    )
+
+    subscription = SimpleNamespace(
+        status="onboarding",
+        billing_cycle="monthly",
+        payment_method_type="card",
+        trial_started_at=None,
+        trial_ends_at=None,
+    )
+
+    class QueryStub:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def one_or_none(self):
+            return subscription
+
+    class DbStub:
+        def query(self, *args, **kwargs):
+            return QueryStub()
+
+    preview = _commercial_release_preview(DbStub(), 7)
+
+    assert preview["operations"] is snapshot["operations"]
+    assert preview["catalogAssistance"] is snapshot["catalogAssistance"]
+    assert preview["progress"] is snapshot["progress"]
+    assert preview["payments"] is snapshot["payments"]
+    assert preview["onboarding"] is snapshot["onboarding"]
+    assert preview["trial"] is snapshot["trial"]
+    assert preview["readiness"] is snapshot["readiness"]
+    assert preview["readyForRelease"] is False
+    assert preview["trialStarted"] is False
