@@ -103,3 +103,17 @@ test('Cockpit informa próximo passo e usa deep link de suporte para configuraç
   assert.match(restaurant360, /Corrigir tipo/);
   assert.match(restaurant360, /Gerenciar acessos/);
 });
+
+
+test('Restaurante 360 executa somente ações corretivas já oferecidas pelo diagnóstico real', () => {
+  assert.match(restaurant360, /\/api\/super-admin\/incidents\/action/);
+  assert.match(restaurant360, /tenant_id: incidentAction\.tenant_id/);
+  assert.match(restaurant360, /action_type: incidentAction\.action_type/);
+  assert.match(restaurant360, /target_id: incidentAction\.action_target_id/);
+  assert.match(restaurant360, /reason: incidentReason\.trim\(\)/);
+  assert.match(restaurant360, /incidentAction\?\.action_available/);
+  assert.match(restaurant360, /Resolver com ação auditada/);
+  assert.match(restaurant360, /A execução fica restrita ao tenant/);
+  assert.doesNotMatch(restaurant360, /reprocess_outbox_event["']\s*:/);
+  assert.doesNotMatch(restaurant360, /retry_print_job["']\s*:/);
+});
