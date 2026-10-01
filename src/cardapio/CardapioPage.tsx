@@ -48,6 +48,7 @@ import { KomaLoading } from "../components/app/KomaLoading";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import { resolveKomaHost } from "../domain/komaHost";
 import { smartSearchMatch } from "../domain";
+import { buildKomaAttributionUrl } from "./komaAttribution";
 import {
   CustomerProfile,
   clearCustomerSession,
@@ -1097,7 +1098,18 @@ export default function CardapioPage() {
 
         <footer className="mt-4 border-t border-koma-border py-7 text-center">
           <strong className="text-xs text-koma-secondary">{activeBrand.name}</strong>
-          <p className="mt-2 text-[9px] text-koma-subtle">Cardápio digital KÔMA · preços e disponibilidade atualizados pelo restaurante.</p>
+          <p className="mt-2 text-[9px] text-koma-subtle">Preços e disponibilidade atualizados pelo restaurante.</p>
+          <a
+            href={buildKomaAttributionUrl("menu_footer", activeBrand.id)}
+            target="_blank"
+            rel="noopener noreferrer"
+            id="koma-powered-by-footer"
+            aria-label="Conhecer o KÔMA, plataforma deste cardápio digital"
+            className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-koma-border bg-koma-card px-3 text-[9px] font-semibold text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-500"
+          >
+            Cardápio digital por <strong className="font-black text-koma-foreground">KÔMA</strong>
+            <span aria-hidden="true">↗</span>
+          </a>
         </footer>
       </main>
 

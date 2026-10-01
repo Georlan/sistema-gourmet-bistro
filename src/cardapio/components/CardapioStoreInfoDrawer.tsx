@@ -7,6 +7,7 @@ import React from "react";
 import { BrandConfig } from "../CardapioTypes";
 import { Clock3, CreditCard, ExternalLink, Info, MapPin, MessageCircle, Store, X } from "lucide-react";
 import { CardapioDeliveryInfo } from "./CardapioOrderConditions";
+import { buildKomaAttributionUrl } from "../komaAttribution";
 
 interface CardapioStoreInfoDrawerProps {
   brand: BrandConfig;
@@ -163,7 +164,17 @@ export default function CardapioStoreInfoDrawer({
         <div className="shrink-0 border-t border-koma-border bg-koma-card/50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
           <button type="button" onClick={onClose} className="mb-3 min-h-11 w-full rounded-xl bg-emerald-500 px-4 text-xs font-black text-white">Voltar ao cardápio</button>
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[9px] font-semibold text-koma-subtle">Cardápio e pedidos online por Kôma</span>
+            <a
+              href={buildKomaAttributionUrl("store_info", brand.id)}
+              target="_blank"
+              rel="noopener noreferrer"
+              id="store-info-koma-attribution"
+              aria-label="Conhecer o KÔMA, plataforma deste cardápio digital"
+              className="inline-flex min-h-9 min-w-0 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-panel px-3 text-[9px] font-semibold text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-500"
+            >
+              <span className="truncate">Cardápio digital por <strong className="font-black text-koma-foreground">KÔMA</strong></span>
+              <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+            </a>
             {brand.phone && (
               <a
                 href={`https://wa.me/${String(brand.phone).replace(/\D/g, "")}`}
