@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
 import MoneyInput from '../MoneyInput';
 import type { GrupoModificador } from './ComplementosTab';
 
@@ -107,7 +108,7 @@ export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos: gr
         return <button key={tamanho} type="button" disabled={saving || !!editing || loading || (createOnly && !!size)}
           aria-label={size ? `Configurar marmita ${tamanho}` : `Cadastrar marmita ${tamanho}`}
           className="rounded-xl border border-koma-border p-3 text-koma-foreground disabled:opacity-50"
-          onClick={() => { setError(''); setEditing(size ? { ...size, regras: size.regras.map(rule => ({ ...rule })) } : { tamanho, nome: `Marmita ${tamanho}`, preco: 0, ativo: false, regras: [] }); }}>
+          onClick={() => { setError(''); setEditing(size ? { ...size, regras: size.regras.map(rule => ({ ...rule })) } : { tamanho, nome: `Marmita ${tamanho}`, preco: 0, ativo: true, regras: [] }); }}>
           <strong className="block">{tamanho}</strong><span className="text-xs">{size ? (createOnly ? 'Já cadastrada' : size.preco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })) : 'Cadastrar'}</span>
         </button>;
       })}
@@ -143,7 +144,18 @@ export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos: gr
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" aria-label={`Permitir repetir grupo ${index + 1}`} checked={rule.modo_selecao === 'porcoes'} onChange={event => updateRule(index, { modo_selecao: event.target.checked ? 'porcoes' : 'tipos' })} />Permitir repetir a mesma opção</label>
             <button type="button" className="text-sm text-rose-500" onClick={() => setEditing({ ...editing, ativo: editing.regras.length > 1 && editing.ativo, regras: editing.regras.filter((_, i) => i !== index) })}>Remover grupo desta quentinha</button>
           </div>)}
-          <button type="button" className="text-sm font-bold text-emerald-500" disabled={editing.regras.length >= grupos.length || editing.regras.length >= 20} onClick={() => setEditing({ ...editing, regras: [...editing.regras, { grupo_id: '', minimo: 0, maximo: 1, modo_selecao: 'tipos' }] })}>Adicionar grupo à quentinha</button>
+          <button
+            type="button"
+            className="group flex w-full items-center justify-between gap-3 rounded-xl border border-dashed border-emerald-500/40 bg-emerald-500/5 px-3 py-3 text-left transition hover:border-emerald-400 hover:bg-emerald-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={editing.regras.length >= grupos.length || editing.regras.length >= 20}
+            onClick={() => setEditing({ ...editing, regras: [...editing.regras, { grupo_id: '', minimo: 0, maximo: 1, modo_selecao: 'tipos' }] })}
+          >
+            <span>
+              <strong className="block text-sm text-emerald-500">{editing.regras.length === 0 ? 'Adicionar à composição' : 'Adicionar outro grupo à composição'}</strong>
+              <span className="mt-0.5 block text-xs text-koma-muted">Escolha Proteínas, Guarnições, Saladas ou outro grupo já cadastrado.</span>
+            </span>
+            <Plus size={18} className="shrink-0 text-emerald-500 transition-transform group-hover:scale-110" />
+          </button>
           {grupos.length === 0 && <p className="text-sm text-amber-500">Cadastre primeiro Proteínas, Guarnições, Saladas e suas opções na aba Complementos. Depois volte aqui para definir os limites deste tamanho.</p>}
         </div>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={editing.regras.length === 0 && !editing.ativo} checked={editing.ativo} onChange={event => setEditing({ ...editing, ativo: event.target.checked })} />Disponível para venda</label>
