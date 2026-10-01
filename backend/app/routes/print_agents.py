@@ -663,18 +663,44 @@ def _release_stuck_jobs(
     now: datetime.datetime,
 ) -> int:
     stuck_cutoff = now - datetime.timedelta(minutes=5)
-    return db.query(PrintJob).filter(
+    base_query = db.query(PrintJob).filter(
         PrintJob.restaurante_id == restaurante_id,
         PrintJob.status == "claimed",
         PrintJob.claimed_at < stuck_cutoff,
-    ).update(
-        {
-            "status": "pending",
-            "claimed_at": None,
-            "agent_id": None,
-        },
-        synchronize_session=False,
     )
+
+    # Testes disparados pela tela de um computador são deliberadamente
+    # pré-atribuídos. Se o agente cair depois do claim, a recuperação deve
+    # devolver o job para a fila DESSE MESMO computador, nunca entregá-lo a
+    # outro agente do restaurante.
+    targeted_test_types = (
+        "teste_extremo_cardapio",
+        "teste_extremo_garcom",
+    )
+    targeted_released = (
+        base_query
+        .filter(PrintJob.source_type.in_(targeted_test_types))
+        .update(
+            {
+                "status": "pending",
+                "claimed_at": None,
+            },
+            synchronize_session=False,
+        )
+    )
+    generic_released = (
+        base_query
+        .filter(~PrintJob.source_type.in_(targeted_test_types))
+        .update(
+            {
+                "status": "pending",
+                "claimed_at": None,
+                "agent_id": None,
+            },
+            synchronize_session=False,
+        )
+    )
+    return targeted_released + generic_released
 
 
 def _expire_stale_unresolved_jobs(
