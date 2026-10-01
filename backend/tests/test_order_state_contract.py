@@ -2,6 +2,18 @@ from app.routes.order_tracking import _effective_tracking_status
 from app.services.order_state_contract import build_order_state_contract
 
 
+def test_acceptance_does_not_announce_preparation_before_it_starts():
+    for fulfillment in ("Delivery", "Retirada", "Consumo no Local"):
+        accepted = build_order_state_contract("aceito", fulfillment)
+        preparing = build_order_state_contract("producao", fulfillment)
+        assert accepted["phase"] == "accepted"
+        assert accepted["label"] == "Aceito · aguardando preparo"
+        assert accepted["progress_step"] == 1
+        assert accepted["can_chat"] is True
+        assert preparing["phase"] == "preparing"
+        assert preparing["progress_step"] == 2
+
+
 def test_delivery_progress_and_terminal_flags_are_canonical():
     preparing = build_order_state_contract("producao", "Delivery")
     assert preparing == {

@@ -977,6 +977,7 @@ export function CaixaPanel({
 
             {activeTab === 'operacao' && activeSubTab === 'pedidos' && (
               <CaixaOrdersWorkspace
+                hasLocalServiceWork={tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0}
                 columns={{
                   tableProduction: filteredCol1.map(buildCashierTableCard),
                   digitalProduction: filteredDigitalProduction,

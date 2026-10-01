@@ -262,7 +262,7 @@ test('getDigitalOrderActionCapability define capacidade canônica por status e m
   const producingDelivery = getDigitalOrderActionCapability({ id: 'p-3', status: 'producao', modalidade: 'delivery' });
   assert.equal(producingDelivery.action, 'mark_ready');
   assert.equal(producingDelivery.targetStatus, 'pronto');
-  assert.equal(producingDelivery.label, 'Pronto para sair');
+  assert.equal(producingDelivery.label, 'Marcar como pronto');
   assert.equal(producingDelivery.isAllowed, true);
 
   // 4. Pronto: delivery exige motoboy para despachar
@@ -282,7 +282,7 @@ test('getDigitalOrderActionCapability define capacidade canônica por status e m
   assert.equal(readyDeliveryWithCourier.action, 'dispatch');
   assert.equal(readyDeliveryWithCourier.targetStatus, 'transito');
   assert.equal(readyDeliveryWithCourier.isAllowed, true);
-  assert.equal(readyDeliveryWithCourier.label, 'Saiu para entrega');
+  assert.equal(readyDeliveryWithCourier.label, 'Despachar pedido');
 
   // 5. Pronto: retirada tem ação finalize ("Finalizar pedido" se pago, "Receber e finalizar" se a receber)
   const readyPickupPaid = getDigitalOrderActionCapability({ id: 'p-5', status: 'pronto', modalidade: 'retirada', pago: true });
@@ -302,7 +302,7 @@ test('getDigitalOrderActionCapability define capacidade canônica por status e m
   );
   assert.equal(mutatingProducing.action, 'mark_ready');
   assert.equal(mutatingProducing.isAllowed, false);
-  assert.equal(mutatingProducing.label, 'Avançando…');
+  assert.equal(mutatingProducing.label, 'Marcando como pronto…');
 
   const mutatingReady = getDigitalOrderActionCapability(
     { id: 'p-8', status: 'pronto', modalidade: 'retirada', pago: true },

@@ -902,6 +902,12 @@ class RestauranteConfigUpdate(BaseModel):
 
 
 # ----------------- PEDIDOS CARDAPIO DIGITAL -----------------
+class CardapioPublicBenefitsResponse(BaseModel):
+    coupons: bool = False
+    loyalty: bool = False
+    cashback: bool = False
+
+
 class CardapioPublicRestaurantResponse(BaseModel):
     id: int
     nome: str
@@ -923,6 +929,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     formas_pagamento_aceitas: Optional[Any] = None
     pagamento_online_ativo: bool = False
     conta_cliente_obrigatoria: bool = False
+    beneficios: CardapioPublicBenefitsResponse = Field(default_factory=CardapioPublicBenefitsResponse)
     tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
 
     @field_validator("tipos_pedido_ativos", mode="before")

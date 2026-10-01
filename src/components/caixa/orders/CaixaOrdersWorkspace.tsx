@@ -68,6 +68,7 @@ export interface CaixaOrdersWorkspaceProps {
     readonly openTablePayment: (order: CashierTableCard['order']) => void;
     readonly finalizeDigitalOrder: (order: DeliveryOrderView) => void;
   };
+  readonly hasLocalServiceWork?: boolean;
   readonly hasPrinting?: boolean;
   readonly restaurantConfig?: Record<string, unknown> | null;
   readonly onToast?: (msg: string, type: 'success' | 'error' | 'info') => void;
@@ -150,7 +151,7 @@ const renderCompactItemsList = (
 export function CaixaOrdersWorkspace({
   columns, pendingCashPayments: pagamentosPendentes, insights: operationalOrderInsights,
   search, acceptance, navigation, couriers, actions, isLoading, now: nowTimestamp,
-  hasPrinting = true, restaurantConfig, onToast,
+  hasPrinting = true, hasLocalServiceWork, restaurantConfig, onToast,
 }: CaixaOrdersWorkspaceProps) {
   const { tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
     tableClosing: filteredCol2Table, digitalFinalization: filteredDeliveryFinalization } = columns;
@@ -206,12 +207,17 @@ export function CaixaOrdersWorkspace({
 
   const totalResultadosBusca = filteredCol1.length + filteredDigitalProduction.length + filteredCol2Table.length + filteredDeliveryFinalization.length;
 
+  const activeOrderTypes = restaurantConfig?.tipos_pedido_ativos;
+  const compactMarmitaria = restaurantConfig?.operation_profile === "marmitaria"
+    && Array.isArray(activeOrderTypes) && !activeOrderTypes.includes("consumo_local")
+    && !hasLocalServiceWork && filteredCol1.length === 0 && filteredCol2Table.length === 0 && pagamentosPendentes.length === 0;
+
   const ordersStages = [
-    { id: 'salon' as const, label: 'Salão', count: filteredCol1.length },
-    { id: 'digital' as const, label: 'Digitais', count: filteredDigitalProduction.length },
-    { id: 'closing' as const, label: 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length },
+    ...(!compactMarmitaria ? [{ id: 'salon' as const, label: 'Salão', count: filteredCol1.length }] : []),
+    { id: 'digital' as const, label: compactMarmitaria ? 'Preparo' : 'Digitais', count: filteredDigitalProduction.length },
+    { id: 'closing' as const, label: compactMarmitaria ? 'Entrega e recebimento' : 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length },
   ];
-  const effectiveMobileOrdersStage = mobileOrdersStage;
+  const effectiveMobileOrdersStage = compactMarmitaria && mobileOrdersStage === "salon" ? "digital" : mobileOrdersStage;
   const ordersColumnCounts = ordersStages.map(stage => stage.count);
   const activeOrdersColumns = ordersColumnCounts.filter(count => count > 0).length;
   const ordersColumnWeight = activeOrdersColumns === 1 ? 1.7 : activeOrdersColumns === 2 ? 1.25 : 1;
@@ -399,9 +405,7 @@ export function CaixaOrdersWorkspace({
                         {order.numeroPedido && <span className={"text-[8px] text-gray-600 font-mono block"}>#{order.numeroPedido}</span>}
                       </div>
                     </div>
-                    <p className={"text-[10px] text-koma-secondary bg-koma-page p-2 rounded border border-koma-border/30 leading-relaxed font-mono"}>
-                      {order.itens}
-                    </p>
+                    {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, `pending-${order.id}`, true, toggleCardExpansion)}
                     {order.endereco && (
                       <span className={"text-[10px] text-koma-subtle flex items-start gap-1"}>
                         <MapPin size={11} className={"shrink-0 text-emerald-600 dark:text-emerald-300/80 mt-0.5"} />
@@ -433,7 +437,7 @@ export function CaixaOrdersWorkspace({
           </div>
         </div>
       )}
-      <div className="orders-mobile-stages" role="tablist" aria-label="Etapa dos pedidos">
+      <div className="orders-mobile-stages" style={{ gridTemplateColumns: `repeat(${ordersStages.length}, minmax(0, 1fr))` }} role="tablist" aria-label="Etapa dos pedidos">
         {ordersStages.map(stage => (
           <button
             key={stage.id}
@@ -450,11 +454,11 @@ export function CaixaOrdersWorkspace({
       </div>
       {/* Kanban operacional universal: mesas, pedidos online e finalização. */}
       <div
-        className={"orders-board flex-1 gap-3 pb-3"}
+        className={clsx("orders-board flex-1 gap-3 pb-3", compactMarmitaria && "orders-board--marmitaria")}
         style={ordersBoardStyle}
       >
         {/* COLUMN 1: Em produção */}
-        <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'salon' && 'is-mobile-active', filteredCol1.length === 0 && 'is-empty')}>
+        {!compactMarmitaria && <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'salon' && 'is-mobile-active', filteredCol1.length === 0 && 'is-empty')}>
           <div className={"orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0"}>
             <div>
               <span className="orders-column__number">01 / SALÃO</span>
@@ -590,12 +594,12 @@ export function CaixaOrdersWorkspace({
               </>
             )}
           </div>
-        </div>
+        </div>}
         {/* COLUMN 2: pedidos sem mesa, de venda rápida, delivery ou retirada. */}
         <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'digital' && 'is-mobile-active', filteredDigitalProduction.length === 0 && 'is-empty')}>
           <div className={"orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0"}>
             <div>
-              <span className="orders-column__number">02 / DIGITAL</span>
+              <span className="orders-column__number">{compactMarmitaria ? "01 / PREPARO" : "02 / DIGITAL"}</span>
               <span className={"font-bold text-koma-foreground font-sans block text-sm"}>Pedidos digitais</span>
               <span className={"text-xs text-koma-subtle block mt-0.5 font-normal"}>Retirada, consumo no local e delivery</span>
             </div>
@@ -732,7 +736,7 @@ export function CaixaOrdersWorkspace({
         <div className={clsx('orders-column orders-column--closing flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'closing' && 'is-mobile-active', filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 && 'is-empty')}>
           <div className={"orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0"}>
             <div>
-              <span className="orders-column__number">03 / FECHAMENTO</span>
+              <span className="orders-column__number">{compactMarmitaria ? "02 / ENTREGA E RECEBIMENTO" : "03 / FECHAMENTO"}</span>
               <span className={"font-bold text-koma-foreground font-sans block text-sm"}>Itens prontos e conclusão</span>
               <span className={"text-xs text-koma-subtle block mt-0.5 font-normal"}>Veja o que já pode ser recebido ou finalizado</span>
             </div>

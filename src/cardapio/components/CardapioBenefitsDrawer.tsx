@@ -46,6 +46,7 @@ interface BenefitsUser {
 }
 
 interface CardapioBenefitsDrawerProps {
+  capabilities?: { coupons: boolean; loyalty: boolean; cashback: boolean };
   restaurantId: string | number;
   isOpen: boolean;
   onClose: () => void;
@@ -78,6 +79,7 @@ const formatDate = (value?: string | null) => {
 
 export default function CardapioBenefitsDrawer({
   restaurantId,
+  capabilities,
   isOpen,
   onClose,
   user,
@@ -113,6 +115,7 @@ export default function CardapioBenefitsDrawer({
             : "Não foi possível carregar os benefícios agora.",
         );
       }
+      if (controller.signal.aborted) return;
       const normalized = payload as BenefitsResponse;
       setData({
         cupons: Array.isArray(normalized?.cupons) ? normalized.cupons : [],
@@ -136,7 +139,10 @@ export default function CardapioBenefitsDrawer({
     { id: "offers" as const, label: "Ofertas", icon: TicketPercent },
     { id: "credit" as const, label: "Créditos", icon: WalletCards },
     { id: "points" as const, label: "Pontos", icon: Sparkles },
-  ]), []);
+  ]).filter(tab => tab.id === "offers" ? capabilities?.coupons === true
+    : tab.id === "credit" ? capabilities?.cashback === true
+    : capabilities?.loyalty === true), [capabilities]);
+  const selectedTab = tabs.some(tab => tab.id === activeTab) ? activeTab : tabs[0]?.id;
 
   const copyCoupon = async (code: string) => {
     try {
@@ -148,7 +154,7 @@ export default function CardapioBenefitsDrawer({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || tabs.length === 0) return null;
 
   return (
     <div
@@ -183,14 +189,14 @@ export default function CardapioBenefitsDrawer({
             </button>
           </div>
 
-          <nav className="mt-4 grid grid-cols-3 gap-1 rounded-2xl border border-koma-border bg-koma-card p-1" aria-label="Tipos de benefício">
+          <nav className="mt-4 grid grid-cols-3 gap-1 rounded-2xl border border-koma-border bg-koma-card p-1" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }} aria-label="Tipos de benefício">
             {tabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setActiveTab(id)}
                 className={`flex h-10 items-center justify-center gap-1.5 rounded-xl px-2 text-[10px] font-black transition ${
-                  activeTab === id
+                  selectedTab === id
                     ? "bg-emerald-500 text-white shadow-lg shadow-emerald-950/30"
                     : "text-koma-muted hover:bg-koma-raised hover:text-koma-foreground"
                 }`}
@@ -217,7 +223,7 @@ export default function CardapioBenefitsDrawer({
                 Tentar novamente
               </button>
             </div>
-          ) : activeTab === "offers" ? (
+          ) : selectedTab === "offers" ? (
             <section className="space-y-3" id="cardapio-benefits-offers">
               {data.cupons.length === 0 ? (
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-5 text-center">
@@ -260,7 +266,7 @@ export default function CardapioBenefitsDrawer({
                 );
               })}
             </section>
-          ) : activeTab === "credit" ? (
+          ) : selectedTab === "credit" ? (
             <section id="cardapio-benefits-credit">
               <div className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.13] to-koma-card p-5">
                 <p className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-400">Crédito para a próxima compra</p>

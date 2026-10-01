@@ -58,8 +58,8 @@ test('Entregas resolve aceite, preparo, logística, cobrança e conclusão com a
   assert.match(couriers, /handleDespacharKanban/);
   assert.match(couriers, /handleFinalizarPedido/);
   assert.match(couriers, /Pré-atribuir entregador/);
-  assert.match(couriers, /Marcar pronto para sair/);
-  assert.match(couriers, /Saiu para entrega/);
+  assert.match(couriers, /Marcar como pronto/);
+  assert.match(couriers, /Despachar pedido/);
   assert.match(couriers, /Receber e marcar entregue/);
   assert.match(couriers, /Marcar entregue/);
   assert.match(couriers, /getDigitalOrderPaymentSummary\(order\)/);

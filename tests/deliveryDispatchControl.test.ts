@@ -157,8 +157,8 @@ test('kanban separa preparo, despacho e finalização de delivery', () => {
     },
   });
 
-  invoke(button(view, 'Pronto para sair'), 'onClick', { stopPropagation: noop });
-  invoke(button(view, 'Saiu para entrega'), 'onClick', { stopPropagation: noop });
+  invoke(button(view, 'Marcar como pronto'), 'onClick', { stopPropagation: noop });
+  invoke(button(view, 'Despachar pedido'), 'onClick', { stopPropagation: noop });
   assert.equal(elements(view).filter(e => e.type === 'button' && textOf(e).includes('Trocar entregador')).length, 0);
   invoke(button(view, 'Fechar e pagar'), 'onClick', { stopPropagation: noop });
 
@@ -209,7 +209,7 @@ test('modal de despacho exige entregador e confirma saída com a atribuição se
     && element.props['aria-label'] === 'Entregador do pedido');
   assert.ok(select);
   invoke(select, 'onChange', { target: { value: '7' } });
-  assert.equal(button(emptyView, 'Saiu para entrega').props.disabled, true);
+  assert.equal(button(emptyView, 'Despachar pedido').props.disabled, true);
 
   const selectedProps: KanbanOrderDetailsProps = {
     ...baseProps,
@@ -219,8 +219,8 @@ test('modal de despacho exige entregador e confirma saída com a atribuição se
     },
   };
   const selectedView = KanbanOrderDetails(selectedProps);
-  assert.equal(button(selectedView, 'Saiu para entrega').props.disabled, false);
-  invoke(button(selectedView, 'Saiu para entrega'), 'onClick');
+  assert.equal(button(selectedView, 'Despachar pedido').props.disabled, false);
+  invoke(button(selectedView, 'Despachar pedido'), 'onClick');
 
   assert.deepEqual(calls, ['courier:7', 'dispatch:7']);
   assert.match(renderToStaticMarkup(createElement(KanbanOrderDetails, selectedProps)), /Pedro Silva/);

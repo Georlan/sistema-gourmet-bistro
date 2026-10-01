@@ -36,6 +36,7 @@ from ..schemas import (
     RestauranteConfigUpdate,
 )
 from ..websocket_manager import manager
+from ..services.plan_entitlements import ENTITLEMENT_COUPONS, ENTITLEMENT_LOYALTY, has_plan_entitlement
 from ..services.restaurant_profile import apply_restaurant_profile_update
 from ..services.online_order_policy import (
     evaluate_online_order_policy,
@@ -201,10 +202,19 @@ def public_tenant_scope(
         yield rest_id
 
 
+def _public_benefit_capabilities(db: Session, restaurante_id: int) -> dict[str, bool]:
+    """Publica capacidades efetivas sem expor plano, saldos ou cupons privados."""
+    coupons = has_plan_entitlement(db, restaurante_id, ENTITLEMENT_COUPONS)
+    loyalty = has_plan_entitlement(db, restaurante_id, ENTITLEMENT_LOYALTY)
+    # Pausar ou trocar a modalidade de acúmulo preserva saldos já conquistados.
+    return {"coupons": coupons, "loyalty": loyalty, "cashback": loyalty}
+
+
 def _public_restaurant_payload(
     restaurante: Restaurante,
     configuracao: Optional[ConfiguracaoRestaurante] = None,
     pagamento_online_ativo: bool = False,
+    beneficios: Optional[dict[str, bool]] = None,
 ) -> dict:
     policy = evaluate_online_order_policy(restaurante, configuracao)
     next_opening = (
@@ -237,6 +247,7 @@ def _public_restaurant_payload(
         "horarios_funcionamento": restaurante.horarios_funcionamento,
         "formas_pagamento_aceitas": restaurante.formas_pagamento_aceitas,
         "pagamento_online_ativo": pagamento_online_ativo,
+        "beneficios": beneficios or {"coupons": False, "loyalty": False, "cashback": False},
         "conta_cliente_obrigatoria": bool(settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS),
         "tipos_pedido_ativos": configuracao.tipos_pedido_ativos if configuracao else None,
         "delivery_ativo": configuracao.delivery_ativo is not False if configuracao else True,
@@ -290,7 +301,10 @@ def obter_config_cardapio_digital(
             RestaurantPaymentAccount.provider == "mercado_pago",
             RestaurantPaymentAccount.status == "active",
         ).first() is not None
-        return _public_restaurant_payload(restaurante, configuracao, pagamento_online_ativo)
+        return _public_restaurant_payload(
+            restaurante, configuracao, pagamento_online_ativo,
+            _public_benefit_capabilities(db, rest_id),
+        )
 
 
 @router.get("/categorias")
@@ -363,6 +377,7 @@ def obter_cardapio_publico(
                 restaurante,
                 configuracao,
                 pagamento_online_ativo,
+                _public_benefit_capabilities(db, rest_id),
             ),
             "categorias": [
                 _public_category_payload(category)
