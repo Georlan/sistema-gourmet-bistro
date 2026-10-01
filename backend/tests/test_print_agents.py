@@ -252,6 +252,55 @@ def test_concurrent_claim_second_agent_gets_conflict():
     assert "já foi assumido" in resp2.json()["detail"]
 
 
+def test_preassigned_pending_job_can_only_be_claimed_by_target_agent():
+    mark_agent_printer_ready("a1")
+    mark_agent_printer_ready("a2")
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            PrintJob(
+                id="job-target-agent-2",
+                restaurante_id=1,
+                document_type="producao",
+                destination="COZINHA",
+                source_type="teste",
+                source_id="targeted-test",
+                payload_text="TESTE LOCAL",
+                status="pending",
+                agent_id="agent-box-2",
+                idempotency_key="idemp:target-agent-2",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    agent1 = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": "token_agent_1"},
+    )
+    assert agent1.status_code == 200
+    assert "job-target-agent-2" not in {item["id"] for item in agent1.json()}
+
+    agent2 = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": "token_agent_2"},
+    )
+    assert agent2.status_code == 200
+    assert "job-target-agent-2" in {item["id"] for item in agent2.json()}
+
+
+def test_local_hardware_action_requires_explicit_agent_id():
+    response = TestClient(app).post(
+        "/api/print-agents/actions/connect-usb",
+        headers=jwt_headers("2", 2, "admin"),
+        json={},
+    )
+
+    assert response.status_code == 422
+
+
 def test_shadow_simulator_feed_starts_now_and_never_claims_jobs():
     client = TestClient(app)
     headers = {"X-Agent-Token": "token_agent_1"}
