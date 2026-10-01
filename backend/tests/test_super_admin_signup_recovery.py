@@ -47,4 +47,4 @@ def test_reissued_activation_can_use_new_delivery_kind(monkeypatch):
     assert len(calls) == 1
     assert calls[0]["kind"] == "activation-reissue-123456789abc"
     assert "new-secret-token" in calls[0]["message"]
-    assert calls[0]["subject"] == "Seu KÔMA foi liberado — crie sua senha"
+    assert calls[0]["subject"] == "Seu acesso ao KÔMA está pronto — crie sua senha"
