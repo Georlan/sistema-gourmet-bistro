@@ -27,7 +27,7 @@ async function installOperationalApi(page: Page, loginReply: LoginReply, authori
     else if (key === 'GET /produtos/catalogo') body = { categorias: [], produtos: [] };
     else if (key === 'GET /caixa/configuracoes') body = {};
     else if (key === 'GET /caixa/turno-atual') body = null;
-    else if (key === 'GET /api/onboarding/status') body = {progress:{completed:5,total:5},trial:{status:'active'}};
+    else if (key === 'GET /api/onboarding/status') body = {onboarding:{releaseState:'released'}};
     else if (key === 'GET /caixa/turno-atual/resumo') body = { total_vendas: 0, comandas_abertas_count: 0 };
     else if (request.method() === 'GET') body = [];
 
@@ -361,4 +361,188 @@ test('duas abas de Caixa em restaurantes diferentes e uma de Garçom isolam toke
   await expect(tabs[2].getByLabel('E-MAIL')).toHaveCount(0);
   expect(new Set(observed[0])).toEqual(new Set(['Bearer isolated-token-0']));
   expect(new Set(observed[2])).toEqual(new Set(['Bearer isolated-token-2']));
+});
+
+const pendingOnboarding = {
+  restaurant: { id: '5', name: 'Restaurante de Teste', slug: 'test', plan: 'pro', operationProfile: 'generic' },
+  trial: { status: 'setup', startsAt: null, endsAt: null, daysRemaining: null },
+  trialCanStart: false, readyForRelease: false,
+  onboarding: { mode: 'commercial', releaseState: 'configuring', operationReleased: false, requiresKomaRelease: true },
+  payments: { mercadoPagoConnected: false, pixOnlineAvailable: false },
+  counts: { products: 0, activeProducts: 0, orders: 0, tables: 0 },
+  operations: { configured: false, ready: false, legacyPolicy: false, orderTypes: [], tableMapEnabled: false, serviceChargeEnabled: false, serviceChargePercent: 0, blockers: ['order_types'] },
+  catalogAssistance: null,
+  steps: { profile: false, hours: false, catalog: false, operations: false, mercadoPago: false, firstOrder: false },
+  progress: { completed: 0, total: 4, percent: 0 },
+  readiness: { configurationComplete: false, trialStarted: false, operationReleased: false, readyToOperate: false, blockers: ['profile'] },
+};
+
+async function seedManagementSession(page: Page, expired = false) {
+  await page.addInitScript(({ expired }) => {
+    if (sessionStorage.getItem('test-session-seeded')) return;
+    sessionStorage.setItem('test-session-seeded', '1');
+    sessionStorage.removeItem('koma_operational_logged_out');
+    const session = { token: 'test-management-session', user: { id: 'admin', nome: 'Admin Teste', role: 'admin', restaurante_id: 5 }, expiresAt: Date.now() + (expired ? -1000 : 60_000) };
+    sessionStorage.setItem('koma_operator_session_caixa', JSON.stringify(session));
+    sessionStorage.setItem('koma_caixa_token', session.token);
+    sessionStorage.setItem('koma_caixa_role', 'admin');
+    sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+  }, { expired });
+}
+
+async function expectLoginWithoutOnboarding(page: Page) {
+  await expect(page.getByLabel('E-MAIL', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Bem-vindo ao KÔMA/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeEnabled();
+}
+
+test('entrada sem sessão ignora identidade antiga no localStorage e continua no login após refresh', async ({ page }) => {
+  let onboardingReads = 0;
+  await installOperationalApi(page, async route => { await route.abort(); });
+  await page.route('**/api/onboarding/status', async route => { onboardingReads++; await route.fulfill({ json: pendingOnboarding }); });
+  await page.addInitScript(() => {
+    localStorage.setItem('koma_operator_session_caixa', JSON.stringify({ token: 'stale', user: { role: 'admin' }, expiresAt: Date.now() + 60_000 }));
+    localStorage.setItem('koma_caixa_token', 'stale');
+    localStorage.setItem('koma_last_operational_portal', 'caixa');
+  });
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
+  await expectLoginWithoutOnboarding(page);
+  await page.reload();
+  await expectLoginWithoutOnboarding(page);
+  expect(onboardingReads).toBe(0);
+});
+
+for (const status of [401, 403, 404]) {
+  test(`sessão rejeitada (${status}) volta ao login sem loop na entrada e na retomada`, async ({ page }) => {
+    await installOperationalApi(page, async route => { await route.abort(); });
+    await seedManagementSession(page);
+    await page.route('**/api/onboarding/status', route => route.fulfill({ status, json: { detail: 'Sessão indisponível' } }));
+    await page.goto(CANONICAL_OPERATIONAL_PATH);
+    await expectLoginWithoutOnboarding(page);
+    expect(await page.evaluate(() => sessionStorage.getItem('koma_caixa_token'))).toBeNull();
+    await page.reload();
+    await expectLoginWithoutOnboarding(page);
+    await page.evaluate(() => sessionStorage.removeItem('test-session-seeded'));
+    await page.goto('/ativar?resume=1');
+    await expectLoginWithoutOnboarding(page);
+    await page.reload();
+    await expectLoginWithoutOnboarding(page);
+  });
+}
+
+test('sessão local expirada abre login sem consultar implantação', async ({ page }) => {
+  await installOperationalApi(page, async route => { await route.abort(); });
+  await seedManagementSession(page, true);
+  let reads = 0;
+  await page.route('**/api/onboarding/status', async route => { reads++; await route.fulfill({ json: pendingOnboarding }); });
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
+  await expectLoginWithoutOnboarding(page);
+  expect(reads).toBe(0);
+});
+
+test('implantação pendente só aparece após validação e permite logout na entrada e em /ativar', async ({ page }) => {
+  await installOperationalApi(page, async route => { await route.fulfill({ json: { access_token: 'new-management-session', usuario: { id: 'admin', nome: 'Admin Teste', role: 'admin', restaurante_id: 5 } } }); });
+  await seedManagementSession(page);
+  let release!: () => void;
+  const statusReady = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/onboarding/status', async route => { await statusReady; await route.fulfill({ json: pendingOnboarding }); });
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
+  await expect(page.getByText('Verificando implantação…', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Bem-vindo ao KÔMA/ })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByText('Verificando implantação…', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Bem-vindo ao KÔMA/ })).toHaveCount(0);
+  release();
+  await expect(page.getByRole('heading', { name: 'Bem-vindo ao KÔMA, Restaurante de Teste' })).toBeVisible();
+  await page.getByRole('button', { name: 'Sair e ir para o login', exact: true }).click();
+  await expectLoginWithoutOnboarding(page);
+  await submitLogin(page, 'admin@example.test', 'test-password');
+  await expect(page.getByRole('heading', { name: /Bem-vindo ao KÔMA/ })).toBeVisible();
+  await page.goto('/ativar?resume=1');
+  await expect(page.getByRole('heading', { name: /Bem-vindo ao KÔMA/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Sair e ir para o login', exact: true }).click();
+  await expectLoginWithoutOnboarding(page);
+  await page.reload();
+  await expectLoginWithoutOnboarding(page);
+});
+
+test('erro temporário ou resposta incompleta não vira implantação e oferece retorno ao login', async ({ page }) => {
+  await installOperationalApi(page, async route => { await route.abort(); });
+  await seedManagementSession(page);
+  await page.route('**/api/onboarding/status', route => route.fulfill({ status: 503, json: {} }));
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
+  await expect(page.getByText('Não foi possível validar a implantação inicial.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Bem-vindo ao KÔMA|Sua conta está ativa/ })).toHaveCount(0);
+  await page.route('**/api/onboarding/status', route => route.fulfill({ json: {} }));
+  await page.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(page.getByText('Não foi possível validar a implantação inicial.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Ir para o login', exact: true }).click();
+  await expectLoginWithoutOnboarding(page);
+});
+
+test('liberação canônica mantém revisão pendente e libera painel após refresh sem pedido de teste obrigatório', async ({ page }) => {
+  await installOperationalApi(page, async route => { await route.abort(); });
+  await seedManagementSession(page);
+  let released = false;
+  await page.route('**/api/onboarding/status', route => route.fulfill({ json: {
+    ...pendingOnboarding,
+    onboarding: { ...pendingOnboarding.onboarding, releaseState: released ? 'released' : 'awaiting_koma', operationReleased: released },
+    progress: { completed: 4, total: 4, percent: 100 },
+    readiness: { ...pendingOnboarding.readiness, configurationComplete: true, operationReleased: released },
+    trial: { ...pendingOnboarding.trial, status: released ? 'active' : 'setup' },
+  } }));
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
+  await expect(page.getByText('Aguardando KÔMA', { exact: true })).toBeVisible();
+  released = true;
+  await page.reload();
+  if (test.info().project.name.startsWith('mobile')) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+  await expect(page.getByRole('button', { name: 'Abrir conta e preferências', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Bem-vindo ao KÔMA/ })).toHaveCount(0);
+});
+
+test('modo de configuração persistido não permite contornar sessão rejeitada', async ({ page }) => {
+  await installOperationalApi(page, async route => { await route.abort(); });
+  await seedManagementSession(page);
+  await page.addInitScript(() => sessionStorage.setItem('koma_onboarding_setup_mode', '1'));
+  await page.route('**/api/onboarding/status', route => route.fulfill({ status: 401, json: {} }));
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
+  await expectLoginWithoutOnboarding(page);
+});
+
+test('timeout de validação oferece login sem concluir que implantação está pendente', async ({ page }) => {
+  await installOperationalApi(page, async route => { await route.abort(); });
+  await seedManagementSession(page);
+  await page.route('**/api/onboarding/status', () => {});
+  await page.clock.install();
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
+  await expect(page.getByText('Verificando implantação…', { exact: true })).toBeVisible();
+  await page.clock.fastForward(10_001);
+  await expect(page.getByText('Não foi possível validar a implantação inicial.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Bem-vindo ao KÔMA/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Ir para o login', exact: true }).click();
+  await expectLoginWithoutOnboarding(page);
+});
+
+test('retomada sem sessão mantém caminho funcional para login', async ({ page }) => {
+  await installOperationalApi(page, async route => { await route.abort(); });
+  await page.goto('/ativar?resume=1');
+  await expect(page.getByRole('heading', { name: 'Entre novamente para continuar' })).toBeVisible();
+  await page.getByRole('button', { name: 'Ir para o login', exact: true }).click();
+  await expectLoginWithoutOnboarding(page);
+});
+
+test('sessão sem identidade recuperável retorna ao login antes de decidir implantação', async ({ page }) => {
+  await installOperationalApi(page, async route => { await route.abort(); });
+  await seedManagementSession(page);
+  await page.addInitScript(() => {
+    const raw = sessionStorage.getItem('koma_operator_session_caixa');
+    if (!raw) return;
+    const session = JSON.parse(raw);
+    session.user = {};
+    sessionStorage.setItem('koma_operator_session_caixa', JSON.stringify(session));
+  });
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
+  await expectLoginWithoutOnboarding(page);
+  await page.reload();
+  await expectLoginWithoutOnboarding(page);
 });

@@ -1,5 +1,5 @@
-import React from 'react';
-import { getOperatorSession, type OperationalPortal } from '../../utils/authSession';
+import React, { useEffect } from 'react';
+import { clearOperatorSession, getOperatorSession, type OperationalPortal } from '../../utils/authSession';
 import { FirstAccessOnboarding, ONBOARDING_SETUP_MODE_KEY } from './FirstAccessOnboarding';
 import { useOnboardingAccessGate } from './useOnboardingAccessGate';
 import { SUPPORT_SESSION_STORAGE_KEY } from '../../super-admin/SuperAdminSupportModal';
@@ -44,10 +44,23 @@ export function OnboardingOperationalBoundary({
     accessToken: session?.token || '',
   });
 
-  if (!isManagementSetupOwner || !session?.token) return <>{children}</>;
-  if (internalSupportMode || setupMode) return <>{children}</>;
+  const returnToLogin = () => {
+    clearOperatorSession(portal);
+    window.location.replace('/?view=caixa');
+  };
 
-  if (gate.isChecking || gate.state === 'idle') {
+  useEffect(() => {
+    if (gate.state !== 'unauthenticated') return;
+    const current = getOperatorSession(portal);
+    if (current && current.token !== session?.token) return;
+    clearOperatorSession(portal);
+    window.location.replace('/?view=caixa');
+  }, [gate.state, portal, session?.token]);
+
+  if (!isManagementSetupOwner || !session?.token) return <>{children}</>;
+  if (internalSupportMode) return <>{children}</>;
+
+  if (gate.isChecking || gate.state === 'idle' || gate.state === 'unauthenticated') {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
         <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">
@@ -57,7 +70,21 @@ export function OnboardingOperationalBoundary({
     );
   }
 
-  if (gate.state === 'error' || !gate.requiredComplete) {
+  if (gate.state === 'error') {
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
+        <section className="text-center">
+          <p>Não foi possível validar a implantação inicial.</p>
+          <button type="button" onClick={gate.retry} className="mt-4 rounded-xl border border-koma-border px-4 py-3">Tentar novamente</button>
+          <button type="button" onClick={returnToLogin} className="ml-3 rounded-xl border border-koma-border px-4 py-3">Ir para o login</button>
+        </section>
+      </main>
+    );
+  }
+
+  if (setupMode) return <>{children}</>;
+
+  if (!gate.requiredComplete) {
     return (
       <FirstAccessOnboarding
         accessToken={session.token}
