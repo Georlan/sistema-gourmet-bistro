@@ -131,7 +131,11 @@ export function getOperatorSession(portal?: OperationalPortal): OperatorSession 
     }
     const expiresAt = readJwtExpiryMs(parsed.token) ?? Number(parsed.expiresAt);
     if (!parsed.token || !Number.isFinite(expiresAt) || Date.now() >= expiresAt) throw new Error('Invalid session');
-    const session = { token: parsed.token, user: minimalOperatorIdentity(parsed.user), expiresAt };
+    const user = minimalOperatorIdentity(parsed.user);
+    // Sem identidade recuperável o App não consegue carregar seu escopo.
+    // A presença do token na aba, sozinha, não restaura uma sessão operacional.
+    if (!user.id || !user.nome?.trim() || !identityPortal(user)) throw new Error('Incomplete session identity');
+    const session = { token: parsed.token, user, expiresAt };
     storage.setItem(SESSION_KEY_BY_PORTAL[selectedPortal], JSON.stringify(session));
     return session;
   } catch {

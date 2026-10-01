@@ -530,3 +530,19 @@ test('retomada sem sessão mantém caminho funcional para login', async ({ page 
   await page.getByRole('button', { name: 'Ir para o login', exact: true }).click();
   await expectLoginWithoutOnboarding(page);
 });
+
+test('sessão sem identidade recuperável retorna ao login antes de decidir implantação', async ({ page }) => {
+  await installOperationalApi(page, async route => { await route.abort(); });
+  await seedManagementSession(page);
+  await page.addInitScript(() => {
+    const raw = sessionStorage.getItem('koma_operator_session_caixa');
+    if (!raw) return;
+    const session = JSON.parse(raw);
+    session.user = {};
+    sessionStorage.setItem('koma_operator_session_caixa', JSON.stringify(session));
+  });
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
+  await expectLoginWithoutOnboarding(page);
+  await page.reload();
+  await expectLoginWithoutOnboarding(page);
+});
