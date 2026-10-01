@@ -40,7 +40,7 @@ const labels: Record<string, string> = {
   payment_pending: 'Autorização pendente',
   payment_failed: 'Autorização recusada',
   awaiting_release: 'Aguardando liberação',
-  activated: 'Acesso liberado',
+  activated: 'Acesso criado · implantação pendente',
 };
 
 const formatFileSize = (bytes: number) => {
@@ -445,7 +445,7 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
                     >{releasingProtocol === item.protocol ? 'Liberando…' : 'Liberar acesso'}</button>
                   : item.status === 'activated' && item.protocol
                     ? <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-semibold text-emerald-400">Liberado</span>
+                        <span className="text-xs font-semibold text-emerald-400">Acesso criado</span>
                         <button
                           disabled={reissuingProtocol === item.protocol}
                           onClick={() => void reissueActivationInvite(item.protocol!)}
