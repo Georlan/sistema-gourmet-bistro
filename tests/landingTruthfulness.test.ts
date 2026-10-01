@@ -34,10 +34,12 @@ test('landing comparison is framed as an example instead of a universal claim', 
 test('landing SEO uses the public root and qualifies advanced features', () => {
   const landing = source('src/landing/LandingPage.tsx');
 
-  assert.match(landing, /canonical\.href = 'https:\/\/komafood\.com\.br\/'/);
+  assert.match(landing, /canonical\.href = LANDING_SEO\.url/);
+  const seo = source('src/landing/seo.ts');
+  assert.match(seo, /https:\/\/komafood\.com\.br\//);
   assert.doesNotMatch(landing, /https:\/\/komafood\.com\.br\/landing/);
-  assert.match(landing, /recursos avançados disponíveis conforme o plano/i);
-  assert.match(landing, /KDS e impressão automática nos planos compatíveis/);
+  assert.match(seo, /recursos avançados disponíveis conforme o plano/i);
+  assert.match(seo, /KDS e impressão automática nos planos compatíveis/);
 });
 
 test('plan cards expose limitations and a canonical feature comparison without duplicating commercial truth', () => {

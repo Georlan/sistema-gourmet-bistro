@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://komafood.com.br/sitemap.xml
