@@ -10,36 +10,36 @@ selecioná-lo não cria produtos, preços ou limites automaticamente.
    O perfil não cria produtos nem define preços automaticamente.
 2. Entre em **Cardápio → Produtos**. Marmitas, sobremesas e bebidas aparecem
    na mesma lista, com busca e filtro por categoria. Use **Editar** no cartão.
-3. Para adicionar uma marmita, clique **Novo produto → Marmita**, escolha P, M ou G
-   e informe o nome no cardápio e o preço real. Tamanhos já cadastrados ficam bloqueados
-   nesse assistente; edite o produto existente na lista. É possível
-   salvar pausado antes de cadastrar as opções, sem publicar composição incompleta.
-4. Em **Cardápio → Complementos → Proteínas, guarnições e saladas**, cadastre os grupos e as
-   opções uma única vez. Use adicional zero para escolhas incluídas; extras
-   cobrados mantêm o valor real. A mesma opção atende vários tamanhos.
-5. Na aba **Complementos**, abra a marmita em **Escolhas por tamanho**, clique
-   **Adicionar escolhas**, selecione Proteínas ou Guarnições
-   e informe **Quantidade de escolhas**. **Escolha obrigatória** exige esse
-   total; desmarcada permite de zero até a quantidade informada. Por exemplo,
-   G pode exigir duas proteínas e três guarnições, com valores definidos pela cliente.
-6. **Permitir repetir a mesma opção** aceita duas porções de Frango. Desmarcada,
-   exige opções diferentes. A regra é própria de cada tamanho.
-7. Marque **Disponível para venda** quando a composição estiver completa e
-   houver opções suficientes. Clique **Salvar escolhas**. A configuração usa
-   uma categoria compartilhada **Marmitas**, reaproveitando **Quentinhas** se existente.
-   Confira o destino de impressão em **Preparo** durante a homologação.
-8. Use **Editar** no cartão para atualizar preço, foto e descrição. Para adicionar
-   outros itens, escolha **Novo produto → Sobremesa** ou **Bebida**: a categoria
-   correspondente é reaproveitada ou preparada automaticamente.
+3. Em **Cardápio → Complementos → Proteínas, guarnições e saladas**, cadastre primeiro
+   os grupos e as opções uma única vez. Complementos define apenas **o que pode ir**
+   na quentinha; não define quantidades globais no perfil Marmitaria. Use adicional
+   zero para escolhas incluídas; extras cobrados mantêm o valor real.
+4. Para adicionar uma marmita, clique **Novo produto → Marmita**, escolha P, M ou G
+   e informe nome e preço. No mesmo cadastro, em **Composição deste tamanho**, escolha
+   os grupos existentes e informe **Mínimo** e **Máximo** de cada um. Exemplo:
+   Quentinha P pode usar Proteínas 0–1 e Quentinha G Proteínas 0–2.
+5. **Permitir repetir a mesma opção** aceita duas porções de Frango quando o máximo
+   permitir. Desmarcada, exige opções diferentes. Essa regra também pertence ao
+   produto/tamanho, não ao grupo compartilhado.
+6. Marque **Disponível para venda** quando a composição estiver completa e houver
+   opções suficientes. Clique **Salvar marmita**. Se ainda não houver grupos,
+   salve a marmita pausada, cadastre os grupos em Complementos e volte a Produtos.
+7. Tamanhos já cadastrados ficam bloqueados no assistente de criação. Use **Editar**
+   no cartão para preço, foto e descrição e **Salvar e configurar composição da
+   quentinha** para alterar os limites daquele produto sem criar outro tamanho.
+8. Para adicionar outros itens, escolha **Novo produto → Sobremesa** ou **Bebida**:
+   a categoria correspondente é reaproveitada ou preparada automaticamente.
 9. Simule cada tamanho no link público: preço, escolhas, repetição, adicionais
    e impressão devem corresponder à configuração. O servidor valida os limites
    por produto e bloqueia pedidos incompletos ou excedentes.
 
-**Produtos** concentra uma única lista de marmitas, sobremesas e bebidas. **Complementos**
-concentra os grupos, disponibilidade de opções e regras de escolha por tamanho;
-não permite criar outro tamanho. **Salvar e configurar escolhas em Complementos** salva as alterações e abre
-a mesma marmita em Complementos. Cada tamanho possui uma identidade única por restaurante, com
-proteção também no banco. Criar P novamente exige editar o cadastro existente.
+**Produtos** concentra a lista e é a autoridade sobre tamanho, preço e composição
+de cada P/M/G. **Complementos**, no perfil Marmitaria, concentra somente grupos,
+opções e disponibilidade diária; não cria tamanhos nem define mínimo/máximo global.
+O mesmo grupo pode ser reutilizado com limites diferentes em cada quentinha.
+Hambúrguer, Pizza e demais perfis continuam usando as regras genéricas de
+Complementos. Cada tamanho possui identidade única por restaurante, com proteção
+também no banco. Criar P novamente exige editar o cadastro existente.
 
 ## Cadastros existentes
 
@@ -74,8 +74,8 @@ necessária para este fluxo.
    A pausa preserva cadastro, preço e vínculos. Não exclua e recrie diariamente.
 5. Uma opção compartilhada afeta todos os produtos vinculados ao grupo.
    Confirme o alcance antes de pausar.
-6. Se um grupo obrigatório não tem escolhas suficientes para cumprir seu
-   mínimo, pause também os produtos dependentes até resolver com a cozinha.
+6. Se uma quentinha exige um mínimo de escolhas e não há opções suficientes
+   disponíveis no grupo correspondente, pause o produto até resolver com a cozinha.
    Não reduza a exigência de composição só para permitir um pedido incompleto.
 7. Atualize o link público e confira o resultado como consumidor. Faça um
    pedido de homologação após a configuração inicial e mudanças de composição.
@@ -90,7 +90,7 @@ pausar uma opção não cancela nem altera esses pedidos.
 
 - [ ] Tamanhos e preços corretos; somente produtos oferecidos hoje estão ativos.
 - [ ] Proteínas, guarnições e saladas disponíveis conferidas com a cozinha.
-- [ ] Grupos obrigatórios continuam possíveis de preencher.
+- [ ] Os mínimos configurados em cada quentinha continuam possíveis de preencher.
 - [ ] Link público reflete as pausas e os meios de pagamento habilitados.
 - [ ] Horários e modalidade de recebimento correspondem ao turno.
 - [ ] Caixa aberto e impressão física funcionando quando usada.

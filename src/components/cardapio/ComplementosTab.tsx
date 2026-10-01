@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Edit3, Layers, Plus, Search, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
-import MarmitariaTamanhos from './MarmitariaTamanhos';
 
 export interface OpcaoModificador {
   id?: string;
@@ -35,12 +34,7 @@ interface ComplementosTabProps {
   authHeaders: Record<string, string>;
   produtos: Array<{ id: string; nome: string; preco: number; categoria_id?: string }>;
   onShowNotification?: (msg: string, type?: 'success' | 'error') => void;
-  onCatalogChanged?: () => Promise<void>;
   marmitariaCadastro?: boolean;
-  focusProductId?: string | null;
-  onFocusHandled?: () => void;
-  catalogVersion?: string;
-  onEditDetails?: (id: string) => void;
 }
 
 export default function ComplementosTab({
@@ -48,12 +42,7 @@ export default function ComplementosTab({
   authHeaders,
   produtos,
   onShowNotification,
-  onCatalogChanged,
   marmitariaCadastro = false,
-  focusProductId,
-  onFocusHandled,
-  catalogVersion,
-  onEditDetails,
 }: ComplementosTabProps) {
   const [grupos, setGrupos] = useState<GrupoModificador[]>([]);
   const [categorias, setCategorias] = useState<CategoriaHierarquia[]>([]);
@@ -325,17 +314,18 @@ export default function ComplementosTab({
 
   return (
     <div className="space-y-6">
-      {marmitariaCadastro && <MarmitariaTamanhos mode="choices" apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} grupos={grupos} notify={onShowNotification} focusProductId={focusProductId} onFocusHandled={onFocusHandled} catalogVersion={catalogVersion} onEditDetails={onEditDetails} onSaved={async () => { await fetchCatalogBindings(); await onCatalogChanged?.(); }} />}
       <details open className="space-y-4">
         <summary className="cursor-pointer font-bold text-koma-foreground">{marmitariaCadastro ? 'Proteínas, guarnições e saladas' : 'Complementos e adicionais'}</summary>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-koma-card border border-koma-border p-5 rounded-2xl">
         <div>
           <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm">
             <Layers className="w-5 h-5" />
-            <span>Grupos de Complementos & Adicionais</span>
+            <span>{marmitariaCadastro ? 'Grupos da quentinha' : 'Grupos de Complementos & Adicionais'}</span>
           </div>
           <p className="text-xs text-koma-muted mt-1 max-w-2xl">
-            Vincule grupos às categorias e subcategorias, ou a produtos específicos. Pause as opções que não serão servidas hoje.
+            {marmitariaCadastro
+              ? 'Cadastre aqui apenas o que pode ir na quentinha, como Proteínas, Guarnições e Saladas. Os limites mínimo e máximo são definidos em cada quentinha na aba Produtos.'
+              : 'Vincule grupos às categorias e subcategorias, ou a produtos específicos. Pause as opções que não serão servidas hoje.'}
           </p>
         </div>
 
@@ -378,6 +368,7 @@ export default function ComplementosTab({
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div>
+                    {!marmitariaCadastro && <>
                     <span className={clsx(
                       'inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider',
                       group.tipo === 'obrigatorio'
@@ -386,11 +377,14 @@ export default function ComplementosTab({
                     )}>
                       {group.tipo === 'obrigatorio' ? 'Obrigatório' : 'Opcional'}
                     </span>
+                    </>}
                     <h4 className="mt-1.5 font-black text-sm text-koma-foreground">{group.nome}</h4>
                     <p className="text-[11px] text-koma-muted mt-0.5">
-                      {group.min_selecoes === group.max_selecoes
-                        ? `Escolha ${group.min_selecoes} opção`
-                        : `De ${group.min_selecoes} a ${group.max_selecoes} opções`}
+                      {marmitariaCadastro
+                        ? <>{group.opcoes.length} {group.opcoes.length === 1 ? 'opção cadastrada' : 'opções cadastradas'}</>
+                        : group.min_selecoes === group.max_selecoes
+                          ? `Escolha ${group.min_selecoes} opção`
+                          : `De ${group.min_selecoes} a ${group.max_selecoes} opções`}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -428,6 +422,11 @@ export default function ComplementosTab({
                 </div>
               </div>
 
+              {marmitariaCadastro ? (
+                <div className="mt-4 pt-3 border-t border-koma-border/60 text-[11px] text-koma-muted">
+                  Os limites de escolha são configurados separadamente em cada quentinha na aba Produtos.
+                </div>
+              ) : (
               <div className="mt-4 pt-3 border-t border-koma-border/60 text-[11px] text-koma-muted space-y-1">
                 <div className="flex justify-between gap-3">
                   <span>Categorias:</span>
@@ -441,6 +440,7 @@ export default function ComplementosTab({
                   <span className="font-bold text-koma-foreground">{group.produto_ids.length}</span>
                 </div>
               </div>
+              )}
             </div>
           ))}
         </div>
@@ -477,7 +477,7 @@ export default function ComplementosTab({
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className={marmitariaCadastro ? 'hidden' : 'grid grid-cols-3 gap-3'}>
                 <div>
                   <label className="block text-xs font-bold text-koma-muted mb-1">Tipo</label>
                   <select
@@ -514,6 +514,11 @@ export default function ComplementosTab({
                 </div>
               </div>
 
+              {marmitariaCadastro && (
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-koma-muted">
+                  Este grupo define apenas os itens disponíveis. O mínimo e o máximo pertencem a cada Quentinha P, M ou G e são configurados em Produtos.
+                </div>
+              )}
               <div className="space-y-2 pt-2 border-t border-koma-border">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-koma-muted">Opções / Adicionais</label>
@@ -563,7 +568,7 @@ export default function ComplementosTab({
                 </div>
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-koma-border">
+              <div className={marmitariaCadastro ? 'hidden' : 'space-y-2 pt-2 border-t border-koma-border'}>
                 <div>
                   <label className="text-xs font-bold text-koma-muted">Vincular por Categoria</label>
                   <p className="text-[11px] text-koma-subtle mt-0.5">
@@ -618,7 +623,7 @@ export default function ComplementosTab({
                 </label>
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-koma-border">
+              <div className={marmitariaCadastro ? 'hidden' : 'space-y-2 pt-2 border-t border-koma-border'}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <label className="text-xs font-bold text-koma-muted">Produtos específicos</label>
