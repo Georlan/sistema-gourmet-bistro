@@ -4,6 +4,7 @@ import datetime
 from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from fastapi.testclient import TestClient
 
@@ -16,7 +17,10 @@ from app.routes.onboarding import (
     _trial_status_payload,
     start_trial_after_readiness,
 )
-from app.routes.super_admin_onboarding import _commercial_release_preview
+from app.routes.super_admin_onboarding import (
+    SuperAdminOperationsUpdateRequest,
+    _commercial_release_preview,
+)
 from app.services.onboarding_readiness import evaluate_operation_readiness
 from app.services.operational_modes import (
     explicit_order_types,
@@ -35,6 +39,7 @@ def test_onboarding_routes_are_registered_once():
     assert "get" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/release"]
     assert "post" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/release"]
     assert "post" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/tables/bootstrap"]
+    assert "put" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/operations"]
 
     with TestClient(app) as client:
         assert client.get("/api/onboarding/status").status_code == 401
@@ -47,6 +52,10 @@ def test_onboarding_routes_are_registered_once():
         assert client.post(
             "/api/super-admin/onboarding/restaurantes/1/tables/bootstrap",
             json={"count": 30, "default_capacity": 4, "reason": "implantação"},
+        ).status_code == 401
+        assert client.put(
+            "/api/super-admin/onboarding/restaurantes/1/operations",
+            json={"order_types": ["retirada", "delivery"], "reason": "correção administrativa"},
         ).status_code == 401
 
 
@@ -314,3 +323,25 @@ def test_superadmin_release_preview_reuses_canonical_onboarding_projection(monke
     assert preview["readiness"] is snapshot["readiness"]
     assert preview["readyForRelease"] is False
     assert preview["trialStarted"] is False
+
+
+
+def test_superadmin_operations_payload_is_narrow_and_requires_reason():
+    payload = SuperAdminOperationsUpdateRequest(
+        order_types=["retirada", "delivery"],
+        reason="Correção da implantação",
+    )
+    assert payload.order_types == ["retirada", "delivery"]
+
+    with pytest.raises(ValidationError):
+        SuperAdminOperationsUpdateRequest(
+            order_types=[],
+            reason="Correção",
+        )
+
+    with pytest.raises(ValidationError):
+        SuperAdminOperationsUpdateRequest(
+            order_types=["retirada"],
+            reason="Correção",
+            taxa_entrega_fixa=7,
+        )

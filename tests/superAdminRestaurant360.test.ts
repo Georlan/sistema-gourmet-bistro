@@ -65,3 +65,15 @@ test('Equipe permite recuperar convite inicial usando o fluxo administrativo exi
   assert.match(restaurant360, /linkedContract && access\?\.users\.some\(user => user\.role === "admin" && user\.status === "pendente_ativacao"\)/);
   assert.doesNotMatch(restaurant360, /token_convite|senha_hash|access_token/);
 });
+
+
+test('Restaurante 360 corrige modalidades pelo endpoint administrativo auditável sem copiar configuração especializada', () => {
+  assert.match(restaurant360, /\/api\/super-admin\/onboarding\/restaurantes\//);
+  assert.match(restaurant360, /\/operations/);
+  assert.match(restaurant360, /method: "PUT"/);
+  assert.match(restaurant360, /order_types: operationModes/);
+  assert.match(restaurant360, /reason: operationReason\.trim\(\)/);
+  assert.match(restaurant360, /Corrigir modalidades/);
+  assert.match(restaurant360, /altera somente a política canônica de atendimento/);
+  assert.match(restaurant360, /Delivery, mesas e outras configurações especializadas continuam separadas/);
+});
