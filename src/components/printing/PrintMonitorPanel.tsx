@@ -175,7 +175,7 @@ interface PrintMonitorPanelProps {
   onTestPrint?: (agentId: string) => void | Promise<void>;
   testInProgress?: boolean;
   children?: React.ReactNode | ((context: { activePaperWidthMm?: number }) => React.ReactNode);
-  advancedTestsSlot?: React.ReactNode;
+  advancedTestsSlot?: React.ReactNode | ((context: { localAgentId: string | null }) => React.ReactNode);
 }
 
 type DiagnosticTone = 'success' | 'warning' | 'danger' | 'neutral';
@@ -1544,7 +1544,9 @@ export function PrintMonitorPanel({
       </div>
 
       {/* 7. Testes avançados [recolhido por padrão] */}
-      {advancedTestsSlot}
+      {typeof advancedTestsSlot === 'function'
+        ? advancedTestsSlot({ localAgentId })
+        : advancedTestsSlot}
 
       {/* 8. Diagnóstico técnico e suporte [recolhido por padrão] */}
       <div className="overflow-hidden rounded-2xl border border-koma-border shadow-xs">
