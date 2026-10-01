@@ -253,6 +253,13 @@ function formatDate(value: string | null): string {
   return date ? dateTimeFormatter.format(date) : '—';
 }
 
+function jobActivityTimestamp(job: PrintJobHistory): number {
+  const printedAt = parseBackendTimestamp(job.printed_at)?.getTime();
+  if (Number.isFinite(printedAt)) return printedAt as number;
+  const createdAt = parseBackendTimestamp(job.created_at)?.getTime();
+  return Number.isFinite(createdAt) ? createdAt as number : 0;
+}
+
 function friendlyDocumentType(value: string): string {
   return value.replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 }
@@ -682,7 +689,22 @@ export function PrintMonitorPanel({
   const hasFreshPrinterDiagnostics = Boolean(
     localAgents.some(agent => agentHasFreshDiagnostics(agent))
   );
-  const latestJob = monitorData?.queue_jobs?.[0] || monitorData?.jobs?.[0] || null;
+  const localJobs = useMemo(() => {
+    if (!localAgentId) return [];
+    const byId = new Map<string, PrintJobHistory>();
+    for (const job of [
+      ...(monitorData?.jobs || []),
+      ...(monitorData?.queue_jobs || [])
+    ]) {
+      if (job.agent_id === localAgentId) {
+        byId.set(job.id, job);
+      }
+    }
+    return [...byId.values()].sort(
+      (left, right) => jobActivityTimestamp(right) - jobActivityTimestamp(left)
+    );
+  }, [localAgentId, monitorData]);
+  const latestJob = localJobs[0] || null;
 
   const requestUsbConnection = async (
     agentId?: string,
@@ -830,10 +852,15 @@ export function PrintMonitorPanel({
     }
   };
   const failedJobs = useMemo(() => {
+    if (!localAgentId) return [];
     return monitorData?.queue_jobs?.filter(
-      job => job.status === 'failed' && job.can_reprint
+      job => (
+        job.agent_id === localAgentId
+        && job.status === 'failed'
+        && job.can_reprint
+      )
     ) || [];
-  }, [monitorData]);
+  }, [localAgentId, monitorData]);
 
   const handleRetryFailedJobs = async () => {
     if (failedJobs.length === 0) return;
