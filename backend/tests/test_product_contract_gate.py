@@ -98,6 +98,11 @@ def setup_gate_tenants():
                 else:
                     mb.ativo = True
 
+                # Garante que o restaurante/usuários existam fisicamente antes
+                # do token do agente, pois o Product Contract Gate usa SQLite
+                # com foreign_keys=ON.
+                db.flush()
+
                 agent_id = f"contract-gate-agent-{r_id}"
                 agent = db.query(PrintAgentToken).filter(
                     PrintAgentToken.restaurante_id == r_id,
