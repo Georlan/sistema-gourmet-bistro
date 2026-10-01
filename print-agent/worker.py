@@ -70,6 +70,15 @@ class AgentMaintenance:
             return
         self.last_heartbeat = now
         response = self.client.heartbeat(diagnostics=self.snapshot[0])
+        if isinstance(response, dict):
+            resolved_agent_id = str(response.get("agent_id") or "").strip()
+            if resolved_agent_id and resolved_agent_id != self.config.agent_id:
+                self.config.agent_id = resolved_agent_id
+                try:
+                    from pairing import save_stored_token
+                    save_stored_token(self.config.agent_token, resolved_agent_id)
+                except (ImportError, OSError, ValueError):
+                    log.debug("[AGENTE] Não foi possível persistir o agent_id resolvido.")
         command = response.get("command") if isinstance(response, dict) else None
         if not isinstance(command, dict) or not command.get("id"):
             return
@@ -462,7 +471,10 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
             wakeup_event,
         )
         wakeup_listener.start()
-        simulator_server = start_simulator_server(type(adapter).__name__)
+        simulator_server = start_simulator_server(
+            type(adapter).__name__,
+            agent_id_provider=lambda: config.agent_id,
+        )
     pending = {}
     ack_future = maintenance_future = None
     ack_items = []

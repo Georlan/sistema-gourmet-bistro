@@ -255,7 +255,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             nonce,
-            token: registration.agent_token
+            token: registration.agent_token,
+            agent_id: registration.agent_id
           })
         });
         if (!localResponse.ok) {

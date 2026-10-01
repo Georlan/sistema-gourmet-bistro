@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.database import SessionLocal, current_restaurante_id
 from app.main import app
-from app.models import ConfiguracaoRestaurante, Motoboy, Restaurante, Usuario
+from app.models import ConfiguracaoRestaurante, Motoboy, PrintAgentToken, Restaurante, Usuario
 from app.security import create_access_token
 from app.services.product_contract import (
     ProductContractViolation,
@@ -97,6 +97,29 @@ def setup_gate_tenants():
                     )
                 else:
                     mb.ativo = True
+
+                # Garante que o restaurante/usuários existam fisicamente antes
+                # do token do agente, pois o Product Contract Gate usa SQLite
+                # com foreign_keys=ON.
+                db.flush()
+
+                agent_id = f"contract-gate-agent-{r_id}"
+                agent = db.query(PrintAgentToken).filter(
+                    PrintAgentToken.restaurante_id == r_id,
+                    PrintAgentToken.agent_id == agent_id,
+                ).first()
+                if not agent:
+                    db.add(
+                        PrintAgentToken(
+                            id=f"contract-gate-token-{r_id}",
+                            restaurante_id=r_id,
+                            agent_id=agent_id,
+                            token_hash=f"contract-gate-hash-{r_id}",
+                            ativo=True,
+                        )
+                    )
+                else:
+                    agent.ativo = True
                 db.commit()
         finally:
             current_restaurante_id.reset(token)
@@ -109,6 +132,10 @@ def setup_gate_tenants():
             with SessionLocal() as db:
                 db.query(RestauranteCapability).filter(
                     RestauranteCapability.restaurante_id == r_id
+                ).delete(synchronize_session=False)
+                db.query(PrintAgentToken).filter(
+                    PrintAgentToken.restaurante_id == r_id,
+                    PrintAgentToken.agent_id == f"contract-gate-agent-{r_id}",
                 ).delete(synchronize_session=False)
                 db.commit()
         finally:
@@ -197,6 +224,8 @@ def test_endpoints_enforce_plan_capabilities_fail_closed():
 
         for plan_id, (tenant_id, headers) in tenant_map.items():
             path = endpoint_template.replace("{motoboy_id}", str(mb_ids[tenant_id]))
+            if path == "/impressao/teste-extremo-garcom":
+                path = f"{path}?agent_id=contract-gate-agent-{tenant_id}"
             resp = _exec(method, path, headers, payload)
 
             plan_caps = contract["plans"][plan_id]["capabilities"]

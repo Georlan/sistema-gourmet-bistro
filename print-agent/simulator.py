@@ -13,7 +13,7 @@ import threading
 import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from urllib.parse import urlparse
 
 from adapters.escpos import build_escpos_payload
@@ -334,7 +334,10 @@ class SimulatorServer:
         self.thread.join(timeout=2)
 
 
-def start_simulator_server(adapter_name: str) -> Optional[SimulatorServer]:
+def start_simulator_server(
+    adapter_name: str,
+    agent_id_provider: Optional[Callable[[], str]] = None,
+) -> Optional[SimulatorServer]:
     """Sobe a ponte local na mesma faixa já autorizada pelo CSP do Kôma."""
 
     auto_state = AutoSimulationState()
@@ -390,6 +393,24 @@ def start_simulator_server(adapter_name: str) -> Optional[SimulatorServer]:
             path = urlparse(self.path).path
             if path == "/simulator/auto/status":
                 self._send_json(200, auto_state.snapshot())
+                return
+            if path == "/agent/identity":
+                agent_id = ""
+                if agent_id_provider is not None:
+                    try:
+                        agent_id = str(agent_id_provider() or "").strip()
+                    except Exception:
+                        agent_id = ""
+                self._send_json(
+                    200,
+                    {
+                        "status": "ready",
+                        "service": "koma-print-agent",
+                        "agent_id": agent_id,
+                        "adapter": adapter_name,
+                        "platform": sys.platform,
+                    },
+                )
                 return
             if path != "/simulator/health":
                 self._send_json(404, {"error": {"stage": "routing", "code": "not_found", "message": "Endpoint local não encontrado."}})

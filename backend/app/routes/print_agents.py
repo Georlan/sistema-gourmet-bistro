@@ -663,18 +663,44 @@ def _release_stuck_jobs(
     now: datetime.datetime,
 ) -> int:
     stuck_cutoff = now - datetime.timedelta(minutes=5)
-    return db.query(PrintJob).filter(
+    base_query = db.query(PrintJob).filter(
         PrintJob.restaurante_id == restaurante_id,
         PrintJob.status == "claimed",
         PrintJob.claimed_at < stuck_cutoff,
-    ).update(
-        {
-            "status": "pending",
-            "claimed_at": None,
-            "agent_id": None,
-        },
-        synchronize_session=False,
     )
+
+    # Testes disparados pela tela de um computador são deliberadamente
+    # pré-atribuídos. Se o agente cair depois do claim, a recuperação deve
+    # devolver o job para a fila DESSE MESMO computador, nunca entregá-lo a
+    # outro agente do restaurante.
+    targeted_test_types = (
+        "teste_extremo_cardapio",
+        "teste_extremo_garcom",
+    )
+    targeted_released = (
+        base_query
+        .filter(PrintJob.source_type.in_(targeted_test_types))
+        .update(
+            {
+                "status": "pending",
+                "claimed_at": None,
+            },
+            synchronize_session=False,
+        )
+    )
+    generic_released = (
+        base_query
+        .filter(~PrintJob.source_type.in_(targeted_test_types))
+        .update(
+            {
+                "status": "pending",
+                "claimed_at": None,
+                "agent_id": None,
+            },
+            synchronize_session=False,
+        )
+    )
+    return targeted_released + generic_released
 
 
 def _expire_stale_unresolved_jobs(
@@ -734,6 +760,10 @@ def _claim_pending_jobs(
                     FROM print_jobs AS candidate
                     WHERE candidate.restaurante_id = :restaurante_id
                       AND candidate.status = 'pending'
+                      AND (
+                        candidate.agent_id IS NULL
+                        OR candidate.agent_id = :agent_id
+                      )
                     ORDER BY candidate.created_at ASC
                     FOR UPDATE SKIP LOCKED
                     LIMIT :claim_limit
@@ -785,6 +815,10 @@ def _claim_pending_jobs(
             .filter(
                 PrintJob.restaurante_id == agent.restaurante_id,
                 PrintJob.status == "pending",
+                or_(
+                    PrintJob.agent_id.is_(None),
+                    PrintJob.agent_id == agent.agent_id,
+                ),
             )
             .order_by(PrintJob.created_at.asc())
             .first()
@@ -1000,13 +1034,13 @@ class HeartbeatRequest(BaseModel):
 
 
 class ConnectUsbPrinterRequest(BaseModel):
-    agent_id: Optional[str] = Field(default=None, max_length=200)
+    agent_id: str = Field(min_length=1, max_length=200)
     printer_name: Optional[str] = Field(default=None, max_length=200)
     printer_uri: Optional[str] = Field(default=None, max_length=300)
 
 
 class TestBluetoothPrinterRequest(BaseModel):
-    agent_id: Optional[str] = Field(default=None, max_length=200)
+    agent_id: str = Field(min_length=1, max_length=200)
     printer_name: Optional[str] = Field(default=None, max_length=200)
     printer_uri: Optional[str] = Field(default=None, max_length=300)
 
@@ -1635,17 +1669,15 @@ def request_usb_printer_connection(
             detail="Restaurante não selecionado",
         )
 
-    query = db.query(PrintAgentToken).filter(
-        PrintAgentToken.restaurante_id == rest_id,
-        PrintAgentToken.ativo == True,
-    )
-    if req.agent_id:
-        query = query.filter(
-            PrintAgentToken.agent_id == req.agent_id.strip()
+    agent = (
+        db.query(PrintAgentToken)
+        .filter(
+            PrintAgentToken.restaurante_id == rest_id,
+            PrintAgentToken.ativo == True,
+            PrintAgentToken.agent_id == req.agent_id.strip(),
         )
-    agent = query.order_by(
-        PrintAgentToken.last_seen_at.desc()
-    ).first()
+        .first()
+    )
     if not agent:
         raise HTTPException(
             status_code=404,
@@ -1736,17 +1768,15 @@ def request_bluetooth_printer_test(
             detail="Restaurante não selecionado",
         )
 
-    query = db.query(PrintAgentToken).filter(
-        PrintAgentToken.restaurante_id == rest_id,
-        PrintAgentToken.ativo == True,
-    )
-    if req.agent_id:
-        query = query.filter(
-            PrintAgentToken.agent_id == req.agent_id.strip()
+    agent = (
+        db.query(PrintAgentToken)
+        .filter(
+            PrintAgentToken.restaurante_id == rest_id,
+            PrintAgentToken.ativo == True,
+            PrintAgentToken.agent_id == req.agent_id.strip(),
         )
-    agent = query.order_by(
-        PrintAgentToken.last_seen_at.desc()
-    ).first()
+        .first()
+    )
     if not agent:
         raise HTTPException(
             status_code=404,
@@ -2163,7 +2193,11 @@ def claim_job(
     rows_updated = db.query(PrintJob).filter(
         PrintJob.id == job_id,
         PrintJob.restaurante_id == agent.restaurante_id,
-        PrintJob.status == "pending"
+        PrintJob.status == "pending",
+        or_(
+            PrintJob.agent_id.is_(None),
+            PrintJob.agent_id == agent.agent_id,
+        ),
     ).update({
         "status": "claimed",
         "claimed_at": now,

@@ -70,14 +70,25 @@ def credentials_path() -> Path:
     return Path.home() / ".config" / "koma-print-agent" / "credentials.json"
 
 
-def load_stored_token() -> str:
+def load_stored_credentials() -> dict[str, str]:
     path = credentials_path()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         token = str(data.get("agent_token", "")).strip()
-        return token if token.startswith("koma_ag_") else ""
+        agent_id = str(data.get("agent_id", "")).strip()
+        if not token.startswith("koma_ag_"):
+            token = ""
+        return {"agent_token": token, "agent_id": agent_id}
     except (OSError, ValueError, TypeError):
-        return ""
+        return {"agent_token": "", "agent_id": ""}
+
+
+def load_stored_token() -> str:
+    return load_stored_credentials()["agent_token"]
+
+
+def load_stored_agent_id() -> str:
+    return load_stored_credentials()["agent_id"]
 
 
 def clear_stored_token() -> None:
@@ -91,11 +102,16 @@ def clear_stored_token() -> None:
         pass
 
 
-def save_stored_token(token: str) -> None:
+def save_stored_token(token: str, agent_id: str = "") -> None:
     path = credentials_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    previous_agent_id = load_stored_agent_id()
+    payload = {
+        "agent_token": token,
+        "agent_id": (agent_id or previous_agent_id).strip(),
+    }
     path.write_text(
-        json.dumps({"agent_token": token}, ensure_ascii=False),
+        json.dumps(payload, ensure_ascii=False),
         encoding="utf-8",
     )
     if os.name != "nt":
@@ -155,14 +171,17 @@ def _pair_agent_once(timeout_seconds: int) -> Optional[str]:
                     return
                 payload = json.loads(self.rfile.read(length).decode("utf-8"))
                 token = str(payload.get("token", "")).strip()
+                agent_id = str(payload.get("agent_id", "")).strip()
                 received_nonce = str(payload.get("nonce", ""))
                 if (
                     not secrets.compare_digest(received_nonce, nonce)
                     or not token.startswith("koma_ag_")
+                    or not agent_id
+                    or len(agent_id) > 200
                 ):
                     self._send_empty(403)
                     return
-                save_stored_token(token)
+                save_stored_token(token, agent_id)
                 state["token"] = token
                 self._send_empty(204)
                 completed.set()

@@ -20,6 +20,7 @@ def test_pair_agent_accepts_browser_callback_and_rejects_bad_requests(tmp_path, 
     monkeypatch.setattr(pairing, "credentials_path", lambda: credentials)
 
     token = "koma_ag_test_pairing_token"
+    agent_id = "desktop-test-agent"
 
     def open_pairing_url(url: str) -> bool:
         parsed = urlparse(url)
@@ -59,21 +60,21 @@ def test_pair_agent_accepts_browser_callback_and_rejects_bad_requests(tmp_path, 
         status, _ = request(
             "POST",
             origin="https://example.invalid",
-            payload={"nonce": nonce, "token": token},
+            payload={"nonce": nonce, "token": token, "agent_id": agent_id},
         )
         assert status == 403
 
         status, _ = request(
             "POST",
             origin=pairing.ALLOWED_ORIGIN,
-            payload={"nonce": "wrong", "token": token},
+            payload={"nonce": "wrong", "token": token, "agent_id": agent_id},
         )
         assert status == 403
 
         status, _ = request(
             "POST",
             origin=pairing.ALLOWED_ORIGIN,
-            payload={"nonce": nonce, "token": token},
+            payload={"nonce": nonce, "token": token, "agent_id": agent_id},
         )
         assert status == 204
         return True
@@ -82,6 +83,7 @@ def test_pair_agent_accepts_browser_callback_and_rejects_bad_requests(tmp_path, 
 
     assert pairing.pair_agent(timeout_seconds=2) == token
     assert pairing.load_stored_token() == token
+    assert pairing.load_stored_agent_id() == agent_id
     if os.name != "nt":
         assert credentials.stat().st_mode & 0o777 == 0o600
 

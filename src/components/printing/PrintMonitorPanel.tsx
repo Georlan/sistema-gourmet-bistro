@@ -161,16 +161,56 @@ interface PrintMonitorResponse {
   } | null;
 }
 
+interface LocalAgentIdentity {
+  status: string;
+  service: string;
+  agent_id: string;
+  adapter?: string;
+  platform?: string;
+}
+
 interface PrintMonitorPanelProps {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
-  onTestPrint?: () => void | Promise<void>;
+  onTestPrint?: (agentId: string) => void | Promise<void>;
   testInProgress?: boolean;
   children?: React.ReactNode | ((context: { activePaperWidthMm?: number }) => React.ReactNode);
-  advancedTestsSlot?: React.ReactNode;
+  advancedTestsSlot?: React.ReactNode | ((context: { localAgentId: string | null }) => React.ReactNode);
 }
 
 type DiagnosticTone = 'success' | 'warning' | 'danger' | 'neutral';
+
+const LOCAL_AGENT_PORTS = Array.from({ length: 11 }, (_, index) => 17654 + index);
+
+async function discoverLocalAgentIdentity(): Promise<LocalAgentIdentity | null> {
+  const attempts = LOCAL_AGENT_PORTS.map(async port => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 450);
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${port}/agent/identity`,
+        { signal: controller.signal, cache: 'no-store' }
+      );
+      if (!response.ok) return null;
+      const payload = await response.json().catch(() => null) as LocalAgentIdentity | null;
+      if (
+        payload?.service !== 'koma-print-agent'
+        || payload.status !== 'ready'
+        || !payload.agent_id?.trim()
+      ) {
+        return null;
+      }
+      return payload;
+    } catch {
+      return null;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  });
+
+  const results = await Promise.all(attempts);
+  return results.find((item): item is LocalAgentIdentity => Boolean(item)) || null;
+}
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Na fila',
@@ -327,12 +367,31 @@ export function PrintMonitorPanel({
   const [pendingCommandId, setPendingCommandId] = useState<string | null>(null);
   const [startingAgent, setStartingAgent] = useState(false);
   const startingAgentRef = useRef(false);
+  const [localAgentId, setLocalAgentId] = useState<string | null>(null);
+  const [localAgentResolved, setLocalAgentResolved] = useState(false);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const authorization = authHeaders.Authorization || authHeaders.authorization || '';
+
+  const refreshLocalAgentIdentity = useCallback(async () => {
+    const identity = await discoverLocalAgentIdentity();
+    setLocalAgentId(identity?.agent_id || null);
+    setLocalAgentResolved(true);
+    return identity?.agent_id || null;
+  }, []);
+
+  useEffect(() => {
+    void refreshLocalAgentIdentity();
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void refreshLocalAgentIdentity();
+      }
+    }, 5_000);
+    return () => window.clearInterval(intervalId);
+  }, [refreshLocalAgentIdentity]);
 
   const loadMonitor = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
@@ -383,7 +442,16 @@ export function PrintMonitorPanel({
     };
   }, [loadMonitor]);
 
-  const activePendingCommand = (monitorData?.agents || [])
+  const localAgents = useMemo(
+    () => (
+      localAgentId
+        ? (monitorData?.agents || []).filter(agent => agent.agent_id === localAgentId)
+        : []
+    ),
+    [localAgentId, monitorData]
+  );
+
+  const activePendingCommand = localAgents
     .map(agent => ({
       command: agent.pending_command,
       requestedAt: agent.command_requested_at
@@ -422,7 +490,7 @@ export function PrintMonitorPanel({
 
   useEffect(() => {
     if (!monitorData) return;
-    const completedResults = (monitorData.agents || [])
+    const completedResults = localAgents
       .map(agent => agent.last_command_result)
       .filter((result): result is AgentCommandResult => Boolean(result))
       .sort((left, right) => (
@@ -446,7 +514,7 @@ export function PrintMonitorPanel({
     setActionMessage(completed.message);
     setActionSuccessful(completed.success);
     setPendingCommandId(null);
-  }, [monitorData, pendingCommandId]);
+  }, [localAgents, monitorData, pendingCommandId]);
 
   useEffect(() => {
     if (!hasPendingCommand || commandRunning) return;
@@ -513,7 +581,7 @@ export function PrintMonitorPanel({
   };
 
   const allDetectedPrinters = useMemo(() => (
-    (monitorData?.agents || [])
+    localAgents
       .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap((agent, agentIndex) => (
         (agent.printer_diagnostics?.printers || []).map(printer => ({
@@ -523,7 +591,7 @@ export function PrintMonitorPanel({
           supportsBluetoothTest: agent.supports_bluetooth_test === true
         }))
       ))
-  ), [agentHasFreshDiagnostics, monitorData]);
+  ), [agentHasFreshDiagnostics, localAgents]);
 
   const readyPrinters = useMemo(() => (
     allDetectedPrinters.filter(isPrinterReady)
@@ -534,7 +602,7 @@ export function PrintMonitorPanel({
   ), [allDetectedPrinters]);
 
   const usbPrinters = useMemo(() => (
-    (monitorData?.agents || [])
+    localAgents
       .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap((agent, agentIndex) => (
         (agent.printer_diagnostics?.printers || [])
@@ -545,10 +613,10 @@ export function PrintMonitorPanel({
             agentId: agent.agent_id
           }))
       ))
-  ), [agentHasFreshDiagnostics, monitorData]);
+  ), [agentHasFreshDiagnostics, localAgents]);
 
   const bluetoothPrinters = useMemo(() => (
-    (monitorData?.agents || [])
+    localAgents
       .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap(agent => (
         (agent.printer_diagnostics?.printers || [])
@@ -559,10 +627,10 @@ export function PrintMonitorPanel({
             supportsBluetoothTest: agent.supports_bluetooth_test === true
           }))
       ))
-  ), [agentHasFreshDiagnostics, monitorData]);
+  ), [agentHasFreshDiagnostics, localAgents]);
 
   const networkPrinters = useMemo(() => (
-    (monitorData?.agents || [])
+    localAgents
       .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap(agent => (
         (agent.printer_diagnostics?.printers || [])
@@ -572,23 +640,23 @@ export function PrintMonitorPanel({
             agentId: agent.agent_id
           }))
       ))
-  ), [agentHasFreshDiagnostics, monitorData]);
+  ), [agentHasFreshDiagnostics, localAgents]);
 
   const configuredEndpoints = useMemo(() => (
-    (monitorData?.agents || [])
+    localAgents
       .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap(agent => agent.printer_diagnostics?.endpoints || [])
-  ), [agentHasFreshDiagnostics, monitorData]);
+  ), [agentHasFreshDiagnostics, localAgents]);
 
   const configuredDestinations = useMemo(() => {
     const map: Record<string, string> = {};
-    for (const agent of monitorData?.agents || []) {
+    for (const agent of localAgents) {
       if (agentHasFreshDiagnostics(agent) && agent.printer_diagnostics?.destinations) {
         Object.assign(map, agent.printer_diagnostics.destinations);
       }
     }
     return map;
-  }, [agentHasFreshDiagnostics, monitorData]);
+  }, [agentHasFreshDiagnostics, localAgents]);
 
   const readyUsbPrinters = usbPrinters.filter(
     printer => (
@@ -600,15 +668,7 @@ export function PrintMonitorPanel({
   const presentUsbPrinters = usbPrinters.filter(
     printer => printer.present === true
   );
-  const onlineAgents = (monitorData?.agents || []).filter(agent => agent.online);
-  const controlAgent = (
-    onlineAgents.find(
-      agent => agent.printer_ready && agent.supports_usb_commands
-    )
-    || onlineAgents.find(agent => agent.supports_usb_commands)
-    || onlineAgents[0]
-    || null
-  );
+  const onlineAgents = localAgents.filter(agent => agent.online);
   const hasOnlineAgent = onlineAgents.length > 0;
   const hasUsbCommandAgent = onlineAgents.some(
     agent => agent.supports_usb_commands
@@ -616,12 +676,11 @@ export function PrintMonitorPanel({
   const hasReadyPrinter = (
     readyPrinters.length > 0
     || readyUsbPrinters.length > 0
-    || (monitorData?.summary?.printer_ready ?? false)
-    || (monitorData?.agents || []).some(agent => agent.printer_ready)
+    || localAgents.some(agent => agent.printer_ready)
   );
   const hasDispatchablePrinter = dispatchablePrinters.length > 0;
   const hasFreshPrinterDiagnostics = Boolean(
-    (monitorData?.agents || []).some(agent => agentHasFreshDiagnostics(agent))
+    localAgents.some(agent => agentHasFreshDiagnostics(agent))
   );
   const latestJob = monitorData?.queue_jobs?.[0] || monitorData?.jobs?.[0] || null;
 
@@ -633,6 +692,10 @@ export function PrintMonitorPanel({
     setActionMessage('');
     setActionSuccessful(null);
     try {
+      const targetAgentId = agentId || localAgentId;
+      if (!targetAgentId) {
+        throw new Error('Este computador ainda não foi identificado pelo KÔMA Print.');
+      }
       const response = await fetch(
         `${apiBaseUrl}/api/print-agents/actions/connect-usb`,
         {
@@ -642,7 +705,7 @@ export function PrintMonitorPanel({
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            agent_id: agentId || controlAgent?.agent_id || null,
+            agent_id: targetAgentId,
             printer_name: printer?.name || null,
             printer_uri: printer?.uri || null
           })
@@ -727,6 +790,7 @@ export function PrintMonitorPanel({
     window.setTimeout(() => {
       startingAgentRef.current = false;
       setStartingAgent(false);
+      void refreshLocalAgentIdentity();
       void loadMonitor(false);
     }, 3_000);
   };
@@ -815,11 +879,18 @@ export function PrintMonitorPanel({
     title: string;
     detail: string;
   }>(() => {
-    if (!monitorData) {
+    if (!monitorData || !localAgentResolved) {
       return {
         tone: 'neutral',
         title: 'Verificando a conexão…',
-        detail: 'Aguarde a leitura das impressoras conectadas a este computador.'
+        detail: 'Aguarde a identificação do KÔMA Print neste computador.'
+      };
+    }
+    if (!localAgentId) {
+      return {
+        tone: 'danger',
+        title: 'KÔMA Print não identificado neste computador',
+        detail: 'Clique em “Preparar impressão” para conectar somente este computador.'
       };
     }
     if (!hasOnlineAgent) {
@@ -919,6 +990,8 @@ export function PrintMonitorPanel({
     };
   }, [
     commandRunning,
+    localAgentId,
+    localAgentResolved,
     hasFreshPrinterDiagnostics,
     hasOnlineAgent,
     hasReadyPrinter,
@@ -1109,14 +1182,18 @@ export function PrintMonitorPanel({
               {onTestPrint && (
                 <button
                   type="button"
-                  onClick={() => void onTestPrint()}
-                  disabled={testInProgress || !hasDispatchablePrinter}
+                  onClick={() => {
+                    if (localAgentId) void onTestPrint(localAgentId);
+                  }}
+                  disabled={testInProgress || !hasDispatchablePrinter || !localAgentId}
                   title={
-                    hasReadyPrinter
-                      ? 'Enviar um cupom real para a impressora pronta'
-                      : hasDispatchablePrinter
-                        ? 'A impressora Bluetooth será conectada somente durante o envio'
-                        : 'Conecte ou configure uma impressora primeiro'
+                    !localAgentId
+                      ? 'Este computador ainda não foi identificado pelo KÔMA Print'
+                      : hasReadyPrinter
+                        ? 'Enviar um cupom real para a impressora deste computador'
+                        : hasDispatchablePrinter
+                          ? 'A impressora Bluetooth será conectada somente durante o envio'
+                          : 'Conecte ou configure uma impressora primeiro'
                   }
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-panel px-5 py-2.5 text-xs font-bold text-koma-foreground transition hover:border-emerald-500 hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer shadow-xs"
                 >
@@ -1468,7 +1545,9 @@ export function PrintMonitorPanel({
       </div>
 
       {/* 7. Testes avançados [recolhido por padrão] */}
-      {advancedTestsSlot}
+      {typeof advancedTestsSlot === 'function'
+        ? advancedTestsSlot({ localAgentId })
+        : advancedTestsSlot}
 
       {/* 8. Diagnóstico técnico e suporte [recolhido por padrão] */}
       <div className="overflow-hidden rounded-2xl border border-koma-border shadow-xs">
