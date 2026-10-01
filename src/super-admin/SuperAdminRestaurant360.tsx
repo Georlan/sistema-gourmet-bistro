@@ -23,6 +23,7 @@ import { SuperAdminReleaseModal } from "./SuperAdminReleaseModal";
 import { SuperAdminTrialModal } from "./SuperAdminTrialModal";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
+import type { SupportNavigationTarget } from "./SuperAdminSupportModal";
 import type { SuperAdminAuditLogEntry, Tenant } from "./superAdminTypes";
 
 type OperationMode = "consumo_local" | "retirada" | "delivery";
@@ -134,10 +135,11 @@ interface SuperAdminRestaurant360Props {
   onBack: () => void;
   onRefreshTenant: () => void;
   onEdit: (tenant: Tenant) => void;
-  onSupport: (tenant: Tenant) => void;
+  onSupport: (tenant: Tenant, target?: SupportNavigationTarget) => void;
   onStatus: (tenant: Tenant) => void;
   onBenefits: (tenant: Tenant) => void;
   onOpenTeamControls: () => void;
+  onOpenCatalogAssistance: () => void;
 }
 
 const sections: Array<{
@@ -194,6 +196,16 @@ function formatContractRate(value?: string | null) {
     : "—";
 }
 
+function supportTargetForCockpit(key: string): SupportNavigationTarget | null {
+  if (key === "profile") return { tab: "cardapio_digital", subTab: "cardapio_perfil", label: "Dados do restaurante" };
+  if (key === "hours") return { tab: "cardapio_digital", subTab: "cardapio_pedidos", label: "Horários e pedidos online" };
+  if (key === "catalog") return { tab: "cardapio", subTab: "produtos", label: "Cardápio / produtos" };
+  if (key === "dine-in") return { tab: "impressao_salao", subTab: "mesas", label: "Salão / mesas" };
+  if (key === "delivery") return { tab: "cardapio_digital", subTab: "cardapio_entrega", label: "Configuração de entrega" };
+  if (key === "payment") return { tab: "cardapio_digital", subTab: "cardapio_pagamentos", label: "Formas de pagamento" };
+  return null;
+}
+
 export function SuperAdminRestaurant360({
   tenant,
   contracts,
@@ -205,6 +217,7 @@ export function SuperAdminRestaurant360({
   onStatus,
   onBenefits,
   onOpenTeamControls,
+  onOpenCatalogAssistance,
 }: SuperAdminRestaurant360Props) {
   const [section, setSection] = useState<SectionId>("summary");
   const [trial, setTrial] = useState<TrialRecord | null>(null);
@@ -226,6 +239,11 @@ export function SuperAdminRestaurant360({
   const [operationBusy, setOperationBusy] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [operationNotice, setOperationNotice] = useState<string | null>(null);
+  const [incidentAction, setIncidentAction] = useState<TenantIncident | null>(null);
+  const [incidentReason, setIncidentReason] = useState("");
+  const [incidentBusy, setIncidentBusy] = useState(false);
+  const [incidentActionError, setIncidentActionError] = useState<string | null>(null);
+  const [incidentActionNotice, setIncidentActionNotice] = useState<string | null>(null);
 
   const linkedContract = useMemo(
     () => contracts.find(item => item.linkedRestaurantId === tenant.id) || null,
@@ -399,6 +417,41 @@ export function SuperAdminRestaurant360({
     }
   };
 
+  const executeIncidentAction = async () => {
+    if (!incidentAction?.action_available || !incidentAction.action_type || !incidentAction.action_target_id || incidentBusy) return;
+    if (incidentReason.trim().length < 3) {
+      setIncidentActionError("Informe um motivo administrativo com pelo menos 3 caracteres.");
+      return;
+    }
+
+    setIncidentBusy(true);
+    setIncidentActionError(null);
+    setIncidentActionNotice(null);
+    try {
+      const response = await superAdminFetch("/api/super-admin/incidents/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: incidentAction.tenant_id,
+          action_type: incidentAction.action_type,
+          target_id: incidentAction.action_target_id,
+          reason: incidentReason.trim(),
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.detail || "Não foi possível executar a ação corretiva.");
+
+      setIncidentActionNotice(body?.message || "Ação corretiva executada e auditada.");
+      setIncidentReason("");
+      setIncidentAction(null);
+      await loadData();
+    } catch (error) {
+      setIncidentActionError(superAdminErrorMessage(error));
+    } finally {
+      setIncidentBusy(false);
+    }
+  };
+
   const reissueActivationInvite = async () => {
     if (!linkedContract || inviteBusy) return;
     setInviteBusy(true);
@@ -440,6 +493,11 @@ export function SuperAdminRestaurant360({
         : "Fonte de acesso indisponível",
       evidence: access ? access.totalUsers + " usuário(s) no tenant" : "—",
       owner: access && access.activeAdmins === 0 ? "KÔMA / cliente" : "—",
+      nextStep: access && access.activeAdmins > 0
+        ? "Nenhuma ação necessária."
+        : access?.pendingUsers
+          ? "Reemitir o convite inicial ou revisar o usuário pendente."
+          : "Criar ou reativar um administrador.",
     },
     {
       key: "operation-profile",
@@ -448,6 +506,7 @@ export function SuperAdminRestaurant360({
       detail: release.restaurant.operationProfile || "Não informado",
       evidence: "Metadado operacional do tenant",
       owner: "KÔMA pode corrigir",
+      nextStep: "Corrigir somente se a classificação estiver errada; isso não altera o cardápio automaticamente.",
     },
     {
       key: "profile",
@@ -456,6 +515,7 @@ export function SuperAdminRestaurant360({
       detail: release.steps.profile ? "Dados essenciais preenchidos" : "Dados essenciais pendentes",
       evidence: "Readiness canônico do onboarding",
       owner: release.steps.profile ? "—" : "Cliente",
+      nextStep: release.steps.profile ? "Revisar apenas se houver dado incorreto." : "Completar os dados básicos na tela canônica.",
     },
     {
       key: "hours",
@@ -464,6 +524,7 @@ export function SuperAdminRestaurant360({
       detail: release.steps.hours ? "Horários estruturados" : "Horários pendentes",
       evidence: "Readiness canônico do onboarding",
       owner: release.steps.hours ? "—" : "Cliente",
+      nextStep: release.steps.hours ? "Revisar somente se a rotina mudou." : "Definir os horários de funcionamento.",
     },
     {
       key: "catalog",
@@ -482,6 +543,11 @@ export function SuperAdminRestaurant360({
             : "Nenhum produto ativo nem fonte assistida",
       evidence: release.catalogAssistance?.filename || "Catálogo do tenant",
       owner: release.steps.catalog ? "—" : release.catalogAssistance?.status ? "KÔMA" : "Cliente",
+      nextStep: release.steps.catalog
+        ? "Revisar catálogo se necessário."
+        : release.catalogAssistance?.status
+          ? "Estruturar e publicar a fonte assistida antes da liberação."
+          : "Enviar a fonte do cardápio ou cadastrar o primeiro produto ativo.",
     },
     {
       key: "operations",
@@ -496,6 +562,9 @@ export function SuperAdminRestaurant360({
         ? "Blockers: " + release.operations.blockers.join(", ")
         : "Política canônica de modalidades",
       owner: release.operations?.configured ? (release.operations?.ready ? "—" : "Cliente / KÔMA") : "Cliente",
+      nextStep: release.operations?.configured && release.operations?.ready
+        ? "Nenhuma ação necessária."
+        : "Corrigir modalidades e resolver as configurações especializadas indicadas pelos blockers.",
     },
     {
       key: "dine-in",
@@ -512,6 +581,9 @@ export function SuperAdminRestaurant360({
         : "Consumo local não está ativo",
       evidence: "Readiness operacional do salão",
       owner: release.operations?.capabilities?.dineIn?.enabled && release.operations?.tableMapEnabled && !release.operations?.capabilities?.dineIn?.ready ? "KÔMA / cliente" : "—",
+      nextStep: release.operations?.capabilities?.dineIn?.enabled && release.operations?.tableMapEnabled && !release.operations?.capabilities?.dineIn?.ready
+        ? "Cadastrar/completar as mesas ou revisar o mapa do salão."
+        : "Nenhuma ação obrigatória.",
     },
     {
       key: "delivery",
@@ -526,6 +598,9 @@ export function SuperAdminRestaurant360({
         : "Delivery não está ativo",
       evidence: "Taxa/tabela/localização conforme modo configurado",
       owner: release.operations?.capabilities?.delivery?.enabled && !release.operations?.capabilities?.delivery?.ready ? "Cliente / KÔMA" : "—",
+      nextStep: release.operations?.capabilities?.delivery?.enabled && !release.operations?.capabilities?.delivery?.ready
+        ? "Revisar taxa, cobertura/bairros e demais regras de entrega."
+        : "Nenhuma ação obrigatória.",
     },
     {
       key: "payment",
@@ -536,6 +611,9 @@ export function SuperAdminRestaurant360({
         : "Mercado Pago não conectado",
       evidence: "Conta de pagamento do Cardápio Online",
       owner: release.payments?.mercadoPagoConnected ? "—" : "Cliente quando quiser pagamento online",
+      nextStep: release.payments?.mercadoPagoConnected
+        ? "Revisar somente se houver incidente de pagamento."
+        : "Configurar formas de pagamento; conectar Mercado Pago apenas se quiser pagamento online.",
     },
     {
       key: "release",
@@ -554,6 +632,11 @@ export function SuperAdminRestaurant360({
         ? "Blockers: " + release.readiness.blockers.join(", ")
         : "Readiness canônico do onboarding",
       owner: release.readiness?.trialStarted ? "—" : release.readyForRelease ? "KÔMA" : "Cliente / KÔMA",
+      nextStep: release.readiness?.trialStarted
+        ? "Acompanhar o período grátis."
+        : release.readyForRelease
+          ? "Revisar e liberar a operação; só então iniciar os 7 dias."
+          : "Resolver os blockers canônicos antes da revisão KÔMA.",
     },
   ] as const : [];
 
@@ -771,12 +854,42 @@ export function SuperAdminRestaurant360({
                       <div className="mt-3 grid gap-1 text-[10px] opacity-80">
                         <p><strong>Evidência:</strong> {item.evidence}</p>
                         <p><strong>Quem age:</strong> {item.owner}</p>
+                        <p><strong>Próximo passo:</strong> {item.nextStep}</p>
                       </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
                       {item.key === "operations" && (
-                        <button type="button" onClick={openOperationsEditor} className="mt-3 rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                        <button type="button" onClick={openOperationsEditor} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
                           Corrigir modalidades
                         </button>
                       )}
+                      {item.key === "operation-profile" && (
+                        <button type="button" onClick={() => onEdit(tenant)} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                          Corrigir tipo
+                        </button>
+                      )}
+                      {item.key === "access" && (
+                        <button type="button" onClick={onOpenTeamControls} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                          Gerenciar acessos
+                        </button>
+                      )}
+                      {item.key === "catalog" && release.catalogAssistance && (
+                        <button type="button" onClick={onOpenCatalogAssistance} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                          Abrir fila de cardápios
+                        </button>
+                      )}
+                      {supportTargetForCockpit(item.key) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const target = supportTargetForCockpit(item.key);
+                            if (target) onSupport(tenant, target);
+                          }}
+                          className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black"
+                        >
+                          Abrir tela canônica em suporte
+                        </button>
+                      )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1060,12 +1173,31 @@ export function SuperAdminRestaurant360({
                     <strong className="text-koma-foreground">Próximo passo</strong>
                     <p className="mt-1 text-koma-muted">{item.recommended_action}</p>
                     {item.last_seen_at && <p className="mt-1 text-[10px] text-koma-subtle">Último sinal: {formatDate(item.last_seen_at)}</p>}
+                    {item.action_available && item.action_type && item.action_target_id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIncidentAction(item);
+                          setIncidentReason("");
+                          setIncidentActionError(null);
+                          setIncidentActionNotice(null);
+                        }}
+                        className="mt-3 rounded-lg bg-[#00b894] px-3 py-1.5 text-[10px] font-black text-black"
+                      >
+                        Resolver com ação auditada
+                      </button>
+                    )}
                   </div>
                 </article>
               ))}
             </div>
           )}
           </div>
+          {incidentActionNotice && (
+            <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3 text-xs text-emerald-300">
+              {incidentActionNotice}
+            </div>
+          )}
         </div>
       )}
 
@@ -1083,6 +1215,41 @@ export function SuperAdminRestaurant360({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {incidentAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label="Resolver incidente">
+          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-koma-card p-5 shadow-2xl">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wide text-[#00b894]">Ação corretiva auditada</span>
+              <h3 className="mt-1 text-base font-bold text-koma-foreground">{incidentAction.title}</h3>
+              <p className="mt-2 text-xs text-koma-muted">{incidentAction.recommended_action}</p>
+            </div>
+            <div className="mt-4 rounded-lg border border-zinc-800 bg-koma-page p-3 text-[11px] text-koma-muted">
+              <p><strong className="text-koma-secondary">Ação:</strong> {incidentAction.action_type}</p>
+              <p className="mt-1"><strong className="text-koma-secondary">Alvo:</strong> {incidentAction.action_target_id}</p>
+              <p className="mt-1">A execução fica restrita ao tenant #{tenant.id} e registrada na auditoria persistente.</p>
+            </div>
+            <label className="mt-4 block text-xs text-koma-muted">
+              Motivo obrigatório
+              <textarea
+                rows={3}
+                value={incidentReason}
+                onChange={event => setIncidentReason(event.target.value)}
+                disabled={incidentBusy}
+                placeholder="Ex.: agente voltou a operar; reenviando o documento retido."
+                className="mt-1 w-full resize-none rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-koma-foreground"
+              />
+            </label>
+            {incidentActionError && <div className="mt-3 rounded-lg border border-rose-900/50 bg-rose-950/20 p-3 text-xs text-rose-300">{incidentActionError}</div>}
+            <div className="mt-4 flex justify-end gap-2 border-t border-zinc-800 pt-4">
+              <button type="button" onClick={() => setIncidentAction(null)} disabled={incidentBusy} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-koma-secondary">Cancelar</button>
+              <button type="button" onClick={() => void executeIncidentAction()} disabled={incidentBusy} className="rounded-lg bg-[#00b894] px-4 py-2 text-xs font-black text-black disabled:opacity-50">
+                {incidentBusy ? "Executando…" : "Confirmar e executar"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

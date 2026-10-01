@@ -19,7 +19,7 @@ import {
 } from "../config/subscriptionPlans";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 import { SuperAdminNewTenantModal } from "./SuperAdminNewTenantModal";
-import { SuperAdminSupportModal } from "./SuperAdminSupportModal";
+import { SuperAdminSupportModal, type SupportNavigationTarget } from "./SuperAdminSupportModal";
 import { SuperAdminCapabilitiesModal } from "./SuperAdminCapabilitiesModal";
 import { SuperAdminRestaurant360 } from "./SuperAdminRestaurant360";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
@@ -34,6 +34,7 @@ interface SuperAdminTenantsTabProps {
   contracts: ContractInboxItem[];
   contractsAvailable: boolean;
   onOpenTeamControls: () => void;
+  onOpenCatalogAssistance: () => void;
 }
 
 const OPERATION_PROFILES = [
@@ -71,6 +72,7 @@ export function SuperAdminTenantsTab({
   contracts,
   contractsAvailable,
   onOpenTeamControls,
+  onOpenCatalogAssistance,
 }: SuperAdminTenantsTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("ALL");
@@ -79,6 +81,7 @@ export function SuperAdminTenantsTab({
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [benefitsTenant, setBenefitsTenant] = useState<Tenant | null>(null);
   const [supportTenant, setSupportTenant] = useState<Tenant | null>(null);
+  const [supportTarget, setSupportTarget] = useState<SupportNavigationTarget | null>(null);
   const [showNewTenantModal, setShowNewTenantModal] = useState(false);
 
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
@@ -192,6 +195,16 @@ export function SuperAdminTenantsTab({
     } finally {
       setIsSubmittingEdit(false);
     }
+  };
+
+  const openSupportModal = (tenant: Tenant, target?: SupportNavigationTarget) => {
+    setSupportTenant(tenant);
+    setSupportTarget(target || null);
+  };
+
+  const closeSupportModal = () => {
+    setSupportTenant(null);
+    setSupportTarget(null);
   };
 
   const openStatusModal = (tenant: Tenant) => {
@@ -323,7 +336,7 @@ export function SuperAdminTenantsTab({
                     <td className="px-4 py-3.5 text-koma-muted">{formatActivity(tenant.lastActivity)}</td>
                     <td className="px-4 py-3.5 text-right"><div className="inline-flex items-center gap-1.5">
                       <button type="button" onClick={() => setSelectedTenant(tenant)} className="flex items-center gap-1 rounded bg-[#00b894] px-2.5 py-1.5 font-bold text-black hover:bg-[#00c9a3]" title="Abrir ficha operacional completa"><Eye className="h-3 w-3" /> Abrir 360°</button>
-                      <button type="button" onClick={() => setSupportTenant(tenant)} className="flex items-center gap-1 rounded border border-amber-800/60 bg-amber-950/40 px-2 py-1.5 text-amber-300 hover:bg-amber-900/60 hover:text-amber-100" title="Acessar estabelecimento em Modo Suporte auditado"><Headphones className="h-3 w-3" /> Suporte</button>
+                      <button type="button" onClick={() => openSupportModal(tenant)} className="flex items-center gap-1 rounded border border-amber-800/60 bg-amber-950/40 px-2 py-1.5 text-amber-300 hover:bg-amber-900/60 hover:text-amber-100" title="Acessar estabelecimento em Modo Suporte auditado"><Headphones className="h-3 w-3" /> Suporte</button>
                     </div></td>
                   </tr>
                 );
@@ -341,10 +354,11 @@ export function SuperAdminTenantsTab({
           onBack={() => setSelectedTenant(null)}
           onRefreshTenant={refreshTenants}
           onEdit={(tenant) => openEditModal(tenant)}
-          onSupport={(tenant) => setSupportTenant(tenant)}
+          onSupport={(tenant, target) => openSupportModal(tenant, target)}
           onStatus={(tenant) => openStatusModal(tenant)}
           onBenefits={(tenant) => setBenefitsTenant(tenant)}
           onOpenTeamControls={onOpenTeamControls}
+          onOpenCatalogAssistance={onOpenCatalogAssistance}
         />
       )}
 
@@ -405,8 +419,9 @@ export function SuperAdminTenantsTab({
       {supportTenant && (
         <SuperAdminSupportModal
           tenant={supportTenant}
-          onClose={() => setSupportTenant(null)}
-          onSessionStarted={() => setSupportTenant(null)}
+          target={supportTarget}
+          onClose={closeSupportModal}
+          onSessionStarted={closeSupportModal}
         />
       )}
     </div>
