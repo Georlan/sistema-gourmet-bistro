@@ -2,6 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import { prerenderLanding } from './scripts/prerenderLanding';
 
 export default defineConfig(() => {
   const buildSha = (
@@ -21,6 +22,11 @@ export default defineConfig(() => {
     plugins: [
       react(),
       tailwindcss(),
+      {
+        name: 'koma-public-prerender',
+        apply: 'build',
+        async closeBundle() { await prerenderLanding(process.cwd(), 'dist'); },
+      },
       {
         name: 'koma-build-metadata',
         transformIndexHtml(html: string) {
