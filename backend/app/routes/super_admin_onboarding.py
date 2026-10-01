@@ -357,6 +357,11 @@ def _commercial_release_preview(db, tenant_id: int) -> dict[str, Any]:
         "operations": snapshot["operations"],
         "counts": snapshot["counts"],
         "catalogAssistance": snapshot["catalogAssistance"],
+        "progress": snapshot["progress"],
+        "payments": snapshot["payments"],
+        "onboarding": snapshot["onboarding"],
+        "trial": snapshot["trial"],
+        "readiness": snapshot["readiness"],
         "readyForRelease": snapshot["readyForRelease"],
         "trialStarted": snapshot["readiness"]["trialStarted"],
     }
