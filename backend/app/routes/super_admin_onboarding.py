@@ -3,7 +3,7 @@ import logging
 import math
 import re
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -25,6 +25,7 @@ from ..models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, U
 from ..saas_billing_models import SaaSSubscription
 from ..security import get_password_hash
 from ..subscription import VALID_SUBSCRIPTION_PLANS
+from ..services.operational_modes import explicit_order_types
 from ..services.table_bootstrap import bootstrap_standard_tables
 from .super_admin import _discover_restaurant_ids, get_current_admin
 
@@ -124,6 +125,13 @@ class TrialActionRequest(BaseModel):
 class SuperAdminTableBootstrapRequest(BaseModel):
     count: int = Field(ge=1, le=300)
     default_capacity: int = Field(default=4, ge=1, le=50)
+    reason: str = Field(min_length=3, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class SuperAdminOperationsUpdateRequest(BaseModel):
+    order_types: list[Literal["consumo_local", "retirada", "delivery"]] = Field(min_length=1)
     reason: str = Field(min_length=3, max_length=1000)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -377,6 +385,88 @@ def preview_commercial_release(
     try:
         with tenant_session_scope(db, tenant_id_int):
             return _commercial_release_preview(db, tenant_id_int)
+    finally:
+        db.close()
+
+
+@router.put("/onboarding/restaurantes/{tenant_id}/operations")
+def update_super_admin_operations(
+    tenant_id: str,
+    payload: SuperAdminOperationsUpdateRequest,
+    admin: dict[str, Any] = Depends(get_current_admin),
+):
+    """Corrige a política canônica de modalidades sem configurar domínios especializados."""
+    tenant_id_int = _parse_tenant_id(tenant_id)
+    clean_reason = payload.reason.strip()
+    actor = str(admin.get("user") or "superadmin")
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id_int):
+            restaurante = (
+                db.query(Restaurante)
+                .filter(Restaurante.id == tenant_id_int)
+                .one_or_none()
+            )
+            if restaurante is None:
+                raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+
+            config = (
+                db.query(ConfiguracaoRestaurante)
+                .filter(ConfiguracaoRestaurante.restaurante_id == tenant_id_int)
+                .with_for_update()
+                .one_or_none()
+            )
+            if config is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Configurações do restaurante não encontradas.",
+                )
+
+            before = list(explicit_order_types(config) or [])
+            after = list(dict.fromkeys(payload.order_types))
+            if before == after:
+                return _commercial_release_preview(db, tenant_id_int)
+
+            config.tipos_pedido_ativos = after
+            db.add(
+                SuperAdminAuditLog(
+                    restaurante_id=tenant_id_int,
+                    actor=f"superadmin:{actor}",
+                    action="SUPERADMIN_ONBOARDING_OPERATION_MODES_UPDATE",
+                    reason=clean_reason,
+                    before_data={"order_types": before},
+                    after_data={
+                        "order_types": after,
+                        "specialized_settings_changed": False,
+                    },
+                )
+            )
+            db.commit()
+
+            logger.info(
+                "SUPERADMIN ONBOARDING OPERATIONS UPDATED tenant=%s actor=%s before=%s after=%s",
+                tenant_id_int,
+                actor,
+                before,
+                after,
+            )
+            return _commercial_release_preview(db, tenant_id_int)
+    except HTTPException:
+        if db.in_transaction():
+            db.rollback()
+        raise
+    except Exception:
+        if db.in_transaction():
+            db.rollback()
+        logger.exception(
+            "SUPERADMIN ONBOARDING OPERATIONS UPDATE FAILED tenant=%s actor=%s",
+            tenant_id_int,
+            actor,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Falha ao atualizar as modalidades do restaurante.",
+        )
     finally:
         db.close()
 
