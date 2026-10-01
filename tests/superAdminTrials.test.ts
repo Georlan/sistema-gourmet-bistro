@@ -29,7 +29,8 @@ test('Super Admin preserva a central global de trials como rota contextual, mas 
   assert.match(clientsHub, /activeView === "trials"/);
   assert.doesNotMatch(clientsHub, /label: "Períodos grátis"/);
   assert.match(restaurant360, /<SuperAdminTrialModal/);
-  assert.match(restaurant360, /Implantação & liberação/);
+  assert.match(restaurant360, /Cockpit de implantação/);
+  assert.match(restaurant360, /Só começa após a liberação comercial/);
 });
 
 test('central consulta a fonte real de trials e não inventa cobrança SaaS', () => {
