@@ -752,7 +752,7 @@ export function SuperAdminRestaurant360({
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-800 p-4">
               <div><h3 className="text-sm font-bold text-koma-foreground">Equipe do restaurante</h3><p className="mt-1 text-[11px] text-koma-muted">A ficha mostra somente a equipe deste tenant; o controle auditável existente continua disponível sem expor credenciais.</p></div>
               <div className="flex flex-wrap gap-2">
-                {linkedContract && access && access.pendingUsers > 0 && (
+                {linkedContract && access?.users.some(user => user.role === "admin" && user.status === "pendente_ativacao") && (
                   <button type="button" onClick={() => void reissueActivationInvite()} disabled={inviteBusy} className="rounded-lg border border-amber-800/60 bg-amber-950/20 px-3 py-2 text-xs font-bold text-amber-300 disabled:opacity-50">
                     {inviteBusy ? "Reemitindo…" : "Reemitir convite inicial"}
                   </button>
