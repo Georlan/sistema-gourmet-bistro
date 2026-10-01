@@ -128,6 +128,10 @@ def setup_gate_tenants():
                 db.query(RestauranteCapability).filter(
                     RestauranteCapability.restaurante_id == r_id
                 ).delete(synchronize_session=False)
+                db.query(PrintAgentToken).filter(
+                    PrintAgentToken.restaurante_id == r_id,
+                    PrintAgentToken.agent_id == f"contract-gate-agent-{r_id}",
+                ).delete(synchronize_session=False)
                 db.commit()
         finally:
             current_restaurante_id.reset(token)
