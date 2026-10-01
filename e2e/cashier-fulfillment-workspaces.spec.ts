@@ -368,7 +368,7 @@ test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Ka
   const courierSelect = deliveries.getByRole('combobox', { name: /Entregador do pedido 5002/i });
   await courierSelect.selectOption('7');
   await expect.poll(state.getAssignmentCalls).toBe(1);
-  await deliveries.getByRole('button', { name: 'Marcar pronto para sair' }).click();
+  await deliveries.getByRole('button', { name: 'Marcar como pronto' }).click();
   await expect(deliveries).toContainText('Pronto');
 
   const dispatch = deliveries.getByRole('button', { name: 'Despachar pedido' });
