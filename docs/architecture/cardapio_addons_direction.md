@@ -53,11 +53,13 @@ Não migra catálogos existentes nem aplica programação semanal, plano ou paga
 A direção anterior de categoria por tamanho foi substituída pelo escopo aprovado
 pelo usuário: uma categoria Marmitas/Quentinhas com P, M e G e limites por produto.
 Todos os itens ficam na mesma lista em Cardápio → Produtos. Novo produto oferece
-Marmita, Sobremesa e Bebida; o assistente de tamanho só aparece ao criar uma marmita.
-Editar no cartão permite alterar preço, foto e descrição.
-Grupos e regras de escolha por tamanho ficam exclusivamente em Complementos.
-Salvar e configurar escolhas preserva as alterações e abre o mesmo produto
-em Complementos; não cria outro tamanho.
+Marmita, Sobremesa e Bebida; o assistente de tamanho aparece ao criar uma marmita e
+também é reutilizado para editar sua composição. Tamanho, preço e as regras
+min/max por grupo pertencem ao produto P/M/G.
+Complementos, no perfil Marmitaria, mantém somente os grupos/opções compartilhados
+(Proteínas, Guarnições, Saladas etc.) e sua disponibilidade diária; não apresenta
+limites globais de quantidade. O mesmo grupo pode ter 0–1 em P e 0–2 em G.
+Hambúrguer, Pizza e demais perfis preservam o editor genérico e suas regras globais.
 O modelo antigo permanece legível por compatibilidade.
 
 `Produto.marmitaria_tamanho` armazena a identidade normalizada do tamanho, única
