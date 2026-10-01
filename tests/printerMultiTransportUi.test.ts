@@ -37,7 +37,7 @@ test('monitor handles multi-transport printing uniformly', () => {
   // Physical readiness and on-demand dispatch are intentionally separate.
   assert.match(monitor, /hasReadyPrinter = \(/);
   assert.match(monitor, /hasDispatchablePrinter/);
-  assert.match(monitor, /disabled=\{testInProgress \|\| !hasDispatchablePrinter\}/);
+  assert.match(monitor, /disabled=\{testInProgress \|\| !hasDispatchablePrinter \|\| !localAgentId\}/);
 });
 
 test('monitor presents friendly non-technical UX for users and keeps technical details in diagnostics', () => {
@@ -95,4 +95,14 @@ test('prepare printing ignores rapid duplicate launcher triggers in the same tab
   assert.match(monitor, /startingAgentRef\.current = true/);
   assert.match(monitor, /startingAgentRef\.current = false/);
   assert.match(monitor, /launcher\.href = 'koma-print:\/\/start'/);
+});
+
+
+test('printing monitor isolates hardware by the local agent identity', () => {
+  assert.match(monitor, /\/agent\/identity/);
+  assert.match(monitor, /localAgentId/);
+  assert.match(monitor, /agent\.agent_id === localAgentId/);
+  assert.match(monitor, /agent_id: targetAgentId/);
+  assert.match(monitor, /if \(localAgentId\) void onTestPrint\(localAgentId\)/);
+  assert.doesNotMatch(monitor, /agent_id: agentId \|\| controlAgent\?\.agent_id/);
 });
