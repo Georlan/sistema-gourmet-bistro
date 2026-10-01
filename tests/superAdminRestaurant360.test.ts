@@ -67,6 +67,17 @@ test('Equipe permite recuperar convite inicial usando o fluxo administrativo exi
 });
 
 
+test('Restaurante 360 corrige modalidades pelo endpoint administrativo auditável sem copiar configuração especializada', () => {
+  assert.match(restaurant360, /\/api\/super-admin\/onboarding\/restaurantes\//);
+  assert.match(restaurant360, /\/operations/);
+  assert.match(restaurant360, /method: "PUT"/);
+  assert.match(restaurant360, /order_types: operationModes/);
+  assert.match(restaurant360, /reason: operationReason\.trim\(\)/);
+  assert.match(restaurant360, /Corrigir modalidades/);
+  assert.match(restaurant360, /altera somente a política canônica de atendimento/);
+  assert.match(restaurant360, /Delivery, mesas e outras configurações especializadas continuam separadas/);
+});
+
 test('Restaurante 360 incorpora incidentes operacionais reais do tenant sem inventar diagnóstico', () => {
   assert.match(restaurant360, /\/api\/super-admin\/incidents\?tenant_id=/);
   assert.match(restaurant360, /Incidentes operacionais deste restaurante/);
