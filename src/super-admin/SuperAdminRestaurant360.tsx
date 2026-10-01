@@ -861,7 +861,8 @@ export function SuperAdminRestaurant360({
       )}
 
       {section === "operation" && (
-        <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-5">
+          <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
             <h3 className="flex items-center gap-2 text-base font-bold text-koma-foreground"><Activity className="h-4 w-4 text-[#00b894]" /> Operação atual</h3>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 text-xs">
@@ -879,9 +880,9 @@ export function SuperAdminRestaurant360({
               {tenant.subdomain && <a href={"https://" + tenant.subdomain + ".komafood.com.br/"} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-koma-secondary"><ExternalLink className="h-4 w-4" /> Abrir cardápio público</a>}
             </div>
           </div>
-        </div>
+          </div>
 
-        <div className="rounded-xl border border-zinc-800 bg-koma-card">
+          <div className="rounded-xl border border-zinc-800 bg-koma-card">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-800 p-4">
             <div>
               <h3 className="text-sm font-bold text-koma-foreground">Incidentes operacionais deste restaurante</h3>
@@ -927,6 +928,7 @@ export function SuperAdminRestaurant360({
               ))}
             </div>
           )}
+          </div>
         </div>
       )}
 
