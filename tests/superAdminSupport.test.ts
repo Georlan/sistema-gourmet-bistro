@@ -29,7 +29,7 @@ const main = readFileSync(
 
 test('Super Admin expõe Modo Suporte na listagem e na ficha 360 do estabelecimento', () => {
   assert.match(tenantsTab, /SuperAdminSupportModal/);
-  assert.match(tenantsTab, /setSupportTenant\(tenant\)/);
+  assert.match(tenantsTab, /openSupportModal\(tenant/);
   assert.match(tenantsTab, /Acessar estabelecimento em Modo Suporte auditado/);
   assert.match(restaurant360, /Modo suporte/);
   assert.match(restaurant360, /onSupport\(tenant\)/);
@@ -82,4 +82,17 @@ test('query de suporte sem contexto auditado não vira login operacional na cent
   assert.match(app, /invalidCentralSupportBridge/);
   assert.match(app, /isCentralSupportOperationalBridge\(\) && !hasInternalSupportSessionContext\(\)/);
   assert.match(app, /hostConfig\.surface === 'central' \|\| invalidCentralSupportBridge/);
+});
+
+
+test('Modo Suporte pode abrir diretamente a tela canônica indicada pelo cockpit sem esconder a identidade de suporte', () => {
+  assert.match(supportModal, /target\?: SupportNavigationTarget/);
+  assert.match(supportModal, /target\?\.tab \|\| "operacao"/);
+  assert.match(supportModal, /target\?\.subTab \|\| "pedidos"/);
+  assert.match(supportModal, /Destino após entrar:/);
+  assert.match(restaurant360, /supportTargetForCockpit/);
+  assert.match(restaurant360, /cardapio_perfil/);
+  assert.match(restaurant360, /cardapio_entrega/);
+  assert.match(restaurant360, /cardapio_pagamentos/);
+  assert.match(restaurant360, /Abrir tela canônica em suporte/);
 });
