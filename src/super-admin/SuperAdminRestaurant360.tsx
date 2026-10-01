@@ -23,6 +23,7 @@ import { SuperAdminReleaseModal } from "./SuperAdminReleaseModal";
 import { SuperAdminTrialModal } from "./SuperAdminTrialModal";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
+import type { SupportNavigationTarget } from "./SuperAdminSupportModal";
 import type { SuperAdminAuditLogEntry, Tenant } from "./superAdminTypes";
 
 type OperationMode = "consumo_local" | "retirada" | "delivery";
@@ -134,7 +135,7 @@ interface SuperAdminRestaurant360Props {
   onBack: () => void;
   onRefreshTenant: () => void;
   onEdit: (tenant: Tenant) => void;
-  onSupport: (tenant: Tenant) => void;
+  onSupport: (tenant: Tenant, target?: SupportNavigationTarget) => void;
   onStatus: (tenant: Tenant) => void;
   onBenefits: (tenant: Tenant) => void;
   onOpenTeamControls: () => void;
@@ -192,6 +193,16 @@ function formatContractRate(value?: string | null) {
   return Number.isFinite(parsed)
     ? (parsed * 100).toFixed(2).replace(".", ",") + "%"
     : "—";
+}
+
+function supportTargetForCockpit(key: string): SupportNavigationTarget | null {
+  if (key === "profile") return { tab: "cardapio_digital", subTab: "cardapio_perfil", label: "Dados do restaurante" };
+  if (key === "hours") return { tab: "cardapio_digital", subTab: "cardapio_pedidos", label: "Horários e pedidos online" };
+  if (key === "catalog") return { tab: "cardapio", subTab: "produtos", label: "Cardápio / produtos" };
+  if (key === "dine-in") return { tab: "impressao_salao", subTab: "mesas", label: "Salão / mesas" };
+  if (key === "delivery") return { tab: "cardapio_digital", subTab: "cardapio_entrega", label: "Configuração de entrega" };
+  if (key === "payment") return { tab: "cardapio_digital", subTab: "cardapio_pagamentos", label: "Formas de pagamento" };
+  return null;
 }
 
 export function SuperAdminRestaurant360({
@@ -440,6 +451,11 @@ export function SuperAdminRestaurant360({
         : "Fonte de acesso indisponível",
       evidence: access ? access.totalUsers + " usuário(s) no tenant" : "—",
       owner: access && access.activeAdmins === 0 ? "KÔMA / cliente" : "—",
+      nextStep: access && access.activeAdmins > 0
+        ? "Nenhuma ação necessária."
+        : access?.pendingUsers
+          ? "Reemitir o convite inicial ou revisar o usuário pendente."
+          : "Criar ou reativar um administrador.",
     },
     {
       key: "operation-profile",
@@ -448,6 +464,7 @@ export function SuperAdminRestaurant360({
       detail: release.restaurant.operationProfile || "Não informado",
       evidence: "Metadado operacional do tenant",
       owner: "KÔMA pode corrigir",
+      nextStep: "Corrigir somente se a classificação estiver errada; isso não altera o cardápio automaticamente.",
     },
     {
       key: "profile",
@@ -456,6 +473,7 @@ export function SuperAdminRestaurant360({
       detail: release.steps.profile ? "Dados essenciais preenchidos" : "Dados essenciais pendentes",
       evidence: "Readiness canônico do onboarding",
       owner: release.steps.profile ? "—" : "Cliente",
+      nextStep: release.steps.profile ? "Revisar apenas se houver dado incorreto." : "Completar os dados básicos na tela canônica.",
     },
     {
       key: "hours",
@@ -464,6 +482,7 @@ export function SuperAdminRestaurant360({
       detail: release.steps.hours ? "Horários estruturados" : "Horários pendentes",
       evidence: "Readiness canônico do onboarding",
       owner: release.steps.hours ? "—" : "Cliente",
+      nextStep: release.steps.hours ? "Revisar somente se a rotina mudou." : "Definir os horários de funcionamento.",
     },
     {
       key: "catalog",
@@ -482,6 +501,11 @@ export function SuperAdminRestaurant360({
             : "Nenhum produto ativo nem fonte assistida",
       evidence: release.catalogAssistance?.filename || "Catálogo do tenant",
       owner: release.steps.catalog ? "—" : release.catalogAssistance?.status ? "KÔMA" : "Cliente",
+      nextStep: release.steps.catalog
+        ? "Revisar catálogo se necessário."
+        : release.catalogAssistance?.status
+          ? "Estruturar e publicar a fonte assistida antes da liberação."
+          : "Enviar a fonte do cardápio ou cadastrar o primeiro produto ativo.",
     },
     {
       key: "operations",
@@ -496,6 +520,9 @@ export function SuperAdminRestaurant360({
         ? "Blockers: " + release.operations.blockers.join(", ")
         : "Política canônica de modalidades",
       owner: release.operations?.configured ? (release.operations?.ready ? "—" : "Cliente / KÔMA") : "Cliente",
+      nextStep: release.operations?.configured && release.operations?.ready
+        ? "Nenhuma ação necessária."
+        : "Corrigir modalidades e resolver as configurações especializadas indicadas pelos blockers.",
     },
     {
       key: "dine-in",
@@ -512,6 +539,9 @@ export function SuperAdminRestaurant360({
         : "Consumo local não está ativo",
       evidence: "Readiness operacional do salão",
       owner: release.operations?.capabilities?.dineIn?.enabled && release.operations?.tableMapEnabled && !release.operations?.capabilities?.dineIn?.ready ? "KÔMA / cliente" : "—",
+      nextStep: release.operations?.capabilities?.dineIn?.enabled && release.operations?.tableMapEnabled && !release.operations?.capabilities?.dineIn?.ready
+        ? "Cadastrar/completar as mesas ou revisar o mapa do salão."
+        : "Nenhuma ação obrigatória.",
     },
     {
       key: "delivery",
@@ -526,6 +556,9 @@ export function SuperAdminRestaurant360({
         : "Delivery não está ativo",
       evidence: "Taxa/tabela/localização conforme modo configurado",
       owner: release.operations?.capabilities?.delivery?.enabled && !release.operations?.capabilities?.delivery?.ready ? "Cliente / KÔMA" : "—",
+      nextStep: release.operations?.capabilities?.delivery?.enabled && !release.operations?.capabilities?.delivery?.ready
+        ? "Revisar taxa, cobertura/bairros e demais regras de entrega."
+        : "Nenhuma ação obrigatória.",
     },
     {
       key: "payment",
@@ -536,6 +569,9 @@ export function SuperAdminRestaurant360({
         : "Mercado Pago não conectado",
       evidence: "Conta de pagamento do Cardápio Online",
       owner: release.payments?.mercadoPagoConnected ? "—" : "Cliente quando quiser pagamento online",
+      nextStep: release.payments?.mercadoPagoConnected
+        ? "Revisar somente se houver incidente de pagamento."
+        : "Configurar formas de pagamento; conectar Mercado Pago apenas se quiser pagamento online.",
     },
     {
       key: "release",
@@ -554,6 +590,11 @@ export function SuperAdminRestaurant360({
         ? "Blockers: " + release.readiness.blockers.join(", ")
         : "Readiness canônico do onboarding",
       owner: release.readiness?.trialStarted ? "—" : release.readyForRelease ? "KÔMA" : "Cliente / KÔMA",
+      nextStep: release.readiness?.trialStarted
+        ? "Acompanhar o período grátis."
+        : release.readyForRelease
+          ? "Revisar e liberar a operação; só então iniciar os 7 dias."
+          : "Resolver os blockers canônicos antes da revisão KÔMA.",
     },
   ] as const : [];
 
@@ -771,12 +812,37 @@ export function SuperAdminRestaurant360({
                       <div className="mt-3 grid gap-1 text-[10px] opacity-80">
                         <p><strong>Evidência:</strong> {item.evidence}</p>
                         <p><strong>Quem age:</strong> {item.owner}</p>
+                        <p><strong>Próximo passo:</strong> {item.nextStep}</p>
                       </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
                       {item.key === "operations" && (
-                        <button type="button" onClick={openOperationsEditor} className="mt-3 rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                        <button type="button" onClick={openOperationsEditor} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
                           Corrigir modalidades
                         </button>
                       )}
+                      {item.key === "operation-profile" && (
+                        <button type="button" onClick={() => onEdit(tenant)} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                          Corrigir tipo
+                        </button>
+                      )}
+                      {item.key === "access" && (
+                        <button type="button" onClick={onOpenTeamControls} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                          Gerenciar acessos
+                        </button>
+                      )}
+                      {supportTargetForCockpit(item.key) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const target = supportTargetForCockpit(item.key);
+                            if (target) onSupport(tenant, target);
+                          }}
+                          className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black"
+                        >
+                          Abrir tela canônica em suporte
+                        </button>
+                      )}
+                      </div>
                     </div>
                   ))}
                 </div>
