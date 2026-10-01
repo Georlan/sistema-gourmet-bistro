@@ -103,3 +103,11 @@ test('Cockpit informa próximo passo e usa deep link de suporte para configuraç
   assert.match(restaurant360, /Corrigir tipo/);
   assert.match(restaurant360, /Gerenciar acessos/);
 });
+
+
+test('Cardápio assistido reaproveita a fila existente em vez de duplicar publicação no 360', () => {
+  assert.match(restaurant360, /onOpenCatalogAssistance/);
+  assert.match(restaurant360, /Abrir fila de cardápios/);
+  assert.match(restaurant360, /item\.key === "catalog"/);
+  assert.doesNotMatch(restaurant360, /catalog-assistance.*\/publish/);
+});

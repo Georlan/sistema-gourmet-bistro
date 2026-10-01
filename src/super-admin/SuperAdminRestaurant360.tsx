@@ -139,6 +139,7 @@ interface SuperAdminRestaurant360Props {
   onStatus: (tenant: Tenant) => void;
   onBenefits: (tenant: Tenant) => void;
   onOpenTeamControls: () => void;
+  onOpenCatalogAssistance: () => void;
 }
 
 const sections: Array<{
@@ -216,6 +217,7 @@ export function SuperAdminRestaurant360({
   onStatus,
   onBenefits,
   onOpenTeamControls,
+  onOpenCatalogAssistance,
 }: SuperAdminRestaurant360Props) {
   const [section, setSection] = useState<SectionId>("summary");
   const [trial, setTrial] = useState<TrialRecord | null>(null);
@@ -828,6 +830,11 @@ export function SuperAdminRestaurant360({
                       {item.key === "access" && (
                         <button type="button" onClick={onOpenTeamControls} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
                           Gerenciar acessos
+                        </button>
+                      )}
+                      {item.key === "catalog" && release.catalogAssistance && (
+                        <button type="button" onClick={onOpenCatalogAssistance} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                          Abrir fila de cardápios
                         </button>
                       )}
                       {supportTargetForCockpit(item.key) && (
