@@ -42,7 +42,7 @@ def _require_physical_printing(db: Session, restaurante_id: int) -> None:
 def _require_local_print_agent(
     db: Session,
     restaurante_id: int,
-    agent_id: str,
+    agent_id: Optional[str],
 ) -> str:
     agent_id_clean = (agent_id or "").strip()
     if not agent_id_clean:
@@ -177,7 +177,7 @@ def imprimir_universal(
     status_code=status.HTTP_200_OK,
 )
 def imprimir_teste_extremo_cardapio(
-    agent_id: str,
+    agent_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("impressao:administrar")),
 ):
@@ -302,7 +302,7 @@ def imprimir_teste_extremo_cardapio(
     status_code=status.HTTP_200_OK,
 )
 def imprimir_teste_extremo_garcom(
-    agent_id: str,
+    agent_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("impressao:administrar")),
 ):
