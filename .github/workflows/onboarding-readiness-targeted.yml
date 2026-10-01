@@ -21,6 +21,14 @@ on:
       - 'backend/tests/test_onboarding_status.py'
       - 'src/components/onboarding/FirstAccessOnboarding.tsx'
       - 'src/components/onboarding/useOnboardingAccessGate.ts'
+      - 'src/components/onboarding/OnboardingOperationalBoundary.tsx'
+      - 'src/components/onboarding/OnboardingAwareOperationalEntry.tsx'
+      - 'src/components/auth/UnifiedOperationalEntry.tsx'
+      - 'src/components/CaixaAtivarPage.tsx'
+      - 'src/utils/authSession.ts'
+      - 'src/main.tsx'
+      - 'e2e/auth-persistence.spec.ts'
+      - 'e2e/onboarding-first-client-ux.spec.ts'
       - 'src/components/caixa/pdv/useCashierPdv.ts'
       - 'tests/firstAccessOnboarding.test.ts'
 
@@ -28,6 +36,32 @@ permissions:
   contents: read
 
 jobs:
+  browser-auth:
+    name: Auth and onboarding browser regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Validate login, recovery, onboarding and tenant isolation
+        run: >-
+          KOMA_E2E_PORT=4283 npm run test:e2e --
+          e2e/auth-persistence.spec.ts e2e/onboarding-first-client-ux.spec.ts
+          --project=desktop-1366 --project=mobile-390 --workers=2
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: auth-onboarding-browser-failures
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
   policy:
     name: Onboarding policy regressions
     runs-on: ubuntu-latest
