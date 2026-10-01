@@ -669,14 +669,6 @@ export function PrintMonitorPanel({
     printer => printer.present === true
   );
   const onlineAgents = localAgents.filter(agent => agent.online);
-  const controlAgent = (
-    onlineAgents.find(
-      agent => agent.printer_ready && agent.supports_usb_commands
-    )
-    || onlineAgents.find(agent => agent.supports_usb_commands)
-    || onlineAgents[0]
-    || null
-  );
   const hasOnlineAgent = onlineAgents.length > 0;
   const hasUsbCommandAgent = onlineAgents.some(
     agent => agent.supports_usb_commands
@@ -887,11 +879,18 @@ export function PrintMonitorPanel({
     title: string;
     detail: string;
   }>(() => {
-    if (!monitorData) {
+    if (!monitorData || !localAgentResolved) {
       return {
         tone: 'neutral',
         title: 'Verificando a conexão…',
-        detail: 'Aguarde a leitura das impressoras conectadas a este computador.'
+        detail: 'Aguarde a identificação do KÔMA Print neste computador.'
+      };
+    }
+    if (!localAgentId) {
+      return {
+        tone: 'danger',
+        title: 'KÔMA Print não identificado neste computador',
+        detail: 'Clique em “Preparar impressão” para conectar somente este computador.'
       };
     }
     if (!hasOnlineAgent) {
@@ -991,6 +990,8 @@ export function PrintMonitorPanel({
     };
   }, [
     commandRunning,
+    localAgentId,
+    localAgentResolved,
     hasFreshPrinterDiagnostics,
     hasOnlineAgent,
     hasReadyPrinter,
