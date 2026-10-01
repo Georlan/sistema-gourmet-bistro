@@ -78,6 +78,7 @@ test('cashier printing settings keeps every action while prioritizing daily oper
   assert.match(printing, /Teste extremo do App do Garçom/);
   assert.match(printing, /Gerar comanda de teste/);
   assert.match(printing, /\/impressao\/teste-extremo-garcom/);
+  assert.match(printing, /agent_id=\$\{encodeURIComponent\(agentId\)\}/);
   assert.match(printing, /sem criar pedido real, estoque ou movimento de caixa/);
   assert.match(printing, /Impressão não incluída no Kôma Pocket/);
   assert.doesNotMatch(printing, /Fila ativa/);
