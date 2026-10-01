@@ -4,6 +4,7 @@ import datetime
 from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from fastapi.testclient import TestClient
 
@@ -16,7 +17,10 @@ from app.routes.onboarding import (
     _trial_status_payload,
     start_trial_after_readiness,
 )
-from app.routes.super_admin_onboarding import _commercial_release_preview
+from app.routes.super_admin_onboarding import (
+    SuperAdminOperationsUpdateRequest,
+    _commercial_release_preview,
+)
 from app.services.onboarding_readiness import evaluate_operation_readiness
 from app.services.operational_modes import (
     explicit_order_types,
@@ -319,3 +323,25 @@ def test_superadmin_release_preview_reuses_canonical_onboarding_projection(monke
     assert preview["readiness"] is snapshot["readiness"]
     assert preview["readyForRelease"] is False
     assert preview["trialStarted"] is False
+
+
+
+def test_superadmin_operations_payload_is_narrow_and_requires_reason():
+    payload = SuperAdminOperationsUpdateRequest(
+        order_types=["retirada", "delivery"],
+        reason="Correção da implantação",
+    )
+    assert payload.order_types == ["retirada", "delivery"]
+
+    with pytest.raises(ValidationError):
+        SuperAdminOperationsUpdateRequest(
+            order_types=[],
+            reason="Correção",
+        )
+
+    with pytest.raises(ValidationError):
+        SuperAdminOperationsUpdateRequest(
+            order_types=["retirada"],
+            reason="Correção",
+            taxa_entrega_fixa=7,
+        )
