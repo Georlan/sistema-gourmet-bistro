@@ -196,7 +196,7 @@ export function SuperAdminTenantsTab({
   };
 
   const openSupportModal = (tenant: Tenant, target?: SupportNavigationTarget) => {
-    openSupportModal(tenant);
+    setSupportTenant(tenant);
     setSupportTarget(target || null);
   };
 
