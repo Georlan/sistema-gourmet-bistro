@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 from typing import Any, Union, Optional
 import bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
@@ -414,8 +414,20 @@ def require_permission(permission: str):
         raise RuntimeError(f"Permissão desconhecida na matriz RBAC: {permission}")
 
     def permission_checker(
-        current_user: Usuario = Depends(get_current_user)
+        request: Request,
+        current_user: Usuario = Depends(get_current_user),
     ) -> Usuario:
+        if (
+            bool(getattr(current_user, "is_support_mode", False))
+            and request.method.upper() not in {"GET", "HEAD", "OPTIONS"}
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Modo Suporte é somente para diagnóstico. "
+                    "Alterações administrativas devem ser executadas pelo Super Admin."
+                ),
+            )
         return ensure_permission(current_user, permission)
 
     return permission_checker
