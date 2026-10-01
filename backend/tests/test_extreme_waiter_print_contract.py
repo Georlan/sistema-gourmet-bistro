@@ -4,7 +4,7 @@ import pytest
 
 from app.database import Base, SessionLocal, current_restaurante_id, engine
 from app.main import app
-from app.models import PrintJob, Restaurante
+from app.models import PrintAgentToken, PrintJob, Restaurante
 from app.routes import printing as printing_routes
 
 
@@ -29,6 +29,18 @@ def setup_extreme_waiter_print_contract(monkeypatch):
             db.commit()
         db.query(PrintJob).filter(PrintJob.restaurante_id == TENANT_ID).delete(
             synchronize_session=False
+        )
+        db.query(PrintAgentToken).filter(
+            PrintAgentToken.restaurante_id == TENANT_ID
+        ).delete(synchronize_session=False)
+        db.add(
+            PrintAgentToken(
+                id="extreme-waiter-agent",
+                restaurante_id=TENANT_ID,
+                agent_id="desktop-extreme-waiter",
+                token_hash="test-token-hash",
+                ativo=True,
+            )
         )
         db.commit()
     finally:
@@ -61,6 +73,7 @@ def test_extreme_waiter_print_enqueues_canonical_synthetic_receipt():
         before = db.query(PrintJob).filter(PrintJob.restaurante_id == TENANT_ID).count()
 
         response = printing_routes.imprimir_teste_extremo_garcom(
+            agent_id="desktop-extreme-waiter",
             db=db,
             current_user=SimpleNamespace(nome="Admin Teste"),
         )
@@ -77,6 +90,7 @@ def test_extreme_waiter_print_enqueues_canonical_synthetic_receipt():
         assert job.destination == "COZINHA"
         assert job.source_type == "teste_extremo_garcom"
         assert job.status == "pending"
+        assert job.agent_id == "desktop-extreme-waiter"
 
         ticket = job.payload_text
         assert "TESTE-88-Z" in ticket
