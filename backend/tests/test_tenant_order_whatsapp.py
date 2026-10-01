@@ -13,6 +13,7 @@ from app.security import create_access_token
 from app.services.tenant_order_whatsapp import (
     EVENT_NAME,
     _locked_whatsapp_config_query,
+    _operational_alert_payload,
     enqueue_order_alert,
     instance_name,
     render_alert,
@@ -143,6 +144,8 @@ def test_whatsapp_alert_snapshots_customer_items_notes_and_online_number(char_se
                     ),
                 ),
                 customer=CustomerInput(name="Sarah", phone="11988887777"),
+                payment_method="dinheiro",
+                change_for="100",
             ),
         )
 
@@ -166,13 +169,27 @@ def test_whatsapp_alert_snapshots_customer_items_notes_and_online_number(char_se
         ]
         assert row.payload["items"][0]["name"]
 
-        rendered = render_alert(row.payload)
+        enriched = _operational_alert_payload(
+            db,
+            restaurant_id=rid,
+            payload=row.payload,
+        )
+        assert "customer_phone" not in row.payload
+        assert enriched["customer_phone"]
+        assert enriched["payment_method"] == "dinheiro"
+        assert Decimal(enriched["change_for"]) == Decimal("100.00")
+
+        rendered = render_alert(enriched)
         assert f"Novo pedido #{dto.display_number}" in rendered
         assert "Cliente: Sarah" in rendered
+        assert "Telefone: (11) 98888-7777" in rendered
         assert "Retirada" in rendered
         assert "2x " in rendered
         assert "Obs.: Sem calda, por favor" in rendered
-        assert "Abra o KÔMA para acompanhar e avançar o pedido." in rendered
+        assert "Pagamento:" in rendered
+        assert "dinheiro" in rendered
+        assert "Troco para: R$ 100,00" in rendered
+        assert "Abra o KÔMA para aceitar e seguir a operação do pedido." in rendered
     finally:
         db.rollback()
         config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
@@ -182,6 +199,60 @@ def test_whatsapp_alert_snapshots_customer_items_notes_and_online_number(char_se
             config.whatsapp_recipient_phone = None
         db.commit()
         db.close()
+
+
+def test_whatsapp_alert_renders_delivery_address_reference_and_payment():
+    payload = {
+        "display_number": "3",
+        "fulfillment": "delivery",
+        "total": "19.00",
+        "items_count": 2,
+        "customer_name": "Georlan",
+        "customer_phone": "5588999616937",
+        "delivery_address": {
+            "logradouro": "Rua José Hamilton de Oliveira",
+            "numero": "165",
+            "complemento": "Casa",
+            "bairro": "Santa Luzia",
+            "cidade": "Limoeiro do Norte",
+            "uf": "CE",
+            "cep": "62932004",
+            "referencia": "Portão lateral",
+            "latitude": None,
+            "longitude": None,
+        },
+        "payment_method": "dinheiro",
+        "change_for": "100.00",
+        "delivery_fee": "2.00",
+        "items": [
+            {
+                "name": "Quentinha G",
+                "quantity": 1,
+                "notes": "Sem cebola",
+                "modifiers": ["Acém cozido", "Bisteca", "Baião"],
+            },
+            {"name": "Suco de acerola", "quantity": 1, "notes": None, "modifiers": []},
+        ],
+    }
+
+    message = render_alert(payload)
+
+    assert "Novo pedido #3" in message
+    assert "Cliente: Georlan" in message
+    assert "Telefone: (88) 99961-6937" in message
+    assert "Entrega:" in message
+    assert "Rua José Hamilton de Oliveira, 165 · Casa" in message
+    assert "Santa Luzia · Limoeiro do Norte/CE" in message
+    assert "CEP 62932-004" in message
+    assert "Referência: Portão lateral" in message
+    assert "1x Quentinha G" in message
+    assert "  + Acém cozido, Bisteca, Baião" in message
+    assert "Obs.: Sem cebola" in message
+    assert "Pagamento:" in message
+    assert "dinheiro" in message
+    assert "Troco para: R$ 100,00" in message
+    assert "Taxa de entrega: R$ 2,00" in message
+    assert "Abra o KÔMA para aceitar e seguir a operação do pedido." in message
 
 
 def test_whatsapp_alert_distinguishes_dine_in_from_pickup():

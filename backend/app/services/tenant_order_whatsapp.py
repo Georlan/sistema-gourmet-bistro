@@ -14,9 +14,11 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..delivery_address_snapshot import load_delivery_address_snapshot
 from ..domain.orders.events import OrderCreated
 from ..domain.orders.types import OrderChannel
 from ..models import (
+    Comanda,
     ConfiguracaoRestaurante,
     IntegrationOutbox,
     Item,
@@ -75,6 +77,7 @@ class _AlertItem:
 class _AlertEvent:
     restaurant_id: int
     order_id: str
+    check_id: str | None
     event_id: str
     display_number: str
     fulfillment: str
@@ -184,6 +187,7 @@ def enqueue_order_alert(db: Session, order: OrderCreated) -> IntegrationOutbox |
     event = _AlertEvent(
         restaurant_id=order.restaurant_id,
         order_id=str(order.order_id),
+        check_id=str(order.check_id) if order.check_id is not None else None,
         event_id=event_id,
         display_number=str(order.check_number or order.display_number or order.order_id)[:32],
         fulfillment=str(order.fulfillment),
@@ -348,6 +352,110 @@ def owner_phone(restaurant_id: int) -> str | None:
     return None
 
 
+def _format_brazilian_phone(value: object) -> str:
+    digits = re.sub(r"\D", "", str(value or ""))
+    national = digits[2:] if digits.startswith("55") and len(digits) in {12, 13} else digits
+    if len(national) == 11:
+        return f"({national[:2]}) {national[2:7]}-{national[7:]}"
+    if len(national) == 10:
+        return f"({national[:2]}) {national[2:6]}-{national[6:]}"
+    return _clean_alert_text(value, max_length=40)
+
+
+def _money(value: object) -> str | None:
+    if value in {None, ""}:
+        return None
+    try:
+        amount = Decimal(str(value)).quantize(Decimal("0.01"))
+    except Exception:
+        return None
+    return f"R$ {str(amount).replace('.', ',')}"
+
+
+def _operational_alert_payload(
+    db: Session,
+    *,
+    restaurant_id: int,
+    payload: dict,
+) -> dict:
+    """Enriquece o alerta em memória com dados operacionais sensíveis.
+
+    Telefone e endereço continuam protegidos nas fontes canônicas e não são
+    duplicados em texto puro na Integration Outbox.
+    """
+    enriched = dict(payload)
+    check_id = _clean_alert_text(payload.get("check_id"), max_length=120)
+    if not check_id:
+        return enriched
+
+    comanda = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == restaurant_id,
+            Comanda.id == check_id,
+        )
+        .first()
+    )
+    if comanda is None:
+        return enriched
+
+    if comanda.delivery_telefone:
+        enriched["customer_phone"] = comanda.delivery_telefone
+    if comanda.delivery_forma_pagamento:
+        enriched["payment_method"] = comanda.delivery_forma_pagamento
+    if comanda.delivery_troco_para is not None:
+        enriched["change_for"] = str(comanda.delivery_troco_para)
+    if comanda.delivery_taxa is not None:
+        enriched["delivery_fee"] = str(comanda.delivery_taxa)
+
+    if str(payload.get("fulfillment") or "") == "delivery":
+        address = load_delivery_address_snapshot(
+            db,
+            restaurante_id=restaurant_id,
+            comanda_id=comanda.id,
+        )
+        if address:
+            enriched["delivery_address"] = address
+        elif comanda.delivery_endereco:
+            enriched["delivery_address_legacy"] = comanda.delivery_endereco
+
+    return enriched
+
+
+def _append_delivery_address(lines: list[str], payload: dict) -> None:
+    address = payload.get("delivery_address")
+    if isinstance(address, dict):
+        street = _clean_alert_text(address.get("logradouro"), max_length=160)
+        number = _clean_alert_text(address.get("numero"), max_length=40)
+        complement = _clean_alert_text(address.get("complemento"), max_length=120)
+        neighborhood = _clean_alert_text(address.get("bairro"), max_length=120)
+        city = _clean_alert_text(address.get("cidade"), max_length=120)
+        state = _clean_alert_text(address.get("uf"), max_length=2).upper()
+        postal_digits = re.sub(r"\D", "", str(address.get("cep") or ""))
+        reference = _clean_alert_text(address.get("referencia"), max_length=160)
+
+        first_line = ", ".join(part for part in (street, number) if part)
+        if complement:
+            first_line = f"{first_line} · {complement}" if first_line else complement
+        second_line = " · ".join(part for part in (neighborhood, city) if part)
+        if state:
+            second_line = f"{second_line}/{state}" if second_line else state
+
+        if first_line:
+            lines.append(first_line)
+        if second_line:
+            lines.append(second_line)
+        if len(postal_digits) == 8:
+            lines.append(f"CEP {postal_digits[:5]}-{postal_digits[5:]}")
+        if reference:
+            lines.append(f"Referência: {reference}")
+        return
+
+    legacy = _clean_alert_text(payload.get("delivery_address_legacy"), max_length=300)
+    if legacy:
+        lines.append(legacy)
+
+
 def render_alert(payload: dict) -> str:
     kind = {
         "delivery": "Delivery",
@@ -357,14 +465,18 @@ def render_alert(payload: dict) -> str:
     amount = Decimal(str(payload.get("total", "0"))).quantize(Decimal("0.01"))
     number = re.sub(r"[^\w-]", "", str(payload.get("display_number", "")))[:32]
     customer = _clean_alert_text(payload.get("customer_name"), max_length=120) or "Cliente"
+    phone = _format_brazilian_phone(payload.get("customer_phone")) if payload.get("customer_phone") else ""
 
-    lines = [
-        f"Novo pedido #{number}",
-        f"Cliente: {customer}",
-        f"{kind} · R$ {str(amount).replace('.', ',')}",
-        "",
-        "Pedido:",
-    ]
+    lines = [f"Novo pedido #{number}", f"Cliente: {customer}"]
+    if phone:
+        lines.append(f"Telefone: {phone}")
+    lines.append(f"{kind} · R$ {str(amount).replace('.', ',')}")
+
+    if kind == "Delivery" and (payload.get("delivery_address") or payload.get("delivery_address_legacy")):
+        lines.extend(["", "Entrega:"])
+        _append_delivery_address(lines, payload)
+
+    lines.extend(["", "Pedido:"])
     items = payload.get("items")
     if isinstance(items, list) and items:
         for raw_item in items:
@@ -389,11 +501,23 @@ def render_alert(payload: dict) -> str:
         count = max(0, int(payload.get("items_count", 0)))
         lines.append(f"{count} itens")
 
-    lines.extend(["", "Abra o KÔMA para acompanhar e avançar o pedido."])
+    payment_method = _clean_alert_text(payload.get("payment_method"), max_length=80)
+    change_for = _money(payload.get("change_for"))
+    delivery_fee = _money(payload.get("delivery_fee"))
+    if payment_method or change_for:
+        lines.extend(["", "Pagamento:"])
+        if payment_method:
+            lines.append(payment_method)
+        if change_for:
+            lines.append(f"Troco para: {change_for}")
+    if delivery_fee and kind == "Delivery":
+        lines.append(f"Taxa de entrega: {delivery_fee}")
+
+    lines.extend(["", "Abra o KÔMA para aceitar e seguir a operação do pedido."])
     message = "\n".join(lines)
     if len(message) <= 3500:
         return message
-    return message[:3440].rstrip() + "\n…\nAbra o KÔMA para acompanhar."
+    return message[:3440].rstrip() + "\n…\nAbra o KÔMA para aceitar o pedido."
 
 
 def _aware(value: dt.datetime | None) -> dt.datetime | None:
@@ -501,7 +625,16 @@ def dispatch_alert(db: Session, snapshot: dict) -> bool:
             response = client.post(
                 f"{base}/message/sendText/{quote(instance_name(rid))}",
                 headers=headers,
-                json={"number": config.whatsapp_recipient_phone, "text": render_alert(snapshot["payload"])},
+                json={
+                    "number": config.whatsapp_recipient_phone,
+                    "text": render_alert(
+                        _operational_alert_payload(
+                            db,
+                            restaurant_id=rid,
+                            payload=snapshot["payload"],
+                        )
+                    ),
+                },
             )
         if 200 <= response.status_code < 300:
             config.whatsapp_consecutive_failures = 0
