@@ -626,6 +626,43 @@ def test_release_batch_returns_only_unprinted_jobs_to_queue():
         db.close()
 
 
+def test_stuck_targeted_test_keeps_original_agent_assignment():
+    db = TestingSessionLocal()
+    try:
+        stuck_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=10)
+        db.add(
+            PrintJob(
+                id="job-stuck-targeted",
+                restaurante_id=1,
+                document_type="producao",
+                destination="COZINHA",
+                source_type="teste_extremo_cardapio",
+                source_id="targeted-stuck",
+                payload_text="TESTE LOCAL",
+                status="claimed",
+                claimed_at=stuck_time,
+                agent_id="agent-box-2",
+                idempotency_key="idemp:stuck-targeted",
+            )
+        )
+        db.commit()
+
+        released = print_agents_route._release_stuck_jobs(
+            db,
+            1,
+            datetime.datetime.now(datetime.timezone.utc),
+        )
+        db.commit()
+        job = db.get(PrintJob, "job-stuck-targeted")
+
+        assert released >= 1
+        assert job.status == "pending"
+        assert job.claimed_at is None
+        assert job.agent_id == "agent-box-2"
+    finally:
+        db.close()
+
+
 def test_stuck_job_recovery():
     """Jobs em 'claimed' há mais de 5min são liberados automaticamente no /jobs/next."""
     mark_agent_printer_ready("a1")
