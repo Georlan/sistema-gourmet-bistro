@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 
 import { API_BASE_URL } from '../../config/api';
+import { clearOperatorSession, getOperatorSession } from '../../utils/authSession';
 import {
   getSubscriptionPlan,
   normalizeSubscriptionPlan,
@@ -208,6 +209,13 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     setState('ready');
   }, []);
 
+  const returnToLogin = useCallback(() => {
+    const current = getOperatorSession('caixa');
+    if (current && current.token !== accessToken) return;
+    clearOperatorSession('caixa');
+    window.location.replace('/?view=caixa');
+  }, [accessToken]);
+
   const loadSnapshot = useCallback(async () => {
     setState((current) => current === 'ready' ? 'ready' : 'loading');
     setErrorMessage('');
@@ -220,6 +228,11 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
         cache: 'no-store',
         signal: controller.signal,
       });
+      if ([401, 403, 404].includes(response.status)) {
+        setSnapshot(null);
+        returnToLogin();
+        return;
+      }
       if (!response.ok) {
         throw new Error(await responseDetail(response, 'Não foi possível carregar a implantação inicial.'));
       }
@@ -236,7 +249,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     } finally {
       window.clearTimeout(timeoutId);
     }
-  }, [applySnapshot, headers]);
+  }, [applySnapshot, headers, returnToLogin]);
 
   useEffect(() => {
     void loadSnapshot();
@@ -495,11 +508,12 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-koma-page px-6 text-koma-foreground">
         <section className="w-full max-w-lg rounded-3xl border border-koma-border bg-koma-card p-7 text-center shadow-2xl">
-          <h1 className="text-xl font-black">Sua conta está ativa</h1>
+          <h1 className="text-xl font-black">Não foi possível validar a implantação inicial.</h1>
           <p className="mt-2 text-sm text-koma-muted">{errorMessage || 'A implantação não pôde ser carregada agora.'}</p>
           <button type="button" onClick={() => void loadSnapshot()} className="mt-6 rounded-xl border border-koma-border px-4 py-3 text-xs font-black text-koma-foreground hover:border-emerald-500/40">
             Tentar novamente
           </button>
+          <button type="button" onClick={returnToLogin} className="mt-3 block w-full text-xs font-bold text-koma-muted">Ir para o login</button>
         </section>
       </main>
     );
@@ -527,6 +541,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   return (
     <main className="min-h-screen bg-koma-page px-4 py-6 text-koma-foreground sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-5">
+        <button type="button" onClick={returnToLogin} className="block ml-auto text-xs font-bold text-koma-muted">Sair e ir para o login</button>
         <section className="overflow-hidden rounded-3xl border border-emerald-500/20 bg-koma-card shadow-2xl">
           <div className="border-b border-koma-border bg-emerald-500/[0.06] p-6 sm:p-8">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">

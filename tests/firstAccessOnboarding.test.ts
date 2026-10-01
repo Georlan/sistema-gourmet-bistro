@@ -110,7 +110,7 @@ test('onboarding status request cannot trap first access in infinite loading', (
   assert.match(onboarding, /clearTimeout\(timeoutId\)/);
   assert.match(gateHook, /ONBOARDING_GATE_TIMEOUT_MS = 10_000/);
   assert.match(gateHook, /setTimeout\(\(\) => controller\.abort\(\), ONBOARDING_GATE_TIMEOUT_MS\)/);
-  assert.match(gateHook, /if \(cancelled\) return;\s*setRequiredComplete\(false\);\s*setState\('error'\)/);
+  assert.match(gateHook, /state: 'error', requiredComplete: false/);
   assert.match(gateHook, /clearTimeout\(timeoutId\)/);
 });
 
@@ -196,5 +196,6 @@ test('audited support mode bypasses customer onboarding without mutating tenant 
   assert.match(boundary, /enabled: isManagementSetupOwner && !internalSupportMode/);
   assert.match(boundary, /internalSupportMode && setupMode/);
   assert.match(boundary, /sessionStorage\.removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
-  assert.match(boundary, /if \(internalSupportMode \|\| setupMode\) return <>\{children\}<\/>/);
+  assert.match(boundary, /if \(internalSupportMode\) return <>\{children\}<\/>/);
+  assert.match(boundary, /if \(setupMode\) return <>\{children\}<\/>/);
 });

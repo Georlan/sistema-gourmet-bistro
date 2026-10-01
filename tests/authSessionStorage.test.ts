@@ -84,3 +84,16 @@ test('admin no salão legado preserva restaurante e sessão local de garçom',()
   assert.equal(getOperatorSession()?.user.restaurante_id,5);
   assert.equal(getOperatorAccessToken(),'admin');
 });
+
+for (const missing of ['id', 'nome', 'role']) test(`sessão incompleta sem ${missing} exige login e preserva outra aba`, () => {
+  const intact = storage(), broken = storage();
+  useTab(intact); saveOperatorSession('intact', user('intact', 2));
+  useTab(broken); saveOperatorSession('incomplete', user('incomplete', 5, 'admin'));
+  const session = JSON.parse(sessionStorage.getItem('koma_operator_session_caixa')!);
+  delete session.user[missing];
+  sessionStorage.setItem('koma_operator_session_caixa', JSON.stringify(session));
+  assert.equal(getOperatorSession(), null);
+  assert.equal(getPersistedOperationalPortal(), null);
+  assert.equal(sessionStorage.getItem('koma_caixa_token'), null);
+  useTab(intact); assert.equal(getOperatorAccessToken(), 'intact');
+});

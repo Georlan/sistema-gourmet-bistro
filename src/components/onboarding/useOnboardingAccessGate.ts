@@ -1,18 +1,10 @@
 import { useEffect, useState } from 'react';
 import { API_BASE_URL } from '../../config/api';
 
-type GateState = 'idle' | 'loading' | 'ready' | 'error';
+type GateState = 'idle' | 'loading' | 'ready' | 'unauthenticated' | 'error';
 const ONBOARDING_GATE_TIMEOUT_MS = 10_000;
 
-type OnboardingProgressPayload = {
-  progress?: {
-    completed?: number;
-    total?: number;
-  };
-  trial?: {
-    status?: string;
-  };
-};
+type GateResult = { token: string; state: GateState; requiredComplete: boolean };
 
 export function useOnboardingAccessGate({
   enabled,
@@ -21,20 +13,19 @@ export function useOnboardingAccessGate({
   enabled: boolean;
   accessToken: string;
 }) {
-  const [state, setState] = useState<GateState>('idle');
-  const [requiredComplete, setRequiredComplete] = useState(false);
+  const [result, setResult] = useState<GateResult>({ token: '', state: 'idle', requiredComplete: false });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!enabled || !accessToken) {
-      setState('idle');
-      setRequiredComplete(false);
+      setResult({ token: '', state: 'idle', requiredComplete: false });
       return;
     }
 
     const controller = new AbortController();
     let cancelled = false;
     const timeoutId = window.setTimeout(() => controller.abort(), ONBOARDING_GATE_TIMEOUT_MS);
-    setState('loading');
+    setResult({ token: accessToken, state: 'loading', requiredComplete: false });
 
     void fetch(`${API_BASE_URL}/api/onboarding/status`, {
       method: 'GET',
@@ -46,22 +37,26 @@ export function useOnboardingAccessGate({
       signal: controller.signal,
     })
       .then(async (response) => {
+        if (cancelled) return;
+        // Este endpoint valida usuário, autorização e tenant no backend.
+        // Uma sessão rejeitada não é uma implantação pendente.
+        if ([401, 403, 404].includes(response.status)) {
+          setResult({ token: accessToken, state: 'unauthenticated', requiredComplete: false });
+          return;
+        }
         if (!response.ok) throw new Error('Não foi possível validar a implantação inicial.');
-        return response.json() as Promise<OnboardingProgressPayload>;
-      })
-      .then((payload) => {
+        const payload = await response.json();
+        const releaseState = payload?.onboarding?.releaseState;
+        if (!['configuring', 'awaiting_koma', 'released'].includes(releaseState)) {
+          throw new Error('Resposta de implantação incompleta.');
+        }
         if (cancelled) return;
-        const completed = Number(payload.progress?.completed || 0);
-        const total = Number(payload.progress?.total || 0);
-        const configurationComplete = total > 0 && completed >= total;
-        const trialPending = String(payload.trial?.status || "").toLowerCase() === "setup";
-        setRequiredComplete(configurationComplete && !trialPending);
-        setState('ready');
+        // A projeção canônica já combina configuração e liberação da conta.
+        setResult({ token: accessToken, state: 'ready', requiredComplete: releaseState === 'released' });
       })
-      .catch((error) => {
+      .catch(() => {
         if (cancelled) return;
-        setRequiredComplete(false);
-        setState('error');
+        setResult({ token: accessToken, state: 'error', requiredComplete: false });
       })
       .finally(() => {
         window.clearTimeout(timeoutId);
@@ -72,11 +67,15 @@ export function useOnboardingAccessGate({
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [accessToken, enabled]);
+  }, [accessToken, enabled, attempt]);
 
+  // Nunca reutilize uma decisão do token anterior enquanto o efeito reinicia.
+  const state: GateState = !enabled || !accessToken ? 'idle'
+    : result.token !== accessToken ? 'loading' : result.state;
   return {
     state,
-    requiredComplete,
+    requiredComplete: state === 'ready' && result.requiredComplete,
     isChecking: enabled && state === 'loading',
+    retry: () => setAttempt(current => current + 1),
   };
 }
