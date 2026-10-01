@@ -30,6 +30,7 @@ from app.models import (
     SuperAdminAuditLog,
 )
 from app.restaurant_profile_models import RestauranteOperationProfile
+from app.websocket_manager import manager
 
 
 class ReconcileError(RuntimeError):
@@ -401,6 +402,10 @@ def reconcile(*, tenant_id: int, spec: dict[str, Any], apply: bool, reason: str)
                 )
             )
             db.commit()
+            manager.broadcast_sync(
+                {"event": "catalog_updated", "message": "Catálogo reconciliado."},
+                restaurante_id=tenant_id,
+            )
         else:
             db.rollback()
         return result
