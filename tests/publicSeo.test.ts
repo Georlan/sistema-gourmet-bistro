@@ -12,7 +12,7 @@ async function serve(url: string, method = 'GET') {
     async fetch(request: Request) {
       const path = new URL(request.url).pathname;
       paths.push(path);
-      return new Response(path === '/seo-landing.html' ? 'public marketing' : 'operational shell', { headers: { 'Content-Type': 'text/html' } });
+      return new Response(path === '/seo-landing' ? 'public marketing' : 'operational shell', { headers: { 'Content-Type': 'text/html' } });
     },
   } });
   return { response, paths };
@@ -22,7 +22,7 @@ test('only public brand hosts receive prerendered landing, with canonical and se
   for (const host of ['komafood.com.br', 'www.komafood.com.br']) {
     for (const path of ['/', '/index.html', '/landing', '/landing/?view=landing']) {
       const { response, paths } = await serve(`https://${host}${path}`);
-      assert.deepEqual(paths, ['/seo-landing.html']);
+      assert.deepEqual(paths, ['/seo-landing']);
       assert.equal(await response.text(), 'public marketing');
       assert.match(response.headers.get('Link')!, /https:\/\/komafood.com.br\//);
       assert.match(response.headers.get('X-Robots-Tag')!, /^index/);
@@ -55,11 +55,40 @@ test('tenant root and activation/deep links are forwarded without rewriting', as
   }
 });
 
-test('internal prerender asset cannot be indexed as another public URL', async () => {
-  const { response, paths } = await serve('https://komafood.com.br/seo-landing.html');
-  assert.equal(response.status, 404);
-  assert.equal(response.headers.get('X-Robots-Tag'), 'noindex');
-  assert.deepEqual(paths, []);
+test('both internal asset URLs are blocked while the public root avoids Pages extension redirects', async () => {
+  for (const path of ['/seo-landing.html', '/seo-landing']) {
+    const { response, paths } = await serve(`https://komafood.com.br${path}`);
+    assert.equal(response.status, 404);
+    assert.equal(response.headers.get('X-Robots-Tag'), 'noindex');
+    assert.deepEqual(paths, []);
+  }
+  const worker = createSeoWorker();
+  const response = await worker.fetch(new Request(LANDING_SEO.url), { ASSETS: {
+    fetch: async (request: Request) => new URL(request.url).pathname.endsWith('.html')
+      ? new Response(null, { status: 308, headers: { Location: '/seo-landing' } })
+      : new Response('public marketing'),
+  } });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Location'), null);
+});
+
+test('worker preserves canonical missing-asset handling and valid asset caching', async () => {
+  for (const type of ['text/html; charset=utf-8', 'application/javascript']) {
+    const worker = createSeoWorker();
+    const response = await worker.fetch(new Request('https://app.komafood.com.br/assets/test.js'), { ASSETS: {
+      fetch: async () => new Response(type === 'application/javascript' ? 'export {}' : '<html>SPA</html>', {
+        headers: { 'Content-Type': type, 'Cache-Control': 'public, max-age=31536000, immutable' },
+      }),
+    } });
+    if (type.startsWith('text/html')) {
+      assert.equal(response.status, 404);
+      assert.match(response.headers.get('Cache-Control')!, /no-store/);
+      assert.match(response.headers.get('Content-Type')!, /text\/plain/);
+    } else {
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('Cache-Control')!, /immutable/);
+    }
+  }
 });
 
 test('private hosts never advertise public sitemap; tenant robots do not block public menus', async () => {
@@ -75,7 +104,7 @@ test('private hosts never advertise public sitemap; tenant robots do not block p
 
 test('HEAD preserves public response headers without a body', async () => {
   const { response, paths } = await serve(LANDING_SEO.url, 'HEAD');
-  assert.deepEqual(paths, ['/seo-landing.html']);
+  assert.deepEqual(paths, ['/seo-landing']);
   assert.equal(await response.text(), '');
   assert.match(response.headers.get('X-Robots-Tag')!, /^index/);
 });
