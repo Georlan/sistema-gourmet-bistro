@@ -20,10 +20,14 @@ test('Restaurante 360 usa somente fontes administrativas reais já existentes', 
   assert.doesNotMatch(restaurant360, /mock|faker|simulad/i);
 });
 
-test('Implantação e trial ficam no mesmo contexto sem misturar suspensão ou Mercado Pago', () => {
-  assert.match(restaurant360, /Implantação & liberação/);
-  assert.match(restaurant360, /O trial comercial começa após a liberação explícita da operação/);
-  assert.match(restaurant360, /Separado de suspensão, cobrança SaaS e Mercado Pago/);
+test('Implantação vira cockpit operacional sem inventar readiness no frontend', () => {
+  assert.match(restaurant360, /Cockpit de implantação/);
+  assert.match(restaurant360, /Estados e blockers vêm das projeções canônicas do backend/);
+  assert.match(restaurant360, /release\.readiness\?\.blockers/);
+  assert.match(restaurant360, /release\.operations\?\.capabilities\?\.delivery/);
+  assert.match(restaurant360, /release\.catalogAssistance/);
+  assert.match(restaurant360, /Quem age:/);
+  assert.match(restaurant360, /Evidência:/);
   assert.match(restaurant360, /<SuperAdminReleaseModal/);
   assert.match(restaurant360, /<SuperAdminTrialModal/);
 });
@@ -51,4 +55,13 @@ test('Pagamentos distingue recebimento do restaurante da cobrança SaaS', () => 
   assert.match(restaurant360, /Mercado Pago do Cardápio Online/);
   assert.match(restaurant360, /Não representa mensalidade SaaS nem Pix anual da contratação/);
   assert.match(restaurant360, /nenhuma taxa é inferida/);
+});
+
+
+test('Equipe permite recuperar convite inicial usando o fluxo administrativo existente', () => {
+  assert.match(restaurant360, /\/api\/super-admin\/signups\//);
+  assert.match(restaurant360, /\/activation-invite/);
+  assert.match(restaurant360, /Reemitir convite inicial/);
+  assert.match(restaurant360, /linkedContract && access\?\.users\.some\(user => user\.role === "admin" && user\.status === "pendente_ativacao"\)/);
+  assert.doesNotMatch(restaurant360, /token_convite|senha_hash|access_token/);
 });
