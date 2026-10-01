@@ -62,6 +62,6 @@ test('Equipe permite recuperar convite inicial usando o fluxo administrativo exi
   assert.match(restaurant360, /\/api\/super-admin\/signups\//);
   assert.match(restaurant360, /\/activation-invite/);
   assert.match(restaurant360, /Reemitir convite inicial/);
-  assert.match(restaurant360, /linkedContract && access && access\.pendingUsers > 0/);
+  assert.match(restaurant360, /linkedContract && access\?\.users\.some\(user => user\.role === "admin" && user\.status === "pendente_ativacao"\)/);
   assert.doesNotMatch(restaurant360, /token_convite|senha_hash|access_token/);
 });
