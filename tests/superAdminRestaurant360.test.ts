@@ -65,3 +65,14 @@ test('Equipe permite recuperar convite inicial usando o fluxo administrativo exi
   assert.match(restaurant360, /linkedContract && access\?\.users\.some\(user => user\.role === "admin" && user\.status === "pendente_ativacao"\)/);
   assert.doesNotMatch(restaurant360, /token_convite|senha_hash|access_token/);
 });
+
+
+test('Restaurante 360 incorpora incidentes operacionais reais do tenant sem inventar diagnóstico', () => {
+  assert.match(restaurant360, /\/api\/super-admin\/incidents\?tenant_id=/);
+  assert.match(restaurant360, /Incidentes operacionais deste restaurante/);
+  assert.match(restaurant360, /impressão, Mercado Pago, Outbox\/integrações, acesso e estado do restaurante/);
+  assert.match(restaurant360, /item\.recommended_action/);
+  assert.match(restaurant360, /item\.detail/);
+  assert.match(restaurant360, /incidentSourceLabel/);
+  assert.doesNotMatch(restaurant360, /mockIncident|fakeIncident|simulatedIncident/);
+});
