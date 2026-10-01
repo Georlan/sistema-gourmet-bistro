@@ -25,6 +25,8 @@ import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 import type { SuperAdminAuditLogEntry, Tenant } from "./superAdminTypes";
 
+type OperationMode = "consumo_local" | "retirada" | "delivery";
+
 type SectionId =
   | "summary"
   | "implementation"
@@ -218,6 +220,12 @@ export function SuperAdminRestaurant360({
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [operationsEditing, setOperationsEditing] = useState(false);
+  const [operationModes, setOperationModes] = useState<OperationMode[]>([]);
+  const [operationReason, setOperationReason] = useState("");
+  const [operationBusy, setOperationBusy] = useState(false);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const [operationNotice, setOperationNotice] = useState<string | null>(null);
 
   const linkedContract = useMemo(
     () => contracts.find(item => item.linkedRestaurantId === tenant.id) || null,
@@ -329,6 +337,66 @@ export function SuperAdminRestaurant360({
     if (source === "acesso") return "Acesso";
     if (source === "tenant") return "Restaurante";
     return source;
+  };
+
+  const openOperationsEditor = () => {
+    const current = (release?.operations?.orderTypes || [])
+      .filter((value): value is OperationMode => (
+        value === "consumo_local" || value === "retirada" || value === "delivery"
+      ));
+    setOperationModes(current);
+    setOperationReason("");
+    setOperationError(null);
+    setOperationNotice(null);
+    setOperationsEditing(true);
+  };
+
+  const toggleOperationMode = (mode: OperationMode) => {
+    setOperationModes(current => (
+      current.includes(mode)
+        ? current.filter(item => item !== mode)
+        : [...current, mode]
+    ));
+  };
+
+  const saveOperationModes = async () => {
+    if (operationBusy) return;
+    if (operationModes.length === 0) {
+      setOperationError("Selecione ao menos uma modalidade.");
+      return;
+    }
+    if (operationReason.trim().length < 3) {
+      setOperationError("Informe um motivo administrativo com pelo menos 3 caracteres.");
+      return;
+    }
+
+    setOperationBusy(true);
+    setOperationError(null);
+    setOperationNotice(null);
+    try {
+      const response = await superAdminFetch(
+        "/api/super-admin/onboarding/restaurantes/" + tenant.id + "/operations",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_types: operationModes,
+            reason: operationReason.trim(),
+          }),
+        },
+      );
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.detail || "Não foi possível atualizar as modalidades.");
+      setRelease(body as ReleasePreview);
+      setOperationReason("");
+      setOperationNotice("Modalidades atualizadas com auditoria. Configurações especializadas não foram alteradas.");
+      setOperationsEditing(false);
+      onRefreshTenant();
+    } catch (error) {
+      setOperationError(superAdminErrorMessage(error));
+    } finally {
+      setOperationBusy(false);
+    }
   };
 
   const reissueActivationInvite = async () => {
@@ -645,28 +713,11 @@ export function SuperAdminRestaurant360({
                       <strong>{item.title}</strong>
                       <span className="text-[9px] font-black uppercase opacity-75">{incidentSourceLabel(item.source)}</span>
                     </div>
-                    <p className="mt-1 opacity-80">{item.recommended_action}</p>
-                  </div>
-                ))}
-                {incidentsAvailable && incidents.length === 0 && (access?.diagnostics?.length ? access.diagnostics.slice(0, 2).map(item => (
-                  <div key={item.code} className={
-                    "rounded-lg border p-3 text-[11px] " +
-                    (item.severity === "critical"
-                      ? "border-rose-900/60 bg-rose-950/20 text-rose-200"
-                      : item.severity === "warning"
-                        ? "border-amber-900/60 bg-amber-950/20 text-amber-200"
-                        : "border-zinc-800 bg-koma-page text-koma-secondary")
-                  }>
-                    <strong>{item.message}</strong>
-                    <p className="mt-1 opacity-80">{item.action}</p>
-                  </div>
                 )) : (
                   <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3 text-[11px] text-emerald-300">
-                    {access ? "Nenhum incidente operacional ou alerta de acesso identificado." : "Diagnóstico operacional indisponível."}
+                    {access ? "Nenhum alerta de acesso identificado." : "Diagnóstico de acesso indisponível."}
                   </div>
-                ))}
-                {!incidentsAvailable && <div className="rounded-lg border border-zinc-800 bg-koma-page p-3 text-[11px] text-koma-muted">Diagnóstico de incidentes indisponível; nenhum estado saudável foi presumido.</div>}
-                {incidents.length > 3 && <p className="text-[10px] text-koma-muted">+ {incidents.length - 3} incidente(s) na aba Operação.</p>}
+                )}
               </div>
             </div>
           </div>
@@ -700,6 +751,11 @@ export function SuperAdminRestaurant360({
                         <p><strong>Evidência:</strong> {item.evidence}</p>
                         <p><strong>Quem age:</strong> {item.owner}</p>
                       </div>
+                      {item.key === "operations" && (
+                        <button type="button" onClick={openOperationsEditor} className="mt-3 rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                          Corrigir modalidades
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -720,6 +776,54 @@ export function SuperAdminRestaurant360({
                       : "Nenhum blocker canônico pendente antes da liberação."}
                   </p>
                 </div>
+                {operationNotice && <div className="mt-4 rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3 text-xs text-emerald-300">{operationNotice}</div>}
+                {operationsEditing && (
+                  <div className="mt-4 rounded-xl border border-[#00b894]/40 bg-emerald-950/10 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-koma-foreground">Corrigir modalidades</h4>
+                        <p className="mt-1 text-[11px] text-koma-muted">
+                          Esta ação altera somente a política canônica de atendimento. Delivery, mesas e outras configurações especializadas continuam separadas e podem gerar blockers de readiness.
+                        </p>
+                      </div>
+                      <button type="button" onClick={() => setOperationsEditing(false)} disabled={operationBusy} className="text-xs text-koma-muted">Cancelar</button>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {([
+                        ["retirada", "Retirada"],
+                        ["consumo_local", "Consumo no local"],
+                        ["delivery", "Delivery"],
+                      ] as Array<[OperationMode, string]>).map(([value, label]) => (
+                        <label key={value} className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-700 bg-koma-page px-3 py-2 text-xs text-koma-secondary">
+                          <input
+                            type="checkbox"
+                            checked={operationModes.includes(value)}
+                            onChange={() => toggleOperationMode(value)}
+                            disabled={operationBusy}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    <label className="mt-4 block text-xs text-koma-muted">
+                      Motivo obrigatório
+                      <textarea
+                        rows={2}
+                        value={operationReason}
+                        onChange={event => setOperationReason(event.target.value)}
+                        placeholder="Ex.: modalidade informada incorretamente durante a implantação."
+                        disabled={operationBusy}
+                        className="mt-1 w-full resize-none rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-koma-foreground"
+                      />
+                    </label>
+                    {operationError && <div className="mt-3 rounded-lg border border-rose-900/50 bg-rose-950/20 p-3 text-xs text-rose-300">{operationError}</div>}
+                    <div className="mt-4 flex justify-end">
+                      <button type="button" onClick={() => void saveOperationModes()} disabled={operationBusy} className="rounded-lg bg-[#00b894] px-4 py-2 text-xs font-black text-black disabled:opacity-50">
+                        {operationBusy ? "Salvando…" : "Salvar modalidades"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             ) : <p className="mt-4 text-xs text-koma-muted">Fonte de implantação indisponível.</p>}
           </div>
@@ -880,6 +984,7 @@ export function SuperAdminRestaurant360({
           <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
             <h3 className="text-sm font-bold text-koma-foreground">Ações operacionais</h3>
             <div className="mt-4 grid gap-2">
+              <button type="button" onClick={openOperationsEditor} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#00b894]/50 bg-emerald-950/20 px-3 py-2 text-xs font-bold text-emerald-300"><Wrench className="h-4 w-4" /> Corrigir modalidades</button>
               <button type="button" onClick={() => onSupport(tenant)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-800/60 bg-amber-950/20 px-3 py-2 text-xs font-bold text-amber-300"><Headphones className="h-4 w-4" /> Modo suporte</button>
               <button type="button" onClick={() => onEdit(tenant)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-koma-secondary"><Pencil className="h-4 w-4" /> Editar cadastro e operação</button>
               {tenant.subdomain && <a href={"https://" + tenant.subdomain + ".komafood.com.br/"} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-koma-secondary"><ExternalLink className="h-4 w-4" /> Abrir cardápio público</a>}
