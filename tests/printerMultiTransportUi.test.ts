@@ -106,3 +106,16 @@ test('printing monitor isolates hardware by the local agent identity', () => {
   assert.match(monitor, /if \(localAgentId\) void onTestPrint\(localAgentId\)/);
   assert.doesNotMatch(monitor, /agent_id: agentId \|\| controlAgent\?\.agent_id/);
 });
+
+
+test('printing monitor derives failure state from the latest job of this computer only', () => {
+  assert.match(monitor, /const localJobs = useMemo/);
+  assert.match(monitor, /job\.agent_id === localAgentId/);
+  assert.match(monitor, /jobActivityTimestamp\(right\) - jobActivityTimestamp\(left\)/);
+  assert.match(monitor, /const latestJob = localJobs\[0\] \|\| null/);
+  assert.match(monitor, /job\.agent_id === localAgentId[\s\S]*job\.status === 'failed'/);
+  assert.doesNotMatch(
+    monitor,
+    /const latestJob = monitorData\?\.queue_jobs\?\.\[0\] \|\| monitorData\?\.jobs\?\.\[0\]/
+  );
+});
