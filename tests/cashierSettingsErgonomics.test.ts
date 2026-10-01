@@ -118,6 +118,7 @@ test('cashier printing settings keeps every action while prioritizing daily oper
 });
 
 test('printer test uses a synchronous ref lock to prevent duplicate POSTs before React rerenders', () => {
+  assert.match(settingsController, /teste-extremo-cardapio\?agent_id=\$\{encodeURIComponent\(agentId\)\}/);
   assert.match(settingsController, /const isTestingPrinterRef = useRef\(false\)/);
   assert.match(settingsController, /if \(isTestingPrinterRef\.current\) return;/);
   assert.match(settingsController, /isTestingPrinterRef\.current = true;[\s\S]*setIsTestingPrinter\(true\)/);
