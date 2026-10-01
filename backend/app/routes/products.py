@@ -97,6 +97,7 @@ class EdicaoLoteResponse(BaseModel):
 
 
 CATEGORY_DISPLAY_ORDER = [
+    "Quentinhas",
     "Pizzas Tradicionais", "Pizzas Especiais", "Hambúrgueres Bovinos",
     "Hambúrgueres de Frango", "Hambúrgueres Suínos", "Baguetes",
     "Pastéis Tradicionais", "Pastelões Especiais", "Pastéis Doces",
