@@ -74,5 +74,7 @@ test('Restaurante 360 incorpora incidentes operacionais reais do tenant sem inve
   assert.match(restaurant360, /item\.recommended_action/);
   assert.match(restaurant360, /item\.detail/);
   assert.match(restaurant360, /incidentSourceLabel/);
+  assert.match(restaurant360, /O painel não presume que o restaurante esteja saudável/);
+  assert.match(restaurant360, /incidentsAvailable/);
   assert.doesNotMatch(restaurant360, /mockIncident|fakeIncident|simulatedIncident/);
 });
