@@ -117,3 +117,11 @@ test('Restaurante 360 executa somente ações corretivas já oferecidas pelo dia
   assert.doesNotMatch(restaurant360, /reprocess_outbox_event["']\s*:/);
   assert.doesNotMatch(restaurant360, /retry_print_job["']\s*:/);
 });
+
+
+test('Cardápio assistido reaproveita a fila existente em vez de duplicar publicação no 360', () => {
+  assert.match(restaurant360, /onOpenCatalogAssistance/);
+  assert.match(restaurant360, /Abrir fila de cardápios/);
+  assert.match(restaurant360, /item\.key === "catalog"/);
+  assert.doesNotMatch(restaurant360, /catalog-assistance.*\/publish/);
+});
