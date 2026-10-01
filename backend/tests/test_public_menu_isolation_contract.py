@@ -42,7 +42,7 @@ def test_public_menu_config_sync_is_tenant_scoped_and_refetches_source_of_truth(
     assert '{ cache: "no-store" }' in page
     assert '${WS_BASE_URL}/ws/cliente?restaurante_id=${activeBrand.id}' in page
     assert '["catalog_updated", "config_updated", "store_status_changed"]' in page
-    assert "setTimeout(() => void loadRestaurantData(), 100)" in page
+    assert "setTimeout(() => void loadRestaurantData(true), 100)" in page
 
     assert "`${apiBaseUrl}/api/cardapio-digital/config`" in settings_panel
     assert "headers: authHeaders" in settings_panel
