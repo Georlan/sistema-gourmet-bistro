@@ -713,11 +713,32 @@ export function SuperAdminRestaurant360({
                       <strong>{item.title}</strong>
                       <span className="text-[9px] font-black uppercase opacity-75">{incidentSourceLabel(item.source)}</span>
                     </div>
+                    <p className="mt-1 opacity-80">{item.recommended_action}</p>
+                  </div>
+                ))}
+                {incidentsAvailable && incidents.length === 0 && (access?.diagnostics?.length ? access.diagnostics.slice(0, 2).map(item => (
+                  <div key={item.code} className={
+                    "rounded-lg border p-3 text-[11px] " +
+                    (item.severity === "critical"
+                      ? "border-rose-900/60 bg-rose-950/20 text-rose-200"
+                      : item.severity === "warning"
+                        ? "border-amber-900/60 bg-amber-950/20 text-amber-200"
+                        : "border-zinc-800 bg-koma-page text-koma-secondary")
+                  }>
+                    <strong>{item.message}</strong>
+                    <p className="mt-1 opacity-80">{item.action}</p>
+                  </div>
                 )) : (
                   <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3 text-[11px] text-emerald-300">
-                    {access ? "Nenhum alerta de acesso identificado." : "Diagnóstico de acesso indisponível."}
+                    {access ? "Nenhum incidente operacional ou alerta de acesso identificado." : "Diagnóstico de acesso indisponível."}
+                  </div>
+                ))}
+                {!incidentsAvailable && (
+                  <div className="rounded-lg border border-zinc-800 bg-koma-page p-3 text-[11px] text-koma-muted">
+                    Diagnóstico de incidentes indisponível; nenhum estado saudável foi presumido.
                   </div>
                 )}
+                {incidents.length > 3 && <p className="text-[10px] text-koma-muted">+ {incidents.length - 3} incidente(s) na aba Operação.</p>}
               </div>
             </div>
           </div>
