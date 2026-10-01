@@ -111,7 +111,7 @@ test('Restaurante 360 executa somente ações corretivas já oferecidas pelo dia
   assert.match(restaurant360, /action_type: incidentAction\.action_type/);
   assert.match(restaurant360, /target_id: incidentAction\.action_target_id/);
   assert.match(restaurant360, /reason: incidentReason\.trim\(\)/);
-  assert.match(restaurant360, /incidentAction\.action_available/);
+  assert.match(restaurant360, /incidentAction\?\.action_available/);
   assert.match(restaurant360, /Resolver com ação auditada/);
   assert.match(restaurant360, /A execução fica restrita ao tenant/);
   assert.doesNotMatch(restaurant360, /reprocess_outbox_event["']\s*:/);
