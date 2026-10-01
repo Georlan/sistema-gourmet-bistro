@@ -85,6 +85,23 @@ type ReleasePreview = {
   trialStarted: boolean;
 };
 
+type TenantIncident = {
+  id: string;
+  tenant_id: number;
+  tenant_name: string;
+  source: "outbox" | "mercado_pago" | "impressao" | "acesso" | "tenant" | string;
+  severity: "critical" | "high" | "medium" | "low" | "info" | string;
+  title: string;
+  detail: string;
+  evidence: Record<string, unknown>;
+  detected_at: string;
+  last_seen_at?: string | null;
+  recommended_action: string;
+  action_available?: boolean;
+  action_type?: string | null;
+  action_target_id?: string | null;
+};
+
 type AccessDetail = {
   totalUsers: number;
   activeUsers: number;
@@ -192,6 +209,7 @@ export function SuperAdminRestaurant360({
   const [release, setRelease] = useState<ReleasePreview | null>(null);
   const [access, setAccess] = useState<AccessDetail | null>(null);
   const [audit, setAudit] = useState<SuperAdminAuditLogEntry[]>([]);
+  const [incidents, setIncidents] = useState<TenantIncident[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [trialOpen, setTrialOpen] = useState(false);
@@ -238,6 +256,13 @@ export function SuperAdminRestaurant360({
           .filter(item => item.restauranteId === tenant.id)
           .slice(0, 100);
       }),
+      superAdminFetch("/api/super-admin/incidents?tenant_id=" + encodeURIComponent(tenant.id)).then(async response => {
+        const body = await response.json();
+        if (!response.ok || !Array.isArray(body)) {
+          throw new Error(body?.detail || "Incidentes operacionais indisponíveis.");
+        }
+        return body as TenantIncident[];
+      }),
     ]);
 
     if (results[0].status === "fulfilled") setTrial(results[0].value as TrialRecord | null);
@@ -264,6 +289,12 @@ export function SuperAdminRestaurant360({
       nextErrors.push("Histórico: " + superAdminErrorMessage(results[3].reason));
     }
 
+    if (results[4].status === "fulfilled") setIncidents(results[4].value as TenantIncident[]);
+    else {
+      setIncidents([]);
+      nextErrors.push("Incidentes: " + superAdminErrorMessage(results[4].reason));
+    }
+
     setErrors(nextErrors);
     setLoading(false);
   }, [tenant.id]);
@@ -278,6 +309,23 @@ export function SuperAdminRestaurant360({
   };
 
   const readySteps = release ? Object.values(release.steps).filter(Boolean).length : null;
+  const criticalIncidentCount = incidents.filter(item => item.severity === "critical" || item.severity === "high").length;
+
+  const incidentTone = (severity: string) => {
+    if (severity === "critical" || severity === "high") return "border-rose-900/60 bg-rose-950/20 text-rose-200";
+    if (severity === "medium") return "border-amber-900/60 bg-amber-950/20 text-amber-200";
+    if (severity === "low") return "border-zinc-700 bg-zinc-900/40 text-koma-secondary";
+    return "border-zinc-800 bg-koma-page text-koma-muted";
+  };
+
+  const incidentSourceLabel = (source: string) => {
+    if (source === "mercado_pago") return "Mercado Pago";
+    if (source === "impressao") return "Impressão";
+    if (source === "outbox") return "Integrações / Outbox";
+    if (source === "acesso") return "Acesso";
+    if (source === "tenant") return "Restaurante";
+    return source;
+  };
 
   const reissueActivationInvite = async () => {
     if (!linkedContract || inviteBusy) return;
@@ -587,7 +635,16 @@ export function SuperAdminRestaurant360({
             <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
               <h3 className="text-sm font-bold text-koma-foreground">Pontos de atenção</h3>
               <div className="mt-3 space-y-2">
-                {access?.diagnostics?.length ? access.diagnostics.map(item => (
+                {incidents.slice(0, 3).map(item => (
+                  <div key={item.id} className={"rounded-lg border p-3 text-[11px] " + incidentTone(item.severity)}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <strong>{item.title}</strong>
+                      <span className="text-[9px] font-black uppercase opacity-75">{incidentSourceLabel(item.source)}</span>
+                    </div>
+                    <p className="mt-1 opacity-80">{item.recommended_action}</p>
+                  </div>
+                ))}
+                {incidents.length === 0 && (access?.diagnostics?.length ? access.diagnostics.slice(0, 2).map(item => (
                   <div key={item.code} className={
                     "rounded-lg border p-3 text-[11px] " +
                     (item.severity === "critical"
@@ -601,9 +658,10 @@ export function SuperAdminRestaurant360({
                   </div>
                 )) : (
                   <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3 text-[11px] text-emerald-300">
-                    {access ? "Nenhum alerta de acesso identificado." : "Diagnóstico de acesso indisponível."}
+                    {access ? "Nenhum incidente operacional ou alerta de acesso identificado." : "Diagnóstico operacional indisponível."}
                   </div>
-                )}
+                ))}
+                {incidents.length > 3 && <p className="text-[10px] text-koma-muted">+ {incidents.length - 3} incidente(s) na aba Operação.</p>}
               </div>
             </div>
           </div>
@@ -821,6 +879,54 @@ export function SuperAdminRestaurant360({
               {tenant.subdomain && <a href={"https://" + tenant.subdomain + ".komafood.com.br/"} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-koma-secondary"><ExternalLink className="h-4 w-4" /> Abrir cardápio público</a>}
             </div>
           </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-koma-card">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-800 p-4">
+            <div>
+              <h3 className="text-sm font-bold text-koma-foreground">Incidentes operacionais deste restaurante</h3>
+              <p className="mt-1 text-[11px] text-koma-muted">Diagnóstico real por tenant: impressão, Mercado Pago, Outbox/integrações, acesso e estado do restaurante.</p>
+            </div>
+            <span className={
+              "rounded-full border px-2.5 py-1 text-[10px] font-black " +
+              (criticalIncidentCount > 0
+                ? "border-rose-800/60 bg-rose-950/30 text-rose-300"
+                : incidents.length > 0
+                  ? "border-amber-800/60 bg-amber-950/30 text-amber-300"
+                  : "border-emerald-800/60 bg-emerald-950/30 text-emerald-300")
+            }>
+              {criticalIncidentCount > 0
+                ? criticalIncidentCount + " crítico(s)/alto(s)"
+                : incidents.length > 0
+                  ? incidents.length + " incidente(s)"
+                  : "Sem incidentes"}
+            </span>
+          </div>
+          {incidents.length === 0 ? (
+            <div className="p-6 text-xs text-emerald-300">Nenhum incidente foi detectado pelas fontes operacionais atuais.</div>
+          ) : (
+            <div className="divide-y divide-zinc-800/60">
+              {incidents.map(item => (
+                <article key={item.id} className="p-4 text-xs">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <span className="text-[9px] font-black uppercase tracking-wide text-koma-muted">{incidentSourceLabel(item.source)}</span>
+                      <h4 className="mt-1 font-bold text-koma-foreground">{item.title}</h4>
+                    </div>
+                    <span className={"rounded-full border px-2 py-0.5 text-[9px] font-black uppercase " + incidentTone(item.severity)}>
+                      {item.severity}
+                    </span>
+                  </div>
+                  <p className="mt-2 leading-relaxed text-koma-secondary">{item.detail}</p>
+                  <div className="mt-3 rounded-lg border border-zinc-800 bg-koma-page p-3">
+                    <strong className="text-koma-foreground">Próximo passo</strong>
+                    <p className="mt-1 text-koma-muted">{item.recommended_action}</p>
+                    {item.last_seen_at && <p className="mt-1 text-[10px] text-koma-subtle">Último sinal: {formatDate(item.last_seen_at)}</p>}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
