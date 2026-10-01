@@ -77,3 +77,15 @@ test('Restaurante 360 corrige modalidades pelo endpoint administrativo auditáve
   assert.match(restaurant360, /altera somente a política canônica de atendimento/);
   assert.match(restaurant360, /Delivery, mesas e outras configurações especializadas continuam separadas/);
 });
+
+test('Restaurante 360 incorpora incidentes operacionais reais do tenant sem inventar diagnóstico', () => {
+  assert.match(restaurant360, /\/api\/super-admin\/incidents\?tenant_id=/);
+  assert.match(restaurant360, /Incidentes operacionais deste restaurante/);
+  assert.match(restaurant360, /impressão, Mercado Pago, Outbox\/integrações, acesso e estado do restaurante/);
+  assert.match(restaurant360, /item\.recommended_action/);
+  assert.match(restaurant360, /item\.detail/);
+  assert.match(restaurant360, /incidentSourceLabel/);
+  assert.match(restaurant360, /O painel não presume que o restaurante esteja saudável/);
+  assert.match(restaurant360, /incidentsAvailable/);
+  assert.doesNotMatch(restaurant360, /mockIncident|fakeIncident|simulatedIncident/);
+});
