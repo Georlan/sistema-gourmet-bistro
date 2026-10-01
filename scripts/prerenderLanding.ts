@@ -1,11 +1,16 @@
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { access, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createServer } from 'vite';
+import { build, createServer } from 'vite';
 
 type Manifest = Record<string, { file: string; src?: string; css?: string[]; imports?: string[] }>;
 
 export async function prerenderLanding(root: string, outDir: string) {
   const directory = path.resolve(root, outDir);
+  const functionFiles = (await readdir(path.join(root, 'functions'), { recursive: true }))
+    .filter(file => /\.[jt]s$/.test(file));
+  if (functionFiles.some(file => file !== 'assets/[[catchall]].ts')) {
+    throw new Error('New Pages Functions must be integrated into the SEO worker before deployment');
+  }
   const manifest: Manifest = JSON.parse(await readFile(path.join(directory, '.vite/manifest.json'), 'utf8'));
   const server = await createServer({ root, server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
   try {
@@ -70,10 +75,16 @@ export async function prerenderLanding(root: string, outDir: string) {
       const separator = line.indexOf(':');
       return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
     }));
-    const workerPath = path.join(directory, '_worker.js');
-    const worker = await readFile(workerPath, 'utf8');
-    if (!worker.includes('/* KOMA_SECURITY_HEADERS */ {}')) throw new Error('Missing worker security policy injection');
-    await writeFile(workerPath, worker.replace('/* KOMA_SECURITY_HEADERS */ {}', JSON.stringify(securityHeaders)));
+    // Advanced mode replaces Pages Functions; bundle their canonical asset
+    // handler into this worker so missing hashes still return real 404s.
+    await build({
+      configFile: false, root, publicDir: false,
+      define: { __KOMA_SECURITY_HEADERS__: JSON.stringify(securityHeaders) },
+      build: {
+        outDir: directory, emptyOutDir: false, minify: false,
+        lib: { entry: path.join(root, 'public/_worker.js'), formats: ['es'], fileName: () => '_worker.js' },
+      },
+    });
     console.log(`Public landing prerendered: ${markup.length} characters; ${css.size} stylesheets`);
   } finally {
     await server.close();

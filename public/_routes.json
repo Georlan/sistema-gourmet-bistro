@@ -1,5 +1,5 @@
 {
   "version": 1,
-  "include": ["/", "/index.html", "/landing", "/landing/", "/robots.txt", "/sitemap.xml", "/seo-landing.html"],
+  "include": ["/", "/index.html", "/landing", "/landing/", "/robots.txt", "/sitemap.xml", "/seo-landing.html", "/seo-landing", "/assets/*"],
   "exclude": []
 }
