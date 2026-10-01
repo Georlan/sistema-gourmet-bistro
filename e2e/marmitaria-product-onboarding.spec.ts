@@ -36,7 +36,7 @@ test('Produtos define limites próprios por quentinha e Complementos mantém som
 
   const configureComposition = async (panel: ReturnType<typeof page.getByRole>, proteinMax: number) => {
     for (const [index, limits] of [[0, [0, proteinMax]], [1, [0, 3]]] as const) {
-      await panel.getByRole('button', { name: 'Adicionar grupo à quentinha' }).click();
+      await panel.getByRole('button', { name: /Adicionar.*composição/ }).click();
       await panel.getByLabel(`Grupo ${index + 1}`, { exact: true }).selectOption(`group-${index}`);
       await panel.getByLabel(`Mínimo do grupo ${index + 1}`).fill(String(limits[0]));
       await panel.getByLabel(`Máximo do grupo ${index + 1}`).fill(String(limits[1]));
@@ -68,6 +68,8 @@ test('Produtos define limites próprios por quentinha e Complementos mantém som
     await expect(panel.getByRole('button', { name: 'Configurar marmita G', exact: true })).toBeDisabled();
     await panel.getByRole('button', { name: `Cadastrar marmita ${size}` }).click();
     await panel.getByLabel('Preço da marmita').fill(price);
+    await expect(panel.getByLabel('Disponível para venda')).toBeChecked();
+    await expect(panel.getByRole('button', { name: /Adicionar à composição/ })).toBeVisible();
     await configureComposition(panel, proteinMax);
     await panel.getByRole('button', { name: 'Salvar marmita' }).click();
     await expect(create).toHaveCount(0);
@@ -104,7 +106,7 @@ test('Produtos define limites próprios por quentinha e Complementos mantém som
   await expect(page.getByText('Tipo', { exact: true })).toBeHidden();
   await expect(page.getByText(/O mínimo e o máximo pertencem a cada Quentinha P, M ou G e são configurados em Produtos/)).toBeVisible();
 });
-test('salva preço pausado sem grupos e permite continuar o cadastro depois', async ({ page }) => {
+test('novo tamanho inicia à venda e ainda pode ser salvo pausado sem grupos', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.addInitScript(() => { sessionStorage.setItem('koma_active_tab', 'cardapio'); sessionStorage.setItem('koma_active_subtab', 'produtos'); });
@@ -122,7 +124,10 @@ test('salva preço pausado sem grupos e permite continuar o cadastro depois', as
   const panel = page.getByRole('region', { name: 'Cadastro de marmitas' });
   await panel.getByRole('button', { name: 'Cadastrar marmita P' }).click();
   await panel.getByLabel('Preço da marmita').fill('1500');
-  await expect(panel.getByLabel('Disponível para venda')).toBeDisabled();
+  await expect(panel.getByLabel('Disponível para venda')).toBeEnabled();
+  await expect(panel.getByLabel('Disponível para venda')).toBeChecked();
+  await expect(panel.getByRole('button', { name: /Adicionar à composição/ })).toBeVisible();
+  await panel.getByLabel('Disponível para venda').uncheck();
   await panel.getByRole('button', { name: 'Salvar marmita' }).click();
   await expect(page.getByRole('dialog', { name: 'Nova marmita' })).toHaveCount(0);
   expect(saved).toMatchObject({ tamanho: 'P', preco: 15, ativo: false, regras: [] });
