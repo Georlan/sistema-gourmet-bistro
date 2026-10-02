@@ -161,3 +161,28 @@ test('Restaurante 360 mostra status e expiração do convite sem expor segredo',
   assert.match(restaurant360, /Expirado/);
   assert.doesNotMatch(restaurant360, /token_convite/);
 });
+
+
+test('Cockpit traduz blockers canônicos para linguagem operacional sem inventar estado', () => {
+  assert.match(restaurant360, /READINESS_BLOCKER_LABELS/);
+  assert.match(restaurant360, /Dados do restaurante pendentes/);
+  assert.match(restaurant360, /Horários de funcionamento pendentes/);
+  assert.match(restaurant360, /Cardápio ainda sem produto ativo/);
+  assert.match(restaurant360, /Aguardando revisão e liberação KÔMA/);
+  assert.match(restaurant360, /OPERATION_BLOCKER_LABELS/);
+  assert.match(restaurant360, /Modalidades de atendimento não configuradas/);
+  assert.match(restaurant360, /Salão usa mapa de mesas, mas não há mesas cadastradas/);
+  assert.match(restaurant360, /Delivery ativo com configuração de entrega incompleta/);
+  assert.match(restaurant360, /Taxa de serviço ativa com percentual inválido/);
+  assert.match(restaurant360, /formatBlockers\(release\.readiness\.blockers, READINESS_BLOCKER_LABELS\)/);
+  assert.match(restaurant360, /formatBlockers\(release\.operations\.blockers, OPERATION_BLOCKER_LABELS\)/);
+});
+
+
+test('Resumo do Restaurante 360 destaca o próximo passo usando readiness canônico', () => {
+  assert.match(restaurant360, /Próximo passo da implantação/);
+  assert.match(restaurant360, /Implantação essencial pronta · aguardando revisão KÔMA/);
+  assert.match(restaurant360, /Fonte: readiness canônico do onboarding/);
+  assert.match(restaurant360, /formatBlockers\(release\.readiness\.blockers, READINESS_BLOCKER_LABELS\)/);
+  assert.match(restaurant360, /setSection\("implementation"\)/);
+});
