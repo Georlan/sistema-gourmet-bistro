@@ -603,6 +603,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     perm_garcom_chamar: bool
     perm_garcom_ociosas: bool
     pedido_minimo: Optional[float] = 0.0
+    pedido_minimo_retirada: bool = False
     frete_gratis_valor: Optional[float] = 0.0
     tipo_taxa_entrega: Optional[str] = "fixa"
     taxa_entrega_fixa: Optional[float] = None
@@ -636,6 +637,7 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     delivery_ativo: Optional[bool] = None
     tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
     pedido_minimo: Optional[float] = None
+    pedido_minimo_retirada: Optional[bool] = None
     frete_gratis_valor: Optional[float] = None
     tipo_taxa_entrega: Optional[str] = None
     taxa_entrega_fixa: Optional[float] = None
@@ -902,6 +904,12 @@ class RestauranteConfigUpdate(BaseModel):
 
 
 # ----------------- PEDIDOS CARDAPIO DIGITAL -----------------
+class CardapioPublicBenefitsResponse(BaseModel):
+    coupons: bool = False
+    loyalty: bool = False
+    cashback: bool = False
+
+
 class CardapioPublicRestaurantResponse(BaseModel):
     id: int
     nome: str
@@ -923,6 +931,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     formas_pagamento_aceitas: Optional[Any] = None
     pagamento_online_ativo: bool = False
     conta_cliente_obrigatoria: bool = False
+    beneficios: CardapioPublicBenefitsResponse = Field(default_factory=CardapioPublicBenefitsResponse)
     tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
 
     @field_validator("tipos_pedido_ativos", mode="before")
@@ -934,6 +943,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     cor_primaria: Optional[str] = "#00b894"
     cor_fundo: Optional[str] = "#090a0f"
     pedido_minimo: Optional[float] = 0.0
+    pedido_minimo_retirada: bool = False
     frete_gratis_valor: Optional[float] = 0.0
     tipo_taxa_entrega: Optional[str] = "fixa"
     taxa_entrega_fixa: Optional[float] = None

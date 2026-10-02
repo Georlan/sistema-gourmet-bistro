@@ -56,6 +56,7 @@ test('delivery pronto avança à última coluna, despacha e permanece até fecha
   });
   await page.goto('/?view=caixa');
   await page.getByRole('button', { name: /Aguardando aceite/ }).click();
+  await expect(page.locator('.orders-pending-card')).toContainText('Opções: Bisteca, Costela, Baião, Arroz, Salada verde');
   await page.getByRole('button', { name: '✓ Aceitar', exact: true }).click();
   const digital = page.locator('.orders-column--digital');
   const closing = page.locator('.orders-column--closing');
@@ -70,23 +71,23 @@ test('delivery pronto avança à última coluna, despacha e permanece até fecha
   await digital.locator('.orders-card--digital').click();
   await expect(page.locator('.orders-detail-modal').getByRole('combobox', { name: 'Entregador do pedido' })).toHaveCount(0);
   await page.locator('.orders-detail-modal').getByRole('button', { name: 'Fechar detalhes' }).click();
-  await digital.getByRole('button', { name: 'Pronto para sair', exact: true }).click();
+  await digital.getByRole('button', { name: 'Marcar como pronto', exact: true }).click();
   await expect(digital.locator('.orders-card--digital')).toHaveCount(0);
   const closingTab = page.getByRole('tab', { name: /^Concluir/ });
   if (await closingTab.isVisible()) await closingTab.click();
-  await expect(closing.getByRole('button', { name: 'Saiu para entrega', exact: true })).toBeDisabled();
+  await expect(closing.getByRole('button', { name: 'Despachar pedido', exact: true })).toBeDisabled();
   await closing.getByRole('combobox', { name: 'Entregador do pedido 87' }).selectOption('7');
   await expect(closing.getByText('R$ 47,00', { exact: true })).toBeVisible();
   await expect(closing).toContainText('Quentinha G');
   await expect(closing).toContainText('Opções: Bisteca, Costela, Baião, Arroz, Salada verde');
-  await expect(closing.getByRole('button', { name: 'Saiu para entrega', exact: true })).toBeEnabled();
-  await closing.getByRole('button', { name: 'Saiu para entrega', exact: true }).click();
+  await expect(closing.getByRole('button', { name: 'Despachar pedido', exact: true })).toBeEnabled();
+  await closing.getByRole('button', { name: 'Despachar pedido', exact: true }).click();
   await expect(closing.locator('.orders-card--closing')).toHaveCount(1);
   await expect(closing).toContainText('EM ROTA');
   await expect(closing.getByRole('button', { name: 'Fechar e pagar', exact: true })).toBeVisible();
   await expect(closing.getByRole('combobox')).toHaveCount(0);
   await expect(closing.getByRole('button', { name: 'Trocar entregador', exact: true })).toHaveCount(0);
-  await expect(closing.getByRole('button', { name: 'Saiu para entrega', exact: true })).toHaveCount(0);
+  await expect(closing.getByRole('button', { name: 'Despachar pedido', exact: true })).toHaveCount(0);
   await expect(closing.getByText('R$ 47,00', { exact: true })).toBeVisible();
   await closing.getByRole('button', { name: 'Fechar e pagar', exact: true }).click();
   await expect(page.getByText('CHECKOUT / CAIXA')).toBeVisible();
@@ -95,4 +96,28 @@ test('delivery pronto avança à última coluna, despacha e permanece até fecha
   await expect(closing.locator('.orders-card--closing')).toHaveCount(0);
   expect(paid).toBe(true);
   expect(transitions).toEqual(['aceito', 'producao', 'pronto', 'transito', 'finalizado']);
+});
+
+
+test('marmitaria sem consumo local reaproveita duas etapas sem coluna de salão', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.route('**/caixa/configuracoes', route => route.fulfill({ json: {
+    plano: 'pro', plano_efetivo: 'pro', operation_profile: 'marmitaria',
+    tipos_pedido_ativos: ['delivery'], delivery_ativo: true,
+    entitlements: { printing: true, kds: true, waiter_app: false },
+  } }));
+  await page.route('**/comandas/detalhes/todos?*', route => route.fulfill({ json: [] }));
+  await page.route('**/comandas/detalhes/todos', route => route.fulfill({ json: [] }));
+  await page.goto('/?view=caixa');
+  const board = page.locator('.orders-board--marmitaria');
+  await expect(board).toBeVisible();
+  await expect(page.locator('.orders-column--salon')).toHaveCount(0);
+  await expect(page.locator('.orders-column--digital')).toHaveClass(/is-mobile-active/);
+  if ((page.viewportSize()?.width || 0) <= 768) {
+    const boardBox = await board.boundingBox();
+    const columnBox = await page.locator('.orders-column--digital').boundingBox();
+    expect(columnBox!.width).toBeGreaterThan(boardBox!.width * 0.95);
+  }
+  await expect(page.locator('.orders-column__number')).toContainText(['01 / PREPARO', '02 / ENTREGA E RECEBIMENTO']);
 });

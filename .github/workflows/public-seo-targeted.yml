@@ -1,0 +1,44 @@
+name: Public SEO regressions
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/landing/**'
+      - 'scripts/prerenderLanding.ts'
+      - 'public/_worker.js'
+      - 'public/_routes.json'
+      - 'public/_headers'
+      - 'public/robots.txt'
+      - 'public/sitemap.xml'
+      - 'vite.config.ts'
+      - 'index.html'
+      - 'e2e/public-seo.spec.ts'
+      - '.github/workflows/public-seo-targeted.yml'
+permissions:
+  contents: read
+jobs:
+  browser:
+    name: Public SEO and auth browser regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: >-
+          KOMA_E2E_PREVIEW=true KOMA_E2E_PORT=4283 npm run test:e2e --
+          e2e/public-seo.spec.ts e2e/auth-persistence.spec.ts
+          --project=desktop-1366 --project=mobile-390 --workers=2
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: public-seo-browser-failures
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

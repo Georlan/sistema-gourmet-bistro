@@ -62,11 +62,17 @@ test('cotações usam apenas a configuração fornecida de cada restaurante', ()
   assert.equal(getDeliveryQuote({ tabelaTaxasBairros: neighborhoods }, 25, 'Centro').fee, 5);
 });
 
-test('pedido mínimo bloqueia somente entrega, nunca retirada ou consumo local', () => {
+test('pedido mínimo bloqueia somente entrega quando retirada não estiver configurada', () => {
   assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 20, 'delivery'), 10);
   assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 20, 'pickup'), 0);
   assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 20, 'dine_in'), 0);
   assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 30, 'delivery'), 0);
+});
+
+test('pedido mínimo também bloqueia retirada quando pedidoMinimoRetirada estiver ativo', () => {
+  assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30, pedidoMinimoRetirada: true }, 20, 'pickup'), 10);
+  assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30, pedidoMinimoRetirada: true }, 30, 'pickup'), 0);
+  assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30, pedidoMinimoRetirada: true }, 20, 'dine_in'), 0);
 });
 
 const cart = readFileSync(new URL('../src/cardapio/components/CardapioCartDrawer.tsx', import.meta.url), 'utf8');

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { CardapioFulfillment } from "./fulfillment";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
@@ -48,6 +49,7 @@ import { KomaLoading } from "../components/app/KomaLoading";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import { resolveKomaHost } from "../domain/komaHost";
 import { smartSearchMatch } from "../domain";
+import { buildKomaAttributionUrl } from "./komaAttribution";
 import {
   CustomerProfile,
   clearCustomerSession,
@@ -120,6 +122,7 @@ export default function CardapioPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("");
+  const [fulfillmentChoice, setFulfillmentChoice] = useState<{ restaurantId: string | number; method: CardapioFulfillment } | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -325,6 +328,11 @@ export default function CardapioPage() {
         about: String(restaurant.sobre_nos || ""),
         paymentMethods,
         onlinePaymentEnabled: restaurant.pagamento_online_ativo === true,
+        benefits: {
+          coupons: restaurant.beneficios?.coupons === true,
+          loyalty: restaurant.beneficios?.loyalty === true,
+          cashback: restaurant.beneficios?.cashback === true,
+        },
         customerAccountRequired: restaurant.conta_cliente_obrigatoria === true,
         activeOrderTypes: Array.isArray(restaurant.tipos_pedido_ativos)
           ? restaurant.tipos_pedido_ativos.filter((item: unknown): item is "consumo_local" | "retirada" | "delivery" =>
@@ -335,6 +343,7 @@ export default function CardapioPage() {
         googleMapsUrl: String(restaurant.google_maps_url || ""),
         deliveryEnabled: restaurant.delivery_ativo !== false,
         pedidoMinimo: Number(restaurant.pedido_minimo || 0),
+        pedidoMinimoRetirada: Boolean(restaurant.pedido_minimo_retirada),
         freteGratisValor: Number(restaurant.frete_gratis_valor || 0),
         tipoTaxaEntrega: String(restaurant.tipo_taxa_entrega || "fixa"),
         tabelaTaxasBairros: Array.isArray(restaurant.tabela_taxas_bairros)
@@ -1092,12 +1101,23 @@ export default function CardapioPage() {
 
         <footer className="mt-4 border-t border-koma-border py-7 text-center">
           <strong className="text-xs text-koma-secondary">{activeBrand.name}</strong>
-          <p className="mt-2 text-[9px] text-koma-subtle">Cardápio digital KÔMA · preços e disponibilidade atualizados pelo restaurante.</p>
+          <p className="mt-2 text-[9px] text-koma-subtle">Preços e disponibilidade atualizados pelo restaurante.</p>
+          <a
+            href={buildKomaAttributionUrl("menu_footer", activeBrand.id)}
+            target="_blank"
+            rel="noopener noreferrer"
+            id="koma-powered-by-footer"
+            aria-label="Conhecer o KÔMA, plataforma deste cardápio digital"
+            className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-koma-border bg-koma-card px-3 text-[9px] font-semibold text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-500"
+          >
+            Cardápio digital por <strong className="font-black text-koma-foreground">KÔMA</strong>
+            <span aria-hidden="true">↗</span>
+          </a>
         </footer>
       </main>
 
       {!hasOpenOverlay && (
-        <nav className="cardapio-mobile-nav" aria-label="Navegação do cardápio" id="cardapio-mobile-nav">
+        <nav className="cardapio-mobile-nav" style={{ gridTemplateColumns: `repeat(${activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty ? 4 : 3}, minmax(0, 1fr))` }} aria-label="Navegação do cardápio" id="cardapio-mobile-nav">
           <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Voltar ao início" id="mobile-nav-home">
             <House aria-hidden="true" /><span>Início</span>
           </button>
@@ -1105,9 +1125,9 @@ export default function CardapioPage() {
             <MessageCircle aria-hidden="true" /><span>Pedidos</span>
             {activeOrders.length > 0 && <small aria-hidden="true">{activeOrders.length > 9 ? "9+" : activeOrders.length}</small>}
           </button>
-          <button type="button" onClick={() => setIsBenefitsOpen(true)} aria-label="Abrir benefícios" id="mobile-nav-benefits">
+          {(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty) && <button type="button" onClick={() => setIsBenefitsOpen(true)} aria-label="Abrir benefícios" id="mobile-nav-benefits">
             <Gift aria-hidden="true" /><span>Benefícios</span>
-          </button>
+          </button>}
           <button type="button" onClick={openCart} aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`} className={cartCount > 0 ? "has-items" : undefined} id="mobile-nav-cart">
             <ShoppingBag aria-hidden="true" /><span>Sacola</span>
             {cartCount > 0 && <small aria-hidden="true">{cartCount > 9 ? "9+" : cartCount}</small>}
@@ -1135,6 +1155,8 @@ export default function CardapioPage() {
           restaurantId={activeBrand.id}
           restaurantAddress={activeBrand.address}
           brandConfig={activeBrand}
+          initialFulfillment={fulfillmentChoice?.restaurantId === activeBrand.id ? fulfillmentChoice.method : null}
+          onFulfillmentChange={(method) => setFulfillmentChoice({ restaurantId: activeBrand.id, method })}
           allProducts={activeBrand.products}
           onAddToCart={handleAddToCart}
           initialCouponCode={couponToApply}
@@ -1169,6 +1191,7 @@ export default function CardapioPage() {
           onClose={() => setIsProfileOpen(false)}
           user={user}
           customerToken={customerToken}
+          benefits={activeBrand.benefits}
           onProfileUpdate={(profile) => {
             setUser(profile);
             if (customerToken) saveCustomerSession(activeBrand.id, { token: customerToken, profile });
@@ -1180,7 +1203,8 @@ export default function CardapioPage() {
 
       <CardapioBenefitsDrawer
         restaurantId={activeBrand.id}
-        isOpen={isBenefitsOpen}
+        capabilities={activeBrand.benefits}
+        isOpen={isBenefitsOpen && Boolean(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty)}
         onClose={() => setIsBenefitsOpen(false)}
         user={user}
         onAuthClick={() => {
@@ -1223,6 +1247,7 @@ export default function CardapioPage() {
           }}
           onOrderSuccess={() => {
             setCart([]);
+            setFulfillmentChoice(null);
             setCouponToApply("");
             setIsCartOpen(false);
             setIsCheckoutOpen(false);

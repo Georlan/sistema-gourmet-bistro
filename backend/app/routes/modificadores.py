@@ -18,6 +18,7 @@ from ..models import (
     Comanda,
     GrupoModificador,
     Item,
+    ItemModificador,
     Lancamento,
     OpcaoModificador,
     Produto,
@@ -224,6 +225,83 @@ def _validate_product_ids(db: Session, restaurante_id: int, product_ids: List[st
         )
 
 
+def _sync_group_options(
+    db: Session,
+    *,
+    restaurante_id: int,
+    grupo_id: str,
+    requested_options: list,
+) -> None:
+    """Atualiza opções em lugar para preservar FKs históricas de pedidos."""
+    existing = db.query(OpcaoModificador).filter(
+        OpcaoModificador.restaurante_id == restaurante_id,
+        OpcaoModificador.grupo_id == grupo_id,
+    ).all()
+    existing_by_id = {str(option.id): option for option in existing}
+
+    requested_existing_ids: set[str] = set()
+    for option in requested_options:
+        if not option.id:
+            continue
+        option_id = str(option.id)
+        if option_id in requested_existing_ids:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="A mesma opção não pode aparecer mais de uma vez no grupo.",
+            )
+        current = existing_by_id.get(option_id)
+        if current is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Uma ou mais opções não pertencem ao grupo ativo.",
+            )
+        requested_existing_ids.add(option_id)
+
+    removed_ids = [
+        option_id
+        for option_id in existing_by_id
+        if option_id not in requested_existing_ids
+    ]
+    if removed_ids:
+        historical_use = db.query(ItemModificador.opcao_modificador_id).filter(
+            ItemModificador.restaurante_id == restaurante_id,
+            ItemModificador.opcao_modificador_id.in_(removed_ids),
+        ).first()
+        if historical_use is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Uma opção já usada em pedidos não pode ser excluída. "
+                    "Pause a opção para removê-la do cardápio sem apagar o histórico."
+                ),
+            )
+
+    for option in requested_options:
+        if option.id:
+            current = existing_by_id[str(option.id)]
+            current.nome = option.nome.strip()
+            current.preco_adicional = option.preco_adicional or 0.0
+            current.ativo = option.ativo
+            continue
+        db.add(
+            OpcaoModificador(
+                id=f"opmod-{uuid.uuid4().hex[:8]}",
+                restaurante_id=restaurante_id,
+                grupo_id=grupo_id,
+                nome=option.nome.strip(),
+                preco_adicional=option.preco_adicional or 0.0,
+                ativo=option.ativo,
+            )
+        )
+
+    if removed_ids:
+        db.query(OpcaoModificador).filter(
+            OpcaoModificador.restaurante_id == restaurante_id,
+            OpcaoModificador.grupo_id == grupo_id,
+            OpcaoModificador.id.in_(removed_ids),
+        ).delete(synchronize_session=False)
+
+
 @router.get("/grupos", response_model=List[GrupoModificadorResponseV2])
 def listar_grupos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     del current_user
@@ -356,21 +434,17 @@ def atualizar_grupo(
     if not grupo:
         raise HTTPException(status_code=404, detail="Grupo não encontrado.")
     _validate_product_ids(db, rest_id, payload.produto_ids or [])
+    if payload.opcoes is not None:
+        _sync_group_options(
+            db,
+            restaurante_id=rest_id,
+            grupo_id=grupo_id,
+            requested_options=payload.opcoes,
+        )
     grupo.nome = payload.nome.strip()
     grupo.min_selecoes = payload.min_selecoes
     grupo.max_selecoes = payload.max_selecoes
     grupo.tipo = payload.tipo
-    if payload.opcoes is not None:
-        db.query(OpcaoModificador).filter(
-            OpcaoModificador.restaurante_id == rest_id,
-            OpcaoModificador.grupo_id == grupo_id,
-        ).delete()
-        for op in payload.opcoes:
-            db.add(OpcaoModificador(
-                id=op.id or f"opmod-{uuid.uuid4().hex[:8]}", restaurante_id=rest_id,
-                grupo_id=grupo_id, nome=op.nome.strip(),
-                preco_adicional=op.preco_adicional or 0.0, ativo=op.ativo,
-            ))
     if payload.produto_ids is not None:
         product_ids = set(payload.produto_ids)
         links = db.query(ProdutoGrupoModificador).filter_by(restaurante_id=rest_id, grupo_id=grupo_id).all()

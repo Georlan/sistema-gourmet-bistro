@@ -13,7 +13,7 @@ import { Implementation } from './sections/Implementation';
 import { FAQ } from './sections/FAQ';
 import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
-import { SUBSCRIPTION_PLANS } from '../config/subscriptionPlans';
+import { LANDING_SEO, landingStructuredData, serializeStructuredData } from './seo';
 import { KOMA_SLOGAN } from '../brand/komaBrand';
 
 type DividerVariant = 'dark-light' | 'light-dark' | 'light-green';
@@ -24,7 +24,7 @@ function AngleDivider({ variant }: { variant: DividerVariant }) {
 
 export default function LandingPage() {
   useEffect(() => {
-    document.title = 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha';
+    document.title = LANDING_SEO.title;
 
     const setMeta = (nameOrProp: string, content: string, isProperty = false) => {
       const attr = isProperty ? 'property' : 'name';
@@ -37,18 +37,21 @@ export default function LandingPage() {
       el.setAttribute('content', content);
     };
 
-    setMeta('description', 'Sistema para restaurantes com PDV, mesas, comandas, caixa e cardápio digital. KDS, impressão automática e recursos avançados disponíveis conforme o plano.');
+    setMeta('description', LANDING_SEO.description);
     setMeta('robots', 'index, follow, max-image-preview:large');
     setMeta('theme-color', '#0a0a0a');
-    setMeta('og:title', 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha', true);
-    setMeta('og:description', 'Pedidos, salão, preparo e caixa conectados. KDS, impressão automática e recursos avançados disponíveis conforme o plano.', true);
+    setMeta('og:title', LANDING_SEO.title, true);
+    setMeta('og:description', LANDING_SEO.description, true);
     setMeta('og:type', 'website', true);
-    setMeta('og:url', 'https://komafood.com.br/', true);
+    setMeta('og:url', LANDING_SEO.url, true);
+    setMeta('og:image', LANDING_SEO.image, true);
+    setMeta('og:image:alt', 'KÔMA — Sistema para restaurantes', true);
     setMeta('og:locale', 'pt_BR', true);
     setMeta('og:site_name', 'KÔMA', true);
-    setMeta('twitter:card', 'summary_large_image');
-    setMeta('twitter:title', 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha');
-    setMeta('twitter:description', 'Pedidos, salão, preparo e caixa conectados. Recursos avançados variam conforme o plano.');
+    setMeta('twitter:card', 'summary');
+    setMeta('twitter:image', LANDING_SEO.image);
+    setMeta('twitter:title', LANDING_SEO.title);
+    setMeta('twitter:description', LANDING_SEO.description);
 
     let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (!canonical) {
@@ -56,37 +59,12 @@ export default function LandingPage() {
       canonical.rel = 'canonical';
       document.head.appendChild(canonical);
     }
-    canonical.href = 'https://komafood.com.br/';
+    canonical.href = LANDING_SEO.url;
 
     const structuredData = document.createElement('script');
     structuredData.type = 'application/ld+json';
     structuredData.id = 'koma-software-schema';
-    const planPrices = SUBSCRIPTION_PLANS.map((plan) => plan.price);
-
-    structuredData.text = JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'SoftwareApplication',
-      name: 'KÔMA',
-      applicationCategory: 'BusinessApplication',
-      operatingSystem: 'Web',
-      url: 'https://komafood.com.br/',
-      inLanguage: 'pt-BR',
-      description: 'Sistema de gestão para restaurantes com PDV, mesas, comandas, caixa e cardápio digital, além de recursos avançados conforme o plano.',
-      slogan: KOMA_SLOGAN,
-      featureList: [
-        'PDV e frente de caixa',
-        'Gestão de mesas e comandas',
-        'Cardápio digital por QR Code',
-        'Fila de preparo na tela',
-        'KDS e impressão automática nos planos compatíveis',
-      ],
-      offers: {
-        '@type': 'AggregateOffer',
-        lowPrice: String(Math.min(...planPrices)),
-        highPrice: String(Math.max(...planPrices)),
-        priceCurrency: 'BRL',
-      },
-    });
+    structuredData.text = serializeStructuredData(landingStructuredData(KOMA_SLOGAN));
     document.getElementById(structuredData.id)?.remove();
     document.head.appendChild(structuredData);
 

@@ -11,6 +11,7 @@ type BairroTaxaRow = {
 type DeliveryConfig = {
   delivery_ativo: boolean;
   pedido_minimo: number;
+  pedido_minimo_retirada: boolean;
   frete_gratis_valor: number;
   tipo_taxa_entrega: 'bairro';
   taxa_entrega_fixa: number;
@@ -42,6 +43,7 @@ function normalizeConfig(data: Record<string, unknown>): DeliveryConfig {
   return {
     delivery_ativo: data.delivery_ativo !== false,
     pedido_minimo: Number(data.pedido_minimo) || 0,
+    pedido_minimo_retirada: Boolean(data.pedido_minimo_retirada),
     frete_gratis_valor: Number(data.frete_gratis_valor) || 0,
     tipo_taxa_entrega: 'bairro',
     taxa_entrega_fixa: Number(data.taxa_entrega_fixa ?? 0),
@@ -56,6 +58,7 @@ function persistedPayload(config: DeliveryConfig) {
   return {
     delivery_ativo: config.delivery_ativo,
     pedido_minimo: Math.max(0, Number(config.pedido_minimo) || 0),
+    pedido_minimo_retirada: Boolean(config.pedido_minimo_retirada),
     frete_gratis_valor: Math.max(0, Number(config.frete_gratis_valor) || 0),
     tipo_taxa_entrega: 'bairro',
     taxa_entrega_fixa: Math.max(0, Number(config.taxa_entrega_fixa) || 0),
@@ -76,6 +79,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
   const [config, setConfig] = useState<DeliveryConfig>({
     delivery_ativo: true,
     pedido_minimo: 0,
+    pedido_minimo_retirada: false,
     frete_gratis_valor: 0,
     tipo_taxa_entrega: 'bairro',
     taxa_entrega_fixa: 0,
@@ -318,19 +322,34 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
           <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Deixe em zero para não aplicar valor mínimo ou faixa de frete grátis.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label>
-            <FieldLabel>Pedido mínimo (R$)</FieldLabel>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={config.pedido_minimo || ''}
-              onChange={(event) => setConfig((current) => ({ ...current, pedido_minimo: Number(event.target.value) || 0 }))}
-              className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
-              placeholder="0,00"
-            />
-            <span className="mt-1 block text-[9px] text-koma-muted">Valor mínimo do pedido para delivery.</span>
-          </label>
+          <div>
+            <label className="block">
+              <FieldLabel>Pedido mínimo (R$)</FieldLabel>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={config.pedido_minimo || ''}
+                onChange={(event) => setConfig((current) => ({ ...current, pedido_minimo: Number(event.target.value) || 0 }))}
+                className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
+                placeholder="0,00"
+              />
+              <span className="mt-1 block text-[9px] text-koma-muted">
+                {config.pedido_minimo_retirada ? 'Valor mínimo para entrega e retirada no balcão.' : 'Valor mínimo do pedido para delivery.'}
+              </span>
+            </label>
+            <label className="mt-3 flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={Boolean(config.pedido_minimo_retirada)}
+                onChange={(event) => setConfig((current) => ({ ...current, pedido_minimo_retirada: event.target.checked }))}
+                className="h-4 w-4 rounded border-koma-border bg-koma-input text-emerald-600 focus:ring-emerald-500/60"
+              />
+              <span className="text-[11px] font-bold text-koma-foreground">
+                Exigir valor mínimo também para retirada no balcão
+              </span>
+            </label>
+          </div>
           <label>
             <FieldLabel>Frete grátis a partir de (R$)</FieldLabel>
             <input

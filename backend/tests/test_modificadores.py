@@ -1,10 +1,24 @@
+import datetime
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 
 from app.main import app
 from app.database import SessionLocal, current_restaurante_id
-from app.models import Restaurante, Usuario, Categoria, Produto, GrupoModificador, OpcaoModificador, ProdutoGrupoModificador
+from app.models import (
+    Restaurante,
+    Usuario,
+    Categoria,
+    Produto,
+    GrupoModificador,
+    OpcaoModificador,
+    ProdutoGrupoModificador,
+    Comanda,
+    Lancamento,
+    Item,
+    ItemModificador,
+)
 from app.routes.auth import create_access_token
 from app.routes.modificadores import listar_grupos_publico
 
@@ -91,6 +105,151 @@ def test_criar_e_listar_grupos_modificadores():
     grupo_publico = next(g for g in grupos_pub if g["nome"] == "Ponto da Carne")
     assert {op["nome"] for op in grupo_publico["opcoes"]} == {"Ao Ponto", "Bem Passado"}
     assert all(op["ativo"] is True for op in grupo_publico["opcoes"])
+
+
+def test_atualizar_grupo_preserva_opcao_referenciada_por_pedido_historico():
+    headers = _auth_headers()
+    created = client.post(
+        "/cardapio/modificadores/grupos",
+        headers=headers,
+        json={
+            "nome": "Proteínas históricas",
+            "min_selecoes": 0,
+            "max_selecoes": 2,
+            "tipo": "opcional",
+            "opcoes": [
+                {"nome": "Frango", "preco_adicional": 0, "ativo": True},
+                {"nome": "Carne", "preco_adicional": 2, "ativo": True},
+            ],
+            "produto_ids": ["prod-burger-1"],
+        },
+    )
+    assert created.status_code == 201, created.text
+    group = created.json()
+    referenced = group["opcoes"][0]
+
+    db = SessionLocal()
+    tenant_token = current_restaurante_id.set(999)
+    try:
+        order_id = f"order-{group['id']}"
+        launch_id = f"launch-{group['id']}"
+        item_id = f"item-{group['id']}"
+        timestamp = datetime.datetime(2026, 10, 2, 9, 0, 0)
+        db.add(
+            Comanda(
+                id=order_id,
+                restaurante_id=999,
+                garcom_id="usr-admin-mod",
+                mesa_id=None,
+                tipo="Consumo no Local",
+                numero_pedido=999001,
+                fechada=True,
+                criado_em=timestamp,
+            )
+        )
+        db.add(
+            Lancamento(
+                id=launch_id,
+                restaurante_id=999,
+                comanda_id=order_id,
+                garcom_id="usr-admin-mod",
+                origem="garcom",
+                status="producao",
+                timestamp=timestamp,
+            )
+        )
+        db.add(
+            Item(
+                id=item_id,
+                restaurante_id=999,
+                comanda_id=order_id,
+                lancamento_id=launch_id,
+                produto_id="prod-burger-1",
+                preco_unit=35.0,
+                observacao="",
+                cliente_nome="Consumo Geral",
+                status="entregue",
+                pago=True,
+            )
+        )
+        db.flush()
+        db.add(
+            ItemModificador(
+                restaurante_id=999,
+                item_id=item_id,
+                opcao_modificador_id=referenced["id"],
+                preco_aplicado=referenced["preco_adicional"],
+            )
+        )
+        db.commit()
+    finally:
+        current_restaurante_id.reset(tenant_token)
+        db.close()
+
+    payload = {
+        "nome": "Proteínas atualizadas",
+        "min_selecoes": group["min_selecoes"],
+        "max_selecoes": group["max_selecoes"],
+        "tipo": group["tipo"],
+        "opcoes": [
+            {
+                "id": option["id"],
+                "nome": "Frango grelhado" if option["id"] == referenced["id"] else option["nome"],
+                "preco_adicional": option["preco_adicional"],
+                "ativo": option["ativo"],
+            }
+            for option in group["opcoes"]
+        ],
+        "produto_ids": group["produto_ids"],
+        "categoria_ids": group["categoria_ids"],
+        "incluir_subcategorias": group["incluir_subcategorias"],
+    }
+    changed = client.put(
+        f"/cardapio/modificadores/grupos/{group['id']}",
+        headers=headers,
+        json=payload,
+    )
+    assert changed.status_code == 200, changed.text
+    changed_group = changed.json()
+    assert {option["id"] for option in changed_group["opcoes"]} == {
+        option["id"] for option in group["opcoes"]
+    }
+    assert next(
+        option for option in changed_group["opcoes"] if option["id"] == referenced["id"]
+    )["nome"] == "Frango grelhado"
+
+    removing_historical = {
+        **payload,
+        "opcoes": [
+            option
+            for option in payload["opcoes"]
+            if option["id"] != referenced["id"]
+        ],
+    }
+    refused = client.put(
+        f"/cardapio/modificadores/grupos/{group['id']}",
+        headers=headers,
+        json=removing_historical,
+    )
+    assert refused.status_code == 409, refused.text
+
+    db = SessionLocal()
+    tenant_token = current_restaurante_id.set(999)
+    try:
+        historical = db.query(ItemModificador).filter(
+            ItemModificador.restaurante_id == 999,
+            ItemModificador.opcao_modificador_id == referenced["id"],
+        ).one()
+        saved_option = db.query(OpcaoModificador).filter(
+            OpcaoModificador.restaurante_id == 999,
+            OpcaoModificador.id == referenced["id"],
+        ).one()
+        assert historical.opcao_modificador_id == referenced["id"]
+        assert saved_option.nome == "Frango grelhado"
+    finally:
+        current_restaurante_id.reset(tenant_token)
+        db.close()
+
 
 
 def test_listar_grupos_publico_has_constant_query_count():

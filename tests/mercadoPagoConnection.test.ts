@@ -7,6 +7,8 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 const card = source('../src/components/caixa/online-menu/MercadoPagoConnectionCard.tsx');
 const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
 const integrations = source('../src/components/caixa/settings/CashierIntegrationsSettings.tsx');
+const komaPayments = source('../src/components/caixa/settings/KomaPaymentsSettings.tsx');
+const onboarding = source('../src/components/onboarding/FirstAccessOnboarding.tsx');
 const settings = source('../src/components/caixa/settings/CashierSettings.tsx');
 const navigation = source('../src/components/caixa/navigation/cashierNavigation.ts');
 
@@ -32,12 +34,25 @@ test('frontend does not handle provider secrets', () => {
   }
 });
 
-test('Sistema > Configurações owns the technical Mercado Pago connection', () => {
+test('Sistema > Configurações owns KÔMA Pagamentos and the Mercado Pago connection', () => {
   assert.doesNotMatch(onlineMenu, /MercadoPagoConnectionCard/);
-  assert.match(integrations, /MercadoPagoConnectionCard/);
+  assert.match(integrations, /KomaPaymentsSettings/);
+  assert.match(komaPayments, /MercadoPagoConnectionCard/);
+  assert.match(komaPayments, /KÔMA Pagamentos/);
+  assert.match(komaPayments, /C6 Bank/);
+  assert.match(komaPayments, /0,99%/);
+  assert.match(komaPayments, /0,49%/);
+  assert.match(komaPayments, /0% divulgado/);
   assert.match(settings, /activeSubTab === 'integracoes'/);
   assert.match(settings, /CashierIntegrationsSettings/);
   assert.match(navigation, /config_integracoes/);
   assert.match(navigation, /label: 'Integrações'/);
   assert.match(navigation, /subTab: 'integracoes'/);
+});
+
+
+test('first access sends provider setup to the canonical integrations screen', () => {
+  assert.match(onboarding, /openCashierAt\('impressao_salao', 'integracoes', true\)/);
+  assert.match(onboarding, /Escolher provedor quando quiser/);
+  assert.match(onboarding, /C6 Bank está em homologação/);
 });

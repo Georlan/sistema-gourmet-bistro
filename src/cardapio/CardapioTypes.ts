@@ -104,6 +104,7 @@ export interface BrandConfig {
   about?: string;
   paymentMethods?: PaymentMethodGroup[];
   onlinePaymentEnabled?: boolean;
+  benefits?: { coupons: boolean; loyalty: boolean; cashback: boolean };
   customerAccountRequired?: boolean;
   activeOrderTypes?: Array<"consumo_local" | "retirada" | "delivery">;
   operatingHours?: OperatingHours[];
@@ -116,6 +117,7 @@ export interface BrandConfig {
   nextOpeningLabel?: string;
   deliveryEnabled?: boolean;
   pedidoMinimo?: number;
+  pedidoMinimoRetirada?: boolean;
   freteGratisValor?: number;
   tipoTaxaEntrega?: string;
   tabelaTaxasBairros?: BairroTaxa[];

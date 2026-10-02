@@ -173,6 +173,10 @@ export function SuperAdminClientsHub({
           contracts={contracts}
           contractsAvailable={contractsAvailable}
           onOpenTeamControls={() => onChangeView("access")}
+          onOpenCatalogAssistance={() => {
+            onChangeNewClientsView("signups");
+            onChangeView("new");
+          }}
         />
       )}
       {activeView === "trials" && (

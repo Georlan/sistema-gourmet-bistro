@@ -27,7 +27,7 @@ function currentGroups(product: Product): CurrentGroup[] {
     return product.modifierGroups.map((group) => ({
       id: group.id,
       title: group.name,
-      minSelection: Math.max(group.minSelection || 0, group.type === "obrigatorio" ? 1 : 0),
+      minSelection: typeof group.minSelection === "number" ? group.minSelection : (group.type === "obrigatorio" ? 1 : 0),
       maxSelection: Math.max(group.maxSelection || 1, 1),
       selectionMode: group.selectionMode,
       options: group.options.map((option) => ({

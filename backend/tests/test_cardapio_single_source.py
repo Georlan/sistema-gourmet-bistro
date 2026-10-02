@@ -81,6 +81,22 @@ def test_public_and_internal_catalog_share_category_order_rule():
     ]
 
 
+def test_quentinhas_are_first_in_public_category_order():
+    categories = [
+        SimpleNamespace(nome="Sobremesas"),
+        SimpleNamespace(nome="Bebidas"),
+        SimpleNamespace(nome="Quentinhas"),
+    ]
+
+    ordered = cardapio_digital._ordered_categories(categories)
+
+    assert [category.nome for category in ordered] == [
+        "Quentinhas",
+        "Sobremesas",
+        "Bebidas",
+    ]
+
+
 def test_current_public_menu_loads_one_catalog_snapshot():
     source = (REPO_ROOT / "src/cardapio/CardapioPage.tsx").read_text(encoding="utf-8")
 

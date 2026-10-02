@@ -1,6 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { fallbackOrderState } from '../src/cardapio/orderTracking';
+
+test('aceite não anuncia preparo ou altera a disponibilidade do chat', () => {
+  for (const type of ['Delivery', 'Retirada', 'Consumo no Local']) {
+    const accepted = fallbackOrderState('aceito', type);
+    const preparing = fallbackOrderState('producao', type);
+    assert.equal(accepted.phase, 'accepted');
+    assert.equal(accepted.label, 'Aceito · aguardando preparo');
+    assert.equal(accepted.progress_step, 1);
+    assert.equal(accepted.can_chat, true);
+    assert.equal(preparing.phase, 'preparing');
+    assert.equal(preparing.progress_step, 2);
+  }
+});
 
 const trackingSource = readFileSync('src/cardapio/orderTracking.ts', 'utf8');
 const drawerSource = readFileSync('src/cardapio/components/CardapioOrdersDrawer.tsx', 'utf8');

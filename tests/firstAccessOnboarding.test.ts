@@ -77,10 +77,10 @@ test('setup mode exposes practical configuration without exposing normal operati
   assert.match(integrationsSettings, />\s*Fiscal\s*</);
 });
 
-test('initial setup reuses the same cashier online-menu screens and Mercado Pago integration owner', () => {
+test('initial setup reuses cashier screens and sends provider setup to KÔMA Pagamentos', () => {
   assert.match(onboarding, /subTab: 'cardapio_perfil'/);
   assert.match(onboarding, /subTab: 'cardapio_pedidos'/);
-  assert.match(onboarding, /openCashierAt\('cardapio_digital', 'cardapio_pagamentos', true\)/);
+  assert.match(onboarding, /openCashierAt\('impressao_salao', 'integracoes', true\)/);
   assert.match(onlineMenu, /cardapio_perfil: 'perfil'/);
   assert.match(onlineMenu, /cardapio_pedidos: 'pedidos'/);
   assert.match(onlineMenu, /cardapio_pagamentos: 'pagamentos'/);
@@ -162,7 +162,7 @@ test('onboarding offers practical first-turn setup shortcuts based on context', 
   assert.match(onboarding, /openCashierAt\(action\.tab, action\.subTab, true\)/);
 });
 
-test('onboarding uses canonical server progress, canonical modes and optional Mercado Pago', () => {
+test('onboarding uses canonical server progress, canonical modes and optional KÔMA Pagamentos', () => {
   assert.match(onboarding, /\/api\/onboarding\/status/);
   for (const label of [
     'Complete os dados do restaurante',
@@ -177,10 +177,11 @@ test('onboarding uses canonical server progress, canonical modes and optional Me
   assert.match(onboarding, /Salvar modalidades/);
   assert.match(onboarding, /Modalidades salvas/);
   assert.match(onboarding, /order_types/);
-  assert.match(onboarding, /Mercado Pago não conectado/);
-  assert.match(onboarding, /pagamentos no atendimento sem Mercado Pago/);
+  assert.match(onboarding, /Nenhum provedor conectado/);
+  assert.match(onboarding, /Mercado Pago já está disponível/);
+  assert.match(onboarding, /C6 Bank está em homologação/);
   assert.match(onboarding, /Novos pedidos online dependem do caixa aberto/);
-  assert.match(onboarding, /separado da cobrança da sua assinatura KÔMA/);
+  assert.match(onboarding, /separada da cobrança da assinatura KÔMA/);
   assert.match(onboarding, /pedido de teste continua disponível como validação opcional/);
 });
 

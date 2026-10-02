@@ -368,10 +368,10 @@ test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Ka
   const courierSelect = deliveries.getByRole('combobox', { name: /Entregador do pedido 5002/i });
   await courierSelect.selectOption('7');
   await expect.poll(state.getAssignmentCalls).toBe(1);
-  await deliveries.getByRole('button', { name: 'Marcar pronto para sair' }).click();
+  await deliveries.getByRole('button', { name: 'Marcar como pronto' }).click();
   await expect(deliveries).toContainText('Pronto');
 
-  const dispatch = deliveries.getByRole('button', { name: 'Saiu para entrega' });
+  const dispatch = deliveries.getByRole('button', { name: 'Despachar pedido' });
   await dispatch.evaluate((element) => {
     (element as HTMLButtonElement).click();
     (element as HTMLButtonElement).click();
@@ -410,7 +410,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   await expect(productionCard).toBeVisible();
 
   await expect(productionCard.getByRole('combobox', { name: /Entregador do pedido 5002/i })).toHaveCount(0);
-  await productionCard.getByRole('button', { name: /Pronto para sair/i }).click();
+  await productionCard.getByRole('button', { name: /Marcar como pronto/i }).click();
   await showStage(page, 'Concluir');
   const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
   await expect(readyCard).toBeVisible();
@@ -419,7 +419,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   await readyCourierSelect.selectOption('7');
   await expect.poll(state.getAssignmentCalls).toBe(1);
   await expect(readyCourierSelect).toHaveValue('7');
-  const dispatch = readyCard.getByRole('button', { name: 'Saiu para entrega' });
+  const dispatch = readyCard.getByRole('button', { name: 'Despachar pedido' });
   await expect(dispatch).toBeEnabled();
   await dispatch.click();
   await expect.poll(state.getDispatchCalls).toBe(1);
@@ -703,11 +703,11 @@ test('Pedidos, Cozinha e Entregas convergem entre três terminais sem refresh ma
   await expect(ordersCard).toContainText('EM PREPARO');
   await expect(deliveries).toContainText('Em preparo');
 
-  await ordersCard.getByRole('button', { name: /Pronto para sair/i }).click();
+  await ordersCard.getByRole('button', { name: /Marcar como pronto/i }).click();
   await expect(deliveries).toContainText('Pronto');
-  await expect(deliveries.getByRole('button', { name: 'Saiu para entrega' })).toBeEnabled();
+  await expect(deliveries.getByRole('button', { name: 'Despachar pedido' })).toBeEnabled();
 
-  await deliveries.getByRole('button', { name: 'Saiu para entrega' }).click();
+  await deliveries.getByRole('button', { name: 'Despachar pedido' }).click();
   await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Concluir' }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
@@ -980,7 +980,7 @@ test('sessão recupera estado atualizado de pedidos após reconexão de WebSocke
   const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Cliente Reconexao' });
   await expect(readyCard).toBeVisible();
   await expect(readyCard).toContainText(/Pronto para sair/i);
-  await expect(readyCard.getByRole('button', { name: 'Saiu para entrega' })).toBeDisabled();
+  await expect(readyCard.getByRole('button', { name: 'Despachar pedido' })).toBeDisabled();
   await expect(page.locator('.orders-card--digital').filter({ hasText: 'Cliente Reconexao' })).toHaveCount(0);
 });
 

@@ -913,18 +913,18 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                     <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">Opcional</span>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
-                    O restaurante pode operar e receber pagamentos no atendimento sem Mercado Pago. Conecte somente se quiser receber Pix ou outros pagamentos online dos clientes pelo KÔMA. Isso é separado da cobrança da sua assinatura KÔMA, inclusive do Pix anual escolhido na contratação.
+                    O restaurante pode operar sem conectar um provedor agora. No KÔMA Pagamentos, Mercado Pago já está disponível e o C6 Bank está em homologação como alternativa. A conexão é separada da cobrança da assinatura KÔMA.
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <span className={`text-[10px] font-bold ${snapshot.steps.mercadoPago ? 'text-emerald-400' : 'text-koma-subtle'}`}>
-                      {snapshot.steps.mercadoPago ? 'Mercado Pago conectado ✓' : 'Mercado Pago não conectado — tudo bem por enquanto'}
+                      {snapshot.steps.mercadoPago ? 'KÔMA Pagamentos conectado via Mercado Pago ✓' : 'Nenhum provedor conectado — tudo bem por enquanto'}
                     </span>
                     <button
                       type="button"
-                      onClick={() => openCashierAt('cardapio_digital', 'cardapio_pagamentos', true)}
+                      onClick={() => openCashierAt('impressao_salao', 'integracoes', true)}
                       className="rounded-xl border border-koma-border bg-koma-page px-3 py-2 text-[10px] font-black transition hover:border-emerald-500/35 hover:text-emerald-400"
                     >
-                      {snapshot.steps.mercadoPago ? 'Revisar conexão' : 'Configurar quando quiser'} <ArrowRight size={12} className="inline" />
+                      {snapshot.steps.mercadoPago ? 'Revisar KÔMA Pagamentos' : 'Escolher provedor quando quiser'} <ArrowRight size={12} className="inline" />
                     </button>
                   </div>
                 </div>

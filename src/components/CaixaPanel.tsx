@@ -341,6 +341,7 @@ export function CaixaPanel({
   const { soundEnabled, toggleSound, playOrderAlert } = useCashierAlerts({
     orders,
     deliveryOrders,
+    pendingAcceptanceOrders,
     isDrawerOpen,
   });
 
@@ -690,6 +691,23 @@ export function CaixaPanel({
         fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}
     >
+      {pendingAcceptanceOrders.length > 0 && (
+        <button
+          type="button"
+          role="alert"
+          onClick={() => {
+            handleSidebarNavigation('vendas_pedidos');
+            setIsDrawerOpen(true);
+          }}
+          className="fixed left-1/2 top-16 z-[9999] w-[min(94vw,620px)] -translate-x-1/2 rounded-2xl border-2 border-amber-400 bg-amber-300 px-5 py-3 text-left text-amber-950 shadow-2xl animate-pulse"
+        >
+          <strong className="block text-sm font-black uppercase tracking-wide">
+            {pendingAcceptanceOrders.length === 1 ? 'Pedido aguardando aceite' : pendingAcceptanceOrders.length + ' pedidos aguardando aceite'}
+          </strong>
+          <span className="block text-[11px] font-bold">O alerta sonoro continua até todos serem aceitos ou recusados. Clique para abrir.</span>
+        </button>
+      )}
+
       {toastData && (
         <div
           className={clsx(
@@ -977,6 +995,7 @@ export function CaixaPanel({
 
             {activeTab === 'operacao' && activeSubTab === 'pedidos' && (
               <CaixaOrdersWorkspace
+                hasLocalServiceWork={tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0}
                 columns={{
                   tableProduction: filteredCol1.map(buildCashierTableCard),
                   digitalProduction: filteredDigitalProduction,

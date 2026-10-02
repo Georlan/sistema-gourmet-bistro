@@ -191,3 +191,104 @@ test('repetir marmita respeita modo e limite atuais, avisando sobre escolhas des
   assert.equal(types.items.length, 0);
   assert.ok(types.issues.some(issue => issue.includes('precisa escolher novamente')));
 });
+
+test('repetir Quentinha G com min=0 em todos os grupos nao bloqueia pedido e preserva adicionais pagos', () => {
+  const historical = order({
+    itens: [{
+      produto_id: 'quentinha-g',
+      nome: 'Quentinha G',
+      quantidade: 1,
+      preco_unitario: 17,
+      modificadores: [
+        { grupo_id: 'proteinas', opcao_id: 'frango', opcao_nome: 'Frango Grelhado', preco_aplicado: 0 },
+        { grupo_id: 'adicionais', opcao_id: 'carne_extra', opcao_nome: 'Carne Adicional', preco_aplicado: 5 },
+        { grupo_id: 'adicionais', opcao_id: 'ovo_extra', opcao_nome: 'Ovo Adicional', preco_aplicado: 2 },
+      ],
+    }],
+  });
+
+  const quentinhaG: Product = {
+    id: 'quentinha-g',
+    name: 'Quentinha G',
+    description: '',
+    price: 10,
+    image: '',
+    category: 'Marmitas',
+    isAvailable: true,
+    modifierGroups: [
+      {
+        id: 'proteinas',
+        name: 'Proteínas',
+        type: 'opcional',
+        minSelection: 0,
+        maxSelection: 2,
+        selectionMode: 'porcoes',
+        options: [
+          { id: 'frango', name: 'Frango Grelhado', extraPrice: 0, active: true },
+          { id: 'carne', name: 'Carne Assada', extraPrice: 0, active: true },
+        ],
+      },
+      {
+        id: 'saladas',
+        name: 'Saladas',
+        type: 'opcional',
+        minSelection: 0,
+        maxSelection: 3,
+        selectionMode: 'tipos',
+        options: [
+          { id: 'alface', name: 'Alface', extraPrice: 0, active: true },
+        ],
+      },
+      {
+        id: 'guarnicoes',
+        name: 'Guarnições',
+        type: 'opcional',
+        minSelection: 0,
+        maxSelection: 20,
+        selectionMode: 'porcoes',
+        options: [
+          { id: 'arroz', name: 'Arroz', extraPrice: 0, active: true },
+        ],
+      },
+      {
+        id: 'adicionais',
+        name: 'Adicionais pagos',
+        type: 'opcional',
+        minSelection: 0,
+        maxSelection: 20,
+        selectionMode: 'porcoes',
+        options: [
+          { id: 'carne_extra', name: 'Carne Adicional', extraPrice: 5, active: true },
+          { id: 'ovo_extra', name: 'Ovo Adicional', extraPrice: 2, active: true },
+        ],
+      },
+    ],
+  };
+
+  const result = rebuildOrderFromCurrentCatalog(historical, [quentinhaG]);
+  assert.equal(result.skippedItems, 0);
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].product.price, 10);
+  assert.equal(result.items[0].selectedOptions.proteinas.length, 1);
+  assert.equal(result.items[0].selectedOptions.adicionais.length, 2);
+  assert.deepEqual(result.items[0].selectedOptions.adicionais, [
+    { id: 'carne_extra', name: 'Carne Adicional', extraPrice: 5 },
+    { id: 'ovo_extra', name: 'Ovo Adicional', extraPrice: 2 },
+  ]);
+
+  // Se o historico nao tinha nenhuma proteina selecionada (min=0), nao deve ser descartado
+  const zeroProteins = order({
+    itens: [{
+      produto_id: 'quentinha-g',
+      nome: 'Quentinha G',
+      quantidade: 1,
+      preco_unitario: 10,
+      modificadores: [],
+    }],
+  });
+  const zeroResult = rebuildOrderFromCurrentCatalog(zeroProteins, [quentinhaG]);
+  assert.equal(zeroResult.skippedItems, 0);
+  assert.equal(zeroResult.items.length, 1);
+  assert.deepEqual(zeroResult.issues, []);
+});
+

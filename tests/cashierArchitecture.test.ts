@@ -107,7 +107,7 @@ test('each owned listener and interval is paired with cleanup in its own effect'
     }
   }
   assert.ok(subscriptions >= 19, 'Do not accidentally stop scanning subscriptions');
-  assert.equal(intervals, 3);
+  assert.equal(intervals, 4); // inclui o alarme persistente de pedido aguardando aceite
 });
 
 test('settings and inventory compose persistent owners instead of acquiring HTTP or financial state', () => {

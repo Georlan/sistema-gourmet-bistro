@@ -451,9 +451,9 @@ export function KanbanOrderDetails({
                   {selectedKanbanOrder.deliveryStatus === 'aceito'
                     ? 'Iniciar preparo'
                     : selectedIsReadyDelivery
-                    ? 'Saiu para entrega'
+                    ? 'Despachar pedido'
                     : selectedIsDelivery
-                      ? 'Marcar pronto para sair'
+                      ? 'Marcar como pronto'
                       : selectedIsDineIn
                         ? 'Marcar pronto para servir'
                         : 'Marcar pronto para retirada'}
