@@ -1,11 +1,12 @@
 import type { BrandConfig } from './CardapioTypes';
 
 export function getDeliveryMinimumRemaining(
-  config: Pick<BrandConfig, 'pedidoMinimo'> | undefined,
+  config: Pick<BrandConfig, 'pedidoMinimo' | 'pedidoMinimoRetirada'> | undefined,
   subtotal: number,
   fulfillment: 'delivery' | 'pickup' | 'dine_in',
 ): number {
-  if (fulfillment !== 'delivery') return 0;
+  const isEnforced = fulfillment === 'delivery' || (fulfillment === 'pickup' && Boolean(config?.pedidoMinimoRetirada));
+  if (!isEnforced) return 0;
   return Math.max(0, Number(config?.pedidoMinimo || 0) - subtotal);
 }
 

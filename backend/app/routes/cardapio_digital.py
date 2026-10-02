@@ -254,6 +254,7 @@ def _public_restaurant_payload(
         "cor_primaria": restaurante.cor_primaria,
         "cor_fundo": restaurante.cor_fundo,
         "pedido_minimo": float(configuracao.pedido_minimo or 0.0) if configuracao and configuracao.pedido_minimo is not None else 0.0,
+        "pedido_minimo_retirada": bool(getattr(configuracao, "pedido_minimo_retirada", False)) if configuracao else False,
         "frete_gratis_valor": float(configuracao.frete_gratis_valor or 0.0) if configuracao and configuracao.frete_gratis_valor is not None else 0.0,
         "tipo_taxa_entrega": configuracao.tipo_taxa_entrega if configuracao and configuracao.tipo_taxa_entrega else "fixa",
         "taxa_entrega_fixa": float(configuracao.taxa_entrega_fixa) if configuracao and configuracao.taxa_entrega_fixa is not None else None,

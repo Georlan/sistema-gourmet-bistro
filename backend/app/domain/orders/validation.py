@@ -97,6 +97,7 @@ class ValidationContext:
     delivery_address: str | None = None
     delivery_phone: str | None = None
     minimum_delivery_subtotal: Decimal = Decimal("0.00")
+    enforce_minimum_for_pickup: bool = False
     coupon: ValidationCoupon | None = None
     available_cashback: Decimal = Decimal("0.00")
     apply_cashback: bool = False
@@ -305,11 +306,16 @@ class OrderValidationService:
             if not context.delivery_phone or not str(context.delivery_phone).strip():
                 raise InvalidFulfillmentDetailsError("Telefone de contato é obrigatório para pedidos delivery.")
 
-            min_delivery = to_money_decimal(context.minimum_delivery_subtotal)
-            if min_delivery > Decimal("0.00") and items_subtotal < min_delivery:
+        is_delivery = context.fulfillment == FulfillmentType.DELIVERY
+        is_pickup_with_min = (
+            context.fulfillment == FulfillmentType.PICKUP and context.enforce_minimum_for_pickup
+        )
+        if is_delivery or is_pickup_with_min:
+            min_subtotal = to_money_decimal(context.minimum_delivery_subtotal)
+            if min_subtotal > Decimal("0.00") and items_subtotal < min_subtotal:
                 raise MinimumOrderAmountNotMetError(
                     subtotal=items_subtotal,
-                    minimum_amount=min_delivery,
+                    minimum_amount=min_subtotal,
                 )
 
         # 4. Avaliação de Elegibilidade de Cupom (NÃO lança exceção)

@@ -1870,6 +1870,8 @@ def atualizar_configuracoes(
         config.delivery_ativo = config_in.delivery_ativo
     if config_in.pedido_minimo is not None:
         config.pedido_minimo = config_in.pedido_minimo
+    if config_in.pedido_minimo_retirada is not None:
+        config.pedido_minimo_retirada = config_in.pedido_minimo_retirada
     if config_in.frete_gratis_valor is not None:
         config.frete_gratis_valor = config_in.frete_gratis_valor
     if config_in.tipo_taxa_entrega is not None:

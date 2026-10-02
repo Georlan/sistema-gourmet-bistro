@@ -52,6 +52,7 @@ type RestaurantConfig = {
   horarios_funcionamento: HourRow[];
   formas_pagamento_aceitas: string[];
   pedido_minimo: number;
+  pedido_minimo_retirada: boolean;
   frete_gratis_valor: number;
   tipo_taxa_entrega: 'fixa' | 'bairro';
   tabela_taxas_bairros: BairroTaxaRow[];
@@ -200,6 +201,7 @@ function normalizeConfig(data: Record<string, any>): RestaurantConfig {
     horarios_funcionamento: normalizeHours(data?.horarios_funcionamento),
     formas_pagamento_aceitas: normalizePayments(data?.formas_pagamento_aceitas),
     pedido_minimo: Number(data?.pedido_minimo) || 0,
+    pedido_minimo_retirada: Boolean(data?.pedido_minimo_retirada),
     frete_gratis_valor: Number(data?.frete_gratis_valor) || 0,
     tipo_taxa_entrega: (data?.tipo_taxa_entrega as any) || 'fixa',
     tabela_taxas_bairros: normalizeBairros(data?.tabela_taxas_bairros),
@@ -219,6 +221,7 @@ const emptyConfig: RestaurantConfig = {
   horarios_funcionamento: [],
   formas_pagamento_aceitas: [],
   pedido_minimo: 0,
+  pedido_minimo_retirada: false,
   frete_gratis_valor: 0,
   tipo_taxa_entrega: 'fixa',
   tabela_taxas_bairros: [],
@@ -238,6 +241,7 @@ function buildPersistedPayload(config: RestaurantConfig) {
     formas_pagamento_aceitas: config.formas_pagamento_aceitas,
     status_override: config.status_override,
     pedido_minimo: config.pedido_minimo,
+    pedido_minimo_retirada: config.pedido_minimo_retirada,
     frete_gratis_valor: config.frete_gratis_valor,
     tipo_taxa_entrega: config.tipo_taxa_entrega,
     tabela_taxas_bairros: config.tabela_taxas_bairros.map(({ bairro, taxa }) => ({

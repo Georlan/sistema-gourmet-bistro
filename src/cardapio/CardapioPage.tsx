@@ -341,6 +341,7 @@ export default function CardapioPage() {
         googleMapsUrl: String(restaurant.google_maps_url || ""),
         deliveryEnabled: restaurant.delivery_ativo !== false,
         pedidoMinimo: Number(restaurant.pedido_minimo || 0),
+        pedidoMinimoRetirada: Boolean(restaurant.pedido_minimo_retirada),
         freteGratisValor: Number(restaurant.frete_gratis_valor || 0),
         tipoTaxaEntrega: String(restaurant.tipo_taxa_entrega || "fixa"),
         tabelaTaxasBairros: Array.isArray(restaurant.tabela_taxas_bairros)
