@@ -16,13 +16,13 @@ test("novo pedido emite uma única nota e não tenta tocar antes do desbloqueio 
   assert.doesNotMatch(alerts, /Bipe duplo suave e moderno de novo pedido/);
 });
 
-test("pedido digital pendente mantém alarme até aceite e exige áudio liberado", () => {
+test("pedido digital pendente mantém alarme até aceite sem aviso fixo de áudio", () => {
   assert.match(alerts, /pendingAcceptanceOrders\.length === 0/);
   assert.match(alerts, /window\.setInterval\(\(\) => \{/);
   assert.match(alerts, /\}, 4000\)/);
   assert.match(alerts, /window\.clearInterval\(alarmId\)/);
-  assert.match(caixa, /Ativar som dos pedidos/);
   assert.match(caixa, /pedidos aguardando aceite/);
+  assert.doesNotMatch(caixa, /Som dos pedidos precisa ser ativado|Ativar som dos pedidos/);
 });
 
 test("banner de pedidos explica a próxima ação em vez de usar atenção genérica", () => {
