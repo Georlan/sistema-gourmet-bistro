@@ -1,3 +1,4 @@
+import datetime
 import uuid
 
 import pytest
@@ -503,3 +504,51 @@ def test_access_state_single_pass_efficiency_and_call_counts(monkeypatch):
         "activeAdmins": 1,
     }
 
+
+
+def test_superadmin_expoe_expiracao_do_convite_sem_expor_token():
+    tenant_id = None
+    try:
+        tenant_id, _ = _create_tenant()
+        pending_user_id = str(uuid.uuid4())
+        expired_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)
+        raw_invite_token = f"secret-{uuid.uuid4().hex}"
+
+        db = SessionLocal()
+        try:
+            with tenant_session_scope(db, tenant_id):
+                db.add(
+                    Usuario(
+                        id=pending_user_id,
+                        restaurante_id=tenant_id,
+                        nome="Convite Expirado",
+                        email=f"expired-{uuid.uuid4().hex[:8]}@example.test",
+                        cargo="gerente",
+                        status="pendente_ativacao",
+                        token_convite=raw_invite_token,
+                        token_expira_em=expired_at,
+                    )
+                )
+                db.commit()
+        finally:
+            db.close()
+
+        detail = client.get(
+            f"/api/super-admin/access/restaurantes/{tenant_id}",
+            headers=_superadmin_headers(),
+        )
+        assert detail.status_code == 200, detail.text
+        body = detail.json()
+        user_payload = next(item for item in body["users"] if item["id"] == pending_user_id)
+
+        assert user_payload["status"] == "pendente_ativacao"
+        assert user_payload["inviteExpired"] is True
+        assert user_payload["inviteExpiresAt"]
+        assert user_payload["inviteEmailStatus"] in {"nao_agendado", "na_fila", "enviado", "entregue", "falhou"}
+        assert any(item["code"] == "PENDING_INVITE_EXPIRED" for item in body["diagnostics"])
+
+        serialized = detail.text
+        assert raw_invite_token not in serialized
+        assert "token_convite" not in serialized.lower()
+    finally:
+        _cleanup_tenant(tenant_id)

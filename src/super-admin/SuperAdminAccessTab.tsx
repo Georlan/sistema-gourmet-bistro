@@ -45,6 +45,9 @@ type AccessUser = {
   role: string;
   status: "ativo" | "inativo" | "pendente_ativacao";
   createdAt?: string | null;
+  inviteEmailStatus?: string | null;
+  inviteExpiresAt?: string | null;
+  inviteExpired?: boolean | null;
 };
 
 type AccessTenantDetail = AccessTenant & { users: AccessUser[] };
@@ -84,6 +87,17 @@ function statusLabel(status: AccessUser["status"]): string {
   if (status === "ativo") return "Ativo";
   if (status === "inativo") return "Bloqueado";
   return "Pendente";
+}
+
+function inviteStatusLabel(user: AccessUser): string {
+  if (user.status !== "pendente_ativacao") return "—";
+  if (user.inviteExpired === true) return "Expirado";
+  if (user.inviteEmailStatus === "entregue") return "E-mail entregue";
+  if (user.inviteEmailStatus === "falhou") return "Falha no e-mail";
+  if (user.inviteEmailStatus === "enviado") return "E-mail enviado";
+  if (user.inviteEmailStatus === "na_fila") return "Na fila";
+  if (user.inviteEmailStatus === "email_ausente") return "Sem e-mail";
+  return "Não confirmado";
 }
 
 export function SuperAdminAccessTab({ globalSearch }: { globalSearch: string }) {
@@ -374,13 +388,19 @@ export function SuperAdminAccessTab({ globalSearch }: { globalSearch: string }) 
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-xs">
-                <thead className="border-b border-zinc-800 text-[10px] uppercase tracking-wide text-koma-muted"><tr><th className="px-4 py-3">Usuário</th><th className="px-4 py-3">Cargo</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Criado</th><th className="px-4 py-3 text-right">Controle</th></tr></thead>
+                <thead className="border-b border-zinc-800 text-[10px] uppercase tracking-wide text-koma-muted"><tr><th className="px-4 py-3">Usuário</th><th className="px-4 py-3">Cargo</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Convite</th><th className="px-4 py-3">Criado</th><th className="px-4 py-3 text-right">Controle</th></tr></thead>
                 <tbody className="divide-y divide-zinc-800/70">
                   {selected.users.map((user) => (
                     <tr key={user.id}>
                       <td className="px-4 py-3"><div className="font-semibold text-koma-foreground">{user.name}</div><div className="mt-0.5 text-[10px] text-koma-muted">{user.email || user.phone || user.id}</div></td>
                       <td className="px-4 py-3 text-koma-secondary">{roleLabels[user.role] || user.role}</td>
                       <td className="px-4 py-3"><span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${user.status === "ativo" ? "border-emerald-900/60 text-emerald-300" : user.status === "inativo" ? "border-rose-900/60 text-rose-300" : "border-amber-900/60 text-amber-300"}`}>{statusLabel(user.status)}</span></td>
+                      <td className="px-4 py-3 text-koma-secondary">
+                        <div className={user.inviteExpired === true || user.inviteEmailStatus === "falhou" ? "font-bold text-amber-300" : ""}>{inviteStatusLabel(user)}</div>
+                        {user.status === "pendente_ativacao" && user.inviteExpiresAt && (
+                          <div className="mt-0.5 text-[10px] text-koma-muted">Expira: {new Date(user.inviteExpiresAt).toLocaleString("pt-BR")}</div>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-koma-muted">{user.createdAt ? new Date(user.createdAt).toLocaleDateString("pt-BR") : "Não disponível"}</td>
                       <td className="px-4 py-3 text-right"><button type="button" onClick={() => openEditor(user)} className="rounded-lg border border-zinc-700 px-3 py-1.5 font-bold text-koma-secondary hover:border-[#00b894]/60 hover:text-koma-foreground">Controlar</button></td>
                     </tr>

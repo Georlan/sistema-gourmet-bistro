@@ -1,3 +1,4 @@
+import datetime
 import logging
 from typing import Any, Literal
 
@@ -7,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ..database import SessionLocal, tenant_session_scope
 from ..models import RestaurantPaymentAccount, Restaurante, SuperAdminAuditLog, Usuario
 from ..security import revoke_user_sessions
+from ..services.team_invitations import with_delivery_status
 from .super_admin import _discover_restaurant_ids, _payment_status, get_current_admin
 
 logger = logging.getLogger("koma.super_admin.access")
@@ -58,8 +60,21 @@ def _normalize_role(user: Usuario) -> str:
     return str(user.role or user.cargo or "garcom").lower().strip()
 
 
+def _invite_expiry(user: Usuario) -> tuple[str | None, bool | None]:
+    if _normalize_status(user) != "pendente_ativacao":
+        return None, None
+    expires_at = getattr(user, "token_expira_em", None)
+    if not expires_at:
+        return None, None
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    return expires_at.isoformat(), expires_at <= now_utc
+
+
 def _user_snapshot(user: Usuario) -> dict[str, Any]:
     created_at = getattr(user, "created_at", None)
+    invite_expires_at, invite_expired = _invite_expiry(user)
     return {
         "id": user.id,
         "name": user.nome,
@@ -68,6 +83,9 @@ def _user_snapshot(user: Usuario) -> dict[str, Any]:
         "role": _normalize_role(user),
         "status": _normalize_status(user),
         "createdAt": created_at.isoformat() if created_at else None,
+        "inviteEmailStatus": getattr(user, "convite_email_status", None),
+        "inviteExpiresAt": invite_expires_at,
+        "inviteExpired": invite_expired,
     }
 
 
@@ -102,6 +120,7 @@ def _diagnostics(
     saas_status: str,
     access_state: dict[str, int],
     payment_status: str,
+    users: list[Usuario],
 ) -> list[dict[str, str]]:
     diagnostics: list[dict[str, str]] = []
 
@@ -141,6 +160,36 @@ def _diagnostics(
                 "action": "Verifique convites pendentes no fluxo de equipe do restaurante.",
             }
         )
+
+        expired_invites = 0
+        failed_invites = 0
+        for user in users:
+            if _normalize_status(user) != "pendente_ativacao":
+                continue
+            _, invite_expired = _invite_expiry(user)
+            if invite_expired is True:
+                expired_invites += 1
+            if getattr(user, "convite_email_status", None) == "falhou":
+                failed_invites += 1
+
+        if expired_invites:
+            diagnostics.append(
+                {
+                    "severity": "warning",
+                    "code": "PENDING_INVITE_EXPIRED",
+                    "message": f"{expired_invites} convite(s) de acesso expirado(s).",
+                    "action": "Reemita o convite inicial ou o convite da equipe pelo fluxo apropriado.",
+                }
+            )
+        if failed_invites:
+            diagnostics.append(
+                {
+                    "severity": "warning",
+                    "code": "PENDING_INVITE_DELIVERY_FAILED",
+                    "message": f"{failed_invites} convite(s) com falha de entrega por e-mail.",
+                    "action": "Revise o e-mail cadastrado e reenvie o convite sem expor o token.",
+                }
+            )
     if access_state["inactiveUsers"] > 0:
         diagnostics.append(
             {
@@ -188,6 +237,7 @@ def _tenant_access_payload(db, restaurante: Restaurante, users: list[Usuario]) -
             saas_status=saas_status,
             access_state=state,
             payment_status=online_payment_status,
+            users=users,
         ),
     }
 
@@ -213,6 +263,7 @@ def list_access_center(admin: dict[str, Any] = Depends(get_current_admin)):
                     .order_by(Usuario.created_at.asc(), Usuario.nome.asc())
                     .all()
                 )
+                with_delivery_status(db, users, tenant_id)
                 result.append(_tenant_access_payload(db, restaurante, users))
 
         logger.info(
@@ -258,6 +309,7 @@ def get_tenant_access(
                 .order_by(Usuario.created_at.asc(), Usuario.nome.asc())
                 .all()
             )
+            with_delivery_status(db, users, tenant_id_int)
             payload = _tenant_access_payload(db, restaurante, users)
             payload["users"] = [_user_snapshot(user) for user in users]
             return payload
