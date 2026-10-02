@@ -26,7 +26,9 @@ def _seed_catalog():
     db = SessionLocal(restaurante_id=tenant_id)
     try:
         db.add(Restaurante(id=tenant_id, nome="Quentinha Teste", slug=f"quentinha-teste-{tenant_id}"))
+        db.commit()
         db.add(RestauranteOperationProfile(restaurante_id=tenant_id, profile_key="marmitaria"))
+        db.commit()
 
         categories = [
             Categoria(
