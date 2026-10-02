@@ -7,24 +7,19 @@ import type { DeliveryOrderView } from '../orders/cashierWorkspaceTypes';
 type Props = {
   orders: Order[];
   deliveryOrders: DeliveryOrderView[];
+  pendingAcceptanceOrders: DeliveryOrderView[];
   isDrawerOpen: boolean;
 };
 
 /** Owns alerts state, effects and actions; composition supplies only cross-feature dependencies. */
-export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props) {
+export function useCashierAlerts({ orders, deliveryOrders, pendingAcceptanceOrders, isDrawerOpen }: Props) {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioUnlockedRef = useRef(false);
+  const [audioReady, setAudioReady] = useState(false);
 
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     return localStorage.getItem('@koma:sound_enabled') !== 'false';
   });
-
-  const toggleSound = () => {
-    const next = !soundEnabled;
-    setSoundEnabled(next);
-    localStorage.setItem('@koma:sound_enabled', String(next));
-    if (next) playOrderAlert('test');
-  };
 
   const playOrderAlert = useCallback(
     (type: 'new_order' | 'bill_requested' | 'delivery_pending' | 'test' = 'new_order') => {
@@ -37,10 +32,15 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
         if (ctx.state === 'suspended') {
           if (type !== 'test') return;
           void ctx.resume().then(() => {
-            audioUnlockedRef.current = true;
-          }).catch(() => undefined);
+            audioUnlockedRef.current = ctx.state === 'running';
+            setAudioReady(audioUnlockedRef.current);
+          }).catch(() => {
+            audioUnlockedRef.current = false;
+            setAudioReady(false);
+          });
         } else if (ctx.state === 'running') {
           audioUnlockedRef.current = true;
+          setAudioReady(true);
         }
         const t = ctx.currentTime;
 
@@ -124,6 +124,40 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
     [soundEnabled]
   );
 
+  const activateAudio = useCallback(async () => {
+    try {
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+      const ready = ctx.state === 'running';
+      audioUnlockedRef.current = ready;
+      setAudioReady(ready);
+      if (!ready) return false;
+
+      setSoundEnabled(true);
+      localStorage.setItem('@koma:sound_enabled', 'true');
+      playOrderAlert('test');
+      return true;
+    } catch {
+      audioUnlockedRef.current = false;
+      setAudioReady(false);
+      return false;
+    }
+  }, [playOrderAlert]);
+
+  const toggleSound = () => {
+    if (soundEnabled) {
+      setSoundEnabled(false);
+      localStorage.setItem('@koma:sound_enabled', 'false');
+      return;
+    }
+    void activateAudio();
+  };
+
   useEffect(() => {
     const unlock = () => {
       try {
@@ -133,15 +167,19 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
         const ctx = audioCtxRef.current;
         if (ctx.state === 'running') {
           audioUnlockedRef.current = true;
+          setAudioReady(true);
           return;
         }
         void ctx.resume().then(() => {
           audioUnlockedRef.current = ctx.state === 'running';
+          setAudioReady(audioUnlockedRef.current);
         }).catch(() => {
           audioUnlockedRef.current = false;
+          setAudioReady(false);
         });
       } catch {
         audioUnlockedRef.current = false;
+        setAudioReady(false);
       }
     };
     window.addEventListener('pointerdown', unlock, { passive: true });
@@ -205,10 +243,23 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
     const hasNewOrder = Array.from(currentIds).some((id) => !known.has(id));
     currentIds.forEach((id) => known.add(id));
 
-    if (hasNewOrder && !isDrawerOpen) {
+    if (hasNewOrder && !isDrawerOpen && pendingAcceptanceOrders.length === 0) {
       playOrderAlert('delivery_pending');
     }
-  }, [deliveryOrders, isDrawerOpen, playOrderAlert]);
+  }, [deliveryOrders, isDrawerOpen, pendingAcceptanceOrders.length, playOrderAlert]);
 
-  return { soundEnabled, toggleSound, playOrderAlert };
+  // Um pedido online aguardando aceite é uma pendência operacional, não um toast.
+  // Após o navegador liberar áudio, o alarme continua até o pedido ser aceito/recusado.
+  useEffect(() => {
+    if (!soundEnabled || !audioReady || pendingAcceptanceOrders.length === 0) return;
+
+    playOrderAlert('delivery_pending');
+    const alarmId = window.setInterval(() => {
+      playOrderAlert('delivery_pending');
+    }, 4000);
+
+    return () => window.clearInterval(alarmId);
+  }, [audioReady, pendingAcceptanceOrders.length, playOrderAlert, soundEnabled]);
+
+  return { soundEnabled, audioReady, activateAudio, toggleSound, playOrderAlert };
 }
