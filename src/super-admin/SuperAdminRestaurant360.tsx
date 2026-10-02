@@ -132,6 +132,9 @@ type AccessDetail = {
     role: string;
     status: "ativo" | "inativo" | "pendente_ativacao";
     createdAt?: string | null;
+    inviteEmailStatus?: string | null;
+    inviteExpiresAt?: string | null;
+    inviteExpired?: boolean | null;
   }>;
 };
 
@@ -1163,13 +1166,33 @@ export function SuperAdminRestaurant360({
             {access ? (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[700px] text-left text-xs">
-                  <thead className="border-b border-zinc-800 text-[10px] uppercase text-koma-muted"><tr><th className="px-4 py-3">Usuário</th><th className="px-4 py-3">Cargo</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Criado</th></tr></thead>
+                  <thead className="border-b border-zinc-800 text-[10px] uppercase text-koma-muted"><tr><th className="px-4 py-3">Usuário</th><th className="px-4 py-3">Cargo</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Convite</th><th className="px-4 py-3">Criado</th></tr></thead>
                   <tbody className="divide-y divide-zinc-800/60">
                     {access.users.map(user => (
                       <tr key={user.id}>
                         <td className="px-4 py-3"><strong className="text-koma-foreground">{user.name}</strong><div className="mt-0.5 text-[10px] text-koma-muted">{user.email || user.phone || user.id}</div></td>
                         <td className="px-4 py-3 text-koma-secondary">{user.role}</td>
                         <td className="px-4 py-3 text-koma-secondary">{user.status === "ativo" ? "Ativo" : user.status === "inativo" ? "Bloqueado" : "Pendente"}</td>
+                        <td className="px-4 py-3 text-koma-secondary">
+                          {user.status !== "pendente_ativacao"
+                            ? "—"
+                            : user.inviteExpired === true
+                              ? "Expirado"
+                              : user.inviteEmailStatus === "entregue"
+                                ? "E-mail entregue"
+                                : user.inviteEmailStatus === "falhou"
+                                  ? "Falha no e-mail"
+                                  : user.inviteEmailStatus === "enviado"
+                                    ? "E-mail enviado"
+                                    : user.inviteEmailStatus === "na_fila"
+                                      ? "Na fila"
+                                      : user.inviteEmailStatus === "email_ausente"
+                                        ? "Sem e-mail"
+                                        : "Não confirmado"}
+                          {user.status === "pendente_ativacao" && user.inviteExpiresAt && (
+                            <div className="mt-0.5 text-[10px] text-koma-muted">Expira: {formatDate(user.inviteExpiresAt)}</div>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-koma-muted">{formatDate(user.createdAt)}</td>
                       </tr>
                     ))}
