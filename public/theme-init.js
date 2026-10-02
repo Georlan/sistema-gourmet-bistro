@@ -26,12 +26,12 @@
   // O mesmo origin atende duas superfícies instaláveis diferentes. O manifesto
   // operacional sempre inicia na raiz; o cardápio público preserva o manifesto
   // de pedidos para não transformar um atalho da equipe em /cardapio.
-  var manifestLink = document.createElement('link');
-  manifestLink.rel = 'manifest';
-  manifestLink.href = isPublicMenuRoute
-    ? '/manifest.webmanifest'
-    : '/manifest-operational.webmanifest';
-  document.head.appendChild(manifestLink);
+  var manifestLink = document.getElementById('koma-manifest');
+  if (manifestLink) {
+    manifestLink.href = isPublicMenuRoute
+      ? '/manifest.webmanifest'
+      : '/manifest-operational.webmanifest';
+  }
 
   // O cardápio público possui apresentação própria. Nunca usa a preferência
   // de tema gravada pelo operador no mesmo origin.
