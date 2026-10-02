@@ -338,7 +338,7 @@ export function CaixaPanel({
     convertToPickup: handleConvertDeliveryToPickup,
   });
 
-  const { soundEnabled, audioReady, activateAudio, toggleSound, playOrderAlert } = useCashierAlerts({
+  const { soundEnabled, toggleSound, playOrderAlert } = useCashierAlerts({
     orders,
     deliveryOrders,
     pendingAcceptanceOrders,
@@ -691,25 +691,6 @@ export function CaixaPanel({
         fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}
     >
-      {(!soundEnabled || !audioReady) && (
-        <div
-          role="alert"
-          className="fixed bottom-4 left-1/2 z-[10000] flex w-[min(94vw,560px)] -translate-x-1/2 items-center justify-between gap-3 rounded-2xl border border-amber-400/50 bg-amber-950/95 px-4 py-3 text-amber-50 shadow-2xl backdrop-blur"
-        >
-          <div className="min-w-0">
-            <strong className="block text-sm">Som dos pedidos precisa ser ativado</strong>
-            <span className="block text-[11px] text-amber-100/80">O navegador exige uma interação para liberar o áudio. Faça isso antes de começar o atendimento.</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => { void activateAudio(); }}
-            className="shrink-0 rounded-xl bg-amber-300 px-3 py-2 text-xs font-black text-amber-950 hover:bg-amber-200"
-          >
-            Ativar som dos pedidos
-          </button>
-        </div>
-      )}
-
       {pendingAcceptanceOrders.length > 0 && (
         <button
           type="button"
