@@ -218,6 +218,30 @@ function supportTargetForCockpit(key: string): SupportNavigationTarget | null {
   return null;
 }
 
+const READINESS_BLOCKER_LABELS: Record<string, string> = {
+  profile: "Dados do restaurante pendentes",
+  hours: "Horários de funcionamento pendentes",
+  catalog: "Cardápio ainda sem produto ativo",
+  operations: "Configuração operacional incompleta",
+  trial: "Aguardando revisão e liberação KÔMA",
+  test_order: "Primeiro pedido de teste ainda não concluído",
+};
+
+const OPERATION_BLOCKER_LABELS: Record<string, string> = {
+  order_types: "Modalidades de atendimento não configuradas",
+  dine_in_tables: "Salão usa mapa de mesas, mas não há mesas cadastradas",
+  delivery_configuration: "Delivery ativo com configuração de entrega incompleta",
+  service_charge: "Taxa de serviço ativa com percentual inválido",
+};
+
+function blockerLabel(code: string, labels: Record<string, string>) {
+  return labels[code] || code.replaceAll("_", " ");
+}
+
+function formatBlockers(codes: string[] | undefined, labels: Record<string, string>) {
+  return codes?.length ? codes.map(code => blockerLabel(code, labels)).join(" · ") : "";
+}
+
 export function SuperAdminRestaurant360({
   tenant,
   contracts,
@@ -621,7 +645,7 @@ export function SuperAdminRestaurant360({
         ? release.operations.orderTypes.join(", ")
         : "Não configuradas",
       evidence: release.operations?.blockers?.length
-        ? "Blockers: " + release.operations.blockers.join(", ")
+        ? "Blockers: " + formatBlockers(release.operations.blockers, OPERATION_BLOCKER_LABELS)
         : "Política canônica de modalidades",
       owner: release.operations?.configured ? (release.operations?.ready ? "—" : "Cliente / KÔMA") : "Cliente",
       nextStep: release.operations?.configured && release.operations?.ready
@@ -722,7 +746,7 @@ export function SuperAdminRestaurant360({
           ? "Implantação essencial pronta · aguardando KÔMA"
           : "Ainda há blockers de implantação",
       evidence: release.readiness?.blockers?.length
-        ? "Blockers: " + release.readiness.blockers.join(", ")
+        ? "Blockers: " + formatBlockers(release.readiness.blockers, READINESS_BLOCKER_LABELS)
         : "Readiness canônico do onboarding",
       owner: release.readiness?.trialStarted ? "—" : release.readyForRelease ? "KÔMA" : "Cliente / KÔMA",
       nextStep: release.readiness?.trialStarted
@@ -1006,7 +1030,7 @@ export function SuperAdminRestaurant360({
                   </div>
                   <p className="mt-2 text-koma-muted">
                     {release.readiness?.blockers?.length
-                      ? "Blockers canônicos: " + release.readiness.blockers.join(", ")
+                      ? "Blockers canônicos: " + formatBlockers(release.readiness.blockers, READINESS_BLOCKER_LABELS)
                       : "Nenhum blocker canônico pendente antes da liberação."}
                   </p>
                 </div>
