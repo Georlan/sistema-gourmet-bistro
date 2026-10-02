@@ -25,6 +25,7 @@ from ..billing_service import tenant_marketplace_rate
 from ..outbox import enqueue_outbox_event_in_session
 from .base import ProviderPayment
 from .mercado_pago import MercadoPagoError, MercadoPagoProvider
+from .provider_registry import UnsupportedPaymentProviderError, provider_for_account
 from .oauth import MercadoPagoOAuthError, refresh_access_token
 from .account_connection import is_marketplace_owner_account
 
@@ -79,6 +80,13 @@ def _token_expiry(expires_in: int | None) -> datetime.datetime | None:
     if expires_in is None or expires_in <= 0:
         return None
     return datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=expires_in)
+
+
+def _provider_adapter(account: RestaurantPaymentAccount):
+    return provider_for_account(
+        account,
+        mercado_pago_factory=MercadoPagoProvider,
+    )
 
 
 class OnlinePaymentService:
@@ -172,26 +180,43 @@ class OnlinePaymentService:
 
     @classmethod
     def active_account(cls, db: Session, restaurant_id: int) -> RestaurantPaymentAccount:
-        account = db.query(RestaurantPaymentAccount).filter(
-            RestaurantPaymentAccount.restaurante_id == restaurant_id,
-            RestaurantPaymentAccount.provider == "mercado_pago",
-            RestaurantPaymentAccount.status == "active",
-        ).first()
-        if account is None:
+        accounts = (
+            db.query(RestaurantPaymentAccount)
+            .filter(
+                RestaurantPaymentAccount.restaurante_id == restaurant_id,
+                RestaurantPaymentAccount.status == "active",
+            )
+            .order_by(RestaurantPaymentAccount.updated_at.desc(), RestaurantPaymentAccount.id.desc())
+            .all()
+        )
+        if not accounts:
             raise OnlinePaymentConfigurationError(
                 "O pagamento online ainda não foi ativado por este restaurante. Escolha dinheiro ou fale com o estabelecimento."
             )
-        if is_marketplace_owner_account(account.provider_user_id):
+        if len(accounts) > 1:
             raise OnlinePaymentConfigurationError(
-                "A conta Mercado Pago conectada é a proprietária da aplicação KÔMA e não pode receber com split. "
-                "O restaurante precisa conectar uma conta Mercado Pago própria."
+                "Há mais de um provedor de recebimento ativo. O KÔMA Pagamentos permite somente um provedor conectado por vez."
             )
-        if not account.access_token or not account.webhook_secret:
-            raise OnlinePaymentConfigurationError("A conta de pagamento precisa ser reconectada.")
+
+        account = accounts[0]
+        if account.provider == "mercado_pago":
+            if is_marketplace_owner_account(account.provider_user_id):
+                raise OnlinePaymentConfigurationError(
+                    "A conta Mercado Pago conectada é a proprietária da aplicação KÔMA e não pode receber com split. "
+                    "O restaurante precisa conectar uma conta Mercado Pago própria."
+                )
+            if not account.access_token or not account.webhook_secret:
+                raise OnlinePaymentConfigurationError("A conta de pagamento precisa ser reconectada.")
+            if _token_needs_refresh(account.token_expires_at):
+                account = cls._refresh_account_credentials(db, account)
+        else:
+            try:
+                _provider_adapter(account)
+            except UnsupportedPaymentProviderError as exc:
+                raise OnlinePaymentConfigurationError(str(exc)) from exc
+
         if not settings.KOMA_PUBLIC_API_URL:
             raise OnlinePaymentConfigurationError("A URL pública de pagamentos ainda não foi configurada.")
-        if _token_needs_refresh(account.token_expires_at):
-            account = cls._refresh_account_credentials(db, account)
         return account
 
     @staticmethod
@@ -242,6 +267,7 @@ class OnlinePaymentService:
         turno: CaixaTurno,
         amount: Decimal,
         idempotency_key: str,
+        provider: str = "mercado_pago",
     ) -> OnlinePaymentIntent:
         restaurant = db.query(Restaurante).filter(
             Restaurante.id == comanda.restaurante_id,
@@ -254,7 +280,7 @@ class OnlinePaymentService:
             restaurante_id=comanda.restaurante_id,
             comanda_id=comanda.id,
             turno_id=turno.id,
-            provider="mercado_pago",
+            provider=provider,
             method="pix",
             status="created",
             amount=float(normalized_amount),
@@ -314,7 +340,7 @@ class OnlinePaymentService:
         locked_intent = db.query(OnlinePaymentIntent).filter(
             OnlinePaymentIntent.restaurante_id == account.restaurante_id,
             OnlinePaymentIntent.id == intent.id,
-            OnlinePaymentIntent.provider == "mercado_pago",
+            OnlinePaymentIntent.provider == account.provider,
         ).with_for_update().one()
 
         if not (payment.external_id or "").strip():
@@ -374,7 +400,7 @@ class OnlinePaymentService:
                 )
             return locked_intent, False
 
-        payment_idempotency_key = f"online:mercado_pago:{payment.external_id}"
+        payment_idempotency_key = f"online:{locked_intent.provider}:{payment.external_id}"
         pagamento = None
         if locked_intent.pagamento_id:
             pagamento = db.query(Pagamento).filter(
@@ -488,14 +514,19 @@ class OnlinePaymentService:
         )
 
         def create_with_current_token() -> ProviderPayment:
-            return MercadoPagoProvider(account.access_token).create_pix(
+            try:
+                provider_adapter = _provider_adapter(account)
+            except UnsupportedPaymentProviderError as exc:
+                raise OnlinePaymentConfigurationError(str(exc)) from exc
+            return provider_adapter.create_pix(
                 amount=_money(intent.amount),
                 marketplace_fee=_money(intent.marketplace_fee),
                 payer_email=payer_email,
                 external_reference=intent.id,
                 idempotency_key=f"koma-online-{intent.id}",
                 notification_url=(
-                    f"{settings.KOMA_PUBLIC_API_URL}/payments/webhooks/mercado-pago/{account.id}"
+                    f"{settings.KOMA_PUBLIC_API_URL}/payments/webhooks/"
+                    f"{account.provider.replace('_', '-')}/{account.id}"
                 ),
                 expires_at=expires_at,
             )
@@ -561,7 +592,10 @@ class OnlinePaymentService:
                 "Pix sem identificador externo não pode ser cancelado com segurança."
             )
 
-        provider = MercadoPagoProvider(account.access_token)
+        try:
+            provider = _provider_adapter(account)
+        except UnsupportedPaymentProviderError as exc:
+            raise OnlinePaymentConfigurationError(str(exc)) from exc
         try:
             payment = provider.cancel_payment(intent.external_payment_id)
         except MercadoPagoError as exc:
@@ -573,7 +607,10 @@ class OnlinePaymentService:
                     force=True,
                     known_access_token=stale_access_token,
                 )
-                provider = MercadoPagoProvider(account.access_token)
+                try:
+                    provider = _provider_adapter(account)
+                except UnsupportedPaymentProviderError as provider_exc:
+                    raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
                 try:
                     payment = provider.cancel_payment(intent.external_payment_id)
                 except MercadoPagoError:
@@ -595,7 +632,7 @@ class OnlinePaymentService:
             and settled_intent.status not in UNPAID_TERMINAL_STATUSES
         ):
             raise OnlinePaymentConfigurationError(
-                "Mercado Pago não confirmou o cancelamento do Pix pendente."
+                "O provedor não confirmou o cancelamento do Pix pendente."
             )
         db.commit()
         db.refresh(settled_intent)
@@ -623,7 +660,11 @@ class OnlinePaymentService:
         external_payment_id: str,
     ) -> tuple[OnlinePaymentIntent | None, bool]:
         try:
-            payment = MercadoPagoProvider(account.access_token).get_payment(external_payment_id)
+            try:
+                provider = _provider_adapter(account)
+            except UnsupportedPaymentProviderError as provider_exc:
+                raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
+            payment = provider.get_payment(external_payment_id)
         except MercadoPagoError as exc:
             if exc.status_code != 401:
                 raise
@@ -634,11 +675,15 @@ class OnlinePaymentService:
                 force=True,
                 known_access_token=stale_access_token,
             )
-            payment = MercadoPagoProvider(account.access_token).get_payment(external_payment_id)
+            try:
+                provider = _provider_adapter(account)
+            except UnsupportedPaymentProviderError as provider_exc:
+                raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
+            payment = provider.get_payment(external_payment_id)
 
         intent = db.query(OnlinePaymentIntent).filter(
             OnlinePaymentIntent.restaurante_id == account.restaurante_id,
-            OnlinePaymentIntent.provider == "mercado_pago",
+            OnlinePaymentIntent.provider == account.provider,
             OnlinePaymentIntent.external_payment_id == payment.external_id,
         ).first()
         if intent is None:

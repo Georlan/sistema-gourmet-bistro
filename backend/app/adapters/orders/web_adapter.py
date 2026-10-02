@@ -598,6 +598,7 @@ class CardapioWebAdapter:
                     turno=payment_shift,
                     amount=order_dto.total,
                     idempotency_key=idempotency_key,
+                    provider=payment_account.provider,
                 )
                 db.commit()
                 db.refresh(payment_intent)
