@@ -895,6 +895,33 @@ export function SuperAdminRestaurant360({
             </div>
           </div>
 
+          {release && !release.readiness?.trialStarted && (
+            <div className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wide text-amber-300">Próximo passo da implantação</p>
+                  <p className="mt-1 text-sm font-bold text-koma-foreground">
+                    {release.readyForRelease
+                      ? "Implantação essencial pronta · aguardando revisão KÔMA"
+                      : release.readiness?.blockers?.length
+                        ? formatBlockers(release.readiness.blockers, READINESS_BLOCKER_LABELS)
+                        : "Readiness carregado sem blocker explícito; revise o cockpit."}
+                  </p>
+                  <p className="mt-1 text-[11px] text-koma-muted">
+                    Fonte: readiness canônico do onboarding. Nenhum estado é inferido a partir da interface.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSection("implementation")}
+                  className="shrink-0 rounded-lg border border-amber-800/60 px-3 py-2 text-xs font-black text-amber-200 hover:bg-amber-950/40"
+                >
+                  Abrir cockpit de implantação
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
             <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
               <h3 className="text-sm font-bold text-koma-foreground">Estado operacional</h3>
