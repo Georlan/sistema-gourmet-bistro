@@ -9,11 +9,15 @@ class UnsupportedPaymentProviderError(RuntimeError):
     pass
 
 
-def provider_for_account(account: RestaurantPaymentAccount) -> OnlinePaymentProvider:
+def provider_for_account(
+    account: RestaurantPaymentAccount,
+    *,
+    mercado_pago_factory=MercadoPagoProvider,
+) -> OnlinePaymentProvider:
     """Resolve o adaptador financeiro sem espalhar decisão de provider pelo domínio."""
     provider = str(account.provider or "").strip().lower()
     if provider == "mercado_pago":
-        return MercadoPagoProvider(account.access_token)
+        return mercado_pago_factory(account.access_token)
     raise UnsupportedPaymentProviderError(
         f"Provedor de pagamento ainda não suportado: {provider or 'não informado'}."
     )
