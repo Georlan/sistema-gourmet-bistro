@@ -57,6 +57,7 @@ class ValidationDataLoader:
 
         # 1. Carregar Configuração de Pedido Mínimo
         min_delivery_subtotal = Decimal("0.00")
+        enforce_minimum_pickup = False
         config = (
             db.query(ConfiguracaoRestaurante)
             .filter(ConfiguracaoRestaurante.restaurante_id == restaurante_id)
@@ -64,6 +65,7 @@ class ValidationDataLoader:
         )
         if config and config.pedido_minimo:
             min_delivery_subtotal = to_money_decimal(config.pedido_minimo)
+            enforce_minimum_pickup = bool(getattr(config, "pedido_minimo_retirada", False))
 
         # 2. Carregar Produtos e os grupos efetivos (produto + categoria + ancestrais)
         prod_ids = {str(it.get("produto_id")) for it in itens_solicitados if it.get("produto_id")}
@@ -210,6 +212,7 @@ class ValidationDataLoader:
             delivery_address=delivery_address,
             delivery_phone=delivery_phone or cliente_telefone,
             minimum_delivery_subtotal=min_delivery_subtotal,
+            enforce_minimum_for_pickup=enforce_minimum_pickup,
             coupon=coupon_input,
             available_cashback=available_cashback,
             apply_cashback=usar_cashback and available_cashback > Decimal("0.00"),

@@ -956,6 +956,7 @@ class ConfiguracaoRestaurante(Base):
     # restaurante confirmar explicitamente as modalidades que aceita.
     tipos_pedido_ativos = Column(JSON, nullable=True)
     pedido_minimo = Column(Numeric(14, 2, asdecimal=False), default=0.0)
+    pedido_minimo_retirada = Column(Boolean, default=False, nullable=False)
     frete_gratis_valor = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     tipo_taxa_entrega = Column(String, default="fixa")  # "fixa" | "bairro" | "distancia"
     taxa_entrega_fixa = Column(Numeric(14, 2, asdecimal=False), default=7.0, nullable=False)
