@@ -343,16 +343,21 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
     return user
 
 def get_current_garcom_optional(
+    request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> Optional[Usuario]:
     """
-    Optional dependency. Returns the Garcom object if a valid token is provided,
-    otherwise returns None.
+    Optional dependency. Returns the authenticated operator when a token exists.
+
+    Support tokens remain read-only here too because several legacy operational
+    routes use this optional dependency for both reads and writes.
     """
     if not token:
         return None
-    return _authenticated_user_from_token(token, db)
+    current_user = _authenticated_user_from_token(token, db)
+    _enforce_support_read_only(request, current_user)
+    return current_user
 
 
 def _required_authenticated_user(
