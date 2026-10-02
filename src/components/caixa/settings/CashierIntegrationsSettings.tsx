@@ -1,7 +1,7 @@
 import { FileCheck2, PlugZap } from 'lucide-react';
 import React, { useState } from 'react';
 import { OperationalBanner } from '../../shared/OperationalBanner';
-import { MercadoPagoConnectionCard } from '../online-menu/MercadoPagoConnectionCard';
+import { KomaPaymentsSettings } from './KomaPaymentsSettings';
 import { CashierFiscalSettings } from './CashierFiscalSettings';
 import { RestaurantWhatsAppSettings } from './RestaurantWhatsAppSettings';
 
@@ -60,8 +60,8 @@ export function CashierIntegrationsSettings({ apiBaseUrl, authHeaders }: Props) 
             accent="em um só lugar"
             description="Conexões técnicas ficam centralizadas aqui. As telas de venda usam apenas o status e as capacidades já conectadas."
             metrics={[
-              { label: 'pagamentos online', value: 'Mercado Pago' },
-              { label: 'configuração', value: 'por restaurante' },
+              { label: 'pagamentos', value: 'KÔMA Pagamentos' },
+              { label: 'provedores', value: 'por restaurante' },
             ]}
           />
 
@@ -73,12 +73,12 @@ export function CashierIntegrationsSettings({ apiBaseUrl, authHeaders }: Props) 
               <div>
                 <h3 className="text-sm font-black text-koma-foreground">Pagamentos e serviços externos</h3>
                 <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
-                  Conecte e reconecte provedores aqui. Configurações específicas do Cardápio Online continuam no canal de vendas.
+                  O KÔMA Pagamentos centraliza o provedor financeiro. Configurações específicas de cada canal continuam no respectivo canal de vendas.
                 </p>
               </div>
             </div>
 
-            <MercadoPagoConnectionCard apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+            <KomaPaymentsSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
           </section>
           <RestaurantWhatsAppSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
         </>
