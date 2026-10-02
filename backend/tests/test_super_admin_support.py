@@ -12,6 +12,7 @@ from app.routes import super_admin
 from app.security import (
     _authenticated_user_from_token,
     create_access_token,
+    get_current_user,
     get_password_hash,
 )
 from app.support_models import SupportSession
@@ -186,13 +187,29 @@ def test_support_mode_is_read_only_for_permission_guarded_tenant_mutations():
     )
     assert entitled_guarded.status_code == 403, entitled_guarded.text
 
-    # Rotas legadas que usam get_current_user diretamente também ficam read-only.
-    direct_guarded = client.put(
-        "/api/onboarding/fiscal/profile",
-        headers=support_headers,
-        json={},
-    )
-    assert direct_guarded.status_code == 403, direct_guarded.text
+    # O guard central também cobre rotas legadas que dependem diretamente
+    # de get_current_user, sem precisar executar uma mutação real no teste.
+    from starlette.requests import Request
+
+    put_request = Request({
+        "type": "http",
+        "method": "PUT",
+        "path": "/legacy-direct-write",
+        "headers": [],
+        "query_string": b"",
+        "server": ("testserver", 80),
+        "client": ("testclient", 50000),
+        "scheme": "http",
+    })
+    with SessionLocal() as direct_db:
+        with pytest.raises(HTTPException) as direct_exc:
+            get_current_user(
+                request=put_request,
+                token=start.json()["access_token"],
+                db=direct_db,
+            )
+    assert direct_exc.value.status_code == 403
+    assert "somente para diagnóstico" in direct_exc.value.detail
 
 
     # Encerrar a própria sessão continua sendo uma ação válida do fluxo de suporte.
