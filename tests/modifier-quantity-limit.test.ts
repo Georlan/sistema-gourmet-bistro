@@ -116,3 +116,22 @@ test('marmitaria por tipos exige opções diferentes sem repetição', () => {
   assert.equal(canIncrementSelectionQuantity(rules, ['chicken', 'beef'], 'fish'), false);
   assert.deepEqual(changeSelectionQuantity(rules, ['chicken'], 'chicken', 1), ['chicken']);
 });
+
+test('marmitaria com min=0 permite 0 escolhas, repetição no modo porcoes e respeita o máximo', () => {
+  // Proteínas: min 0, max 2, modo porções (Quentinha G)
+  const proteinas = { optionIds: ['frango', 'carne', 'ovo'], minSelection: 0, maxSelection: 2, selectionMode: 'porcoes' as const };
+  assert.equal(selectionWithinRules(proteinas, []), true, '0 proteínas deve ser válido');
+  assert.equal(selectionWithinRules(proteinas, ['frango']), true, '1 proteína deve ser válida');
+  assert.equal(selectionWithinRules(proteinas, ['ovo', 'ovo']), true, '2 ovos repetidos devem ser válidos');
+  assert.equal(selectionWithinRules(proteinas, ['ovo', 'ovo', 'frango']), false, '3 proteínas devem ser bloqueadas');
+  assert.equal(canIncrementSelectionQuantity(proteinas, ['ovo', 'ovo'], 'carne'), false, 'Não deve permitir 3ª proteína');
+
+  // Guarnições livres / adicionais pagos com teto operacional amplo (ex: 20)
+  const guarnicoes = { optionIds: ['arroz', 'feijao', 'macarrao'], minSelection: 0, maxSelection: 20, selectionMode: 'porcoes' as const };
+  assert.equal(selectionWithinRules(guarnicoes, []), true, '0 guarnições deve ser válido');
+  assert.equal(canIncrementSelectionQuantity(guarnicoes, [], 'arroz'), true);
+  const selectedGuar = changeSelectionQuantity(guarnicoes, [], 'arroz', 1);
+  assert.deepEqual(selectedGuar, ['arroz']);
+  assert.equal(canIncrementSelectionQuantity(guarnicoes, selectedGuar, 'feijao'), true);
+});
+

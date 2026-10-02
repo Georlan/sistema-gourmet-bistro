@@ -85,7 +85,7 @@ export default function CardapioProductModal({
       return product.modifierGroups.map((g) => ({
         id: g.id,
         title: g.name,
-        required: g.type === "obrigatorio" || g.minSelection > 0,
+        required: typeof g.minSelection === "number" ? g.minSelection > 0 : g.type === "obrigatorio",
         maxSelection: g.maxSelection,
         minSelection: g.minSelection,
         selectionMode: g.selectionMode,
@@ -315,12 +315,24 @@ export default function CardapioProductModal({
                       <div>
                         <h3 className="text-sm font-black text-koma-foreground">{modifier.title}</h3>
                         <p className="mt-0.5 text-xs text-koma-muted">
-                          {modifier.selectionMode ? `Escolha de ${modifier.minSelection || 0} até ${max} ${modifier.selectionMode === "porcoes" ? "porções (pode repetir)" : "tipos diferentes"}` : max === 1 ? "Escolha uma opção" : `Até ${max} tipos · quantidade livre por adicional`}
+                          {max >= 20 && (modifier.minSelection ?? 0) === 0
+                            ? (modifier.selectionMode === "porcoes" ? "Escolha à vontade (pode repetir)" : "Escolha à vontade (tipos diferentes)")
+                            : modifier.selectionMode
+                            ? `Escolha de ${modifier.minSelection || 0} até ${max} ${modifier.selectionMode === "porcoes" ? "porções (pode repetir)" : "tipos diferentes"}`
+                            : max === 1
+                            ? "Escolha uma opção"
+                            : `Até ${max} tipos · quantidade livre por adicional`}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
                         {max > 1 && (
-                          <span className="text-[10px] font-black text-emerald-400">{selectedTypes}/{max} {modifier.selectionMode === "porcoes" ? "porções" : "tipos"}</span>
+                          <span className="text-[10px] font-black text-emerald-400">
+                            {max >= 20 && (modifier.minSelection ?? 0) === 0
+                              ? (selectedTypes > 0
+                                ? `${selectedTypes} ${modifier.selectionMode === "porcoes" ? (selectedTypes === 1 ? "porção" : "porções") : (selectedTypes === 1 ? "tipo" : "tipos")}`
+                                : "Livre")
+                              : `${selectedTypes}/${max} ${modifier.selectionMode === "porcoes" ? "porções" : "tipos"}`}
+                          </span>
                         )}
                         <span className={modifier.required
                           ? "rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-400"
