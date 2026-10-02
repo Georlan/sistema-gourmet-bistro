@@ -24,7 +24,7 @@ from ...subscription import subscription_marketplace_rate
 from ..billing_service import tenant_marketplace_rate
 from ..outbox import enqueue_outbox_event_in_session
 from .base import ProviderPayment
-from .mercado_pago import MercadoPagoError
+from .mercado_pago import MercadoPagoError, MercadoPagoProvider
 from .provider_registry import UnsupportedPaymentProviderError, provider_for_account
 from .oauth import MercadoPagoOAuthError, refresh_access_token
 from .account_connection import is_marketplace_owner_account
@@ -80,6 +80,13 @@ def _token_expiry(expires_in: int | None) -> datetime.datetime | None:
     if expires_in is None or expires_in <= 0:
         return None
     return datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=expires_in)
+
+
+def _provider_adapter(account: RestaurantPaymentAccount):
+    return provider_for_account(
+        account,
+        mercado_pago_factory=MercadoPagoProvider,
+    )
 
 
 class OnlinePaymentService:
@@ -204,7 +211,7 @@ class OnlinePaymentService:
                 account = cls._refresh_account_credentials(db, account)
         else:
             try:
-                provider_for_account(account)
+                _provider_adapter(account)
             except UnsupportedPaymentProviderError as exc:
                 raise OnlinePaymentConfigurationError(str(exc)) from exc
 
@@ -508,7 +515,7 @@ class OnlinePaymentService:
 
         def create_with_current_token() -> ProviderPayment:
             try:
-                provider_adapter = provider_for_account(account)
+                provider_adapter = _provider_adapter(account)
             except UnsupportedPaymentProviderError as exc:
                 raise OnlinePaymentConfigurationError(str(exc)) from exc
             return provider_adapter.create_pix(
@@ -586,7 +593,7 @@ class OnlinePaymentService:
             )
 
         try:
-            provider = provider_for_account(account)
+            provider = _provider_adapter(account)
         except UnsupportedPaymentProviderError as exc:
             raise OnlinePaymentConfigurationError(str(exc)) from exc
         try:
@@ -601,7 +608,7 @@ class OnlinePaymentService:
                     known_access_token=stale_access_token,
                 )
                 try:
-                    provider = provider_for_account(account)
+                    provider = _provider_adapter(account)
                 except UnsupportedPaymentProviderError as provider_exc:
                     raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
                 try:
@@ -654,7 +661,7 @@ class OnlinePaymentService:
     ) -> tuple[OnlinePaymentIntent | None, bool]:
         try:
             try:
-                provider = provider_for_account(account)
+                provider = _provider_adapter(account)
             except UnsupportedPaymentProviderError as provider_exc:
                 raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
             payment = provider.get_payment(external_payment_id)
@@ -669,7 +676,7 @@ class OnlinePaymentService:
                 known_access_token=stale_access_token,
             )
             try:
-                provider = provider_for_account(account)
+                provider = _provider_adapter(account)
             except UnsupportedPaymentProviderError as provider_exc:
                 raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
             payment = provider.get_payment(external_payment_id)
