@@ -186,6 +186,14 @@ def test_support_mode_is_read_only_for_permission_guarded_tenant_mutations():
     )
     assert entitled_guarded.status_code == 403, entitled_guarded.text
 
+    # Rotas legadas que usam get_current_user diretamente também ficam read-only.
+    direct_guarded = client.put(
+        "/api/onboarding/fiscal/profile",
+        headers=support_headers,
+        json={},
+    )
+    assert direct_guarded.status_code == 403, direct_guarded.text
+
 
     # Encerrar a própria sessão continua sendo uma ação válida do fluxo de suporte.
     end = client.post(
