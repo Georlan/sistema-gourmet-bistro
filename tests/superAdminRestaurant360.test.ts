@@ -125,3 +125,17 @@ test('Cardápio assistido reaproveita a fila existente em vez de duplicar public
   assert.match(restaurant360, /item\.key === "catalog"/);
   assert.doesNotMatch(restaurant360, /catalog-assistance.*\/publish/);
 });
+
+
+test('Restaurante 360 mostra impressão sem inventar saúde positiva', () => {
+  assert.match(restaurant360, /\/api\/super-admin\/restaurantes\/.*\/capabilities/);
+  assert.match(restaurant360, /key: "printing"/);
+  assert.match(restaurant360, /printingIncidents/);
+  assert.match(restaurant360, /Capability efetiva \+ ausência de incidente detectado/);
+  assert.match(restaurant360, /Recurso habilitado · nenhum incidente de impressão detectado/);
+  assert.match(restaurant360, /state: printingEnabled === false/);
+  assert.match(restaurant360, /\? "check"/);
+  assert.match(restaurant360, /Abrir a tela de impressão em Modo Suporte/);
+  assert.match(restaurant360, /subTab: "impressao"/);
+  assert.doesNotMatch(restaurant360, /Impressão pronta.*nenhum incidente/i);
+});
