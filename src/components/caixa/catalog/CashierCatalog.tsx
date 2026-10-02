@@ -517,7 +517,21 @@ export default function CashierCatalog({
               )}
 
               {isMarmitaria && <p className="text-sm text-koma-muted">{editingProduct && isMarmita(editingProduct) ? 'Edite preço, foto e descrição aqui. A quantidade de proteínas, guarnições e saladas é configurada nesta quentinha, em Produtos.' : 'Cadastre aqui sobremesas e bebidas. Todos aparecem na mesma lista de produtos.'}</p>}
-              {isMarmitaria && editingProduct && isMarmita(editingProduct) && <button type="submit" name="nextAction" value="composition" disabled={isLoading} className="text-sm font-bold text-emerald-500">Salvar e configurar composição da quentinha</button>}
+              {isMarmitaria && editingProduct && isMarmita(editingProduct) && (
+                <button
+                  type="submit"
+                  name="nextAction"
+                  value="composition"
+                  disabled={isLoading}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-left text-emerald-400 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span>
+                    <strong className="block text-sm">Salvar e configurar composição da quentinha</strong>
+                    <span aria-hidden="true" className="mt-0.5 block text-[10px] font-medium text-koma-muted">Defina os limites de proteínas, guarnições e saladas deste tamanho.</span>
+                  </span>
+                  <span aria-hidden="true" className="text-lg font-black">→</span>
+                </button>
+              )}
               <div className="space-y-1.5">
                 <label
                   htmlFor="product-name"
