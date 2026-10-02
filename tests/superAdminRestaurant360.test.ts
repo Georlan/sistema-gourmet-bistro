@@ -177,3 +177,12 @@ test('Cockpit traduz blockers canônicos para linguagem operacional sem inventar
   assert.match(restaurant360, /formatBlockers\(release\.readiness\.blockers, READINESS_BLOCKER_LABELS\)/);
   assert.match(restaurant360, /formatBlockers\(release\.operations\.blockers, OPERATION_BLOCKER_LABELS\)/);
 });
+
+
+test('Resumo do Restaurante 360 destaca o próximo passo usando readiness canônico', () => {
+  assert.match(restaurant360, /Próximo passo da implantação/);
+  assert.match(restaurant360, /Implantação essencial pronta · aguardando revisão KÔMA/);
+  assert.match(restaurant360, /Fonte: readiness canônico do onboarding/);
+  assert.match(restaurant360, /formatBlockers\(release\.readiness\.blockers, READINESS_BLOCKER_LABELS\)/);
+  assert.match(restaurant360, /setSection\("implementation"\)/);
+});
