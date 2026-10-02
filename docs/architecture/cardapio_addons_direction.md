@@ -83,3 +83,26 @@ Migration aditiva z6d7e8f9a0b1; não converte dados nem elimina categorias antig
 Configuração explícita reaproveita a categoria Quentinhas/Marmitas existente,
 preservando nomes/IDs dos pedidos históricos. Duplicados antigos exigem resolução
 explícita; nenhum produto ou pedido real é excluído pela atualização.
+
+## Guarnições livres e adicionais pagos — 02/10/2026 (Correção P0 Tenant 6)
+
+### 1. Mínimo 0 opcional
+- Grupos com `min_selecoes: 0` são estritamente opcionais.
+- O cardápio público e o modal do produto não exibem tag "OBRIGATÓRIO" quando `min_selecoes: 0`.
+- O cliente pode avançar ou adicionar o produto à sacola sem selecionar itens desse grupo (0 itens válido).
+- Limites máximos configurados (ex.: 2 proteínas) bloqueiam seleções além da quantidade contratada.
+
+### 2. Adicionais pagos da marmitaria
+- Extras além do que está incluso na quentinha (ex.: carnes extras a R$ 5,00 cada, ovos extras a R$ 2,00 cada)
+  são cadastrados como um grupo regular ("Adicionais" ou "Adicionais pagos") com opções contendo `preco_adicional`.
+- O grupo é vinculado à quentinha com `min_selecoes: 0`, `modo_selecao: "porcoes"` e teto amplo (ex.: 20).
+- Cada unidade selecionada soma seu respectivo `preco_adicional` no cliente e no Order Core autoritativo do backend.
+- A observação do pedido sumariza as quantidades escolhidas (ex.: `2x Ovo Cozido, 1x Carne adicional`) e o Caixa recebe itens e totais precisos.
+
+### 3. Dívida Técnica: Teto numérico em Guarnições Livres
+- **Observado**: O domínio atual (`ProdutoGrupoModificador`, `RegraTamanho`, `OrderValidationService`) exige
+  inteiro estrito para `max_selecoes` (`1 <= max_selecoes <= 100`).
+- **Impacto**: Se o operador cadastrar `maximo: 3` em Guarnições, a validação do backend e a UI tratam 3 como teto real.
+- **Solução Operacional Segura Adotada**: Para guarnições livres sem limite prático, o operador define um teto
+  operacional amplo (ex.: 20), e a interface pública do cardápio apresenta "Escolha à vontade" e badge "Livre" quando `max >= 20` e `min = 0`.
+- **Dívida Técnica Registrada**: Em evolução futura aprovada, o domínio deve suportar formalmente `max_selecoes = null` / `unlimited` sem quebrar constraints de banco ou modelos intermediários.
