@@ -211,6 +211,13 @@ def test_support_mode_is_read_only_for_permission_guarded_tenant_mutations():
     assert direct_exc.value.status_code == 403
     assert "somente para diagnóstico" in direct_exc.value.detail
 
+    optional_guarded = client.post(
+        "/caixa/turno/movimentar",
+        headers=support_headers,
+        json={},
+    )
+    assert optional_guarded.status_code == 403, optional_guarded.text
+
 
     # Encerrar a própria sessão continua sendo uma ação válida do fluxo de suporte.
     end = client.post(
