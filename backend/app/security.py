@@ -355,14 +355,10 @@ def get_current_garcom_optional(
     return _authenticated_user_from_token(token, db)
 
 
-def get_current_user(
-    token: Optional[str] = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+def _required_authenticated_user(
+    token: Optional[str],
+    db: Session,
 ) -> Usuario:
-    """
-    Dependency obrigatória. Levanta 401 se não houver token válido ou
-    se o usuário não existir mais no banco.
-    """
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -370,6 +366,34 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return _authenticated_user_from_token(token, db)
+
+
+def get_current_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> Usuario:
+    """Autentica a sessão operacional e mantém Modo Suporte read-only.
+
+    O bloqueio fica neste ponto comum para cobrir inclusive rotas legadas que
+    dependem diretamente de get_current_user em vez dos factories de permissão.
+    A única mutação própria do suporte usa uma dependência separada e explícita.
+    """
+    current_user = _required_authenticated_user(token, db)
+    _enforce_support_read_only(request, current_user)
+    return current_user
+
+
+def get_current_user_for_support_action(
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> Usuario:
+    """Autenticação estreita para ações que pertencem ao próprio Modo Suporte.
+
+    Hoje é usada para encerrar a própria sessão. Não deve proteger mutações do
+    tenant nem substituir get_current_user em rotas operacionais.
+    """
+    return _required_authenticated_user(token, db)
 
 
 def ensure_permission(current_user: Optional[Usuario], permission: str) -> Usuario:
@@ -433,10 +457,8 @@ def require_permission(permission: str):
         raise RuntimeError(f"Permissão desconhecida na matriz RBAC: {permission}")
 
     def permission_checker(
-        request: Request,
         current_user: Usuario = Depends(get_current_user),
     ) -> Usuario:
-        _enforce_support_read_only(request, current_user)
         return ensure_permission(current_user, permission)
 
     return permission_checker
@@ -458,11 +480,9 @@ def require_entitled_permission(
         raise RuntimeError(f"Permissão desconhecida na matriz RBAC: {permission}")
 
     def entitled_permission_checker(
-        request: Request,
         current_user: Usuario = Depends(get_current_user),
         db: Session = Depends(get_db),
     ) -> Usuario:
-        _enforce_support_read_only(request, current_user)
         authorized = ensure_permission(current_user, permission)
         from .services.plan_entitlements import require_plan_entitlement
         require_plan_entitlement(
@@ -482,10 +502,8 @@ def require_roles(*allowed_roles: str):
     um dos cargos autorizados. Admin/superadmin sempre têm acesso total.
     """
     def role_checker(
-        request: Request,
         current_user: Usuario = Depends(get_current_user),
     ) -> Usuario:
-        _enforce_support_read_only(request, current_user)
         user_role = (current_user.role or current_user.cargo or "garcom").lower().strip()
         allowed = [r.lower().strip() for r in allowed_roles]
 
