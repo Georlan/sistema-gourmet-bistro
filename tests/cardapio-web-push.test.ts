@@ -4,7 +4,9 @@ import test from "node:test";
 
 const sw = readFileSync("public/koma-sw.js", "utf8");
 const manifest = readFileSync("public/manifest.webmanifest", "utf8");
+const operationalManifest = readFileSync("public/manifest-operational.webmanifest", "utf8");
 const indexHtml = readFileSync("index.html", "utf8");
+const themeInit = readFileSync("public/theme-init.js", "utf8");
 const pushUi = readFileSync("src/cardapio/components/CardapioPushNotifications.tsx", "utf8");
 const pushResumeStore = readFileSync("src/cardapio/pushResumeStore.ts", "utf8");
 const trackingPage = readFileSync("src/cardapio/OrderTrackingPage.tsx", "utf8");
@@ -65,10 +67,27 @@ test("preview de mensagem é resolvido no dispatcher sem copiar body para outbox
   assert.match(webPushBackend, /sanitize_message_preview/);
 });
 
-test("PWA mantém experiência standalone sem substituir o cardápio", () => {
-  const parsed = JSON.parse(manifest) as { display?: string; start_url?: string };
-  assert.equal(parsed.display, "standalone");
-  assert.equal(parsed.start_url, "/cardapio");
+test("PWA separa entrada operacional do cardápio público", () => {
+  const publicParsed = JSON.parse(manifest) as { display?: string; start_url?: string };
+  const operationalParsed = JSON.parse(operationalManifest) as {
+    id?: string;
+    display?: string;
+    start_url?: string;
+    scope?: string;
+  };
+
+  assert.equal(publicParsed.display, "standalone");
+  assert.equal(publicParsed.start_url, "/cardapio");
+
+  assert.equal(operationalParsed.id, "/");
+  assert.equal(operationalParsed.display, "standalone");
+  assert.equal(operationalParsed.start_url, "/");
+  assert.equal(operationalParsed.scope, "/");
+
+  assert.doesNotMatch(indexHtml, /<link\s+rel="manifest"/);
+  assert.match(themeInit, /manifestLink\.rel = 'manifest'/);
+  assert.match(themeInit, /isPublicMenuRoute[\s\S]*'\/manifest\.webmanifest'[\s\S]*'\/manifest-operational\.webmanifest'/);
+  assert.match(themeInit, /pathname\.indexOf\('\/c\/'\) === 0/);
 });
 
 test("iOS orienta instalação antes de pedir permissão", () => {
