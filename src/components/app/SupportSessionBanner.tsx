@@ -99,7 +99,7 @@ export function SupportSessionBanner() {
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 font-bold uppercase tracking-wider text-amber-400">
           <ShieldAlert className="h-3.5 w-3.5" />
-          Modo Suporte Ativo
+          Modo Suporte Ativo · Somente leitura
         </span>
         <span className="text-amber-200/90">
           Restaurante: <strong>{session.restaurantName}</strong> (#{session.restaurantId})
