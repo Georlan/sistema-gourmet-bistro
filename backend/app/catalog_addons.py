@@ -317,7 +317,11 @@ def effective_modifier_payloads_by_product(
             "nome": group.nome,
             "min_selecoes": int(group.min_selecoes or 0),
             "max_selecoes": int(group.max_selecoes or 1),
-            "tipo": group.tipo,
+            "tipo": (
+                group.tipo
+                if group.tipo == "meio_a_meio"
+                else ("obrigatorio" if int(group.min_selecoes or 0) > 0 else "opcional")
+            ),
             "opcoes": options_by_group.get(str(group.id), []),
         }
         for group in groups

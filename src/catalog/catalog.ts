@@ -55,7 +55,9 @@ function normalizeModifierGroups(value: unknown): CatalogModifierGroup[] {
       nome: String(group.nome ?? ''),
       min_selecoes: Math.max(0, Number(group.min_selecoes ?? 0)),
       max_selecoes: Math.max(1, Number(group.max_selecoes ?? 1)),
-      tipo: String(group.tipo ?? 'opcional'),
+      tipo: group.tipo === 'meio_a_meio'
+        ? 'meio_a_meio'
+        : (Number(group.min_selecoes ?? 0) > 0 ? String(group.tipo ?? 'obrigatorio') : 'opcional'),
       recomendado: group.recomendado !== false,
       modo_selecao: group.modo_selecao === 'porcoes' || group.modo_selecao === 'tipos' ? group.modo_selecao : undefined,
       opcoes: (Array.isArray(group.opcoes) ? group.opcoes : [])
