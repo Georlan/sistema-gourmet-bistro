@@ -105,6 +105,13 @@ type TenantIncident = {
   action_target_id?: string | null;
 };
 
+type CapabilitySnapshot = {
+  plan: string;
+  baseline: Record<string, boolean>;
+  overrides: Record<string, { enabled: boolean; source: string }>;
+  effective: Record<string, boolean>;
+};
+
 type AccessDetail = {
   totalUsers: number;
   activeUsers: number;
@@ -203,6 +210,7 @@ function supportTargetForCockpit(key: string): SupportNavigationTarget | null {
   if (key === "dine-in") return { tab: "impressao_salao", subTab: "mesas", label: "Salão / mesas" };
   if (key === "delivery") return { tab: "cardapio_digital", subTab: "cardapio_entrega", label: "Configuração de entrega" };
   if (key === "payment") return { tab: "cardapio_digital", subTab: "cardapio_pagamentos", label: "Formas de pagamento" };
+  if (key === "printing") return { tab: "impressao_salao", subTab: "impressao", label: "Impressão" };
   return null;
 }
 
@@ -226,6 +234,8 @@ export function SuperAdminRestaurant360({
   const [audit, setAudit] = useState<SuperAdminAuditLogEntry[]>([]);
   const [incidents, setIncidents] = useState<TenantIncident[]>([]);
   const [incidentsAvailable, setIncidentsAvailable] = useState(false);
+  const [capabilities, setCapabilities] = useState<CapabilitySnapshot | null>(null);
+  const [capabilitiesAvailable, setCapabilitiesAvailable] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [trialOpen, setTrialOpen] = useState(false);
@@ -290,6 +300,13 @@ export function SuperAdminRestaurant360({
         }
         return body as TenantIncident[];
       }),
+      superAdminFetch("/api/super-admin/restaurantes/" + tenant.id + "/capabilities").then(async response => {
+        const body = await response.json();
+        if (!response.ok || !body || typeof body !== "object") {
+          throw new Error(body?.detail || "Recursos efetivos indisponíveis.");
+        }
+        return body as CapabilitySnapshot;
+      }),
     ]);
 
     if (results[0].status === "fulfilled") setTrial(results[0].value as TrialRecord | null);
@@ -325,6 +342,15 @@ export function SuperAdminRestaurant360({
       nextErrors.push("Incidentes: " + superAdminErrorMessage(results[4].reason));
     }
 
+    if (results[5].status === "fulfilled") {
+      setCapabilities(results[5].value as CapabilitySnapshot);
+      setCapabilitiesAvailable(true);
+    } else {
+      setCapabilities(null);
+      setCapabilitiesAvailable(false);
+      nextErrors.push("Recursos: " + superAdminErrorMessage(results[5].reason));
+    }
+
     setErrors(nextErrors);
     setLoading(false);
   }, [tenant.id]);
@@ -340,6 +366,8 @@ export function SuperAdminRestaurant360({
 
   const readySteps = release ? Object.values(release.steps).filter(Boolean).length : null;
   const criticalIncidentCount = incidents.filter(item => item.severity === "critical" || item.severity === "high").length;
+  const printingIncidents = incidents.filter(item => item.source === "impressao");
+  const printingEnabled = capabilitiesAvailable ? capabilities?.effective?.printing === true : null;
 
   const incidentTone = (severity: string) => {
     if (severity === "critical" || severity === "high") return "border-rose-900/60 bg-rose-950/20 text-rose-200";
@@ -616,6 +644,37 @@ export function SuperAdminRestaurant360({
         : "Configurar formas de pagamento; conectar Mercado Pago apenas se quiser pagamento online.",
     },
     {
+      key: "printing",
+      label: "Impressão",
+      state: printingEnabled === false
+        ? "optional"
+        : printingEnabled === true && printingIncidents.length > 0
+          ? "blocked"
+          : printingEnabled === true
+            ? "check"
+            : "unknown",
+      detail: printingEnabled === false
+        ? "Recurso de impressão não está habilitado para este restaurante"
+        : printingEnabled === true && printingIncidents.length > 0
+          ? String(printingIncidents.length) + " incidente(s) de impressão detectado(s)"
+          : printingEnabled === true
+            ? "Recurso habilitado · nenhum incidente de impressão detectado"
+            : "Estado do recurso de impressão indisponível",
+      evidence: printingEnabled === false
+        ? "Capability efetiva: printing=false"
+        : printingEnabled === true && printingIncidents.length > 0
+          ? "Central de Incidentes + capability efetiva"
+          : printingEnabled === true
+            ? "Capability efetiva + ausência de incidente detectado"
+            : "Fonte de recursos indisponível",
+      owner: printingEnabled === false ? "KÔMA se o recurso precisar ser liberado" : "KÔMA / cliente",
+      nextStep: printingEnabled === false
+        ? "Nenhuma ação obrigatória se o restaurante não contratou nem recebeu impressão."
+        : printingIncidents.length > 0
+          ? "Revisar o incidente e abrir a tela de impressão em Modo Suporte para confirmar agente, impressora e fila."
+          : "Abrir a tela de impressão em Modo Suporte e confirmar agente, impressora e fila antes do primeiro turno.",
+    },
+    {
       key: "release",
       label: "Liberação / trial",
       state: release.readiness?.trialStarted
@@ -645,6 +704,7 @@ export function SuperAdminRestaurant360({
     if (state === "blocked") return "border-rose-900/50 bg-rose-950/20 text-rose-200";
     if (state === "waiting") return "border-amber-900/50 bg-amber-950/20 text-amber-200";
     if (state === "optional") return "border-zinc-800 bg-koma-page text-koma-muted";
+    if (state === "check") return "border-sky-900/50 bg-sky-950/20 text-sky-200";
     return "border-zinc-800 bg-koma-page text-koma-secondary";
   };
 
@@ -653,6 +713,7 @@ export function SuperAdminRestaurant360({
     if (state === "blocked") return "Bloqueado";
     if (state === "waiting") return "Aguardando";
     if (state === "optional") return "Opcional";
+    if (state === "check") return "Verificar";
     if (state === "pending") return "Pendente";
     return "Indisponível";
   };
