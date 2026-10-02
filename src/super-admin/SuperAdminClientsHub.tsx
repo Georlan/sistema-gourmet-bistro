@@ -177,6 +177,10 @@ export function SuperAdminClientsHub({
             onChangeNewClientsView("signups");
             onChangeView("new");
           }}
+          onOpenContracts={() => {
+            onChangeNewClientsView("contracts");
+            onChangeView("new");
+          }}
         />
       )}
       {activeView === "trials" && (
