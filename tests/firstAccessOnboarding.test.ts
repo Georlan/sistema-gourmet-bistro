@@ -181,7 +181,7 @@ test('onboarding uses canonical server progress, canonical modes and optional K�
   assert.match(onboarding, /Mercado Pago já está disponível/);
   assert.match(onboarding, /C6 Bank está em homologação/);
   assert.match(onboarding, /Novos pedidos online dependem do caixa aberto/);
-  assert.match(onboarding, /separado da cobrança da sua assinatura KÔMA/);
+  assert.match(onboarding, /separada da cobrança da assinatura KÔMA/);
   assert.match(onboarding, /pedido de teste continua disponível como validação opcional/);
 });
 
