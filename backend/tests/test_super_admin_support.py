@@ -145,6 +145,7 @@ def test_support_mode_authenticates_operational_routes():
     assert isinstance(op_resp.json(), list)
 
 
+
 def test_support_mode_is_read_only_for_permission_guarded_tenant_mutations():
     """Modo Suporte navega e diagnostica, mas não altera configuração do tenant."""
     headers = _superadmin_headers()
@@ -170,14 +171,13 @@ def test_support_mode_is_read_only_for_permission_guarded_tenant_mutations():
     assert "somente para diagnóstico" in write.json()["detail"]
     assert "Super Admin" in write.json()["detail"]
 
-    # O encerramento explícito da própria sessão continua sendo uma ação de suporte válida.
+    # Encerrar a própria sessão continua sendo uma ação válida do fluxo de suporte.
     end = client.post(
         "/api/super-admin/support/end-current",
         headers=support_headers,
         json={"reason": "Diagnóstico concluído sem alteração do tenant."},
     )
     assert end.status_code == 200, end.text
-
 
 def test_customer_pii_requires_audited_support_mode():
     """Super Admin direto não acessa PII tenant; Modo Suporte temporário pode."""
