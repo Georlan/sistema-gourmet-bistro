@@ -74,7 +74,7 @@ async function activate(page: Page) {
   await expect(page).toHaveURL(/\?view=ativar$/);
 }
 
-test('modalidades mostram confirmação persistida e Mercado Pago fica claramente opcional', async ({ page }) => {
+test('modalidades mostram confirmação persistida e KÔMA Pagamentos fica claramente opcional', async ({ page }) => {
   let snapshot = baseSnapshot();
   await page.route('**/api/subscription', route => route.fulfill({ json: { subscription: null } }));
   await page.route('**/api/onboarding/status', route => route.fulfill({ json: snapshot }));
@@ -91,7 +91,7 @@ test('modalidades mostram confirmação persistida e Mercado Pago fica clarament
   await expect(page.getByText('Modalidades salvas ✓: Retirada')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Salvo ✓' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pode configurar depois' })).toBeVisible();
-  await expect(page.getByText('Mercado Pago não conectado — tudo bem por enquanto')).toBeVisible();
+  await expect(page.getByText('Nenhum provedor conectado — tudo bem por enquanto')).toBeVisible();
 });
 
 test('onboarding comercial concluído deixa claro que a equipe KÔMA está liberando o acesso', async ({ page }) => {
