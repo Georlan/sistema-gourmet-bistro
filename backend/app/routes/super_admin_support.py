@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..database import SessionLocal, get_db, tenant_session_scope
 from ..models import Restaurante, SuperAdminAuditLog
-from ..security import create_access_token, get_current_user
+from ..security import create_access_token, get_current_user_for_support_action
 from ..support_models import SupportSession
 from .super_admin import get_current_admin
 
@@ -295,7 +295,7 @@ def get_active_support_session(
 @router.post("/end-current")
 def end_current_support_session(
     payload: SupportSessionEndRequest = SupportSessionEndRequest(),
-    current_user=Depends(get_current_user),
+    current_user=Depends(get_current_user_for_support_action),
     db: Session = Depends(get_db),
 ):
     """Permite ao operador encerrar sua própria sessão pelo banner operacional."""
