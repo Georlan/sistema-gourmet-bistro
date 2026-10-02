@@ -35,6 +35,7 @@ interface SuperAdminTenantsTabProps {
   contractsAvailable: boolean;
   onOpenTeamControls: () => void;
   onOpenCatalogAssistance: () => void;
+  onOpenContracts: () => void;
 }
 
 const OPERATION_PROFILES = [
@@ -73,6 +74,7 @@ export function SuperAdminTenantsTab({
   contractsAvailable,
   onOpenTeamControls,
   onOpenCatalogAssistance,
+  onOpenContracts,
 }: SuperAdminTenantsTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("ALL");
@@ -359,6 +361,7 @@ export function SuperAdminTenantsTab({
           onBenefits={(tenant) => setBenefitsTenant(tenant)}
           onOpenTeamControls={onOpenTeamControls}
           onOpenCatalogAssistance={onOpenCatalogAssistance}
+          onOpenContracts={onOpenContracts}
         />
       )}
 
