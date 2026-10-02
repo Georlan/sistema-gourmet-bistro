@@ -24,7 +24,8 @@ from ...subscription import subscription_marketplace_rate
 from ..billing_service import tenant_marketplace_rate
 from ..outbox import enqueue_outbox_event_in_session
 from .base import ProviderPayment
-from .mercado_pago import MercadoPagoError, MercadoPagoProvider
+from .mercado_pago import MercadoPagoError
+from .provider_registry import UnsupportedPaymentProviderError, provider_for_account
 from .oauth import MercadoPagoOAuthError, refresh_access_token
 from .account_connection import is_marketplace_owner_account
 
@@ -242,6 +243,7 @@ class OnlinePaymentService:
         turno: CaixaTurno,
         amount: Decimal,
         idempotency_key: str,
+        provider: str = "mercado_pago",
     ) -> OnlinePaymentIntent:
         restaurant = db.query(Restaurante).filter(
             Restaurante.id == comanda.restaurante_id,
@@ -254,7 +256,7 @@ class OnlinePaymentService:
             restaurante_id=comanda.restaurante_id,
             comanda_id=comanda.id,
             turno_id=turno.id,
-            provider="mercado_pago",
+            provider=provider,
             method="pix",
             status="created",
             amount=float(normalized_amount),
@@ -314,7 +316,7 @@ class OnlinePaymentService:
         locked_intent = db.query(OnlinePaymentIntent).filter(
             OnlinePaymentIntent.restaurante_id == account.restaurante_id,
             OnlinePaymentIntent.id == intent.id,
-            OnlinePaymentIntent.provider == "mercado_pago",
+            OnlinePaymentIntent.provider == account.provider,
         ).with_for_update().one()
 
         if not (payment.external_id or "").strip():
@@ -374,7 +376,7 @@ class OnlinePaymentService:
                 )
             return locked_intent, False
 
-        payment_idempotency_key = f"online:mercado_pago:{payment.external_id}"
+        payment_idempotency_key = f"online:{locked_intent.provider}:{payment.external_id}"
         pagamento = None
         if locked_intent.pagamento_id:
             pagamento = db.query(Pagamento).filter(
@@ -488,7 +490,11 @@ class OnlinePaymentService:
         )
 
         def create_with_current_token() -> ProviderPayment:
-            return MercadoPagoProvider(account.access_token).create_pix(
+            try:
+                provider_adapter = provider_for_account(account)
+            except UnsupportedPaymentProviderError as exc:
+                raise OnlinePaymentConfigurationError(str(exc)) from exc
+            return provider_adapter.create_pix(
                 amount=_money(intent.amount),
                 marketplace_fee=_money(intent.marketplace_fee),
                 payer_email=payer_email,
@@ -561,7 +567,10 @@ class OnlinePaymentService:
                 "Pix sem identificador externo não pode ser cancelado com segurança."
             )
 
-        provider = MercadoPagoProvider(account.access_token)
+        try:
+            provider = provider_for_account(account)
+        except UnsupportedPaymentProviderError as exc:
+            raise OnlinePaymentConfigurationError(str(exc)) from exc
         try:
             payment = provider.cancel_payment(intent.external_payment_id)
         except MercadoPagoError as exc:
@@ -573,7 +582,10 @@ class OnlinePaymentService:
                     force=True,
                     known_access_token=stale_access_token,
                 )
-                provider = MercadoPagoProvider(account.access_token)
+                try:
+                    provider = provider_for_account(account)
+                except UnsupportedPaymentProviderError as provider_exc:
+                    raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
                 try:
                     payment = provider.cancel_payment(intent.external_payment_id)
                 except MercadoPagoError:
@@ -623,7 +635,11 @@ class OnlinePaymentService:
         external_payment_id: str,
     ) -> tuple[OnlinePaymentIntent | None, bool]:
         try:
-            payment = MercadoPagoProvider(account.access_token).get_payment(external_payment_id)
+            try:
+                provider = provider_for_account(account)
+            except UnsupportedPaymentProviderError as provider_exc:
+                raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
+            payment = provider.get_payment(external_payment_id)
         except MercadoPagoError as exc:
             if exc.status_code != 401:
                 raise
@@ -634,11 +650,15 @@ class OnlinePaymentService:
                 force=True,
                 known_access_token=stale_access_token,
             )
-            payment = MercadoPagoProvider(account.access_token).get_payment(external_payment_id)
+            try:
+                provider = provider_for_account(account)
+            except UnsupportedPaymentProviderError as provider_exc:
+                raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
+            payment = provider.get_payment(external_payment_id)
 
         intent = db.query(OnlinePaymentIntent).filter(
             OnlinePaymentIntent.restaurante_id == account.restaurante_id,
-            OnlinePaymentIntent.provider == "mercado_pago",
+            OnlinePaymentIntent.provider == account.provider,
             OnlinePaymentIntent.external_payment_id == payment.external_id,
         ).first()
         if intent is None:
