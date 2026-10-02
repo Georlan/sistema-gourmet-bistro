@@ -705,3 +705,56 @@ test('sugestões usam bebidas e sobremesas do catálogo real e adicionam sem err
   await expect(suggestions).not.toContainText('Suco de laranja');
   await expect(page.getByText('Suco de laranja', { exact: true }).last()).toBeVisible();
 });
+
+test('default entrega e escolha manual sobrevivem ao fechamento da sacola e revisão', async ({ page }) => {
+  const orders: CapturedOrder[] = [];
+  await mockPublicMenuBackend(page, orders);
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#btn-fast-add-101').click();
+  await openCart(page);
+  const delivery = page.getByRole('button', { name: /^Entrega\b/ });
+  const pickup = page.getByRole('button', { name: /Retirada/ });
+  await expect(delivery).toHaveAttribute('aria-pressed', 'true');
+  await pickup.click();
+  await page.getByRole('button', { name: 'Fechar sacola' }).click();
+  await openCart(page);
+  await expect(pickup).toHaveAttribute('aria-pressed', 'true');
+  await delivery.click();
+  await page.getByRole('button', { name: 'Fechar sacola' }).click();
+  await openCart(page);
+  await expect(delivery).toHaveAttribute('aria-pressed', 'true');
+  await pickup.click();
+  await page.getByPlaceholder('Como devemos chamar você?').fill('Ana Teste');
+  await page.getByPlaceholder('(00) 00000-0000').fill('85999999999');
+  await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
+  await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
+  await page.getByRole('button', { name: 'Fechar revisão do pedido' }).click();
+  await openCart(page);
+  await expect(pickup).toHaveAttribute('aria-pressed', 'true');
+  await page.getByPlaceholder('Como devemos chamar você?').fill('Ana Teste');
+  await page.getByPlaceholder('(00) 00000-0000').fill('85999999999');
+  await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
+  await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
+  await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
+  await expect.poll(() => orders.length).toBe(1);
+  expect(orders[0].tipo_pedido).toBe('retirada');
+  expect(orders[0].taxa_entrega).toBe(0);
+});
+
+
+test('configuração assíncrona não seleciona retirada antes de carregar', async ({ page }) => {
+  await mockPublicMenuBackend(page, []);
+  let release!: () => void;
+  const ready = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`${API_ORIGIN}/api/cardapio-digital/public**`, async route => {
+    await ready;
+    await route.fallback();
+  });
+  await page.goto('/cardapio?restaurante_id=2', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByText('Carregando cardápio', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Retirada/ })).toHaveCount(0);
+  release();
+  await page.locator('#btn-fast-add-101').click();
+  await openCart(page);
+  await expect(page.getByRole('button', { name: /^Entrega\b/ })).toHaveAttribute('aria-pressed', 'true');
+});
