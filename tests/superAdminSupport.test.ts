@@ -43,6 +43,9 @@ test('modal de suporte exige motivo obrigatório e não manipula senhas de clien
   assert.match(supportModal, /Nenhuma senha de cliente/);
   assert.match(supportModal, /início, o motivo, a duração e o encerramento desta sessão/);
   assert.match(supportModal, /auditoria administrativa/);
+  assert.match(supportModal, /somente para diagnóstico e visualização/);
+  assert.match(supportModal, /alterações administrativas devem ser executadas explicitamente no/);
+  assert.match(supportModal, /Super Admin/);
   assert.doesNotMatch(supportModal, /Todas as ações nesta sessão serão registradas/);
   assert.match(supportModal, /saveOperatorSession/);
   assert.doesNotMatch(supportModal, /senha_hash|password|client_secret/i);
@@ -56,7 +59,7 @@ test('modal de suporte bloqueia submissões concorrentes antes do re-render', ()
 });
 
 test('banner de suporte informa contexto operacional, tempo restante e encerramento', () => {
-  assert.match(banner, /Modo Suporte Ativo/);
+  assert.match(banner, /Modo Suporte Ativo · Somente leitura/);
   assert.match(banner, /Restaurante:/);
   assert.match(banner, /Operador:/);
   assert.match(banner, /Encerrar Suporte/);
