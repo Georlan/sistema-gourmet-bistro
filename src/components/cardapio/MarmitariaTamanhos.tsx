@@ -141,6 +141,9 @@ export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos: gr
               <label className="block text-sm">Mínimo<input aria-label={`Mínimo do grupo ${index + 1}`} type="number" required min={0} max={100} step={1} className={inputClass} value={rule.minimo} onChange={event => updateRule(index, { minimo: Number(event.target.value) })} /></label>
               <label className="block text-sm">Máximo<input aria-label={`Máximo do grupo ${index + 1}`} type="number" required min={1} max={100} step={1} className={inputClass} value={rule.maximo} onChange={event => updateRule(index, { maximo: Number(event.target.value) })} /></label>
             </div>
+            <p className="text-[11px] leading-relaxed text-koma-muted">
+              Mínimo 0 deixa o grupo opcional. O máximo é apenas o limite permitido e não obriga o cliente a completar essa quantidade.
+            </p>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" aria-label={`Permitir repetir grupo ${index + 1}`} checked={rule.modo_selecao === 'porcoes'} onChange={event => updateRule(index, { modo_selecao: event.target.checked ? 'porcoes' : 'tipos' })} />Permitir repetir a mesma opção</label>
             <button type="button" className="text-sm text-rose-500" onClick={() => setEditing({ ...editing, ativo: editing.regras.length > 1 && editing.ativo, regras: editing.regras.filter((_, i) => i !== index) })}>Remover grupo desta quentinha</button>
           </div>)}
