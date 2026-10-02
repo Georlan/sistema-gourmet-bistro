@@ -463,8 +463,11 @@ export default function CardapioCartDrawer({
 
     // Check minimum order
     const pedidoMin = brandConfig?.pedidoMinimo || 0;
-    if (deliveryMethod === "delivery" && pedidoMin > 0 && subtotal < pedidoMin) {
-      reportValidationError(`O pedido mínimo para entrega é de ${formatPrice(pedidoMin)} (faltam ${formatPrice(pedidoMin - subtotal)}).`, "cart-receive-methods");
+    const isDeliveryBelowMinimum = deliveryMethod === "delivery" && pedidoMin > 0 && subtotal < pedidoMin;
+    const isPickupBelowMinimum = deliveryMethod === "pickup" && Boolean(brandConfig?.pedidoMinimoRetirada) && pedidoMin > 0 && subtotal < pedidoMin;
+    if (isDeliveryBelowMinimum || isPickupBelowMinimum) {
+      const modeLabel = deliveryMethod === "delivery" ? "para entrega" : "para retirada";
+      reportValidationError(`O pedido mínimo ${modeLabel} é de ${formatPrice(pedidoMin)} (faltam ${formatPrice(pedidoMin - subtotal)}).`, "cart-receive-methods");
       return;
     }
 

@@ -603,6 +603,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     perm_garcom_chamar: bool
     perm_garcom_ociosas: bool
     pedido_minimo: Optional[float] = 0.0
+    pedido_minimo_retirada: bool = False
     frete_gratis_valor: Optional[float] = 0.0
     tipo_taxa_entrega: Optional[str] = "fixa"
     taxa_entrega_fixa: Optional[float] = None
@@ -636,6 +637,7 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     delivery_ativo: Optional[bool] = None
     tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
     pedido_minimo: Optional[float] = None
+    pedido_minimo_retirada: Optional[bool] = None
     frete_gratis_valor: Optional[float] = None
     tipo_taxa_entrega: Optional[str] = None
     taxa_entrega_fixa: Optional[float] = None
@@ -941,6 +943,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     cor_primaria: Optional[str] = "#00b894"
     cor_fundo: Optional[str] = "#090a0f"
     pedido_minimo: Optional[float] = 0.0
+    pedido_minimo_retirada: bool = False
     frete_gratis_valor: Optional[float] = 0.0
     tipo_taxa_entrega: Optional[str] = "fixa"
     taxa_entrega_fixa: Optional[float] = None
