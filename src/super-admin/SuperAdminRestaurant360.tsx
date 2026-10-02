@@ -147,6 +147,7 @@ interface SuperAdminRestaurant360Props {
   onBenefits: (tenant: Tenant) => void;
   onOpenTeamControls: () => void;
   onOpenCatalogAssistance: () => void;
+  onOpenContracts: () => void;
 }
 
 const sections: Array<{
@@ -226,6 +227,7 @@ export function SuperAdminRestaurant360({
   onBenefits,
   onOpenTeamControls,
   onOpenCatalogAssistance,
+  onOpenContracts,
 }: SuperAdminRestaurant360Props) {
   const [section, setSection] = useState<SectionId>("summary");
   const [trial, setTrial] = useState<TrialRecord | null>(null);
@@ -508,6 +510,35 @@ export function SuperAdminRestaurant360({
   };
 
   const cockpitItems = release ? [
+    {
+      key: "contract",
+      label: "Contratação",
+      state: !contractsAvailable
+        ? "unknown"
+        : linkedContract
+          ? "ready"
+          : release.onboarding?.mode === "commercial"
+            ? "blocked"
+            : "optional",
+      detail: !contractsAvailable
+        ? "Fonte de contratações indisponível"
+        : linkedContract
+          ? "Contrato vinculado · " + (linkedContract.status === "ACTIVATED" ? "ativado" : "ativação pendente")
+          : release.onboarding?.mode === "commercial"
+            ? "Implantação comercial sem contrato vinculado"
+            : "Tenant administrativo/QA · sem contratação comercial",
+      evidence: linkedContract
+        ? "Protocolo " + linkedContract.protocol + " · billing " + (linkedContract.billingStatus || "não informado")
+        : release.onboarding?.mode === "commercial"
+          ? "Onboarding comercial sem ContractAcceptance vinculado ao tenant"
+          : "Modo de onboarding administrativo",
+      owner: linkedContract || release.onboarding?.mode !== "commercial" ? "—" : "KÔMA",
+      nextStep: linkedContract
+        ? "Nenhuma ação necessária; condições congeladas estão disponíveis em Plano & benefícios."
+        : release.onboarding?.mode === "commercial"
+          ? "Revisar a contratação e o vínculo do restaurante antes de continuar a implantação."
+          : "Nenhuma ação comercial obrigatória para tenant administrativo/QA.",
+    },
     {
       key: "access",
       label: "Acesso",
@@ -931,6 +962,11 @@ export function SuperAdminRestaurant360({
                       {item.key === "access" && (
                         <button type="button" onClick={onOpenTeamControls} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
                           Gerenciar acessos
+                        </button>
+                      )}
+                      {item.key === "contract" && release.onboarding?.mode === "commercial" && !linkedContract && (
+                        <button type="button" onClick={onOpenContracts} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                          Abrir contratações
                         </button>
                       )}
                       {item.key === "catalog" && release.catalogAssistance && (

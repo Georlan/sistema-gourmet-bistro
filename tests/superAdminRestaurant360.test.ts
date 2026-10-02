@@ -139,3 +139,15 @@ test('Restaurante 360 mostra impressão sem inventar saúde positiva', () => {
   assert.match(restaurant360, /subTab: "impressao"/);
   assert.doesNotMatch(restaurant360, /Impressão pronta.*nenhum incidente/i);
 });
+
+
+test('Cockpit mostra contratação real e diferencia tenant comercial de administrativo', () => {
+  assert.match(restaurant360, /key: "contract"/);
+  assert.match(restaurant360, /linkedContract/);
+  assert.match(restaurant360, /contractsAvailable/);
+  assert.match(restaurant360, /Implantação comercial sem contrato vinculado/);
+  assert.match(restaurant360, /Tenant administrativo\/QA · sem contratação comercial/);
+  assert.match(restaurant360, /ContractAcceptance vinculado ao tenant/);
+  assert.match(restaurant360, /Abrir contratações/);
+  assert.doesNotMatch(restaurant360, /mockContract|fakeContract|simulatedContract/);
+});
