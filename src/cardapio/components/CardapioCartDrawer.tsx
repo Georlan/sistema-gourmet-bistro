@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { getFulfillmentAvailability, resolveFulfillmentSelection, type CardapioFulfillment } from "../fulfillment";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { 
   Product, 
@@ -63,7 +64,7 @@ export interface CartItem {
   notes: string;
 }
 
-export type CardapioFulfillment = "delivery" | "pickup" | "dine_in";
+export type { CardapioFulfillment } from "../fulfillment";
 
 export interface CardapioCheckoutRequest {
   deliveryMethod: CardapioFulfillment;
@@ -87,6 +88,8 @@ interface CardapioCartDrawerProps {
   restaurantId: string | number;
   restaurantAddress?: string;
   brandConfig?: BrandConfig;
+  initialFulfillment?: CardapioFulfillment | null;
+  onFulfillmentChange?: (method: CardapioFulfillment) => void;
   allProducts?: Product[];
   onClose: () => void;
   onUpdateQty: (itemId: string, newQty: number) => void;
@@ -114,6 +117,8 @@ export default function CardapioCartDrawer({
   restaurantId,
   restaurantAddress,
   brandConfig,
+  initialFulfillment,
+  onFulfillmentChange,
   allProducts = [],
   onClose,
   onUpdateQty,
@@ -128,13 +133,16 @@ export default function CardapioCartDrawer({
   orderingEnabled = true,
   orderingMessage = "Pedidos temporariamente pausados.",
 }: CardapioCartDrawerProps) {
-  const [deliveryMethod, setDeliveryMethod] = useState<CardapioFulfillment>("pickup");
+  const [selectedFulfillment, setSelectedFulfillment] = useState<CardapioFulfillment | null>(initialFulfillment ?? null);
+  const deliveryMethod = resolveFulfillmentSelection(brandConfig, selectedFulfillment);
+  const { pickup: pickupEnabled, dine_in: dineInEnabled, delivery: deliveryEnabled } = getFulfillmentAvailability(brandConfig);
+  const setDeliveryMethod = (method: CardapioFulfillment) => {
+    setSelectedFulfillment(method);
+    onFulfillmentChange?.(method);
+  };
   const couponsEnabled = brandConfig?.benefits?.coupons === true;
   const cashbackEnabled = brandConfig?.benefits?.cashback === true;
   const showDiscounts = couponsEnabled || cashbackEnabled;
-  const explicitOrderTypes = brandConfig?.activeOrderTypes;
-  const pickupEnabled = !explicitOrderTypes || explicitOrderTypes.includes("retirada");
-  const dineInEnabled = !explicitOrderTypes || explicitOrderTypes.includes("consumo_local");
   const [address, setAddress] = useState(user?.address || "");
   const [deliveryAddressDraft, setDeliveryAddressDraft] = useState<DeliveryAddressDraft>(() => (
     parseDeliveryAddressLegacy(user?.address) || emptyAddress()
@@ -320,31 +328,17 @@ export default function CardapioCartDrawer({
   }, [appliedCoupon, couponValidationFingerprint]);
 
   const deliveryQuote = getDeliveryQuote(brandConfig, subtotal, selectedBairro);
-  const deliveryEnabled = brandConfig?.deliveryEnabled !== false && (!explicitOrderTypes || explicitOrderTypes.includes("delivery"));
   const deliveryFee = deliveryMethod === "delivery" ? deliveryQuote.fee : 0;
   const deliveryLabel = deliveryQuote.fee === 0 ? "Sem taxa de entrega" : `Taxa de ${formatPrice(deliveryQuote.fee)}`;
   const minimumOrder = brandConfig?.pedidoMinimo || 0;
-  const remainingMinimum = getDeliveryMinimumRemaining(brandConfig, subtotal, deliveryMethod);
+  const remainingMinimum = deliveryMethod ? getDeliveryMinimumRemaining(brandConfig, subtotal, deliveryMethod) : 0;
   const freeDeliveryThreshold = brandConfig?.freteGratisValor || 0;
 
   useEffect(() => {
-    const methodEnabled = deliveryMethod === "pickup"
-      ? pickupEnabled
-      : deliveryMethod === "dine_in"
-        ? dineInEnabled
-        : deliveryEnabled;
-    if (!methodEnabled) {
-      const fallback: CardapioFulfillment | null = pickupEnabled
-        ? "pickup"
-        : dineInEnabled
-          ? "dine_in"
-          : deliveryEnabled
-            ? "delivery"
-            : null;
-      if (fallback) setDeliveryMethod(fallback);
+    if (brandConfig && selectedFulfillment && selectedFulfillment !== deliveryMethod) {
       setSelectedBairro("");
     }
-  }, [deliveryEnabled, deliveryMethod, dineInEnabled, pickupEnabled]);
+  }, [brandConfig, selectedFulfillment, deliveryMethod]);
 
   // Cashback deduction calculation
   const userCashbackBalance = cashbackEnabled ? Number(user?.cashback ?? user?.saldo_cashback ?? 0) : 0;
@@ -459,6 +453,11 @@ export default function CardapioCartDrawer({
     }
     if (paymentError || !paymentDetail) {
       reportValidationError(paymentError || "Escolha uma forma de pagamento.", "cart-payment-methods");
+      return;
+    }
+
+    if (!deliveryMethod) {
+      reportValidationError("Nenhuma modalidade de recebimento disponível.", "cart-receive-methods");
       return;
     }
 
