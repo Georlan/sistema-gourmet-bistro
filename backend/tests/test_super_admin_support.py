@@ -160,7 +160,10 @@ def test_support_mode_is_read_only_for_permission_guarded_tenant_mutations():
         "Authorization": f"Bearer {start.json()['access_token']}"
     }
 
-    read = client.get("/caixa/configuracoes", headers=support_headers)
+    # Use a read endpoint that is always valid for a provisioned tenant.
+    # /caixa/configuracoes may legitimately return 404 when that optional row
+    # has not been created yet, which says nothing about Support Mode reads.
+    read = client.get("/produtos/", headers=support_headers)
     assert read.status_code == 200, read.text
 
     write = client.put(
