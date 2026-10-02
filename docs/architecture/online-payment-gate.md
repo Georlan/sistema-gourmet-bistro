@@ -18,6 +18,24 @@ O KÔMA separa a criação técnica do pedido da sua liberação operacional.
 6. Somente `approved` cria `Pagamento`, marca os itens como pagos, muda a barreira para `approved` e publica `OrderCreated`.
 7. Repetições de webhook e reconciliação são idempotentes.
 
+## KÔMA Pagamentos e providers
+
+O nome de produto da camada de recebimento é **KÔMA Pagamentos**. Ela orquestra provedores financeiros; não funciona como carteira e não deve custodiar saldo do restaurante.
+
+Regras aprovadas para a evolução multi-provider:
+
+- o restaurante mantém **um único provedor de recebimento conectado/ativo por vez**;
+- a preferência de uso é modelada por canal (`online` e `presencial`), sem fazer a taxa KÔMA variar entre canais;
+- a taxa KÔMA vem exclusivamente do `marketplaceRate` congelado no aceite comercial do tenant;
+- tarifas do banco/PSP são externas e adicionais quando existirem;
+- Mercado Pago permanece disponível;
+- C6 Bank será oferecido como alternativa mesmo se a primeira versão não conseguir retirar a taxa KÔMA por split; nesse caso, a comissão KÔMA deve ser conciliada/cobrada separadamente sem custodiar o principal do restaurante;
+- cartão faz parte da direção de KÔMA Pagamentos, mas só entra quando houver fluxo seguro de tokenização/autorização pelo provider.
+
+O core não deve instanciar um provider concreto espalhado pelo domínio. A intenção materializa o provider conectado no momento da criação e o adaptador financeiro é resolvido pelo registry. Um provider ainda não implementado falha fechado antes de qualquer reconhecimento financeiro.
+
+As preferências por canal podem existir separadamente mesmo enquanto somente um provider estiver ativo; nesse estágio elas apontam para o mesmo recebedor. A regra evita manter duas contas financeiras simultaneamente ativas enquanto preserva o caminho para configurações distintas de online e presencial.
+
 ## Fechamento do Caixa e Pix assíncrono
 
 O Pix online pertence ao turno de Caixa em que a intenção foi criada. Esse vínculo é histórico: `OnlinePaymentIntent.turno_id` não é transferido para um turno posterior.
