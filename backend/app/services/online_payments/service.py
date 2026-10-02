@@ -173,26 +173,43 @@ class OnlinePaymentService:
 
     @classmethod
     def active_account(cls, db: Session, restaurant_id: int) -> RestaurantPaymentAccount:
-        account = db.query(RestaurantPaymentAccount).filter(
-            RestaurantPaymentAccount.restaurante_id == restaurant_id,
-            RestaurantPaymentAccount.provider == "mercado_pago",
-            RestaurantPaymentAccount.status == "active",
-        ).first()
-        if account is None:
+        accounts = (
+            db.query(RestaurantPaymentAccount)
+            .filter(
+                RestaurantPaymentAccount.restaurante_id == restaurant_id,
+                RestaurantPaymentAccount.status == "active",
+            )
+            .order_by(RestaurantPaymentAccount.updated_at.desc(), RestaurantPaymentAccount.id.desc())
+            .all()
+        )
+        if not accounts:
             raise OnlinePaymentConfigurationError(
                 "O pagamento online ainda não foi ativado por este restaurante. Escolha dinheiro ou fale com o estabelecimento."
             )
-        if is_marketplace_owner_account(account.provider_user_id):
+        if len(accounts) > 1:
             raise OnlinePaymentConfigurationError(
-                "A conta Mercado Pago conectada é a proprietária da aplicação KÔMA e não pode receber com split. "
-                "O restaurante precisa conectar uma conta Mercado Pago própria."
+                "Há mais de um provedor de recebimento ativo. O KÔMA Pagamentos permite somente um provedor conectado por vez."
             )
-        if not account.access_token or not account.webhook_secret:
-            raise OnlinePaymentConfigurationError("A conta de pagamento precisa ser reconectada.")
+
+        account = accounts[0]
+        if account.provider == "mercado_pago":
+            if is_marketplace_owner_account(account.provider_user_id):
+                raise OnlinePaymentConfigurationError(
+                    "A conta Mercado Pago conectada é a proprietária da aplicação KÔMA e não pode receber com split. "
+                    "O restaurante precisa conectar uma conta Mercado Pago própria."
+                )
+            if not account.access_token or not account.webhook_secret:
+                raise OnlinePaymentConfigurationError("A conta de pagamento precisa ser reconectada.")
+            if _token_needs_refresh(account.token_expires_at):
+                account = cls._refresh_account_credentials(db, account)
+        else:
+            try:
+                provider_for_account(account)
+            except UnsupportedPaymentProviderError as exc:
+                raise OnlinePaymentConfigurationError(str(exc)) from exc
+
         if not settings.KOMA_PUBLIC_API_URL:
             raise OnlinePaymentConfigurationError("A URL pública de pagamentos ainda não foi configurada.")
-        if _token_needs_refresh(account.token_expires_at):
-            account = cls._refresh_account_credentials(db, account)
         return account
 
     @staticmethod
@@ -501,7 +518,8 @@ class OnlinePaymentService:
                 external_reference=intent.id,
                 idempotency_key=f"koma-online-{intent.id}",
                 notification_url=(
-                    f"{settings.KOMA_PUBLIC_API_URL}/payments/webhooks/mercado-pago/{account.id}"
+                    f"{settings.KOMA_PUBLIC_API_URL}/payments/webhooks/"
+                    f"{account.provider.replace('_', '-')}/{account.id}"
                 ),
                 expires_at=expires_at,
             )
@@ -607,7 +625,7 @@ class OnlinePaymentService:
             and settled_intent.status not in UNPAID_TERMINAL_STATUSES
         ):
             raise OnlinePaymentConfigurationError(
-                "Mercado Pago não confirmou o cancelamento do Pix pendente."
+                "O provedor não confirmou o cancelamento do Pix pendente."
             )
         db.commit()
         db.refresh(settled_intent)
