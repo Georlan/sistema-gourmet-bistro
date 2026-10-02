@@ -151,3 +151,13 @@ test('Cockpit mostra contratação real e diferencia tenant comercial de adminis
   assert.match(restaurant360, /Abrir contratações/);
   assert.doesNotMatch(restaurant360, /mockContract|fakeContract|simulatedContract/);
 });
+
+
+test('Restaurante 360 mostra status e expiração do convite sem expor segredo', () => {
+  assert.match(restaurant360, /inviteEmailStatus/);
+  assert.match(restaurant360, /inviteExpiresAt/);
+  assert.match(restaurant360, /inviteExpired/);
+  assert.match(restaurant360, /E-mail entregue/);
+  assert.match(restaurant360, /Expirado/);
+  assert.doesNotMatch(restaurant360, /token_convite/);
+});
