@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker, with_loader_criteria
 
 from .config import settings
+from .pool_observability import ObservedQueuePool
 
 # AJUSTADO: connect_args agora é condicional para não travar no PostgreSQL (Supabase)
 connect_args = {"connect_timeout": 10}
@@ -263,6 +264,7 @@ if settings.DATABASE_URL.startswith("sqlite"):
 else:
     engine = create_engine(
         settings.DATABASE_URL,
+        poolclass=ObservedQueuePool,
         pool_size=settings.DB_POOL_SIZE,
         max_overflow=settings.DB_MAX_OVERFLOW,
         pool_timeout=settings.DB_POOL_TIMEOUT,

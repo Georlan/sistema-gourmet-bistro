@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from .pool_observability import pool_snapshot
 from .config import settings
 from .database import Base, current_restaurante_id, engine
 from .logging_security import install_sensitive_query_log_filter
@@ -252,6 +253,7 @@ async def add_request_id_and_structured_log(request: Request, call_next):
         json.dumps(
             {
                 "event": "http_request",
+                "db_pool": pool_snapshot(engine),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "request_id": request_id,
                 "support_code": request_id[:12],

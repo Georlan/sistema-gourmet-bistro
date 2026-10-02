@@ -42,6 +42,8 @@ def _engine():
 
 def main() -> int:
     args = parse_args()
+    if args.apply or args.tenant_id == 6:
+        raise SystemExit("Reset legado desativado; tenant real protegido.")
     engine = _engine()
     try:
         if args.apply:

@@ -9,10 +9,11 @@ Não há atores com bypass. Consulte o ruleset novamente antes de integrar:
 a configuração do GitHub é a fonte de verdade dos checks exigidos.
 
 `Merge verdict` executa `.github/workflows/quality-gate.yml` (**Koma Minimal
-Gate**): TypeScript, suíte unitária frontend, build de produção e compilação
-sintática de `backend/app`. Quando o detector de paths sensíveis é acionado,
-também executa regressões focais de autenticação, onboarding, cobrança, planos
-e otimização. Esse detector não equivale à cobertura de todo o backend.
+Gate**): TypeScript, suíte unitária frontend, build, regressões de navegador
+para sessão/onboarding, compilação backend, head Alembic único e detecção AST de
+migrations incompatíveis. As regressões críticas de auth, tenant, pedidos,
+idempotência, WebSocket, onboarding, cobrança, planos e observabilidade rodam
+em todo PR, sem depender de paths. Isso não equivale à suíte backend completa.
 
 Os antigos contexts `Frontend typecheck + unit + build`, `Backend full +
 critical regression gate`, `Browser regression matrix` e

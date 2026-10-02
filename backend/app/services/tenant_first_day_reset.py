@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import MetaData, delete, func, select, text, update
+from sqlalchemy import MetaData, func, select
 from sqlalchemy.engine import Connection, Engine
 
 
@@ -164,6 +164,8 @@ def build_tenant_first_day_plan(
     tenant_id: int,
     expected_name: str,
 ) -> TenantFirstDayPlan:
+    if tenant_id == 6:
+        raise RuntimeError("Tenant protegido: não pode ser alvo de ferramentas de QA/reset.")
     if tenant_id <= 0:
         raise RuntimeError("tenant_id deve ser positivo.")
 
@@ -213,118 +215,6 @@ def apply_tenant_first_day_reset(
     expected_name: str,
     confirmation: str,
 ) -> dict[str, Any]:
-    if confirmation != CONFIRMATION_PHRASE:
-        raise RuntimeError("Frase de confirmacao invalida.")
-
-    with engine.begin() as connection:
-        if connection.dialect.name == "postgresql":
-            connection.execute(
-                text("SELECT pg_advisory_xact_lock(:key)"),
-                {"key": 6_000_000 + int(tenant_id)},
-            )
-
-        before = build_tenant_first_day_plan(
-            connection,
-            tenant_id=tenant_id,
-            expected_name=expected_name,
-        )
-        if before.open_cash_shifts:
-            raise RuntimeError(
-                f"Reset bloqueado: existem {before.open_cash_shifts} caixa(s) aberto(s)."
-            )
-        if before.fiscal_documents:
-            raise RuntimeError(
-                "Reset bloqueado: existem documentos fiscais para este tenant."
-            )
-
-        metadata = _reflect(connection)
-        removed: dict[str, int] = {}
-        for table in reversed(metadata.sorted_tables):
-            if table.name not in OPERATIONAL_TABLES:
-                continue
-            if "restaurante_id" not in table.c:
-                continue
-            result = connection.execute(
-                delete(table).where(table.c.restaurante_id == tenant_id)
-            )
-            removed[table.name] = int(result.rowcount or 0)
-
-        print_agents = metadata.tables.get("print_agent_tokens")
-        cleared_agent_commands = 0
-        if print_agents is not None and "restaurante_id" in print_agents.c:
-            values = {}
-            if "pending_command" in print_agents.c:
-                values["pending_command"] = None
-            if "command_requested_at" in print_agents.c:
-                values["command_requested_at"] = None
-            if values:
-                result = connection.execute(
-                    update(print_agents)
-                    .where(print_agents.c.restaurante_id == tenant_id)
-                    .values(**values)
-                )
-                cleared_agent_commands = int(result.rowcount or 0)
-
-        clients = metadata.tables.get("clientes")
-        loyalty_balances_reset = 0
-        if clients is not None and "restaurante_id" in clients.c:
-            values = {}
-            if "saldo_pontos" in clients.c:
-                values["saldo_pontos"] = 0
-            if "saldo_cashback" in clients.c:
-                values["saldo_cashback"] = 0
-            if values:
-                result = connection.execute(
-                    update(clients)
-                    .where(clients.c.restaurante_id == tenant_id)
-                    .values(**values)
-                )
-                loyalty_balances_reset = int(result.rowcount or 0)
-
-        after = build_tenant_first_day_plan(
-            connection,
-            tenant_id=tenant_id,
-            expected_name=expected_name,
-        )
-
-        remaining = {
-            name: count
-            for name, count in after.operational_counts.items()
-            if count
-        }
-        if remaining:
-            raise RuntimeError(
-                f"Validacao final falhou; dados operacionais permaneceram: {remaining}"
-            )
-        if before.preserved_counts != after.preserved_counts:
-            raise RuntimeError(
-                "Validacao final falhou; contagens estruturais preservadas mudaram."
-            )
-
-        return {
-            "mode": "apply",
-            "tenant_id": tenant_id,
-            "restaurant_name": before.restaurant_name,
-            "before_nonzero": {
-                name: count
-                for name, count in before.operational_counts.items()
-                if count
-            },
-            "removed_nonzero": {
-                name: count for name, count in removed.items() if count
-            },
-            "print_agent_commands_cleared": cleared_agent_commands,
-            "customer_loyalty_balances_zeroed": loyalty_balances_reset,
-            "preserved_counts": after.preserved_counts,
-            "validation": {
-                "operational_rows_remaining": 0,
-                "orders_remaining": after.operational_counts.get("comandas", 0),
-                "print_jobs_remaining": after.operational_counts.get("print_jobs", 0),
-                "cash_shifts_remaining": after.operational_counts.get("caixa_turnos", 0),
-                "payments_remaining": after.operational_counts.get("pagamentos", 0),
-                "order_counters_remaining": after.operational_counts.get(
-                    "numeradores_operacionais", 0
-                ),
-                "next_order_expected_after_app_restart": 1,
-            },
-        }
+    # Retired before the first real customer: name/ID/confirmation were not
+    # sufficient to distinguish a QA restaurant from a customer.
+    raise RuntimeError("Reset legado desativado. Clientes reais não podem ser resetados.")
