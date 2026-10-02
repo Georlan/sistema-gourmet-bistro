@@ -53,3 +53,14 @@ test('interface deixa claro que revogação sobrevive à reativação', () => {
   assert.match(accessTab, /Encerrar sessões/);
   assert.doesNotMatch(accessTab, /revogação permanente de sessões terá uma camada dedicada/);
 });
+
+
+test('central mostra entrega e expiração de convites sem revelar token', () => {
+  assert.match(accessTab, /inviteEmailStatus/);
+  assert.match(accessTab, /inviteExpiresAt/);
+  assert.match(accessTab, /inviteExpired/);
+  assert.match(accessTab, /E-mail entregue/);
+  assert.match(accessTab, /Falha no e-mail/);
+  assert.match(accessTab, /Expirado/);
+  assert.doesNotMatch(accessTab, /token_convite/);
+});
