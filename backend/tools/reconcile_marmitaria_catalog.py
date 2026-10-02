@@ -5,7 +5,9 @@ Uso seguro:
   python -m tools.reconcile_marmitaria_catalog --tenant-id 1 --spec-base64 <BASE64> --apply --reason "..."
 
 Sem --apply, toda alteração é revertida ao final. O spec deve incluir guards em
-"expected" para impedir que o comando seja aplicado ao restaurante errado.
+"expected" para impedir que o comando seja aplicado ao restaurante errado. O guard
+aceita product_id ou, quando o ID não é conhecido externamente, restaurant_name
+com product_name/preço/grupos esperados.
 
 Para disponibilidade diária, um grupo pode usar
 {"options": [...], "sync_active": true}: opções desejadas são criadas/reativadas e
@@ -110,18 +112,35 @@ def _guard_target(db, tenant_id: int, spec: dict[str, Any]) -> None:
     if profile is None or profile.profile_key != "marmitaria":
         raise ReconcileError("O tenant informado não está no perfil Marmitaria.")
 
+    restaurant_name = str(expected.get("restaurant_name") or "").strip()
+    if restaurant_name and normalize_catalog_name(restaurant.nome) != normalize_catalog_name(restaurant_name):
+        raise ReconcileError(
+            f"Restaurante divergente: esperado {restaurant_name!r}, encontrado {restaurant.nome!r}."
+        )
+
     product_id = str(expected.get("product_id") or "").strip()
     product_name = str(expected.get("product_name") or "").strip()
-    if not product_id or not product_name:
-        raise ReconcileError("expected.product_id e expected.product_name são obrigatórios.")
+    if not product_name:
+        raise ReconcileError("expected.product_name é obrigatório.")
+    if not product_id and not restaurant_name:
+        raise ReconcileError(
+            "Informe expected.product_id ou expected.restaurant_name para identificar o restaurante com segurança."
+        )
 
-    product = (
-        db.query(Produto)
-        .filter(Produto.restaurante_id == tenant_id, Produto.id == product_id)
-        .one_or_none()
-    )
-    if product is None:
-        raise ReconcileError(f"Produto sentinela {product_id!r} não encontrado.")
+    if product_id:
+        product = (
+            db.query(Produto)
+            .filter(Produto.restaurante_id == tenant_id, Produto.id == product_id)
+            .one_or_none()
+        )
+        if product is None:
+            raise ReconcileError(f"Produto sentinela {product_id!r} não encontrado.")
+    else:
+        products = db.query(Produto).filter(Produto.restaurante_id == tenant_id).all()
+        product = _one_by_name(products, product_name, "produto sentinela")
+        if product is None:
+            raise ReconcileError(f"Produto sentinela {product_name!r} não encontrado.")
+
     if normalize_catalog_name(product.nome) != normalize_catalog_name(product_name):
         raise ReconcileError(
             f"Produto sentinela divergente: esperado {product_name!r}, encontrado {product.nome!r}."
