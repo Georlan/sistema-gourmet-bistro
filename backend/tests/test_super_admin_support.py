@@ -171,6 +171,22 @@ def test_support_mode_is_read_only_for_permission_guarded_tenant_mutations():
     assert "somente para diagnóstico" in write.json()["detail"]
     assert "Super Admin" in write.json()["detail"]
 
+    # Factories alternativos também precisam manter o suporte read-only.
+    role_guarded = client.post(
+        "/api/online-orders/pause",
+        headers=support_headers,
+        json={"reason": "Teste de bloqueio no modo suporte."},
+    )
+    assert role_guarded.status_code == 403, role_guarded.text
+
+    entitled_guarded = client.post(
+        "/relatorios/meta-mensal",
+        headers=support_headers,
+        json={"meta_mensal": 1000},
+    )
+    assert entitled_guarded.status_code == 403, entitled_guarded.text
+
+
     # Encerrar a própria sessão continua sendo uma ação válida do fluxo de suporte.
     end = client.post(
         "/api/super-admin/support/end-current",
