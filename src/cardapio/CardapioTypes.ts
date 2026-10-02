@@ -117,6 +117,7 @@ export interface BrandConfig {
   nextOpeningLabel?: string;
   deliveryEnabled?: boolean;
   pedidoMinimo?: number;
+  pedidoMinimoRetirada?: boolean;
   freteGratisValor?: number;
   tipoTaxaEntrega?: string;
   tabelaTaxasBairros?: BairroTaxa[];

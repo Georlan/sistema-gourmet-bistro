@@ -15,8 +15,11 @@ def setup_checkout_test():
     try:
         rest = db.query(Restaurante).filter(Restaurante.id == 998).first()
         if not rest:
-            rest = Restaurante(id=998, nome="Restaurante Teste 998", slug="rest-998")
+            rest = Restaurante(id=998, nome="Restaurante Teste 998", slug="rest-998", plano="pro")
             db.add(rest)
+            db.commit()
+        else:
+            rest.plano = "pro"
             db.commit()
 
         user = db.query(Usuario).filter(Usuario.id == "usr-admin-chk998").first()
