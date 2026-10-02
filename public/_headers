@@ -7,6 +7,15 @@
 /koma-sw.js
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
+/theme-init.js
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/manifest.webmanifest
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/manifest-operational.webmanifest
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
 /ativar
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 

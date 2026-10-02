@@ -84,8 +84,8 @@ test("PWA separa entrada operacional do cardápio público", () => {
   assert.equal(operationalParsed.start_url, "/");
   assert.equal(operationalParsed.scope, "/");
 
-  assert.doesNotMatch(indexHtml, /<link\s+rel="manifest"/);
-  assert.match(themeInit, /manifestLink\.rel = 'manifest'/);
+  assert.match(indexHtml, /id="koma-manifest"\s+rel="manifest"\s+href="\/manifest-operational\.webmanifest"/);
+  assert.match(themeInit, /document\.getElementById\('koma-manifest'\)/);
   assert.match(themeInit, /isPublicMenuRoute[\s\S]*'\/manifest\.webmanifest'[\s\S]*'\/manifest-operational\.webmanifest'/);
   assert.match(themeInit, /pathname\.indexOf\('\/c\/'\) === 0/);
 });
