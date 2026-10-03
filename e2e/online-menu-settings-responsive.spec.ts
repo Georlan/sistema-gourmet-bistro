@@ -212,3 +212,73 @@ test('implantação usa o slug salvo no link, na abertura e no QR de divulgaçã
   const svgAfter = await page.locator('svg').filter({ has: page.locator('title', { hasText: 'QR Code do cardápio Kôma' }) }).innerHTML();
   expect(svgBefore).not.toEqual(svgAfter);
 });
+
+test('setup salva identidade na API canônica e retorna apenas após sucesso', async ({ page }) => {
+  await setup(page, 'dark');
+  await page.route('**/api/onboarding/status', route => route.fulfill({ json: { steps: { profile: true }, onboarding: { releaseState: 'released' } } }));
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_onboarding_setup_mode', '1');
+    sessionStorage.setItem('koma_active_tab', 'cardapio_digital');
+    sessionStorage.setItem('koma_active_subtab', 'cardapio_perfil');
+  });
+  let saved: Record<string, unknown> | null = null;
+  await page.route('**/api/cardapio-digital/config', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: profile });
+    saved = route.request().postDataJSON();
+    return route.fulfill({ json: { ...profile, ...saved } });
+  });
+  await page.goto('/?view=caixa');
+  await expect(page.getByRole('heading', { name: 'Dados do restaurante', exact: true })).toBeVisible();
+  await page.getByLabel('Nome público do restaurante', { exact: true }).fill('Pizzaria teste');
+  await page.getByRole('button', { name: 'Salvar e voltar para implantação' }).click();
+  await expect(page).toHaveURL(/\/ativar\?resume=1/);
+  expect(saved?.nome).toBe('Pizzaria teste');
+});
+
+test('setup mantém horários e erro de save na tela sem voltar nem descartar', async ({ page }) => {
+  await setup(page, 'dark');
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_onboarding_setup_mode', '1');
+    sessionStorage.setItem('koma_active_tab', 'cardapio_digital');
+    sessionStorage.setItem('koma_active_subtab', 'cardapio_pedidos');
+  });
+  let saves = 0;
+  await page.route('**/api/cardapio-digital/config', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: profile });
+    saves++;
+    return route.fulfill({ status: 500, json: { detail: 'Falha de teste ao salvar' } });
+  });
+  await page.goto('/?view=caixa');
+  await expect(page.getByRole('heading', { name: 'Horários do restaurante' })).toBeVisible();
+  await page.getByLabel('Horário', { exact: true }).fill('18:00 - 01:00');
+  await page.getByRole('button', { name: 'Salvar e voltar para implantação' }).click();
+  await expect(page.getByText('Falha de teste ao salvar')).toBeVisible();
+  await expect(page.getByLabel('Horário', { exact: true })).toHaveValue('18:00 - 01:00');
+  expect(saves).toBe(1);
+  expect(page.url()).not.toContain('/ativar');
+});
+
+test('setup exige linhas completas e salva horários agrupados após meia-noite', async ({ page }) => {
+  await setup(page, 'dark');
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_onboarding_setup_mode', '1');
+    sessionStorage.setItem('koma_active_tab', 'cardapio_digital');
+    sessionStorage.setItem('koma_active_subtab', 'cardapio_pedidos');
+  });
+  let saved: Record<string, unknown> | null = null;
+  await page.route('**/api/cardapio-digital/config', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { ...profile, horarios_funcionamento: [] } });
+    saved = route.request().postDataJSON();
+    return route.fulfill({ json: { ...profile, ...saved } });
+  });
+  await page.goto('/?view=caixa');
+  await page.getByRole('button', { name: 'Adicionar horário' }).click();
+  await page.getByRole('button', { name: 'Salvar e voltar para implantação' }).click();
+  await expect(page.getByText('Preencha os dias e o horário de cada linha ou remova a linha incompleta.')).toBeVisible();
+  expect(saved).toBeNull();
+  await page.getByLabel('Dias', { exact: true }).fill('Terça a domingo');
+  await page.getByLabel('Horário', { exact: true }).fill('18:00 - 01:00');
+  await page.getByRole('button', { name: 'Salvar e voltar para implantação' }).click();
+  await expect(page).toHaveURL(/\/ativar\?resume=1/);
+  expect(saved?.horarios_funcionamento).toEqual([{ days: 'Terça a domingo', hours: '18:00 - 01:00' }]);
+});

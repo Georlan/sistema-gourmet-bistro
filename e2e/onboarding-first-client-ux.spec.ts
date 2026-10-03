@@ -62,7 +62,7 @@ const baseSnapshot = (overrides: SnapshotOverrides = {}) => {
 async function activate(page: Page) {
   await page.route('**/auth/ativar', route => route.fulfill({
     json: {
-      access_token: 'test-operator',
+      access_token: `test.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600, role: 'admin', restaurante_id: 5 })).toString('base64url')}.test`,
       usuario: { id: 'admin', cargo: 'admin', role: 'admin', nome: 'Ana', restaurante_id: 5 },
     },
   }));
@@ -88,6 +88,7 @@ test('modalidades mostram confirmação persistida e KÔMA Pagamentos fica clara
   await page.getByRole('button', { name: 'Retirada', exact: false }).click();
   await page.getByRole('button', { name: 'Salvar modalidades' }).click();
 
+  await page.getByRole('button', { name: /Modalidades Retirada Editar/ }).click();
   await expect(page.getByText('Modalidades salvas ✓: Retirada')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Salvo ✓' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pode configurar depois' })).toBeVisible();
@@ -126,4 +127,44 @@ test('onboarding comercial concluído deixa claro que a equipe KÔMA está liber
   await expect(page.getByText('Aguardando KÔMA')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pode configurar depois' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Entrar no KÔMA/i })).toHaveCount(0);
+});
+
+
+test('Pizzaria prioriza pendentes e recolhe preparação salva sem falsificar readiness', async ({ page }) => {
+  const snapshot = baseSnapshot({ mode: 'commercial', operationsReady: true, orderTypes: ['retirada', 'consumo_local', 'delivery'], progress: 1 });
+  Object.assign(snapshot.restaurant, { operationProfile: 'pizzaria', name: 'Pizzaria' });
+  snapshot.counts.tables = 30;
+  Object.assign(snapshot, { catalogAssistance: { id: 'menu-1', filename: 'cardapiopizza.webp', status: 'pending', createdAt: null, updatedAt: null } });
+  await page.route('**/api/subscription', route => route.fulfill({ json: { subscription: null } }));
+  await page.route('**/api/onboarding/status', route => route.fulfill({ json: snapshot }));
+  await activate(page);
+  await expect(page.getByRole('heading', { name: 'Faltam 3 essenciais para revisão' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeVisible();
+  await expect(page.getByText('Falta pouco — 1 de 4 concluídos').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Confirmar tipo' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Salvar modalidades' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Completar mesas' })).toHaveCount(0);
+  await expect(page.getByLabel('Arquivo do cardápio para implantação assistida')).toHaveCount(0);
+  const nextY = await page.getByRole('button', { name: 'Continuar', exact: true }).evaluate(el => el.getBoundingClientRect().top);
+  const typeY = await page.getByRole('button', { name: /Tipo de operação Pizzaria Editar/ }).evaluate(el => el.getBoundingClientRect().top);
+  expect(nextY).toBeLessThan(typeY);
+  await page.getByRole('button', { name: /Salão 30 mesas cadastradas Editar/ }).click();
+  await expect(page.getByRole('button', { name: 'Completar mesas' })).toBeVisible();
+  await page.getByRole('button', { name: 'Substituir arquivo' }).click();
+  await expect(page.getByLabel('Arquivo do cardápio para implantação assistida')).toBeAttached();
+  await page.goto('/ativar?resume=1');
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Completar mesas' })).toHaveCount(0);
+  await expect(page.getByText('Ainda não iniciado', { exact: true })).toBeVisible();
+});
+
+test('quando só faltam modalidades o próximo passo leva ao formulário existente', async ({ page }) => {
+  const snapshot = baseSnapshot({ mode: 'commercial', progress: 3 });
+  Object.assign(snapshot.steps, { profile: true, hours: true, catalog: true });
+  await page.route('**/api/subscription', route => route.fulfill({ json: { subscription: null } }));
+  await page.route('**/api/onboarding/status', route => route.fulfill({ json: snapshot }));
+  await activate(page);
+  await expect(page.getByRole('heading', { name: 'Falta 1 essencial para revisão' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Salvar modalidades' })).toBeInViewport();
 });

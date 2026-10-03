@@ -40,6 +40,7 @@ export function CatalogAssistanceUpload({
   const inputId = useId();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [replacing, setReplacing] = useState(false);
   const [notice, setNotice] = useState('');
   const [noticeKind, setNoticeKind] = useState<'success' | 'error' | ''>('');
 
@@ -77,6 +78,7 @@ export function CatalogAssistanceUpload({
         throw new Error(payload?.detail || 'Não foi possível enviar o cardápio.');
       }
       setSelectedFile(null);
+      setReplacing(false);
       setNotice(payload?.message || 'Cardápio recebido ✓ A equipe KÔMA já pode acessar o arquivo.');
       setNoticeKind('success');
       onSubmitted();
@@ -99,10 +101,10 @@ export function CatalogAssistanceUpload({
           <FileUp size={18} />
         </div>
         <div className="min-w-0">
-          <h2 className="font-black">Já possui um cardápio?</h2>
-          <p className="mt-1 text-sm leading-relaxed text-koma-muted">
+          <h2 className="font-black">{activeAssistance ? 'Cardápio recebido' : 'Já possui um cardápio?'}</h2>
+          {!activeAssistance && <p className="mt-1 text-sm leading-relaxed text-koma-muted">
             Envie um PDF ou uma foto. Você não precisa preparar JSON: a equipe KÔMA organiza categorias, produtos e preços para revisão antes da publicação.
-          </p>
+          </p>}
         </div>
       </div>
 
@@ -119,13 +121,14 @@ export function CatalogAssistanceUpload({
           )}
           {activeAssistance.status !== 'completed' && (
             <p className="mt-2 text-[11px] leading-relaxed text-koma-subtle">
-              Se precisar corrigir o arquivo, envie outro abaixo. O envio anterior será substituído na fila de implantação.
+              {activeAssistance.status === 'processing' ? 'A equipe KÔMA está preparando o catálogo.' : 'Aguardando preparação KÔMA.'} Você pode completar dados e horários enquanto a equipe prepara o catálogo.
             </p>
           )}
         </div>
       )}
 
-      {activeAssistance?.status !== 'completed' && (
+      {activeAssistance && activeAssistance.status !== 'completed' && <button type="button" onClick={() => setReplacing(!replacing)} className="mt-3 text-xs font-bold text-koma-muted">{replacing ? 'Cancelar substituição' : 'Substituir arquivo'}</button>}
+      {activeAssistance?.status !== 'completed' && (!activeAssistance || replacing) && (
         <div className="mt-4 rounded-xl border border-koma-border bg-koma-page p-3">
           <input
             id={inputId}
