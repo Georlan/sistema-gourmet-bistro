@@ -157,3 +157,14 @@ test('Pizzaria prioriza pendentes e recolhe preparação salva sem falsificar re
   await expect(page.getByRole('button', { name: 'Completar mesas' })).toHaveCount(0);
   await expect(page.getByText('Ainda não iniciado', { exact: true })).toBeVisible();
 });
+
+test('quando só faltam modalidades o próximo passo leva ao formulário existente', async ({ page }) => {
+  const snapshot = baseSnapshot({ mode: 'commercial', progress: 3 });
+  Object.assign(snapshot.steps, { profile: true, hours: true, catalog: true });
+  await page.route('**/api/subscription', route => route.fulfill({ json: { subscription: null } }));
+  await page.route('**/api/onboarding/status', route => route.fulfill({ json: snapshot }));
+  await activate(page);
+  await expect(page.getByRole('heading', { name: 'Falta 1 essencial para revisão' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Salvar modalidades' })).toBeInViewport();
+});

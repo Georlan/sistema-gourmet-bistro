@@ -176,13 +176,13 @@ const blockerLabel = (blocker: string) => {
   return blocker;
 };
 
-function SetupDisclosure({ title, summary, complete, error, children }: {
-  title: string; summary: string; complete: boolean; error?: string; children: React.ReactNode;
+function SetupDisclosure({ id, title, summary, complete, error, children }: {
+  id?: string; title: string; summary: string; complete: boolean; error?: string; children: React.ReactNode;
 }) {
   const [expanded, setExpanded] = useState(!complete);
   useEffect(() => { setExpanded(!complete); }, [complete]);
   return (
-    <section className="mt-4 rounded-2xl border border-koma-border bg-koma-page p-4">
+    <section id={id} className="mt-4 rounded-2xl border border-koma-border bg-koma-page p-4">
       <button type="button" aria-expanded={expanded || Boolean(error)} onClick={() => setExpanded(!expanded)} className="flex w-full items-center justify-between gap-3 text-left">
         <span className="flex min-w-0 items-center gap-3">
           {complete ? <CheckCircle2 size={18} className="shrink-0 text-emerald-400" /> : <Circle size={18} className="shrink-0 text-koma-subtle" />}
@@ -436,6 +436,16 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       subTab: 'produtos',
       icon: UtensilsCrossed,
     },
+    {
+      id: 'operations',
+      title: snapshot.steps.operations ? 'Modalidades de pedido' : 'Escolha as modalidades de pedido',
+      description: 'Defina se recebe pedidos para retirada, consumo no local ou delivery.',
+      done: snapshot.steps.operations,
+      actionLabel: snapshot.steps.operations ? 'Editar modalidades' : 'Escolher modalidades',
+      tab: '',
+      subTab: '',
+      icon: ShoppingBag,
+    },
   ] : [];
 
   const planId = snapshot ? normalizeSubscriptionPlan(snapshot.restaurant.plan) : 'pocket';
@@ -559,13 +569,14 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const isAdministrative = onboardingMode === 'administrative';
   const isAwaitingKoma = releaseState === 'awaiting_koma';
   const nextStep = steps.find(step => !step.done);
+  const remainingEssentials = snapshot.progress.total - snapshot.progress.completed;
 
   return (
     <main className="min-h-screen bg-koma-page px-4 py-6 text-koma-foreground sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-5">
         <button type="button" onClick={returnToLogin} className="block ml-auto text-xs font-bold text-koma-muted">Sair e ir para o login</button>
         <section className="overflow-hidden rounded-3xl border border-emerald-500/20 bg-koma-card shadow-2xl">
-          <div className="border-b border-koma-border bg-emerald-500/[0.06] p-6 sm:p-8">
+          <div className="border-b border-koma-border bg-emerald-500/[0.06] p-4 sm:p-8">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-emerald-400">
@@ -602,7 +613,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
             </div>
           </div>
 
-          <div className="p-6 sm:p-8">
+          <div className="p-4 sm:p-8">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <div className="flex items-center gap-2 text-sm font-black">
@@ -619,39 +630,11 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               </button>
             </div>
 
-            {isCommercial && (
-              <div className="mt-5 grid grid-cols-3 gap-2" aria-label="Etapas da liberação">
-                {[
-                  { id: 'setup', label: 'Configuração', done: configurationComplete, active: !configurationComplete },
-                  { id: 'review', label: 'Revisão KÔMA', done: operationReleased, active: configurationComplete && !operationReleased },
-                  { id: 'released', label: 'Liberado', done: operationReleased, active: operationReleased },
-                ].map((item, index) => (
-                  <div
-                    key={item.id}
-                    className={`rounded-xl border p-3 ${
-                      item.done
-                        ? 'border-emerald-500/30 bg-emerald-500/10'
-                        : item.active
-                          ? 'border-amber-500/30 bg-amber-500/10'
-                          : 'border-koma-border bg-koma-page'
-                    }`}
-                  >
-                    <p className="text-[9px] font-black uppercase tracking-wider text-koma-subtle">
-                      Etapa {index + 1}
-                    </p>
-                    <p className="mt-1 flex items-center gap-2 text-xs font-black">
-                      {item.done ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Circle size={14} className={item.active ? 'text-amber-400' : 'text-koma-subtle'} />}
-                      {item.label}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
 
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-koma-raised" aria-label="Progresso dos essenciais">
               <div className="h-full rounded-full bg-emerald-500" style={{ width: `${snapshot.progress.percent}%` }} />
             </div>
-            <h2 className="mt-5 text-sm font-black">{configurationComplete ? 'Essenciais concluídos · pronto para revisão' : `Faltam ${snapshot.progress.total - snapshot.progress.completed} essenciais para revisão`}</h2>
+            <h2 className="mt-5 text-sm font-black">{configurationComplete ? 'Essenciais concluídos · pronto para revisão' : `${remainingEssentials === 1 ? 'Falta 1 essencial' : `Faltam ${remainingEssentials} essenciais`} para revisão`}</h2>
             <p className="mt-1 text-xs text-koma-muted">Você pode configurar os itens em qualquer ordem. O primeiro pendente está destacado.</p>
             <div className="mt-5 space-y-3">
               {[...steps].sort((a, b) => Number(a.done) - Number(b.done)).map((step) => {
@@ -674,7 +657,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                       {step.done ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
                       <button
                         type="button"
-                        onClick={() => openCashierAt(step.tab, step.subTab, true)}
+                        onClick={() => step.id === 'operations'
+                          ? document.getElementById('setup-modalities')?.scrollIntoView({ block: 'start' })
+                          : openCashierAt(step.tab, step.subTab, true)}
                         className="inline-flex items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3 py-2 text-[10px] font-black transition hover:border-emerald-500/35 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         {step === nextStep ? 'Continuar' : step.actionLabel} <ArrowRight size={12} />
@@ -684,6 +669,35 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 );
               })}
             </div>
+
+            {isCommercial && (
+              <div className="mt-5 grid grid-cols-3 gap-2" aria-label="Etapas da liberação">
+                {[
+                  { id: 'setup', label: 'Configuração', done: configurationComplete, active: !configurationComplete },
+                  { id: 'review', label: 'Revisão KÔMA', done: operationReleased, active: configurationComplete && !operationReleased },
+                  { id: 'released', label: 'Liberado', done: operationReleased, active: operationReleased },
+                ].map((item, index) => (
+                  <div
+                    key={item.id}
+                    className={`rounded-xl border p-3 ${
+                      item.done
+                        ? 'border-emerald-500/30 bg-emerald-500/10'
+                        : item.active
+                          ? 'border-amber-500/30 bg-amber-500/10'
+                          : 'border-koma-border bg-koma-page'
+                    }`}
+                  >
+                    <p className="text-[9px] font-black uppercase tracking-wider text-koma-subtle">
+                      Etapa {index + 1}
+                    </p>
+                    <p className="mt-1 flex flex-wrap items-center gap-1 text-[10px] font-black sm:gap-2 sm:text-xs">
+                      {item.done ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Circle size={14} className={item.active ? 'text-amber-400' : 'text-koma-subtle'} />}
+                      <span className="sm:hidden">{index === 0 ? 'Configurar' : index === 1 ? 'Revisão' : item.label}</span><span className="hidden sm:inline">{item.label}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <p className="mt-5 text-xs font-bold text-koma-muted">Preparação já salva: {[
               Boolean(snapshot.restaurant.operationProfile && snapshot.restaurant.operationProfile !== 'generic') && 'tipo de operação',
@@ -754,7 +768,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               )}
             </SetupDisclosure>
 
-            <SetupDisclosure title={snapshot.steps.operations ? 'Modalidades' : 'Pendente · escolha as modalidades'} summary={ORDER_TYPE_OPTIONS.filter(option => snapshot.operations.orderTypes.includes(option.value)).map(option => option.label).join(' · ') || 'Escolha como receber pedidos'} complete={snapshot.steps.operations} error={operationError || snapshot.operations.blockers.map(blockerLabel).join(' ')}>
+            <SetupDisclosure id="setup-modalities" title={snapshot.steps.operations ? 'Modalidades' : 'Pendente · escolha as modalidades'} summary={ORDER_TYPE_OPTIONS.filter(option => snapshot.operations.orderTypes.includes(option.value)).map(option => option.label).join(' · ') || 'Escolha como receber pedidos'} complete={snapshot.steps.operations} error={operationError || snapshot.operations.blockers.map(blockerLabel).join(' ')}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2">
