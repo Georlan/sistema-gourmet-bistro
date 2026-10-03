@@ -2432,6 +2432,17 @@ def fail_job(
             detail="Operação negada: o job pertence a outro agente"
         )
 
+    # Uma falha atrasada não pode reabrir um sucesso já confirmado.
+    if job.status == "printed":
+        response = {
+            "status": "printed",
+            "job_id": job.id,
+            "attempts": job.attempts,
+            "max_attempts": MAX_ATTEMPTS,
+        }
+        db.rollback()
+        return response
+
     job.attempts += 1
     job.last_error = req.error[:500] if req.error else "Erro desconhecido"
 
