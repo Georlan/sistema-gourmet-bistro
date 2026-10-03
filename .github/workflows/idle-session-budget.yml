@@ -5,6 +5,12 @@ on:
     branches: [main]
     paths:
       - src/components/auth/TenantSuspensionBoundary.tsx
+      - src/components/caixa/online-menu/OnlineOrderEmergencyControl.tsx
+      - src/components/caixa/navigation/**
+      - src/components/CaixaPanel.tsx
+      - e2e/online-control-idle.spec.ts
+      - e2e/online-control-request-coordination.spec.ts
+      - e2e/fixtures/online-control.html
       - src/utils/authSession.ts
       - src/smartpos/smartPosSession.ts
       - e2e/tenant-suspension-idle.spec.ts
@@ -28,7 +34,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test e2e/tenant-suspension-idle.spec.ts --project=desktop-1366 --project=mobile-390 --workers=2
+      - run: npx playwright test e2e/tenant-suspension-idle.spec.ts e2e/online-control-idle.spec.ts --project=desktop-1366 --project=mobile-390 --project=tablet-768 --workers=2
+        env:
+          KOMA_E2E_PORT: '4283'
+      - run: npx playwright test e2e/online-control-request-coordination.spec.ts --project=desktop-1366 --project=mobile-390 --workers=2
         env:
           KOMA_E2E_PORT: '4283'
       - uses: actions/upload-artifact@v6
