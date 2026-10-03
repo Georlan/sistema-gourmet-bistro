@@ -320,110 +320,35 @@ def _seed(engine, metadata, *, open_cash=False, with_fiscal=False):
             )
 
 
-def test_reset_tenant_first_day_preserves_structure_and_other_tenants():
+def test_retired_reset_refuses_before_database_access():
+    from unittest.mock import Mock
+    import pytest
+    engine = Mock()
+    with pytest.raises(RuntimeError, match="desativado"):
+        apply_tenant_first_day_reset(engine, tenant_id=6,
+            expected_name="Quentinha Caseira", confirmation=CONFIRMATION_PHRASE)
+    assert engine.mock_calls == []
+
+
+def test_reset_cli_refuses_before_building_engine(monkeypatch):
+    from unittest.mock import Mock
+    from tools import reset_tenant_first_day as tool
+    import argparse
+    import pytest
+    monkeypatch.setattr(tool, "parse_args", lambda: argparse.Namespace(apply=True))
+    factory = Mock()
+    monkeypatch.setattr(tool, "_engine", factory)
+    with pytest.raises(SystemExit, match="desativado"):
+        tool.main()
+    factory.assert_not_called()
+
+
+def test_readonly_first_day_plan_preserves_all_rows():
     engine, metadata = _schema()
     _seed(engine, metadata)
-
-    result = apply_tenant_first_day_reset(
-        engine,
-        tenant_id=6,
-        expected_name="Quentinha Caseira",
-        confirmation=CONFIRMATION_PHRASE,
-    )
-
-    assert result["validation"]["orders_remaining"] == 0
-    assert result["validation"]["print_jobs_remaining"] == 0
-    assert result["validation"]["cash_shifts_remaining"] == 0
-    assert result["validation"]["payments_remaining"] == 0
-    assert result["validation"]["order_counters_remaining"] == 0
-    assert result["validation"]["next_order_expected_after_app_restart"] == 1
-
-    t = metadata.tables
     with engine.connect() as conn:
-        assert conn.execute(
-            select(t["produtos"].c.id).where(t["produtos"].c.restaurante_id == 6)
-        ).all() == [("prod6",)]
-        assert conn.execute(
-            select(t["configuracoes_restaurante"].c.id).where(
-                t["configuracoes_restaurante"].c.restaurante_id == 6
-            )
-        ).all() == [(1,)]
-
-        assert conn.execute(
-            select(t["comandas"].c.id).where(t["comandas"].c.restaurante_id == 6)
-        ).all() == []
-        assert conn.execute(
-            select(t["print_jobs"].c.id).where(t["print_jobs"].c.restaurante_id == 6)
-        ).all() == []
-        assert conn.execute(
-            select(t["caixa_turnos"].c.id).where(
-                t["caixa_turnos"].c.restaurante_id == 6
-            )
-        ).all() == []
-
-        assert conn.execute(
-            select(t["comandas"].c.id).where(t["comandas"].c.restaurante_id == 7)
-        ).all() == [("cmd7",)]
-        assert conn.execute(
-            select(t["print_jobs"].c.id).where(t["print_jobs"].c.restaurante_id == 7)
-        ).all() == [("print7",)]
-
-        agent6 = conn.execute(
-            select(
-                t["print_agent_tokens"].c.pending_command,
-                t["print_agent_tokens"].c.command_requested_at,
-            ).where(t["print_agent_tokens"].c.restaurante_id == 6)
-        ).one()
-        assert agent6 == (None, None)
-
-        client6 = conn.execute(
-            select(
-                t["clientes"].c.saldo_pontos,
-                t["clientes"].c.saldo_cashback,
-            ).where(t["clientes"].c.restaurante_id == 6)
-        ).one()
-        assert int(client6[0]) == 0
-        assert float(client6[1]) == 0.0
-
-
-def test_reset_blocks_open_cash():
-    engine, metadata = _schema()
-    _seed(engine, metadata, open_cash=True)
-
-    try:
-        apply_tenant_first_day_reset(
-            engine,
-            tenant_id=6,
-            expected_name="Quentinha Caseira",
-            confirmation=CONFIRMATION_PHRASE,
-        )
-    except RuntimeError as exc:
-        assert "caixa(s) aberto(s)" in str(exc)
-    else:
-        raise AssertionError("reset deveria bloquear caixa aberto")
-
-
-def test_reset_blocks_fiscal_documents():
-    engine, metadata = _schema()
-    _seed(engine, metadata, with_fiscal=True)
-
-    plan = None
-    with engine.connect() as conn:
-        plan = build_tenant_first_day_plan(
-            conn,
-            tenant_id=6,
-            expected_name="Quentinha Caseira",
-        )
-    assert plan.fiscal_documents == 1
-
-    try:
-        apply_tenant_first_day_reset(
-            engine,
-            tenant_id=6,
-            expected_name="Quentinha Caseira",
-            confirmation=CONFIRMATION_PHRASE,
-        )
-    except RuntimeError as exc:
-        assert "documentos fiscais" in str(exc)
-    else:
-        raise AssertionError("reset deveria bloquear documento fiscal")
+        before = {name: conn.execute(select(table)).all() for name, table in metadata.tables.items()}
+        plan = build_tenant_first_day_plan(conn, tenant_id=6, expected_name="Quentinha Caseira")
+        assert plan.tenant_id == 6
+        after = {name: conn.execute(select(table)).all() for name, table in metadata.tables.items()}
+        assert before == after

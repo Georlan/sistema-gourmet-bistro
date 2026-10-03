@@ -42,6 +42,8 @@ def _engine():
 
 def main() -> int:
     args = parse_args()
+    if args.apply:
+        raise SystemExit("Reset legado desativado. Clientes reais não podem ser resetados.")
     engine = _engine()
     try:
         if args.apply:
