@@ -104,5 +104,5 @@ explícita; nenhum produto ou pedido real é excluído pela atualização.
   inteiro estrito para `max_selecoes` (`1 <= max_selecoes <= 100`).
 - **Impacto**: Se o operador cadastrar `maximo: 3` em Guarnições, a validação do backend e a UI tratam 3 como teto real.
 - **Solução Operacional Segura Adotada**: Para guarnições livres sem limite prático, o operador define um teto
-  operacional amplo (ex.: 20), e a interface pública do cardápio apresenta "Escolha à vontade" e badge "Livre" quando `max >= 20` e `min = 0`.
+  operacional amplo (ex.: 20), e a interface pública apresenta "Escolha à vontade" e badge "Livre" somente para Guarnições do perfil Marmitaria, quando `max >= 20` e `min = 0`. Adicionais pagos e demais perfis mostram o teto real. O snapshot público informa o perfil efetivo através de `produto.marmitaria`; nomes de produtos ou categorias não ativam essa apresentação.
 - **Dívida Técnica Registrada**: Em evolução futura aprovada, o domínio deve suportar formalmente `max_selecoes = null` / `unlimited` sem quebrar constraints de banco ou modelos intermediários.
