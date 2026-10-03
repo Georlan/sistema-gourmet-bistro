@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import textwrap
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -71,7 +72,16 @@ class ItemChangePrintingService:
         if not is_production_destination(destination):
             return []
 
-        payload = cls._render_item_change(item, quantity_added=intent.quantity_added)
+        from ...domain.orders.composition import composition_presentation
+        from ...services.order_item_composition import load_item_modifiers, uses_grouped_composition
+
+        modifiers = load_item_modifiers(db, intent.restaurant_id, [str(item.id)]).get(str(item.id), [])
+        composition, observation = composition_presentation(
+            item.observacao or "", modifiers, grouped=uses_grouped_composition(db, intent.restaurant_id),
+        )
+        payload = cls._render_item_change(
+            item, quantity_added=intent.quantity_added, composition=composition, observation=observation,
+        )
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
         idempotency_key = (
             f"{intent.idempotency_key}:{destination.lower()}"
@@ -96,14 +106,15 @@ class ItemChangePrintingService:
         return [job]
 
     @staticmethod
-    def _render_item_change(item: Item, *, quantity_added: int) -> str:
+    def _render_item_change(item: Item, *, quantity_added: int, composition: tuple[str, ...] = (), observation: str | None = None) -> str:
         comanda = item.comanda
         mesa_label = comanda.mesa_id if comanda and comanda.mesa_id else "BALCAO"
         lines = [
             "=== ITEM ALTERADO/ADICIONADO ===".center(32),
             f"MESA: {mesa_label}",
             f"PRODUTO: {item.produto.nome}",
-            f"OBS (EDITADO): {item.observacao or ''}",
+            *(line for detail in composition for line in textwrap.wrap(detail.upper(), width=32, break_on_hyphens=False)),
+            f"OBS (EDITADO): {observation if observation is not None else item.observacao or ''}",
             f"CLIENTE: {item.cliente_nome or ''}",
         ]
         if quantity_added > 0:

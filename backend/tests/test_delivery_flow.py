@@ -228,12 +228,23 @@ def test_delivery_can_become_pickup_before_dispatch_without_losing_history(setup
             "delivery_taxa": 8.5,
             "delivery_forma_pagamento": "dinheiro",
             "delivery_troco_para": 50,
-            "motoboy_id": courier_id,
+            "motoboy_id": None,
         },
         headers=headers,
     )
     assert created.status_code == 201, created.text
     order_id = created.json()["id"]
+
+    db = SessionLocal(restaurante_id=1)
+    try:
+        launch = Lancamento(id="conversion-launch", restaurante_id=1, comanda_id=order_id, garcom_id="u-del-01")
+        db.add(launch)
+        db.flush()
+        db.add(Item(id="conversion-item", restaurante_id=1, comanda_id=order_id, lancamento_id=launch.id,
+                    produto_id="p-del", preco_unit=15, status="preparando", pago=False))
+        db.commit()
+    finally:
+        db.close()
 
     missing_reason = client.post(
         f"/comandas/{order_id}/delivery/converter-retirada",
@@ -273,7 +284,7 @@ def test_delivery_can_become_pickup_before_dispatch_without_losing_history(setup
         assert details["fulfillment_original"] == "Delivery"
         assert details["fulfillment_atual"] == "Retirada"
         assert details["delivery_status_preservado"] == "producao"
-        assert details["motoboy_id_anterior"] == courier_id
+        assert details["motoboy_id_anterior"] is None
         assert details["delivery_taxa_anterior"] == 8.5
         assert details["motivo"] == "Cliente decidiu retirar no balcão"
 
@@ -373,7 +384,7 @@ def test_delivery_to_pickup_rejects_in_route_and_paid_delivery_fee(setup_db):
         headers=headers,
     )
     assert blocked_finance.status_code == 409
-    assert "ajuste financeiro/estorno" in blocked_finance.json()["detail"]
+    assert "pagamento registrado ou online" in blocked_finance.json()["detail"]
 
 
 def test_cash_payment_uses_fee_and_discounts_without_finishing_fulfillment(setup_db):

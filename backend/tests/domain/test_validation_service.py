@@ -281,7 +281,7 @@ class TestOrderValidationService:
         assert "45.00" in str(exc.value)
 
     def test_pickup_and_dine_in_do_not_enforce_delivery_requirements(self):
-        """Retirada e Salão passam com sucesso sem endereço, telefone ou pedido mínimo."""
+        """Retirada e Salão passam com sucesso sem endereço, telefone ou pedido mínimo quando não configurado."""
         prods, mods = _sample_catalog()
         ctx = ValidationContext(
             restaurant_id=1,
@@ -292,10 +292,30 @@ class TestOrderValidationService:
             delivery_address=None,
             delivery_phone=None,
             minimum_delivery_subtotal=Decimal("100.00"),
+            enforce_minimum_for_pickup=False,
         )
         validated = OrderValidationService.validate(ctx)
         assert len(validated.items) == 1
         assert validated.items[0].product_id == "p1"
+
+    def test_pickup_enforces_minimum_when_configured(self):
+        """Retirada bloqueia pedido abaixo do mínimo quando a flag enforce_minimum_for_pickup está ativa."""
+        prods, mods = _sample_catalog()
+        ctx = ValidationContext(
+            restaurant_id=1,
+            fulfillment=FulfillmentType.PICKUP,
+            items=(OrderValidationInputItem(product_id="p1", quantity=1),),  # p1 = 45.00
+            catalog_products=prods,
+            catalog_modifiers=mods,
+            delivery_address=None,
+            delivery_phone=None,
+            minimum_delivery_subtotal=Decimal("50.00"),
+            enforce_minimum_for_pickup=True,
+        )
+        with pytest.raises(MinimumOrderAmountNotMetError) as exc:
+            OrderValidationService.validate(ctx)
+        assert "50.00" in str(exc.value)
+        assert "45.00" in str(exc.value)
 
     def test_coupon_ineligible_does_not_raise_error_and_preserves_order(self):
         """[COMPORTAMENTO LEGADO PRESERVADO] Cupom abaixo do mínimo não quebra a validação do pedido."""

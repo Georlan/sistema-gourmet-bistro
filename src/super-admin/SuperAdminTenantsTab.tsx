@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Edit3,
@@ -15,13 +15,13 @@ import {
 } from "lucide-react";
 import {
   SUBSCRIPTION_PLANS,
-  formatCurrency,
 } from "../config/subscriptionPlans";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 import { SuperAdminNewTenantModal } from "./SuperAdminNewTenantModal";
 import { SuperAdminSupportModal, type SupportNavigationTarget } from "./SuperAdminSupportModal";
 import { SuperAdminCapabilitiesModal } from "./SuperAdminCapabilitiesModal";
-import { SuperAdminRestaurant360 } from "./SuperAdminRestaurant360";
+import { attentionLabels, compareAttention, matchesAttention, type OperationalAttention } from "./operationalAttention";
+import { SuperAdminRestaurant360, READINESS_BLOCKER_LABELS } from "./SuperAdminRestaurant360";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import type { Tenant } from "./superAdminTypes";
 
@@ -35,6 +35,7 @@ interface SuperAdminTenantsTabProps {
   contractsAvailable: boolean;
   onOpenTeamControls: () => void;
   onOpenCatalogAssistance: () => void;
+  onOpenContracts: () => void;
 }
 
 const OPERATION_PROFILES = [
@@ -73,6 +74,7 @@ export function SuperAdminTenantsTab({
   contractsAvailable,
   onOpenTeamControls,
   onOpenCatalogAssistance,
+  onOpenContracts,
 }: SuperAdminTenantsTabProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("ALL");
@@ -98,6 +100,41 @@ export function SuperAdminTenantsTab({
   const [isSubmittingStatus, setIsSubmittingStatus] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
 
+  const [attention, setAttention] = useState<OperationalAttention[]>([]);
+  const [attentionCheckedAt, setAttentionCheckedAt] = useState<string | null>(null);
+  const [attentionError, setAttentionError] = useState<string | null>(null);
+  const [attentionLoading, setAttentionLoading] = useState(false);
+  const [attentionFilter, setAttentionFilter] = useState("ALL");
+  const [sortBy, setSortBy] = useState("attention");
+  const [attentionRefresh, setAttentionRefresh] = useState(0);
+  const attentionFlight = useRef<Promise<{ checked_at: string; items: OperationalAttention[] }> | null>(null);
+
+  useEffect(() => {
+    if (!tenantsAvailable) return;
+    let active = true;
+    setAttentionLoading(true);
+    setAttentionError(null);
+    setAttention([]);
+    setAttentionCheckedAt(null);
+    if (!attentionFlight.current) {
+      attentionFlight.current = (async () => {
+        const response = await superAdminFetch("/api/super-admin/incidents/attention");
+        const data = await response.json();
+        if (!response.ok || !Array.isArray(data?.items) || typeof data?.checked_at !== "string") {
+          throw new Error("Diagnóstico de prioridades indisponível.");
+        }
+        return data;
+      })().finally(() => { attentionFlight.current = null; });
+    }
+    attentionFlight.current.then(data => {
+      if (active) { setAttention(data.items); setAttentionCheckedAt(data.checked_at); }
+    }).catch(error => {
+      if (active) setAttentionError("Diagnóstico de prioridades indisponível. " + superAdminErrorMessage(error));
+    }).finally(() => { if (active) setAttentionLoading(false); });
+    return () => { active = false; };
+  }, [tenants, tenantsAvailable, attentionRefresh]);
+  const attentionByTenant = new Map(attention.map(item => [item.tenant_id, item]));
+
   const effectiveSearch = (globalSearch || searchTerm).toLowerCase().trim();
   const filteredTenants = tenants.filter(tenant => {
     const matchesSearch =
@@ -110,8 +147,11 @@ export function SuperAdminTenantsTab({
     const normalizedStatus = tenant.status?.toUpperCase() || "ACTIVE";
     const matchesStatus = selectedStatus === "ALL" || normalizedStatus === selectedStatus;
     const matchesPayment = selectedPayment === "ALL" || tenant.onlinePaymentStatus === selectedPayment;
-    return matchesSearch && matchesPlan && matchesStatus && matchesPayment;
-  });
+    return matchesSearch && matchesPlan && matchesStatus && matchesPayment
+      && matchesAttention(attentionByTenant.get(tenant.id), attentionFilter);
+  }).sort((a, b) => sortBy === "attention"
+    ? compareAttention(attentionByTenant.get(a.id), attentionByTenant.get(b.id)) || a.name.localeCompare(b.name)
+    : a.name.localeCompare(b.name));
 
   const loadOperationProfile = async (tenant: Tenant) => {
     setIsLoadingOperationProfile(true);
@@ -252,12 +292,13 @@ export function SuperAdminTenantsTab({
             <h2 className="flex items-center gap-2 text-lg font-bold text-koma-foreground">
               <Store className="h-5 w-5 text-[#00b894]" /> Gestão de Restaurantes
             </h2>
-            <p className="mt-0.5 text-xs text-koma-muted">Administração multi-tenant com trilha de auditoria atômica e isolamento RLS</p>
+            <p className="mt-0.5 text-xs text-koma-muted">Prioridades por incidentes e blockers canônicos, sem score artificial.</p>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setShowNewTenantModal(true)} className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3.5 py-2 text-xs font-bold text-koma-secondary hover:text-koma-foreground" title="Novo restaurante">
               <Plus className="h-4 w-4" /> Novo restaurante
             </button>
+            <button type="button" onClick={() => setAttentionRefresh(value => value + 1)} disabled={attentionLoading} className="rounded-lg border border-zinc-800 px-3 py-2 text-xs text-koma-secondary disabled:opacity-50">{attentionLoading ? "Diagnosticando…" : "Atualizar prioridades"}</button>
             <button type="button" onClick={refreshTenants} disabled={isLoading} className="rounded-lg border border-zinc-800 bg-koma-page p-2 text-koma-secondary hover:border-zinc-700 hover:text-koma-foreground disabled:opacity-50" title="Atualizar lista">
               <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
             </button>
@@ -270,6 +311,14 @@ export function SuperAdminTenantsTab({
             <input type="text" placeholder="Buscar por nome, ID, slug ou plano..." value={searchTerm} onChange={event => setSearchTerm(event.target.value)} disabled={!tenantsAvailable} className="w-full rounded-lg border border-zinc-800 bg-koma-page py-2 pl-9 pr-3 text-xs text-koma-foreground placeholder:text-koma-subtle focus:border-[#00b894] focus:outline-none disabled:opacity-50" />
           </div>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <select aria-label="Filtrar atenção" value={attentionFilter} onChange={event => setAttentionFilter(event.target.value)} className="rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-xs text-koma-foreground">
+              <option value="ALL">Toda atenção</option>
+              {Object.entries(attentionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              <option value="acesso">Acesso</option><option value="mercado_pago">Pagamento</option><option value="impressao">Impressão</option><option value="outbox">Outbox</option>
+            </select>
+            <select aria-label="Ordenar restaurantes" value={sortBy} onChange={event => setSortBy(event.target.value)} className="rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-xs text-koma-foreground">
+              <option value="attention">Atenção primeiro</option><option value="name">Nome</option>
+            </select>
             <select value={selectedPlan} onChange={event => setSelectedPlan(event.target.value)} disabled={!tenantsAvailable} className="rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-xs text-koma-foreground focus:border-[#00b894] focus:outline-none disabled:opacity-50">
               <option value="ALL">Todos os planos</option>
               {SUBSCRIPTION_PLANS.map(plan => <option key={plan.id} value={plan.id}>{plan.name}</option>)}
@@ -290,12 +339,13 @@ export function SuperAdminTenantsTab({
         </div>
       </div>
 
+      <p role="status" className="text-xs text-koma-muted">{attentionError || (attentionLoading ? "Consultando implantação e incidentes…" : attentionCheckedAt ? `Diagnóstico consultado em ${formatActivity(attentionCheckedAt)}. Ausência de incidentes não comprova saúde de todas as integrações.` : "Diagnóstico não verificado.")}</p>
       <div className="overflow-hidden rounded-xl border border-[#1e293b] bg-koma-card shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-zinc-800 bg-koma-page/30 font-medium text-koma-muted">
-                <th className="px-4 py-3">Estabelecimento</th><th className="px-4 py-3">Status SaaS</th><th className="px-4 py-3">Plano</th><th className="px-4 py-3">Pagamento online</th><th className="px-4 py-3">Pedidos no mês</th><th className="px-4 py-3">Recebimentos no mês</th><th className="px-4 py-3">Última atividade</th><th className="px-4 py-3 text-right">Ações</th>
+                <th className="px-4 py-3">Estabelecimento</th><th className="px-4 py-3">Status SaaS</th><th className="px-4 py-3">Plano</th><th className="px-4 py-3">Pagamento online</th><th className="px-4 py-3">Situação operacional</th><th className="px-4 py-3">Principal atenção / próximo passo</th><th className="px-4 py-3">Última atividade</th><th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/40">
@@ -304,6 +354,7 @@ export function SuperAdminTenantsTab({
               ) : filteredTenants.length === 0 ? (
                 <tr><td colSpan={8} className="py-12 text-center text-koma-muted">Nenhum restaurante localizado.</td></tr>
               ) : filteredTenants.map(tenant => {
+                const operational = attentionByTenant.get(tenant.id);
                 const plan = officialPlan(tenant.plan);
                 const isSuspended = tenant.status?.toUpperCase() === "SUSPENDED";
                 return (
@@ -328,11 +379,18 @@ export function SuperAdminTenantsTab({
                         {tenant.subdomain ? ` • ${tenant.subdomain}.komafood.com.br` : ""}
                       </div>
                     </td>
-                    <td className="px-4 py-3.5"><span className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-bold ${isSuspended ? "border-rose-800/40 bg-rose-950/60 text-rose-400" : "border-emerald-800/30 bg-emerald-950/60 text-emerald-400"}`}><span className={`h-1.5 w-1.5 rounded-full ${isSuspended ? "bg-rose-400" : "bg-emerald-400"}`} />{isSuspended ? "Suspenso" : "Ativo"}</span></td>
+                    <td className="px-4 py-3.5"><span className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-bold ${isSuspended ? "border-rose-800/40 bg-rose-950/60 text-rose-400" : "border-emerald-800/30 bg-emerald-950/60 text-emerald-400"}`}><span className={`h-1.5 w-1.5 rounded-full ${isSuspended ? "bg-rose-400" : "bg-emerald-400"}`} />{isSuspended ? "Suspenso" : tenant.status === "ACTIVE" ? "Ativo" : tenant.status === "PENDING" ? "Pendente" : tenant.status || "Não verificado"}</span></td>
                     <td className="px-4 py-3.5"><span className="inline-flex rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] font-semibold text-koma-secondary">{plan?.name || tenant.plan || "Não disponível"}</span></td>
                     <td className="px-4 py-3.5"><span className={tenant.onlinePaymentStatus === "connected" ? "text-emerald-400" : tenant.onlinePaymentStatus === "disconnected" ? "text-amber-400" : "text-koma-muted"}>{paymentStatusLabel(tenant.onlinePaymentStatus)}</span></td>
-                    <td className="px-4 py-3.5 text-koma-foreground">{tenant.monthlyOrders ?? "—"}</td>
-                    <td className="px-4 py-3.5 text-koma-foreground">{tenant.monthlyBilling != null ? formatCurrency(tenant.monthlyBilling) : "—"}</td>
+                    <td className="px-4 py-3.5"><strong className={operational?.priority === "critical" ? "text-rose-300" : operational?.priority === "incident" || operational?.priority === "blocked" ? "text-amber-300" : "text-koma-secondary"}>{attentionLabels[operational?.priority || "unverified"]}</strong>
+                      {!!operational?.unavailable_sources.length && <p className="mt-1 text-[10px] text-amber-300">Fonte indisponível: {operational.unavailable_sources.join(", ")}</p>}
+                    </td>
+                    <td className="max-w-xs px-4 py-3.5 text-koma-secondary">
+                      {operational?.primary_incident ? <><p>{operational.primary_incident.title}</p><p className="mt-1 text-[10px] text-koma-muted">{operational.primary_incident.id} · detectado {formatActivity(operational.primary_incident.detected_at)}</p><p className="mt-1">{operational.primary_incident.recommended_action}</p></>
+                        : operational?.blockers.length ? <><p>{operational.blockers.map(code => READINESS_BLOCKER_LABELS[code] || code.replaceAll("_", " ")).join(" · ")}</p><p className="mt-1 text-[10px] text-koma-muted">{operational.blockers.includes("trial") ? "KÔMA: revisar liberação no 360°" : "Cliente / KÔMA: abrir implantação no 360°"}</p></>
+                        : operational?.priority === "no_attention" ? "Sem blocker ou incidente nas fontes consultadas."
+                        : "Abra o 360° para consultar as fontes disponíveis."}
+                    </td>
                     <td className="px-4 py-3.5 text-koma-muted">{formatActivity(tenant.lastActivity)}</td>
                     <td className="px-4 py-3.5 text-right"><div className="inline-flex items-center gap-1.5">
                       <button type="button" onClick={() => setSelectedTenant(tenant)} className="flex items-center gap-1 rounded bg-[#00b894] px-2.5 py-1.5 font-bold text-black hover:bg-[#00c9a3]" title="Abrir ficha operacional completa"><Eye className="h-3 w-3" /> Abrir 360°</button>
@@ -359,6 +417,7 @@ export function SuperAdminTenantsTab({
           onBenefits={(tenant) => setBenefitsTenant(tenant)}
           onOpenTeamControls={onOpenTeamControls}
           onOpenCatalogAssistance={onOpenCatalogAssistance}
+          onOpenContracts={onOpenContracts}
         />
       )}
 

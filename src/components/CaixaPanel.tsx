@@ -336,11 +336,14 @@ export function CaixaPanel({
   });
   const fulfillmentConversion = useFulfillmentConversion({
     convertToPickup: handleConvertDeliveryToPickup,
+    selectedOrderRevision: JSON.stringify(selectedKanbanOrder),
+    apiBaseUrl, authHeaders, selectedOrderId: selectedKanbanOrder ? String(selectedKanbanOrder.comandaId || selectedKanbanOrder.id) : undefined,
   });
 
-  const { soundEnabled, toggleSound, playOrderAlert } = useCashierAlerts({
+  const { soundEnabled, audioReady, activateAudio, toggleSound, playOrderAlert } = useCashierAlerts({
     orders,
     deliveryOrders,
+    pendingAcceptanceOrders,
     isDrawerOpen,
   });
 
@@ -690,6 +693,7 @@ export function CaixaPanel({
         fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}
     >
+
       {toastData && (
         <div
           className={clsx(
@@ -715,6 +719,7 @@ export function CaixaPanel({
           planId={currentPlanId}
           entitlements={planEntitlements}
           hasOnlineMenu={hasOnlineMenu}
+          isWsConnected={isWsConnected}
           isSidebarTabActive={isSidebarTabActive}
           sidebarOrderCount={sidebarOrderCount}
           handleSidebarNavigation={handleSidebarNavigation}
@@ -733,6 +738,7 @@ export function CaixaPanel({
           planId={currentPlanId}
           entitlements={planEntitlements}
           hasOnlineMenu={hasOnlineMenu}
+          isWsConnected={isWsConnected}
           isSidebarTabActive={isSidebarTabActive}
           sidebarOrderCount={sidebarOrderCount}
           handleSidebarNavigation={handleSidebarNavigation}
@@ -941,6 +947,23 @@ export function CaixaPanel({
               </button>
             ))}
           </div>
+
+      {pendingAcceptanceOrders.length > 0 && (
+        <button
+          type="button"
+          role="alert"
+          onClick={() => {
+            handleSidebarNavigation('vendas_pedidos');
+            setIsDrawerOpen(true);
+          }}
+          className="shrink-0 mx-5 mt-3 rounded-2xl border-2 border-amber-400 bg-amber-300 px-5 py-3 text-left text-amber-950"
+        >
+          <strong className="block text-sm font-black uppercase tracking-wide">
+            {pendingAcceptanceOrders.length === 1 ? 'Pedido aguardando aceite' : pendingAcceptanceOrders.length + ' pedidos aguardando aceite'}
+          </strong>
+          <span className="block text-[11px] font-bold">O alerta sonoro continua até todos serem aceitos ou recusados. Clique para abrir.</span>
+        </button>
+      )}
 
           <div ref={cashierContentRef} className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
             {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
@@ -1308,12 +1331,14 @@ export function CaixaPanel({
           isSubmitting={fulfillmentConversion.isSubmitting}
           onClose={fulfillmentConversion.close}
           onSubmit={fulfillmentConversion.submit}
+          onPreview={fulfillmentConversion.preview}
         />
 
         {selectedKanbanOrder && (
           <KanbanOrderDetails
             order={selectedKanbanOrder}
             saveObservation={saveItemObservation}
+            canChangeFulfillment={fulfillmentConversion.canChange}
             hasPrinting={hasPrinting}
             restaurantConfig={restauranteConfig}
             taxaServicoAtiva={taxaServicoAtiva}
@@ -1351,7 +1376,7 @@ export function CaixaPanel({
               transferTable: handleTransferSelectedKanbanTable,
               associateTable: handleAssociateSelectedKanbanTable,
               convertDeliveryToPickup: () => fulfillmentConversion.request({
-                id: selectedKanbanOrder.id,
+                id: selectedKanbanOrder.comandaId || selectedKanbanOrder.id,
                 numeroPedido: selectedKanbanOrder.numeroPedido,
               }),
               cancelConsumption: handleCancelSelectedKanbanConsumption,
@@ -1396,7 +1421,8 @@ export function CaixaPanel({
           fontSize={fontSize}
           soundEnabled={soundEnabled}
           toggleSound={toggleSound}
-          playOrderAlert={playOrderAlert}
+          audioReady={audioReady}
+          activateAudio={activateAudio}
         />
 
         <CashierConversationsDrawer

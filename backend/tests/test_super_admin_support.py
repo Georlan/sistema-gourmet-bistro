@@ -12,6 +12,7 @@ from app.routes import super_admin
 from app.security import (
     _authenticated_user_from_token,
     create_access_token,
+    get_current_user,
     get_password_hash,
 )
 from app.support_models import SupportSession
@@ -144,6 +145,90 @@ def test_support_mode_authenticates_operational_routes():
     assert op_resp.status_code == 200
     assert isinstance(op_resp.json(), list)
 
+
+
+def test_support_mode_is_read_only_for_permission_guarded_tenant_mutations():
+    """Modo Suporte navega e diagnostica, mas não altera configuração do tenant."""
+    headers = _superadmin_headers()
+    start = client.post(
+        "/api/super-admin/support/1/start",
+        json={"reason": "Diagnóstico somente leitura das configurações."},
+        headers=headers,
+    )
+    assert start.status_code == 200, start.text
+    support_headers = {
+        "Authorization": f"Bearer {start.json()['access_token']}"
+    }
+
+    # Use a read endpoint that is always valid for a provisioned tenant.
+    # /caixa/configuracoes may legitimately return 404 when that optional row
+    # has not been created yet, which says nothing about Support Mode reads.
+    read = client.get("/produtos/", headers=support_headers)
+    assert read.status_code == 200, read.text
+
+    write = client.put(
+        "/caixa/configuracoes",
+        headers=support_headers,
+        json={},
+    )
+    assert write.status_code == 403, write.text
+    assert "somente para diagnóstico" in write.json()["detail"]
+    assert "Super Admin" in write.json()["detail"]
+
+    # Factories alternativos também precisam manter o suporte read-only.
+    role_guarded = client.post(
+        "/api/online-orders/pause",
+        headers=support_headers,
+        json={"reason": "Teste de bloqueio no modo suporte."},
+    )
+    assert role_guarded.status_code == 403, role_guarded.text
+
+    entitled_guarded = client.post(
+        "/relatorios/meta-mensal",
+        headers=support_headers,
+        json={"meta_mensal": 1000},
+    )
+    assert entitled_guarded.status_code == 403, entitled_guarded.text
+
+    # O guard central também cobre rotas legadas que dependem diretamente
+    # de get_current_user, sem precisar executar uma mutação real no teste.
+    from starlette.requests import Request
+
+    put_request = Request({
+        "type": "http",
+        "method": "PUT",
+        "path": "/legacy-direct-write",
+        "headers": [],
+        "query_string": b"",
+        "server": ("testserver", 80),
+        "client": ("testclient", 50000),
+        "scheme": "http",
+    })
+    with SessionLocal() as direct_db:
+        with pytest.raises(HTTPException) as direct_exc:
+            get_current_user(
+                request=put_request,
+                token=start.json()["access_token"],
+                db=direct_db,
+            )
+    assert direct_exc.value.status_code == 403
+    assert "somente para diagnóstico" in direct_exc.value.detail
+
+    optional_guarded = client.post(
+        "/caixa/turno/movimentar",
+        headers=support_headers,
+        json={},
+    )
+    assert optional_guarded.status_code == 403, optional_guarded.text
+
+
+    # Encerrar a própria sessão continua sendo uma ação válida do fluxo de suporte.
+    end = client.post(
+        "/api/super-admin/support/end-current",
+        headers=support_headers,
+        json={"reason": "Diagnóstico concluído sem alteração do tenant."},
+    )
+    assert end.status_code == 200, end.text
 
 def test_customer_pii_requires_audited_support_mode():
     """Super Admin direto não acessa PII tenant; Modo Suporte temporário pode."""

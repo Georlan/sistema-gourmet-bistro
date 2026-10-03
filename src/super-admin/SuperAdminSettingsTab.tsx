@@ -4,31 +4,19 @@ import {
   Key,
   Bell,
   CheckCircle2,
-  AlertCircle,
   RefreshCw,
-  Send,
   HelpCircle,
 } from "lucide-react";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
-import type { CredentialsStatus } from "./superAdminTypes";
+import type { CredentialsStatus, TelegramHealthStatus } from "./superAdminTypes";
 
-interface SuperAdminSettingsTabProps {
-  onAddLog: (
-    text: string,
-    level?: "INFO" | "WARNING" | "ERROR" | "CRITICAL" | "info" | "warning" | "error" | "critical" | "success",
-    source?: string
-  ) => void;
-  onTriggerTelegramAlert: (text: string) => Promise<boolean>;
-}
 
-export function SuperAdminSettingsTab({
-  onTriggerTelegramAlert,
-}: SuperAdminSettingsTabProps) {
+export function SuperAdminSettingsTab() {
   const [credentials, setCredentials] = useState<CredentialsStatus | null>(null);
   const [isLoadingCreds, setIsLoadingCreds] = useState(false);
-  const [telegramText, setTelegramText] = useState("");
-  const [isSendingTelegram, setIsSendingTelegram] = useState(false);
-  const [telegramStatus, setTelegramStatus] = useState<string | null>(null);
+  const [telegramHealth, setTelegramHealth] = useState<TelegramHealthStatus | null>(null);
+  const [telegramError, setTelegramError] = useState<string | null>(null);
+  const [checkingTelegram, setCheckingTelegram] = useState(false);
 
   const fetchCredentials = async () => {
     setIsLoadingCreds(true);
@@ -50,24 +38,18 @@ export function SuperAdminSettingsTab({
     fetchCredentials();
   }, []);
 
-  const handleSendTelegramTest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!telegramText.trim()) return;
-
-    setIsSendingTelegram(true);
-    setTelegramStatus(null);
+  const checkTelegram = async () => {
+    setCheckingTelegram(true);
+    setTelegramHealth(null);
+    setTelegramError(null);
     try {
-      const ok = await onTriggerTelegramAlert(telegramText.trim());
-      if (ok) {
-        setTelegramStatus("Alerta de teste enviado com sucesso ao Telegram.");
-        setTelegramText("");
-      } else {
-        setTelegramStatus("Não foi possível enviar a notificação.");
-      }
-    } catch (err) {
-      setTelegramStatus(`Erro: ${superAdminErrorMessage(err)}`);
+      const response = await superAdminFetch("/api/super-admin/telegram/health");
+      if (!response.ok) throw new Error("Diagnóstico indisponível");
+      setTelegramHealth(await response.json());
+    } catch (error) {
+      setTelegramError("Diagnóstico não confirmado. " + superAdminErrorMessage(error));
     } finally {
-      setIsSendingTelegram(false);
+      setCheckingTelegram(false);
     }
   };
 
@@ -80,27 +62,27 @@ export function SuperAdminSettingsTab({
     },
     {
       id: "supabase",
-      name: "Supabase PostgreSQL",
+      name: "Supabase (acesso opcional)",
       isConfigured: credentials?.supabase ? credentials.supabase.configured : null,
-      details: "Banco de dados e isolamento multi-tenant",
+      details: "Credencial administrativa opcional; a disponibilidade do banco está em Saúde",
     },
     {
       id: "railway",
       name: "Railway Platform",
       isConfigured: credentials?.railway ? credentials.railway.configured : null,
-      details: "Hospedagem e operações do backend",
+      details: "API administrativa opcional; ausência de token não significa hospedagem desconectada",
     },
     {
       id: "cloudflare",
       name: "Cloudflare Edge & DNS",
       isConfigured: credentials?.cloudflare ? credentials.cloudflare.configured : null,
-      details: "Frontend, proxy e DNS",
+      details: "Acesso administrativo DNS opcional; ausência de token não significa frontend indisponível",
     },
     {
       id: "github",
       name: "GitHub Deployments",
       isConfigured: credentials?.github ? credentials.github.configured : null,
-      details: "Quality gates e histórico de builds",
+      details: "Token opcional para consultar o histórico de um repositório público",
     },
     {
       id: "telegram",
@@ -119,7 +101,7 @@ export function SuperAdminSettingsTab({
           <div>
             <h2 className="text-lg font-bold text-koma-foreground flex items-center gap-2">
               <Settings className="w-5 h-5 text-[#00b894]" />
-              Configurações da Plataforma KÔMA
+              Acessos e diagnóstico de integrações
             </h2>
             <p className="text-xs text-koma-muted mt-0.5">
               Estado de configuração das integrações centrais sem expor credenciais
@@ -161,8 +143,8 @@ export function SuperAdminSettingsTab({
                         <CheckCircle2 className="w-3 h-3" /> Configurado
                       </span>
                     ) : integ.isConfigured === false ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/30">
-                        <AlertCircle className="w-3 h-3" /> Não configurado
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-koma-muted bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
+                        <HelpCircle className="w-3 h-3" /> { ["railway", "cloudflare", "github", "supabase"].includes(integ.id) ? "Acesso opcional não habilitado" : "Não configurado" }
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-koma-muted bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
@@ -180,7 +162,7 @@ export function SuperAdminSettingsTab({
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
             <h3 className="text-sm font-bold text-koma-foreground flex items-center gap-2">
-              <Bell className="w-4 h-4 text-amber-400" /> Teste de Notificações Telegram
+              <Bell className="w-4 h-4 text-amber-400" /> Diagnóstico Telegram
             </h3>
             <span className={`text-[11px] font-semibold flex items-center gap-1 ${telegramConfigured ? "text-emerald-400" : "text-koma-muted"}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${telegramConfigured ? "bg-emerald-400" : "bg-zinc-600"}`}></span>
@@ -188,38 +170,21 @@ export function SuperAdminSettingsTab({
             </span>
           </div>
 
-          <form onSubmit={handleSendTelegramTest} className="space-y-3 text-xs">
-            <p className="text-koma-muted">
-              O envio só é liberado quando o backend confirma que bot e chat estão configurados.
-            </p>
-
-            <div>
-              <label className="block text-koma-secondary font-medium mb-1">Texto da Notificação</label>
-              <textarea
-                rows={3}
-                placeholder="Ex: Teste operacional do Super Admin KÔMA..."
-                value={telegramText}
-                onChange={e => setTelegramText(e.target.value)}
-                disabled={!telegramConfigured}
-                className="w-full bg-koma-page border border-zinc-800 rounded-lg p-2.5 text-xs text-koma-foreground placeholder:text-koma-subtle focus:outline-none focus:border-[#00b894] disabled:opacity-50"
-              />
-            </div>
-
-            {telegramStatus && (
-              <p className="p-2 rounded bg-zinc-900 border border-zinc-800 text-xs text-koma-secondary">
-                {telegramStatus}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={!telegramConfigured || isSendingTelegram || !telegramText.trim()}
-              className="px-4 py-2 bg-[#00b894] hover:bg-[#00c996] text-black font-bold rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <Send className="w-3.5 h-3.5" />
-              {isSendingTelegram ? "Enviando..." : "Transmitir Alerta"}
+          <div className="space-y-3 text-xs">
+            <p className="text-koma-muted">Consulta o bot, o destino e a participação pelo backend. Nenhuma mensagem é enviada.</p>
+            {telegramHealth && <div className="space-y-2 rounded-lg border border-zinc-800 p-3">
+              <strong className={telegramHealth.status === "verified" ? "text-emerald-400" : "text-koma-secondary"}>
+                {telegramHealth.status === "verified" ? "Bot e destino verificados" : telegramHealth.status === "unavailable" ? "Consulta rejeitada / acesso indisponível" : telegramHealth.status === "not_configured" ? "Não configurado" : "Não verificado"}
+              </strong>
+              <p>{telegramHealth.detail}</p>
+              <p className="text-koma-muted">Verificado em {new Date(telegramHealth.checked_at).toLocaleString("pt-BR")}</p>
+              <p className="text-koma-muted">Entrega de mensagens: não testada.</p>
+            </div>}
+            {telegramError && <p role="alert">{telegramError}</p>}
+            <button type="button" onClick={checkTelegram} disabled={!telegramConfigured || checkingTelegram} className="px-4 py-2 bg-[#00b894] text-black font-bold rounded-lg disabled:opacity-50">
+              {checkingTelegram ? "Verificando…" : "Verificar Telegram"}
             </button>
-          </form>
+          </div>
         </div>
       </div>
     </div>

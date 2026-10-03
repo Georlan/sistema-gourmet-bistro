@@ -15,7 +15,7 @@ test('Restaurante 360 usa somente fontes administrativas reais já existentes', 
   assert.match(restaurant360, /\/api\/super-admin\/trials/);
   assert.match(restaurant360, /\/api\/super-admin\/onboarding\/restaurantes\//);
   assert.match(restaurant360, /\/api\/super-admin\/access\/restaurantes\//);
-  assert.match(restaurant360, /\/api\/super-admin\/audit/);
+  assert.match(restaurant360, /SuperAdminAuditTab key=\{tenant.id\} tenantId=\{tenant.id\}/);
   assert.match(restaurant360, /linkedRestaurantId === tenant\.id/);
   assert.doesNotMatch(restaurant360, /mock|faker|simulad/i);
 });
@@ -124,4 +124,65 @@ test('Cardápio assistido reaproveita a fila existente em vez de duplicar public
   assert.match(restaurant360, /Abrir fila de cardápios/);
   assert.match(restaurant360, /item\.key === "catalog"/);
   assert.doesNotMatch(restaurant360, /catalog-assistance.*\/publish/);
+});
+
+
+test('Restaurante 360 mostra impressão sem inventar saúde positiva', () => {
+  assert.match(restaurant360, /\/api\/super-admin\/restaurantes\/.*\/capabilities/);
+  assert.match(restaurant360, /key: "printing"/);
+  assert.match(restaurant360, /printingIncidents/);
+  assert.match(restaurant360, /Capability efetiva \+ ausência de incidente detectado/);
+  assert.match(restaurant360, /Recurso habilitado · nenhum incidente de impressão detectado/);
+  assert.match(restaurant360, /state: printingEnabled === false/);
+  assert.match(restaurant360, /\? "check"/);
+  assert.match(restaurant360, /Abrir a tela de impressão em Modo Suporte/);
+  assert.match(restaurant360, /subTab: "impressao"/);
+  assert.doesNotMatch(restaurant360, /Impressão pronta.*nenhum incidente/i);
+});
+
+
+test('Cockpit mostra contratação real e diferencia tenant comercial de administrativo', () => {
+  assert.match(restaurant360, /key: "contract"/);
+  assert.match(restaurant360, /linkedContract/);
+  assert.match(restaurant360, /contractsAvailable/);
+  assert.match(restaurant360, /Implantação comercial sem contrato vinculado/);
+  assert.match(restaurant360, /Tenant administrativo\/QA · sem contratação comercial/);
+  assert.match(restaurant360, /ContractAcceptance vinculado ao tenant/);
+  assert.match(restaurant360, /Abrir contratações/);
+  assert.doesNotMatch(restaurant360, /mockContract|fakeContract|simulatedContract/);
+});
+
+
+test('Restaurante 360 mostra status e expiração do convite sem expor segredo', () => {
+  assert.match(restaurant360, /inviteEmailStatus/);
+  assert.match(restaurant360, /inviteExpiresAt/);
+  assert.match(restaurant360, /inviteExpired/);
+  assert.match(restaurant360, /E-mail entregue/);
+  assert.match(restaurant360, /Expirado/);
+  assert.doesNotMatch(restaurant360, /token_convite/);
+});
+
+
+test('Cockpit traduz blockers canônicos para linguagem operacional sem inventar estado', () => {
+  assert.match(restaurant360, /READINESS_BLOCKER_LABELS/);
+  assert.match(restaurant360, /Dados do restaurante pendentes/);
+  assert.match(restaurant360, /Horários de funcionamento pendentes/);
+  assert.match(restaurant360, /Cardápio ainda sem produto ativo/);
+  assert.match(restaurant360, /Aguardando revisão e liberação KÔMA/);
+  assert.match(restaurant360, /OPERATION_BLOCKER_LABELS/);
+  assert.match(restaurant360, /Modalidades de atendimento não configuradas/);
+  assert.match(restaurant360, /Salão usa mapa de mesas, mas não há mesas cadastradas/);
+  assert.match(restaurant360, /Delivery ativo com configuração de entrega incompleta/);
+  assert.match(restaurant360, /Taxa de serviço ativa com percentual inválido/);
+  assert.match(restaurant360, /formatBlockers\(release\.readiness\.blockers, READINESS_BLOCKER_LABELS\)/);
+  assert.match(restaurant360, /formatBlockers\(release\.operations\.blockers, OPERATION_BLOCKER_LABELS\)/);
+});
+
+
+test('Resumo do Restaurante 360 destaca o próximo passo usando readiness canônico', () => {
+  assert.match(restaurant360, /Próximo passo da implantação/);
+  assert.match(restaurant360, /Implantação essencial pronta · aguardando revisão KÔMA/);
+  assert.match(restaurant360, /Fonte: readiness canônico do onboarding/);
+  assert.match(restaurant360, /formatBlockers\(release\.readiness\.blockers, READINESS_BLOCKER_LABELS\)/);
+  assert.match(restaurant360, /setSection\("implementation"\)/);
 });

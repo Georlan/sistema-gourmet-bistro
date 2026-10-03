@@ -351,6 +351,7 @@ def dispatch_order_push_event(db: Session, snapshot: dict) -> int:
 
     delivered = 0
     now = datetime.datetime.now(datetime.timezone.utc)
+    targets = []
     for subscription in subscriptions:
         subscription_info = {
             "endpoint": decrypt_field(subscription.endpoint_ciphertext),
@@ -359,26 +360,38 @@ def dispatch_order_push_event(db: Session, snapshot: dict) -> int:
                 "auth": decrypt_field(subscription.auth_ciphertext),
             },
         }
-        try:
-            webpush(
-                subscription_info=subscription_info,
-                data=data,
-                vapid_private_key=config.private_key,
-                vapid_claims={"sub": config.subject},
-                ttl=config.ttl_seconds,
-                headers={"Urgency": "high" if payload.get("kind") == "message" or payload.get("status") in {"pronto", "transito"} else "normal"},
-            )
-            subscription.last_sent_at = now
-            subscription.updated_at = now
-            delivered += 1
-        except WebPushException as exc:
-            response = getattr(exc, "response", None)
-            status_code = getattr(response, "status_code", None)
-            if status_code in {404, 410}:
-                subscription.enabled = False
+        targets.append((subscription, subscription_info))
+        db.expunge(subscription)
+    # Only detached scalar snapshots cross the network boundary. Keep changes
+    # staged for the dispatcher's existing commit/rollback policy afterwards.
+    db.rollback()
+    updated = []
+    try:
+        for subscription, subscription_info in targets:
+            try:
+                webpush(
+                    subscription_info=subscription_info,
+                    data=data,
+                    vapid_private_key=config.private_key,
+                    vapid_claims={"sub": config.subject},
+                    ttl=config.ttl_seconds,
+                    timeout=5.0,
+                    headers={"Urgency": "high" if payload.get("kind") == "message" or payload.get("status") in {"pronto", "transito"} else "normal"},
+                )
+                subscription.last_sent_at = now
                 subscription.updated_at = now
-                continue
-            raise
-
-    db.flush()
+                updated.append(subscription)
+                delivered += 1
+            except WebPushException as exc:
+                response = getattr(exc, "response", None)
+                status_code = getattr(response, "status_code", None)
+                if status_code in {404, 410}:
+                    subscription.enabled = False
+                    subscription.updated_at = now
+                    updated.append(subscription)
+                    continue
+                raise
+    finally:
+        db.add_all(updated)
+        db.flush()
     return delivered

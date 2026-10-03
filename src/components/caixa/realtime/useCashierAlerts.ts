@@ -7,28 +7,29 @@ import type { DeliveryOrderView } from '../orders/cashierWorkspaceTypes';
 type Props = {
   orders: Order[];
   deliveryOrders: DeliveryOrderView[];
+  pendingAcceptanceOrders: DeliveryOrderView[];
   isDrawerOpen: boolean;
 };
 
 /** Owns alerts state, effects and actions; composition supplies only cross-feature dependencies. */
-export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props) {
+export function useCashierAlerts({ orders, deliveryOrders, pendingAcceptanceOrders }: Props) {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioUnlockedRef = useRef(false);
+  const lastDigitalAlertAtRef = useRef<number | null>(null);
+  const [audioReady, setAudioReady] = useState(false);
 
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     return localStorage.getItem('@koma:sound_enabled') !== 'false';
   });
 
-  const toggleSound = () => {
-    const next = !soundEnabled;
-    setSoundEnabled(next);
-    localStorage.setItem('@koma:sound_enabled', String(next));
-    if (next) playOrderAlert('test');
-  };
-
   const playOrderAlert = useCallback(
     (type: 'new_order' | 'bill_requested' | 'delivery_pending' | 'test' = 'new_order') => {
       if (type !== 'test' && (!soundEnabled || !audioUnlockedRef.current)) return;
+      if (type === 'delivery_pending') {
+        const now = performance.now();
+        if (lastDigitalAlertAtRef.current !== null && now - lastDigitalAlertAtRef.current < 250) return;
+        lastDigitalAlertAtRef.current = now;
+      }
       try {
         if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
           audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -37,10 +38,15 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
         if (ctx.state === 'suspended') {
           if (type !== 'test') return;
           void ctx.resume().then(() => {
-            audioUnlockedRef.current = true;
-          }).catch(() => undefined);
+            audioUnlockedRef.current = ctx.state === 'running';
+            setAudioReady(audioUnlockedRef.current);
+          }).catch(() => {
+            audioUnlockedRef.current = false;
+            setAudioReady(false);
+          });
         } else if (ctx.state === 'running') {
           audioUnlockedRef.current = true;
+          setAudioReady(true);
         }
         const t = ctx.currentTime;
 
@@ -124,7 +130,42 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
     [soundEnabled]
   );
 
+  const activateAudio = useCallback(async () => {
+    try {
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+      const ready = ctx.state === 'running';
+      audioUnlockedRef.current = ready;
+      setAudioReady(ready);
+      if (!ready) return false;
+
+      setSoundEnabled(true);
+      localStorage.setItem('@koma:sound_enabled', 'true');
+      playOrderAlert('test');
+      return true;
+    } catch {
+      audioUnlockedRef.current = false;
+      setAudioReady(false);
+      return false;
+    }
+  }, [playOrderAlert]);
+
+  const toggleSound = () => {
+    if (soundEnabled) {
+      setSoundEnabled(false);
+      localStorage.setItem('@koma:sound_enabled', 'false');
+      return;
+    }
+    void activateAudio();
+  };
+
   useEffect(() => {
+    let disposed = false;
     const unlock = () => {
       try {
         if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
@@ -133,22 +174,33 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
         const ctx = audioCtxRef.current;
         if (ctx.state === 'running') {
           audioUnlockedRef.current = true;
+          setAudioReady(true);
           return;
         }
         void ctx.resume().then(() => {
+          if (disposed) return;
           audioUnlockedRef.current = ctx.state === 'running';
+          setAudioReady(audioUnlockedRef.current);
         }).catch(() => {
+          if (disposed) return;
           audioUnlockedRef.current = false;
+          setAudioReady(false);
         });
       } catch {
         audioUnlockedRef.current = false;
+        setAudioReady(false);
       }
     };
     window.addEventListener('pointerdown', unlock, { passive: true });
     window.addEventListener('keydown', unlock, { passive: true });
     return () => {
+      disposed = true;
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
+      audioUnlockedRef.current = false;
+      const ctx = audioCtxRef.current;
+      audioCtxRef.current = null;
+      if (ctx && ctx.state !== 'closed') void ctx.close().catch(() => {});
     };
   }, []);
 
@@ -205,10 +257,25 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
     const hasNewOrder = Array.from(currentIds).some((id) => !known.has(id));
     currentIds.forEach((id) => known.add(id));
 
-    if (hasNewOrder && !isDrawerOpen) {
+    if (hasNewOrder) {
       playOrderAlert('delivery_pending');
     }
-  }, [deliveryOrders, isDrawerOpen, playOrderAlert]);
+  }, [deliveryOrders, playOrderAlert]);
 
-  return { soundEnabled, toggleSound, playOrderAlert };
+  const hasPendingAcceptance = pendingAcceptanceOrders.length > 0;
+
+  // Um pedido online aguardando aceite é uma pendência operacional, não um toast.
+  // Após o navegador liberar áudio, o alarme continua até o pedido ser aceito/recusado.
+  useEffect(() => {
+    if (!soundEnabled || !audioReady || !hasPendingAcceptance) return;
+
+    playOrderAlert('delivery_pending');
+    const alarmId = window.setInterval(() => {
+      playOrderAlert('delivery_pending');
+    }, 4000);
+
+    return () => window.clearInterval(alarmId);
+  }, [audioReady, hasPendingAcceptance, playOrderAlert, soundEnabled]);
+
+  return { soundEnabled, audioReady, activateAudio, toggleSound, playOrderAlert };
 }

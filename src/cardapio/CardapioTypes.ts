@@ -38,6 +38,7 @@ export interface ProductModifier {
 }
 
 export interface Product {
+  marmitaria?: boolean;
   id: string;
   name: string;
   description: string;
@@ -117,6 +118,7 @@ export interface BrandConfig {
   nextOpeningLabel?: string;
   deliveryEnabled?: boolean;
   pedidoMinimo?: number;
+  pedidoMinimoRetirada?: boolean;
   freteGratisValor?: number;
   tipoTaxaEntrega?: string;
   tabelaTaxasBairros?: BairroTaxa[];

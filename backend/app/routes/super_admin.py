@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 import jwt
 import httpx
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy import func, text
 from pydantic import BaseModel, Field
 
@@ -193,6 +193,8 @@ SENSITIVE_AUDIT_KEYS = {
 
 
 def _sanitize_audit_data(data: Any) -> Any:
+    if isinstance(data, list):
+        return [_sanitize_audit_data(item) for item in data]
     if not isinstance(data, dict):
         return data
     sanitized: dict[str, Any] = {}
@@ -200,7 +202,7 @@ def _sanitize_audit_data(data: Any) -> Any:
         k_lower = str(k).lower()
         if any(s in k_lower for s in SENSITIVE_AUDIT_KEYS):
             sanitized[k] = "[REDACTED]"
-        elif isinstance(v, dict):
+        elif isinstance(v, (dict, list)):
             sanitized[k] = _sanitize_audit_data(v)
         else:
             sanitized[k] = v
@@ -574,16 +576,21 @@ def update_tenant(
 
 
 @router.get("/audit")
-def list_audit_logs(admin: dict = Depends(get_current_admin)):
+def list_audit_logs(
+    admin: dict = Depends(get_current_admin),
+    tenant_id: int | None = Query(default=None, gt=0),
+):
     """Retorna a trilha de auditoria administrativa de todos os tenants sob isolamento RLS."""
     db = SessionLocal()
     logs: list[dict[str, Any]] = []
 
     try:
-        restaurant_ids = _discover_restaurant_ids(db)
+        restaurant_ids = [tenant_id] if tenant_id is not None else _discover_restaurant_ids(db)
         for r_id in restaurant_ids:
             with tenant_session_scope(db, r_id):
                 restaurante = db.query(Restaurante).filter(Restaurante.id == r_id).first()
+                if tenant_id is not None and restaurante is None:
+                    raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
                 rest_name = restaurante.nome if restaurante else f"Restaurante #{r_id}"
                 r_logs = (
                     db.query(SuperAdminAuditLog)
@@ -663,19 +670,21 @@ async def get_github_runs(admin: dict = Depends(get_current_admin)):
     token = os.getenv("GITHUB_TOKEN", "").strip()
     owner = os.getenv("GITHUB_OWNER", "Georlan").strip()
     repo = os.getenv("GITHUB_REPO", "sistema-gourmet-bistro").strip()
-    if not token:
-        _unavailable("GitHub não configurado no servidor.")
     headers = {
-        "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
     }
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"https://api.github.com/repos/{owner}/{repo}/actions/runs",
-            params={"per_page": 20},
-            headers=headers,
-            timeout=10.0,
-        )
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/actions/runs",
+                params={"per_page": 20},
+                headers=headers,
+                timeout=10.0,
+            )
+    except httpx.RequestError:
+        _unavailable("Consulta GitHub não confirmada; conexão indisponível.")
     if response.status_code != 200:
         _unavailable(f"GitHub API respondeu HTTP {response.status_code}.")
     return response.json()
@@ -734,6 +743,7 @@ def get_integrations_health(admin: dict = Depends(get_current_admin)):
             connection.execute(text("SELECT 1"))
     except Exception:
         database_status = "unavailable"
+    database_latency_ms = round((time.perf_counter() - database_started) * 1000, 2)
 
     def configured(*names: str) -> dict:
         is_configured = all(bool(os.getenv(name)) for name in names)
@@ -763,13 +773,16 @@ def get_integrations_health(admin: dict = Depends(get_current_admin)):
         },
         "database": {
             "status": database_status,
-            "latency_ms": round((time.perf_counter() - database_started) * 1000, 2),
+            "latency_ms": database_latency_ms,
             "source": "select_1",
             "simulated": False,
         },
         "supabase": configured("SUPABASE_DB_URL", "SUPABASE_SERVICE_ROLE_KEY"),
         "cloudflare": configured("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ZONE_ID"),
-        "railway": configured("RAILWAY_API_TOKEN", "RAILWAY_PROJECT_ID"),
+        "railway": {
+            **configured("RAILWAY_API_TOKEN", "RAILWAY_PROJECT_ID"),
+            "hosting_detected": bool(os.getenv("RAILWAY_ENVIRONMENT_ID") and os.getenv("RAILWAY_SERVICE_ID")),
+        },
         "github": configured("GITHUB_TOKEN"),
         "mercado_pago": configured(
             "MERCADO_PAGO_CLIENT_ID",
@@ -787,6 +800,14 @@ def get_integrations_health(admin: dict = Depends(get_current_admin)):
 
 
 # --- TELEGRAM BOT ALERTING ---
+@router.get("/telegram/health")
+async def get_telegram_health(
+    admin: dict = Depends(get_current_admin),
+    telegram: TelegramService = Depends(TelegramService),
+):
+    return await telegram.get_health()
+
+
 @router.post("/telegram/notify")
 async def trigger_developer_alert(
     text: str = Body(..., embed=True),

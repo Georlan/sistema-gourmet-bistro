@@ -24,7 +24,8 @@ import { SuperAdminTrialModal } from "./SuperAdminTrialModal";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 import type { SupportNavigationTarget } from "./SuperAdminSupportModal";
-import type { SuperAdminAuditLogEntry, Tenant } from "./superAdminTypes";
+import { SuperAdminAuditTab } from "./SuperAdminAuditTab";
+import type { Tenant } from "./superAdminTypes";
 
 type OperationMode = "consumo_local" | "retirada" | "delivery";
 
@@ -105,6 +106,13 @@ type TenantIncident = {
   action_target_id?: string | null;
 };
 
+type CapabilitySnapshot = {
+  plan: string;
+  baseline: Record<string, boolean>;
+  overrides: Record<string, { enabled: boolean; source: string }>;
+  effective: Record<string, boolean>;
+};
+
 type AccessDetail = {
   totalUsers: number;
   activeUsers: number;
@@ -125,6 +133,9 @@ type AccessDetail = {
     role: string;
     status: "ativo" | "inativo" | "pendente_ativacao";
     createdAt?: string | null;
+    inviteEmailStatus?: string | null;
+    inviteExpiresAt?: string | null;
+    inviteExpired?: boolean | null;
   }>;
 };
 
@@ -140,6 +151,7 @@ interface SuperAdminRestaurant360Props {
   onBenefits: (tenant: Tenant) => void;
   onOpenTeamControls: () => void;
   onOpenCatalogAssistance: () => void;
+  onOpenContracts: () => void;
 }
 
 const sections: Array<{
@@ -203,7 +215,32 @@ function supportTargetForCockpit(key: string): SupportNavigationTarget | null {
   if (key === "dine-in") return { tab: "impressao_salao", subTab: "mesas", label: "Salão / mesas" };
   if (key === "delivery") return { tab: "cardapio_digital", subTab: "cardapio_entrega", label: "Configuração de entrega" };
   if (key === "payment") return { tab: "cardapio_digital", subTab: "cardapio_pagamentos", label: "Formas de pagamento" };
+  if (key === "printing") return { tab: "impressao_salao", subTab: "impressao", label: "Impressão" };
   return null;
+}
+
+export const READINESS_BLOCKER_LABELS: Record<string, string> = {
+  profile: "Dados do restaurante pendentes",
+  hours: "Horários de funcionamento pendentes",
+  catalog: "Cardápio ainda sem produto ativo",
+  operations: "Configuração operacional incompleta",
+  trial: "Aguardando revisão e liberação KÔMA",
+  test_order: "Primeiro pedido de teste ainda não concluído",
+};
+
+const OPERATION_BLOCKER_LABELS: Record<string, string> = {
+  order_types: "Modalidades de atendimento não configuradas",
+  dine_in_tables: "Salão usa mapa de mesas, mas não há mesas cadastradas",
+  delivery_configuration: "Delivery ativo com configuração de entrega incompleta",
+  service_charge: "Taxa de serviço ativa com percentual inválido",
+};
+
+function blockerLabel(code: string, labels: Record<string, string>) {
+  return labels[code] || code.replaceAll("_", " ");
+}
+
+function formatBlockers(codes: string[] | undefined, labels: Record<string, string>) {
+  return codes?.length ? codes.map(code => blockerLabel(code, labels)).join(" · ") : "";
 }
 
 export function SuperAdminRestaurant360({
@@ -218,14 +255,16 @@ export function SuperAdminRestaurant360({
   onBenefits,
   onOpenTeamControls,
   onOpenCatalogAssistance,
+  onOpenContracts,
 }: SuperAdminRestaurant360Props) {
   const [section, setSection] = useState<SectionId>("summary");
   const [trial, setTrial] = useState<TrialRecord | null>(null);
   const [release, setRelease] = useState<ReleasePreview | null>(null);
   const [access, setAccess] = useState<AccessDetail | null>(null);
-  const [audit, setAudit] = useState<SuperAdminAuditLogEntry[]>([]);
   const [incidents, setIncidents] = useState<TenantIncident[]>([]);
   const [incidentsAvailable, setIncidentsAvailable] = useState(false);
+  const [capabilities, setCapabilities] = useState<CapabilitySnapshot | null>(null);
+  const [capabilitiesAvailable, setCapabilitiesAvailable] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [trialOpen, setTrialOpen] = useState(false);
@@ -274,21 +313,19 @@ export function SuperAdminRestaurant360({
         if (!response.ok) throw new Error(body?.detail || "Equipe indisponível.");
         return body as AccessDetail;
       }),
-      superAdminFetch("/api/super-admin/audit").then(async response => {
-        const body = await response.json();
-        if (!response.ok || !Array.isArray(body)) {
-          throw new Error(body?.detail || "Auditoria indisponível.");
-        }
-        return (body as SuperAdminAuditLogEntry[])
-          .filter(item => item.restauranteId === tenant.id)
-          .slice(0, 100);
-      }),
       superAdminFetch("/api/super-admin/incidents?tenant_id=" + encodeURIComponent(tenant.id)).then(async response => {
         const body = await response.json();
         if (!response.ok || !Array.isArray(body)) {
           throw new Error(body?.detail || "Incidentes operacionais indisponíveis.");
         }
         return body as TenantIncident[];
+      }),
+      superAdminFetch("/api/super-admin/restaurantes/" + tenant.id + "/capabilities").then(async response => {
+        const body = await response.json();
+        if (!response.ok || !body || typeof body !== "object") {
+          throw new Error(body?.detail || "Recursos efetivos indisponíveis.");
+        }
+        return body as CapabilitySnapshot;
       }),
     ]);
 
@@ -310,19 +347,22 @@ export function SuperAdminRestaurant360({
       nextErrors.push("Equipe: " + superAdminErrorMessage(results[2].reason));
     }
 
-    if (results[3].status === "fulfilled") setAudit(results[3].value as SuperAdminAuditLogEntry[]);
-    else {
-      setAudit([]);
-      nextErrors.push("Histórico: " + superAdminErrorMessage(results[3].reason));
-    }
-
-    if (results[4].status === "fulfilled") {
-      setIncidents(results[4].value as TenantIncident[]);
+    if (results[3].status === "fulfilled") {
+      setIncidents(results[3].value as TenantIncident[]);
       setIncidentsAvailable(true);
     } else {
       setIncidents([]);
       setIncidentsAvailable(false);
-      nextErrors.push("Incidentes: " + superAdminErrorMessage(results[4].reason));
+      nextErrors.push("Incidentes: " + superAdminErrorMessage(results[3].reason));
+    }
+
+    if (results[4].status === "fulfilled") {
+      setCapabilities(results[4].value as CapabilitySnapshot);
+      setCapabilitiesAvailable(true);
+    } else {
+      setCapabilities(null);
+      setCapabilitiesAvailable(false);
+      nextErrors.push("Recursos: " + superAdminErrorMessage(results[4].reason));
     }
 
     setErrors(nextErrors);
@@ -340,6 +380,8 @@ export function SuperAdminRestaurant360({
 
   const readySteps = release ? Object.values(release.steps).filter(Boolean).length : null;
   const criticalIncidentCount = incidents.filter(item => item.severity === "critical" || item.severity === "high").length;
+  const printingIncidents = incidents.filter(item => item.source === "impressao");
+  const printingEnabled = capabilitiesAvailable ? capabilities?.effective?.printing === true : null;
 
   const incidentTone = (severity: string) => {
     if (severity === "critical" || severity === "high") return "border-rose-900/60 bg-rose-950/20 text-rose-200";
@@ -481,6 +523,35 @@ export function SuperAdminRestaurant360({
 
   const cockpitItems = release ? [
     {
+      key: "contract",
+      label: "Contratação",
+      state: !contractsAvailable
+        ? "unknown"
+        : linkedContract
+          ? "ready"
+          : release.onboarding?.mode === "commercial"
+            ? "blocked"
+            : "optional",
+      detail: !contractsAvailable
+        ? "Fonte de contratações indisponível"
+        : linkedContract
+          ? "Contrato vinculado · " + (linkedContract.status === "ACTIVATED" ? "ativado" : "ativação pendente")
+          : release.onboarding?.mode === "commercial"
+            ? "Implantação comercial sem contrato vinculado"
+            : "Tenant administrativo/QA · sem contratação comercial",
+      evidence: linkedContract
+        ? "Protocolo " + linkedContract.protocol + " · billing " + (linkedContract.billingStatus || "não informado")
+        : release.onboarding?.mode === "commercial"
+          ? "Onboarding comercial sem ContractAcceptance vinculado ao tenant"
+          : "Modo de onboarding administrativo",
+      owner: linkedContract || release.onboarding?.mode !== "commercial" ? "—" : "KÔMA",
+      nextStep: linkedContract
+        ? "Nenhuma ação necessária; condições congeladas estão disponíveis em Plano & benefícios."
+        : release.onboarding?.mode === "commercial"
+          ? "Revisar a contratação e o vínculo do restaurante antes de continuar a implantação."
+          : "Nenhuma ação comercial obrigatória para tenant administrativo/QA.",
+    },
+    {
       key: "access",
       label: "Acesso",
       state: access ? (access.activeAdmins > 0 ? "ready" : "blocked") : "unknown",
@@ -559,7 +630,7 @@ export function SuperAdminRestaurant360({
         ? release.operations.orderTypes.join(", ")
         : "Não configuradas",
       evidence: release.operations?.blockers?.length
-        ? "Blockers: " + release.operations.blockers.join(", ")
+        ? "Blockers: " + formatBlockers(release.operations.blockers, OPERATION_BLOCKER_LABELS)
         : "Política canônica de modalidades",
       owner: release.operations?.configured ? (release.operations?.ready ? "—" : "Cliente / KÔMA") : "Cliente",
       nextStep: release.operations?.configured && release.operations?.ready
@@ -616,6 +687,37 @@ export function SuperAdminRestaurant360({
         : "Configurar formas de pagamento; conectar Mercado Pago apenas se quiser pagamento online.",
     },
     {
+      key: "printing",
+      label: "Impressão",
+      state: printingEnabled === false
+        ? "optional"
+        : printingEnabled === true && printingIncidents.length > 0
+          ? "blocked"
+          : printingEnabled === true
+            ? "check"
+            : "unknown",
+      detail: printingEnabled === false
+        ? "Recurso de impressão não está habilitado para este restaurante"
+        : printingEnabled === true && printingIncidents.length > 0
+          ? String(printingIncidents.length) + " incidente(s) de impressão detectado(s)"
+          : printingEnabled === true
+            ? "Recurso habilitado · nenhum incidente de impressão detectado"
+            : "Estado do recurso de impressão indisponível",
+      evidence: printingEnabled === false
+        ? "Capability efetiva: printing=false"
+        : printingEnabled === true && printingIncidents.length > 0
+          ? "Central de Incidentes + capability efetiva"
+          : printingEnabled === true
+            ? "Capability efetiva + ausência de incidente detectado"
+            : "Fonte de recursos indisponível",
+      owner: printingEnabled === false ? "KÔMA se o recurso precisar ser liberado" : "KÔMA / cliente",
+      nextStep: printingEnabled === false
+        ? "Nenhuma ação obrigatória se o restaurante não contratou nem recebeu impressão."
+        : printingIncidents.length > 0
+          ? "Revisar o incidente e abrir a tela de impressão em Modo Suporte para confirmar agente, impressora e fila."
+          : "Abrir a tela de impressão em Modo Suporte e confirmar agente, impressora e fila antes do primeiro turno.",
+    },
+    {
       key: "release",
       label: "Liberação / trial",
       state: release.readiness?.trialStarted
@@ -629,7 +731,7 @@ export function SuperAdminRestaurant360({
           ? "Implantação essencial pronta · aguardando KÔMA"
           : "Ainda há blockers de implantação",
       evidence: release.readiness?.blockers?.length
-        ? "Blockers: " + release.readiness.blockers.join(", ")
+        ? "Blockers: " + formatBlockers(release.readiness.blockers, READINESS_BLOCKER_LABELS)
         : "Readiness canônico do onboarding",
       owner: release.readiness?.trialStarted ? "—" : release.readyForRelease ? "KÔMA" : "Cliente / KÔMA",
       nextStep: release.readiness?.trialStarted
@@ -645,6 +747,7 @@ export function SuperAdminRestaurant360({
     if (state === "blocked") return "border-rose-900/50 bg-rose-950/20 text-rose-200";
     if (state === "waiting") return "border-amber-900/50 bg-amber-950/20 text-amber-200";
     if (state === "optional") return "border-zinc-800 bg-koma-page text-koma-muted";
+    if (state === "check") return "border-sky-900/50 bg-sky-950/20 text-sky-200";
     return "border-zinc-800 bg-koma-page text-koma-secondary";
   };
 
@@ -653,6 +756,7 @@ export function SuperAdminRestaurant360({
     if (state === "blocked") return "Bloqueado";
     if (state === "waiting") return "Aguardando";
     if (state === "optional") return "Opcional";
+    if (state === "check") return "Verificar";
     if (state === "pending") return "Pendente";
     return "Indisponível";
   };
@@ -776,6 +880,33 @@ export function SuperAdminRestaurant360({
             </div>
           </div>
 
+          {release && !release.readiness?.trialStarted && (
+            <div className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wide text-amber-300">Próximo passo da implantação</p>
+                  <p className="mt-1 text-sm font-bold text-koma-foreground">
+                    {release.readyForRelease
+                      ? "Implantação essencial pronta · aguardando revisão KÔMA"
+                      : release.readiness?.blockers?.length
+                        ? formatBlockers(release.readiness.blockers, READINESS_BLOCKER_LABELS)
+                        : "Readiness carregado sem blocker explícito; revise o cockpit."}
+                  </p>
+                  <p className="mt-1 text-[11px] text-koma-muted">
+                    Fonte: readiness canônico do onboarding. Nenhum estado é inferido a partir da interface.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSection("implementation")}
+                  className="shrink-0 rounded-lg border border-amber-800/60 px-3 py-2 text-xs font-black text-amber-200 hover:bg-amber-950/40"
+                >
+                  Abrir cockpit de implantação
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
             <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
               <h3 className="text-sm font-bold text-koma-foreground">Estado operacional</h3>
@@ -872,6 +1003,11 @@ export function SuperAdminRestaurant360({
                           Gerenciar acessos
                         </button>
                       )}
+                      {item.key === "contract" && release.onboarding?.mode === "commercial" && !linkedContract && (
+                        <button type="button" onClick={onOpenContracts} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
+                          Abrir contratações
+                        </button>
+                      )}
                       {item.key === "catalog" && release.catalogAssistance && (
                         <button type="button" onClick={onOpenCatalogAssistance} className="rounded-lg border border-current/30 px-3 py-1.5 text-[10px] font-black">
                           Abrir fila de cardápios
@@ -906,7 +1042,7 @@ export function SuperAdminRestaurant360({
                   </div>
                   <p className="mt-2 text-koma-muted">
                     {release.readiness?.blockers?.length
-                      ? "Blockers canônicos: " + release.readiness.blockers.join(", ")
+                      ? "Blockers canônicos: " + formatBlockers(release.readiness.blockers, READINESS_BLOCKER_LABELS)
                       : "Nenhum blocker canônico pendente antes da liberação."}
                   </p>
                 </div>
@@ -1066,13 +1202,33 @@ export function SuperAdminRestaurant360({
             {access ? (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[700px] text-left text-xs">
-                  <thead className="border-b border-zinc-800 text-[10px] uppercase text-koma-muted"><tr><th className="px-4 py-3">Usuário</th><th className="px-4 py-3">Cargo</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Criado</th></tr></thead>
+                  <thead className="border-b border-zinc-800 text-[10px] uppercase text-koma-muted"><tr><th className="px-4 py-3">Usuário</th><th className="px-4 py-3">Cargo</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Convite</th><th className="px-4 py-3">Criado</th></tr></thead>
                   <tbody className="divide-y divide-zinc-800/60">
                     {access.users.map(user => (
                       <tr key={user.id}>
                         <td className="px-4 py-3"><strong className="text-koma-foreground">{user.name}</strong><div className="mt-0.5 text-[10px] text-koma-muted">{user.email || user.phone || user.id}</div></td>
                         <td className="px-4 py-3 text-koma-secondary">{user.role}</td>
                         <td className="px-4 py-3 text-koma-secondary">{user.status === "ativo" ? "Ativo" : user.status === "inativo" ? "Bloqueado" : "Pendente"}</td>
+                        <td className="px-4 py-3 text-koma-secondary">
+                          {user.status !== "pendente_ativacao"
+                            ? "—"
+                            : user.inviteExpired === true
+                              ? "Expirado"
+                              : user.inviteEmailStatus === "entregue"
+                                ? "E-mail entregue"
+                                : user.inviteEmailStatus === "falhou"
+                                  ? "Falha no e-mail"
+                                  : user.inviteEmailStatus === "enviado"
+                                    ? "E-mail enviado"
+                                    : user.inviteEmailStatus === "na_fila"
+                                      ? "Na fila"
+                                      : user.inviteEmailStatus === "email_ausente"
+                                        ? "Sem e-mail"
+                                        : "Não confirmado"}
+                          {user.status === "pendente_ativacao" && user.inviteExpiresAt && (
+                            <div className="mt-0.5 text-[10px] text-koma-muted">Expira: {formatDate(user.inviteExpiresAt)}</div>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-koma-muted">{formatDate(user.createdAt)}</td>
                       </tr>
                     ))}
@@ -1202,20 +1358,7 @@ export function SuperAdminRestaurant360({
       )}
 
       {section === "history" && (
-        <div className="rounded-xl border border-zinc-800 bg-koma-card">
-          <div className="border-b border-zinc-800 p-4"><h3 className="text-base font-bold text-koma-foreground">Histórico administrativo</h3><p className="mt-1 text-xs text-koma-muted">Trilha persistente filtrada para este tenant.</p></div>
-          {audit.length === 0 ? <p className="p-8 text-center text-xs text-koma-muted">Nenhum registro retornado.</p> : (
-            <div className="divide-y divide-zinc-800/60">
-              {audit.map(item => (
-                <div key={item.id} className="p-4 text-xs">
-                  <div className="flex flex-wrap items-center justify-between gap-2"><strong className="font-mono text-koma-foreground">{item.action}</strong><span className="text-[10px] text-koma-muted">{formatDate(item.createdAt)}</span></div>
-                  <p className="mt-2 text-koma-secondary">{item.reason}</p>
-                  <p className="mt-1 text-[10px] text-koma-muted">Ator: {item.actor}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <SuperAdminAuditTab key={tenant.id} tenantId={tenant.id} />
       )}
 
       {incidentAction && (

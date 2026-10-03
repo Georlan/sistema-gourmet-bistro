@@ -5,6 +5,8 @@ on:
       - 'print-agent/**'
       - 'backend/app/routes/print_agents.py'
       - 'backend/tests/test_print_agents.py'
+      - 'backend/tests/test_print_job_terminal_invariant.py'
+      - 'backend/tests/test_print_ack_concurrency_postgres.py'
       - 'INSTALAR-KOMA-WINDOWS.cmd'
       - 'ATUALIZAR-KOMA-WINDOWS.cmd'
       - 'DESINSTALAR-KOMA-WINDOWS.cmd'
@@ -41,10 +43,26 @@ jobs:
   backend-contract:
     name: Print backend contract
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: koma_print_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d koma_print_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - run: python -m pip install -r backend/requirements.txt "pytest>=8,<9"
-      - run: PYTHONPATH=backend python -m pytest backend/tests/test_print_agents.py -q -ra
+      - run: python -m pytest backend/tests/test_print_agents.py backend/tests/test_print_job_terminal_invariant.py backend/tests/test_print_ack_concurrency_postgres.py -q -ra
+        env:
+          PYTHONPATH: backend
+          PRINT_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/koma_print_test

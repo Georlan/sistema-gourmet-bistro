@@ -1,3 +1,4 @@
+import { OrderItemComposition } from '../../shared/OrderItemComposition';
 import { ChefHat, Check, CircleDot, PackageCheck, Search, UtensilsCrossed } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -174,11 +175,7 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
                       </span>
                     )}
                   </div>
-                  {item.observacao && (
-                    <div className="mt-2 rounded-lg border border-rose-500/20 bg-rose-500/5 px-2.5 py-2 text-[10px] font-bold leading-relaxed text-rose-400">
-                      {item.observacao}
-                    </div>
-                  )}
+                  <OrderItemComposition item={item} className="mt-2 text-koma-foreground" />
                 </div>
                 <button
                   type="button"

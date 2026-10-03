@@ -144,7 +144,9 @@ export function SuperAdminSupportModal({
               <p className="text-amber-200/80 leading-relaxed">
                 Você acessará o ambiente operacional deste restaurante com sua
                 identidade de operador KÔMA. Nenhuma senha de cliente é utilizada ou
-                revelada. O início, o motivo, a duração e o encerramento desta sessão
+                revelada. Esta sessão é somente para diagnóstico e visualização:
+                alterações administrativas devem ser executadas explicitamente no
+                Super Admin. O início, o motivo, a duração e o encerramento desta sessão
                 ficam registrados na auditoria administrativa.
               </p>
               {target?.label && (

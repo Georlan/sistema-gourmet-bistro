@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..catalog_addons import effective_modifier_payloads_by_product
+from ..marmitaria_catalog import enabled as marmitaria_enabled
 from ..config import settings
 from ..database import (
     bind_session_to_tenant,
@@ -254,6 +255,7 @@ def _public_restaurant_payload(
         "cor_primaria": restaurante.cor_primaria,
         "cor_fundo": restaurante.cor_fundo,
         "pedido_minimo": float(configuracao.pedido_minimo or 0.0) if configuracao and configuracao.pedido_minimo is not None else 0.0,
+        "pedido_minimo_retirada": bool(getattr(configuracao, "pedido_minimo_retirada", False)) if configuracao else False,
         "frete_gratis_valor": float(configuracao.frete_gratis_valor or 0.0) if configuracao and configuracao.frete_gratis_valor is not None else 0.0,
         "tipo_taxa_entrega": configuracao.tipo_taxa_entrega if configuracao and configuracao.tipo_taxa_entrega else "fixa",
         "taxa_entrega_fixa": float(configuracao.taxa_entrega_fixa) if configuracao and configuracao.taxa_entrega_fixa is not None else None,
@@ -267,7 +269,7 @@ def _public_category_payload(category: Categoria) -> dict:
     return {"id": category.id, "nome": category.nome}
 
 
-def _public_product_payload(product: Produto, modifier_groups: Optional[list[dict]] = None) -> dict:
+def _public_product_payload(product: Produto, modifier_groups: Optional[list[dict]] = None, *, marmitaria: bool = False) -> dict:
     return {
         "id": product.id,
         "nome": product.nome,
@@ -277,6 +279,7 @@ def _public_product_payload(product: Produto, modifier_groups: Optional[list[dic
         "imagens_galeria": product.imagens_galeria or [],
         "categoria_id": product.categoria_id,
         "grupos_modificadores": modifier_groups or [],
+        "marmitaria": marmitaria,
     }
 
 
@@ -332,11 +335,13 @@ def obter_produtos_cardapio_digital(
             Produto.ativo.is_(True),
         ).all()
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
+        is_marmitaria = marmitaria_enabled(db, rest_id)
         return [
             {
                 **_public_product_payload(
                     product,
                     modifier_payloads.get(str(product.id), []),
+                    marmitaria=is_marmitaria,
                 ),
                 "ativo": True,
             }
@@ -371,6 +376,7 @@ def obter_cardapio_publico(
             Produto.ativo.is_(True),
         ).all()
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
+        is_marmitaria = marmitaria_enabled(db, rest_id)
 
         return {
             "restaurante": _public_restaurant_payload(
@@ -387,6 +393,7 @@ def obter_cardapio_publico(
                 _public_product_payload(
                     product,
                     modifier_payloads.get(str(product.id), []),
+                    marmitaria=is_marmitaria,
                 )
                 for product in produtos
             ],

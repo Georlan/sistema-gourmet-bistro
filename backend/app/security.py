@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 from typing import Any, Union, Optional
 import bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
@@ -69,6 +69,7 @@ PERMISSION_ROLES = MappingProxyType({
     "comandas:forcar_fechamento": frozenset({"admin", "gerente", "caixa"}),
     "comandas:reabrir": frozenset({"admin", "gerente", "caixa"}),
     "pedidos:alterar_status": frozenset({"admin", "gerente", "caixa", "cozinha"}),
+    "pedidos:alterar_modalidade": frozenset({"admin", "gerente", "caixa"}),
 })
 
 
@@ -343,26 +344,27 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
     return user
 
 def get_current_garcom_optional(
+    request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> Optional[Usuario]:
     """
-    Optional dependency. Returns the Garcom object if a valid token is provided,
-    otherwise returns None.
+    Optional dependency. Returns the authenticated operator when a token exists.
+
+    Support tokens remain read-only here too because several legacy operational
+    routes use this optional dependency for both reads and writes.
     """
     if not token:
         return None
-    return _authenticated_user_from_token(token, db)
+    current_user = _authenticated_user_from_token(token, db)
+    _enforce_support_read_only(request, current_user)
+    return current_user
 
 
-def get_current_user(
-    token: Optional[str] = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+def _required_authenticated_user(
+    token: Optional[str],
+    db: Session,
 ) -> Usuario:
-    """
-    Dependency obrigatória. Levanta 401 se não houver token válido ou
-    se o usuário não existir mais no banco.
-    """
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -370,6 +372,34 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return _authenticated_user_from_token(token, db)
+
+
+def get_current_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> Usuario:
+    """Autentica a sessão operacional e mantém Modo Suporte read-only.
+
+    O bloqueio fica neste ponto comum para cobrir inclusive rotas legadas que
+    dependem diretamente de get_current_user em vez dos factories de permissão.
+    A única mutação própria do suporte usa uma dependência separada e explícita.
+    """
+    current_user = _required_authenticated_user(token, db)
+    _enforce_support_read_only(request, current_user)
+    return current_user
+
+
+def get_current_user_for_support_action(
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> Usuario:
+    """Autenticação estreita para ações que pertencem ao próprio Modo Suporte.
+
+    Hoje é usada para encerrar a própria sessão. Não deve proteger mutações do
+    tenant nem substituir get_current_user em rotas operacionais.
+    """
+    return _required_authenticated_user(token, db)
 
 
 def ensure_permission(current_user: Optional[Usuario], permission: str) -> Usuario:
@@ -408,13 +438,32 @@ def ensure_permission(current_user: Optional[Usuario], permission: str) -> Usuar
     return current_user
 
 
+def _enforce_support_read_only(request: Request, current_user: Usuario) -> None:
+    """Impede que a sessão de suporte altere estado do tenant.
+
+    Ferramentas internas que precisam de uma ação explícita de suporte não usam
+    estes factories genéricos e continuam exigindo suas próprias dependências.
+    """
+    if (
+        bool(getattr(current_user, "is_support_mode", False))
+        and request.method.upper() not in {"GET", "HEAD", "OPTIONS"}
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Modo Suporte é somente para diagnóstico. "
+                "Alterações administrativas devem ser executadas pelo Super Admin."
+            ),
+        )
+
+
 def require_permission(permission: str):
     """Dependency factory baseada na matriz central de permissões."""
     if permission not in PERMISSION_ROLES:
         raise RuntimeError(f"Permissão desconhecida na matriz RBAC: {permission}")
 
     def permission_checker(
-        current_user: Usuario = Depends(get_current_user)
+        current_user: Usuario = Depends(get_current_user),
     ) -> Usuario:
         return ensure_permission(current_user, permission)
 
@@ -458,7 +507,9 @@ def require_roles(*allowed_roles: str):
     Dependency factory que verifica se o usuário autenticado é ativo e possui
     um dos cargos autorizados. Admin/superadmin sempre têm acesso total.
     """
-    def role_checker(current_user: Usuario = Depends(get_current_user)) -> Usuario:
+    def role_checker(
+        current_user: Usuario = Depends(get_current_user),
+    ) -> Usuario:
         user_role = (current_user.role or current_user.cargo or "garcom").lower().strip()
         allowed = [r.lower().strip() for r in allowed_roles]
 

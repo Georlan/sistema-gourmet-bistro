@@ -546,3 +546,47 @@ test('sessão sem identidade recuperável retorna ao login antes de decidir impl
   await page.reload();
   await expectLoginWithoutOnboarding(page);
 });
+
+for (const endpoint of ['/caixa/pagamentos/pendentes', '/mesas/', '/comandas/detalhes/todos']) {
+for (const replaceCredential of [false, true]) {
+test(`401 de ${endpoint} ${replaceCredential ? 'antigo preserva credencial substituída' : 'atual encerra sessão inválida'}`, async ({ page }) => {
+  const cashierReply: LoginReply = async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      access_token: 'cashier-old-token',
+      usuario: { id: 'cashier-race', nome: 'Caixa', role: 'caixa', cargo: 'caixa', restaurante_id: 2 },
+    }) });
+  };
+  await installOperationalApi(page, cashierReply);
+  const delayed: Route[] = [];
+  let holdRequests = true;
+  await page.route(url => url.pathname === endpoint, async route => {
+    if (holdRequests) { delayed.push(route); return; }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
+  await submitLogin(page, 'caixa@koma.test', 'senha-teste');
+  await expect.poll(() => delayed.length).toBeGreaterThan(0);
+  await page.waitForTimeout(300);
+  holdRequests = false;
+  for (const route of delayed.slice(0, -1)) {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }).catch(() => {});
+  }
+  if (replaceCredential) await page.evaluate(() => {
+    const session = JSON.parse(sessionStorage.getItem('koma_operator_session_caixa')!);
+    session.token = 'cashier-new-token';
+    sessionStorage.setItem('koma_operator_session_caixa', JSON.stringify(session));
+    sessionStorage.setItem('koma_caixa_token', 'cashier-new-token');
+  });
+  await delayed.at(-1)!.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"invalid token"}' });
+  // Give the rejected response time to settle before checking the active session.
+  if (replaceCredential) {
+    await page.waitForTimeout(500);
+    await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
+    expect(await page.evaluate(() => sessionStorage.getItem('koma_caixa_token'))).toBe('cashier-new-token');
+  } else {
+    await expect(page.getByLabel('E-MAIL')).toBeVisible();
+    expect(await page.evaluate(() => sessionStorage.getItem('koma_caixa_token'))).toBeNull();
+  }
+});
+}
+}

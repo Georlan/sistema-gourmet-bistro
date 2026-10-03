@@ -1,3 +1,4 @@
+import { OrderItemComposition } from '../../components/shared/OrderItemComposition';
 /**
  * Account-backed order history. This is deliberately separate from anonymous
  * order tracking, which remains session-scoped and token-based.
@@ -23,6 +24,7 @@ export interface CustomerHistoryItem {
   preco_unitario: number;
   observacao?: string;
   modificadores: HistoryModifier[];
+  composicao_agrupada?: boolean;
 }
 
 export interface CustomerHistoryOrder {
@@ -217,10 +219,14 @@ export default function CardapioCustomerOrderHistory({
                             <span><strong className="text-koma-secondary">{item.quantidade}x</strong> {item.nome}</span>
                             <span className="shrink-0">{formatCurrency(item.preco_unitario * item.quantidade)}</span>
                           </div>
-                          {item.modificadores.length > 0 && (
-                            <p className="pl-4 text-[8px] text-koma-subtle">+ {item.modificadores.map((modifier) => modifier.opcao_nome).join(", ")}</p>
-                          )}
-                          {item.observacao && <p className="pl-4 text-[8px] italic text-koma-subtle">“{item.observacao}”</p>}
+                          <OrderItemComposition item={{
+                            observacao: item.observacao,
+                            composicao_agrupada: item.composicao_agrupada,
+                            modificadores: item.modificadores.map(modifier => ({
+                              id: modifier.opcao_id, nome: modifier.opcao_nome, preco: modifier.preco_aplicado,
+                              grupo_id: modifier.grupo_id, grupo_nome: modifier.grupo_nome,
+                            })),
+                          }} className="pl-4 text-koma-subtle" />
                         </div>
                       ))}
                     </div>

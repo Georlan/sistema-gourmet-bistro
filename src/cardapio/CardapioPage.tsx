@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { CardapioFulfillment } from "./fulfillment";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
@@ -121,6 +122,7 @@ export default function CardapioPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("");
+  const [fulfillmentChoice, setFulfillmentChoice] = useState<{ restaurantId: string | number; method: CardapioFulfillment } | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -229,6 +231,7 @@ export default function CardapioPage() {
       });
 
       const products: Product[] = payload.produtos.map((product) => ({
+        marmitaria: product.marmitaria === true,
         id: String(product.id),
         name: String(product.nome || ""),
         description: String(product.descricao || ""),
@@ -341,6 +344,7 @@ export default function CardapioPage() {
         googleMapsUrl: String(restaurant.google_maps_url || ""),
         deliveryEnabled: restaurant.delivery_ativo !== false,
         pedidoMinimo: Number(restaurant.pedido_minimo || 0),
+        pedidoMinimoRetirada: Boolean(restaurant.pedido_minimo_retirada),
         freteGratisValor: Number(restaurant.frete_gratis_valor || 0),
         tipoTaxaEntrega: String(restaurant.tipo_taxa_entrega || "fixa"),
         tabelaTaxasBairros: Array.isArray(restaurant.tabela_taxas_bairros)
@@ -1152,6 +1156,8 @@ export default function CardapioPage() {
           restaurantId={activeBrand.id}
           restaurantAddress={activeBrand.address}
           brandConfig={activeBrand}
+          initialFulfillment={fulfillmentChoice?.restaurantId === activeBrand.id ? fulfillmentChoice.method : null}
+          onFulfillmentChange={(method) => setFulfillmentChoice({ restaurantId: activeBrand.id, method })}
           allProducts={activeBrand.products}
           onAddToCart={handleAddToCart}
           initialCouponCode={couponToApply}
@@ -1242,6 +1248,7 @@ export default function CardapioPage() {
           }}
           onOrderSuccess={() => {
             setCart([]);
+            setFulfillmentChoice(null);
             setCouponToApply("");
             setIsCartOpen(false);
             setIsCheckoutOpen(false);
