@@ -271,6 +271,10 @@ else:
         pool_pre_ping=True,
         connect_args=connect_args,
     )
+from .database_diagnostics import install_pool_diagnostics
+
+install_pool_diagnostics(engine, current_restaurante_id.get)
+
 SessionLocal = sessionmaker(
     class_=TenantSession,
     autocommit=False,

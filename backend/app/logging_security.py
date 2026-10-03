@@ -1,5 +1,6 @@
 import logging
 import re
+import sys
 from collections.abc import Mapping
 from typing import Any
 
@@ -40,6 +41,34 @@ class SensitiveQueryFilter(logging.Filter):
         return True
 
 
+class _TransportInformation(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno < logging.WARNING
+
+
+class _TransportWarnings(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno >= logging.WARNING
+
+
+def _route_transport_information_to_stdout() -> None:
+    # Uvicorn's error logger inherits its stderr handler from `uvicorn`.
+    # Railway labels that stream as error even for normal WebSocket INFO.
+    logger = logging.getLogger("uvicorn")
+    if any(getattr(handler, "_koma_transport_stdout", False) for handler in logger.handlers):
+        return
+    for handler in tuple(logger.handlers):
+        if isinstance(handler, logging.StreamHandler) and handler.stream is sys.stderr:
+            stdout = logging.StreamHandler(sys.stdout)
+            stdout.setLevel(handler.level)
+            stdout.setFormatter(handler.formatter)
+            stdout.addFilter(_TransportInformation())
+            stdout._koma_transport_stdout = True
+            handler.addFilter(_TransportWarnings())
+            logger.addHandler(stdout)
+            return
+
+
 def install_sensitive_query_log_filter() -> None:
     """Protege logs HTTP/WebSocket, inclusive clientes antigos com token na URL."""
 
@@ -47,3 +76,4 @@ def install_sensitive_query_log_filter() -> None:
         logger = logging.getLogger(logger_name)
         if not any(isinstance(item, SensitiveQueryFilter) for item in logger.filters):
             logger.addFilter(SensitiveQueryFilter())
+    _route_transport_information_to_stdout()
