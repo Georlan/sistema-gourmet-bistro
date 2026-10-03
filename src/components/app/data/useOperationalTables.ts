@@ -43,6 +43,7 @@ export function useOperationalTables({
     }
     const controller = new AbortController();
     const requestScopeKey = scopeKey;
+    const requestHeaders = getAuthHeaders();
     let timedOut = false;
     const timeoutId = globalThis.setTimeout(() => {
       timedOut = true;
@@ -53,16 +54,19 @@ export function useOperationalTables({
     try {
       setFetchError(null);
       const res = await fetch(`${API_BASE_URL}/mesas/`, {
-        headers: getAuthHeaders(),
+        headers: requestHeaders,
         signal: controller.signal,
       });
+      if (requestScopeKey !== scopeKeyRef.current
+        || requestHeaders.Authorization !== getAuthHeaders().Authorization) return;
       if (res.status === 401) {
         handleLogout();
         return;
       }
       if (res.ok) {
         const data = await res.json();
-        if (requestScopeKey !== scopeKeyRef.current) return;
+        if (requestScopeKey !== scopeKeyRef.current
+          || requestHeaders.Authorization !== getAuthHeaders().Authorization) return;
         setSalonTables(data);
         setLoadedScopeKey(requestScopeKey);
       } else {
