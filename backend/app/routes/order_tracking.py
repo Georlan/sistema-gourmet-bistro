@@ -20,6 +20,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, selectinload
+from starlette.concurrency import run_in_threadpool
 
 from ..database import SessionLocal, get_db, tenant_session_scope
 from ..models import Comanda, Item, OnlinePaymentIntent, Restaurante
@@ -635,11 +636,7 @@ def desativar_push_do_pedido(
         return {"status": "disabled", "changed": disabled}
 
 
-@router.get("/{token}/events", summary="Stream SSE de status e chat do pedido")
-async def stream_eventos_pedido(
-    token: str,
-    request: Request,
-):
+def _resolve_stream_tracking(token: str):
     # SSE é uma resposta potencialmente longa. Nunca mantenha a sessão HTTP
     # (e portanto uma conexão do pool) viva durante o streaming. O capability
     # token é resolvido em uma sessão curta que é fechada antes de criar o
@@ -649,6 +646,17 @@ async def stream_eventos_pedido(
         resolved = resolve_public_tracking(db, token)
     finally:
         db.close()
+    return resolved
+
+
+@router.get("/{token}/events", summary="Stream SSE de status e chat do pedido")
+async def stream_eventos_pedido(
+    token: str,
+    request: Request,
+):
+    # Checkout pode esperar pelo pool. Execute também o close no mesmo worker,
+    # mantendo o loop livre para finalizar outras requests e devolver conexões.
+    resolved = await run_in_threadpool(_resolve_stream_tracking, token)
     if not resolved:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
     _restaurante_id, conversation_id, _pedido_id, _closed_at = resolved

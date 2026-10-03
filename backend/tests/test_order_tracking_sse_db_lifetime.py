@@ -8,7 +8,7 @@ def test_order_tracking_sse_releases_database_session_before_streaming():
     ).read_text(encoding="utf-8")
 
     endpoint = source.split(
-        '@router.get("/{token}/events", summary="Stream SSE de status e chat do pedido")',
+        'def _resolve_stream_tracking(token: str):',
         1,
     )[1].split("return StreamingResponse", 1)[0]
 
