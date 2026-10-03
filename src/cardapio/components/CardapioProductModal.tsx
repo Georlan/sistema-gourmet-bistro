@@ -308,6 +308,9 @@ export default function CardapioProductModal({
                 const rules = rulesForModifier(modifier);
                 const selectedTypes = selectionCount(rules, selectedIds);
                 const max = Math.max(1, Number(modifier.maxSelection || 1));
+                const freeGarnishes = product.marmitaria === true
+                  && modifier.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase() === "guarnicoes"
+                  && max >= 20 && (modifier.minSelection ?? 0) === 0;
 
                 return (
                   <section key={modifier.id}>
@@ -315,7 +318,7 @@ export default function CardapioProductModal({
                       <div>
                         <h3 className="text-sm font-black text-koma-foreground">{modifier.title}</h3>
                         <p className="mt-0.5 text-xs text-koma-muted">
-                          {max >= 20 && (modifier.minSelection ?? 0) === 0
+                          {freeGarnishes
                             ? (modifier.selectionMode === "porcoes" ? "Escolha à vontade (pode repetir)" : "Escolha à vontade (tipos diferentes)")
                             : modifier.selectionMode
                             ? `Escolha de ${modifier.minSelection || 0} até ${max} ${modifier.selectionMode === "porcoes" ? "porções (pode repetir)" : "tipos diferentes"}`
@@ -327,7 +330,7 @@ export default function CardapioProductModal({
                       <div className="flex items-center gap-2">
                         {max > 1 && (
                           <span className="text-[10px] font-black text-emerald-400">
-                            {max >= 20 && (modifier.minSelection ?? 0) === 0
+                            {freeGarnishes
                               ? (selectedTypes > 0
                                 ? `${selectedTypes} ${modifier.selectionMode === "porcoes" ? (selectedTypes === 1 ? "porção" : "porções") : (selectedTypes === 1 ? "tipo" : "tipos")}`
                                 : "Livre")
