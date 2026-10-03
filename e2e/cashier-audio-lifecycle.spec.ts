@@ -61,3 +61,33 @@ test('arrival with autoaccept and an open drawer; manual pending loop has one ow
   expect(await page.evaluate(() => (window as any).alertNotes)).toBe(18);
   expect(await page.evaluate(() => (window as any).closedContexts)).toBe(1);
 });
+
+test('a saved sound preference does not imply browser permission; denied resume stays inactive', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(async () => {
+    const reactUrl = '/.vite/e2e/deps/react.js';
+    const domUrl = '/.vite/e2e/deps/react-dom_client.js';
+    const hookUrl = '/src/components/caixa/realtime/useCashierAlerts.ts';
+    const { default: React } = await import(reactUrl);
+    const { default: ReactDOM } = await import(domUrl);
+    const { useCashierAlerts } = await import(hookUrl);
+    const w = window as any;
+    class BlockedAudioContext {
+      state = 'suspended';
+      async resume() { throw new Error('Browser denied audio'); }
+      async close() { this.state = 'closed'; }
+    }
+    w.AudioContext = BlockedAudioContext;
+    localStorage.setItem('@koma:sound_enabled', 'true');
+    const host = document.createElement('div'); document.body.append(host);
+    function Harness() {
+      const alerts = useCashierAlerts({ orders: [], deliveryOrders: [], pendingAcceptanceOrders: [] });
+      return React.createElement('button', { id: 'permission-test', onClick: async () => { w.activationResult = await alerts.activateAudio(); } }, `${alerts.soundEnabled}:${alerts.audioReady}`);
+    }
+    ReactDOM.createRoot(host).render(React.createElement(Harness));
+  });
+  await expect(page.locator('#permission-test')).toHaveText('true:false');
+  await page.locator('#permission-test').click();
+  await expect.poll(() => page.evaluate(() => (window as any).activationResult)).toBe(false);
+  await expect(page.locator('#permission-test')).toHaveText('true:false');
+});
