@@ -9,6 +9,7 @@ on:
       - 'src/components/caixa/pdv/**'
       - 'src/utils/apiError.ts'
       - 'e2e/cashier-delivery-new-order.spec.ts'
+      - 'e2e/cashier-sale-recovery.spec.ts'
       - 'src/components/cardapio/**'
       - 'tests/cardapio*.test.ts'
       - 'tests/publicMenu*.test.ts'
@@ -64,6 +65,7 @@ jobs:
           e2e/marmitaria-product-onboarding.spec.ts
           e2e/marmitaria-composition-presentation.spec.ts
           e2e/cashier-delivery-new-order.spec.ts
+          e2e/cashier-sale-recovery.spec.ts
           e2e/public-menu-order.spec.ts
           e2e/order-tracking-chat.spec.ts
           e2e/cardapio-chat-viewports.spec.ts
