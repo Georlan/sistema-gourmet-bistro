@@ -1,16 +1,16 @@
 import io
 import logging
-import sys
+from types import SimpleNamespace
 
 import pytest
 from app.logging_security import install_sensitive_query_log_filter
+from app import logging_security
 
 
 @pytest.fixture
 def transport_logs(monkeypatch):
     stdout, stderr = io.StringIO(), io.StringIO()
-    monkeypatch.setattr(sys, "stdout", stdout)
-    monkeypatch.setattr(sys, "stderr", stderr)
+    monkeypatch.setattr(logging_security, "sys", SimpleNamespace(stdout=stdout, stderr=stderr))
     parent = logging.Logger("uvicorn", level=logging.INFO)
     parent.propagate = False
     parent.addHandler(logging.StreamHandler(stderr))
