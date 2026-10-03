@@ -160,7 +160,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
   }, [loadConfig]);
 
   useEffect(() => {
-    if (!feedback) return;
+    if (!feedback || feedback.type === 'error') return;
     const timer = window.setTimeout(() => setFeedback(null), 4500);
     return () => window.clearTimeout(timer);
   }, [feedback]);

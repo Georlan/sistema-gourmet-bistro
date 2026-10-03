@@ -754,7 +754,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               )}
             </SetupDisclosure>
 
-            <SetupDisclosure title={snapshot.steps.operations ? 'Modalidades' : 'Pendente · escolha as modalidades'} summary={ORDER_TYPE_OPTIONS.filter(option => snapshot.operations.orderTypes.includes(option.value)).map(option => option.label).join(' · ') || 'Escolha como receber pedidos'} complete={snapshot.steps.operations} error={operationError}>
+            <SetupDisclosure title={snapshot.steps.operations ? 'Modalidades' : 'Pendente · escolha as modalidades'} summary={ORDER_TYPE_OPTIONS.filter(option => snapshot.operations.orderTypes.includes(option.value)).map(option => option.label).join(' · ') || 'Escolha como receber pedidos'} complete={snapshot.steps.operations} error={operationError || snapshot.operations.blockers.map(blockerLabel).join(' ')}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2">

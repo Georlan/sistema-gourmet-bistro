@@ -121,7 +121,7 @@ export function CatalogAssistanceUpload({
           )}
           {activeAssistance.status !== 'completed' && (
             <p className="mt-2 text-[11px] leading-relaxed text-koma-subtle">
-              Aguardando preparação KÔMA. Você pode completar dados e horários enquanto a equipe prepara o catálogo.
+              {activeAssistance.status === 'processing' ? 'A equipe KÔMA está preparando o catálogo.' : 'Aguardando preparação KÔMA.'} Você pode completar dados e horários enquanto a equipe prepara o catálogo.
             </p>
           )}
         </div>
