@@ -219,7 +219,7 @@ function supportTargetForCockpit(key: string): SupportNavigationTarget | null {
   return null;
 }
 
-const READINESS_BLOCKER_LABELS: Record<string, string> = {
+export const READINESS_BLOCKER_LABELS: Record<string, string> = {
   profile: "Dados do restaurante pendentes",
   hours: "Horários de funcionamento pendentes",
   catalog: "Cardápio ainda sem produto ativo",
