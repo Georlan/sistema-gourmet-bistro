@@ -326,8 +326,8 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
 
     # Check SaaS tenant status
     if restaurante_id and restaurante_id > 0:
-        restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
-        if restaurante and getattr(restaurante, "saas_status", "active") == "suspended":
+        tenant_status = db.query(Restaurante.saas_status).filter(Restaurante.id == restaurante_id).first()
+        if tenant_status is not None and tenant_status[0] == "suspended":
             if db.in_transaction():
                 db.rollback()
             raise HTTPException(

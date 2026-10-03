@@ -133,36 +133,51 @@ def category_lineage(category_id: str, parents: dict[str, str]) -> tuple[str, ..
     return tuple(lineage)
 
 
+@dataclass(frozen=True)
+class _ModifierLinks:
+    direct: tuple[ProdutoGrupoModificador, ...]
+    categories: tuple[CategoriaGrupoModificador, ...]
+    parents: dict[str, str]
+
+
+def _modifier_links(db: Session, restaurante_id: int, products: Sequence[Produto], *, limits_only: bool = False) -> _ModifierLinks:
+    product_ids = [str(product.id) for product in products]
+    direct_query = db.query(ProdutoGrupoModificador).filter(
+        ProdutoGrupoModificador.restaurante_id == restaurante_id,
+        ProdutoGrupoModificador.produto_id.in_(product_ids),
+    )
+    category_query = db.query(CategoriaGrupoModificador).filter(
+        CategoriaGrupoModificador.restaurante_id == restaurante_id,
+    )
+    if limits_only:
+        direct_query = direct_query.filter(ProdutoGrupoModificador.min_selecoes.isnot(None), ProdutoGrupoModificador.max_selecoes.isnot(None))
+        category_query = category_query.filter(CategoriaGrupoModificador.min_selecoes.isnot(None), CategoriaGrupoModificador.max_selecoes.isnot(None))
+    return _ModifierLinks(
+        tuple(direct_query.all()) if product_ids else (),
+        tuple(category_query.all()),
+        category_parent_map(db, restaurante_id),
+    )
+
+
 def _recommended_modifier_group_ids_by_product(
     db: Session,
     restaurante_id: int,
     products: Sequence[Produto],
+    *,
+    links: _ModifierLinks | None = None,
 ) -> dict[str, tuple[str, ...]]:
     """Resolve os grupos recomendados por produto, categoria e ancestrais."""
-    product_ids = [str(product.id) for product in products]
+    links = links or _modifier_links(db, restaurante_id, products)
     direct_by_product: dict[str, list[str]] = {}
-    if product_ids:
-        direct_rows = (
-            db.query(ProdutoGrupoModificador)
-            .filter(
-                ProdutoGrupoModificador.restaurante_id == restaurante_id,
-                ProdutoGrupoModificador.produto_id.in_(product_ids),
-            )
-            .all()
-        )
-        for row in direct_rows:
-            direct_by_product.setdefault(str(row.produto_id), []).append(str(row.grupo_id))
+    for row in links.direct:
+        direct_by_product.setdefault(str(row.produto_id), []).append(str(row.grupo_id))
 
-    category_links = (
-        db.query(CategoriaGrupoModificador)
-        .filter(CategoriaGrupoModificador.restaurante_id == restaurante_id)
-        .all()
-    )
+    category_links = links.categories
     links_by_category: dict[str, list[CategoriaGrupoModificador]] = {}
     for link in category_links:
         links_by_category.setdefault(str(link.categoria_id), []).append(link)
 
-    parents = category_parent_map(db, restaurante_id)
+    parents = links.parents
     resolved: dict[str, tuple[str, ...]] = {}
     for product in products:
         ordered: list[str] = []
@@ -217,27 +232,25 @@ def effective_modifier_group_ids_by_product(
     )
 
 
-def modifier_limits_by_product(db: Session, restaurante_id: int, products: Sequence[Produto]) -> dict[str, dict[str, tuple[int, int, str]]]:
+def modifier_limits_by_product(db: Session, restaurante_id: int, products: Sequence[Produto], *, links: _ModifierLinks | None = None) -> dict[str, dict[str, tuple[int, int, str]]]:
     """Limites do produto prevalecem sobre categoria e ancestrais."""
-    links = db.query(CategoriaGrupoModificador).filter(
-        CategoriaGrupoModificador.restaurante_id == restaurante_id,
-        CategoriaGrupoModificador.min_selecoes.isnot(None),
-        CategoriaGrupoModificador.max_selecoes.isnot(None),
-    ).all()
+    if not products:
+        return {}
+    links = links or _modifier_links(db, restaurante_id, products, limits_only=True)
+    categories = [link for link in links.categories if link.min_selecoes is not None and link.max_selecoes is not None]
     by_category: dict[str, list[CategoriaGrupoModificador]] = {}
-    for link in links:
+    for link in categories:
         by_category.setdefault(str(link.categoria_id), []).append(link)
-    direct = db.query(ProdutoGrupoModificador).filter(
-        ProdutoGrupoModificador.restaurante_id == restaurante_id,
-        ProdutoGrupoModificador.produto_id.in_([p.id for p in products]),
-        ProdutoGrupoModificador.min_selecoes.isnot(None),
-        ProdutoGrupoModificador.max_selecoes.isnot(None),
-    ).all()
-    parents = category_parent_map(db, restaurante_id)
+    direct_by_product: dict[str, dict[str, tuple[int, int, str]]] = {}
+    for link in links.direct:
+        if link.min_selecoes is not None and link.max_selecoes is not None:
+            direct_by_product.setdefault(str(link.produto_id), {})[str(link.grupo_id)] = (
+                int(link.min_selecoes), int(link.max_selecoes), link.modo_selecao or "tipos",
+            )
+    parents = links.parents
     result = {}
     for product in products:
-        limits = {str(link.grupo_id): (int(link.min_selecoes), int(link.max_selecoes), link.modo_selecao or "tipos")
-                  for link in direct if link.produto_id == product.id}
+        limits = dict(direct_by_product.get(str(product.id), {}))
         for index, category in enumerate(() if product.marmitaria_tamanho else category_lineage(str(product.categoria_id), parents)):
             for link in by_category.get(category, []):
                 if index and not link.incluir_subcategorias:
@@ -245,6 +258,20 @@ def modifier_limits_by_product(db: Session, restaurante_id: int, products: Seque
                 limits.setdefault(str(link.grupo_id), (int(link.min_selecoes), int(link.max_selecoes), link.modo_selecao or "tipos"))
         result[str(product.id)] = limits
     return result
+
+
+def effective_modifier_rules_by_product(
+    db: Session, restaurante_id: int, products: Sequence[Produto],
+) -> tuple[dict[str, tuple[str, ...]], dict[str, dict[str, tuple[int, int, str]]]]:
+    """Resolve IDs and composition limits from one tenant-local set of reads."""
+    products = list(products)
+    if not products:
+        return {}, {}
+    links = _modifier_links(db, restaurante_id, products)
+    return (
+        _recommended_modifier_group_ids_by_product(db, restaurante_id, products, links=links),
+        modifier_limits_by_product(db, restaurante_id, products, links=links),
+    )
 
 
 def effective_modifier_payloads_by_product(
@@ -260,16 +287,10 @@ def effective_modifier_payloads_by_product(
             .all()
         )
     products = list(products)
-    recommended_by_product = _recommended_modifier_group_ids_by_product(
-        db,
-        restaurante_id,
-        products,
-    )
-    groups_by_product = effective_modifier_group_ids_by_product(
-        db,
-        restaurante_id,
-        products,
-    )
+    if not products:
+        return {}
+    recommended_by_product, limits_by_product = effective_modifier_rules_by_product(db, restaurante_id, products)
+    groups_by_product = recommended_by_product
 
     needed_group_ids = {
         group_id
@@ -327,7 +348,6 @@ def effective_modifier_payloads_by_product(
         for group in groups
     }
 
-    limits_by_product = modifier_limits_by_product(db, restaurante_id, products)
     payloads: dict[str, list[dict]] = {}
     for product in products:
         recommended_ids = set(recommended_by_product.get(str(product.id), ()))

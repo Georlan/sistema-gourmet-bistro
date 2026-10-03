@@ -5,8 +5,8 @@ from .restaurant_profile_models import RestauranteOperationProfile
 
 
 def enabled(db, tenant):
-    profile = db.query(RestauranteOperationProfile).filter_by(restaurante_id=tenant).first()
-    return bool(profile and profile.profile_key == 'marmitaria')
+    profile = db.query(RestauranteOperationProfile.profile_key).filter(RestauranteOperationProfile.restaurante_id == tenant).first()
+    return bool(profile and profile[0] == 'marmitaria')
 
 
 def size_key(name):

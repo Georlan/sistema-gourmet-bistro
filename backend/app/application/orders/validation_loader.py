@@ -10,9 +10,9 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 from typing import Sequence
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only, raiseload
 
-from ...catalog_addons import effective_modifier_group_ids_by_product, modifier_limits_by_product
+from ...catalog_addons import effective_modifier_rules_by_product
 from ...domain.orders.pricing import to_money_decimal
 from ...domain.orders.types import FulfillmentType, normalize_to_fulfillment
 from ...domain.orders.validation import (
@@ -60,6 +60,10 @@ class ValidationDataLoader:
         enforce_minimum_pickup = False
         config = (
             db.query(ConfiguracaoRestaurante)
+            .options(
+                load_only(ConfiguracaoRestaurante.pedido_minimo, ConfiguracaoRestaurante.pedido_minimo_retirada, raiseload=True),
+                raiseload(ConfiguracaoRestaurante.restaurante),
+            )
             .filter(ConfiguracaoRestaurante.restaurante_id == restaurante_id)
             .first()
         )
@@ -75,13 +79,9 @@ class ValidationDataLoader:
             # Buscar produtos sem filtro inicial de tenant preserva a detecção explícita
             # de ProductTenantMismatchError no serviço de domínio.
             prods = db.query(Produto).filter(Produto.id.in_(prod_ids)).all()
-            grupos_by_prod = effective_modifier_group_ids_by_product(
-                db,
-                restaurante_id,
-                prods,
+            grupos_by_prod, limits_by_product = effective_modifier_rules_by_product(
+                db, restaurante_id, prods,
             )
-
-            limits_by_product = modifier_limits_by_product(db, restaurante_id, prods)
             for p in prods:
                 catalog_products[str(p.id)] = ValidationProduct(
                     id=p.id,

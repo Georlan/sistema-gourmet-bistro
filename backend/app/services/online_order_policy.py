@@ -9,7 +9,7 @@ import re
 import unicodedata
 from typing import Any
 
-from sqlalchemy.orm import object_session
+from sqlalchemy.orm import object_session, load_only
 from sqlalchemy.orm.exc import UnmappedInstanceError
 
 from ..models import CaixaTurno
@@ -264,7 +264,9 @@ def _infer_emergency_pause(restaurante: Any, *, now: datetime.datetime | None = 
     from ..online_order_control_models import OnlineOrderControl
     from .online_order_control import is_effectively_paused
 
-    control = db.query(OnlineOrderControl).filter(
+    control = db.query(OnlineOrderControl).options(
+        load_only(OnlineOrderControl.paused, OnlineOrderControl.pause_until, raiseload=True),
+    ).filter(
         OnlineOrderControl.restaurante_id == restaurante_id,
     ).first()
     return is_effectively_paused(control, now=now)

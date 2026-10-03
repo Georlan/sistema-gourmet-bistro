@@ -8,7 +8,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only, raiseload
 
 from ..catalog_addons import effective_modifier_payloads_by_product
 from ..marmitaria_catalog import enabled as marmitaria_enabled
@@ -38,7 +38,7 @@ from ..schemas import (
     RestauranteConfigUpdate,
 )
 from ..websocket_manager import manager
-from ..services.plan_entitlements import ENTITLEMENT_COUPONS, ENTITLEMENT_LOYALTY, has_plan_entitlement
+from ..services.plan_entitlements import ENTITLEMENT_COUPONS, ENTITLEMENT_LOYALTY, resolve_plan_entitlements
 from ..services.restaurant_profile import apply_restaurant_profile_update
 from ..services.image_optimization import ImageOptimizerBusy, InvalidImage, optimize_image
 from ..services.online_order_policy import (
@@ -215,12 +215,37 @@ def public_tenant_scope(
         yield rest_id
 
 
-def _public_benefit_capabilities(db: Session, restaurante_id: int) -> dict[str, bool]:
+def _public_benefit_capabilities(db: Session, restaurante_id: int, stored_plan: str | None = None) -> dict[str, bool]:
     """Publica capacidades efetivas sem expor plano, saldos ou cupons privados."""
-    coupons = has_plan_entitlement(db, restaurante_id, ENTITLEMENT_COUPONS)
-    loyalty = has_plan_entitlement(db, restaurante_id, ENTITLEMENT_LOYALTY)
+    capabilities = resolve_plan_entitlements(
+        db, restaurante_id, stored_plan=stored_plan,
+        entitlements=(ENTITLEMENT_COUPONS, ENTITLEMENT_LOYALTY),
+    )
+    coupons = capabilities[ENTITLEMENT_COUPONS]
+    loyalty = capabilities[ENTITLEMENT_LOYALTY]
     # Pausar ou trocar a modalidade de acúmulo preserva saldos já conquistados.
     return {"coupons": coupons, "loyalty": loyalty, "cashback": loyalty}
+
+
+def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoRestaurante | None:
+    # No joined restaurant, integration secrets or internal printing/settings data.
+    # raiseload makes any accidental dependency on omitted fields explicit.
+    return db.query(ConfiguracaoRestaurante).options(
+        load_only(
+            ConfiguracaoRestaurante.restaurante_id,
+            ConfiguracaoRestaurante.delivery_ativo,
+            ConfiguracaoRestaurante.tipos_pedido_ativos,
+            ConfiguracaoRestaurante.pedido_minimo,
+            ConfiguracaoRestaurante.pedido_minimo_retirada,
+            ConfiguracaoRestaurante.frete_gratis_valor,
+            ConfiguracaoRestaurante.tipo_taxa_entrega,
+            ConfiguracaoRestaurante.taxa_entrega_fixa,
+            ConfiguracaoRestaurante.tabela_taxas_bairros,
+            ConfiguracaoRestaurante.tabela_taxas_km,
+            raiseload=True,
+        ),
+        raiseload(ConfiguracaoRestaurante.restaurante),
+    ).filter(ConfiguracaoRestaurante.restaurante_id == restaurante_id).first()
 
 
 def _public_restaurant_payload(
@@ -308,9 +333,7 @@ def obter_config_cardapio_digital(
         restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
         if not restaurante:
             raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
-        configuracao = db.query(ConfiguracaoRestaurante).filter(
-            ConfiguracaoRestaurante.restaurante_id == rest_id
-        ).first()
+        configuracao = _public_configuration(db, rest_id)
         pagamento_online_ativo = db.query(RestaurantPaymentAccount.id).filter(
             RestaurantPaymentAccount.restaurante_id == rest_id,
             RestaurantPaymentAccount.provider == "mercado_pago",
@@ -318,7 +341,7 @@ def obter_config_cardapio_digital(
         ).first() is not None
         return _public_restaurant_payload(
             restaurante, configuracao, pagamento_online_ativo,
-            _public_benefit_capabilities(db, rest_id),
+            _public_benefit_capabilities(db, rest_id, restaurante.plano),
         )
 
 
@@ -374,9 +397,7 @@ def obter_cardapio_publico(
         if not restaurante:
             raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
 
-        configuracao = db.query(ConfiguracaoRestaurante).filter(
-            ConfiguracaoRestaurante.restaurante_id == rest_id
-        ).first()
+        configuracao = _public_configuration(db, rest_id)
         pagamento_online_ativo = db.query(RestaurantPaymentAccount.id).filter(
             RestaurantPaymentAccount.restaurante_id == rest_id,
             RestaurantPaymentAccount.provider == "mercado_pago",
@@ -395,7 +416,7 @@ def obter_cardapio_publico(
                 restaurante,
                 configuracao,
                 pagamento_online_ativo,
-                _public_benefit_capabilities(db, rest_id),
+                _public_benefit_capabilities(db, rest_id, restaurante.plano),
             ),
             "categorias": [
                 _public_category_payload(category)
