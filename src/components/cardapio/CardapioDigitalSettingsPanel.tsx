@@ -1,3 +1,4 @@
+import { isInitialSetup, returnToInitialSetup, useUnsavedSetupChanges } from '../onboarding/setupNavigation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
@@ -375,6 +376,7 @@ export function CardapioDigitalSettingsPanel({
   onSectionChange,
 }: CardapioDigitalSettingsPanelProps) {
   const activeTab = activeSection;
+  const setupMode = isInitialSetup();
   const [config, setConfig] = useState<RestaurantConfig>(emptyConfig);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -429,8 +431,14 @@ export function CardapioDigitalSettingsPanel({
   const currentPayload = useMemo(() => buildPersistedPayload(config), [config]);
   const hasUnsavedChanges = hasLoadedConfig && JSON.stringify(currentPayload) !== savedSnapshot;
 
+  const markSaved = useUnsavedSetupChanges(setupMode && hasUnsavedChanges);
+
   const readiness = useMemo(() => {
-    const checks = [
+    const checks = setupMode && activeTab === 'perfil' ? [
+      { label: 'nome público', ok: Boolean(config.nome.trim()) },
+      { label: 'WhatsApp', ok: Boolean(String(config.socials.whatsapp || '').trim()) },
+      { label: 'endereço', ok: Boolean(config.endereco.trim()) },
+    ] : [
       { label: 'nome do restaurante', ok: config.nome.trim().length >= 2 },
       { label: 'contato ou endereço', ok: Boolean(String(config.socials.whatsapp || '').trim() || config.endereco.trim()) },
       {
@@ -446,7 +454,7 @@ export function CardapioDigitalSettingsPanel({
       missing: checks.filter((check) => !check.ok).map((check) => check.label),
       ready: completed === checks.length,
     };
-  }, [config]);
+  }, [config, setupMode, activeTab]);
 
   const saveConfig = async () => {
     if (!hasLoadedConfig || loadError) {
@@ -472,6 +480,19 @@ export function CardapioDigitalSettingsPanel({
       setConfig(next);
       setSavedSnapshot(JSON.stringify(buildPersistedPayload(next)));
       setFeedback({ type: 'success', text: 'Cardápio atualizado e publicado.' });
+      if (setupMode) {
+        const statusResponse = await fetch(`${apiBaseUrl}/api/onboarding/status`, { headers: authHeaders, cache: 'no-store' });
+        const status = await statusResponse.json().catch(() => null);
+        if (!statusResponse.ok || typeof status?.steps?.profile !== 'boolean') {
+          throw new Error('Dados salvos, mas não foi possível validar a etapa. Tente novamente na implantação.');
+        }
+        if (activeTab !== 'perfil' || status.steps.profile) {
+          markSaved();
+          returnToInitialSetup();
+        } else {
+          setFeedback({ type: 'error', text: 'Dados salvos. Para concluir esta etapa, informe nome público, WhatsApp e endereço.' });
+        }
+      }
     } catch (error) {
       setFeedback({ type: 'error', text: error instanceof Error ? error.message : 'Erro ao salvar configurações.' });
     } finally {
@@ -519,12 +540,12 @@ export function CardapioDigitalSettingsPanel({
       <header className="online-menu-editor__header flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
           <h2 className="text-base font-black text-koma-foreground">
-            {activeTab === 'marca' ? 'Marca' : 'Perfil do cardápio'}
+            {activeTab === 'marca' ? 'Marca' : setupMode ? 'Dados do restaurante' : 'Perfil do cardápio'}
           </h2>
           <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
             {activeTab === 'marca'
               ? 'Logo e capa usadas no cardápio público.'
-              : 'Informações que o cliente vê para reconhecer e encontrar o restaurante.'}
+              : setupMode ? 'Informe nome público, WhatsApp e endereço. Essas informações também serão exibidas no cardápio online.' : 'Informações que o cliente vê para reconhecer e encontrar o restaurante.'}
           </p>
         </div>
         {publicMenuUrl && (
@@ -947,7 +968,7 @@ export function CardapioDigitalSettingsPanel({
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-70"
                 >
                   {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                  {isSaving ? 'Publicando…' : 'Salvar e publicar'}
+                  {isSaving ? 'Salvando…' : setupMode ? 'Salvar e voltar para implantação' : 'Salvar e publicar'}
                 </button>
               )}
             </div>
