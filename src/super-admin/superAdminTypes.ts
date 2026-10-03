@@ -44,7 +44,7 @@ export interface IntegrationsHealthStatus {
   };
   supabase?: { status: string };
   cloudflare?: { status: string };
-  railway?: { status: string };
+  railway?: { status: string; hosting_detected?: boolean };
   github?: { status: string };
   mercado_pago?: { status: string };
   telegram?: { status: string };
@@ -57,6 +57,14 @@ export interface IntegrationsHealthStatus {
       details?: string;
     };
   };
+}
+
+export interface TelegramHealthStatus {
+  status: "verified" | "unavailable" | "unverified" | "not_configured";
+  checks: Record<string, string>;
+  checked_at: string;
+  delivery_status: "not_tested";
+  detail: string;
 }
 
 export interface SuperAdminAuditLogEntry {
