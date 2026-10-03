@@ -2016,6 +2016,8 @@ class DirectPixFeeInvoice(Base):
     period = Column(String(7), nullable=False)
     provider_payment_id = Column(String(128), nullable=True)
     payment_payload = Column(JSON, nullable=True)
+    payment_attempt = Column(Integer, nullable=False, default=0)
+    previous_payment_ids = Column(JSON, nullable=True)
     paid_at = Column(DateTime(timezone=True), nullable=True)
     subscription_due_at = Column(DateTime(timezone=True), nullable=True)
     fees = Column(Numeric(14,2), nullable=False)

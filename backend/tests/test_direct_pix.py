@@ -229,7 +229,7 @@ def test_postgres_migration_rls_and_legacy_tenant_preservation(monkeypatch):
         from sqlalchemy.exc import DBAPIError
         with pytest.raises(DBAPIError):
             with conn.begin_nested():
-                conn.execute(text("INSERT INTO direct_pix_fee_invoices VALUES ('wrong',99421,'2025-01',null,null,null,null,0,0,'open',now())"))
+                conn.execute(text("INSERT INTO direct_pix_fee_invoices (id,restaurante_id,period,fees,subscription_amount,status,created_at) VALUES ('wrong',99421,'2025-01',0,0,'open',now())"))
     # Container is disposable, but leave the database clean for repeatability.
     with pg.begin() as conn:
         conn.execute(text('DROP TABLE direct_pix_receipts, direct_pix_fee_invoices, restaurant_direct_pix_configs, online_payment_intents, restaurantes CASCADE'))
@@ -296,3 +296,30 @@ def test_monthly_pix_invoice_combines_one_fixed_installment_with_fees(db,monkeyp
     assert invoice.fees==Decimal('1.79') and invoice.subscription_amount==Decimal('99')
     assert invoice.fees+invoice.subscription_amount==Decimal('100.79')
     assert close_month(db,restaurant_id=99420,period='2025-01').id==invoice.id
+
+
+def test_fee_invoice_reissue_requires_confirmed_terminal_state(db,monkeypatch):
+    import httpx
+    from app.services.direct_pix_billing import create_invoice_pix
+    row=DirectPixFeeInvoice(restaurante_id=99420,period='2025-01',fees=Decimal('179'),subscription_amount=0,status='open',provider_payment_id='old-charge')
+    db.add(row);db.commit()
+    reference=f'KOMA-FEE-99420-{row.id}'
+    old={'id':'old-charge','status':'cancelled','external_reference':reference,'transaction_amount':179,'currency_id':'BRL','payment_method_id':'pix'}
+    new={**old,'id':'new-charge','status':'pending','point_of_interaction':{'transaction_data':{'qr_code':'new-pix'}}}
+    posted=[]
+    class Gateway:
+        is_mock=False
+        def _ensure_provider_ready(self): pass
+        def _validate_merchant_identity(self,payment): pass
+        def get_payment(self,payment_id): return old if payment_id=='old-charge' else new
+        def _client(self):
+            def handler(request):
+                posted.append(request)
+                return httpx.Response(201,json=new)
+            return httpx.Client(base_url='https://api.mercadopago.com',transport=httpx.MockTransport(handler))
+    monkeypatch.setattr('app.services.saas_mercadopago.default_saas_mp_service',Gateway())
+    result=create_invoice_pix(db,restaurant_id=99420,invoice_id=row.id,payer_email='admin@example.com')
+    assert result['paymentId']=='new-charge' and row.payment_attempt==1
+    assert row.previous_payment_ids==['old-charge']
+    assert create_invoice_pix(db,restaurant_id=99420,invoice_id=row.id,payer_email='admin@example.com')==result
+    assert len(posted)==1

@@ -46,7 +46,7 @@ Anual: parcela fixa R$0; pagamento da fatura de uso não estende outro ano de as
 
 O job `backend/scripts/close_direct_pix_month.py --tenant ID` fecha o mês anterior e deve ser agendado diariamente com allowlist explícita de tenants. Não há descoberta global nem alteração automática no tenant 6. O agendamento de produção não foi instalado nesta tarefa.
 
-API `POST /payments/direct-pix/invoices/{id}/pix` gera cobrança na conta da plataforma, por valor total da fatura e idempotência determinística. A tela de Integrações lista as faturas e permite pagar/conferir. O webhook SaaS existente verifica assinatura, consulta o gateway e concilia referência, ID externo, moeda, método e valor antes de quitar. Mensalidade consolidada substitui a cobrança fixa daquele vencimento; anual não altera o período pago. Reemissão de cobranças encerradas exige conciliação e não cria outro Pix silenciosamente.
+API `POST /payments/direct-pix/invoices/{id}/pix` gera cobrança na conta da plataforma, por valor total da fatura e idempotência determinística. A tela de Integrações lista as faturas e permite pagar/conferir. O webhook SaaS existente verifica assinatura, consulta o gateway e concilia referência, ID externo, moeda, método e valor antes de quitar. Mensalidade consolidada substitui a cobrança fixa daquele vencimento; anual não altera o período pago. Uma nova tentativa de pagamento só é criada após o gateway confirmar estado terminal da cobrança anterior; mantém histórico dos IDs e idempotência por tentativa. Cobranças pendentes são reutilizadas.
 
 Não confundir fatura comercial com emissão de nota fiscal. Não foram implementadas suspensão, alteração de landing, mudança unilateral de contrato ou régua de cobrança por WhatsApp.
 

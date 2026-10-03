@@ -46,6 +46,8 @@ def upgrade():
         sa.Column('period',sa.String(7),nullable=False),
         sa.Column('provider_payment_id',sa.String(128),nullable=True),
         sa.Column('payment_payload',sa.JSON(),nullable=True),
+        sa.Column('payment_attempt',sa.Integer(),nullable=False,server_default='0'),
+        sa.Column('previous_payment_ids',sa.JSON(),nullable=True),
         sa.Column('paid_at',sa.DateTime(timezone=True),nullable=True),
         sa.Column('subscription_due_at',sa.DateTime(timezone=True),nullable=True),
         sa.Column('fees',sa.Numeric(14,2),nullable=False),

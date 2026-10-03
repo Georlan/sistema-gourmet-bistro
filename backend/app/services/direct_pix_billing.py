@@ -118,8 +118,15 @@ def create_invoice_pix(db: Session, *, restaurant_id: int, invoice_id: str, paye
             # Return the original charge; never create a second charge while an older one can be paid.
             if row.payment_payload:
                 return row.payment_payload
+        elif payment.get('status') in {'cancelled','rejected','expired'}:
+            # Only an authoritative terminal state permits another attempt.
+            row.previous_payment_ids = [*(row.previous_payment_ids or []),row.provider_payment_id]
+            row.payment_attempt = (row.payment_attempt or 0)+1
+            row.provider_payment_id = None
+            row.payment_payload = None
+            db.flush()
         else:
-            raise ValueError('Cobrança encerrada exige conciliação antes de reemitir a fatura.')
+            raise ValueError('O gateway ainda não confirmou o encerramento da cobrança anterior.')
     if not payer_email or '@' not in payer_email:
         raise ValueError('E-mail do administrador inválido para cobrança.')
     now = dt.datetime.now(dt.timezone.utc)
@@ -138,7 +145,7 @@ def create_invoice_pix(db: Session, *, restaurant_id: int, invoice_id: str, paye
             'date_of_expiration':expiration.isoformat()}
     else:
         with provider._client() as client:
-            response = client.post('/v1/payments',json=payload,headers={'X-Idempotency-Key':str(uuid.uuid5(uuid.NAMESPACE_URL,reference))})
+            response = client.post('/v1/payments',json=payload,headers={'X-Idempotency-Key':str(uuid.uuid5(uuid.NAMESPACE_URL,f'{reference}/attempt/{row.payment_attempt or 0}'))})
             if response.status_code >= 400:
                 raise SaasMercadoPagoError('Não foi possível gerar a cobrança da fatura.',status_code=response.status_code)
             payment = response.json()
