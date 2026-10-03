@@ -176,6 +176,25 @@ const blockerLabel = (blocker: string) => {
   return blocker;
 };
 
+function SetupDisclosure({ title, summary, complete, error, children }: {
+  title: string; summary: string; complete: boolean; error?: string; children: React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(!complete);
+  useEffect(() => { setExpanded(!complete); }, [complete]);
+  return (
+    <section className="mt-4 rounded-2xl border border-koma-border bg-koma-page p-4">
+      <button type="button" aria-expanded={expanded || Boolean(error)} onClick={() => setExpanded(!expanded)} className="flex w-full items-center justify-between gap-3 text-left">
+        <span className="flex min-w-0 items-center gap-3">
+          {complete ? <CheckCircle2 size={18} className="shrink-0 text-emerald-400" /> : <Circle size={18} className="shrink-0 text-koma-subtle" />}
+          <span><strong className="block text-sm">{title}</strong><span className="mt-1 block text-xs text-koma-muted">{summary}</span></span>
+        </span>
+        <span className="shrink-0 text-xs font-bold text-koma-muted">{expanded || error ? 'Recolher' : 'Editar'}</span>
+      </button>
+      {(expanded || error) && <div className="mt-4 border-t border-koma-border pt-4">{children}</div>}
+    </section>
+  );
+}
+
 export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const [state, setState] = useState<LoadState>('loading');
   const [snapshot, setSnapshot] = useState<OnboardingStatus | null>(null);
@@ -387,8 +406,8 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const steps: SetupStep[] = snapshot ? [
     {
       id: 'profile',
-      title: 'Complete os dados do restaurante',
-      description: 'Preencha as informações básicas usadas na operação e no cardápio.',
+      title: snapshot.steps.profile ? 'Dados do restaurante' : 'Complete os dados do restaurante',
+      description: 'Informe nome público, WhatsApp e endereço. Logo, slogan e redes sociais são opcionais.',
       done: snapshot.steps.profile,
       actionLabel: snapshot.steps.profile ? 'Revisar dados' : 'Configurar dados',
       tab: 'cardapio_digital',
@@ -397,7 +416,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     },
     {
       id: 'hours',
-      title: 'Defina os horários de funcionamento',
+      title: snapshot.steps.hours ? 'Horários de funcionamento' : 'Defina os horários de funcionamento',
       description: 'Os horários informam sua rotina ao cliente. Novos pedidos online dependem do caixa aberto; a agenda não bloqueia pedidos sozinha.',
       done: snapshot.steps.hours,
       actionLabel: snapshot.steps.hours ? 'Revisar horários' : 'Configurar horários',
@@ -407,10 +426,12 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     },
     {
       id: 'catalog',
-      title: 'Publique o primeiro produto',
-      description: 'A implantação só considera o catálogo pronto quando houver ao menos um produto ativo.',
+      title: snapshot.steps.catalog ? 'Cardápio publicado' : 'Publique o primeiro produto',
+      description: snapshot?.catalogAssistance && ['pending', 'processing'].includes(snapshot.catalogAssistance.status)
+        ? 'A equipe KÔMA prepara o arquivo recebido. Enquanto isso, complete dados e horários; depois confira o catálogo. O essencial só conclui com um produto ativo.'
+        : 'A implantação só considera o catálogo pronto quando houver ao menos um produto ativo.',
       done: snapshot.steps.catalog,
-      actionLabel: snapshot.steps.catalog ? 'Abrir cardápio' : 'Criar produto',
+      actionLabel: snapshot.steps.catalog || snapshot.catalogAssistance ? 'Conferir cardápio' : 'Criar produto',
       tab: 'cardapio',
       subTab: 'produtos',
       icon: UtensilsCrossed,
@@ -537,6 +558,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const isCommercial = onboardingMode === 'commercial';
   const isAdministrative = onboardingMode === 'administrative';
   const isAwaitingKoma = releaseState === 'awaiting_koma';
+  const nextStep = steps.find(step => !step.done);
 
   return (
     <main className="min-h-screen bg-koma-page px-4 py-6 text-koma-foreground sm:px-6 lg:px-8">
@@ -598,7 +620,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
             </div>
 
             {isCommercial && (
-              <div className="mt-5 grid gap-2 sm:grid-cols-3" aria-label="Etapas da liberação">
+              <div className="mt-5 grid grid-cols-3 gap-2" aria-label="Etapas da liberação">
                 {[
                   { id: 'setup', label: 'Configuração', done: configurationComplete, active: !configurationComplete },
                   { id: 'review', label: 'Revisão KÔMA', done: operationReleased, active: configurationComplete && !operationReleased },
@@ -626,18 +648,57 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               </div>
             )}
 
-            <SubscriptionControl accessToken={accessToken} />
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-koma-raised" aria-label="Progresso dos essenciais">
+              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${snapshot.progress.percent}%` }} />
+            </div>
+            <h2 className="mt-5 text-sm font-black">{configurationComplete ? 'Essenciais concluídos · pronto para revisão' : `Faltam ${snapshot.progress.total - snapshot.progress.completed} essenciais para revisão`}</h2>
+            <p className="mt-1 text-xs text-koma-muted">Você pode configurar os itens em qualquer ordem. O primeiro pendente está destacado.</p>
+            <div className="mt-5 space-y-3">
+              {[...steps].sort((a, b) => Number(a.done) - Number(b.done)).map((step) => {
+                const Icon = step.icon;
+                return (
+                  <article key={step.id} className={`flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${step === nextStep ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-page'}`}>
+                    <div className="flex min-w-0 gap-3">
+                      <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border ${step.done ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-koma-border bg-koma-raised text-koma-muted'}`}>
+                        <Icon size={17} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="text-sm font-black">{step.title}</h2>
+                          {step.optional && <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">Opcional</span>}
+                        </div>
+                        <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">{step.done ? 'Concluído ✓' : step.description}</p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3 pl-[52px] sm:pl-0">
+                      {step.done ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
+                      <button
+                        type="button"
+                        onClick={() => openCashierAt(step.tab, step.subTab, true)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3 py-2 text-[10px] font-black transition hover:border-emerald-500/35 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        {step === nextStep ? 'Continuar' : step.actionLabel} <ArrowRight size={12} />
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            <p className="mt-5 text-xs font-bold text-koma-muted">Preparação já salva: {[
+              Boolean(snapshot.restaurant.operationProfile && snapshot.restaurant.operationProfile !== 'generic') && 'tipo de operação',
+              snapshot.steps.operations && 'modalidades',
+              snapshot.counts.tables > 0 && `${snapshot.counts.tables} mesas`,
+              snapshot.catalogAssistance && !['cancelled', 'superseded'].includes(snapshot.catalogAssistance.status) && 'cardápio recebido',
+            ].filter(Boolean).join(' · ') || 'Comece pelos essenciais acima.'}</p>
             <CatalogAssistanceUpload
               accessToken={accessToken}
               assistance={snapshot.catalogAssistance}
               onSubmitted={() => void loadSnapshot()}
             />
 
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-koma-raised">
-              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${snapshot.progress.percent}%` }} />
-            </div>
 
-            <section className="mt-5 rounded-2xl border border-koma-border bg-koma-page p-4">
+            <SetupDisclosure title="Tipo de operação" summary={OPERATION_PROFILE_OPTIONS.find(option => option.value === snapshot.restaurant.operationProfile)?.label || 'Escolha o tipo'} complete={Boolean(snapshot.restaurant.operationProfile && snapshot.restaurant.operationProfile !== 'generic')} error={operationProfileError}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -691,9 +752,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                   {operationProfileError}
                 </p>
               )}
-            </section>
+            </SetupDisclosure>
 
-            <section className="mt-5 rounded-2xl border border-koma-border bg-koma-page p-4">
+            <SetupDisclosure title={snapshot.steps.operations ? 'Modalidades' : 'Pendente · escolha as modalidades'} summary={ORDER_TYPE_OPTIONS.filter(option => snapshot.operations.orderTypes.includes(option.value)).map(option => option.label).join(' · ') || 'Escolha como receber pedidos'} complete={snapshot.steps.operations} error={operationError}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex items-center gap-2">
@@ -745,10 +806,10 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 </p>
               )}
               {operationError && <p role="alert" className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-[10px] font-bold text-rose-300">{operationError}</p>}
-            </section>
+            </SetupDisclosure>
 
             {snapshot.operations.orderTypes.includes('consumo_local') && (
-              <section className="mt-5 rounded-2xl border border-koma-border bg-koma-page p-4">
+              <SetupDisclosure title="Salão" summary={`${snapshot.counts.tables} mesas cadastradas`} complete={snapshot.counts.tables > 0} error={tableSetupError}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex items-center gap-2">
@@ -826,40 +887,14 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                     {tableSetupError}
                   </p>
                 )}
-              </section>
+              </SetupDisclosure>
             )}
 
-            <div className="mt-5 space-y-3">
-              {steps.map((step) => {
-                const Icon = step.icon;
-                return (
-                  <article key={step.id} className="flex flex-col gap-4 rounded-2xl border border-koma-border bg-koma-page p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex min-w-0 gap-3">
-                      <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border ${step.done ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-koma-border bg-koma-raised text-koma-muted'}`}>
-                        <Icon size={17} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="text-sm font-black">{step.title}</h2>
-                          {step.optional && <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">Opcional</span>}
-                        </div>
-                        <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">{step.description}</p>
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-3 pl-[52px] sm:pl-0">
-                      {step.done ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
-                      <button
-                        type="button"
-                        onClick={() => openCashierAt(step.tab, step.subTab, true)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3 py-2 text-[10px] font-black transition hover:border-emerald-500/35 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-45"
-                      >
-                        {step.actionLabel} <ArrowRight size={12} />
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+
+            <details className="mt-5 rounded-2xl border border-koma-border p-4">
+              <summary className="cursor-pointer text-xs font-bold">Assinatura · {trialLabel(snapshot.trial)}</summary>
+              <SubscriptionControl accessToken={accessToken} />
+            </details>
 
             <section className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4 sm:p-5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -874,7 +909,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               </div>
 
               <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {practicalSetupActions.map((action) => {
+                {practicalSetupActions.filter(action => action.context !== 'Opcional').map((action) => {
                   const Icon = action.icon;
                   return (
                     <button
@@ -910,6 +945,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-sm font-black">Pode configurar depois</h2>
+                {practicalSetupActions.filter(action => action.context === 'Opcional').map(action => (
+                  <button key={action.id} type="button" onClick={() => openCashierAt(action.tab, action.subTab, true)} className="mt-3 block text-xs font-bold text-koma-muted">{action.title} · {action.actionLabel} <ArrowRight size={12} className="inline" /></button>
+                ))}
                     <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">Opcional</span>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
@@ -978,7 +1016,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               <div>
                 <p className="text-xs font-black">
                   {!configurationComplete
-                    ? `Falta pouco — ${snapshot.progress.completed} de ${snapshot.progress.total} concluídos`
+                    ? `Essenciais: ${snapshot.progress.completed} de ${snapshot.progress.total} concluídos`
                     : isAwaitingKoma
                       ? 'Sua parte está concluída ✓'
                       : isAdministrative

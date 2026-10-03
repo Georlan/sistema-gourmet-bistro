@@ -114,7 +114,19 @@ def _trial_status_payload(row: dict[str, Any] | None, *, setup_pending: bool = F
     }
 
 
-def _profile_is_configured(restaurant: Restaurante) -> bool:
+def _profile_is_configured(restaurant: Restaurante, *, require_essentials: bool = False) -> bool:
+    """New commercial setup requires identity; preserve released/legacy readiness."""
+    if require_essentials:
+        socials = restaurant.socials
+        if isinstance(socials, str):
+            try:
+                socials = json.loads(socials)
+            except (TypeError, ValueError):
+                socials = {}
+        whatsapp = socials.get("whatsapp") if isinstance(socials, dict) else None
+        return all(bool(str(value or "").strip()) for value in (
+            restaurant.nome, restaurant.endereco, whatsapp,
+        ))
     return any(
         bool(str(value).strip())
         for value in (
@@ -412,7 +424,7 @@ def _build_onboarding_status(
         test_order_detected = query.first() is not None
 
     steps = {
-        "profile": _profile_is_configured(restaurant),
+        "profile": _profile_is_configured(restaurant, require_essentials=setup_pending),
         "hours": _structured_has_items(restaurant.horarios_funcionamento),
         "catalog": active_product_count > 0,
         "operations": _operations_step_is_complete(operations),
