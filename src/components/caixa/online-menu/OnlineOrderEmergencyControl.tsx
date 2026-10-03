@@ -35,7 +35,17 @@ const getAuthHeaders = (): Record<string, string> => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boolean }) {
+export function OnlineOrderEmergencyControl({ mobile = false, isWsConnected = false }: { mobile?: boolean; isWsConnected?: boolean }) {
+  const [desktopViewport, setDesktopViewport] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  const visibleOwner = mobile ? !desktopViewport : desktopViewport;
+  const [pauseDeadlineReached, setPauseDeadlineReached] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const update = () => setDesktopViewport(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
   const [statusData, setStatusData] = useState<OperationalStatus | null>(null);
   const [authorized, setAuthorized] = useState(true);
   const [statusLoading, setStatusLoading] = useState(true);
@@ -87,6 +97,7 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
   }, []);
 
   useEffect(() => {
+    if (!visibleOwner) return;
     mountedRef.current = true;
     void loadStatus();
     let hintTimer: number | null = null;
@@ -99,21 +110,39 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
         else void loadStatus();
       }, 100);
     };
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void loadStatus();
-    }, 30000);
     window.addEventListener('koma_orders_updated', refresh);
     window.addEventListener('koma_online_order_control_updated', refresh);
     document.addEventListener('visibilitychange', refresh);
     return () => {
       mountedRef.current = false;
       if (hintTimer !== null) window.clearTimeout(hintTimer);
-      window.clearInterval(interval);
       window.removeEventListener('koma_orders_updated', refresh);
       window.removeEventListener('koma_online_order_control_updated', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [loadStatus]);
+  }, [loadStatus, visibleOwner]);
+
+  const statusReady = statusData !== null;
+  useEffect(() => {
+    // Keep recovery polling if bootstrap failed or a timed pause needs reconciliation.
+    if (!visibleOwner || !authorized || (isWsConnected && statusReady && !pauseDeadlineReached)) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadStatus();
+    }, 30000);
+    return () => window.clearInterval(interval);
+  }, [isWsConnected, statusReady, pauseDeadlineReached, visibleOwner, authorized, loadStatus]);
+
+  useEffect(() => {
+    setPauseDeadlineReached(false);
+    if (!visibleOwner || !statusData?.paused || !statusData.pause_until) return;
+    const deadline = Date.parse(statusData.pause_until);
+    if (!Number.isFinite(deadline)) return;
+    const timer = window.setTimeout(() => {
+      setPauseDeadlineReached(true);
+      if (document.visibilityState === 'visible') void loadStatus();
+    }, Math.max(0, Math.min(2_147_483_647, deadline - Date.now())));
+    return () => window.clearTimeout(timer);
+  }, [visibleOwner, statusData?.paused, statusData?.pause_until, loadStatus]);
 
   const resolvedReason = useMemo(
     () => (reason === 'Outro motivo operacional' ? customReason.trim() : reason),
@@ -148,7 +177,7 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
     }
   };
 
-  if (!authorized) return null;
+  if (!authorized || !visibleOwner) return null;
 
   if (!statusData || !statusData.counts) {
     return (

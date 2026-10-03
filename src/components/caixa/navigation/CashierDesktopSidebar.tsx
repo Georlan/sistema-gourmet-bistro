@@ -37,6 +37,7 @@ export function CashierDesktopSidebar({
   planId,
   entitlements,
   hasOnlineMenu,
+  isWsConnected,
   isSidebarTabActive,
   sidebarOrderCount,
   handleSidebarNavigation,
@@ -147,7 +148,7 @@ export function CashierDesktopSidebar({
       </SidebarContent>
 
       <SidebarFooter className="cashier-sidebar__footer p-3 flex flex-col gap-2">
-        {!setupMode && hasOnlineMenu && <OnlineOrderEmergencyControl />}
+        {!setupMode && hasOnlineMenu && <OnlineOrderEmergencyControl isWsConnected={isWsConnected} />}
         <CashierSidebarFooter
           changeFontSize={changeFontSize}
           fontSize={fontSize}
