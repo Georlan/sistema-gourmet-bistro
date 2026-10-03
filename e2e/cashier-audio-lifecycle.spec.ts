@@ -5,9 +5,12 @@ test('arrival with autoaccept and an open drawer; manual pending loop has one ow
   await page.goto('/');
   await page.clock.install();
   await page.evaluate(async () => {
-    const { default: React } = await import('/.vite/e2e/deps/react.js');
-    const { default: ReactDOM } = await import('/.vite/e2e/deps/react-dom_client.js');
-    const { useCashierAlerts } = await import('/src/components/caixa/realtime/useCashierAlerts.ts');
+    const reactUrl = '/.vite/e2e/deps/react.js';
+    const domUrl = '/.vite/e2e/deps/react-dom_client.js';
+    const hookUrl = '/src/components/caixa/realtime/useCashierAlerts.ts';
+    const { default: React } = await import(reactUrl);
+    const { default: ReactDOM } = await import(domUrl);
+    const { useCashierAlerts } = await import(hookUrl);
     const w = window as any;
     w.alertNotes = 0;
     w.closedContexts = 0;
