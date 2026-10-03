@@ -462,3 +462,27 @@ def test_paid_complement_sync_rejects_cycles_and_foreign_sources():
     for source_id in (created['id'], 'foreign-source'):
         payload = {**created, 'grupo_origem_id': source_id, 'preco_novo_adicional': 5, 'preco_novo_ovo': 2}
         assert client.put(f"/cardapio/modificadores/grupos/{created['id']}", headers=headers, json=payload).status_code == 422
+
+
+def test_paid_links_reject_actual_other_tenant_and_ambiguous_existing_copies():
+    headers = _auth_headers()
+    db = SessionLocal()
+    token = current_restaurante_id.set(997)
+    try:
+        db.add(Restaurante(id=997, nome='Other linked catalog', slug='other-linked-catalog'))
+        db.flush()
+        db.add(GrupoModificador(id='foreign-link-source', restaurante_id=997, nome='Proteínas', tipo='opcional'))
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+    source = client.post('/cardapio/modificadores/grupos', headers=headers, json={'nome': 'Source duplicate test', 'opcoes': [{'nome': 'Frango'}]}).json()
+    target = client.post('/cardapio/modificadores/grupos', headers=headers, json={'nome': 'Target duplicate test', 'opcoes': [{'nome': 'Frango adicional', 'preco_adicional': 5}, {'nome': 'Frango adicional', 'preco_adicional': 9}]}).json()
+    payload = {**target, 'grupo_origem_id': 'foreign-link-source', 'preco_novo_adicional': 5, 'preco_novo_ovo': 2}
+    assert client.put(f"/cardapio/modificadores/grupos/{target['id']}", headers=headers, json=payload).status_code == 422
+    payload['grupo_origem_id'] = source['id']
+    assert client.put(f"/cardapio/modificadores/grupos/{target['id']}", headers=headers, json=payload).status_code == 409
+    saved = next(group for group in client.get('/cardapio/modificadores/grupos', headers=headers).json() if group['id'] == target['id'])
+    assert saved['grupo_origem_id'] is None
+    assert {option['id'] for option in saved['opcoes']} == {option['id'] for option in target['opcoes']}
+    assert sorted(option['preco_adicional'] for option in saved['opcoes']) == [5, 9]

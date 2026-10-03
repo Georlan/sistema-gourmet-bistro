@@ -13,13 +13,15 @@ def _key(name: str) -> str:
     return ' '.join(''.join(c for c in unicodedata.normalize('NFKD', name.casefold()) if not unicodedata.combining(c)).split())
 
 
-def sync_linked_complements(db: Session, restaurante_id: int, changed_group_id: str) -> None:
+def sync_linked_complements(db: Session, restaurante_id: int, changed_group_id: str) -> list[str]:
     groups = db.query(GrupoModificador).filter(
         GrupoModificador.restaurante_id == restaurante_id,
         GrupoModificador.grupo_origem_id.isnot(None),
         (GrupoModificador.id == changed_group_id) | (GrupoModificador.grupo_origem_id == changed_group_id),
     ).all()
+    changed_groups = []
     for group in groups:
+        changed = False
         source = db.query(OpcaoModificador).filter_by(restaurante_id=restaurante_id, grupo_id=group.grupo_origem_id).all()
         targets = db.query(OpcaoModificador).filter_by(restaurante_id=restaurante_id, grupo_id=group.id).all()
         linked = {option.opcao_origem_id: option for option in targets if option.opcao_origem_id}
@@ -38,9 +40,15 @@ def sync_linked_complements(db: Session, restaurante_id: int, changed_group_id: 
                     db.add(target)
                     targets.append(target)
                 target.opcao_origem_id = original.id
+                changed = True
+            changed = changed or target.nome != f"{original.nome} adicional" or target.ativo != original.ativo
             target.nome = f"{original.nome} adicional"
             target.ativo = original.ativo
         source_ids = {option.id for option in source}
         for target in targets:
             if target.opcao_origem_id and target.opcao_origem_id not in source_ids:
+                changed = changed or bool(target.ativo)
                 target.ativo = False
+        if changed:
+            changed_groups.append(group.id)
+    return changed_groups

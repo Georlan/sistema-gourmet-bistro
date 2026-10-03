@@ -48,6 +48,8 @@ class ReconcileError(RuntimeError):
     pass
 
 
+from app.services.linked_complements import sync_linked_complements
+
 def _money(value: Any) -> Decimal:
     return Decimal(str(value)).quantize(Decimal("0.01"))
 
@@ -209,6 +211,8 @@ def _reconcile_groups(db, tenant_id: int, spec: dict[str, Any], changes: dict[st
             raise ReconcileError(
                 f"Grupo {group_name!r} não existe. Crie o grupo pela interface antes de reconciliar as opções."
             )
+        if group.grupo_origem_id:
+            raise ReconcileError("Atualize o grupo de origem dos adicionais sincronizados.")
         resolved[normalize_catalog_name(str(group_name))] = group
         options = (
             db.query(OpcaoModificador)
@@ -559,6 +563,7 @@ def _reconcile_sizes(
 def reconcile(*, tenant_id: int, spec: dict[str, Any], apply: bool, reason: str) -> dict[str, Any]:
     changes: dict[str, list[str]] = {
         "categories_created": [],
+        "linked_groups_synced": [],
         "options_created": [],
         "options_activated": [],
         "options_paused": [],
@@ -574,8 +579,12 @@ def reconcile(*, tenant_id: int, spec: dict[str, Any], apply: bool, reason: str)
     token = current_restaurante_id.set(tenant_id)
     db = SessionLocal(restaurante_id=tenant_id)
     try:
+        db.query(Restaurante).filter(Restaurante.id == tenant_id).with_for_update().one()
         _guard_target(db, tenant_id, spec)
         groups = _reconcile_groups(db, tenant_id, spec, changes)
+        for group in groups.values():
+            changes["linked_groups_synced"].extend(sync_linked_complements(db, tenant_id, group.id))
+        db.flush()
         _reconcile_products(db, tenant_id, spec, changes)
         _sync_product_categories(db, tenant_id, spec, changes)
         if "sizes" in spec:
