@@ -9,7 +9,7 @@ import type { useCashierPreferences } from './useCashierPreferences';
 export type CashierSidebarProps = Pick<ReturnType<typeof useCashShift>, 'turno' | 'turnoLoadState' | 'setShowAbrirModal'> &
   Pick<ReturnType<typeof useCashierNavigation>, 'isSidebarTabActive' | 'handleSidebarNavigation'> &
   Pick<ReturnType<typeof useCashierPreferences>, 'changeFontSize' | 'fontSize' | 'setTheme' | 'theme'> &
-  Pick<CaixaPanelProps, 'activeWaiterNome'> & {
+  Pick<CaixaPanelProps, 'activeWaiterNome' | 'isWsConnected'> & {
     setIsOperatorDrawerOpen: Dispatch<SetStateAction<boolean>>;
     planId: SubscriptionPlanId;
     entitlements?: SubscriptionEntitlements;
