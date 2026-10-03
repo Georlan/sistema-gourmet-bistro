@@ -338,7 +338,7 @@ export function CaixaPanel({
     convertToPickup: handleConvertDeliveryToPickup,
   });
 
-  const { soundEnabled, toggleSound, playOrderAlert } = useCashierAlerts({
+  const { soundEnabled, audioReady, activateAudio, toggleSound, playOrderAlert } = useCashierAlerts({
     orders,
     deliveryOrders,
     pendingAcceptanceOrders,
@@ -691,22 +691,6 @@ export function CaixaPanel({
         fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}
     >
-      {pendingAcceptanceOrders.length > 0 && (
-        <button
-          type="button"
-          role="alert"
-          onClick={() => {
-            handleSidebarNavigation('vendas_pedidos');
-            setIsDrawerOpen(true);
-          }}
-          className="fixed left-1/2 top-16 z-[9999] w-[min(94vw,620px)] -translate-x-1/2 rounded-2xl border-2 border-amber-400 bg-amber-300 px-5 py-3 text-left text-amber-950 shadow-2xl animate-pulse"
-        >
-          <strong className="block text-sm font-black uppercase tracking-wide">
-            {pendingAcceptanceOrders.length === 1 ? 'Pedido aguardando aceite' : pendingAcceptanceOrders.length + ' pedidos aguardando aceite'}
-          </strong>
-          <span className="block text-[11px] font-bold">O alerta sonoro continua até todos serem aceitos ou recusados. Clique para abrir.</span>
-        </button>
-      )}
 
       {toastData && (
         <div
@@ -961,6 +945,23 @@ export function CaixaPanel({
               </button>
             ))}
           </div>
+
+      {pendingAcceptanceOrders.length > 0 && (
+        <button
+          type="button"
+          role="alert"
+          onClick={() => {
+            handleSidebarNavigation('vendas_pedidos');
+            setIsDrawerOpen(true);
+          }}
+          className="shrink-0 mx-5 mt-3 rounded-2xl border-2 border-amber-400 bg-amber-300 px-5 py-3 text-left text-amber-950"
+        >
+          <strong className="block text-sm font-black uppercase tracking-wide">
+            {pendingAcceptanceOrders.length === 1 ? 'Pedido aguardando aceite' : pendingAcceptanceOrders.length + ' pedidos aguardando aceite'}
+          </strong>
+          <span className="block text-[11px] font-bold">O alerta sonoro continua até todos serem aceitos ou recusados. Clique para abrir.</span>
+        </button>
+      )}
 
           <div ref={cashierContentRef} className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
             {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
@@ -1416,7 +1417,8 @@ export function CaixaPanel({
           fontSize={fontSize}
           soundEnabled={soundEnabled}
           toggleSound={toggleSound}
-          playOrderAlert={playOrderAlert}
+          audioReady={audioReady}
+          activateAudio={activateAudio}
         />
 
         <CashierConversationsDrawer
