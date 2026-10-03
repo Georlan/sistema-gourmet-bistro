@@ -219,11 +219,13 @@ export function TenantSuspensionBoundary({ children, disabled = false }: TenantS
   }, [disabled, probeToken]);
 
   useEffect(() => {
-    if (disabled) return;
+    // Operational 403 responses detect suspension while active. Only a blocked
+    // session needs periodic recovery probes; idle active sessions do no HTTP work.
+    if (disabled || accessState !== 'suspended') return;
 
     const probeCurrentToken = () => {
       const token = readOperationalToken();
-      if (token) void probeToken(token);
+      if (token && !document.hidden) void probeToken(token);
     };
 
     const onVisibilityChange = () => {
@@ -239,7 +241,7 @@ export function TenantSuspensionBoundary({ children, disabled = false }: TenantS
       window.removeEventListener('focus', probeCurrentToken);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [disabled, probeToken]);
+  }, [disabled, accessState, probeToken]);
 
   const retry = () => {
     const token = readOperationalToken();
