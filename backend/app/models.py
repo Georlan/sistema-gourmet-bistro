@@ -1106,15 +1106,20 @@ class GrupoModificador(Base):
     nome = Column(String, nullable=False)
     min_selecoes = Column(Integer, default=0)
     max_selecoes = Column(Integer, default=1)
+    grupo_origem_id = Column(String, ForeignKey("grupo_modificadores.id"), nullable=True)
+    preco_novo_adicional = Column(Numeric(14, 2, asdecimal=False), nullable=True)
+    preco_novo_ovo = Column(Numeric(14, 2, asdecimal=False), nullable=True)
     tipo = Column(String, default="obrigatorio")  # "obrigatorio" | "opcional" | "meio_a_meio"
 
 
 class OpcaoModificador(Base):
     __tablename__ = "opcao_modificadores"
+    __table_args__ = (UniqueConstraint("restaurante_id", "grupo_id", "opcao_origem_id", name="uq_opcao_grupo_origem"),)
     
     id = Column(String, primary_key=True, index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
     grupo_id = Column(String, ForeignKey("grupo_modificadores.id"), nullable=False)
+    opcao_origem_id = Column(String, ForeignKey("opcao_modificadores.id"), nullable=True)
     nome = Column(String, nullable=False)
     preco_adicional = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     ativo = Column(Boolean, default=True)

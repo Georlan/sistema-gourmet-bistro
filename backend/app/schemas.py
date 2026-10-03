@@ -1255,12 +1255,13 @@ class CupomValidateResponse(BaseModel):
 # ─── SCHEMAS DE GRUPOS DE MODIFICADORES & COMPLEMENTOS ─────────────────────────
 class OpcaoModificadorCreate(BaseModel):
     id: Optional[str] = None
-    nome: str = Field(min_length=1, max_length=100)
+    nome: str = Field(min_length=1, max_length=110)
     preco_adicional: float = Field(default=0.0, ge=0)
     ativo: bool = True
 
 
 class OpcaoModificadorResponse(BaseModel):
+    opcao_origem_id: Optional[str] = None
     id: str
     grupo_id: str
     nome: str

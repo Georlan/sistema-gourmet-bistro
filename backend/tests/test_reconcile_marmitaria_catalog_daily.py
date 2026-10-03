@@ -444,3 +444,34 @@ def test_invalid_sync_flag_does_not_pause_catalog(invalid):
     with SessionLocal(restaurante_id=tenant_id) as db:
         assert db.query(OpcaoModificador).filter_by(restaurante_id=tenant_id, nome="Acém cozido").one().ativo is True
         assert db.query(SuperAdminAuditLog).filter_by(restaurante_id=tenant_id).count() == 0
+
+
+def test_daily_reconcile_updates_explicit_paid_links_and_dry_run_rolls_back():
+    tenant_id = _seed_catalog()
+    token = current_restaurante_id.set(tenant_id)
+    db = SessionLocal(restaurante_id=tenant_id)
+    try:
+        db.add(GrupoModificador(id=f'extras-{tenant_id}', restaurante_id=tenant_id, nome='Extras', grupo_origem_id=f'proteinas-{tenant_id}', preco_novo_adicional=5, preco_novo_ovo=2))
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+    spec = _friday_spec()
+    spec['groups'] = {'Proteínas': {'options': ['Ovo frito', 'Carne nova'], 'sync_active': True}}
+    dry = reconcile(tenant_id=tenant_id, spec=spec, apply=False, reason='Dry run isolated')
+    assert dry['changes']['linked_groups_synced'] == [f'extras-{tenant_id}']
+    db = SessionLocal(restaurante_id=tenant_id)
+    try:
+        assert db.query(OpcaoModificador).filter_by(restaurante_id=tenant_id, grupo_id=f'extras-{tenant_id}').count() == 0
+    finally:
+        db.close()
+    reconcile(tenant_id=tenant_id, spec=spec, apply=True, reason='Apply isolated')
+    db = SessionLocal(restaurante_id=tenant_id)
+    try:
+        options = db.query(OpcaoModificador).filter_by(restaurante_id=tenant_id, grupo_id=f'extras-{tenant_id}').all()
+        by_name = {option.nome: option for option in options}
+        assert by_name['Ovo frito adicional'].ativo and by_name['Ovo frito adicional'].preco_adicional == 2
+        assert by_name['Carne nova adicional'].ativo and by_name['Carne nova adicional'].preco_adicional == 5
+        assert all(option.opcao_origem_id for option in options)
+    finally:
+        db.close()

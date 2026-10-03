@@ -5,6 +5,7 @@ import clsx from 'clsx';
 export interface OpcaoModificador {
   id?: string;
   grupo_id?: string;
+  opcao_origem_id?: string | null;
   nome: string;
   preco_adicional: number;
   ativo: boolean;
@@ -20,6 +21,9 @@ export interface GrupoModificador {
   produto_ids: string[];
   categoria_ids?: string[];
   incluir_subcategorias?: boolean;
+  grupo_origem_id?: string | null;
+  preco_novo_adicional?: number | null;
+  preco_novo_ovo?: number | null;
 }
 
 interface CategoriaHierarquia {
@@ -61,6 +65,9 @@ export default function ComplementosTab({
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [includeSubcategories, setIncludeSubcategories] = useState(true);
+  const [grupoOrigemId, setGrupoOrigemId] = useState('');
+  const [precoNovoAdicional, setPrecoNovoAdicional] = useState('5');
+  const [precoNovoOvo, setPrecoNovoOvo] = useState('2');
   const [saving, setSaving] = useState(false);
   const [pendingOptionId, setPendingOptionId] = useState<string | null>(null);
 
@@ -158,6 +165,9 @@ export default function ComplementosTab({
       setSelectedCategoryIds([]);
       setIncludeSubcategories(true);
     }
+    setGrupoOrigemId(grupo?.grupo_origem_id || '');
+    setPrecoNovoAdicional(String(grupo?.preco_novo_adicional ?? 5));
+    setPrecoNovoOvo(String(grupo?.preco_novo_ovo ?? 2));
     setIsModalOpen(true);
   };
 
@@ -220,6 +230,9 @@ export default function ComplementosTab({
     try {
       setSaving(true);
       const payload = {
+        grupo_origem_id: grupoOrigemId || null,
+        preco_novo_adicional: grupoOrigemId ? Number(precoNovoAdicional) : null,
+        preco_novo_ovo: grupoOrigemId ? Number(precoNovoOvo) : null,
         nome: nome.trim(),
         tipo,
         min_selecoes: min,
@@ -300,7 +313,7 @@ export default function ComplementosTab({
       if (!response.ok || typeof data?.ativo !== 'boolean') {
         throw new Error(data?.detail || 'Não foi possível atualizar a disponibilidade.');
       }
-      setGrupos(previous => previous.map(group => ({ ...group, opcoes: group.opcoes.map(item => item.id === option.id ? { ...item, ativo: data.ativo } : item) })));
+      await fetchCatalogBindings();
       onShowNotification?.(data.ativo ? 'Complemento disponível.' : 'Complemento pausado e oculto do cardápio online.', 'success');
     } catch (err) {
       onShowNotification?.(err instanceof Error ? err.message : 'Falha ao atualizar complemento.', 'error');
@@ -407,6 +420,7 @@ export default function ComplementosTab({
                   </div>
                 </div>
 
+                {group.grupo_origem_id && <p className="mt-2 text-xs text-emerald-400">Sincronizado com {grupos.find(item => item.id === group.grupo_origem_id)?.nome || 'complementos'}. Altere a disponibilidade na origem.</p>}
                 <div className="mt-3 space-y-1.5 max-h-36 overflow-y-auto pr-1">
                   {group.opcoes.map((option) => (
                     <div key={option.id || option.nome} className="flex items-center justify-between text-xs bg-koma-raised/60 px-2.5 py-1.5 rounded-lg">
@@ -414,7 +428,7 @@ export default function ComplementosTab({
                       <span className="text-koma-muted font-mono font-semibold">
                         {option.preco_adicional > 0 ? `+ R$ ${Number(option.preco_adicional).toFixed(2).replace('.', ',')}` : 'Grátis'}
                       </span>
-                      {option.id && <button type="button" disabled={pendingOptionId !== null} onClick={() => void toggleOptionAvailability(option)} aria-label={`${option.ativo === false ? 'Reativar' : 'Pausar'} ${option.nome}`} className="ml-2 rounded border border-koma-border px-2 py-1 font-bold text-koma-secondary disabled:opacity-50">
+                      {option.id && !option.opcao_origem_id && <button type="button" disabled={pendingOptionId !== null} onClick={() => void toggleOptionAvailability(option)} aria-label={`${option.ativo === false ? 'Reativar' : 'Pausar'} ${option.nome}`} className="ml-2 rounded border border-koma-border px-2 py-1 font-bold text-koma-secondary disabled:opacity-50">
                         {pendingOptionId === option.id ? 'Salvando...' : option.ativo === false ? 'Reativar' : 'Pausar'}
                       </button>}
                     </div>
@@ -519,6 +533,22 @@ export default function ComplementosTab({
                   Este grupo define apenas os itens disponíveis. O mínimo e o máximo pertencem a cada Quentinha P, M ou G e são configurados em Produtos.
                 </div>
               )}
+              {marmitariaCadastro && (
+                <div className="space-y-2 rounded-xl border border-koma-border p-3">
+                  <label className="block text-xs font-bold text-koma-muted" htmlFor="complement-source">Sincronizar adicionais com</label>
+                  <select id="complement-source" value={grupoOrigemId} onChange={event => setGrupoOrigemId(event.target.value)} className="w-full rounded-lg bg-koma-card border border-koma-border p-2 text-sm">
+                    <option value="">Cadastro independente</option>
+                    {grupos.filter(group => group.id !== editingGrupo?.id && !group.grupo_origem_id).map(group => <option key={group.id} value={group.id}>{group.nome}</option>)}
+                  </select>
+                  {grupoOrigemId && <>
+                    <p className="text-xs text-koma-muted">Nome e disponibilidade acompanham o grupo escolhido. Os preços existentes são mantidos.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="text-xs">Novos adicionais (R$)<input aria-label="Preço de novos adicionais" type="number" min="0.01" step="0.01" required value={precoNovoAdicional} onChange={event => setPrecoNovoAdicional(event.target.value)} className="mt-1 w-full rounded-lg bg-koma-card border border-koma-border p-2" /></label>
+                      <label className="text-xs">Novos ovos (R$)<input aria-label="Preço de novos ovos" type="number" min="0.01" step="0.01" required value={precoNovoOvo} onChange={event => setPrecoNovoOvo(event.target.value)} className="mt-1 w-full rounded-lg bg-koma-card border border-koma-border p-2" /></label>
+                    </div>
+                  </>}
+                </div>
+              )}
               <div className="space-y-2 pt-2 border-t border-koma-border">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-koma-muted">Opções / Adicionais</label>
@@ -536,6 +566,7 @@ export default function ComplementosTab({
                     <div key={`${option.id || 'new'}-${index}`} className="flex items-center gap-2 bg-koma-card p-2 rounded-xl border border-koma-border">
                       <input
                         type="text"
+                        disabled={Boolean(grupoOrigemId && option.opcao_origem_id)}
                         placeholder="Nome da opção (ex: Bacon Crocante)"
                         value={option.nome}
                         onChange={(event) => handleOpcaoChange(index, 'nome', event.target.value)}
@@ -553,7 +584,7 @@ export default function ComplementosTab({
                           className="w-full pl-7 pr-2 py-1.5 bg-koma-raised border border-koma-border rounded-lg text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 font-mono"
                         />
                       </div>
-                      {opcoes.length > 1 && (
+                      {opcoes.length > 1 && !option.opcao_origem_id && (
                         <button
                           type="button"
                           onClick={() => handleRemoveOpcao(index)}

@@ -404,3 +404,85 @@ def test_paused_product_is_hidden_and_returns_without_recreating_it():
             assert ('prod-burger-1' in {p['id'] for p in public.json()['produtos']}) is active
     finally:
         client.put(url, headers=_auth_headers(), json={'ativo': True})
+
+
+def test_paid_complements_follow_source_and_preserve_existing_ids_prices():
+    headers = _auth_headers()
+    def create(name, options):
+        response = client.post('/cardapio/modificadores/grupos', headers=headers, json={'nome': name, 'opcoes': options})
+        assert response.status_code == 201, response.text
+        return response.json()
+    source = create('Proteínas vinculadas', [{'nome': 'Frango', 'ativo': True}, {'nome': 'Ovo frito', 'ativo': False}])
+    target = create('Extras vinculados', [{'nome': 'Frango adicional', 'preco_adicional': 7}, {'nome': 'Bacon independente', 'preco_adicional': 3}])
+    original_id = target['opcoes'][0]['id']
+    target.update(grupo_origem_id=source['id'], preco_novo_adicional=5, preco_novo_ovo=2)
+    result = client.put(f"/cardapio/modificadores/grupos/{target['id']}", headers=headers, json=target)
+    assert result.status_code == 200, result.text
+    target = result.json()
+    chicken = next(option for option in target['opcoes'] if option['nome'] == 'Frango adicional')
+    egg = next(option for option in target['opcoes'] if option['nome'] == 'Ovo frito adicional')
+    assert chicken['id'] == original_id and chicken['preco_adicional'] == 7
+    assert chicken['opcao_origem_id'] == source['opcoes'][0]['id']
+    assert egg['ativo'] is False and egg['preco_adicional'] == 2
+    assert client.patch(f"/cardapio/modificadores/opcoes/{chicken['id']}/disponibilidade", headers=headers, json={'ativo': False}).status_code == 409
+    assert client.patch(f"/cardapio/modificadores/opcoes/{source['opcoes'][0]['id']}/disponibilidade", headers=headers, json={'ativo': False}).status_code == 200
+    source['opcoes'][0].update(nome='Frango acebolado', ativo=False)
+    source['opcoes'][1]['ativo'] = True
+    source['opcoes'].append({'nome': 'Carne nova', 'ativo': True})
+    response = client.put(f"/cardapio/modificadores/grupos/{source['id']}", headers=headers, json=source)
+    assert response.status_code == 200, response.text
+    groups = client.get('/cardapio/modificadores/grupos', headers=headers).json()
+    updated = next(group for group in groups if group['id'] == target['id'])
+    by_name = {option['nome']: option for option in updated['opcoes']}
+    assert by_name['Frango acebolado adicional']['id'] == original_id
+    assert by_name['Frango acebolado adicional']['preco_adicional'] == 7
+    assert by_name['Frango acebolado adicional']['ativo'] is False
+    assert by_name['Ovo frito adicional']['id'] == egg['id'] and by_name['Ovo frito adicional']['ativo'] is True
+    assert by_name['Carne nova adicional']['preco_adicional'] == 5
+    assert by_name['Bacon independente']['preco_adicional'] == 3
+    # Re-saving is idempotent and cannot unlink via an older client omitting new fields.
+    legacy = {key: updated[key] for key in ('nome', 'tipo', 'min_selecoes', 'max_selecoes', 'opcoes', 'produto_ids')}
+    response = client.put(f"/cardapio/modificadores/grupos/{target['id']}", headers=headers, json=legacy)
+    assert response.status_code == 200, response.text
+    assert response.json()['grupo_origem_id'] == source['id']
+    assert {option['id'] for option in response.json()['opcoes']} == {option['id'] for option in updated['opcoes']}
+    source = client.get('/cardapio/modificadores/grupos', headers=headers).json()
+    source = next(group for group in source if group['id'] == target['grupo_origem_id'])
+    source['opcoes'] = source['opcoes'][1:]
+    assert client.put(f"/cardapio/modificadores/grupos/{source['id']}", headers=headers, json=source).status_code == 409
+    assert client.delete(f"/cardapio/modificadores/grupos/{source['id']}", headers=headers).status_code == 409
+    public = client.get('/cardapio/modificadores/publico/999').json()
+    public_target = next(group for group in public if group['id'] == target['id'])
+    assert 'Frango acebolado adicional' not in {option['nome'] for option in public_target['opcoes']}
+
+
+def test_paid_complement_sync_rejects_cycles_and_foreign_sources():
+    headers = _auth_headers()
+    created = client.post('/cardapio/modificadores/grupos', headers=headers, json={'nome': 'Origem segura', 'opcoes': [{'nome': 'Carne'}]}).json()
+    for source_id in (created['id'], 'foreign-source'):
+        payload = {**created, 'grupo_origem_id': source_id, 'preco_novo_adicional': 5, 'preco_novo_ovo': 2}
+        assert client.put(f"/cardapio/modificadores/grupos/{created['id']}", headers=headers, json=payload).status_code == 422
+
+
+def test_paid_links_reject_actual_other_tenant_and_ambiguous_existing_copies():
+    headers = _auth_headers()
+    db = SessionLocal()
+    token = current_restaurante_id.set(997)
+    try:
+        db.add(Restaurante(id=997, nome='Other linked catalog', slug='other-linked-catalog'))
+        db.flush()
+        db.add(GrupoModificador(id='foreign-link-source', restaurante_id=997, nome='Proteínas', tipo='opcional'))
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+    source = client.post('/cardapio/modificadores/grupos', headers=headers, json={'nome': 'Source duplicate test', 'opcoes': [{'nome': 'Frango'}]}).json()
+    target = client.post('/cardapio/modificadores/grupos', headers=headers, json={'nome': 'Target duplicate test', 'opcoes': [{'nome': 'Frango adicional', 'preco_adicional': 5}, {'nome': 'Frango adicional', 'preco_adicional': 9}]}).json()
+    payload = {**target, 'grupo_origem_id': 'foreign-link-source', 'preco_novo_adicional': 5, 'preco_novo_ovo': 2}
+    assert client.put(f"/cardapio/modificadores/grupos/{target['id']}", headers=headers, json=payload).status_code == 422
+    payload['grupo_origem_id'] = source['id']
+    assert client.put(f"/cardapio/modificadores/grupos/{target['id']}", headers=headers, json=payload).status_code == 409
+    saved = next(group for group in client.get('/cardapio/modificadores/grupos', headers=headers).json() if group['id'] == target['id'])
+    assert saved['grupo_origem_id'] is None
+    assert {option['id'] for option in saved['opcoes']} == {option['id'] for option in target['opcoes']}
+    assert sorted(option['preco_adicional'] for option in saved['opcoes']) == [5, 9]
