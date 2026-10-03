@@ -1,3 +1,5 @@
+import { OrderItemComposition } from '../../shared/OrderItemComposition';
+import { itemCompositionPresentation, itemCompositionSignature, type CompositionSource } from '../../../domain/orderItemComposition';
 import React from 'react';
 import clsx from 'clsx';
 import { Smartphone, Users, ShoppingCart, X, Check, Printer, RefreshCw, ArrowUpRight, Trash2, Plus, CreditCard } from 'lucide-react';
@@ -15,7 +17,7 @@ import { formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import { DigitalReceiptAction } from '../digital-receipt/DigitalReceiptAction';
 import { getTableAssociationOptionLabel } from './digitalOrderPresentation';
 
-export interface KanbanDetailSourceItem {
+export interface KanbanDetailSourceItem extends CompositionSource {
   readonly id?: string;
   readonly lancamentoId?: string;
   readonly pago?: boolean;
@@ -106,7 +108,7 @@ export interface KanbanOrderDetailsProps {
   readonly onToast?: (msg: string, type: 'success' | 'error' | 'info') => void;
 }
 
-type KanbanDetailItem = {
+type KanbanDetailItem = CompositionSource & {
   nome: string;
   observacao: string;
   clienteNome: string;
@@ -122,12 +124,12 @@ function groupKanbanDetailItems(items: readonly KanbanDetailSourceItem[]): Kanba
     const observacao = String(item?.observacao || '').trim();
     const clienteNome = String(item?.cliente_nome || item?.clienteNome || 'Consumo Geral').trim();
     const status = String(item?.status || 'preparando').toLowerCase();
-    const key = [nome, observacao, clienteNome, status].join('\u0000');
+    const key = [nome, observacao, clienteNome, status, itemCompositionSignature(item)].join('\u0000');
     const current = grouped.get(key);
     if (current) {
       current.quantidade += 1;
     } else {
-      grouped.set(key, { nome, observacao, clienteNome, status, quantidade: 1 });
+      grouped.set(key, { ...item, nome, observacao, clienteNome, status, quantidade: 1 });
     }
   });
   return Array.from(grouped.values());
@@ -425,7 +427,7 @@ export function KanbanOrderDetails({
                   <span className="orders-detail-modal__quantity">{item.quantidade}×</span>
                   <div className="min-w-0 flex-1">
                     <strong>{item.nome}</strong>
-                    {item.observacao && <span className="orders-detail-modal__observation">{item.observacao}</span>}
+                    <OrderItemComposition item={item} className="orders-detail-modal__observation" />
                     {item.clienteNome !== 'Consumo Geral' && item.clienteNome.toLowerCase() !== 'balcão' && (
                       <span className="orders-detail-modal__for">Para: {item.clienteNome}</span>
                     )}
@@ -630,14 +632,14 @@ export function KanbanOrderDetails({
 }
 
 function ItemObservationEditor({ item, save }: { item: KanbanDetailSourceItem; save: (id: string, observation: string) => Promise<void> }) {
-  const [value, setValue] = React.useState(item.observacao || '');
+  const [value, setValue] = React.useState(itemCompositionPresentation(item).observation);
   const [saving, setSaving] = React.useState(false);
   const [message, setMessage] = React.useState('');
   return <div className="rounded-xl border border-koma-border p-3 space-y-2">
     <label className="block text-xs text-koma-foreground">Observação — {item.nome || item.produto?.nome || 'Item'}
       <textarea value={value} maxLength={1000} disabled={saving} onChange={event => { setValue(event.target.value); setMessage(''); }} className="mt-2 block w-full rounded-lg border border-koma-border bg-koma-card p-2" />
     </label>
-    <button type="button" disabled={saving || value === (item.observacao || '')} onClick={async () => {
+    <button type="button" disabled={saving || value === itemCompositionPresentation(item).observation} onClick={async () => {
       setSaving(true); setMessage('');
       try { await save(String(item.id), value); setMessage('Observação salva.'); }
       catch (error) { setMessage(error instanceof Error ? error.message : 'Não foi possível salvar.'); }

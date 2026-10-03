@@ -1,3 +1,4 @@
+import { itemCompositionPresentation } from '../../../domain/orderItemComposition';
 import type { Order, OrderItem } from '../../../types';
 
 export type KdsKitchenItem = OrderItem &
@@ -149,7 +150,7 @@ export function matchesKdsTicketQuery(ticket: KdsTicket, query: string): boolean
     ticket.identificador,
     ticket.garcomNome,
     ticket.origemOperacional,
-    ...ticket.items.flatMap((item) => [item.nome, item.observacao, item.clienteNome, item.cliente_nome]),
+    ...ticket.items.flatMap((item) => [item.nome, item.observacao, item.clienteNome, item.cliente_nome, ...itemCompositionPresentation(item).lines]),
   ]
     .map(normalizeSearchText)
     .filter(Boolean)

@@ -1,3 +1,4 @@
+import { OrderItemComposition } from '../shared/OrderItemComposition';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -360,7 +361,7 @@ export function MesaConsumptionPanel({
                             )}
                           </div>
 
-                          {(item.modificadores || []).length > 0 && (
+                          {!item.composicao_agrupada && (item.modificadores || []).length > 0 && (
                             <div
                               id={`placed-item-modifiers-${item.id}`}
                               data-testid={`placed-item-modifiers-${item.id}`}
@@ -378,7 +379,7 @@ export function MesaConsumptionPanel({
                             </div>
                           )}
 
-                          {item.observacao ? (
+                          {item.composicao_agrupada ? <OrderItemComposition item={item} className="text-koma-subtle" /> : item.observacao ? (
                             <p className="text-[11px] text-koma-subtle italic bg-koma-panel px-2 py-0.5 rounded border border-dashed border-koma-border inline-block">
                               Obs: "{item.observacao}"
                             </p>

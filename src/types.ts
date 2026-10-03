@@ -30,6 +30,8 @@ export interface OrderItemModifier {
   id: string;
   nome: string;
   preco: number;
+  grupo_id?: string | null;
+  grupo_nome?: string | null;
 }
 
 export interface OrderItem {
@@ -41,6 +43,7 @@ export interface OrderItem {
   clienteNome: string;
   cliente_nome?: string;
   modificadores?: OrderItemModifier[];
+  composicao_agrupada?: boolean;
   status: 'preparando' | 'pronto' | 'entregue' | 'cancelado';
   pago?: boolean;
   lancamentoId?: string;

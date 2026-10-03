@@ -11,6 +11,8 @@ from ...domain.printing import (
 )
 from ...models import Comanda, ConfiguracaoRestaurante, Item, Lancamento, PrintJob
 from ...printer_service import printer_service
+from ...domain.orders.composition import composition_presentation
+from ...services.order_item_composition import load_item_modifiers, uses_grouped_composition
 from ...services.atendimentos import AtendimentoError, ensure_launch_identity
 from ...services.clientes import buscar_cliente_por_telefone
 from ...services.customer_relationship import load_customer_relationship_metrics
@@ -283,7 +285,7 @@ class PrintingApplicationService:
             else comanda.criado_em
         )
         operator_name = cls._operator_name(lancamento, comanda)
-        print_items = [cls._to_print_item(item) for item in active_items]
+        print_items = cls._to_print_items(db, intent.restaurant_id, active_items)
         payload = render_canonical_comanda(
             restaurant_name=preferences.restaurant_name,
             restaurant_name_position=preferences.restaurant_name_position,
@@ -356,7 +358,7 @@ class PrintingApplicationService:
             if requested_is_launch and lancamento is not None
             else comanda.criado_em
         )
-        print_items = [cls._to_print_item(item) for item in active_items]
+        print_items = cls._to_print_items(db, intent.restaurant_id, active_items)
 
         routed_items = {
             destination: list(items)
@@ -743,6 +745,21 @@ class PrintingApplicationService:
             "mesa",
             "local",
         }
+
+    @classmethod
+    def _to_print_items(cls, db: Session, restaurant_id: int, items: list[Item]) -> list[PrintItem]:
+        by_item = load_item_modifiers(db, restaurant_id, [str(item.id) for item in items])
+        grouped = uses_grouped_composition(db, restaurant_id)
+        result = []
+        for item in items:
+            print_item = cls._to_print_item(item)
+            modifiers = by_item.get(str(item.id), [])
+            print_item.composicao, print_item.observacao = composition_presentation(
+                item.observacao or "", modifiers, grouped=grouped,
+            )
+            print_item.modifier_signature = tuple(sorted((m.id, m.preco) for m in modifiers))
+            result.append(print_item)
+        return result
 
     @staticmethod
     def _to_print_item(item: Item) -> PrintItem:

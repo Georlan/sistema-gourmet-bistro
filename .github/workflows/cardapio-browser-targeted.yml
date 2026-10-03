@@ -14,6 +14,9 @@ on:
       - 'tests/publicMenu*.test.ts'
       - 'e2e/cardapio-*.spec.ts'
       - 'e2e/marmitaria-product-onboarding.spec.ts'
+      - 'e2e/marmitaria-composition-presentation.spec.ts'
+      - 'src/domain/orderItemComposition.ts'
+      - 'src/components/shared/OrderItemComposition.tsx'
       - 'src/components/caixa/catalog/CashierCatalog.tsx'
       - '.github/workflows/cardapio-browser-targeted.yml'
       - 'e2e/public-menu-order.spec.ts'
@@ -59,6 +62,7 @@ jobs:
           e2e/cardapio-benefits.spec.ts
           e2e/cardapio-marmitaria-complements.spec.ts
           e2e/marmitaria-product-onboarding.spec.ts
+          e2e/marmitaria-composition-presentation.spec.ts
           e2e/cashier-delivery-new-order.spec.ts
           e2e/public-menu-order.spec.ts
           e2e/order-tracking-chat.spec.ts
