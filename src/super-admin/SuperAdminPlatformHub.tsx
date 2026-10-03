@@ -9,12 +9,7 @@ export type PlatformView = "health" | "integrations" | "audit";
 interface SuperAdminPlatformHubProps {
   activeView: PlatformView;
   onChangeView: (view: PlatformView) => void;
-  onAddLog: (
-    text: string,
-    level?: "INFO" | "WARNING" | "ERROR" | "CRITICAL" | "info" | "warning" | "error" | "critical" | "success",
-    source?: string,
-  ) => void;
-  onTriggerTelegramAlert: (text: string) => Promise<boolean>;
+
 }
 
 const views = [
@@ -26,8 +21,6 @@ const views = [
 export function SuperAdminPlatformHub({
   activeView,
   onChangeView,
-  onAddLog,
-  onTriggerTelegramAlert,
 }: SuperAdminPlatformHubProps) {
   return (
     <div className="space-y-5">
@@ -63,16 +56,10 @@ export function SuperAdminPlatformHub({
       </div>
 
       {activeView === "health" && (
-        <SuperAdminOperationsTab
-          onAddLog={onAddLog}
-          onTriggerTelegramAlert={onTriggerTelegramAlert}
-        />
+        <SuperAdminOperationsTab />
       )}
       {activeView === "integrations" && (
-        <SuperAdminSettingsTab
-          onAddLog={onAddLog}
-          onTriggerTelegramAlert={onTriggerTelegramAlert}
-        />
+        <SuperAdminSettingsTab />
       )}
       {activeView === "audit" && <SuperAdminAuditTab />}
     </div>
