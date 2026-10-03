@@ -6,6 +6,7 @@ import pytest
 import datetime
 from types import SimpleNamespace
 from fastapi.testclient import TestClient
+from fastapi import BackgroundTasks
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
@@ -24,6 +25,36 @@ engine = create_engine(
     connect_args={"check_same_thread": False, "timeout": 30}
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.mark.parametrize("action", ["complete", "complete-batch", "fail", "retryable-fail"])
+def test_print_ack_releases_request_connection_before_background_tasks(action):
+    with TestingSessionLocal() as db:
+        agent = db.query(PrintAgentToken).filter_by(id="a1").one()
+        job = db.query(PrintJob).filter_by(id="job-1001").one()
+        job.status = "claimed"
+        job.agent_id = agent.agent_id
+        job.attempts = 0 if action == "retryable-fail" else print_agents_route.MAX_ATTEMPTS - 1
+        db.commit()
+        background = BackgroundTasks()
+        if action == "complete-batch":
+            result = print_agents_route.complete_job_batch(
+                print_agents_route.CompleteJobsRequest(jobs=[{"job_id": "job-1001"}]),
+                background, agent, db,
+            )
+            assert result["confirmed_job_ids"] == ["job-1001"]
+        elif action == "complete":
+            result = print_agents_route.complete_job("job-1001", print_agents_route.CompleteJobRequest(), background, agent, db)
+            assert result["status"] == "printed"
+        else:
+            result = print_agents_route.fail_job("job-1001", print_agents_route.FailJobRequest(error="test failure"), background, agent, db)
+            assert result["status"] == ("pending" if action == "retryable-fail" else "failed")
+        assert background.tasks
+        assert not db.in_transaction(), "Expired ORM fields must not reopen SQL after ack commit"
+        assert engine.pool.checkedout() == 0
+        with TestingSessionLocal() as verify:
+            stored = verify.query(PrintJob).filter_by(id="job-1001").one()
+            assert stored.status == ("pending" if action == "retryable-fail" else "failed" if action == "fail" else "printed")
 
 
 @pytest.mark.parametrize(
@@ -2197,5 +2228,4 @@ def test_heartbeat_accepts_structured_endpoints_and_destinations():
     assert state["printer_ready"] is True
     assert len(base_agent.printer_diagnostics["endpoints"]) == 2
     assert base_agent.printer_diagnostics["destinations"]["COZINHA"] == "ep-ka1445-bt"
-
 

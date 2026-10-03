@@ -145,7 +145,7 @@ test("falha de suspensão não possui mutação local e o painel não simula fee
   const source = readFileSync(new URL("../src/super-admin/SuperAdminPanel.tsx", import.meta.url), "utf8");
   const suspension = source.slice(
     source.indexOf("const handleToggleTenantStatus"),
-    source.indexOf("const triggerTelegramAlert"),
+    source.indexOf("const navItems"),
   );
 
   const suspensionCatch = suspension.slice(suspension.indexOf("catch"));

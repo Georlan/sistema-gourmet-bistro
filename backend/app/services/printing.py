@@ -19,6 +19,8 @@ from ..models import (
     Restaurante,
     Usuario,
 )
+from ..domain.orders.composition import composition_presentation
+from .order_item_composition import load_item_modifiers, uses_grouped_composition
 from ..printer_service import ESC_BOLD_OFF, ESC_BOLD_ON, align_center, printer_service
 from ..timezone_utils import get_operational_now, to_operational_local_time
 from .plan_entitlements import ENTITLEMENT_PRINTING, has_plan_entitlement
@@ -87,6 +89,18 @@ def get_print_preferences(db: Session, restaurante_id: int) -> PrintPreferences:
             else 10.0
         ),
     )
+
+
+def _enrich_receipt_composition(db: Session, restaurant_id: int, details: list[dict]) -> None:
+    items = [item for detail in details for item in detail["itens"]]
+    by_item = load_item_modifiers(db, restaurant_id, [str(item["id"]) for item in items])
+    grouped = uses_grouped_composition(db, restaurant_id)
+    for item in items:
+        modifiers = by_item.get(str(item["id"]), [])
+        item["composicao"], item["observacao"] = composition_presentation(
+            item.get("observacao") or "", modifiers, grouped=grouped,
+        )
+        item["modifier_signature"] = tuple(sorted((m.id, m.preco) for m in modifiers))
 
 
 def _item_detail(item: Item) -> Optional[dict]:
@@ -187,6 +201,7 @@ def load_open_table_snapshot(
     if not has_active_items:
         raise PrintingRequestError("Não há itens ativos para imprimir nesta mesa", status_code=400)
 
+    _enrich_receipt_composition(db, restaurante_id, comandas_details)
     first = comandas[0]
     opened_at_raw = min(
         (command.criado_em for command in comandas if command.criado_em is not None),
@@ -318,6 +333,7 @@ def load_table_source_snapshot(
         raise PrintingRequestError("Não há itens imprimíveis neste lançamento", status_code=400)
 
     source_details = [detail for item in active_items if (detail := _item_detail(item)) is not None]
+    _enrich_receipt_composition(db, restaurante_id, [{"itens": source_details}])
     return TableReceiptSnapshot(
         mesa_id=mesa_id,
         numero_pedido=number_text,

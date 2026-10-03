@@ -38,6 +38,7 @@ export interface ProductModifier {
 }
 
 export interface Product {
+  marmitaria?: boolean;
   id: string;
   name: string;
   description: string;

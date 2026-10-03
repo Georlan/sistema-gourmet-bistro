@@ -1,3 +1,4 @@
+import { useUnsavedSetupChanges } from '../../onboarding/setupNavigation';
 import clsx from 'clsx';
 import {
   AlertCircle,
@@ -159,7 +160,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
   }, [loadConfig]);
 
   useEffect(() => {
-    if (!feedback) return;
+    if (!feedback || feedback.type === 'error') return;
     const timer = window.setTimeout(() => setFeedback(null), 4500);
     return () => window.clearTimeout(timer);
   }, [feedback]);
@@ -167,9 +168,15 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
   const payload = useMemo(() => persistedPayload(config), [config]);
   const hasUnsavedChanges = JSON.stringify(payload) !== savedSnapshot;
   const automaticWithoutHours = config.status_override === 'Automático' && config.horarios_funcionamento.length === 0;
+  const incompleteHours = config.horarios_funcionamento.some(row => !row.days.trim() || !row.hours.trim());
+  const markSaved = useUnsavedSetupChanges(setupMode && (hasUnsavedChanges || incompleteHours));
   const legacyOverrideActive = config.status_override !== 'Automático';
 
   const save = async () => {
+    if (incompleteHours) {
+      setFeedback({ type: 'error', text: 'Preencha os dias e o horário de cada linha ou remova a linha incompleta.' });
+      return;
+    }
     setIsSaving(true);
     try {
       const response = await fetch(`${apiBaseUrl}/api/cardapio-digital/config`, {
@@ -183,6 +190,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
       setConfig(next);
       setSavedSnapshot(JSON.stringify(persistedPayload(next)));
       setFeedback({ type: 'success', text: 'Funcionamento atualizado.' });
+      if (setupMode && next.horarios_funcionamento.length > 0) { markSaved(); openInitialSetup(); }
     } catch (error) {
       setFeedback({ type: 'error', text: error instanceof Error ? error.message : 'Erro ao salvar o funcionamento.' });
     } finally {
@@ -236,7 +244,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
     <div className="space-y-4 animate-fade-in">
       <header className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
-          <h2 className="text-base font-black text-koma-foreground">Pedidos online</h2>
+          <h2 className="text-base font-black text-koma-foreground">{setupMode ? 'Horários do restaurante' : 'Pedidos online'}</h2>
           <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
             O cardápio fica disponível para consulta e aceita pedidos quando o caixa está aberto e sincronizado. O horário cadastrado é apenas informativo.
           </p>
@@ -286,6 +294,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
             </div>
             <div>
               <h3 className="text-sm font-black text-koma-foreground">Horário do estabelecimento</h3>
+              <p className="mt-1 text-xs text-koma-muted">Agrupe dias com o mesmo horário, como “Terça a domingo”. Para passar da meia-noite, use “18:00 - 01:00”. Dias fechados podem ficar fora da lista.</p>
               <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
                 Os horários são informativos para os clientes. O cardápio só aceita pedidos quando o caixa estiver aberto e sincronizado.
               </p>
@@ -416,7 +425,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
         </div>
       </section>
 
-      {(feedback || hasUnsavedChanges) && (
+      {(feedback || hasUnsavedChanges || incompleteHours) && (
         <div className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
           {feedback ? (
             <span className={clsx(
@@ -431,7 +440,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
           ) : (
             <span className="mr-auto text-[10px] font-semibold text-amber-700 dark:text-amber-300">Alterações ainda não publicadas.</span>
           )}
-          {hasUnsavedChanges && (
+          {(hasUnsavedChanges || incompleteHours) && (
             <button
               type="button"
               disabled={isSaving}
@@ -439,7 +448,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-70"
             >
               {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-              {isSaving ? 'Salvando…' : setupMode ? 'Salvar horários' : 'Salvar automático'}
+              {isSaving ? 'Salvando…' : setupMode ? 'Salvar e voltar para implantação' : 'Salvar automático'}
             </button>
           )}
         </div>

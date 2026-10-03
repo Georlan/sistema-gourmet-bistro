@@ -695,6 +695,7 @@ export function useCashierOrders({
   const handleConvertDeliveryToPickup = async (
     orderId: string,
     reason: string,
+    conversionPayload?: Record<string, unknown>,
   ): Promise<boolean> => {
     const orderKey = String(orderId);
     if (!orderKey || pendingFulfillmentConversionRef.current.has(orderKey)) return false;
@@ -702,17 +703,24 @@ export function useCashierOrders({
     pendingFulfillmentConversionRef.current.add(orderKey);
     try {
       const response = await fetch(
-        `${apiBaseUrl}/comandas/${encodeURIComponent(orderKey)}/delivery/converter-retirada`,
+        `${apiBaseUrl}/comandas/${encodeURIComponent(orderKey)}/${conversionPayload ? 'modalidade' : 'delivery/converter-retirada'}`,
         {
           method: 'POST',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ motivo: reason.trim() }),
+          body: JSON.stringify({ ...conversionPayload, motivo: reason.trim() }),
         },
       );
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        showToast(data?.detail || 'Não foi possível alterar o pedido para retirada.', 'error');
+        showToast(data?.detail || 'Não foi possível alterar o tipo do pedido.', 'error');
+        await Promise.allSettled([fetchDeliveryOrders(), onRefreshOrders()]);
         return false;
+      }
+
+      // Snapshot completo confirmado pelo servidor, antes da revalidação.
+      const confirmed = conversionPayload ? mapComandaToDeliveryView(data) : null;
+      if (confirmed) {
+        setDeliveryOrders(current => current.map(order => String(order.id) === orderKey ? confirmed : order));
       }
 
       const nextSelections = { ...selectedMotoboysRef.current };
@@ -724,12 +732,12 @@ export function useCashierOrders({
       // O broadcast do backend faz o mesmo em outros terminais.
       await Promise.allSettled([fetchDeliveryOrders(), onRefreshOrders()]);
       window.dispatchEvent(new Event('koma_orders_updated'));
-      showToast('Pedido alterado para retirada. Status de preparo e pagamento foram preservados.', 'success');
+      showToast('Tipo do pedido alterado. Etapa de preparo preservada.', 'success');
       return true;
     } catch (error) {
       console.error(error);
-      showToast('Erro de conexão ao alterar o pedido para retirada.', 'error');
-      void fetchDeliveryOrders();
+      showToast('Erro de conexão. Confira o estado atualizado do pedido antes de tentar novamente.', 'error');
+      await Promise.allSettled([fetchDeliveryOrders(), onRefreshOrders()]);
       return false;
     } finally {
       pendingFulfillmentConversionRef.current.delete(orderKey);
@@ -745,6 +753,8 @@ export function useCashierOrders({
           nome: it.produto?.nome || it.nome || 'Item',
           preco: it.preco_unit || it.preco || 0,
           observacao: it.observacao || '',
+          modificadores: it.modificadores || [],
+          composicao_agrupada: Boolean(it.composicao_agrupada),
           cliente_nome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
           status: it.status,
           pago: it.pago,

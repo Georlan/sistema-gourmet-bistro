@@ -211,6 +211,8 @@ class ItemModifierResponse(BaseModel):
     id: str
     nome: str
     preco: float
+    grupo_id: Optional[str] = None
+    grupo_nome: Optional[str] = None
 
 
 class ItemResponse(BaseModel):
@@ -231,6 +233,7 @@ class ItemResponse(BaseModel):
     impresso_em: Optional[datetime] = None
     pago: bool
     modificadores: List[ItemModifierResponse] = Field(default_factory=list)
+    composicao_agrupada: bool = False
     # Nested: produto name for display (populated via SQLAlchemy relationship)
     produto: Optional[ProdutoSimples] = None
 
@@ -958,6 +961,7 @@ class CardapioPublicCategoryResponse(BaseModel):
 
 
 class CardapioPublicProductResponse(BaseModel):
+    marmitaria: bool = False
     id: str
     nome: str
     descricao: str = ""

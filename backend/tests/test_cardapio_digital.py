@@ -596,3 +596,35 @@ def test_public_menu_exposes_customer_account_requirement(monkeypatch):
     assert response.status_code == 200, response.text
     assert response.json()["restaurante"]["conta_cliente_obrigatoria"] is True
 
+
+
+def test_public_marmitaria_presentation_follows_tenant_profile(test_setup):
+    from app.restaurant_profile_models import RestauranteOperationProfile
+    tenant = test_setup["rest_id"]
+    db = SessionLocal()
+    ctx = current_restaurante_id.set(tenant)
+    try:
+        profile = db.query(RestauranteOperationProfile).filter_by(restaurante_id=tenant).first()
+        previous = profile.profile_key if profile else None
+        if profile is None:
+            profile = RestauranteOperationProfile(restaurante_id=tenant, profile_key="marmitaria")
+            db.add(profile)
+        for key in ("marmitaria", "pizzaria", "generic"):
+            profile.profile_key = key
+            db.commit()
+            response = client.get(f"/api/cardapio-digital/public?restaurante_id={tenant}")
+            assert response.status_code == 200, response.text
+            products = response.json()["produtos"]
+            assert products
+            assert all(product["marmitaria"] is (key == "marmitaria") for product in products)
+            response = client.get(f"/api/cardapio-digital/produtos?restaurante_id={tenant}")
+            assert response.status_code == 200
+            assert all(product["marmitaria"] is (key == "marmitaria") for product in response.json())
+    finally:
+        if previous is None:
+            db.delete(profile)
+        else:
+            profile.profile_key = previous
+        db.commit()
+        current_restaurante_id.reset(ctx)
+        db.close()

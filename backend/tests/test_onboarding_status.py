@@ -345,3 +345,25 @@ def test_superadmin_operations_payload_is_narrow_and_requires_reason():
             reason="Correção",
             taxa_entrega_fixa=7,
         )
+
+@pytest.mark.parametrize("missing", ["nome", "endereco", "whatsapp"])
+def test_commercial_setup_requires_all_identity_fields(missing):
+    restaurant = SimpleNamespace(nome="Pizzaria", endereco="Rua A, 10", socials={"whatsapp": "85999999999"},
+                                subtitulo="Slogan", sobre_nos="Sobre", logo_url="logo.png", banner_url="banner.png")
+    if missing == "whatsapp":
+        restaurant.socials["whatsapp"] = "  "
+    else:
+        setattr(restaurant, missing, "  ")
+    assert _profile_is_configured(restaurant, require_essentials=True) is False
+    # Existing released/legacy tenants retain their historical progress.
+    assert _profile_is_configured(restaurant) is True
+
+@pytest.mark.parametrize("socials", [{"whatsapp": "85999999999"}, '{"whatsapp":"85999999999"}'])
+def test_commercial_setup_accepts_canonical_and_legacy_json_contact(socials):
+    restaurant = SimpleNamespace(nome="Pizzaria", endereco="Rua A, 10", socials=socials)
+    assert _profile_is_configured(restaurant, require_essentials=True) is True
+
+@pytest.mark.parametrize("socials", [None, [], "invalid-json", {}])
+def test_commercial_setup_rejects_missing_contact_without_error(socials):
+    restaurant = SimpleNamespace(nome="Pizzaria", endereco="Rua A, 10", socials=socials)
+    assert _profile_is_configured(restaurant, require_essentials=True) is False
