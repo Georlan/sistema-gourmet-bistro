@@ -11,6 +11,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import type { SuperAdminAuditLogEntry } from "./superAdminTypes";
+import { filterAuditLogs } from "./auditFilters";
 import { superAdminFetch, superAdminErrorMessage } from "./superAdminApi";
 
 export interface AuditLogItem {
@@ -21,24 +22,30 @@ export interface AuditLogItem {
   message: string;
 }
 
-export function SuperAdminAuditTab() {
+export function SuperAdminAuditTab({ tenantId }: { tenantId?: string }) {
   const [auditLogs, setAuditLogs] = useState<SuperAdminAuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionFilter, setActionFilter] = useState<string>("ALL");
+  const [search, setSearch] = useState("");
+  const [tenantFilter, setTenantFilter] = useState("ALL");
+  const [actorFilter, setActorFilter] = useState("ALL");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   const fetchAuditLogs = async () => {
     setIsLoading(true);
     setError(null);
+    setAuditLogs([]);
     try {
-      const res = await superAdminFetch("/api/super-admin/audit");
+      const res = await superAdminFetch(`/api/super-admin/audit${tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : ""}`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
           setAuditLogs(data);
         } else {
-          setAuditLogs([]);
+          throw new Error("Resposta de auditoria inválida.");
         }
       } else {
         const errPayload = await res.json().catch(() => null);
@@ -55,12 +62,14 @@ export function SuperAdminAuditTab() {
 
   useEffect(() => {
     fetchAuditLogs();
-  }, []);
+  }, [tenantId]);
 
-  const filteredLogs = auditLogs.filter(log => {
-    if (actionFilter === "ALL") return true;
-    return log.action === actionFilter;
+  const filteredLogs = filterAuditLogs(auditLogs, {
+    action: actionFilter, tenant: tenantId || tenantFilter, actor: actorFilter,
+    search, fromDate, toDate,
   });
+  const tenantOptions = Array.from(new Map(auditLogs.map(log => [log.restauranteId, log.restaurantName])).entries());
+  const actorOptions = Array.from(new Set(auditLogs.map(log => log.actor))).sort();
 
   const actionOptions = Array.from(new Set(auditLogs.map(log => log.action))).sort();
 
@@ -114,7 +123,7 @@ export function SuperAdminAuditTab() {
               Trilha de Auditoria Persistente
             </h2>
             <p className="text-xs text-koma-muted mt-0.5">
-              Registro cronológico imutável (append-only) de todas as intervenções do Super Admin
+              {tenantId ? `Histórico administrativo do tenant #${tenantId}` : "Intervenções administrativas de todos os tenants"}
             </p>
           </div>
 
@@ -142,6 +151,34 @@ export function SuperAdminAuditTab() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-xs text-koma-muted">Buscar ID, ator, motivo ou alteração
+            <input value={search} onChange={e => setSearch(e.target.value)} type="search" className="mt-1 block rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-koma-foreground" />
+          </label>
+          {!tenantId && <label className="text-xs text-koma-muted">Restaurante
+            <select value={tenantFilter} onChange={e => setTenantFilter(e.target.value)} className="mt-1 block rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-koma-foreground">
+              <option value="ALL">Todos os restaurantes</option>
+              {tenantOptions.map(([id, name]) => <option key={id} value={id}>#{id} — {name}</option>)}
+            </select>
+          </label>}
+          <label className="text-xs text-koma-muted">Ator
+            <select value={actorFilter} onChange={e => setActorFilter(e.target.value)} className="mt-1 block rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-koma-foreground">
+              <option value="ALL">Todos os atores</option>
+              {actorOptions.map(actor => <option key={actor} value={actor}>{actor}</option>)}
+            </select>
+          </label>
+          <label className="text-xs text-koma-muted">De
+            <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="mt-1 block rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-koma-foreground" />
+          </label>
+          <label className="text-xs text-koma-muted">Até
+            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="mt-1 block rounded-lg border border-zinc-800 bg-koma-page px-3 py-2 text-koma-foreground" />
+          </label>
+          <button type="button" onClick={() => { setSearch(""); setTenantFilter("ALL"); setActorFilter("ALL"); setActionFilter("ALL"); setFromDate(""); setToDate(""); }} className="rounded-lg border border-zinc-800 px-3 py-2 text-xs text-koma-secondary">Limpar filtros</button>
+        </div>
+        <p className="text-[11px] text-koma-muted">
+          {filteredLogs.length} de {auditLogs.length} registros retornados. {tenantId ? "Até 100 ações recentes deste tenant." : "Até 200 ações recentes da plataforma, com limite de 100 por tenant."} Os filtros pesquisam somente esta janela; eventos mais antigos podem existir.
+        </p>
+
         {error && (
           <div className="p-3 bg-rose-950/40 border border-rose-800/50 rounded-lg text-rose-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
@@ -164,8 +201,8 @@ export function SuperAdminAuditTab() {
                 ? "Carregando auditoria..."
                 : error
                   ? "Auditoria indisponível"
-                  : actionFilter !== "ALL"
-                    ? "Nenhum registro para a ação selecionada"
+                  : actionFilter !== "ALL" || search || tenantFilter !== "ALL" || actorFilter !== "ALL" || fromDate || toDate
+                    ? "Nenhum registro nesta janela para os filtros selecionados"
                     : "Nenhum registro de auditoria encontrado"}
             </p>
             <p className="text-[11px] text-koma-muted">
@@ -207,6 +244,7 @@ export function SuperAdminAuditTab() {
                     </div>
                   </div>
 
+                  <p className="font-mono text-[11px] text-koma-muted">Registro #{log.id}</p>
                   <div className="flex items-start gap-2 bg-zinc-900/60 p-2.5 rounded-lg border border-zinc-800/80">
                     <FileText className="w-3.5 h-3.5 text-koma-subtle shrink-0 mt-0.5" />
                     <div>
