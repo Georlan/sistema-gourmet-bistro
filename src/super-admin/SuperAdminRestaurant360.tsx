@@ -24,7 +24,8 @@ import { SuperAdminTrialModal } from "./SuperAdminTrialModal";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 import type { SupportNavigationTarget } from "./SuperAdminSupportModal";
-import type { SuperAdminAuditLogEntry, Tenant } from "./superAdminTypes";
+import { SuperAdminAuditTab } from "./SuperAdminAuditTab";
+import type { Tenant } from "./superAdminTypes";
 
 type OperationMode = "consumo_local" | "retirada" | "delivery";
 
@@ -260,7 +261,6 @@ export function SuperAdminRestaurant360({
   const [trial, setTrial] = useState<TrialRecord | null>(null);
   const [release, setRelease] = useState<ReleasePreview | null>(null);
   const [access, setAccess] = useState<AccessDetail | null>(null);
-  const [audit, setAudit] = useState<SuperAdminAuditLogEntry[]>([]);
   const [incidents, setIncidents] = useState<TenantIncident[]>([]);
   const [incidentsAvailable, setIncidentsAvailable] = useState(false);
   const [capabilities, setCapabilities] = useState<CapabilitySnapshot | null>(null);
@@ -313,15 +313,6 @@ export function SuperAdminRestaurant360({
         if (!response.ok) throw new Error(body?.detail || "Equipe indisponível.");
         return body as AccessDetail;
       }),
-      superAdminFetch("/api/super-admin/audit").then(async response => {
-        const body = await response.json();
-        if (!response.ok || !Array.isArray(body)) {
-          throw new Error(body?.detail || "Auditoria indisponível.");
-        }
-        return (body as SuperAdminAuditLogEntry[])
-          .filter(item => item.restauranteId === tenant.id)
-          .slice(0, 100);
-      }),
       superAdminFetch("/api/super-admin/incidents?tenant_id=" + encodeURIComponent(tenant.id)).then(async response => {
         const body = await response.json();
         if (!response.ok || !Array.isArray(body)) {
@@ -356,28 +347,22 @@ export function SuperAdminRestaurant360({
       nextErrors.push("Equipe: " + superAdminErrorMessage(results[2].reason));
     }
 
-    if (results[3].status === "fulfilled") setAudit(results[3].value as SuperAdminAuditLogEntry[]);
-    else {
-      setAudit([]);
-      nextErrors.push("Histórico: " + superAdminErrorMessage(results[3].reason));
-    }
-
-    if (results[4].status === "fulfilled") {
-      setIncidents(results[4].value as TenantIncident[]);
+    if (results[3].status === "fulfilled") {
+      setIncidents(results[3].value as TenantIncident[]);
       setIncidentsAvailable(true);
     } else {
       setIncidents([]);
       setIncidentsAvailable(false);
-      nextErrors.push("Incidentes: " + superAdminErrorMessage(results[4].reason));
+      nextErrors.push("Incidentes: " + superAdminErrorMessage(results[3].reason));
     }
 
-    if (results[5].status === "fulfilled") {
-      setCapabilities(results[5].value as CapabilitySnapshot);
+    if (results[4].status === "fulfilled") {
+      setCapabilities(results[4].value as CapabilitySnapshot);
       setCapabilitiesAvailable(true);
     } else {
       setCapabilities(null);
       setCapabilitiesAvailable(false);
-      nextErrors.push("Recursos: " + superAdminErrorMessage(results[5].reason));
+      nextErrors.push("Recursos: " + superAdminErrorMessage(results[4].reason));
     }
 
     setErrors(nextErrors);
@@ -1373,20 +1358,7 @@ export function SuperAdminRestaurant360({
       )}
 
       {section === "history" && (
-        <div className="rounded-xl border border-zinc-800 bg-koma-card">
-          <div className="border-b border-zinc-800 p-4"><h3 className="text-base font-bold text-koma-foreground">Histórico administrativo</h3><p className="mt-1 text-xs text-koma-muted">Trilha persistente filtrada para este tenant.</p></div>
-          {audit.length === 0 ? <p className="p-8 text-center text-xs text-koma-muted">Nenhum registro retornado.</p> : (
-            <div className="divide-y divide-zinc-800/60">
-              {audit.map(item => (
-                <div key={item.id} className="p-4 text-xs">
-                  <div className="flex flex-wrap items-center justify-between gap-2"><strong className="font-mono text-koma-foreground">{item.action}</strong><span className="text-[10px] text-koma-muted">{formatDate(item.createdAt)}</span></div>
-                  <p className="mt-2 text-koma-secondary">{item.reason}</p>
-                  <p className="mt-1 text-[10px] text-koma-muted">Ator: {item.actor}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <SuperAdminAuditTab key={tenant.id} tenantId={tenant.id} />
       )}
 
       {incidentAction && (
