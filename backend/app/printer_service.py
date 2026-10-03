@@ -426,6 +426,8 @@ class PrinterService:
             codigo = _single_line(safe_get(item, "codigo") or safe_get(produto, "id"))
             nome = _single_line(safe_get(item, "nome") or safe_get(produto, "nome"))
             observacao = _single_line(safe_get(item, "observacao"))
+            composition = tuple(safe_get(item, "composicao", ()))
+            modifier_signature = tuple(safe_get(item, "modifier_signature", ()))
             cliente = _single_line(
                 safe_get(item, "cliente_nome")
                 or safe_get(item, "cliente_nome_custom")
@@ -439,7 +441,7 @@ class PrinterService:
                 or 0.0
             )
             group = grouped.setdefault(cliente.casefold(), {"label": cliente, "items": {}})
-            key = (codigo, nome, observacao, preco_unit)
+            key = (codigo, nome, observacao, preco_unit, composition, modifier_signature)
             group["items"][key] = group["items"].get(key, 0) + quantidade
 
         for index, group in enumerate(grouped.values()):
@@ -451,13 +453,15 @@ class PrinterService:
                     + align_center(f"CLIENTE: {group['label'].upper()}", width)
                     + ESC_BOLD_OFF
                 )
-            for (codigo, nome, observacao, preco_unit), quantidade in group["items"].items():
+            for (codigo, nome, observacao, preco_unit, composition, _signature), quantidade in group["items"].items():
                 _append_bold_amount_line(
                     lines,
                     f"{quantidade}x {_printable_product_name(codigo, nome).upper()}",
                     _format_brl(quantidade * preco_unit),
                     width,
                 )
+                for composition_line in composition:
+                    _append_wrapped(lines, composition_line.upper(), width, "   ")
                 if observacao:
                     _append_wrapped_in_font(
                         lines, observacao.upper(), width, "   OBS: ", ESC_FONT_A
@@ -588,18 +592,20 @@ class PrinterService:
                     + ESC_BOLD_OFF
                 )
 
-            grouped_items: dict[tuple[str, str, float, str], int] = {}
+            grouped_items: dict[tuple, int] = {}
             for item in group["items"]:
                 produto = item["produto"]
                 product_name = _single_line(produto["nome"])
                 product_code = _single_line(item.get("codigo") or produto.get("id"))
                 observation = "" if apenas_valores else _single_line(item.get("observacao"))
-                key = (product_code, product_name, float(item["preco_unit"]), observation)
+                composition = () if apenas_valores else tuple(item.get("composicao") or ())
+                modifier_signature = tuple(item.get("modifier_signature") or ())
+                key = (product_code, product_name, float(item["preco_unit"]), observation, composition, modifier_signature)
                 qty = max(int(item.get("quantidade") or 1), 1)
                 grouped_items[key] = grouped_items.get(key, 0) + qty
 
             client_subtotal = 0.0
-            for (product_code, product_name, unit_price, observation), qty in grouped_items.items():
+            for (product_code, product_name, unit_price, observation, composition, _signature), qty in grouped_items.items():
                 item_total = qty * unit_price
                 client_subtotal += item_total
                 _append_bold_amount_line(
@@ -608,6 +614,8 @@ class PrinterService:
                     _format_brl(item_total),
                     width,
                 )
+                for composition_line in composition:
+                    _append_wrapped(lines, composition_line.upper(), width, "   ")
                 if not apenas_valores and observation:
                     _append_wrapped_in_font(
                         lines, observation.upper(), width, "   OBS: ", ESC_FONT_A

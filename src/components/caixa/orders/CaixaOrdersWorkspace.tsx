@@ -1,3 +1,5 @@
+import { OrderItemComposition } from '../../shared/OrderItemComposition';
+import { itemCompositionSignature, type CompositionSource } from '../../../domain/orderItemComposition';
 import React from 'react';
 import clsx from 'clsx';
 import { AlertTriangle, Search, MapPin, ClipboardList, Users, Printer, Check, Globe, Smartphone, Clock, Store } from 'lucide-react';
@@ -86,22 +88,22 @@ const digitalOrderIcon = (order: DeliveryOrderView) => {
 
 // Renderizador compacto de itens de alta densidade
 const renderCompactItemsList = (
-  items: string | readonly { nome?: string; produto?: { nome?: string }; observacao?: string; status?: string }[],
+  items: string | readonly (CompositionSource & { nome?: string; produto?: { nome?: string }; status?: string })[],
   cardId: string,
   isExpanded: boolean,
   onToggle: (cardId: string, e: React.MouseEvent) => void
 ) => {
-  let itemList: { name: string; qty: number; observation?: string }[] = [];
+  let itemList: { name: string; qty: number; source?: CompositionSource }[] = [];
 
   if (Array.isArray(items)) {
-    const groups = new Map<string, { name: string; qty: number; observation: string }>();
+    const groups = new Map<string, { name: string; qty: number; source: CompositionSource }>();
     items.filter(it => it.status !== 'cancelado').forEach(it => {
       const name = it.nome || it.produto?.nome || 'Item';
       const observation = it.observacao || '';
-      const key = JSON.stringify([name, observation]);
+      const key = JSON.stringify([name, observation, itemCompositionSignature(it)]);
       const group = groups.get(key);
       if (group) group.qty += 1;
-      else groups.set(key, { name, qty: 1, observation });
+      else groups.set(key, { name, qty: 1, source: it });
     });
     itemList = Array.from(groups.values());
   } else if (typeof items === 'string') {
@@ -130,7 +132,9 @@ const renderCompactItemsList = (
           <span className={"block font-semibold text-koma-foreground font-sans break-words"}>
             <strong className={"orders-card__item-qty font-mono mr-1"}>{it.qty}x</strong> {it.name}
           </span>
-          {it.observation && <span className="block whitespace-pre-wrap break-words text-[11px] text-emerald-700 dark:text-emerald-400">{it.observation}</span>}
+          {it.source && (it.source.composicao_agrupada || it.source.modificadores?.length
+            ? <OrderItemComposition item={it.source} className="text-emerald-700 dark:text-emerald-400" />
+            : it.source.observacao && <span className="block whitespace-pre-wrap break-words text-[11px] text-emerald-700 dark:text-emerald-400">{it.source.observacao}</span>)}
         </div>
       ))}
       {itemList.length > 3 && (

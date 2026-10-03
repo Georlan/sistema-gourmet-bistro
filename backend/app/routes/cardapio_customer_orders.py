@@ -21,6 +21,7 @@ from ..database import get_db
 from ..models import Comanda, GrupoModificador, Item, ItemModificador, OnlinePaymentIntent, OpcaoModificador
 from ..services.order_chat_service import compute_comanda_total
 from ..services.order_state_contract import build_order_state_contract
+from ..services.order_item_composition import uses_grouped_composition
 from .cardapio_clientes import customer_token_scope
 
 
@@ -42,6 +43,7 @@ class CustomerOrderHistoryItem(BaseModel):
     preco_unitario: float = Field(ge=0)
     observacao: str = ""
     modificadores: list[CustomerOrderHistoryModifier] = Field(default_factory=list)
+    composicao_agrupada: bool = False
 
 
 class CustomerOrderPaymentRecovery(BaseModel):
@@ -168,6 +170,7 @@ def _build_modifier_lookup(
 def _serialize_items(
     comanda: Comanda,
     modifiers_by_item: dict[str, list[CustomerOrderHistoryModifier]],
+    *, grouped_composition: bool = False,
 ) -> list[CustomerOrderHistoryItem]:
     grouped: dict[tuple[Any, ...], CustomerOrderHistoryItem] = {}
 
@@ -200,6 +203,7 @@ def _serialize_items(
             preco_unitario=float(item.preco_unit or 0.0),
             observacao=str(item.observacao or ""),
             modificadores=modifiers,
+            composicao_agrupada=grouped_composition,
         )
 
     return list(grouped.values())
@@ -245,6 +249,7 @@ def list_customer_orders(
         has_more = len(rows) > limit
         page = rows[:limit]
         modifiers_by_item = _build_modifier_lookup(db, claims.restaurante_id, page)
+        grouped_composition = uses_grouped_composition(db, claims.restaurante_id)
         payment_by_order = {
             str(intent.comanda_id): intent
             for intent in db.query(OnlinePaymentIntent).filter(
@@ -289,7 +294,7 @@ def list_customer_orders(
                     taxa_entrega=float(comanda.delivery_taxa or 0.0),
                     desconto_cupom=float(comanda.valor_desconto_cupom or 0.0),
                     desconto_cashback=float(comanda.valor_desconto_cashback or 0.0),
-                    itens=_serialize_items(comanda, modifiers_by_item),
+                    itens=_serialize_items(comanda, modifiers_by_item, grouped_composition=grouped_composition),
                     pagamento=payment_recovery,
                 )
             )

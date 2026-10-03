@@ -12,6 +12,8 @@ class PrintItem:
     cliente_nome: str = "GERAL"
     observacao: str = ""
     destino_impressao: str = "COZINHA"
+    composicao: tuple[str, ...] = ()
+    modifier_signature: tuple[tuple[str, float], ...] = ()
 
     @property
     def total(self) -> float:

@@ -58,6 +58,8 @@ const readPersistedModifiers = (item: any): OrderItemModifier[] =>
       id,
       nome,
       preco: Number(modifier?.preco) || 0,
+      ...(modifier.grupo_id !== undefined ? { grupo_id: modifier.grupo_id } : {}),
+      ...(modifier.grupo_nome !== undefined ? { grupo_nome: modifier.grupo_nome } : {}),
     }];
   });
 
@@ -132,6 +134,7 @@ export function mapBackendComandaToOperationalOrder({
           observacao: item.observacao || '',
           clienteNome: item.cliente_nome || 'Consumo Geral',
           modificadores: readPersistedModifiers(item),
+          composicao_agrupada: Boolean(item.composicao_agrupada),
           status: item.status,
           pago: Boolean(item.pago),
           lancamentoId: launchId,

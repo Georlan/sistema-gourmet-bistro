@@ -745,6 +745,8 @@ export function useCashierOrders({
           nome: it.produto?.nome || it.nome || 'Item',
           preco: it.preco_unit || it.preco || 0,
           observacao: it.observacao || '',
+          modificadores: it.modificadores || [],
+          composicao_agrupada: Boolean(it.composicao_agrupada),
           cliente_nome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
           status: it.status,
           pago: it.pago,
