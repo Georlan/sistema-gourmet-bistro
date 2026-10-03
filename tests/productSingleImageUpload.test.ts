@@ -19,6 +19,6 @@ test('product editor uses one native file picker instead of URL gallery fields',
 test('product save keeps a single-image data model and delegates binary upload to storage endpoint', () => {
   assert.match(source, /imagens_galeria: \[\]/);
   assert.match(source, /\/api\/cardapio-digital\/assets\/product\//);
-  assert.match(source, /formData\.append\('file', prodFormImageFile\)/);
+  assert.match(source, /formData\.append\('file', preparedImage\)/);
   assert.match(source, /method: 'DELETE'/);
 });

@@ -6,6 +6,7 @@ import uuid
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -39,6 +40,7 @@ from ..schemas import (
 from ..websocket_manager import manager
 from ..services.plan_entitlements import ENTITLEMENT_COUPONS, ENTITLEMENT_LOYALTY, has_plan_entitlement
 from ..services.restaurant_profile import apply_restaurant_profile_update
+from ..services.image_optimization import ImageOptimizerBusy, InvalidImage, optimize_image
 from ..services.online_order_policy import (
     evaluate_online_order_policy,
     next_schedule_opening,
@@ -95,6 +97,15 @@ def _validate_asset_content(content_type: str, content: bytes) -> str:
     return extension
 
 
+async def _prepare_public_image(content: bytes, kind: str):
+    try:
+        return await run_in_threadpool(optimize_image, content, kind)
+    except InvalidImage as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ImageOptimizerBusy as exc:
+        raise HTTPException(status_code=429, detail=str(exc), headers={"Retry-After": "2"}) from exc
+
+
 def _storage_object_path(
     asset_url: Optional[str],
     restaurante_id: int,
@@ -133,6 +144,7 @@ def _supabase_storage_headers(content_type: Optional[str] = None) -> dict:
     if content_type:
         headers["Content-Type"] = content_type
         headers["x-upsert"] = "false"
+        headers["Cache-Control"] = "max-age=31536000, immutable"
     return headers
 
 
@@ -490,11 +502,10 @@ async def upload_product_asset(
         )
     extension = _validate_asset_content(content_type, content)
 
-    previous_url = produto.imagem or next(
-        (str(url) for url in (produto.imagens_galeria or []) if str(url).strip()),
-        "",
-    )
-    previous_path = _storage_object_path(previous_url, rest_id, "products")
+    # Release the read transaction before CPU work and the external Storage request.
+    db.rollback()
+    optimized = await _prepare_public_image(content, "products")
+    content, content_type, extension = optimized.content, optimized.content_type, optimized.extension
 
     object_path = f"{rest_id}/products/{uuid.uuid4().hex}.{extension}"
     storage_url = _supabase_storage_url()
@@ -537,18 +548,17 @@ async def upload_product_asset(
         f"{storage_url}/storage/v1/object/public/cardapio-assets/"
         f"{quote(object_path, safe='/')}"
     )
+    produto = db.query(Produto).filter(
+        Produto.restaurante_id == rest_id, Produto.id == produto_id,
+    ).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
     produto.imagem = public_url
     produto.imagens_galeria = []
     db.commit()
     db.refresh(produto)
 
-    if previous_path and previous_path != object_path:
-        background_tasks.add_task(
-            _delete_storage_object_best_effort,
-            previous_path,
-            rest_id,
-            "foto de produto",
-        )
+    # Keep the previous object available for reference rollback; no automatic deletion.
     notify_catalog_update(background_tasks, "Foto do produto atualizada", rest_id)
     return {
         "id": produto.id,
@@ -632,6 +642,10 @@ async def upload_cardapio_asset(
     if not restaurante:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
 
+    db.rollback()
+    optimized = await _prepare_public_image(content, asset_type)
+    content, content_type, extension = optimized.content, optimized.content_type, optimized.extension
+
     object_path = f"{rest_id}/{asset_type}/{uuid.uuid4().hex}.{extension}"
     storage_url = _supabase_storage_url()
     upload_url = (
@@ -673,6 +687,9 @@ async def upload_cardapio_asset(
         f"{storage_url}/storage/v1/object/public/cardapio-assets/"
         f"{quote(object_path, safe='/')}"
     )
+    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+    if not restaurante:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
     if asset_type == "logo":
         restaurante.logo_url = public_url
         restaurante.cardapio_logo_path = object_path

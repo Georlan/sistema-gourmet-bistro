@@ -9,12 +9,11 @@ from app.models import CaixaTurno, ConfiguracaoRestaurante, Restaurante, Usuario
 
 client = TestClient(app)
 
-# Dummy 1x1 valid PNG image bytes
-VALID_PNG_BYTES = (
-    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
-    b"\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\rIDATx\x9cc\xf8\xff\xff?"
-    b"\x03\x00\x05\x00\x01\x0d\x0a-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
-)
+from PIL import Image
+
+_image = io.BytesIO()
+Image.new('RGBA', (8, 8), (10, 20, 30, 96)).save(_image, format='PNG')
+VALID_PNG_BYTES = _image.getvalue()
 
 
 @pytest.fixture(autouse=True)
@@ -186,6 +185,12 @@ def test_upload_logo_success(mock_post, test_setup):
     data = response.json()
     assert data["id"] == 999
     assert "cardapio-assets/999/logo/" in data["logo_url"]
+    assert data["logo_url"].endswith(".webp")
+    sent = mock_post.call_args.kwargs
+    assert sent["headers"]["Content-Type"] == "image/webp"
+    assert sent["headers"]["Cache-Control"] == "max-age=31536000, immutable"
+    with Image.open(io.BytesIO(sent["content"])) as image:
+        assert image.convert("RGBA").getpixel((0, 0))[3] == 96
 
 
 @patch("httpx.AsyncClient.post")
@@ -627,4 +632,116 @@ def test_public_marmitaria_presentation_follows_tenant_profile(test_setup):
             profile.profile_key = previous
         db.commit()
         current_restaurante_id.reset(ctx)
+        db.close()
+
+
+@pytest.fixture
+def image_product(test_setup):
+    from app.models import Categoria, Produto
+    db = SessionLocal()
+    scope = current_restaurante_id.set(999)
+    try:
+        if not db.query(Categoria).filter_by(restaurante_id=999, id='image-test').first():
+            db.add(Categoria(restaurante_id=999, id='image-test', nome='Image test'))
+            db.commit()
+        product = db.query(Produto).filter_by(restaurante_id=999, id='image-test').first()
+        if product is None:
+            product = Produto(restaurante_id=999, id='image-test', nome='Image test', categoria_id='image-test', preco=10)
+            db.add(product)
+        product.imagem = 'https://mock.local/storage/v1/object/public/cardapio-assets/999/products/original.png'
+        db.commit()
+        yield product.imagem
+    finally:
+        current_restaurante_id.reset(scope)
+        db.close()
+
+
+@patch('httpx.AsyncClient.request')
+@patch('httpx.AsyncClient.post')
+def test_product_image_uses_new_webp_and_keeps_original(mock_post, mock_delete, test_setup, image_product):
+    mock_post.return_value = AsyncMock(status_code=201)
+    response = client.post('/api/cardapio-digital/assets/product/image-test',
+                           headers={'Authorization': f"Bearer {test_setup['token']}"},
+                           files={'file': ('photo.png', VALID_PNG_BYTES, 'image/png')})
+    assert response.status_code == 200
+    assert '/999/products/' in response.json()['imagem']
+    assert response.json()['imagem'].endswith('.webp')
+    assert response.json()['imagem'] != image_product
+    assert mock_post.call_args.kwargs['headers']['x-upsert'] == 'false'
+    with Image.open(io.BytesIO(mock_post.call_args.kwargs['content'])) as image:
+        assert image.format == 'WEBP'
+    mock_delete.assert_not_called()
+
+
+@patch('httpx.AsyncClient.post')
+def test_failed_storage_keeps_existing_product_reference(mock_post, test_setup, image_product):
+    from app.models import Produto
+    mock_post.return_value = AsyncMock(status_code=500)
+    response = client.post('/api/cardapio-digital/assets/product/image-test',
+                           headers={'Authorization': f"Bearer {test_setup['token']}"},
+                           files={'file': ('photo.png', VALID_PNG_BYTES, 'image/png')})
+    assert response.status_code == 502
+    db = SessionLocal()
+    scope = current_restaurante_id.set(999)
+    try:
+        assert db.query(Produto).filter_by(restaurante_id=999, id='image-test').one().imagem == image_product
+    finally:
+        current_restaurante_id.reset(scope)
+        db.close()
+
+
+@patch('httpx.AsyncClient.post')
+def test_corrupt_asset_and_busy_optimizer_do_not_reach_storage(mock_post, test_setup):
+    from app.services.image_optimization import _encoder_slot
+    headers = {'Authorization': f"Bearer {test_setup['token']}"}
+    response = client.post('/api/cardapio-digital/assets/logo', headers=headers,
+                           files={'file': ('fake.png', VALID_PNG_BYTES[:30], 'image/png')})
+    assert response.status_code == 400
+    with _encoder_slot:
+        response = client.post('/api/cardapio-digital/assets/logo', headers=headers,
+                               files={'file': ('logo.png', VALID_PNG_BYTES, 'image/png')})
+    assert response.status_code == 429
+    assert response.headers['retry-after'] == '2'
+    mock_post.assert_not_called()
+
+
+def test_assistance_photo_is_optimized_before_database_storage(test_setup):
+    import hashlib
+    from sqlalchemy import select
+    from app.catalog_assistance import catalog_assistance_requests
+    response = client.post('/api/onboarding/catalog-assistance',
+                           headers={'Authorization': f"Bearer {test_setup['token']}"},
+                           files={'file': ('menu.png', VALID_PNG_BYTES, 'image/png')})
+    assert response.status_code == 201
+    result = response.json()
+    assert result['contentType'] == 'image/webp'
+    assert result['filename'] == 'menu.webp'
+    db = SessionLocal()
+    try:
+        row = db.execute(select(catalog_assistance_requests).where(
+            catalog_assistance_requests.c.id == result['id'])).mappings().one()
+        assert row['restaurante_id'] == 999
+        assert row['file_size'] == len(row['file_content']) == result['fileSize']
+        assert row['file_sha256'] == hashlib.sha256(row['file_content']).hexdigest()
+        with Image.open(io.BytesIO(row['file_content'])) as image:
+            assert image.format == 'WEBP'
+    finally:
+        db.close()
+
+
+def test_assistance_pdf_bytes_are_preserved(test_setup):
+    from sqlalchemy import select
+    from app.catalog_assistance import catalog_assistance_requests
+    content = b'%PDF-1.7\noriginal document'
+    response = client.post('/api/onboarding/catalog-assistance',
+                           headers={'Authorization': f"Bearer {test_setup['token']}"},
+                           files={'file': ('menu.pdf', content, 'application/pdf')})
+    assert response.status_code == 201
+    assert response.json()['contentType'] == 'application/pdf'
+    db = SessionLocal()
+    try:
+        stored = db.execute(select(catalog_assistance_requests.c.file_content).where(
+            catalog_assistance_requests.c.id == response.json()['id'])).scalar_one()
+        assert stored == content
+    finally:
         db.close()
