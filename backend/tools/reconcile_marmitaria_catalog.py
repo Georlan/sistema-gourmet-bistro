@@ -38,6 +38,10 @@ from app.models import (
     SuperAdminAuditLog,
 )
 from app.restaurant_profile_models import RestauranteOperationProfile
+from app.websocket_manager import manager
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ReconcileError(RuntimeError):
@@ -157,10 +161,16 @@ def _guard_target(db, tenant_id: int, spec: dict[str, Any]) -> None:
             raise ReconcileError(f"Grupo sentinela {group_name!r} não encontrado.")
 
 
+def _boolean(value: Any, field: str) -> bool:
+    if not isinstance(value, bool):
+        raise ReconcileError(f"{field} precisa ser booleano (true/false).")
+    return value
+
+
 def _parse_group_option_specs(group_name: str, raw: Any) -> tuple[list[dict[str, Any]], bool]:
     sync_active = False
     if isinstance(raw, dict):
-        sync_active = bool(raw.get("sync_active", False))
+        sync_active = _boolean(raw.get("sync_active", False), "sync_active")
         raw = raw.get("options") or []
     if not isinstance(raw, list):
         raise ReconcileError(
@@ -315,7 +325,7 @@ def _reconcile_products(db, tenant_id: int, spec: dict[str, Any], changes: dict[
             if "description" in item:
                 product.descricao = str(item.get("description") or "")
             if "active" in item:
-                product.ativo = bool(item["active"])
+                product.ativo = _boolean(item["active"], "active")
             after = (product.nome, _money(product.preco), product.categoria_id, product.descricao, bool(product.ativo))
             if before != after:
                 changes["products_updated"].append(name)
@@ -376,7 +386,7 @@ def _sync_size_availability(db, tenant_id: int, spec: dict[str, Any], changes: d
     if not isinstance(config, dict):
         raise ReconcileError("size_availability precisa ser um objeto.")
 
-    sync_active = bool(config.get("sync_active", False))
+    sync_active = _boolean(config.get("sync_active", False), "size_availability.sync_active")
     items = config.get("items") or {}
     if not isinstance(items, dict):
         raise ReconcileError("size_availability.items precisa ser um objeto.")
@@ -386,7 +396,12 @@ def _sync_size_availability(db, tenant_id: int, spec: dict[str, Any], changes: d
         .filter(Produto.restaurante_id == tenant_id, Produto.marmitaria_tamanho.isnot(None))
         .all()
     )
-    by_size = {str(product.marmitaria_tamanho).lower(): product for product in existing}
+    by_size = {}
+    for product in existing:
+        key = str(product.marmitaria_tamanho).lower()
+        if key in by_size:
+            raise ReconcileError(f"Mais de um produto representa o tamanho {key.upper()}.")
+        by_size[key] = product
     desired_sizes: set[str] = set()
 
     for raw_size, item in items.items():
@@ -414,7 +429,7 @@ def _sync_size_availability(db, tenant_id: int, spec: dict[str, Any], changes: d
         if "price" in item:
             product.preco = _money(item["price"])
         if "active" in item:
-            product.ativo = bool(item["active"])
+            product.ativo = _boolean(item["active"], "active")
         after = (_money(product.preco or 0), bool(product.ativo))
         if before != after:
             changes["sizes_availability_updated"].append(size)
@@ -584,6 +599,15 @@ def reconcile(*, tenant_id: int, spec: dict[str, Any], apply: bool, reason: str)
                 )
             )
             db.commit()
+            # The commit is authoritative. A missed realtime hint must not turn
+            # a successful catalog update into an apparent failed transaction.
+            try:
+                manager.broadcast_sync(
+                    {"event": "catalog_updated", "message": "Catálogo reconciliado."},
+                    restaurante_id=tenant_id,
+                )
+            except Exception:
+                logger.warning("Catálogo confirmado; notificação realtime indisponível.", exc_info=True)
         else:
             db.rollback()
         return result

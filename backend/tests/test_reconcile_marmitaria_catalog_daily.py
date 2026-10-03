@@ -414,3 +414,33 @@ def test_guard_can_use_restaurant_name_but_rejects_wrong_target_before_changes()
     finally:
         db.close()
         current_restaurante_id.reset(token)
+
+
+def test_catalog_broadcast_only_after_apply_and_failure_preserves_commit(monkeypatch):
+    from tools import reconcile_marmitaria_catalog as tool
+    tenant_id = _seed_catalog()
+    events = []
+    def notify(payload, *, restaurante_id):
+        with SessionLocal(restaurante_id=tenant_id) as db:
+            assert db.query(Produto).filter_by(restaurante_id=tenant_id, nome="Pudim").one().ativo is False
+        events.append((payload, restaurante_id))
+        raise RuntimeError("transport unavailable")
+    monkeypatch.setattr(tool.manager, "broadcast_sync", notify)
+    spec = _friday_spec()
+    reconcile(tenant_id=tenant_id, spec=spec, apply=False, reason="dry run")
+    assert events == []
+    result = reconcile(tenant_id=tenant_id, spec=spec, apply=True, reason="isolated test")
+    assert result["mode"] == "apply"
+    assert events == [({"event": "catalog_updated", "message": "Catálogo reconciliado."}, tenant_id)]
+
+
+@pytest.mark.parametrize("invalid", ["false", "true", 0, 1, None])
+def test_invalid_sync_flag_does_not_pause_catalog(invalid):
+    tenant_id = _seed_catalog()
+    spec = _friday_spec()
+    spec["groups"]["Proteínas"]["sync_active"] = invalid
+    with pytest.raises(ReconcileError, match="booleano"):
+        reconcile(tenant_id=tenant_id, spec=spec, apply=True, reason="invalid input")
+    with SessionLocal(restaurante_id=tenant_id) as db:
+        assert db.query(OpcaoModificador).filter_by(restaurante_id=tenant_id, nome="Acém cozido").one().ativo is True
+        assert db.query(SuperAdminAuditLog).filter_by(restaurante_id=tenant_id).count() == 0
