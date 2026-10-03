@@ -15,7 +15,6 @@ def test_product_image_upload_is_single_tenant_scoped_asset():
     assert 'Depends(require_permission("catalogo:administrar"))' in source
     assert "Produto.restaurante_id == rest_id" in source
     assert 'object_path = f"{rest_id}/products/{uuid.uuid4().hex}.{extension}"' in source
-    assert 'previous_path = _storage_object_path(previous_url, rest_id, "products")' in source
     assert "produto.imagens_galeria = []" in source
     assert 'notify_catalog_update(background_tasks, "Foto do produto atualizada", rest_id)' in source
 

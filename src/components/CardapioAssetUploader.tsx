@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Image as ImageIcon, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react';
 import clsx from 'clsx';
+import { MAX_IMAGE_UPLOAD_SOURCE_BYTES, prepareImageUpload } from '../utils/imageUpload';
 
 type AssetType = 'logo' | 'banner';
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-const MAX_SIZE = 5 * 1024 * 1024;
+const MAX_SIZE = MAX_IMAGE_UPLOAD_SOURCE_BYTES;
 
 /** Uploads one asset; page composition and restaurant configuration belong to its caller. */
 export function CardapioAssetUploader({
@@ -35,15 +36,17 @@ export function CardapioAssetUploader({
     }
     if (file.size > MAX_SIZE) {
       setStatus('error');
-      setMessage('A imagem deve ter no máximo 5 MB.');
+      setMessage('A imagem deve ter no máximo 20 MB.');
       return;
     }
 
     setStatus('busy');
-    setMessage('Enviando imagem…');
+    setMessage('Preparando imagem…');
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      const prepared = await prepareImageUpload(file, type);
+      formData.append('file', prepared);
+      setMessage('Enviando imagem…');
       const headers = { ...authHeaders };
       delete headers['Content-Type'];
       const response = await fetch(`${apiBaseUrl}/api/cardapio-digital/assets/${type}`, {
@@ -139,7 +142,7 @@ export function CardapioAssetUploader({
               ? 'Use uma versão legível em fundo escuro. Formato quadrado funciona melhor.'
               : 'Use uma foto horizontal que represente bem o restaurante ou seus produtos.'}
           </p>
-          <p className="mt-1.5 text-[9px] text-koma-subtle">PNG, JPG ou WEBP · até 5 MB</p>
+          <p className="mt-1.5 text-[9px] text-koma-subtle">PNG, JPG ou WEBP · até 20 MB · otimização automática</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"

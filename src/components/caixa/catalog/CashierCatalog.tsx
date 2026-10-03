@@ -1,4 +1,5 @@
 
+import { MAX_IMAGE_UPLOAD_SOURCE_BYTES, prepareImageUpload } from '../../../utils/imageUpload';
 import { Image as ImageIcon, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { CatalogCategory } from '../../../catalog/catalog';
@@ -32,7 +33,7 @@ interface Props {
 }
 
 const PRODUCT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-const PRODUCT_IMAGE_MAX_SIZE = 5 * 1024 * 1024;
+const PRODUCT_IMAGE_MAX_SIZE = MAX_IMAGE_UPLOAD_SOURCE_BYTES;
 
 export default function CashierCatalog({
   apiBaseUrl,
@@ -103,7 +104,7 @@ export default function CashierCatalog({
       return;
     }
     if (file.size > PRODUCT_IMAGE_MAX_SIZE) {
-      setProdFormImageError('A foto deve ter no máximo 5 MB.');
+      setProdFormImageError('A foto deve ter no máximo 20 MB.');
       return;
     }
 
@@ -401,6 +402,8 @@ export default function CashierCatalog({
                 if (isLoading) return;
                 setIsLoading(true);
                 try {
+                  const preparedImage = prodFormImageFile
+                    ? await prepareImageUpload(prodFormImageFile, 'products') : null;
                   const payload = {
                     nome: prodFormNome.trim(),
                     categoria_id: prodFormCategoriaId,
@@ -439,9 +442,9 @@ export default function CashierCatalog({
                     savedProduct.id || editingProduct?.id || prodFormId.trim() || suggestedProductCode,
                   );
 
-                  if (prodFormImageFile) {
+                  if (preparedImage) {
                     const formData = new FormData();
-                    formData.append('file', prodFormImageFile);
+                    formData.append('file', preparedImage);
                     const uploadHeaders = { ...authHeaders };
                     delete uploadHeaders['Content-Type'];
                     const imageResponse = await fetch(
@@ -681,7 +684,7 @@ export default function CashierCatalog({
                     )}
                   </button>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[9px] text-koma-muted">PNG, JPG ou WEBP · até 5 MB</p>
+                    <p className="text-[9px] text-koma-muted">PNG, JPG ou WEBP · até 20 MB · otimização automática</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         type="button"
