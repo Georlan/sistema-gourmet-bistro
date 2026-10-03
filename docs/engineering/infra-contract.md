@@ -8,6 +8,24 @@
 - Backup do banco KÔMA: Railway `Postgres S3 Backup` aponta para o mesmo destino da API, cron `0 3 * * *` UTC, upload S3. Rodar `node scripts/check-backup-freshness.mjs` em sessão Railway autenticada; o gate exige conclusão, validação do arquivo, tamanho positivo, upload e idade menor que 36 horas. Nenhum segredo é registrado.
 - Smoke público: `.github/workflows/production-smoke.yml`, diário e manual, somente GET/OPTIONS.
 
+### Orçamento de conexões verificado em 2026-10-03
+
+O runtime usa o pool de sessão Supabase (porta 5432), com QueuePool de quatro
+conexões e overflow zero. Além desse pool, há uma conexão LISTEN operacional,
+uma de chat e, quando há agente inscrito, uma de wakeup de impressão. O teto é
+sete conexões por processo; duas versões em rolling deploy podem ocupar 14.
+Migrações usam porta 6543. Homologação tem banco distinto.
+
+Os logs Supavisor de 2026-10-01 06:28:35 UTC registraram limite de sessão
+`pool_size=15`, junto ao 500 de categorias do tenant 6. Esse limite é distinto
+do `max_connections=60` do PostgreSQL e do timeout do QueuePool. A margem de
+um cliente durante overlap não comporta ferramentas adicionais sem orçamento.
+Não ampliar pool, overflow, processos ou réplicas sem recalcular listeners,
+overlap e demais clientes. Evitar consultas diagnósticas pelo pool de sessão
+durante a troca de versões. Não migrar LISTEN para transaction pooling: o
+listener requer afinidade de sessão. Qualquer separação futura dos pools deve
+preservar a identidade/RLS do runtime e validar reconexão e polling fallback.
+
 ## Homologação
 
 - Railway projeto `Koma Homologacao`, serviço `Koma`, root `/backend`, `sfo`, **2 réplicas**, healthcheck `/health/ready`.
