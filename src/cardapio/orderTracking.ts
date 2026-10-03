@@ -78,6 +78,7 @@ export interface StoredOrder {
   pagamento?: {
     status?: string;
     cobranca_online?: boolean;
+    confirmacao_manual?: boolean;
     metodo?: string;
     qr_code?: string | null;
     qr_code_base64?: string | null;

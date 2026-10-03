@@ -239,6 +239,7 @@ def _resolve_tracking_payment_state(
             "status": intent.status,
             "cobranca_online": True,
             "metodo": intent.method,
+            "confirmacao_manual": intent.provider == "direct_pix",
             "qr_code": intent.qr_code,
             "qr_code_base64": intent.qr_code_base64,
             "ticket_url": intent.ticket_url,
