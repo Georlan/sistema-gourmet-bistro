@@ -1,0 +1,13 @@
+<!DOCTYPE html><html><head><title>Isolated online control</title></head><body><div id="root"></div><script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {OnlineOrderEmergencyControl} from '/src/components/caixa/online-menu/OnlineOrderEmergencyControl.tsx';
+function Harness() {
+  const [connected, setConnected] = React.useState(true);
+  return React.createElement(React.Fragment, {},
+    React.createElement('button', {onClick: () => setConnected(v => !v)}, 'Toggle realtime'),
+    React.createElement(OnlineOrderEmergencyControl, {isWsConnected: connected}),
+    React.createElement(OnlineOrderEmergencyControl, {mobile: true, isWsConnected: connected}));
+}
+createRoot(document.getElementById('root')).render(React.createElement(Harness));
+</script></body></html>
