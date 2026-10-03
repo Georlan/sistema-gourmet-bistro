@@ -15,7 +15,7 @@ test('Restaurante 360 usa somente fontes administrativas reais já existentes', 
   assert.match(restaurant360, /\/api\/super-admin\/trials/);
   assert.match(restaurant360, /\/api\/super-admin\/onboarding\/restaurantes\//);
   assert.match(restaurant360, /\/api\/super-admin\/access\/restaurantes\//);
-  assert.match(restaurant360, /\/api\/super-admin\/audit/);
+  assert.match(restaurant360, /SuperAdminAuditTab key=\{tenant.id\} tenantId=\{tenant.id\}/);
   assert.match(restaurant360, /linkedRestaurantId === tenant\.id/);
   assert.doesNotMatch(restaurant360, /mock|faker|simulad/i);
 });

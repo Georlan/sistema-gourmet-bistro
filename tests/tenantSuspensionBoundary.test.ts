@@ -27,12 +27,14 @@ test('checagem de suspensão preserva o shell montado para não reiniciar o logi
   assert.match(boundary, /desmontá-lo aqui[\s\S]*apaga `activePortal`/);
 });
 
-test('boundary detecta suspensão no backend e revalida a sessão periodicamente', () => {
+test('boundary detecta suspensão nas operações e revalida apenas sessões suspensas', () => {
   assert.match(boundary, /response\.status !== 403/);
   assert.match(boundary, /normalized\.includes\('restaurante'\)/);
   assert.match(boundary, /normalized\.includes\('suspens'\)/);
   assert.match(boundary, /\/produtos\/categorias/);
   assert.match(boundary, /STATUS_PROBE_INTERVAL_MS = 5_000/);
+  assert.match(boundary, /if \(disabled \|\| accessState !== 'suspended'\) return/);
+  assert.match(boundary, /token && !document.hidden/);
   assert.match(boundary, /visibilitychange/);
   assert.match(boundary, /window\.addEventListener\('focus'/);
 });
