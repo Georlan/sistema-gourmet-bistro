@@ -1,11 +1,24 @@
 import os
 import logging
 import httpx
+import asyncio
+import datetime
+import json
+import urllib.request
+import urllib.parse
+import urllib.error
+import sentry_sdk
 from typing import Any, Dict, List
 
 # Central Logging Configuration
 logger = logging.getLogger("SuperAdminOrchestrator")
 logger.setLevel(logging.INFO)
+
+# An explicitly empty DSN prevents environment fallback. This client has no
+# transport or integrations and is scoped only to secret-bearing Telegram URLs.
+_telegram_diagnostic_client = sentry_sdk.Client(
+    dsn="", default_integrations=False, auto_enabling_integrations=False,
+)
 
 class CloudflareService:
     """
@@ -157,6 +170,81 @@ class TelegramService:
         self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID", "")
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage" if self.bot_token else ""
+
+    async def get_health(self) -> Dict[str, Any]:
+        # urllib avoids HTTP client's INFO URL logs: Telegram embeds the secret in its URL.
+        # No database session and no sendMessage call are involved in this diagnosis.
+        return await asyncio.to_thread(self._read_health_without_telemetry)
+
+    def _read_health_without_telemetry(self) -> Dict[str, Any]:
+        with sentry_sdk.new_scope() as scope:
+            scope.set_client(_telegram_diagnostic_client)
+            return self._read_health()
+
+    def _read_health(self) -> Dict[str, Any]:
+        result = {
+            "status": "not_configured", "checks": {},
+            "checked_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "delivery_status": "not_tested", "source": "telegram_bot_api", "simulated": False,
+            "detail": "Bot ou destino não configurado no servidor.",
+        }
+        if not self.bot_token or not self.chat_id:
+            return result
+
+        def read(method, params=None):
+            query = urllib.parse.urlencode(params or {})
+            url = f"https://api.telegram.org/bot{self.bot_token}/{method}" + (f"?{query}" if query else "")
+            with urllib.request.urlopen(url, timeout=5) as response:
+                payload = json.load(response)
+            if payload.get("ok") is not True or not isinstance(payload.get("result"), dict):
+                raise ValueError("Unconfirmed response")
+            return payload["result"]
+
+        stage = "bot"
+        try:
+            bot = read("getMe")
+            if not bot.get("is_bot") or not bot.get("id"):
+                raise ValueError("Unconfirmed bot")
+            result["checks"][stage] = "verified"
+            stage = "destination"
+            chat = read("getChat", {"chat_id": self.chat_id})
+            if not chat.get("id"):
+                raise ValueError("Unconfirmed destination")
+            result["checks"][stage] = "verified"
+            stage = "membership"
+            member = read("getChatMember", {"chat_id": self.chat_id, "user_id": bot["id"]})
+            membership = member.get("status")
+            if membership in {"left", "kicked"}:
+                result["status"] = "unavailable"
+                result["checks"][stage] = "unavailable"
+                result["detail"] = "Bot sem participação no destino configurado."
+                return result
+            if membership not in {"creator", "administrator", "member", "restricted"}:
+                raise ValueError("Unconfirmed membership")
+            if membership == "restricted" and not member.get("is_member"):
+                result["status"] = "unavailable"
+                result["checks"][stage] = "unavailable"
+                result["detail"] = "Bot sem participação no destino configurado."
+                return result
+            if membership == "restricted" and member.get("can_send_messages") is False:
+                result["status"] = "unavailable"
+                result["checks"][stage] = "restricted"
+                result["detail"] = "Bot presente, mas envio bloqueado pelas permissões do destino. Nenhuma mensagem foi enviada."
+                return result
+            result["checks"][stage] = "verified"
+            result["status"] = "verified"
+            result["detail"] = "Bot, destino e participação verificados por leitura. Envio de mensagem não testado."
+        except urllib.error.HTTPError as exc:
+            result["status"] = "unavailable" if exc.code in {400, 401, 403, 404} else "unverified"
+            result["checks"][stage] = result["status"]
+            label = {"bot": "bot", "destination": "destino", "membership": "participação"}[stage]
+            result["detail"] = f"Consulta de {label} não confirmada (HTTP {exc.code}). Envio não testado."
+        except Exception:
+            # Never return/log exceptions containing the token URL or private chat data.
+            result["status"] = "unverified"
+            result["checks"][stage] = "unverified"
+            result["detail"] = "Não foi possível concluir a verificação de leitura. Envio não testado."
+        return result
 
     async def send_alert(self, text: str) -> bool:
         if not self.bot_token or not self.chat_id:

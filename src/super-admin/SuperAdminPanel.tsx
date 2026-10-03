@@ -203,27 +203,6 @@ export default function SuperAdminPanel() {
     }
   };
 
-  const triggerTelegramAlert = async (text: string) => {
-    try {
-      const safeText = text
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;");
-      const response = await superAdminFetch("/api/super-admin/telegram/notify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: safeText }),
-      });
-      const data = await response.json() as { success?: boolean };
-      if (!data.success) throw new Error("o servidor não confirmou a entrega");
-      addAuditLog(`Notificação entregue ao Telegram: ${text.substring(0, 40)}...`, "INFO", "TELEGRAM");
-      return true;
-    } catch (err) {
-      reportApiError("Telegram: mensagem não enviada", err);
-      return false;
-    }
-  };
-
   const navItems = [
     { id: "overview" as TabId, label: "Início", icon: LayoutDashboard, badge: 0 },
     { id: "clients" as TabId, label: "Clientes", icon: Store, badge: pendingContractsCount },
@@ -399,8 +378,6 @@ export default function SuperAdminPanel() {
             <SuperAdminPlatformHub
               activeView={platformView}
               onChangeView={setPlatformView}
-              onAddLog={addAuditLog}
-              onTriggerTelegramAlert={triggerTelegramAlert}
             />
           )}
         </main>
