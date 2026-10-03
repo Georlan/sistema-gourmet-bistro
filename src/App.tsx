@@ -295,13 +295,16 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       const res = await fetch(`${API_BASE_URL}/caixa/pagamentos/pendentes`, {
         headers: getAuthHeaders()
       });
+      if (requestScopeKey !== operationalScopeKeyRef.current
+        || token !== sessionStorage.getItem(tokenKey)) return;
       if (res.status === 401) {
         handleLogout();
         return;
       }
       if (res.ok) {
         const data = await res.json();
-        if (requestScopeKey !== operationalScopeKeyRef.current) return;
+        if (requestScopeKey !== operationalScopeKeyRef.current
+          || token !== sessionStorage.getItem(tokenKey)) return;
         setPagamentosPendentes(data);
         setPendingPaymentsLoadedScopeKey(requestScopeKey);
       }
