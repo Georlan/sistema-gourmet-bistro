@@ -124,13 +124,16 @@ export function useOperationalOrders({
     }
     const controller = new AbortController();
     const requestScopeKey = scopeKey;
+    const requestHeaders = getAuthHeaders();
     fetchOrdersAbortControllerRef.current = controller;
 
     try {
       const response = await fetch(`${API_BASE_URL}/comandas/detalhes/todos?fechada=false`, {
-        headers: getAuthHeaders(),
+        headers: requestHeaders,
         signal: controller.signal,
       });
+      if (requestScopeKey !== scopeKeyRef.current
+        || requestHeaders.Authorization !== getAuthHeaders().Authorization) return;
       if (response.status === 401) {
         handleLogout();
         return;
@@ -141,7 +144,8 @@ export function useOperationalOrders({
         return;
       }
       const comandas = await response.json();
-      if (requestScopeKey !== scopeKeyRef.current) return;
+      if (requestScopeKey !== scopeKeyRef.current
+          || requestHeaders.Authorization !== getAuthHeaders().Authorization) return;
       const now = Date.now();
 
       const mappedOrders = comandas.map((comanda: any) => mapBackendComandaToOrder(comanda, now));
@@ -175,19 +179,23 @@ export function useOperationalOrders({
     if (!scopeKey) return;
 
     const requestScopeKey = scopeKey;
+    const requestHeaders = getAuthHeaders();
     const requestVersion = (targetedOrderRequestRef.current.get(normalizedId) || 0) + 1;
     targetedOrderRequestRef.current.set(normalizedId, requestVersion);
 
     try {
       const response = await fetch(`${API_BASE_URL}/comandas/${encodeURIComponent(normalizedId)}`, {
-        headers: getAuthHeaders(),
+        headers: requestHeaders,
         cache: 'no-store',
       });
+      if (requestScopeKey !== scopeKeyRef.current
+        || requestHeaders.Authorization !== getAuthHeaders().Authorization) return;
       if (response.status === 401) {
         handleLogout();
         return;
       }
-      if (requestScopeKey !== scopeKeyRef.current) return;
+      if (requestScopeKey !== scopeKeyRef.current
+          || requestHeaders.Authorization !== getAuthHeaders().Authorization) return;
       if (response.status === 404) {
         if (targetedOrderRequestRef.current.get(normalizedId) === requestVersion) {
           setOrders((prevOrders) => prevOrders.filter((order) => String(order.id) !== normalizedId));
@@ -201,6 +209,7 @@ export function useOperationalOrders({
       const mappedOrder = mapBackendComandaToOrder(await response.json());
       if (
         requestScopeKey !== scopeKeyRef.current ||
+        requestHeaders.Authorization !== getAuthHeaders().Authorization ||
         targetedOrderRequestRef.current.get(normalizedId) !== requestVersion
       ) return;
 
@@ -217,7 +226,8 @@ export function useOperationalOrders({
       // snapshot as ready; readiness is established exclusively by fetchOrdersFromAPI.
       setFetchError(null);
     } catch (err) {
-      if (requestScopeKey !== scopeKeyRef.current) return;
+      if (requestScopeKey !== scopeKeyRef.current
+          || requestHeaders.Authorization !== getAuthHeaders().Authorization) return;
       console.warn('Falha no refresh direcionado da comanda; reconciliando snapshot completo.', err);
       fetchOrdersFromAPI();
     }
