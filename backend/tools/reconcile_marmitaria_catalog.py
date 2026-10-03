@@ -5,7 +5,15 @@ Uso seguro:
   python -m tools.reconcile_marmitaria_catalog --tenant-id 1 --spec-base64 <BASE64> --apply --reason "..."
 
 Sem --apply, toda alteração é revertida ao final. O spec deve incluir guards em
-"expected" para impedir que o comando seja aplicado ao restaurante errado.
+"expected" para impedir que o comando seja aplicado ao restaurante errado. O guard
+aceita product_id ou, quando o ID não é conhecido externamente, restaurant_name
+com product_name/preço/grupos esperados.
+
+Para disponibilidade diária, um grupo pode usar
+{"options": [...], "sync_active": true}: opções desejadas são criadas/reativadas e
+as demais daquele grupo são apenas pausadas. "sync_product_categories" pausa
+produtos não listados somente nas categorias declaradas. "size_availability"
+altera preço/disponibilidade de P/M/G sem tocar na composição por tamanho.
 """
 from __future__ import annotations
 
@@ -30,6 +38,10 @@ from app.models import (
     SuperAdminAuditLog,
 )
 from app.restaurant_profile_models import RestauranteOperationProfile
+from app.websocket_manager import manager
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ReconcileError(RuntimeError):
@@ -104,18 +116,35 @@ def _guard_target(db, tenant_id: int, spec: dict[str, Any]) -> None:
     if profile is None or profile.profile_key != "marmitaria":
         raise ReconcileError("O tenant informado não está no perfil Marmitaria.")
 
+    restaurant_name = str(expected.get("restaurant_name") or "").strip()
+    if restaurant_name and normalize_catalog_name(restaurant.nome) != normalize_catalog_name(restaurant_name):
+        raise ReconcileError(
+            f"Restaurante divergente: esperado {restaurant_name!r}, encontrado {restaurant.nome!r}."
+        )
+
     product_id = str(expected.get("product_id") or "").strip()
     product_name = str(expected.get("product_name") or "").strip()
-    if not product_id or not product_name:
-        raise ReconcileError("expected.product_id e expected.product_name são obrigatórios.")
+    if not product_name:
+        raise ReconcileError("expected.product_name é obrigatório.")
+    if not product_id and not restaurant_name:
+        raise ReconcileError(
+            "Informe expected.product_id ou expected.restaurant_name para identificar o restaurante com segurança."
+        )
 
-    product = (
-        db.query(Produto)
-        .filter(Produto.restaurante_id == tenant_id, Produto.id == product_id)
-        .one_or_none()
-    )
-    if product is None:
-        raise ReconcileError(f"Produto sentinela {product_id!r} não encontrado.")
+    if product_id:
+        product = (
+            db.query(Produto)
+            .filter(Produto.restaurante_id == tenant_id, Produto.id == product_id)
+            .one_or_none()
+        )
+        if product is None:
+            raise ReconcileError(f"Produto sentinela {product_id!r} não encontrado.")
+    else:
+        products = db.query(Produto).filter(Produto.restaurante_id == tenant_id).all()
+        product = _one_by_name(products, product_name, "produto sentinela")
+        if product is None:
+            raise ReconcileError(f"Produto sentinela {product_name!r} não encontrado.")
+
     if normalize_catalog_name(product.nome) != normalize_catalog_name(product_name):
         raise ReconcileError(
             f"Produto sentinela divergente: esperado {product_name!r}, encontrado {product.nome!r}."
@@ -132,14 +161,49 @@ def _guard_target(db, tenant_id: int, spec: dict[str, Any]) -> None:
             raise ReconcileError(f"Grupo sentinela {group_name!r} não encontrado.")
 
 
+def _boolean(value: Any, field: str) -> bool:
+    if not isinstance(value, bool):
+        raise ReconcileError(f"{field} precisa ser booleano (true/false).")
+    return value
+
+
+def _parse_group_option_specs(group_name: str, raw: Any) -> tuple[list[dict[str, Any]], bool]:
+    sync_active = False
+    if isinstance(raw, dict):
+        sync_active = _boolean(raw.get("sync_active", False), "sync_active")
+        raw = raw.get("options") or []
+    if not isinstance(raw, list):
+        raise ReconcileError(
+            f"As opções de {group_name!r} precisam ser uma lista ou um objeto com options."
+        )
+
+    parsed: list[dict[str, Any]] = []
+    for item in raw:
+        if isinstance(item, str):
+            name = item.strip()
+            aliases: list[str] = []
+        elif isinstance(item, dict):
+            name = str(item.get("name") or "").strip()
+            raw_aliases = item.get("aliases") or []
+            if not isinstance(raw_aliases, list):
+                raise ReconcileError(f"aliases de {group_name!r}/{name or '?'} precisa ser uma lista.")
+            aliases = [str(alias).strip() for alias in raw_aliases if str(alias).strip()]
+        else:
+            raise ReconcileError(f"Opção inválida em {group_name!r}.")
+        if not name:
+            continue
+        parsed.append({"name": name, "aliases": aliases})
+    return parsed, sync_active
+
+
 def _reconcile_groups(db, tenant_id: int, spec: dict[str, Any], changes: dict[str, list[str]]) -> dict[str, GrupoModificador]:
     all_groups = db.query(GrupoModificador).filter(GrupoModificador.restaurante_id == tenant_id).all()
     resolved: dict[str, GrupoModificador] = {}
     groups_spec = spec.get("groups") or {}
     if not isinstance(groups_spec, dict):
-        raise ReconcileError("groups precisa ser um objeto nome -> lista de opções.")
+        raise ReconcileError("groups precisa ser um objeto nome -> lista/objeto de opções.")
 
-    for group_name, desired_options in groups_spec.items():
+    for group_name, raw_options in groups_spec.items():
         group = _one_by_name(all_groups, str(group_name), "grupo")
         if group is None:
             raise ReconcileError(
@@ -154,7 +218,7 @@ def _reconcile_groups(db, tenant_id: int, spec: dict[str, Any], changes: dict[st
             )
             .all()
         )
-        seen = {}
+        seen: dict[str, OpcaoModificador] = {}
         for option in options:
             key = normalize_catalog_name(option.nome)
             if key in seen:
@@ -163,29 +227,46 @@ def _reconcile_groups(db, tenant_id: int, spec: dict[str, Any], changes: dict[st
                 )
             seen[key] = option
 
-        if not isinstance(desired_options, list):
-            raise ReconcileError(f"As opções de {group_name!r} precisam ser uma lista.")
-        for option_name in desired_options:
-            option_name = str(option_name).strip()
-            if not option_name:
-                continue
-            key = normalize_catalog_name(option_name)
-            if key in seen:
-                continue
-            option = OpcaoModificador(
-                id=f"opmod-{uuid.uuid4().hex[:8]}",
-                restaurante_id=tenant_id,
-                grupo_id=group.id,
-                nome=option_name,
-                preco_adicional=0,
-                ativo=True,
-            )
-            db.add(option)
-            seen[key] = option
-            changes["options_created"].append(f"{group.nome}: {option_name}")
+        desired_options, sync_active = _parse_group_option_specs(str(group_name), raw_options)
+        desired_ids: set[str] = set()
+        for desired in desired_options:
+            name = desired["name"]
+            candidate_keys = {
+                normalize_catalog_name(value)
+                for value in [name, *desired["aliases"]]
+                if str(value).strip()
+            }
+            matches = {seen[key].id: seen[key] for key in candidate_keys if key in seen}
+            if len(matches) > 1:
+                raise ReconcileError(
+                    f"Mais de uma opção de {group.nome!r} corresponde a {name!r}; reconciliação abortada."
+                )
+            option = next(iter(matches.values()), None)
+            if option is None:
+                option = OpcaoModificador(
+                    id=f"opmod-{uuid.uuid4().hex[:8]}",
+                    restaurante_id=tenant_id,
+                    grupo_id=group.id,
+                    nome=name,
+                    preco_adicional=0,
+                    ativo=True,
+                )
+                db.add(option)
+                db.flush()
+                seen[normalize_catalog_name(name)] = option
+                changes["options_created"].append(f"{group.nome}: {name}")
+            elif not bool(option.ativo):
+                option.ativo = True
+                changes["options_activated"].append(f"{group.nome}: {option.nome}")
+            desired_ids.add(option.id)
+
+        if sync_active:
+            for option in options:
+                if option.id not in desired_ids and bool(option.ativo):
+                    option.ativo = False
+                    changes["options_paused"].append(f"{group.nome}: {option.nome}")
     db.flush()
     return resolved
-
 
 def _product_by_name(db, tenant_id: int, name: str) -> Produto | None:
     products = db.query(Produto).filter(Produto.restaurante_id == tenant_id).all()
@@ -244,13 +325,122 @@ def _reconcile_products(db, tenant_id: int, spec: dict[str, Any], changes: dict[
             if "description" in item:
                 product.descricao = str(item.get("description") or "")
             if "active" in item:
-                product.ativo = bool(item["active"])
+                product.ativo = _boolean(item["active"], "active")
             after = (product.nome, _money(product.preco), product.categoria_id, product.descricao, bool(product.ativo))
             if before != after:
                 changes["products_updated"].append(name)
         if created:
             db.flush()
 
+
+
+def _product_matches_item(product: Produto, item: dict[str, Any]) -> bool:
+    aliases = [str(item.get("name") or ""), *[str(value) for value in item.get("aliases") or []]]
+    normalized_aliases = {normalize_catalog_name(value) for value in aliases if value.strip()}
+    return normalize_catalog_name(product.nome) in normalized_aliases
+
+
+def _sync_product_categories(db, tenant_id: int, spec: dict[str, Any], changes: dict[str, list[str]]) -> None:
+    category_names = spec.get("sync_product_categories") or []
+    if not category_names:
+        return
+    if not isinstance(category_names, list):
+        raise ReconcileError("sync_product_categories precisa ser uma lista.")
+
+    product_specs = spec.get("products") or []
+    if not isinstance(product_specs, list):
+        raise ReconcileError("products precisa ser uma lista.")
+
+    categories = db.query(Categoria).filter(Categoria.restaurante_id == tenant_id).all()
+    products = db.query(Produto).filter(Produto.restaurante_id == tenant_id).all()
+    for category_name in category_names:
+        category = _one_by_name(categories, str(category_name), "categoria")
+        if category is None:
+            raise ReconcileError(f"Categoria {category_name!r} não encontrada para sincronizar disponibilidade.")
+
+        desired_specs = [
+            item for item in product_specs
+            if isinstance(item, dict)
+            and normalize_catalog_name(str(item.get("category") or "")) == normalize_catalog_name(category.nome)
+        ]
+        desired_ids = {
+            product.id
+            for product in products
+            if product.categoria_id == category.id and any(_product_matches_item(product, item) for item in desired_specs)
+        }
+        for product in products:
+            if (
+                product.categoria_id == category.id
+                and product.id not in desired_ids
+                and bool(product.ativo)
+            ):
+                product.ativo = False
+                changes["products_paused"].append(product.nome)
+    db.flush()
+
+
+def _sync_size_availability(db, tenant_id: int, spec: dict[str, Any], changes: dict[str, list[str]]) -> None:
+    config = spec.get("size_availability")
+    if config is None:
+        return
+    if not isinstance(config, dict):
+        raise ReconcileError("size_availability precisa ser um objeto.")
+
+    sync_active = _boolean(config.get("sync_active", False), "size_availability.sync_active")
+    items = config.get("items") or {}
+    if not isinstance(items, dict):
+        raise ReconcileError("size_availability.items precisa ser um objeto.")
+
+    existing = (
+        db.query(Produto)
+        .filter(Produto.restaurante_id == tenant_id, Produto.marmitaria_tamanho.isnot(None))
+        .all()
+    )
+    by_size = {}
+    for product in existing:
+        key = str(product.marmitaria_tamanho).lower()
+        if key in by_size:
+            raise ReconcileError(f"Mais de um produto representa o tamanho {key.upper()}.")
+        by_size[key] = product
+    desired_sizes: set[str] = set()
+
+    for raw_size, item in items.items():
+        size = str(raw_size).upper()
+        key = size.lower()
+        if size not in {"P", "M", "G"}:
+            raise ReconcileError(f"Tamanho inválido em size_availability: {raw_size!r}.")
+        if not isinstance(item, dict):
+            raise ReconcileError(f"Configuração de disponibilidade do tamanho {size} precisa ser um objeto.")
+
+        product = by_size.get(key)
+        if product is None:
+            expected_name = str(item.get("name") or f"Quentinha {size}").strip()
+            product = _product_by_name(db, tenant_id, expected_name)
+            if product is None:
+                raise ReconcileError(
+                    f"Tamanho {size} não existe. Crie/configure a quentinha com sua composição antes da sincronização diária."
+                )
+            if product.marmitaria_tamanho not in (None, key):
+                raise ReconcileError(f"Produto {product.nome!r} já representa outro tamanho.")
+            product.marmitaria_tamanho = key
+            by_size[key] = product
+
+        before = (_money(product.preco or 0), bool(product.ativo))
+        if "price" in item:
+            product.preco = _money(item["price"])
+        if "active" in item:
+            product.ativo = _boolean(item["active"], "active")
+        after = (_money(product.preco or 0), bool(product.ativo))
+        if before != after:
+            changes["sizes_availability_updated"].append(size)
+        desired_sizes.add(key)
+
+    if sync_active:
+        for key, product in by_size.items():
+            if key not in desired_sizes and bool(product.ativo):
+                product.ativo = False
+                changes["sizes_paused"].append(str(product.marmitaria_tamanho).upper())
+    db.flush()
 
 def _resolve_size_product(db, tenant_id: int, size: str, name: str, shared_category: Categoria) -> tuple[Produto, bool]:
     key = size.lower()
@@ -370,10 +560,15 @@ def reconcile(*, tenant_id: int, spec: dict[str, Any], apply: bool, reason: str)
     changes: dict[str, list[str]] = {
         "categories_created": [],
         "options_created": [],
+        "options_activated": [],
+        "options_paused": [],
         "products_created": [],
         "products_updated": [],
+        "products_paused": [],
         "sizes_created": [],
         "sizes_updated": [],
+        "sizes_availability_updated": [],
+        "sizes_paused": [],
     }
 
     token = current_restaurante_id.set(tenant_id)
@@ -382,7 +577,10 @@ def reconcile(*, tenant_id: int, spec: dict[str, Any], apply: bool, reason: str)
         _guard_target(db, tenant_id, spec)
         groups = _reconcile_groups(db, tenant_id, spec, changes)
         _reconcile_products(db, tenant_id, spec, changes)
-        _reconcile_sizes(db, tenant_id, spec, groups, changes)
+        _sync_product_categories(db, tenant_id, spec, changes)
+        if "sizes" in spec:
+            _reconcile_sizes(db, tenant_id, spec, groups, changes)
+        _sync_size_availability(db, tenant_id, spec, changes)
 
         result = {
             "tenant_id": tenant_id,
@@ -401,6 +599,15 @@ def reconcile(*, tenant_id: int, spec: dict[str, Any], apply: bool, reason: str)
                 )
             )
             db.commit()
+            # The commit is authoritative. A missed realtime hint must not turn
+            # a successful catalog update into an apparent failed transaction.
+            try:
+                manager.broadcast_sync(
+                    {"event": "catalog_updated", "message": "Catálogo reconciliado."},
+                    restaurante_id=tenant_id,
+                )
+            except Exception:
+                logger.warning("Catálogo confirmado; notificação realtime indisponível.", exc_info=True)
         else:
             db.rollback()
         return result
