@@ -670,19 +670,21 @@ async def get_github_runs(admin: dict = Depends(get_current_admin)):
     token = os.getenv("GITHUB_TOKEN", "").strip()
     owner = os.getenv("GITHUB_OWNER", "Georlan").strip()
     repo = os.getenv("GITHUB_REPO", "sistema-gourmet-bistro").strip()
-    if not token:
-        _unavailable("GitHub não configurado no servidor.")
     headers = {
-        "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
     }
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"https://api.github.com/repos/{owner}/{repo}/actions/runs",
-            params={"per_page": 20},
-            headers=headers,
-            timeout=10.0,
-        )
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/actions/runs",
+                params={"per_page": 20},
+                headers=headers,
+                timeout=10.0,
+            )
+    except httpx.RequestError:
+        _unavailable("Consulta GitHub não confirmada; conexão indisponível.")
     if response.status_code != 200:
         _unavailable(f"GitHub API respondeu HTTP {response.status_code}.")
     return response.json()
@@ -741,6 +743,7 @@ def get_integrations_health(admin: dict = Depends(get_current_admin)):
             connection.execute(text("SELECT 1"))
     except Exception:
         database_status = "unavailable"
+    database_latency_ms = round((time.perf_counter() - database_started) * 1000, 2)
 
     def configured(*names: str) -> dict:
         is_configured = all(bool(os.getenv(name)) for name in names)
@@ -770,13 +773,16 @@ def get_integrations_health(admin: dict = Depends(get_current_admin)):
         },
         "database": {
             "status": database_status,
-            "latency_ms": round((time.perf_counter() - database_started) * 1000, 2),
+            "latency_ms": database_latency_ms,
             "source": "select_1",
             "simulated": False,
         },
         "supabase": configured("SUPABASE_DB_URL", "SUPABASE_SERVICE_ROLE_KEY"),
         "cloudflare": configured("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ZONE_ID"),
-        "railway": configured("RAILWAY_API_TOKEN", "RAILWAY_PROJECT_ID"),
+        "railway": {
+            **configured("RAILWAY_API_TOKEN", "RAILWAY_PROJECT_ID"),
+            "hosting_detected": bool(os.getenv("RAILWAY_ENVIRONMENT_ID") and os.getenv("RAILWAY_SERVICE_ID")),
+        },
         "github": configured("GITHUB_TOKEN"),
         "mercado_pago": configured(
             "MERCADO_PAGO_CLIENT_ID",
@@ -794,6 +800,14 @@ def get_integrations_health(admin: dict = Depends(get_current_admin)):
 
 
 # --- TELEGRAM BOT ALERTING ---
+@router.get("/telegram/health")
+async def get_telegram_health(
+    admin: dict = Depends(get_current_admin),
+    telegram: TelegramService = Depends(TelegramService),
+):
+    return await telegram.get_health()
+
+
 @router.post("/telegram/notify")
 async def trigger_developer_alert(
     text: str = Body(..., embed=True),
