@@ -7,11 +7,18 @@ import json
 import urllib.request
 import urllib.parse
 import urllib.error
+import sentry_sdk
 from typing import Any, Dict, List
 
 # Central Logging Configuration
 logger = logging.getLogger("SuperAdminOrchestrator")
 logger.setLevel(logging.INFO)
+
+# An explicitly empty DSN prevents environment fallback. This client has no
+# transport or integrations and is scoped only to secret-bearing Telegram URLs.
+_telegram_diagnostic_client = sentry_sdk.Client(
+    dsn="", default_integrations=False, auto_enabling_integrations=False,
+)
 
 class CloudflareService:
     """
@@ -167,7 +174,12 @@ class TelegramService:
     async def get_health(self) -> Dict[str, Any]:
         # urllib avoids HTTP client's INFO URL logs: Telegram embeds the secret in its URL.
         # No database session and no sendMessage call are involved in this diagnosis.
-        return await asyncio.to_thread(self._read_health)
+        return await asyncio.to_thread(self._read_health_without_telemetry)
+
+    def _read_health_without_telemetry(self) -> Dict[str, Any]:
+        with sentry_sdk.new_scope() as scope:
+            scope.set_client(_telegram_diagnostic_client)
+            return self._read_health()
 
     def _read_health(self) -> Dict[str, Any]:
         result = {
