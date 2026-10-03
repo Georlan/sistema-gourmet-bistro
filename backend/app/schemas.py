@@ -961,6 +961,7 @@ class CardapioPublicCategoryResponse(BaseModel):
 
 
 class CardapioPublicProductResponse(BaseModel):
+    marmitaria: bool = False
     id: str
     nome: str
     descricao: str = ""
