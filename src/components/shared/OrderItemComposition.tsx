@@ -9,6 +9,6 @@ export function OrderItemComposition({ item, className = '' }: { item: Compositi
       const separator = line.indexOf(':');
       return <div key={index}><strong>{line.slice(0, separator + 1)}</strong>{line.slice(separator + 1)}</div>;
     })}
-    {observation && <div><strong>OBS: </strong>{observation}</div>}
+    {observation && <div>{(item.composicao_agrupada || lines.length > 0) && <strong>OBS: </strong>}{observation}</div>}
   </div>;
 }
