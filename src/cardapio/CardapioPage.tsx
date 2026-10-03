@@ -231,6 +231,7 @@ export default function CardapioPage() {
       });
 
       const products: Product[] = payload.produtos.map((product) => ({
+        marmitaria: product.marmitaria === true,
         id: String(product.id),
         name: String(product.nome || ""),
         description: String(product.descricao || ""),
