@@ -98,6 +98,7 @@ export interface KanbanOrderDetailsProps {
     readonly cancelConsumption: () => void;
     readonly cancelOrder: () => void;
   };
+  readonly canChangeFulfillment?: boolean;
   readonly hasPrinting?: boolean;
   readonly restaurantConfig?: Record<string, unknown> | null;
   readonly taxaServicoAtiva?: boolean;
@@ -141,6 +142,7 @@ export function KanbanOrderDetails({
   tableMovement,
   saveObservation,
   hasPrinting = true,
+  canChangeFulfillment = false,
   restaurantConfig,
   taxaServicoAtiva,
   serviceTaxRate,
@@ -182,8 +184,6 @@ export function KanbanOrderDetails({
   const selectedCanAssignCourier = selectedIsDelivery
     && Boolean(selectedKanbanOrder.courierAssignment)
     && selectedDeliveryStatus === 'pronto';
-  const selectedCanConvertDeliveryToPickup = selectedIsDelivery
-    && !['transito', 'finalizado', 'recusado', 'cancelado'].includes(selectedDeliveryStatus);
   const selectedCourierId = selectedKanbanOrder.courierAssignment?.value
     ? String(selectedKanbanOrder.courierAssignment.value)
     : '';
@@ -460,13 +460,13 @@ export function KanbanOrderDetails({
                 </span>
               </button>
             )}
-            {selectedCanConvertDeliveryToPickup && (
+            {canChangeFulfillment && (
               <button
                 type="button"
                 onClick={actions.convertDeliveryToPickup}
                 className="min-h-10 w-full rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 text-[10px] font-extrabold uppercase tracking-wide text-amber-500 transition hover:bg-amber-500/10"
               >
-                Alterar para retirada
+                Alterar tipo do pedido
               </button>
             )}
             {!isWholeTableDetail && hasPrinting !== false && (
