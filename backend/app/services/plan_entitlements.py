@@ -7,7 +7,7 @@ sem espalhar comparações Pocket/Pro/Premium pelas rotas.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Iterable, Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -69,11 +69,11 @@ def _stored_plan(
     if stored_plan is not None:
         return stored_plan
     restaurante = (
-        db.query(Restaurante)
+        db.query(Restaurante.plano)
         .filter(Restaurante.id == restaurante_id)
         .first()
     )
-    return restaurante.plano if restaurante is not None else None
+    return restaurante[0] if restaurante is not None else None
 
 
 def has_plan_entitlement(
@@ -89,34 +89,10 @@ def has_plan_entitlement(
     Isso permite revogar um recurso de um plano ou concedê-lo como add-on sem
     alterar o slug comercial do restaurante.
     """
-    from ..database import _effective_tenant_id, tenant_session_scope
-
     normalized = _normalize_entitlement(entitlement)
-
-    def _resolve():
-        explicit = (
-            db.query(RestauranteCapability)
-            .filter(
-                RestauranteCapability.restaurante_id == restaurante_id,
-                RestauranteCapability.capability == normalized,
-            )
-            .first()
-        )
-        if explicit is not None:
-            return bool(explicit.enabled)
-
-        effective_plan = get_effective_subscription_plan(
-            restaurante_id,
-            _stored_plan(db, restaurante_id, stored_plan),
-        )
-        return normalized in _PLAN_ENTITLEMENTS[effective_plan]
-
-    current_eff = _effective_tenant_id(db)
-    if current_eff == int(restaurante_id):
-        return _resolve()
-
-    with tenant_session_scope(db, int(restaurante_id)):
-        return _resolve()
+    return resolve_plan_entitlements(
+        db, restaurante_id, stored_plan=stored_plan, entitlements=(normalized,),
+    )[normalized]
 
 
 def plan_entitlement_baseline(restaurante_id: int, stored_plan: Optional[str]) -> dict[str, bool]:
@@ -130,16 +106,38 @@ def resolve_plan_entitlements(
     restaurante_id: int,
     *,
     stored_plan: Optional[str] = None,
+    entitlements: Iterable[str] | None = None,
 ) -> dict[str, bool]:
-    return {
-        entitlement: has_plan_entitlement(
-            db,
-            restaurante_id,
-            entitlement,
-            stored_plan=stored_plan,
-        )
-        for entitlement in sorted(KNOWN_ENTITLEMENTS)
-    }
+    """Read overrides once; use the baseline only for capabilities without overrides.
+
+    This is request-local resolution, never a cache of permissions or revocations.
+    """
+    from ..database import _effective_tenant_id, tenant_session_scope
+
+    selected = sorted({
+        _normalize_entitlement(key)
+        for key in (KNOWN_ENTITLEMENTS if entitlements is None else entitlements)
+    })
+    if not selected:
+        return {}
+
+    def _resolve():
+        overrides = dict(db.query(RestauranteCapability.capability, RestauranteCapability.enabled).filter(
+            RestauranteCapability.restaurante_id == restaurante_id,
+            RestauranteCapability.capability.in_(selected),
+        ).all())
+        baseline = frozenset()
+        if any(key not in overrides for key in selected):
+            plan = get_effective_subscription_plan(
+                restaurante_id, _stored_plan(db, restaurante_id, stored_plan),
+            )
+            baseline = _PLAN_ENTITLEMENTS[plan]
+        return {key: bool(overrides[key]) if key in overrides else key in baseline for key in selected}
+
+    if _effective_tenant_id(db) == int(restaurante_id):
+        return _resolve()
+    with tenant_session_scope(db, int(restaurante_id)):
+        return _resolve()
 
 
 def require_plan_entitlement(
