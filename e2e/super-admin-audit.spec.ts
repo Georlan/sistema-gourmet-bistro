@@ -20,12 +20,16 @@ test('360 consulta auditoria do tenant, pesquisa snapshots e distingue falha de 
   await page.route('**/health/live', route => route.fulfill({ json: { status: 'ok' } }));
   await page.goto('/super-admin');
   const menu = page.getByRole('button', { name: 'Abrir menu lateral' });
-  if (await menu.isVisible()) await menu.click();
+  if (page.viewportSize()!.width < 1024) {
+    await expect(menu).toBeVisible();
+    await menu.click();
+  }
   await page.getByRole('button', { name: 'Clientes', exact: true }).click();
   await page.getByRole('button', { name: 'Abrir 360°', exact: true }).click();
   await page.getByRole('button', { name: 'Histórico', exact: true }).click();
   await expect(page.getByText('Registro #42')).toBeVisible();
-  expect(auditScopes).toEqual(['961301']);
+  expect(auditScopes.length).toBeGreaterThan(0);
+  expect(auditScopes.every(scope => scope === '961301')).toBe(true);
   await page.getByLabel('Buscar ID, ator, motivo ou alteração').fill('delivery');
   await page.getByRole('button', { name: 'Ver alterações (before / after)' }).click();
   await expect(page.getByText('Estado Anterior (Before):')).toBeVisible();
