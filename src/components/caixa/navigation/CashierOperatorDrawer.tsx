@@ -21,7 +21,7 @@ type BoundaryProps = Pick<
   ReturnType<typeof useCashierPreferences>,
   'toggleFullscreen' | 'isFullscreen' | 'changeFontSize' | 'fontSize'
 > &
-  Pick<ReturnType<typeof useCashierAlerts>, 'soundEnabled' | 'toggleSound' | 'playOrderAlert'> &
+  Pick<ReturnType<typeof useCashierAlerts>, 'soundEnabled' | 'audioReady' | 'toggleSound' | 'activateAudio'> &
   Pick<CaixaPanelProps, 'activeWaiterNome' | 'orders' | 'salonTables' | 'onRefreshOrders'> & {
     isOperatorDrawerOpen: boolean;
     setIsOperatorDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -45,7 +45,8 @@ export function CashierOperatorDrawer({
   fontSize,
   soundEnabled,
   toggleSound,
-  playOrderAlert,
+  audioReady,
+  activateAudio,
 }: BoundaryProps) {
   return (
     <>
@@ -311,7 +312,10 @@ export function CashierOperatorDrawer({
                     </div>
                     <button
                       type="button"
-                      onClick={toggleSound}
+                      onClick={() => {
+                        if (soundEnabled && !audioReady) void activateAudio();
+                        else toggleSound();
+                      }}
                       className={clsx(
                         'px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer border',
                         soundEnabled
@@ -319,15 +323,21 @@ export function CashierOperatorDrawer({
                           : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20',
                       )}
                     >
-                      {soundEnabled ? 'Ativado' : 'Mudo'}
+                      {soundEnabled ? (audioReady ? 'Ativado neste navegador' : 'Ativar neste navegador') : 'Mudo'}
                     </button>
                   </div>
 
+                  <p className="text-[11px] text-koma-secondary">A liberação do som é feita em cada navegador e computador.</p>
                   <button
                     type="button"
-                    onClick={() => {
-                      playOrderAlert('test');
-                      showToast('🔊 Teste de som emitido na saída do computador!', 'info');
+                    onClick={async () => {
+                      const ready = await activateAudio();
+                      showToast(
+                        ready
+                          ? 'Teste enviado ao navegador. Confira se ouviu o bip neste computador.'
+                          : 'O navegador não liberou o áudio. Verifique as permissões de som deste site.',
+                        ready ? 'info' : 'error',
+                      );
                     }}
                     className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-koma-card hover:bg-koma-raised border border-koma-border text-xs font-bold text-koma-foreground rounded-xl transition-all cursor-pointer"
                   >
