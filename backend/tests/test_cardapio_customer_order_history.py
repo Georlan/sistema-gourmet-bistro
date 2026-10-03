@@ -268,6 +268,7 @@ def test_customer_history_is_authenticated_paginated_and_grouped():
             "quantidade": 2,
             "preco_unitario": 23.0,
             "observacao": "Sem cebola",
+            "composicao_agrupada": False,
             "modificadores": [
                 {
                     "grupo_id": "history-group-701",

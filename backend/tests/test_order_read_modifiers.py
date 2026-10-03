@@ -197,3 +197,34 @@ def test_projection_exposes_persisted_modifier_rows_including_repeated_units(see
     payload = projected.model_dump()
     assert payload["itens"][0]["modificadores"][0]["nome"] == "Ovo"
     assert len(payload["itens"][0]["modificadores"]) == 3
+
+
+def test_marmitaria_reads_and_printing_share_grouped_persisted_composition(seeded_order):
+    from app.restaurant_profile_models import RestauranteOperationProfile
+    from app.application.printing.service import PrintingApplicationService
+    from app.domain.orders.composition import composition_presentation
+    from app.services.order_item_composition import load_item_modifiers
+
+    order, db = seeded_order
+    db.add(RestauranteOperationProfile(restaurante_id=TENANT, profile_key="marmitaria"))
+    db.flush()
+    try:
+        item = order.itens[0]
+        item.observacao = "Sem cebola - Opções: 2x Ovo, Bacon"
+        projected = project_check_details(db, [order], TENANT)[0].itens[0]
+        assert projected.composicao_agrupada is True
+        assert [(m.grupo_id, m.grupo_nome) for m in projected.modificadores] == [(GROUP, "Extras")] * 3
+        print_item = PrintingApplicationService._to_print_items(db, TENANT, [item])[0]
+        assert print_item.composicao == ("EXTRAS: 2x Ovo, Bacon",)
+        assert print_item.observacao == "Sem cebola"
+        assert print_item.preco_unit == 29.0
+        from app.services.printing import _enrich_receipt_composition
+        details = [{"itens": [{"id": item.id, "observacao": item.observacao}]}]
+        _enrich_receipt_composition(db, TENANT, details)
+        assert details[0]["itens"][0]["composicao"] == print_item.composicao
+        assert details[0]["itens"][0]["observacao"] == print_item.observacao
+        assert load_item_modifiers(db, TENANT + 1, [ITEM]) == {}
+        modifiers = load_item_modifiers(db, TENANT, [ITEM])[ITEM]
+        assert composition_presentation("Opções: 2x Ovo, Bacon", modifiers, grouped=False) == ((), "Opções: 2x Ovo, Bacon")
+    finally:
+        db.rollback()

@@ -1,3 +1,4 @@
+import { OrderItemComposition } from './shared/OrderItemComposition';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -164,16 +165,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                       )}
                     </div>
 
-                    {item.modificadores?.length ? <ul className="text-xs text-koma-muted">{item.modificadores.map(modifier => <li key={modifier.id}>+ {modifier.nome}</li>)}</ul> : null}
-                    {/* Unit observation - Crucial for kitchen */}
-                    {item.observacao ? (
-                      <div className="flex items-start gap-1.5 p-3 bg-amber-50 border border-dashed border-amber-300 dark:bg-rose-950/40 dark:border-rose-900/50 rounded-xl text-xs text-amber-800 dark:text-amber-300 leading-normal font-sans">
-                        <MessageSquare size={12} className="shrink-0 mt-0.5 text-emerald-700 dark:text-emerald-400" />
-                        <span>"{item.observacao}"</span>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-koma-muted italic font-sans">Sem observações especiais.</p>
-                    )}
+                    <OrderItemComposition item={item} className="text-koma-foreground" />
                   </div>
                 </div>
 

@@ -8,6 +8,13 @@ on:
       - 'backend/app/application/printing/**'
       - 'backend/app/services/online_payments/**'
       - 'backend/tests/test_canonical_comanda_renderer.py'
+      - 'backend/tests/test_order_item_composition.py'
+      - 'backend/tests/test_order_read_modifiers*.py'
+      - 'backend/app/domain/orders/composition.py'
+      - 'backend/app/domain/printing/**'
+      - 'backend/app/services/order_item_composition.py'
+      - 'backend/app/services/order_read_projection.py'
+      - 'backend/app/printer_service.py'
       - 'backend/tests/test_local_comanda_visual_hierarchy.py'
       - 'backend/tests/test_first_client_payment_simulation.py'
   workflow_dispatch:
@@ -57,7 +64,12 @@ jobs:
       - name: Run printing simulations
         working-directory: backend
         run: |
-          python -m pytest -q -x             tests/test_canonical_comanda_renderer.py             tests/test_local_comanda_visual_hierarchy.py
+          python -m pytest -q -x \
+            tests/test_canonical_comanda_renderer.py \
+            tests/test_local_comanda_visual_hierarchy.py \
+            tests/test_order_item_composition.py \
+            tests/test_order_read_modifiers.py \
+            tests/test_order_read_modifiers_contract.py
 
       - name: Run DINE_IN Pix split lifecycle simulation
         working-directory: backend
