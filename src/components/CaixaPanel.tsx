@@ -336,6 +336,8 @@ export function CaixaPanel({
   });
   const fulfillmentConversion = useFulfillmentConversion({
     convertToPickup: handleConvertDeliveryToPickup,
+    selectedOrderRevision: JSON.stringify(selectedKanbanOrder),
+    apiBaseUrl, authHeaders, selectedOrderId: selectedKanbanOrder ? String(selectedKanbanOrder.comandaId || selectedKanbanOrder.id) : undefined,
   });
 
   const { soundEnabled, audioReady, activateAudio, toggleSound, playOrderAlert } = useCashierAlerts({
@@ -1329,12 +1331,14 @@ export function CaixaPanel({
           isSubmitting={fulfillmentConversion.isSubmitting}
           onClose={fulfillmentConversion.close}
           onSubmit={fulfillmentConversion.submit}
+          onPreview={fulfillmentConversion.preview}
         />
 
         {selectedKanbanOrder && (
           <KanbanOrderDetails
             order={selectedKanbanOrder}
             saveObservation={saveItemObservation}
+            canChangeFulfillment={fulfillmentConversion.canChange}
             hasPrinting={hasPrinting}
             restaurantConfig={restauranteConfig}
             taxaServicoAtiva={taxaServicoAtiva}
@@ -1372,7 +1376,7 @@ export function CaixaPanel({
               transferTable: handleTransferSelectedKanbanTable,
               associateTable: handleAssociateSelectedKanbanTable,
               convertDeliveryToPickup: () => fulfillmentConversion.request({
-                id: selectedKanbanOrder.id,
+                id: selectedKanbanOrder.comandaId || selectedKanbanOrder.id,
                 numeroPedido: selectedKanbanOrder.numeroPedido,
               }),
               cancelConsumption: handleCancelSelectedKanbanConsumption,

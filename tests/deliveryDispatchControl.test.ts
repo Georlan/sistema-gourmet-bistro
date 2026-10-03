@@ -262,8 +262,8 @@ test('delivery pode virar retirada antes da rota e mantém exceção fora do flu
     },
   };
 
-  const preparingView = KanbanOrderDetails(props);
-  invoke(button(preparingView, 'Alterar para retirada'), 'onClick');
+  const preparingView = KanbanOrderDetails({ ...props, canChangeFulfillment: true });
+  invoke(button(preparingView, 'Alterar tipo do pedido'), 'onClick');
   assert.deepEqual(calls, ['convert']);
 
   const transitView = KanbanOrderDetails({
@@ -272,7 +272,7 @@ test('delivery pode virar retirada antes da rota e mantém exceção fora do flu
   });
   assert.equal(
     elements(transitView).filter(element => element.type === 'button'
-      && textOf(element).replace(/\s+/g, ' ').trim() === 'Alterar para retirada').length,
+      && textOf(element).replace(/\s+/g, ' ').trim() === 'Alterar tipo do pedido').length,
     0,
   );
 

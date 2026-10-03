@@ -151,7 +151,15 @@ async function mockFulfillmentBackend(
       return;
     }
 
-    if (pathname.endsWith('/delivery/converter-retirada') && request.method() === 'POST') {
+    if (pathname.endsWith('/modalidade/opcoes')) {
+      await route.fulfill({ json: { options: delivery.motoboy_id ? [] : ['pickup'], address_snapshot: null } });
+      return;
+    }
+    if (pathname.endsWith('/modalidade/previa')) {
+      await route.fulfill({ json: { token: 'workspace-preview', previous_fee: 5, delivery_fee: 0, previous_total: 60, total: 55 } });
+      return;
+    }
+    if ((pathname.endsWith('/delivery/converter-retirada') || pathname.endsWith('/modalidade')) && request.method() === 'POST') {
       conversionCalls += 1;
       const body = request.postDataJSON() as { motivo?: string };
       if (!String(body.motivo || '').trim()) {
@@ -462,11 +470,14 @@ test('delivery alterado para retirada sai de Entregas e aparece em Retiradas sem
   await expect(deliveries).toContainText('Bruno Delivery');
 
   await deliveries.getByRole('button', { name: 'Alterar para retirada' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Alterar para retirada' });
+  const dialog = page.getByRole('dialog', { name: 'Alterar tipo do pedido' });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole('textbox', { name: 'Motivo da alteração para retirada' })
+  await dialog.getByRole('textbox', { name: 'Motivo da alteração', exact: true })
     .fill('Cliente avisou que passará para buscar');
-  await dialog.getByRole('button', { name: 'Confirmar retirada' }).click();
+  await dialog.getByRole('button', { name: 'Calcular e revisar' }).click();
+  await expect(dialog.getByRole('status')).toContainText('R$ 55,00');
+  expect(state.getConversionCalls()).toBe(0);
+  await dialog.getByRole('button', { name: 'Confirmar alteração' }).click();
 
   await expect.poll(state.getConversionCalls).toBe(1);
   await expect(dialog).toBeHidden();
