@@ -2267,6 +2267,8 @@ def complete_job_batch(
             PrintJob.restaurante_id == agent.restaurante_id,
             PrintJob.id.in_(requested_items),
         )
+        .order_by(PrintJob.id)
+        .with_for_update()
         .all()
     )
     jobs_by_id = {job.id: job for job in jobs}
@@ -2365,7 +2367,7 @@ def complete_job(
     job = db.query(PrintJob).filter(
         PrintJob.id == job_id,
         PrintJob.restaurante_id == agent.restaurante_id
-    ).first()
+    ).with_for_update().first()
 
     if not job:
         raise HTTPException(status_code=404, detail="Job de impressão não encontrado")
@@ -2421,7 +2423,7 @@ def fail_job(
     job = db.query(PrintJob).filter(
         PrintJob.id == job_id,
         PrintJob.restaurante_id == agent.restaurante_id
-    ).first()
+    ).with_for_update().first()
 
     if not job:
         raise HTTPException(status_code=404, detail="Job de impressão não encontrado")
