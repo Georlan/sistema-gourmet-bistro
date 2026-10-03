@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Order } from '../../../types';
 import { operationalFetch } from '../../../utils/operationalRequest';
+import { createVisibleRefresh, smartPosFallbackInterval } from '../../../utils/visibleRefresh';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 import type { SmartPosCardState } from '../orders/cashierWorkspaceTypes';
 
@@ -24,7 +25,7 @@ interface SmartPosCashRow {
   pagamento?: SmartPosCashPaymentView | null;
 }
 
-type Props = Pick<CaixaPanelProps, 'apiBaseUrl' | 'authHeaders' | 'onRefreshOrders'> & {
+type Props = Pick<CaixaPanelProps, 'apiBaseUrl' | 'authHeaders' | 'onRefreshOrders' | 'isWsConnected'> & {
   activeSubTab: string;
   showToast: CashierNotice;
   fetchTurno: () => Promise<void>;
@@ -34,6 +35,7 @@ type Props = Pick<CaixaPanelProps, 'apiBaseUrl' | 'authHeaders' | 'onRefreshOrde
 /** Owns smartpos state, effects and actions; composition supplies only cross-feature dependencies. */
 export function useCashierSmartPos({
   apiBaseUrl,
+  isWsConnected = false,
   authHeaders,
   onRefreshOrders,
   activeSubTab,
@@ -82,25 +84,22 @@ export function useCashierSmartPos({
       return;
     }
 
-    void refreshSmartPosCashProjection();
-    // O WebSocket já reconcilia eventos operacionais. Este fallback mais lento
-    // evita milhares de leituras durante um expediente e pausa em aba oculta.
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void refreshSmartPosCashProjection();
-    }, 30_000);
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') void refreshSmartPosCashProjection();
-    };
-    window.addEventListener('focus', refreshWhenVisible);
-    window.addEventListener('koma_orders_updated', refreshWhenVisible);
-    document.addEventListener('visibilitychange', refreshWhenVisible);
+    const refresh = createVisibleRefresh(refreshSmartPosCashProjection, () => !document.hidden);
+    refresh.invalidate();
+    const timer = window.setInterval(refresh.tick, smartPosFallbackInterval(isWsConnected));
+    window.addEventListener('focus', refresh.resume);
+    window.addEventListener('koma_orders_updated', refresh.invalidate);
+    window.addEventListener('koma_smartpos_updated', refresh.invalidate);
+    document.addEventListener('visibilitychange', refresh.resume);
     return () => {
+      refresh.stop();
       window.clearInterval(timer);
-      window.removeEventListener('focus', refreshWhenVisible);
-      window.removeEventListener('koma_orders_updated', refreshWhenVisible);
-      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('focus', refresh.resume);
+      window.removeEventListener('koma_orders_updated', refresh.invalidate);
+      window.removeEventListener('koma_smartpos_updated', refresh.invalidate);
+      document.removeEventListener('visibilitychange', refresh.resume);
     };
-  }, [activeSubTab, refreshSmartPosCashProjection, smartPosAuthorization]);
+  }, [activeSubTab, refreshSmartPosCashProjection, smartPosAuthorization, isWsConnected]);
 
   const getSmartPosCardState = useCallback(
     (order: Order): SmartPosCardState | null => {

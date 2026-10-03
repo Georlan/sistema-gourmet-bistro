@@ -254,9 +254,10 @@ export function CaixaPanel({
 
   const smartPos = useCashierSmartPos({
     apiBaseUrl,
+    isWsConnected,
     authHeaders,
     onRefreshOrders,
-    activeSubTab,
+    activeSubTab: activeTab === 'operacao' ? activeSubTab : '',
     showToast,
     fetchTurno,
     onReconciled: () => {

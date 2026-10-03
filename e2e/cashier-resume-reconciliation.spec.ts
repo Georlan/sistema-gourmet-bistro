@@ -135,7 +135,7 @@ test('reconciliação ao retornar do background move card imediatamente', async 
   await page.goto('/?view=caixa');
 
   if (isMobile) {
-    await page.getByRole('tab', { name: /Balcão/ }).click();
+    await page.getByRole('tab', { name: /^Digitais/ }).click();
   }
 
   // O card deve aparecer na coluna de Em Produção
@@ -188,13 +188,14 @@ test('respostas fora de ordem não fazem o status regredir para trás', async ({
     let body: unknown = {};
 
     if (pathname === '/comandas/delivery/ativos') {
+      const responseStatus = deliveryStatus;
       if (holdNextRequest) {
         holdNextRequest = false;
         await new Promise<void>(resolve => {
           resolveHeldRequest = resolve;
         });
       }
-      body = [{ ...onlineOrder, delivery_status: deliveryStatus }];
+      body = [{ ...onlineOrder, delivery_status: responseStatus }];
     } else if (pathname === '/comandas/detalhes/todos') {
       body = [];
     } else if (pathname === '/mesas/') {
@@ -248,7 +249,7 @@ test('respostas fora de ordem não fazem o status regredir para trás', async ({
   await page.goto('/?view=caixa');
 
   if (isMobile) {
-    await page.getByRole('tab', { name: /Balcão/ }).click();
+    await page.getByRole('tab', { name: /^Digitais/ }).click();
   }
 
   await expect(page.locator('text=Cliente Retomada').first()).toBeVisible();

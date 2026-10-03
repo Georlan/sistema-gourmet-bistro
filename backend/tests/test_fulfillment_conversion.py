@@ -47,7 +47,9 @@ def quote(client, order, **overrides):
 
 
 def test_pickup_delivery_pickup_preserves_state_history_and_totals(char_client, order):
-    before = call(char_client, order, '/opcoes').json()
+    response = call(char_client, order, '/opcoes')
+    assert response.status_code == 200, response.text
+    before = response.json()
     assert before['options'] == ['delivery']
     payload, preview = quote(char_client, order)
     assert preview['delivery_fee'] == 7
@@ -81,6 +83,30 @@ def test_pickup_delivery_pickup_preserves_state_history_and_totals(char_client, 
 def test_delivery_requires_structured_address(char_client, order, address):
     result = call(char_client, order, '/previa', {'fulfillment': 'delivery', 'address_snapshot': address})
     assert result.status_code == 422
+
+
+def test_configuration_lock_does_not_lock_nullable_joined_restaurant(char_client, order):
+    # SQLite ignores row locks; compile the actual endpoint statements for PG
+    # so its nullable-join restriction remains covered in the default CI suite.
+    from sqlalchemy import event
+    from sqlalchemy.dialects import postgresql
+    from app.database import engine
+    statements = []
+
+    def observe(_conn, clause, _multiparams, _params, _options):
+        sql = str(clause.compile(dialect=postgresql.dialect()))
+        if 'FOR UPDATE' in sql and 'configuracoes_restaurante' in sql:
+            statements.append(sql)
+
+    event.listen(engine, 'before_execute', observe)
+    try:
+        response = call(char_client, order, '/opcoes')
+        assert response.status_code == 200, response.text
+        quote(char_client, order)
+    finally:
+        event.remove(engine, 'before_execute', observe)
+    assert len(statements) >= 3
+    assert all('FOR UPDATE OF configuracoes_restaurante' in sql for sql in statements)
 
 
 def test_neighborhood_unlisted_uses_canonical_fallback(char_client, order):
