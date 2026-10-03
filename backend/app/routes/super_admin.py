@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 import jwt
 import httpx
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy import func, text
 from pydantic import BaseModel, Field
 
@@ -193,6 +193,8 @@ SENSITIVE_AUDIT_KEYS = {
 
 
 def _sanitize_audit_data(data: Any) -> Any:
+    if isinstance(data, list):
+        return [_sanitize_audit_data(item) for item in data]
     if not isinstance(data, dict):
         return data
     sanitized: dict[str, Any] = {}
@@ -200,7 +202,7 @@ def _sanitize_audit_data(data: Any) -> Any:
         k_lower = str(k).lower()
         if any(s in k_lower for s in SENSITIVE_AUDIT_KEYS):
             sanitized[k] = "[REDACTED]"
-        elif isinstance(v, dict):
+        elif isinstance(v, (dict, list)):
             sanitized[k] = _sanitize_audit_data(v)
         else:
             sanitized[k] = v
@@ -574,16 +576,21 @@ def update_tenant(
 
 
 @router.get("/audit")
-def list_audit_logs(admin: dict = Depends(get_current_admin)):
+def list_audit_logs(
+    admin: dict = Depends(get_current_admin),
+    tenant_id: int | None = Query(default=None, gt=0),
+):
     """Retorna a trilha de auditoria administrativa de todos os tenants sob isolamento RLS."""
     db = SessionLocal()
     logs: list[dict[str, Any]] = []
 
     try:
-        restaurant_ids = _discover_restaurant_ids(db)
+        restaurant_ids = [tenant_id] if tenant_id is not None else _discover_restaurant_ids(db)
         for r_id in restaurant_ids:
             with tenant_session_scope(db, r_id):
                 restaurante = db.query(Restaurante).filter(Restaurante.id == r_id).first()
+                if tenant_id is not None and restaurante is None:
+                    raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
                 rest_name = restaurante.nome if restaurante else f"Restaurante #{r_id}"
                 r_logs = (
                     db.query(SuperAdminAuditLog)
