@@ -145,6 +145,29 @@ def _route_pattern(request: Request) -> str:
     return getattr(route, "path", None) or "<unmatched>"
 
 
+def _validation_diagnostic(exc: Exception) -> dict:
+    from pydantic import ValidationError
+    if not isinstance(exc, ValidationError):
+        return {}
+    from .schemas import ConfiguracaoRestauranteResponse
+    allowed = ConfiguracaoRestauranteResponse.model_fields if exc.title == "ConfiguracaoRestauranteResponse" else {}
+    errors = exc.errors(include_url=False, include_context=False, include_input=False)
+    return {"validation_error_count": len(errors), "validation_errors": [
+        {"field": str(error["loc"][0]) if error.get("loc") and error["loc"][0] in allowed else "<redacted>",
+         "type": error["type"]}
+        for error in errors[:10]
+    ]}
+
+
+def _log_auth_rejection(request: Request, reason: str) -> None:
+    request_logger.warning(json.dumps({
+        "event": "auth_rejected", "timestamp": datetime.now(timezone.utc).isoformat(),
+        "request_id": getattr(request.state, "request_id", None),
+        "method": request.method, "path": _route_pattern(request),
+        "status_code": 401, "reason": reason,
+    }, separators=(",", ":")))
+
+
 def _log_unexpected_error(request: Request, exc: Exception) -> None:
     request_logger.error(json.dumps({
         "event": "http_exception",
@@ -158,6 +181,7 @@ def _log_unexpected_error(request: Request, exc: Exception) -> None:
         "status_code": 500,
         "duration_ms": round((perf_counter() - getattr(request.state, "started_at", perf_counter())) * 1_000, 2),
         "exception_type": type(exc).__name__,
+        **_validation_diagnostic(exc),
     }, separators=(",", ":")))
 
 
@@ -297,6 +321,7 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
 
     if auth_header:
         if not auth_header.startswith("Bearer "):
+            _log_auth_rejection(request, "malformed_bearer")
             return JSONResponse(
                 status_code=401,
                 content={
@@ -315,6 +340,7 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
             rid = payload.get("restaurante_id")
             role = payload.get("role", "")
             if isinstance(rid, bool):
+                _log_auth_rejection(request, "invalid_tenant_claim")
                 return JSONResponse(
                     status_code=401,
                     content={"detail": "Identificação do restaurante inválida ou ausente no token."},
@@ -322,22 +348,29 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
             try:
                 parsed_rid = int(rid)
             except (TypeError, ValueError):
+                _log_auth_rejection(request, "invalid_tenant_claim")
                 return JSONResponse(
                     status_code=401,
                     content={"detail": "Identificação do restaurante inválida ou ausente no token."},
                 )
             if parsed_rid < 0 or (parsed_rid == 0 and role != "superadmin"):
+                _log_auth_rejection(request, "invalid_tenant_claim")
                 return JSONResponse(
                     status_code=401,
                     content={"detail": "Identificação do restaurante inválida ou ausente no token."},
                 )
             restaurante_id = parsed_rid
         except jwt.PyJWTError as exc:
+            reason = "expired_token" if isinstance(exc, jwt.ExpiredSignatureError) else (
+                "invalid_signature" if isinstance(exc, jwt.InvalidSignatureError) else "invalid_token"
+            )
+            _log_auth_rejection(request, reason)
             return JSONResponse(
                 status_code=401,
                 content={"detail": f"Token de autenticação inválido ou expirado: {str(exc)}"},
             )
         except Exception:
+            _log_auth_rejection(request, "validation_failure")
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Falha na validação do token de autenticação."},
