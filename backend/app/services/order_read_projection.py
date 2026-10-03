@@ -3,13 +3,12 @@
 Batch lookup includes launches referenced by transferred items, not only the
 launches originally created in this check. Missing identity remains null.
 """
-from collections import defaultdict
 
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from ..domain.orders.types import format_order_family_id
-from ..models import Comanda, ItemModificador, OpcaoModificador, Lancamento, Usuario
+from ..models import Comanda, Lancamento, Usuario
 from ..operational_models import AtendimentoMesa, LancamentoIdentidade
 from ..schemas import ComandaDetail, ItemModifierResponse
 
@@ -28,36 +27,17 @@ def _attach_item_modifiers(
     if not item_ids:
         return
 
-    rows = (
-        db.query(ItemModificador, OpcaoModificador)
-        .join(
-            OpcaoModificador,
-            and_(
-                OpcaoModificador.restaurante_id == ItemModificador.restaurante_id,
-                OpcaoModificador.id == ItemModificador.opcao_modificador_id,
-            ),
-        )
-        .filter(
-            ItemModificador.restaurante_id == restaurante_id,
-            ItemModificador.item_id.in_(item_ids),
-        )
-        .order_by(ItemModificador.item_id.asc(), ItemModificador.id.asc())
-        .all()
-    )
+    from .order_item_composition import load_item_modifiers, uses_grouped_composition
 
-    modifiers_by_item: dict[str, list[ItemModifierResponse]] = defaultdict(list)
-    for item_modifier, option in rows:
-        modifiers_by_item[str(item_modifier.item_id)].append(
-            ItemModifierResponse(
-                id=str(option.id),
-                nome=option.nome,
-                preco=float(item_modifier.preco_aplicado or 0.0),
-            )
-        )
-
+    modifiers_by_item = load_item_modifiers(db, restaurante_id, item_ids)
+    grouped = uses_grouped_composition(db, restaurante_id)
     for detail in details:
         for item in detail.itens:
-            item.modificadores = modifiers_by_item.get(str(item.id), [])
+            item.modificadores = [ItemModifierResponse(
+                id=modifier.id, nome=modifier.nome, preco=modifier.preco,
+                grupo_id=modifier.grupo_id, grupo_nome=modifier.grupo_nome,
+            ) for modifier in modifiers_by_item.get(str(item.id), [])]
+            item.composicao_agrupada = grouped
 
 
 def project_check_details(

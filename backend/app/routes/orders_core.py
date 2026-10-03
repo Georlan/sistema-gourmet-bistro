@@ -873,13 +873,48 @@ def _listar_delivery_operacional(db: Session, *, pending_only: bool) -> List[Com
     return project_check_details(db, checks, rest_id)
 
 
+@router.get("/{comanda_id}/modalidade/opcoes")
+def fulfillment_options(comanda_id: str, db: Session = Depends(get_db),
+                        current_user: Usuario = Depends(require_permission("pedidos:alterar_modalidade"))):
+    from ..application.orders.fulfillment_conversion import locked_order, options
+    return options(db, locked_order(db, require_tenant_id(), comanda_id))
+
+
+@router.post("/{comanda_id}/modalidade/previa")
+def fulfillment_preview(comanda_id: str, payload: dict, db: Session = Depends(get_db),
+                        current_user: Usuario = Depends(require_permission("pedidos:alterar_modalidade"))):
+    from ..application.orders.fulfillment_conversion import locked_order, preview
+    quote, _address = preview(db, locked_order(db, require_tenant_id(), comanda_id), payload)
+    return quote
+
+
+@router.post("/{comanda_id}/modalidade", response_model=ComandaDetail)
+def change_fulfillment(comanda_id: str, payload: dict, background_tasks: BackgroundTasks,
+                       db: Session = Depends(get_db),
+                       current_user: Usuario = Depends(require_permission("pedidos:alterar_modalidade"))):
+    from ..application.orders.fulfillment_conversion import locked_order, apply
+    rid = require_tenant_id()
+    order = locked_order(db, rid, comanda_id)
+    try:
+        apply(db, order, payload, current_user.id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(order)
+    background_tasks.add_task(manager.broadcast, {
+        "event": "tables_updated", "detail": {"type": "fulfillment_changed", "comanda_id": order.id}
+    }, rid)
+    return project_check_details(db, [order], rid)[0]
+
+
 @router.post("/{comanda_id}/delivery/converter-retirada", response_model=ComandaResponse)
 def converter_delivery_para_retirada(
     comanda_id: str,
     payload: dict,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
+    current_user: Usuario = Depends(require_permission("pedidos:alterar_modalidade")),
 ):
     """Converte excepcionalmente delivery em retirada sem reescrever o lifecycle.
 
@@ -925,6 +960,11 @@ def converter_delivery_para_retirada(
             status_code=status.HTTP_409_CONFLICT,
             detail="Pedido encerrado ou recusado não pode mudar de modalidade.",
         )
+
+    from ..application.orders.fulfillment_conversion import options
+    conversion_block = options(db, comanda)["blocked_reason"]
+    if conversion_block:
+        raise HTTPException(status_code=409, detail=conversion_block)
 
     reason = str(payload.get("motivo") or payload.get("reason") or "").strip()
     if len(reason) < 3:

@@ -30,6 +30,9 @@ test('avisos próximos produzem uma consulta e aba oculta não consulta controle
     return route.fulfill({ json: status(false) });
   });
   await page.goto('/?view=caixa');
+      if ((page.viewportSize()?.width || 1280) < 1024) {
+        await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+      }
   await expect(page.locator('#online-orders-emergency-trigger:visible')).toContainText('Pausar cardápio online');
   const beforeBurst = reads;
   await page.evaluate(() => {
@@ -73,6 +76,9 @@ test('outro terminal pausa o cardápio e o Caixa reconcilia após WebSocket', as
         return route.fulfill({ json: status(paused) });
       });
       await page.goto('/?view=caixa');
+      if ((page.viewportSize()?.width || 1280) < 1024) {
+        await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+      }
       await expect(page.locator('#online-orders-emergency-trigger:visible')).toContainText('Pausar cardápio online');
     }
     await expect.poll(() => Boolean(cashierSocket)).toBe(true);

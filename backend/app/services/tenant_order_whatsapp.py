@@ -587,13 +587,14 @@ def dispatch_alert(db: Session, snapshot: dict) -> bool:
     config.whatsapp_next_send_at = now + dt.timedelta(
         seconds=settings.TENANT_WHATSAPP_MIN_SEND_INTERVAL_SECONDS
     )
+    recipient_phone = config.whatsapp_recipient_phone
     db.commit()
 
     # A disconnected provider has not accepted the message, so delayed retry is safe.
     try:
         if connection_state(rid) != "open" or not phones_match(
             owner_phone(rid),
-            config.whatsapp_recipient_phone,
+            recipient_phone,
         ):
             raise RuntimeError("WhatsApp desconectado ou número vinculado diferente.")
     except Exception:
@@ -619,6 +620,13 @@ def dispatch_alert(db: Session, snapshot: dict) -> bool:
         return False
     base, headers = _provider()
     event.attempts = int(snapshot["attempts"]) + 1
+    message_text = render_alert(
+        _operational_alert_payload(
+            db, restaurant_id=rid, payload=snapshot["payload"],
+        )
+    )
+    # Materialize the payload before committing the attempt. Expired ORM
+    # attributes and payload queries must not reacquire SQL during provider I/O.
     db.commit()
     try:
         with httpx.Client(timeout=4.0) as client:
@@ -626,14 +634,8 @@ def dispatch_alert(db: Session, snapshot: dict) -> bool:
                 f"{base}/message/sendText/{quote(instance_name(rid))}",
                 headers=headers,
                 json={
-                    "number": config.whatsapp_recipient_phone,
-                    "text": render_alert(
-                        _operational_alert_payload(
-                            db,
-                            restaurant_id=rid,
-                            payload=snapshot["payload"],
-                        )
-                    ),
+                    "number": recipient_phone,
+                    "text": message_text,
                 },
             )
         if 200 <= response.status_code < 300:

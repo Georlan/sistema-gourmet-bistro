@@ -31,6 +31,13 @@ def _config(db: Session, user: Usuario) -> ConfiguracaoRestaurante:
     return config
 
 
+def _release_before_provider(db: Session, config: ConfiguracaoRestaurante) -> None:
+    # Snapshot the loaded scalar configuration, release the read transaction,
+    # and reattach only after the provider has finished if writes are needed.
+    db.expunge(config)
+    db.rollback()
+
+
 def _provider_error(exc: Exception) -> HTTPException:
     if isinstance(exc, httpx.TimeoutException):
         detail = "Evolution demorou a responder. Tente verificar a conexão novamente."
@@ -56,6 +63,7 @@ def get_status(
     config = _config(db, user)
     if not config.whatsapp_instance_name:
         return {"state": "not_configured", "enabled": False, "phone_ending": None}
+    _release_before_provider(db, config)
     state = "error"
     try:
         provider_state = wa.connection_state(user.restaurante_id)
@@ -92,6 +100,7 @@ def configure(
     if config.whatsapp_instance_name and config.whatsapp_recipient_phone != phone:
         raise HTTPException(status_code=409, detail="Desconecte o número atual antes de configurar outro.")
 
+    _release_before_provider(db, config)
     pairing_code = None
     try:
         if mode == "pairing_code":
@@ -136,6 +145,7 @@ def configure(
     config.whatsapp_instance_name = wa.instance_name(user.restaurante_id)
     config.whatsapp_recipient_phone = phone
     config.whatsapp_alerts_enabled = False
+    db.add(config)
     db.commit()
     return {
         "state": "connecting" if pairing_code else "waiting_qr",
@@ -153,6 +163,7 @@ def refresh_qr(
     config = _config(db, user)
     if config.whatsapp_instance_name != wa.instance_name(user.restaurante_id):
         raise HTTPException(status_code=409, detail="Configure primeiro o WhatsApp deste restaurante.")
+    _release_before_provider(db, config)
     try:
         data = wa.connect_instance(user.restaurante_id)
     except Exception as exc:
@@ -171,6 +182,7 @@ def refresh_pairing_code(
         or not config.whatsapp_recipient_phone
     ):
         raise HTTPException(status_code=409, detail="Configure primeiro o WhatsApp deste restaurante.")
+    _release_before_provider(db, config)
     try:
         _, code = wa.recreate_instance_with_pairing_code(
             user.restaurante_id,
@@ -187,6 +199,7 @@ def enable(
     user: Usuario = Depends(require_permission("configuracoes:administrar")),
 ):
     config = _config(db, user)
+    _release_before_provider(db, config)
     try:
         valid = (
             config.whatsapp_instance_name == wa.instance_name(user.restaurante_id)
@@ -201,6 +214,7 @@ def enable(
     if not valid:
         raise HTTPException(status_code=409, detail="Conecte o WhatsApp do número informado antes de ativar os avisos.")
     config.whatsapp_alerts_enabled = True
+    db.add(config)
     db.commit()
     return {"enabled": True}
 
@@ -222,9 +236,10 @@ def disconnect(
     user: Usuario = Depends(require_permission("configuracoes:administrar")),
 ):
     config = _config(db, user)
+    owns_instance = config.whatsapp_instance_name == wa.instance_name(user.restaurante_id)
     config.whatsapp_alerts_enabled = False
     db.commit()
-    if config.whatsapp_instance_name == wa.instance_name(user.restaurante_id):
+    if owns_instance:
         try:
             wa.logout_instance(user.restaurante_id)
         except httpx.HTTPStatusError as exc:

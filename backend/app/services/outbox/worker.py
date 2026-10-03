@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import logging
 import os
 import signal
@@ -45,6 +46,29 @@ def discover_active_restaurant_ids(db: Session) -> list[int]:
         ).scalars().all()
 
     return [int(rid) for rid in result if rid is not None]
+
+
+def discover_due_restaurant_ids(db: Session, *, stale_timeout_seconds: int) -> list[int]:
+    """Return only tenant IDs with durable due work; payload processing stays RLS-scoped."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cutoff = now - datetime.timedelta(seconds=stale_timeout_seconds)
+    if db.get_bind().dialect.name == "postgresql":
+        query = "SELECT id FROM koma_internal.worker_due_restaurants(:now, :cutoff)"
+    else:
+        query = """
+            SELECT restaurante_id FROM integration_outbox
+            WHERE status IN ('pending', 'failed')
+              AND (next_retry_at IS NULL OR next_retry_at <= :now)
+            UNION
+            SELECT restaurante_id FROM integration_outbox
+            WHERE status = 'processing' AND (locked_at IS NULL OR locked_at <= :cutoff)
+            UNION
+            SELECT restaurante_id FROM scheduled_orders
+            WHERE released_at IS NULL AND scheduled_for <= :now
+        """
+    return sorted(int(rid) for rid in db.execute(
+        text(query), {"now": now, "cutoff": cutoff},
+    ).scalars().all())
 
 
 class OutboxWorker:
@@ -116,7 +140,14 @@ class OutboxWorker:
             if restaurant_id is not None:
                 target_tenant_ids = [restaurant_id]
             else:
-                target_tenant_ids = self._active_restaurant_ids(db)
+                target_tenant_ids = discover_due_restaurant_ids(
+                    db, stale_timeout_seconds=self.stale_timeout_seconds,
+                )
+                # Preserve the existing maintenance cadence and scoped retention path.
+                if time.monotonic() - self._last_chat_retention_at >= 21600:
+                    target_tenant_ids = sorted(set(target_tenant_ids).union(
+                        self._active_restaurant_ids(db),
+                    ))
 
             for rid in target_tenant_ids:
                 try:
