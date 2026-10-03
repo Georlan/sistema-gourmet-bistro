@@ -2256,6 +2256,7 @@ def complete_job_batch(
     db: Session = Depends(get_db),
 ):
     """Confirma vários trabalhos enviados ao spooler em uma única chamada."""
+    restaurante_id = agent.restaurante_id
     requested_items = {
         item.job_id: item
         for item in req.jobs
@@ -2294,12 +2295,12 @@ def complete_job_batch(
     if confirmed_job_ids:
         _schedule_print_monitor_refresh(
             background_tasks,
-            agent.restaurante_id,
+            restaurante_id,
         )
     if changed:
         _schedule_print_history_maintenance(
             background_tasks,
-            agent.restaurante_id,
+            restaurante_id,
             now,
         )
 
@@ -2360,6 +2361,7 @@ def complete_job(
     Uma repetição da confirmação pelo mesmo agente é idempotente. Isso cobre o
     caso em que o servidor gravou o sucesso, mas a resposta HTTP se perdeu.
     """
+    restaurante_id = agent.restaurante_id
     job = db.query(PrintJob).filter(
         PrintJob.id == job_id,
         PrintJob.restaurante_id == agent.restaurante_id
@@ -2375,7 +2377,9 @@ def complete_job(
         )
 
     if job.status == "printed":
-        return {"status": "printed", "job_id": job.id}
+        response = {"status": "printed", "job_id": job.id}
+        db.rollback()
+        return response
 
     if job.status not in ("claimed", "printing"):
         raise HTTPException(
@@ -2387,18 +2391,19 @@ def complete_job(
     job.status = "printed"
     job.printed_at = now
     job.printer_name = req.printer_name or "Padrão"
+    response = {"status": "printed", "job_id": job.id}
     db.commit()
     _schedule_print_monitor_refresh(
         background_tasks,
-        agent.restaurante_id,
+        restaurante_id,
     )
     _schedule_print_history_maintenance(
         background_tasks,
-        agent.restaurante_id,
+        restaurante_id,
         now,
     )
 
-    return {"status": "printed", "job_id": job.id}
+    return response
 
 @router.post("/jobs/{job_id}/fail")
 def fail_job(
@@ -2412,6 +2417,7 @@ def fail_job(
     Registra falha de impressão enviada pelo agente.
     Se o limite de tentativas for atingido, marca como 'failed'. Caso contrário, volta a 'pending'.
     """
+    restaurante_id = agent.restaurante_id
     job = db.query(PrintJob).filter(
         PrintJob.id == job_id,
         PrintJob.restaurante_id == agent.restaurante_id
@@ -2437,24 +2443,25 @@ def fail_job(
         job.claimed_at = None
         job.agent_id = None
 
-    db.commit()
-    _schedule_print_monitor_refresh(
-        background_tasks,
-        agent.restaurante_id,
-    )
-    if job.status == "failed":
-        _schedule_print_history_maintenance(
-            background_tasks,
-            agent.restaurante_id,
-            datetime.datetime.now(datetime.timezone.utc),
-        )
-
-    return {
+    response = {
         "status": job.status,
         "job_id": job.id,
         "attempts": job.attempts,
-        "max_attempts": MAX_ATTEMPTS
+        "max_attempts": MAX_ATTEMPTS,
     }
+    db.commit()
+    _schedule_print_monitor_refresh(
+        background_tasks,
+        restaurante_id,
+    )
+    if response["status"] == "failed":
+        _schedule_print_history_maintenance(
+            background_tasks,
+            restaurante_id,
+            datetime.datetime.now(datetime.timezone.utc),
+        )
+
+    return response
 
 @router.post("/jobs/retry-batch")
 def retry_failed_jobs(
