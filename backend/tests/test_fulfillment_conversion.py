@@ -137,11 +137,25 @@ def test_stale_preview_cannot_commit(char_client, order, change):
 
 def test_tenant_and_permission_isolation(char_client, order):
     from app.security import create_access_token
-    foreign = create_access_token(subject='usr-char-admin', restaurante_id=order['restaurant_id'] + 1, role='admin')
+    from app.database import current_restaurante_id
+    from app.models import Restaurante, Usuario
+    foreign_rid = order['restaurant_id'] + 10000
+    foreign_user = 'foreign-operator-' + uuid.uuid4().hex
+    context = current_restaurante_id.set(foreign_rid)
+    try:
+        with SessionLocal(restaurante_id=foreign_rid) as db:
+            if db.get(Restaurante, foreign_rid) is None:
+                db.add(Restaurante(id=foreign_rid, nome='Restaurante estrangeiro', slug='foreign-conversion-test', plano='premium'))
+                db.flush()
+            db.add(Usuario(id=foreign_user, restaurante_id=foreign_rid, nome='Caixa de outro tenant', cargo='caixa', status='ativo'))
+            db.commit()
+    finally:
+        current_restaurante_id.reset(context)
+    foreign = create_access_token(subject=foreign_user, restaurante_id=foreign_rid, role='caixa')
     foreign_headers = {'Authorization': f'Bearer {foreign}'}
     for suffix in ['/opcoes', '/previa', '']:
         result = char_client.get(f"/comandas/{order['id']}/modalidade{suffix}", headers=foreign_headers) if suffix == '/opcoes' else char_client.post(f"/comandas/{order['id']}/modalidade{suffix}", json={'fulfillment': 'delivery'}, headers=foreign_headers)
-        assert result.status_code in {401, 403, 404}
+        assert result.status_code == 404, result.text
     assert char_client.post(f"/comandas/{order['id']}/modalidade", json={}).status_code == 401
 
 
