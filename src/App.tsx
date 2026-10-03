@@ -31,6 +31,7 @@ import { authFetch, authRequestErrorMessage } from './utils/authRequest';
 import { clearOperatorSession, getOperatorSession, saveOperatorSession, type OperationalPortal } from './utils/authSession';
 import { openAuthenticatedWebSocket } from './utils/authenticatedWebSocket';
 import { operationalFetch } from './utils/operationalRequest';
+import { createVisibleRefresh } from './utils/visibleRefresh';
 import { aplicarMascaraTelefoneInput } from './utils/phonePresentation';
 
 // Route modules have stable identities and are downloaded only when selected.
@@ -397,12 +398,20 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   }, [operationalScopeKey, fetchTurnoResumo]);
 
   useEffect(() => {
-    if (!isAuthenticated || isWsConnected) return;
-    const interval = setInterval(() => {
-      fetchConfig();
-      fetchTurnoResumo();
-    }, 15000);
-    return () => clearInterval(interval);
+    if (!isAuthenticated) return;
+    const refresh = createVisibleRefresh(
+      () => Promise.allSettled([fetchConfig(), fetchTurnoResumo()]),
+      () => !document.hidden,
+    );
+    const interval = isWsConnected ? undefined : setInterval(refresh.tick, 15000);
+    window.addEventListener('focus', refresh.resume);
+    document.addEventListener('visibilitychange', refresh.resume);
+    return () => {
+      refresh.stop();
+      clearInterval(interval);
+      window.removeEventListener('focus', refresh.resume);
+      document.removeEventListener('visibilitychange', refresh.resume);
+    };
   }, [isAuthenticated, isWsConnected, operationalScopeKey, fetchTurnoResumo]);
 
   useEffect(() => {
@@ -780,6 +789,10 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         try {
           const data = JSON.parse(event.data);
           const eventName = data.event || data.type;
+
+          if (eventName === 'payment_intent_updated' || eventName === 'payment_updated') {
+            window.dispatchEvent(new Event('koma_smartpos_updated'));
+          }
 
           if (
             eventName === "new_delivery_order"

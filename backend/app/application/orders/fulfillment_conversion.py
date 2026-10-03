@@ -54,7 +54,7 @@ def options(db: Session, order: Comanda) -> dict[str, Any]:
     reason = blocked_reason(db, order)
     current = normalize_to_fulfillment(order.tipo)
     target = 'delivery' if current == FulfillmentType.PICKUP else 'pickup'
-    config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == order.restaurante_id).with_for_update().first()
+    config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == order.restaurante_id).with_for_update(of=ConfiguracaoRestaurante).first()
     if not reason and (not mode_is_allowed(config, 'delivery' if target == 'delivery' else 'retirada') or (target == 'delivery' and (config is None or not config.delivery_ativo))):
         reason = 'A modalidade de destino não está habilitada no restaurante.'
     return {'options': [] if reason else [target],
@@ -75,7 +75,7 @@ def preview(db: Session, order: Comanda, payload: dict[str, Any]):
     try:
         if target == 'delivery':
             phone = normalizar_telefone_cliente(str(payload.get('telefone') or phone))
-            config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == order.restaurante_id).with_for_update().first()
+            config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == order.restaurante_id).with_for_update(of=ConfiguracaoRestaurante).first()
             if config is None or not config.delivery_ativo:
                 raise HTTPException(409, 'Entrega não está habilitada no restaurante.')
             address = delivery_address_from_payload(payload.get('address_snapshot'))
@@ -91,7 +91,7 @@ def preview(db: Session, order: Comanda, payload: dict[str, Any]):
             fee = OrderApplicationService.resolve_server_delivery_fee(db, order.restaurante_id, FulfillmentType.DELIVERY,
                 active_items_subtotal(order), neighborhood=address.neighborhood, delivery_address=address)
         else:
-            config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == order.restaurante_id).with_for_update().first()
+            config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == order.restaurante_id).with_for_update(of=ConfiguracaoRestaurante).first()
             if config and config.pedido_minimo_retirada and active_items_subtotal(order) < money(config.pedido_minimo):
                 raise HTTPException(422, 'O pedido não atinge o mínimo configurado para retirada.')
             fee = Decimal('0.00')
