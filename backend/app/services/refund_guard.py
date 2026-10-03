@@ -179,6 +179,17 @@ def create_refund_guarded(
             alocacoes=alocacoes,
         )
 
+    direct_intent = db.query(OnlinePaymentIntent).filter(
+        OnlinePaymentIntent.restaurante_id == restaurante_id,
+        OnlinePaymentIntent.pagamento_id == payment_id,
+        OnlinePaymentIntent.provider == "direct_pix",
+    ).first()
+    if direct_intent is not None:
+        raise RefundDomainError(
+            "Pix direto exige devolução no banco e registro da referência bancária; o KÔMA não executa a devolução automaticamente.",
+            status_code=409,
+        )
+
     online_intent = db.query(OnlinePaymentIntent).filter(
         OnlinePaymentIntent.restaurante_id == restaurante_id,
         OnlinePaymentIntent.pagamento_id == payment_id,

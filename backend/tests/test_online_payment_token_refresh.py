@@ -170,6 +170,7 @@ def test_pix_creation_retries_once_after_provider_401(monkeypatch):
         token_expires_at=None,
     )
     intent = SimpleNamespace(
+        provider="mercado_pago",
         id="intent-1",
         restaurante_id=3,
         amount=100.0,
@@ -253,6 +254,7 @@ def test_pix_creation_retries_once_after_provider_401(monkeypatch):
 def test_pix_creation_never_waives_fee_when_provider_rejects_application_fee(monkeypatch):
     account = _account(access_token="connected-access")
     intent = SimpleNamespace(
+        provider="mercado_pago",
         id="intent-fee-fallback",
         restaurante_id=3,
         amount=20.90,

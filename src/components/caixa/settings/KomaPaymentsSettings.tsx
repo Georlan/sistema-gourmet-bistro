@@ -1,3 +1,4 @@
+import { DirectPixSettings } from './DirectPixSettings';
 import { Landmark, Percent, ShieldCheck } from 'lucide-react';
 import { MercadoPagoConnectionCard } from '../online-menu/MercadoPagoConnectionCard';
 
@@ -7,13 +8,6 @@ interface Props {
 }
 
 const PROVIDER_REFERENCES = [
-  {
-    name: 'C6 Bank',
-    status: 'Em homologação',
-    online: 'API Pix: 0% divulgado',
-    inPerson: 'API Pix: 0% divulgado',
-    note: 'O KÔMA ainda não libera a conexão enquanto homologa credenciais, confirmação e repasse da taxa.',
-  },
   {
     name: 'Mercado Pago',
     status: 'Disponível',
@@ -34,7 +28,7 @@ export function KomaPaymentsSettings({ apiBaseUrl, authHeaders }: Props) {
           <div className="min-w-0">
             <h3 id="koma-payments-heading" className="text-sm font-black text-koma-foreground">KÔMA Pagamentos</h3>
             <p className="mt-1.5 max-w-3xl text-[10px] leading-relaxed text-koma-muted">
-              Escolha como o restaurante recebe pagamentos processados pelo KÔMA. A taxa KÔMA vem do contrato e não muda entre online, presencial ou provedor; tarifas bancárias são cobradas separadamente pelo provedor quando existirem.
+              Escolha como o restaurante recebe pagamentos processados pelo KÔMA. A taxa KÔMA contratada incide apenas sobre pagamentos online. Dinheiro e cartão na entrega não têm taxa KÔMA; tarifas bancárias são cobradas separadamente pelo provedor quando existirem.
             </p>
           </div>
         </div>
@@ -70,6 +64,7 @@ export function KomaPaymentsSettings({ apiBaseUrl, authHeaders }: Props) {
         </div>
       </section>
 
+      <DirectPixSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
       <MercadoPagoConnectionCard apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
     </div>
   );

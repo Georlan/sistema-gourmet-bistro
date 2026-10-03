@@ -406,6 +406,35 @@ def generate_or_get_subscription_pix(user=Depends(_administrator), db: Session =
             "message": "Ainda não há cobrança Pix vencida.",
         }
 
+    from ..models import DirectPixFeeInvoice, RestaurantDirectPixConfig
+    from ..services.direct_pix_billing import close_month
+    direct_config = db.query(RestaurantDirectPixConfig).filter(
+        RestaurantDirectPixConfig.restaurante_id == restaurante_id,
+        RestaurantDirectPixConfig.enabled.is_(True),
+    ).one_or_none()
+    if direct_config is not None and subscription.billing_cycle in {'monthly','mensal'}:
+        from zoneinfo import ZoneInfo
+        local_now = now.astimezone(ZoneInfo('America/Sao_Paulo'))
+        period = (local_now.replace(day=1)-dt.timedelta(days=1)).strftime('%Y-%m')
+        try:
+            close_month(db,restaurant_id=restaurante_id,period=period)
+            db.flush()
+        except ValueError as exc:
+            raise HTTPException(409,str(exc)) from exc
+    from ..services.direct_pix_billing import create_invoice_pix
+    consolidated = db.query(DirectPixFeeInvoice).filter(
+        DirectPixFeeInvoice.restaurante_id == restaurante_id,
+        DirectPixFeeInvoice.status == "open",
+        DirectPixFeeInvoice.subscription_amount > 0,
+        DirectPixFeeInvoice.subscription_due_at == due_at,
+    ).one_or_none()
+    if consolidated is not None:
+        try:
+            return create_invoice_pix(db,restaurant_id=restaurante_id,invoice_id=consolidated.id,
+                payer_email=str(user.email or ""))
+        except (ValueError,SaasMercadoPagoError) as exc:
+            raise HTTPException(409,str(exc)) from exc
+
     amount = _subscription_amount(db, subscription, restaurante_id)
     existing_payment_id = str(subscription.provider_subscription_id or "").strip()
     if existing_payment_id:
@@ -482,6 +511,21 @@ async def mercado_pago_saas_pix_webhook(
         if exc.status_code in {400, 404}:
             return {"status": "received", "reconciled": False, "reason": "payment_not_found"}
         raise HTTPException(502, "Não foi possível confirmar o Pix.") from exc
+
+    fee_reference = str(payment.get("external_reference") or "").strip()
+    fee_match = re.fullmatch(r"KOMA-FEE-(\d+)-([a-f0-9-]{36})",fee_reference)
+    if fee_match:
+        from ..services.direct_pix_billing import reconcile_invoice_payment
+        restaurant_id = int(fee_match.group(1))
+        with tenant_session_scope(db,restaurant_id):
+            try:
+                reconciled = reconcile_invoice_payment(db,restaurant_id=restaurant_id,
+                    invoice_id=fee_match.group(2),payment=payment)
+                db.commit()
+            except ValueError as exc:
+                db.rollback()
+                raise HTTPException(409,str(exc)) from exc
+        return {"status":"received","reconciled":reconciled}
 
     reference = str(payment.get("external_reference") or "").strip().upper()
     match = _PIX_REFERENCE_RE.fullmatch(reference)

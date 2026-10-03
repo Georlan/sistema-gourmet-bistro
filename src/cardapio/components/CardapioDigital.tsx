@@ -1,3 +1,4 @@
+import { QRCodeSVG } from 'qrcode.react';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -53,6 +54,7 @@ interface OnlinePaymentResponse {
   metodo?: string;
   qr_code?: string | null;
   qr_code_base64?: string | null;
+  confirmacao_manual?: boolean;
   ticket_url?: string | null;
   expira_em?: string | null;
 }
@@ -568,7 +570,7 @@ export default function CardapioDigital({
               <h3 className="mt-1.5 font-display text-2xl font-black tracking-tight text-koma-foreground">Pedido #{createdOrder.numero_pedido}</h3>
               <p className="mt-2 max-w-md text-xs leading-relaxed text-koma-muted">
                 {createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved"
-                  ? "Pague o Pix abaixo. O pedido só aparecerá para o restaurante depois da confirmação automática."
+                  ? (createdOrder.pagamento.confirmacao_manual ? "Pague o Pix abaixo. O restaurante conferirá o recebimento antes de liberar seu pedido." : "Pague o Pix abaixo. O pedido só aparecerá para o restaurante depois da confirmação automática.")
                   : isCreatedOrderScheduled
                     ? `Pedido reservado para ${createdScheduleLabel}. Ele entra na operação somente no horário escolhido.`
                     : "Seu pedido entrou no painel do restaurante e está aguardando aceite. Você pode acompanhar o andamento neste mesmo cardápio."}
@@ -576,10 +578,11 @@ export default function CardapioDigital({
 
               {createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved" && (
                 <div className="mt-5 w-full max-w-md rounded-2xl border border-emerald-500/25 bg-koma-card p-4">
+                  {!createdOrder.pagamento.qr_code_base64 && createdOrder.pagamento.qr_code && <QRCodeSVG value={createdOrder.pagamento.qr_code} size={208} level="M" marginSize={4} className="mx-auto" />}
                   {createdOrder.pagamento.qr_code_base64 && <img className="mx-auto h-52 w-52 rounded-xl bg-white p-2" src={`data:image/png;base64,${createdOrder.pagamento.qr_code_base64}`} alt="QR Code Pix do pedido" />}
                   {createdOrder.pagamento.qr_code && <button type="button" onClick={() => void navigator.clipboard.writeText(createdOrder.pagamento?.qr_code || "")} className="mt-3 h-11 w-full rounded-xl bg-emerald-500 px-4 text-xs font-black text-white">Copiar código Pix</button>}
                   {createdOrder.pagamento.ticket_url && <a href={createdOrder.pagamento.ticket_url} target="_blank" rel="noreferrer" className="mt-2 flex h-11 w-full items-center justify-center rounded-xl border border-koma-border text-xs font-bold text-koma-foreground">Abrir pagamento</a>}
-                  <p className="mt-2 text-[10px] leading-relaxed text-koma-muted">A confirmação é automática. Não feche esta tela até concluir o pagamento.</p>
+                  <p className="mt-2 text-[10px] leading-relaxed text-koma-muted">{createdOrder.pagamento.confirmacao_manual ? "O restaurante confirmará o recebimento. Você pode acompanhar o pedido neste cardápio." : "A confirmação é automática. Você pode acompanhar o pedido neste cardápio."}</p>
                 </div>
               )}
 

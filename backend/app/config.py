@@ -294,6 +294,7 @@ class Settings:
     ).strip()
     # Trava operacional: as taxas por plano existem no catálogo e no backend,
     # mas só são enviadas ao provedor quando este flag é habilitado explicitamente.
+    DIRECT_PIX_ENABLED = os.getenv("DIRECT_PIX_ENABLED", "false").lower() == "true"
     ONLINE_PAYMENT_PLAN_FEES_ENABLED: bool = (
         os.getenv("ONLINE_PAYMENT_PLAN_FEES_ENABLED", "false").lower() == "true"
     )

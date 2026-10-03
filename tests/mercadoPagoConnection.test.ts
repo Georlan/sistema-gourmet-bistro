@@ -39,10 +39,10 @@ test('Sistema > Configurações owns KÔMA Pagamentos and the Mercado Pago conne
   assert.match(integrations, /KomaPaymentsSettings/);
   assert.match(komaPayments, /MercadoPagoConnectionCard/);
   assert.match(komaPayments, /KÔMA Pagamentos/);
-  assert.match(komaPayments, /C6 Bank/);
+  assert.match(komaPayments, /DirectPixSettings/);
   assert.match(komaPayments, /0,99%/);
   assert.match(komaPayments, /0,49%/);
-  assert.match(komaPayments, /0% divulgado/);
+  assert.match(komaPayments, /apenas sobre pagamentos online/);
   assert.match(settings, /activeSubTab === 'integracoes'/);
   assert.match(settings, /CashierIntegrationsSettings/);
   assert.match(navigation, /config_integracoes/);
@@ -54,5 +54,5 @@ test('Sistema > Configurações owns KÔMA Pagamentos and the Mercado Pago conne
 test('first access sends provider setup to the canonical integrations screen', () => {
   assert.match(onboarding, /openCashierAt\('impressao_salao', 'integracoes', true\)/);
   assert.match(onboarding, /Escolher provedor quando quiser/);
-  assert.match(onboarding, /C6 Bank está em homologação/);
+  assert.match(onboarding, /chave Pix própria/);
 });

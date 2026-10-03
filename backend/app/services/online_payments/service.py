@@ -19,6 +19,7 @@ from ...models import (
     Pagamento,
     Restaurante,
     RestaurantPaymentAccount,
+    RestaurantDirectPixConfig,
 )
 from ...subscription import subscription_marketplace_rate
 from ..billing_service import tenant_marketplace_rate
@@ -178,8 +179,29 @@ class OnlinePaymentService:
         db.refresh(account)
         return account
 
+    @staticmethod
+    def has_active_account(db: Session, restaurant_id: int) -> bool:
+        config = db.query(RestaurantDirectPixConfig).filter(
+            RestaurantDirectPixConfig.restaurante_id == restaurant_id,
+        ).one_or_none()
+        if config is not None and config.enabled:
+            return bool(settings.DIRECT_PIX_ENABLED)
+        return db.query(RestaurantPaymentAccount.id).filter(
+            RestaurantPaymentAccount.restaurante_id == restaurant_id,
+            RestaurantPaymentAccount.provider == "mercado_pago",
+            RestaurantPaymentAccount.status == "active",
+        ).first() is not None
+
     @classmethod
     def active_account(cls, db: Session, restaurant_id: int) -> RestaurantPaymentAccount:
+        config = db.query(RestaurantDirectPixConfig).filter(
+            RestaurantDirectPixConfig.restaurante_id == restaurant_id,
+            RestaurantDirectPixConfig.enabled.is_(True),
+        ).first()
+        if config is not None:
+            if not settings.DIRECT_PIX_ENABLED:
+                raise OnlinePaymentConfigurationError("Pix direto temporariamente indisponível. Escolha pagamento na entrega.")
+            return RestaurantPaymentAccount(restaurante_id=restaurant_id, provider="direct_pix", status="active")
         accounts = (
             db.query(RestaurantPaymentAccount)
             .filter(
@@ -217,6 +239,21 @@ class OnlinePaymentService:
 
         if not settings.KOMA_PUBLIC_API_URL:
             raise OnlinePaymentConfigurationError("A URL pública de pagamentos ainda não foi configurada.")
+        return account
+
+    @classmethod
+    def account_for_intent(cls, db: Session, intent: OnlinePaymentIntent) -> RestaurantPaymentAccount:
+        if intent.provider == "direct_pix":
+            return RestaurantPaymentAccount(restaurante_id=intent.restaurante_id, provider="direct_pix", status="active")
+        account = db.query(RestaurantPaymentAccount).filter(
+            RestaurantPaymentAccount.restaurante_id == intent.restaurante_id,
+            RestaurantPaymentAccount.provider == intent.provider,
+            RestaurantPaymentAccount.status == "active",
+        ).one_or_none()
+        if account is None:
+            raise OnlinePaymentConfigurationError("A conta original do pagamento precisa ser reconectada.")
+        if _token_needs_refresh(account.token_expires_at):
+            account = cls._refresh_account_credentials(db, account)
         return account
 
     @staticmethod
@@ -285,6 +322,7 @@ class OnlinePaymentService:
             status="created",
             amount=float(normalized_amount),
             marketplace_fee=float(cls.marketplace_fee_for_tenant(db, normalized_amount, restaurant)),
+            fee_settlement="invoiced" if provider == "direct_pix" else "split",
             idempotency_key=idempotency_key,
         )
         comanda.online_payment_status = "pending"
@@ -508,7 +546,29 @@ class OnlinePaymentService:
     ) -> OnlinePaymentIntent:
         if intent.external_payment_id:
             return intent
-        account = account or cls.active_account(db, intent.restaurante_id)
+        if intent.provider == "direct_pix":
+            from .direct_pix import brcode
+            config = db.query(RestaurantDirectPixConfig).filter(
+                RestaurantDirectPixConfig.restaurante_id == intent.restaurante_id,
+                RestaurantDirectPixConfig.enabled.is_(True),
+            ).one_or_none()
+            if not settings.DIRECT_PIX_ENABLED or config is None:
+                raise OnlinePaymentConfigurationError("Pix direto indisponível.")
+            locked = db.query(OnlinePaymentIntent).filter(
+                OnlinePaymentIntent.restaurante_id == intent.restaurante_id,
+                OnlinePaymentIntent.id == intent.id,
+            ).with_for_update().one()
+            if locked.qr_code is None:
+                locked.qr_code = brcode(key=config.pix_key, name=config.holder_name, city=config.city,
+                    amount=_money(locked.amount), txid=locked.id.replace("-", "")[:25])
+                locked.external_payment_id = f"direct:{locked.id}"
+                locked.status = "pending"
+                # Static QR has no bank-enforced expiry. It must be resolved by an operator.
+                locked.expires_at = None
+            db.commit()
+            db.refresh(locked)
+            return locked
+        account = account or cls.account_for_intent(db, intent)
         expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
             minutes=settings.ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES
         )
@@ -645,6 +705,7 @@ class OnlinePaymentService:
             "cobranca_online": True,
             "provedor": intent.provider,
             "metodo": intent.method,
+            "confirmacao_manual": intent.provider == "direct_pix",
             "qr_code": intent.qr_code,
             "qr_code_base64": intent.qr_code_base64,
             "ticket_url": intent.ticket_url,
@@ -761,8 +822,12 @@ class OnlinePaymentService:
                 db.commit()
                 continue
 
+            if intent.provider == "direct_pix":
+                raise OnlinePaymentConfigurationError(
+                    "Confira os Pix diretos pendentes no extrato e confirme ou cancele os pedidos antes de fechar o caixa."
+                )
             if intent.external_payment_id:
-                account = account or cls.active_account(db, restaurant_id)
+                account = cls.account_for_intent(db, intent)
                 intent, _ = cls.reconcile_provider_payment(
                     db,
                     account=account,
@@ -801,8 +866,12 @@ class OnlinePaymentService:
                 db.commit()
                 continue
 
+            if intent.provider == "direct_pix":
+                raise OnlinePaymentConfigurationError(
+                    "Confira os Pix diretos pendentes no extrato e confirme ou cancele os pedidos antes de fechar o caixa."
+                )
             if intent.external_payment_id:
-                account = account or cls.active_account(db, restaurant_id)
+                account = cls.account_for_intent(db, intent)
                 cls.cancel_provider_payment(
                     db,
                     account=account,

@@ -820,6 +820,7 @@ class OnlinePaymentIntent(Base):
     status = Column(String(20), nullable=False, default="created")
     amount = Column(Numeric(14, 2, asdecimal=False), nullable=False)
     marketplace_fee = Column(Numeric(14, 2, asdecimal=False), nullable=False, default=0)
+    fee_settlement = Column(String(16), nullable=True)
     idempotency_key = Column(String(128), nullable=False)
     external_payment_id = Column(String(128), nullable=True)
     qr_code = Column(Text, nullable=True)
@@ -842,7 +843,7 @@ class OnlinePaymentIntent(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "provider IN ('mercado_pago')",
+            "provider IN ('mercado_pago', 'direct_pix')",
             name="ck_online_payment_intents_provider",
         ),
         CheckConstraint(
@@ -1983,4 +1984,57 @@ class ExternalOrderReference(Base):
     __table_args__ = (
         UniqueConstraint("restaurante_id", "provider", "external_order_id", name="uq_external_order_ref_provider_order"),
         Index("ix_external_order_ref_internal_lookup", "restaurante_id", "internal_order_id"),
+    )
+
+
+class RestaurantDirectPixConfig(Base):
+    __tablename__ = "restaurant_direct_pix_configs"
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), primary_key=True, default=lambda: current_restaurante_id.get())
+    enabled = Column(Boolean, nullable=False, default=False)
+    key_type = Column(String(16), nullable=False)
+    _pix_key = Column("pix_key", Text, nullable=False)
+    holder_name = Column(String(25), nullable=False)
+    city = Column(String(15), nullable=False)
+    accepted_by = Column(String, nullable=False)
+    accepted_at = Column(DateTime(timezone=True), nullable=False)
+    terms_version = Column(String(32), nullable=False)
+    __table_args__ = (CheckConstraint("key_type IN ('cpf','cnpj','phone','email','random')", name="ck_direct_pix_key_type"),)
+
+    @hybrid_property
+    def pix_key(self):
+        return decrypt_field(self._pix_key)
+
+    @pix_key.setter
+    def pix_key(self, value):
+        self._pix_key = encrypt_field(value)
+
+
+class DirectPixFeeInvoice(Base):
+    __tablename__ = "direct_pix_fee_invoices"
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), nullable=False, default=lambda: current_restaurante_id.get())
+    period = Column(String(7), nullable=False)
+    provider_payment_id = Column(String(128), nullable=True)
+    payment_payload = Column(JSON, nullable=True)
+    paid_at = Column(DateTime(timezone=True), nullable=True)
+    subscription_due_at = Column(DateTime(timezone=True), nullable=True)
+    fees = Column(Numeric(14,2), nullable=False)
+    subscription_amount = Column(Numeric(14,2), nullable=False)
+    status = Column(String(16), nullable=False, default="open")
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    __table_args__ = (UniqueConstraint("restaurante_id","period", name="uq_direct_pix_invoice_period"),)
+
+
+class DirectPixReceipt(Base):
+    __tablename__ = "direct_pix_receipts"
+    intent_id = Column(String(36), ForeignKey("online_payment_intents.id"), primary_key=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), nullable=False, default=lambda: current_restaurante_id.get())
+    bank_reference = Column(String(32), nullable=False)
+    confirmed_by = Column(String, nullable=False)
+    confirmed_at = Column(DateTime(timezone=True), nullable=False)
+    fee = Column(Numeric(14,2), nullable=False)
+    invoice_id = Column(String(36), ForeignKey("direct_pix_fee_invoices.id"), nullable=True)
+    __table_args__ = (
+        UniqueConstraint("restaurante_id","bank_reference", name="uq_direct_pix_receipt_reference"),
+        Index("ix_direct_pix_receipts_tenant_date", "restaurante_id", "confirmed_at"),
     )

@@ -271,6 +271,7 @@ def consultar_status_pedido_publico(
                     "status": payment_intent.status,
                     "cobranca_online": True,
                     "metodo": payment_intent.method,
+                    "confirmacao_manual": payment_intent.provider == "direct_pix",
                     "qr_code": payment_intent.qr_code,
                     "qr_code_base64": payment_intent.qr_code_base64,
                     "ticket_url": payment_intent.ticket_url,

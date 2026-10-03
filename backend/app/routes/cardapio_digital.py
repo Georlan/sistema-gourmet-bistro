@@ -1,3 +1,4 @@
+from ..services.online_payments.service import OnlinePaymentService
 from contextlib import contextmanager
 import logging
 from typing import Optional
@@ -25,7 +26,6 @@ from ..models import (
     ConfiguracaoRestaurante,
     Produto,
     Restaurante,
-    RestaurantPaymentAccount,
     Usuario,
 )
 from ..security import require_permission, get_current_garcom_optional
@@ -334,11 +334,7 @@ def obter_config_cardapio_digital(
         if not restaurante:
             raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
         configuracao = _public_configuration(db, rest_id)
-        pagamento_online_ativo = db.query(RestaurantPaymentAccount.id).filter(
-            RestaurantPaymentAccount.restaurante_id == rest_id,
-            RestaurantPaymentAccount.provider == "mercado_pago",
-            RestaurantPaymentAccount.status == "active",
-        ).first() is not None
+        pagamento_online_ativo = OnlinePaymentService.has_active_account(db, rest_id)
         return _public_restaurant_payload(
             restaurante, configuracao, pagamento_online_ativo,
             _public_benefit_capabilities(db, rest_id, restaurante.plano),
@@ -398,11 +394,7 @@ def obter_cardapio_publico(
             raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
 
         configuracao = _public_configuration(db, rest_id)
-        pagamento_online_ativo = db.query(RestaurantPaymentAccount.id).filter(
-            RestaurantPaymentAccount.restaurante_id == rest_id,
-            RestaurantPaymentAccount.provider == "mercado_pago",
-            RestaurantPaymentAccount.status == "active",
-        ).first() is not None
+        pagamento_online_ativo = OnlinePaymentService.has_active_account(db, rest_id)
         categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
         produtos = db.query(Produto).filter(
             Produto.restaurante_id == rest_id,

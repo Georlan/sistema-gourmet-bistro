@@ -182,7 +182,7 @@ export function OnlineMenuPaymentSettings({ apiBaseUrl, authHeaders, publicMenuU
               <h3 className="text-sm font-black text-koma-foreground">Pagamento online</h3>
               <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
                 {onlinePaymentEnabled
-                  ? 'Mercado Pago está conectado. Este painel só mostra o estado operacional; credenciais permanecem em Integrações.'
+                  ? 'O recebimento online está ativo. Confira o modo de confirmação e a conta recebedora em Integrações.'
                   : 'Nenhum provedor de pagamento online está ativo para este restaurante.'}
               </p>
             </div>

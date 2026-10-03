@@ -1,3 +1,4 @@
+import { DirectPixPendingPanel } from './caixa/orders/DirectPixPendingPanel';
 import clsx from 'clsx';
 import { Loader2, Lock, Maximize2, Menu, MessageSquare, Minimize2 } from 'lucide-react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -1000,6 +1001,8 @@ export function CaixaPanel({
             )}
 
             {activeTab === 'operacao' && activeSubTab === 'pedidos' && (
+              <>
+              <DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />
               <CaixaOrdersWorkspace
                 hasLocalServiceWork={tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0}
                 columns={{
@@ -1057,6 +1060,7 @@ export function CaixaPanel({
                 restaurantConfig={restauranteConfig}
                 onToast={showToast}
               />
+              </>
             )}
 
             <DeferredCashierSection active={activeTab === 'operacao' && activeSubTab === 'balcao'} label="Novo pedido" load={loadCashierPdvView} sectionProps={{ activeSubTab, catalogReady, isLoading, pdvTableOptions, pdv }} />

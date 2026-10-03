@@ -965,7 +965,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                     <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">Opcional</span>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
-                    O restaurante pode operar sem conectar um provedor agora. No KÔMA Pagamentos, Mercado Pago já está disponível e o C6 Bank está em homologação como alternativa. A conexão é separada da cobrança da assinatura KÔMA.
+                    O restaurante pode operar sem conectar um provedor agora. No KÔMA Pagamentos, Mercado Pago é a opção recomendada. Quando disponível, a chave Pix própria permite recebimento direto com conferência manual. A conexão é separada da cobrança da assinatura KÔMA.
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <span className={`text-[10px] font-bold ${snapshot.steps.mercadoPago ? 'text-emerald-400' : 'text-koma-subtle'}`}>
