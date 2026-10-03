@@ -118,13 +118,14 @@ def test_assigned_courier_blocks_both_endpoints(char_client, order):
     assert legacy.status_code == 409
 
 
-@pytest.mark.parametrize('change', ['status', 'items', 'fee'])
+@pytest.mark.parametrize('change', ['status', 'items', 'fee', 'phone'])
 def test_stale_preview_cannot_commit(char_client, order, change):
-    payload, preview = quote(char_client, order)
+    payload, preview = quote(char_client, order, telefone='85999990000')
     with SessionLocal(restaurante_id=order['restaurant_id']) as db:
         persisted = db.get(Comanda, order['id'])
         if change == 'status': persisted.delivery_status = 'pronto'
         elif change == 'items': persisted.itens[0].preco_unit += 1
+        elif change == 'phone': persisted.delivery_telefone = '85988881111'
         else: db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=order['restaurant_id']).one().taxa_entrega_fixa = 10
         db.commit()
     result = call(char_client, order, '', {**payload, 'token': preview['token'], 'motivo': 'Cliente pediu entrega'})

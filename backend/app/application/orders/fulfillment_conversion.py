@@ -104,7 +104,8 @@ def preview(db: Session, order: Comanda, payload: dict[str, Any]):
     # A prévia vincula destino, preço e todas as dimensões mutáveis relevantes.
     state = {'id': order.id, 'tenant': order.restaurante_id, 'tipo': order.tipo, 'status': order.delivery_status,
              'fee': str(order.delivery_taxa), 'paid': str(order.valor_pago), 'target': target,
-             'address': address.to_snapshot() if address else None, 'phone': phone, 'new_total': str(new_total), 'new_fee': str(fee),
+             'address': address.to_snapshot() if address else None, 'phone': phone,
+             'previous_phone': order.delivery_telefone, 'previous_address': order.delivery_endereco, 'new_total': str(new_total), 'new_fee': str(fee),
              'discounts': [str(order.valor_desconto_cupom), str(order.valor_desconto_cashback)],
              'payment_method': order.delivery_forma_pagamento, 'change': str(order.delivery_troco_para),
              'items': sorted((str(i.id), i.status, str(i.preco_unit), bool(i.pago)) for i in order.itens)}
