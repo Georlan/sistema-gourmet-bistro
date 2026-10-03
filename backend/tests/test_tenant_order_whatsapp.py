@@ -544,6 +544,8 @@ def test_order_alerts_are_paced_per_restaurant(char_setup, monkeypatch):
             return False
 
         def post(self, *args, **kwargs):
+            assert not db.in_transaction(), "Provider send must not hold SQL"
+            assert kwargs["json"]["number"] == "5511999999999"
             return Response()
 
     try:
@@ -564,8 +566,16 @@ def test_order_alerts_are_paced_per_restaurant(char_setup, monkeypatch):
         db.commit()
         before = dt.datetime.now(dt.timezone.utc)
         monkeypatch.setattr(settings, "TENANT_WHATSAPP_MIN_SEND_INTERVAL_SECONDS", 13)
-        monkeypatch.setattr(wa, "connection_state", lambda _: "open")
-        monkeypatch.setattr(wa, "owner_phone", lambda _: "5511999999999")
+        def connection_state(_):
+            assert not db.in_transaction(), "Provider status must not hold SQL"
+            return "open"
+
+        def owner_phone(_):
+            assert not db.in_transaction(), "Provider identity must not hold SQL"
+            return "5511999999999"
+
+        monkeypatch.setattr(wa, "connection_state", connection_state)
+        monkeypatch.setattr(wa, "owner_phone", owner_phone)
         monkeypatch.setattr(wa, "_provider", lambda: ("https://provider.test", {"header": "value"}))
         monkeypatch.setattr(wa.httpx, "Client", SuccessClient)
 

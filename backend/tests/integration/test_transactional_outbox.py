@@ -221,6 +221,7 @@ def test_outbox_dispatcher_success_delivery(outbox_db):
 
     # Mock HTTP transport respondendo 200 OK
     def mock_handler(request: httpx.Request):
+        assert not outbox_db.in_transaction(), "Webhook I/O must not hold SQL"
         assert request.headers.get("X-Koma-Signature") is not None
         assert request.headers.get("X-Koma-Event-Type") == "koma.order.created"
         return httpx.Response(200, json={"received": True})
