@@ -11,10 +11,11 @@ from app import database_diagnostics
 from app.main import _validation_diagnostic, _log_auth_rejection
 
 
-def test_slow_checkout_is_reported_without_sql_or_values(monkeypatch, caplog):
+@pytest.mark.parametrize("pool_size", [1, 4])
+def test_slow_checkout_is_reported_without_sql_or_values(monkeypatch, caplog, pool_size):
     clock = [100.0]
     monkeypatch.setattr(database_diagnostics, 'monotonic', lambda: clock[0])
-    engine = create_engine('sqlite://', poolclass=QueuePool, pool_size=1, max_overflow=0)
+    engine = create_engine('sqlite://', poolclass=QueuePool, pool_size=pool_size, max_overflow=0)
     database_diagnostics.install_pool_diagnostics(engine, lambda: 6)
     with engine.connect() as connection:
         connection.execute(text("SELECT :value"), {'value': 'SECRET_SENTINEL'})
@@ -23,7 +24,8 @@ def test_slow_checkout_is_reported_without_sql_or_values(monkeypatch, caplog):
     assert record['event'] == 'sql_connection_held'
     assert record['duration_ms'] == 6000
     assert record['restaurante_id'] == 6
-    assert record['pool_size'] == 1
+    assert record['pool_size'] == pool_size
+    assert record['overflow'] == 0
     assert engine.pool.checkedout() == 0
     assert 'SECRET_SENTINEL' not in caplog.text
     assert 'SELECT' not in caplog.text

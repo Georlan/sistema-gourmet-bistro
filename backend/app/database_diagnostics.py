@@ -43,5 +43,5 @@ def install_pool_diagnostics(engine, tenant_id, *, slow_seconds=5.0):
                 "pool_size": pool.size(),
                 # checkin fires before the slot is returned to the queue.
                 "checked_out_before_return": pool.checkedout(),
-                "overflow": pool.overflow(),
+                "overflow": max(0, pool.overflow()),
             }, separators=(",", ":")))
