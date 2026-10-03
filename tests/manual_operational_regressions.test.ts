@@ -17,7 +17,7 @@ test("novo pedido emite uma única nota e não tenta tocar antes do desbloqueio 
 });
 
 test("pedido digital pendente mantém alarme até aceite sem aviso fixo de áudio", () => {
-  assert.match(alerts, /pendingAcceptanceOrders\.length === 0/);
+  assert.match(alerts, /hasPendingAcceptance = pendingAcceptanceOrders\.length > 0/);
   assert.match(alerts, /window\.setInterval\(\(\) => \{/);
   assert.match(alerts, /\}, 4000\)/);
   assert.match(alerts, /window\.clearInterval\(alarmId\)/);

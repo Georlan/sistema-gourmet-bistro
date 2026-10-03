@@ -12,9 +12,10 @@ type Props = {
 };
 
 /** Owns alerts state, effects and actions; composition supplies only cross-feature dependencies. */
-export function useCashierAlerts({ orders, deliveryOrders, pendingAcceptanceOrders, isDrawerOpen }: Props) {
+export function useCashierAlerts({ orders, deliveryOrders, pendingAcceptanceOrders }: Props) {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioUnlockedRef = useRef(false);
+  const lastDigitalAlertAtRef = useRef<number | null>(null);
   const [audioReady, setAudioReady] = useState(false);
 
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
@@ -24,6 +25,11 @@ export function useCashierAlerts({ orders, deliveryOrders, pendingAcceptanceOrde
   const playOrderAlert = useCallback(
     (type: 'new_order' | 'bill_requested' | 'delivery_pending' | 'test' = 'new_order') => {
       if (type !== 'test' && (!soundEnabled || !audioUnlockedRef.current)) return;
+      if (type === 'delivery_pending') {
+        const now = performance.now();
+        if (lastDigitalAlertAtRef.current !== null && now - lastDigitalAlertAtRef.current < 250) return;
+        lastDigitalAlertAtRef.current = now;
+      }
       try {
         if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
           audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -159,6 +165,7 @@ export function useCashierAlerts({ orders, deliveryOrders, pendingAcceptanceOrde
   };
 
   useEffect(() => {
+    let disposed = false;
     const unlock = () => {
       try {
         if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
@@ -171,9 +178,11 @@ export function useCashierAlerts({ orders, deliveryOrders, pendingAcceptanceOrde
           return;
         }
         void ctx.resume().then(() => {
+          if (disposed) return;
           audioUnlockedRef.current = ctx.state === 'running';
           setAudioReady(audioUnlockedRef.current);
         }).catch(() => {
+          if (disposed) return;
           audioUnlockedRef.current = false;
           setAudioReady(false);
         });
@@ -185,8 +194,13 @@ export function useCashierAlerts({ orders, deliveryOrders, pendingAcceptanceOrde
     window.addEventListener('pointerdown', unlock, { passive: true });
     window.addEventListener('keydown', unlock, { passive: true });
     return () => {
+      disposed = true;
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
+      audioUnlockedRef.current = false;
+      const ctx = audioCtxRef.current;
+      audioCtxRef.current = null;
+      if (ctx && ctx.state !== 'closed') void ctx.close().catch(() => {});
     };
   }, []);
 
@@ -243,15 +257,17 @@ export function useCashierAlerts({ orders, deliveryOrders, pendingAcceptanceOrde
     const hasNewOrder = Array.from(currentIds).some((id) => !known.has(id));
     currentIds.forEach((id) => known.add(id));
 
-    if (hasNewOrder && !isDrawerOpen && pendingAcceptanceOrders.length === 0) {
+    if (hasNewOrder) {
       playOrderAlert('delivery_pending');
     }
-  }, [deliveryOrders, isDrawerOpen, pendingAcceptanceOrders.length, playOrderAlert]);
+  }, [deliveryOrders, playOrderAlert]);
+
+  const hasPendingAcceptance = pendingAcceptanceOrders.length > 0;
 
   // Um pedido online aguardando aceite é uma pendência operacional, não um toast.
   // Após o navegador liberar áudio, o alarme continua até o pedido ser aceito/recusado.
   useEffect(() => {
-    if (!soundEnabled || !audioReady || pendingAcceptanceOrders.length === 0) return;
+    if (!soundEnabled || !audioReady || !hasPendingAcceptance) return;
 
     playOrderAlert('delivery_pending');
     const alarmId = window.setInterval(() => {
@@ -259,7 +275,7 @@ export function useCashierAlerts({ orders, deliveryOrders, pendingAcceptanceOrde
     }, 4000);
 
     return () => window.clearInterval(alarmId);
-  }, [audioReady, pendingAcceptanceOrders.length, playOrderAlert, soundEnabled]);
+  }, [audioReady, hasPendingAcceptance, playOrderAlert, soundEnabled]);
 
   return { soundEnabled, audioReady, activateAudio, toggleSound, playOrderAlert };
 }
