@@ -9,6 +9,8 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
+
 from sqlalchemy import func, insert, select, update
 from sqlalchemy.orm import Session
 
@@ -34,6 +36,7 @@ from ..models import (
 from ..restaurant_profile_models import RestauranteOperationProfile
 from ..saas_billing_models import SaaSSubscription
 from ..security import get_current_user
+from ..services.image_optimization import ImageOptimizerBusy, InvalidImage, optimize_image
 from ..services.onboarding_readiness import evaluate_operation_readiness
 from ..services.operational_modes import explicit_order_types
 from ..services.table_bootstrap import bootstrap_standard_tables
@@ -221,7 +224,10 @@ async def submit_catalog_assistance(
     if restaurant is None:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
 
-    content = await file.read(MAX_CATALOG_SOURCE_SIZE + 1)
+    try:
+        content = await file.read(MAX_CATALOG_SOURCE_SIZE + 1)
+    finally:
+        await file.close()
     if not content:
         raise HTTPException(status_code=422, detail="O arquivo do cardápio está vazio.")
     if len(content) > MAX_CATALOG_SOURCE_SIZE:
@@ -233,6 +239,16 @@ async def submit_catalog_assistance(
         content_type = detect_catalog_source_type(file.content_type, content)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if content_type.startswith("image/"):
+        db.rollback()
+        try:
+            optimized = await run_in_threadpool(optimize_image, content, "catalog_source")
+        except InvalidImage as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ImageOptimizerBusy as exc:
+            raise HTTPException(status_code=429, detail=str(exc), headers={"Retry-After": "2"}) from exc
+        content, content_type = optimized.content, optimized.content_type
 
     now = utc_now()
     request_id = str(uuid.uuid4())
