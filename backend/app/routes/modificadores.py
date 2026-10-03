@@ -22,6 +22,7 @@ from ..models import (
     Lancamento,
     OpcaoModificador,
     Produto,
+    Restaurante,
     ProdutoGrupoModificador,
     Usuario,
 )
@@ -40,6 +41,7 @@ from ..services.atendimentos import (
     principal_command_for_table,
 )
 from ..websocket_manager import manager
+from ..services.linked_complements import sync_linked_complements
 
 router = APIRouter(
     prefix="/cardapio/modificadores",
@@ -55,11 +57,17 @@ ARCHIVED_MODIFIER_TYPE = "__archived__"
 class GrupoModificadorCreateV2(GrupoModificadorCreate):
     categoria_ids: List[str] = Field(default_factory=list)
     incluir_subcategorias: bool = True
+    grupo_origem_id: Optional[str] = None
+    preco_novo_adicional: Optional[float] = Field(default=None, gt=0)
+    preco_novo_ovo: Optional[float] = Field(default=None, gt=0)
 
 
 class GrupoModificadorResponseV2(GrupoModificadorResponse):
     categoria_ids: List[str] = Field(default_factory=list)
     incluir_subcategorias: bool = True
+    grupo_origem_id: Optional[str] = None
+    preco_novo_adicional: Optional[float] = None
+    preco_novo_ovo: Optional[float] = None
 
 
 class ItemComModificadoresCreate(BaseModel):
@@ -116,12 +124,16 @@ def _serialize_grupo(
     return GrupoModificadorResponseV2(
         id=grupo.id,
         nome=grupo.nome,
+        grupo_origem_id=grupo.grupo_origem_id,
+        preco_novo_adicional=grupo.preco_novo_adicional,
+        preco_novo_ovo=grupo.preco_novo_ovo,
         min_selecoes=grupo.min_selecoes,
         max_selecoes=grupo.max_selecoes,
         tipo=grupo.tipo,
         opcoes=[
             OpcaoModificadorResponse(
                 id=op.id,
+                opcao_origem_id=op.opcao_origem_id,
                 grupo_id=op.grupo_id,
                 nome=op.nome,
                 preco_adicional=float(op.preco_adicional or 0.0),
@@ -186,12 +198,16 @@ def _serialize_grupos(
             GrupoModificadorResponseV2(
                 id=grupo.id,
                 nome=grupo.nome,
+                grupo_origem_id=grupo.grupo_origem_id,
+                preco_novo_adicional=grupo.preco_novo_adicional,
+                preco_novo_ovo=grupo.preco_novo_ovo,
                 min_selecoes=grupo.min_selecoes,
                 max_selecoes=grupo.max_selecoes,
                 tipo=grupo.tipo,
                 opcoes=[
                     OpcaoModificadorResponse(
                         id=op.id,
+                        opcao_origem_id=op.opcao_origem_id,
                         grupo_id=op.grupo_id,
                         nome=op.nome,
                         preco_adicional=float(op.preco_adicional or 0.0),
@@ -208,6 +224,33 @@ def _serialize_grupos(
             )
         )
     return payloads
+
+
+def _lock_catalog(db: Session, restaurante_id: int) -> None:
+    db.query(Restaurante).filter(Restaurante.id == restaurante_id).with_for_update().one()
+
+
+def _configure_sync(db: Session, rest_id: int, grupo: GrupoModificador, payload: GrupoModificadorCreateV2) -> None:
+    # Older clients can edit unrelated fields without silently disabling the link.
+    if "grupo_origem_id" not in payload.model_fields_set:
+        return
+    source_id = payload.grupo_origem_id
+    if source_id:
+        source = db.query(GrupoModificador).filter_by(id=source_id, restaurante_id=rest_id).first()
+        if not source or source.id == grupo.id or source.grupo_origem_id or source.tipo == ARCHIVED_MODIFIER_TYPE:
+            raise HTTPException(422, "Escolha um grupo de origem independente deste restaurante.")
+        if db.query(GrupoModificador).filter_by(restaurante_id=rest_id, grupo_origem_id=grupo.id).first():
+            raise HTTPException(422, "Um grupo de origem não pode depender de outro grupo.")
+        if grupo.grupo_origem_id and grupo.grupo_origem_id != source_id:
+            raise HTTPException(409, "Desative a sincronização antes de trocar a origem.")
+        if payload.preco_novo_adicional is None or payload.preco_novo_ovo is None:
+            raise HTTPException(422, "Informe os preços dos novos adicionais e ovos.")
+    else:
+        for option in db.query(OpcaoModificador).filter_by(restaurante_id=rest_id, grupo_id=grupo.id).all():
+            option.opcao_origem_id = None
+    grupo.grupo_origem_id = source_id
+    grupo.preco_novo_adicional = payload.preco_novo_adicional if source_id else None
+    grupo.preco_novo_ovo = payload.preco_novo_ovo if source_id else None
 
 
 def _validate_product_ids(db: Session, restaurante_id: int, product_ids: List[str]) -> None:
@@ -263,6 +306,10 @@ def _sync_group_options(
         if option_id not in requested_existing_ids
     ]
     if removed_ids:
+        if any(existing_by_id[option_id].opcao_origem_id for option_id in removed_ids):
+            raise HTTPException(409, "Pause o complemento de origem em vez de remover seu adicional sincronizado.")
+        if db.query(OpcaoModificador).filter(OpcaoModificador.restaurante_id == restaurante_id, OpcaoModificador.opcao_origem_id.in_(removed_ids)).first():
+            raise HTTPException(409, "Esta opção tem um adicional sincronizado. Pause-a em vez de excluir.")
         historical_use = db.query(ItemModificador.opcao_modificador_id).filter(
             ItemModificador.restaurante_id == restaurante_id,
             ItemModificador.opcao_modificador_id.in_(removed_ids),
@@ -345,6 +392,7 @@ def criar_grupo(
 ):
     del current_user
     rest_id = require_tenant_id()
+    _lock_catalog(db, rest_id)
     _validate_product_ids(db, rest_id, payload.produto_ids or [])
     grupo_id = f"gmod-{uuid.uuid4().hex[:8]}"
     novo_grupo = GrupoModificador(
@@ -376,6 +424,9 @@ def criar_grupo(
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _configure_sync(db, rest_id, novo_grupo, payload)
+    db.flush()
+    sync_linked_complements(db, rest_id, novo_grupo.id)
     db.commit()
     db.refresh(novo_grupo)
     _notify_catalog_update(background_tasks, rest_id, "Grupo de complementos criado.")
@@ -398,6 +449,7 @@ def atualizar_disponibilidade_opcao(
     """Pausa/reativa uma opção sem recriar grupo, vínculos ou IDs históricos."""
     del current_user
     rest_id = require_tenant_id()
+    _lock_catalog(db, rest_id)
     opcao = db.query(OpcaoModificador).join(
         GrupoModificador,
         (GrupoModificador.id == OpcaoModificador.grupo_id)
@@ -409,7 +461,11 @@ def atualizar_disponibilidade_opcao(
     ).one_or_none()
     if opcao is None:
         raise HTTPException(status_code=404, detail="Opção não encontrada.")
+    if opcao.opcao_origem_id:
+        raise HTTPException(409, "Altere a disponibilidade no complemento de origem.")
     opcao.ativo = payload.ativo
+    db.flush()
+    sync_linked_complements(db, rest_id, opcao.grupo_id)
     db.commit()
     db.refresh(opcao)
     _notify_catalog_update(background_tasks, rest_id, "Disponibilidade de complemento atualizada.")
@@ -426,6 +482,7 @@ def atualizar_grupo(
 ):
     del current_user
     rest_id = require_tenant_id()
+    _lock_catalog(db, rest_id)
     grupo = db.query(GrupoModificador).filter(
         GrupoModificador.restaurante_id == rest_id,
         GrupoModificador.id == grupo_id,
@@ -466,6 +523,9 @@ def atualizar_grupo(
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _configure_sync(db, rest_id, grupo, payload)
+    db.flush()
+    sync_linked_complements(db, rest_id, grupo.id)
     db.commit()
     db.refresh(grupo)
     _notify_catalog_update(background_tasks, rest_id, "Grupo de complementos atualizado.")
@@ -481,6 +541,7 @@ def deletar_grupo(
 ):
     del current_user
     rest_id = require_tenant_id()
+    _lock_catalog(db, rest_id)
     grupo = db.query(GrupoModificador).filter(
         GrupoModificador.restaurante_id == rest_id,
         GrupoModificador.id == grupo_id,
@@ -488,6 +549,8 @@ def deletar_grupo(
     ).first()
     if not grupo:
         raise HTTPException(status_code=404, detail="Grupo não encontrado.")
+    if grupo.grupo_origem_id or db.query(GrupoModificador).filter_by(restaurante_id=rest_id, grupo_origem_id=grupo_id).first():
+        raise HTTPException(409, "Desative a sincronização dos adicionais antes de excluir o grupo.")
     if db.query(ProdutoGrupoModificador).filter_by(restaurante_id=rest_id, grupo_id=grupo_id).filter(ProdutoGrupoModificador.min_selecoes.isnot(None)).first() or db.query(CategoriaGrupoModificador).filter(
         CategoriaGrupoModificador.restaurante_id == rest_id,
         CategoriaGrupoModificador.grupo_id == grupo_id,

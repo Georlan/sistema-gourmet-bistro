@@ -106,3 +106,18 @@ explícita; nenhum produto ou pedido real é excluído pela atualização.
 - **Solução Operacional Segura Adotada**: Para guarnições livres sem limite prático, o operador define um teto
   operacional amplo (ex.: 20), e a interface pública apresenta "Escolha à vontade" e badge "Livre" somente para Guarnições do perfil Marmitaria, quando `max >= 20` e `min = 0`. Adicionais pagos e demais perfis mostram o teto real. O snapshot público informa o perfil efetivo através de `produto.marmitaria`; nomes de produtos ou categorias não ativam essa apresentação.
 - **Dívida Técnica Registrada**: Em evolução futura aprovada, o domínio deve suportar formalmente `max_selecoes = null` / `unlimited` sem quebrar constraints de banco ou modelos intermediários.
+
+## Adicionais vinculados — 03/10/2026
+
+O dono pode escolher explicitamente um grupo de origem no editor de adicionais.
+Nomes e disponibilidade acompanham as opções de origem, mantendo um ID próprio
+para o extra pago e o seu preço. Cópias existentes com nome equivalente são
+reaproveitadas somente quando a correspondência é inequívoca. Itens independentes
+não são vinculados por suposição. Novas opções usam os preços configurados no grupo
+(incluindo uma tarifa própria para ovos). A migração adiciona campos nulos, sem
+configurar nenhum restaurante automaticamente.
+
+As escritas canônicas de grupo e de disponibilidade sincronizam na mesma transação,
+serializada por restaurante. Ciclos, origem de outro restaurante e exclusão de
+opções vinculadas são bloqueados; pausa preserva as referências históricas.
+Guarnições continuam compartilhadas pelas quentinhas sem criar extras pagos.
