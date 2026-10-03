@@ -1,4 +1,6 @@
 import logging
+import datetime
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -81,6 +83,72 @@ def list_incidents(
         )
     finally:
         db.close()
+
+
+ATTENTION_ORDER = {"critical": 0, "incident": 1, "blocked": 2, "unverified": 3, "no_attention": 4}
+
+
+def _attention_item(tenant_id, snapshot, incidents, unavailable_sources):
+    # Presentation of existing canonical evidence, never a second readiness policy.
+    blockers = snapshot["readiness"]["blockers"] if snapshot is not None else []
+    primary = incidents[0] if incidents else None
+    priority = (
+        "critical" if primary and primary.severity == IncidentSeverity.CRITICAL
+        else "incident" if primary
+        else "blocked" if blockers
+        else "unverified" if unavailable_sources
+        else "no_attention"
+    )
+    return {
+        "tenant_id": str(tenant_id),
+        "priority": priority,
+        "blockers": blockers,
+        "release_state": snapshot["onboarding"]["releaseState"] if snapshot else None,
+        "incident_count": len(incidents),
+        "incident_sources": sorted({item.source.value for item in incidents}),
+        "primary_incident": ({
+            "id": primary.id, "source": primary.source.value,
+            "severity": primary.severity.value, "title": primary.title,
+            "detected_at": primary.detected_at,
+            "recommended_action": primary.recommended_action,
+        } if primary else None),
+        "unavailable_sources": unavailable_sources,
+    }
+
+
+@router.get("/attention")
+def get_operational_attention(admin: dict = Depends(get_current_admin)):
+    """Consolida blockers e incidentes existentes; GET sem mutações ou polling."""
+    from .onboarding import _build_onboarding_status
+
+    db = SessionLocal()
+    try:
+        tenant_ids = _discover_restaurant_ids(db)
+    finally:
+        db.close()
+    items = []
+    for tenant_id in tenant_ids:
+        db = SessionLocal()
+        snapshot, incidents, unavailable = None, [], []
+        try:
+            try:
+                with tenant_session_scope(db, tenant_id):
+                    snapshot = _build_onboarding_status(db, current_user=SimpleNamespace(is_support_mode=False))
+            except Exception:
+                db.rollback()
+                unavailable.append("onboarding")
+                logger.exception("SUPERADMIN ATTENTION onboarding unavailable tenant=%s", tenant_id)
+            try:
+                incidents = diagnose_all_incidents(db, tenant_ids=[tenant_id])
+            except Exception:
+                db.rollback()
+                unavailable.append("incidents")
+                logger.exception("SUPERADMIN ATTENTION incidents unavailable tenant=%s", tenant_id)
+            items.append(_attention_item(tenant_id, snapshot, incidents, unavailable))
+        finally:
+            db.close()
+    items.sort(key=lambda item: ATTENTION_ORDER[item["priority"]])
+    return {"checked_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "items": items}
 
 
 @router.get("/summary", response_model=IncidentSummaryResponse)
