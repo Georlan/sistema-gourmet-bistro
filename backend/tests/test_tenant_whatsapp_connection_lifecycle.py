@@ -62,3 +62,27 @@ def test_provider_never_holds_read_connection(char_setup, monkeypatch, operation
             assert stored.whatsapp_instance_name is None
     finally:
         db.close()
+
+
+def test_configure_creates_missing_row_after_provider(char_setup, monkeypatch):
+    rid = CHAR_RESTAURANT_ID
+    db = SessionLocal(restaurante_id=rid)
+    try:
+        db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).delete()
+        db.commit()
+        def create_instance(restaurant_id):
+            assert restaurant_id == rid
+            assert not db.in_transaction()
+            return {'qrcode': {'code': 'fixture-qr'}}
+        monkeypatch.setattr(routes.wa, 'create_instance', create_instance)
+        result = routes.configure(routes.ConfigureRequest(phone='11999999999'), db,
+                                  SimpleNamespace(restaurante_id=rid))
+        assert result['qr_code'] == 'fixture-qr'
+        db.close()
+        with SessionLocal(restaurante_id=rid) as verify:
+            config = verify.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one()
+            assert config.whatsapp_instance_name == routes.wa.instance_name(rid)
+            assert config.whatsapp_recipient_phone == '5511999999999'
+            assert not config.whatsapp_alerts_enabled
+    finally:
+        db.close()
