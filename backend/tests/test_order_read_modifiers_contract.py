@@ -17,5 +17,5 @@ def test_item_response_exposes_modifier_contract():
     )
 
     assert item.model_dump()["modificadores"] == [
-        {"id": "egg", "nome": "Ovo", "preco": 2.0}
+        {"id": "egg", "nome": "Ovo", "preco": 2.0, "grupo_id": None, "grupo_nome": None}
     ]

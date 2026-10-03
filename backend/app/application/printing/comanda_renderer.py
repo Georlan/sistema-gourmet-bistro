@@ -101,6 +101,8 @@ def _to_receipt_item(item: PrintItem, *, preserve_customer: bool = False) -> dic
             else "Consumo Geral"
         ),
         "observacao": item.observacao or "",
+        "composicao": item.composicao,
+        "modifier_signature": item.modifier_signature,
         "quantidade": max(int(item.quantidade or 1), 1),
     }
 
