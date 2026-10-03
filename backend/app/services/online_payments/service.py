@@ -5,6 +5,7 @@ import logging
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
 
+from sqlalchemy import case
 from sqlalchemy.orm import Session
 
 from ...config import settings
@@ -181,16 +182,17 @@ class OnlinePaymentService:
 
     @staticmethod
     def has_active_account(db: Session, restaurant_id: int) -> bool:
-        config = db.query(RestaurantDirectPixConfig).filter(
+        # One roundtrip: keep the public catalog's existing read budget.
+        direct = db.query(RestaurantDirectPixConfig.restaurante_id).filter(
             RestaurantDirectPixConfig.restaurante_id == restaurant_id,
-        ).one_or_none()
-        if config is not None and config.enabled:
-            return bool(settings.DIRECT_PIX_ENABLED)
-        return db.query(RestaurantPaymentAccount.id).filter(
+            RestaurantDirectPixConfig.enabled.is_(True),
+        ).exists()
+        mercado_pago = db.query(RestaurantPaymentAccount.id).filter(
             RestaurantPaymentAccount.restaurante_id == restaurant_id,
             RestaurantPaymentAccount.provider == "mercado_pago",
             RestaurantPaymentAccount.status == "active",
-        ).first() is not None
+        ).exists()
+        return bool(db.query(case((direct, bool(settings.DIRECT_PIX_ENABLED)), else_=mercado_pago)).scalar())
 
     @classmethod
     def active_account(cls, db: Session, restaurant_id: int) -> RestaurantPaymentAccount:
