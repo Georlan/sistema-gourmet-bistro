@@ -291,6 +291,9 @@ def dispatch_single_claimed_snapshot(
     webhook_url = (config.webhook_url or "").strip() if config else ""
     webhook_secret = (config.webhook_secret or "").strip() if config else ""
     webhook_ativo = bool(config.webhook_ativo) if config else False
+    # The lease was committed above. These are read-only configuration values;
+    # release their transaction before waiting on the external webhook.
+    db.rollback()
 
     if not webhook_ativo or not webhook_url:
         settle_outbox_event(
