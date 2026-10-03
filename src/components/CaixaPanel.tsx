@@ -717,6 +717,7 @@ export function CaixaPanel({
           planId={currentPlanId}
           entitlements={planEntitlements}
           hasOnlineMenu={hasOnlineMenu}
+          isWsConnected={isWsConnected}
           isSidebarTabActive={isSidebarTabActive}
           sidebarOrderCount={sidebarOrderCount}
           handleSidebarNavigation={handleSidebarNavigation}
@@ -735,6 +736,7 @@ export function CaixaPanel({
           planId={currentPlanId}
           entitlements={planEntitlements}
           hasOnlineMenu={hasOnlineMenu}
+          isWsConnected={isWsConnected}
           isSidebarTabActive={isSidebarTabActive}
           sidebarOrderCount={sidebarOrderCount}
           handleSidebarNavigation={handleSidebarNavigation}
