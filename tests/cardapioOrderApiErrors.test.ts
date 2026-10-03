@@ -57,3 +57,15 @@ test('shared sale formatter identifies address fields without object coercion', 
   assert.match(message, /UF: preenchimento incompleto/);
   assert.doesNotMatch(message, /object Object/);
 });
+
+
+test('formats cashier fields and nested modifier errors without leaking input', () => {
+  const message = formatCardapioApiError({ detail: [
+    { loc: ['body', 'itens', 0, 'modificador_ids', 2], type: 'string_type', input: 'private-option-id' },
+    { loc: ['body', 'delivery_forma_pagamento'], type: 'literal_error' },
+    { loc: ['body', 'delivery_telefone'], type: 'string_too_short', input: 'private-phone' },
+  ] });
+  assert.equal(message, 'Revise os dados do pedido: Item 1 — Complementos: valor inválido. Forma de pagamento: opção inválida. Telefone: preenchimento incompleto.');
+  assert.doesNotMatch(message, /private-phone|private-option-id|\[object Object\]/);
+  assert.equal(formatCardapioApiError({ detail: [{ loc: ['body', 'identificador'], type: 'missing' }] }), 'Revise os dados do pedido: Nome: campo obrigatório.');
+});
