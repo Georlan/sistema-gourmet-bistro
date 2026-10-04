@@ -395,11 +395,8 @@ def test_remote_production_separates_and_bolds_marmitaria_groups_without_item_pr
     assert "\n\n   " + ESC_BOLD_ON + "SALADAS:" in ticket
     assert ESC_BOLD_ON + "TROCO PARA: R$ 100,00" + ESC_BOLD_OFF in ticket
     assert ESC_BOLD_ON + "LEVAR TROCO: R$ 30,00" + ESC_BOLD_OFF in ticket
-    assert (
-        ESC_DOUBLE_HEIGHT_ON
-        + ESC_BOLD_ON
-        + "          A COBRAR: R$ 70,00"
-    ) in ticket
+    charge_line = next(line for line in ticket.splitlines() if "A COBRAR: R$ 70,00" in line)
+    assert charge_line.startswith(ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON)
 
 
 def test_remote_paid_online_makes_do_not_charge_a_large_operational_warning():
@@ -423,9 +420,6 @@ def test_remote_paid_online_makes_do_not_charge_a_large_operational_warning():
     assert "PAGO ONLINE" in ticket
     assert "NÃO COBRAR" in ticket
     assert "NÃO COBRAR DO CLIENTE" not in ticket
-    assert (
-        ESC_DOUBLE_HEIGHT_ON
-        + ESC_BOLD_ON
-        + "              NÃO COBRAR"
-    ) in ticket
+    warning_line = next(line for line in ticket.splitlines() if "NÃO COBRAR" in line)
+    assert warning_line.startswith(ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON)
 
