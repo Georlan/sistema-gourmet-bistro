@@ -45,7 +45,7 @@ test('guest checkout contact is saved only in sessionStorage', async () => {
     name: 'Cliente QA',
     phone: '85999991111',
     email: 'qa@example.com',
-    address: 'Rua QA, 123',
+    address: '',
   });
 });
 
@@ -65,6 +65,7 @@ test('legacy localStorage guest checkout contact migrates once and is erased dur
   assert.equal(localStorage.getItem(key), null);
   assert.equal(sessionStorage.getItem(key) !== null, true);
   assert.equal(loaded?.phone, '85988887777');
+  assert.equal(loaded?.address, '');
 });
 
 test('clearing guest checkout contact erases both current and legacy storage', async () => {
@@ -86,4 +87,21 @@ test('cart drawer no longer reads or writes guest PII through localStorage direc
   assert.match(source, /saveGuestCheckoutContact/);
   assert.doesNotMatch(source, /localStorage\./);
   assert.doesNotMatch(source, /koma_guest_checkout/);
+});
+
+
+test('guest checkout never restores a previous delivery address', async () => {
+  const { sessionStorage } = installStorage();
+  const { loadGuestCheckoutContact } = await import('../src/cardapio/guestCheckoutSession');
+  const key = 'koma_guest_checkout:12';
+
+  sessionStorage.setItem(key, JSON.stringify({
+    name: 'Cliente recorrente',
+    phone: '85999990000',
+    email: '',
+    address: 'Avenida Antiga, 999',
+  }));
+
+  const loaded = loadGuestCheckoutContact(12);
+  assert.equal(loaded?.address, '');
 });
