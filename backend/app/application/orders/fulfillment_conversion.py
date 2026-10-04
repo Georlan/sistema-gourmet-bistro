@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from typing import Any
 from ...models import Comanda, Pagamento, OnlinePaymentIntent, ConfiguracaoRestaurante, ActivityLog, ExternalOrderReference
 from ...fiscal_models import FiscalDocument
-from ...delivery_address_snapshot import load_delivery_address_snapshot, persist_delivery_address_snapshot
+from ...delivery_address_snapshot import load_delivery_address_snapshot, revise_delivery_address_snapshot
 from ...domain.orders.types import FulfillmentType, normalize_to_fulfillment
 from ...domain.orders.errors import OrderDomainError
 from ...services.order_financials import active_items_subtotal, payable_total, money, is_quick_counter_sale
@@ -81,9 +81,6 @@ def preview(db: Session, order: Comanda, payload: dict[str, Any]):
             address = delivery_address_from_payload(payload.get('address_snapshot'))
             if address is None:
                 raise HTTPException(422, 'Informe o endereço de entrega.')
-            saved = load_delivery_address_snapshot(db, restaurante_id=order.restaurante_id, comanda_id=order.id)
-            if saved is not None and saved != address.to_snapshot():
-                raise HTTPException(409, 'O endereço histórico é imutável. Confirme o destino original.')
             if not phone:
                 raise HTTPException(422, 'Informe o telefone de contato para entrega.')
             if active_items_subtotal(order) < money(config.pedido_minimo):
@@ -122,8 +119,21 @@ def apply(db: Session, order: Comanda, payload: dict[str, Any], operator_id: str
     if not 3 <= len(reason) <= 500:
         raise HTTPException(422, 'Informe um motivo entre 3 e 500 caracteres.')
     previous_type = order.tipo
+    previous_address = load_delivery_address_snapshot(
+        db,
+        restaurante_id=order.restaurante_id,
+        comanda_id=order.id,
+    )
+    address_revision = None
     if address:
-        persist_delivery_address_snapshot(db, restaurante_id=order.restaurante_id, comanda_id=order.id, address=address)
+        address_revision = revise_delivery_address_snapshot(
+            db,
+            restaurante_id=order.restaurante_id,
+            comanda_id=order.id,
+            address=address,
+            operator_id=operator_id,
+            reason=reason,
+        )
         order.delivery_endereco = address.to_legacy_address()
         order.delivery_bairro = address.neighborhood
         order.delivery_telefone = normalizar_telefone_cliente(str(payload.get('telefone') or order.delivery_telefone or ''))
@@ -132,7 +142,10 @@ def apply(db: Session, order: Comanda, payload: dict[str, Any], operator_id: str
     db.add(ActivityLog(restaurante_id=order.restaurante_id, garcom_id=operator_id, action='CONVERT_FULFILLMENT',
         details=json.dumps({'comanda_id': order.id, 'fulfillment_original': previous_type, 'fulfillment_atual': order.tipo,
             'delivery_status_preservado': order.delivery_status, 'delivery_taxa_anterior': quote['previous_fee'],
-            'delivery_taxa_atual': quote['delivery_fee'], 'motivo': reason}, ensure_ascii=False, sort_keys=True)))
+            'delivery_taxa_atual': quote['delivery_fee'], 'endereco_corrigido': bool(
+                address and previous_address is not None and previous_address != address.to_snapshot()
+            ), 'address_revision_id': getattr(address_revision, 'id', None),
+            'motivo': reason}, ensure_ascii=False, sort_keys=True)))
     from ...services.order_chat_service import queue_order_tracking_refresh
     queue_order_tracking_refresh(db, order.restaurante_id, order.id)
     return quote
