@@ -63,6 +63,7 @@ import {
   OrderStateContract,
   StoredOrder,
   loadStoredOrders,
+  restoreDurableStoredOrders,
   refreshAllStoredOrders,
   removeStoredOrder,
   clearAllStoredOrders,
@@ -389,6 +390,15 @@ export default function CardapioPage() {
         ))) {
           void checkActiveOrders(rid);
         }
+
+        // sessionStorage some ao fechar a aba. Reidrata em segundo plano os
+        // snapshots cifrados do navegador e devolve ao cliente o acesso ao
+        // acompanhamento/chat sem aumentar o payload público do cardápio.
+        void restoreDurableStoredOrders(rid)
+          .then((restored) => setStoredOrders(restored))
+          .catch((resumeError) => {
+            console.warn("Falha ao retomar pedidos salvos neste navegador:", resumeError);
+          });
       }
     } catch (error) {
       if (background) {
