@@ -455,7 +455,7 @@ export default function CardapioDigital({
       try {
         saveStoredOrder(orderObj);
       } catch (error) {
-        console.warn("Não foi possível salvar pedido ativo no localStorage:", error);
+        console.warn("Não foi possível salvar pedido ativo no navegador:", error);
       }
 
       clearPendingSubmission(idempotencyKey);
