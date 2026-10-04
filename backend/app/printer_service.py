@@ -150,35 +150,9 @@ def _append_composition_group(
     width: int,
     prefix: str = "   ",
 ) -> None:
-    """Destaca só o nome do grupo e mantém as escolhas em tamanho normal."""
+    """Destaca a linha do grupo sem quebrar o texto visível com comandos ESC/POS."""
     clean = _single_line(text).upper()
-    label, separator, value = clean.partition(":")
-    if not separator or not label.strip():
-        _append_wrapped(lines, clean, width, prefix)
-        return
-
-    label = f"{label.strip()}:"
-    value = value.strip()
-    visible_prefix = f"{prefix}{label}" + (" " if value else "")
-    if value:
-        wrapper = textwrap.TextWrapper(
-            width=width,
-            initial_indent=visible_prefix,
-            subsequent_indent=prefix,
-            break_long_words=True,
-            break_on_hyphens=False,
-        )
-        wrapped = wrapper.wrap(value) or [visible_prefix.rstrip()]
-    else:
-        wrapped = [visible_prefix.rstrip()]
-
-    target = f"{prefix}{label}"
-    wrapped[0] = wrapped[0].replace(
-        target,
-        f"{prefix}{ESC_BOLD_ON}{label}{ESC_BOLD_OFF}",
-        1,
-    )
-    lines.extend(wrapped)
+    _append_bold_wrapped(lines, clean, width, prefix)
 
 
 def _critical_center(text: str, width: int) -> str:
