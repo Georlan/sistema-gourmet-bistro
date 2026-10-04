@@ -176,3 +176,81 @@ test('sem benefícios habilitados não mostra acesso nem cupom na sacola', async
   await expect(page.getByLabel('Código do cupom')).toHaveCount(0);
   expect(benefitRequests).toBe(0);
 });
+
+const couponChoices = {
+  cupons: [
+    { codigo: 'CUPOM5', tipo_desconto: 'fixo', valor_desconto: 5, valor_minimo_pedido: 0 },
+    { codigo: 'CUPOM10', tipo_desconto: 'fixo', valor_desconto: 10, valor_minimo_pedido: 0 },
+  ],
+  programa: null,
+};
+
+async function prepareCouponCart(page: Page) {
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#btn-fast-add-101').click();
+  if (!(await page.locator('#cart-drawer-container').isVisible())) {
+    await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
+  }
+  const cart = page.locator('#cart-drawer-container');
+  await cart.getByRole('button', { name: 'Contato', exact: true }).click();
+  await cart.locator('#input-guest-phone').fill('85999999999');
+  await cart.getByRole('button', { name: 'Cupom', exact: true }).click();
+  return cart;
+}
+
+async function chooseBenefitCoupon(page: Page, code: string) {
+  await page.locator('#mobile-nav-benefits:visible, #btn-benefits-header:visible').first().click();
+  const offers = page.locator('#cardapio-benefits-offers');
+  await offers.locator('article').filter({ hasText: code }).getByRole('button', { name: 'Usar na sacola' }).click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Cupom', exact: true }).click();
+}
+
+test('trocar oferta externa limpa o cupom aplicado sem perder celular ou produtos', async ({ page }) => {
+  await mockCardapio(page, couponChoices);
+  const validated: string[] = [];
+  await page.route('**/cardapio/cupons/validar', async route => {
+    const code = route.request().postDataJSON().codigo;
+    validated.push(code);
+    await route.fulfill({ json: { valido: true, codigo: code, desconto_calculado: code === 'CUPOM5' ? 5 : 10, mensagem: 'Cupom aceito' } });
+  });
+  const cart = await prepareCouponCart(page);
+  await cart.getByRole('button', { name: 'Fechar sacola' }).click();
+  await chooseBenefitCoupon(page, 'CUPOM5');
+  await cart.getByRole('button', { name: 'Aplicar', exact: true }).click();
+  await expect(cart.getByText('CUPOM5', { exact: true })).toBeVisible();
+  await expect(cart.getByText(/R\$\s*43,00/, { exact: true })).toBeVisible();
+  await cart.getByRole('button', { name: 'Fechar sacola' }).click();
+  await chooseBenefitCoupon(page, 'CUPOM10');
+  await expect(cart.getByLabel('Código do cupom')).toHaveValue('CUPOM10');
+  await expect(cart.getByRole('button', { name: 'Remover cupom' })).toHaveCount(0);
+  await expect(cart.getByText(/R\$\s*43,00/, { exact: true })).toHaveCount(0);
+  await expect(cart.locator('#input-guest-phone')).toHaveValue('(85) 99999-9999');
+  await expect(cart.locator('[id^="cart-item-"]')).toHaveCount(1);
+  await cart.getByRole('button', { name: 'Aplicar', exact: true }).click();
+  await expect(cart.getByText('CUPOM10', { exact: true })).toBeVisible();
+  await expect(cart.getByText(/R\$\s*38,00/, { exact: true })).toBeVisible();
+  expect(validated).toEqual(['CUPOM5', 'CUPOM10']);
+});
+
+test('resposta atrasada do cupom anterior não aplica desconto após trocar o código', async ({ page }) => {
+  await mockCardapio(page, couponChoices);
+  let release!: () => void;
+  const heldResponse = new Promise<void>(resolve => { release = resolve; });
+  let requested = false;
+  await page.route('**/cardapio/cupons/validar', async route => {
+    requested = true;
+    await heldResponse;
+    await route.fulfill({ json: { valido: true, codigo: 'CUPOM5', desconto_calculado: 5, mensagem: 'Cupom aceito' } });
+  });
+  const cart = await prepareCouponCart(page);
+  const code = cart.getByLabel('Código do cupom');
+  await code.fill('CUPOM5');
+  await cart.getByRole('button', { name: 'Aplicar', exact: true }).click();
+  await expect.poll(() => requested).toBe(true);
+  await code.fill('CUPOM10');
+  release();
+  await expect(cart.getByRole('button', { name: 'Aplicar', exact: true })).toBeEnabled();
+  await expect(code).toHaveValue('CUPOM10');
+  await expect(cart.getByRole('button', { name: 'Remover cupom' })).toHaveCount(0);
+  await expect(cart.getByText(/R\$\s*43,00/, { exact: true })).toHaveCount(0);
+});

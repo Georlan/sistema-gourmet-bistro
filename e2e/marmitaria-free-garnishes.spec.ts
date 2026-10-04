@@ -17,12 +17,20 @@ for (const marmitaria of [true, false]) {
     await page.goto('/cardapio?restaurante_id=6');
     await page.getByRole('button', { name: 'Produto de teste, R$ 10,00, ver detalhes' }).click();
     const sections = page.locator('#product-details-modal section');
-    await expect(sections.nth(0)).toContainText(marmitaria ? 'Escolha à vontade' : 'Escolha de 0 até 20');
-    await expect(sections.nth(1)).toContainText('Escolha de 0 até 20');
+    await expect(sections.nth(0)).toContainText(marmitaria ? 'Escolha à vontade' : 'Escolha até 20 porções');
+    await expect(sections.nth(1)).toContainText('Escolha até 20 porções');
     await expect(sections.nth(1)).not.toContainText('Livre');
+    const extras = sections.nth(1).getByRole('button', { name: /Adicionais pagos/ });
+    await expect(extras).toHaveAttribute('aria-expanded', 'false');
+    await extras.click();
     await page.getByRole('button', { name: 'Adicionar uma unidade de Ovo adicional', exact: true }).click();
     await page.getByRole('button', { name: 'Adicionar uma unidade de Ovo adicional', exact: true }).click();
     await expect(page.locator('#btn-add-to-cart-action')).toContainText('14,00');
-    await expect(sections.nth(1)).toContainText('2/20 porções');
+    await expect(sections.nth(1)).toContainText('2/20');
+    await extras.click();
+    await expect(extras).toContainText('2 adicionais · + R$ 4,00 por item');
+    await expect(page.getByRole('button', { name: 'Adicionar uma unidade de Ovo adicional', exact: true })).toBeHidden();
+    await extras.click();
+    await expect(page.getByLabel('2 unidade(s) de Ovo adicional', { exact: true })).toBeVisible();
   });
 }

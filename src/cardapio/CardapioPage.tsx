@@ -1173,7 +1173,8 @@ export default function CardapioPage() {
         <CardapioProductModal product={selectedProduct} initialItem={editingCartItem || undefined} onClose={() => { setSelectedProduct(null); setEditingCartItem(null); }} onAddToCart={handleAddToCart} />
       )}
 
-      {isCartOpen && (
+      {(isCartOpen || cart.length > 0) && (
+        <div hidden={!isCartOpen}>
         <CardapioCartDrawer
           key={activeBrand.id}
           cart={cart}
@@ -1193,6 +1194,12 @@ export default function CardapioPage() {
             setEditingCartItem(item);
             setSelectedProduct(product);
           }}
+          onComposeAnother={item => {
+            const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
+            if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para montagem."); return; }
+            setEditingCartItem(null);
+            setSelectedProduct(product);
+          }}
           onRemoveItem={(itemId) => setCart((current) => current.filter((item) => item.id !== itemId))}
           onPlaceOrder={(request) => {
             setCheckoutRequest(request);
@@ -1206,6 +1213,7 @@ export default function CardapioPage() {
           orderingEnabled={orderingEnabled}
           orderingMessage={orderingMessage}
         />
+        </div>
       )}
 
       {isAuthOpen && (
