@@ -232,3 +232,15 @@ def test_inventory_pagination_is_tenant_scoped():
     with httpx.Client(base_url='https://test.supabase.co', transport=httpx.MockTransport(handle)) as client:
         assert len(list(list_product_objects(client, 6))) == 100
     assert [r['offset'] for r in calls] == [0, 100]
+
+
+def test_migration_lineage_has_one_resolvable_head():
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    config = Config(str(root / 'backend/alembic.ini'))
+    config.set_main_option('script_location', str(root / 'backend/alembic'))
+    script = ScriptDirectory.from_config(config)
+    assert len(script.get_heads()) == 1
+    assert script.get_revision('82c7a941d5ef') is not None

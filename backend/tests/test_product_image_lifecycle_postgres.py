@@ -40,7 +40,7 @@ def pg():
         for model in (Restaurante, Categoria, Produto):
             model.__table__.to_metadata(metadata)
         metadata.create_all(engine)
-        spec = importlib.util.spec_from_file_location('retention_migration', Path(__file__).parents[1] / 'alembic/versions/e2f3a4b5c6d7_product_image_retention.py')
+        spec = importlib.util.spec_from_file_location('retention_migration', Path(__file__).parents[1] / 'alembic/versions/82c7a941d5ef_product_image_retention.py')
         migration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(migration)
         with engine.begin() as c:
