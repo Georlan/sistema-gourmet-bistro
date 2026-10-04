@@ -3,6 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {
+  clearOrderResumes,
+  loadOrderResumes,
+  persistOrderResume,
+  removeOrderResume,
+} from "./orderResumeStore";
+
 export const ACTIVE_ORDERS_STORAGE_KEY = "koma_active_orders";
 export const LEGACY_ACTIVE_ORDER_STORAGE_KEY = "koma_active_order";
 export const ACTIVE_ORDER_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
@@ -337,6 +344,19 @@ function persistStoredOrders(orders: StoredOrder[]): void {
   // Migração one-way: versões antigas gravavam tracking_token/idempotency_key
   // em localStorage. Assim que uma versão nova toca no histórico, apaga as cópias.
   removeDurableOrderCopies();
+
+  // O snapshot de sessão continua sendo a fonte síncrona da UI. Em paralelo,
+  // pedidos modernos com capability são cifrados no IndexedDB para sobreviver
+  // ao fechamento da aba sem reintroduzir tracking_token em localStorage.
+  minimal.forEach((item) => {
+    if (!item.tracking_token) return;
+    void persistOrderResume({
+      ...item,
+      tracking_token: item.tracking_token,
+    }).catch((error) => {
+      console.warn("Falha ao salvar retomada segura do pedido:", error);
+    });
+  });
 }
 
 /**
@@ -381,6 +401,40 @@ export function loadStoredOrders(restaurantId?: number): StoredOrder[] {
   return allOrders;
 }
 
+/**
+ * Restaura pedidos cifrados que sobreviveram ao fechamento da aba e os repõe
+ * no sessionStorage. A operação é assíncrona para não bloquear o primeiro paint
+ * do cardápio nem transformar IndexedDB em requisito para concluir um pedido.
+ */
+export async function restoreDurableStoredOrders(restaurantId: number): Promise<StoredOrder[]> {
+  if (!Number.isFinite(restaurantId)) return [];
+
+  let resumed: StoredOrder[] = [];
+  try {
+    resumed = (await loadOrderResumes(restaurantId)) as StoredOrder[];
+  } catch (error) {
+    console.warn("Falha ao restaurar pedidos salvos com segurança:", error);
+  }
+
+  if (resumed.length === 0) return loadStoredOrders(restaurantId);
+
+  const current = loadStoredOrders();
+  const merged = new Map<string, StoredOrder>();
+  [...current, ...resumed].forEach((order) => {
+    if (!order?.id) return;
+    const existing = merged.get(String(order.id));
+    if (!existing || Number(order.timestamp || 0) > Number(existing.timestamp || 0)) {
+      merged.set(String(order.id), order);
+    }
+  });
+
+  const allOrders = Array.from(merged.values()).sort(
+    (a, b) => (b.timestamp || 0) - (a.timestamp || 0),
+  );
+  persistStoredOrders(allOrders);
+  return allOrders.filter((item) => item.restaurante_id === restaurantId);
+}
+
 export function saveStoredOrder(order: StoredOrder): void {
   if (!getSessionOrderStorage() || !order?.id) return;
   const current = loadStoredOrders();
@@ -403,9 +457,14 @@ export function updateStoredOrderStatus(
 }
 
 export function removeStoredOrder(orderId: string): void {
-  if (!getSessionOrderStorage() || !orderId) return;
-  const filtered = loadStoredOrders().filter((item) => item.id !== orderId);
-  persistStoredOrders(filtered);
+  if (!orderId) return;
+  if (getSessionOrderStorage()) {
+    const filtered = loadStoredOrders().filter((item) => item.id !== orderId);
+    persistStoredOrders(filtered);
+  }
+  void removeOrderResume(orderId).catch((error) => {
+    console.warn("Falha ao remover retomada segura do pedido:", error);
+  });
 }
 
 export function clearAllStoredOrders(restaurantId?: number): void {
@@ -416,6 +475,9 @@ export function clearAllStoredOrders(restaurantId?: number): void {
   if (typeof restaurantId === "number" && Number.isFinite(restaurantId)) {
     const remaining = loadStoredOrders().filter((item) => item.restaurante_id !== restaurantId);
     persistStoredOrders(remaining);
+    void clearOrderResumes(restaurantId).catch((error) => {
+      console.warn("Falha ao limpar retomadas seguras do restaurante:", error);
+    });
     return;
   }
 
@@ -427,6 +489,9 @@ export function clearAllStoredOrders(restaurantId?: number): void {
   } catch {
     // Ignora erro
   }
+  void clearOrderResumes().catch((error) => {
+    console.warn("Falha ao limpar retomadas seguras de pedidos:", error);
+  });
 }
 
 export async function fetchOrderLiveStatus(
