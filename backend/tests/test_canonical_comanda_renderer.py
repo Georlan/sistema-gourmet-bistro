@@ -210,7 +210,7 @@ def test_pickup_payment_block_is_structural_even_for_legacy_order_without_method
     assert "PAGAMENTO" in ticket
     assert "FORMA: NÃO INFORMADA" in ticket
     assert "A COBRAR: R$ 10,90" in ticket
-    assert "NÃO COBRAR DO CLIENTE" not in ticket
+    assert "NÃO COBRAR" not in ticket
 
 
 def test_paid_fulfillment_never_instructs_operator_to_charge_again():
@@ -234,7 +234,7 @@ def test_paid_fulfillment_never_instructs_operator_to_charge_again():
     assert "FORMA: CARTÃO DE DÉBITO" in ticket
     assert "VALOR PAGO: R$ 15,90" in ticket
     assert "PAGO" in ticket
-    assert "NÃO COBRAR DO CLIENTE" in ticket
+    assert "NÃO COBRAR" in ticket
     assert "A COBRAR:" not in ticket
 
 
@@ -327,7 +327,7 @@ def test_online_dine_in_without_table_prints_customer_pix_and_never_fakes_delive
     assert "1x COCA-COLA LATA" in ticket
     assert "FORMA: PIX ONLINE" in ticket
     assert "PAGO ONLINE" in ticket
-    assert "NÃO COBRAR DO CLIENTE" in ticket
+    assert "NÃO COBRAR" in ticket
     assert "DESCONTO CUPOM:" in ticket
     assert "DESCONTO CASHBACK:" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
@@ -419,7 +419,7 @@ def test_remote_paid_online_makes_do_not_charge_a_large_operational_warning():
 
     assert "PAGO ONLINE" in ticket
     assert "NÃO COBRAR" in ticket
-    assert "NÃO COBRAR DO CLIENTE" not in ticket
+    assert "NÃO COBRAR" not in ticket
     warning_line = next(line for line in ticket.splitlines() if "NÃO COBRAR" in line)
     assert warning_line.startswith(ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON)
 
