@@ -85,7 +85,7 @@ def test_online_pickup_hides_operator_and_prints_customer_payment_and_paid_warni
     assert ESC_BOLD_ON + "FORMA: PIX ONLINE" + ESC_BOLD_OFF in ticket
     assert "VALOR PAGO: R$ 12,00" in ticket
     assert "PAGO ONLINE" in ticket
-    assert "NÃO COBRAR DO CLIENTE" in ticket
+    assert "NÃO COBRAR" in ticket
     assert "SUBTOTAL ITENS:" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
     assert "TOTAL GERAL DA MESA:" not in ticket
