@@ -8,7 +8,7 @@ from app.application.orders.service import OrderApplicationService
 from app.database import SessionLocal
 from app.domain.orders.types import FulfillmentType, OrderChannel
 from app.models import Comanda, ConfiguracaoRestaurante, ActivityLog
-from app.delivery_address_snapshot import load_delivery_address_snapshot
+from app.delivery_address_snapshot import load_delivery_address_snapshot, load_original_delivery_address_snapshot
 from tests.characterization.orders.fixtures import char_client, char_setup
 
 ADDRESS = {'logradouro': 'Rua das Flores', 'numero': '10', 'bairro': 'Centro', 'cidade': 'Fortaleza', 'uf': 'CE', 'cep': ''}
@@ -75,8 +75,39 @@ def test_pickup_delivery_pickup_preserves_state_history_and_totals(char_client, 
     assert result.json()['delivery_status'] == 'producao'
     with SessionLocal(restaurante_id=order['restaurant_id']) as db:
         assert load_delivery_address_snapshot(db, restaurante_id=order['restaurant_id'], comanda_id=order['id']) == snapshot
-    changed = call(char_client, order, '/previa', {'fulfillment': 'delivery', 'address_snapshot': {**ADDRESS, 'numero': '99'}})
-    assert changed.status_code == 409
+
+    corrected_address = {**ADDRESS, 'numero': '99'}
+    corrected_payload = {'fulfillment': 'delivery', 'address_snapshot': corrected_address}
+    changed = call(char_client, order, '/previa', corrected_payload)
+    assert changed.status_code == 200, changed.text
+    corrected = call(char_client, order, '', {
+        **corrected_payload,
+        'token': changed.json()['token'],
+        'motivo': 'Cliente corrigiu o número',
+    })
+    assert corrected.status_code == 200, corrected.text
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        assert load_original_delivery_address_snapshot(
+            db, restaurante_id=order['restaurant_id'], comanda_id=order['id']
+        ) == snapshot
+        current = load_delivery_address_snapshot(
+            db, restaurante_id=order['restaurant_id'], comanda_id=order['id']
+        )
+        assert current['numero'] == '99'
+        persisted = db.get(Comanda, order['id'])
+        assert ', 99' in persisted.delivery_endereco
+        logs = db.query(ActivityLog).filter_by(
+            restaurante_id=order['restaurant_id'],
+            action='CONVERT_FULFILLMENT',
+        ).all()
+        correction_entry = next(
+            log for log in reversed(logs)
+            if json.loads(log.details)['comanda_id'] == order['id']
+            and json.loads(log.details).get('endereco_corrigido')
+        )
+        correction_log = json.loads(correction_entry.details)
+        assert correction_log['address_revision_id']
+        assert 'Rua das Flores' not in correction_entry.details
 
 
 @pytest.mark.parametrize('address', [None, {}, {**ADDRESS, 'numero': ''}])
