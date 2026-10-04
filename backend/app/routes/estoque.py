@@ -29,6 +29,9 @@ router = APIRouter(
     tags=["Estoque e Insumos"]
 )
 
+MAX_XML_IMPORT_SIZE = 10 * 1024 * 1024
+
+
 def check_caixa_permission(user: Usuario, db: Session):
     authorized = ensure_permission(user, "estoque:administrar")
     require_plan_entitlement(
@@ -54,13 +57,33 @@ async def importar_xml(
     rest_id = require_tenant_id()
 
     try:
-        xml_content = await file.read()
-        root = ET.fromstring(xml_content)
-    except Exception as e:
+        xml_content = await file.read(MAX_XML_IMPORT_SIZE + 1)
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Erro ao ler arquivo XML: {str(e)}"
+            detail="Não foi possível ler o arquivo XML da NF-e.",
+        ) from exc
+    finally:
+        await file.close()
+
+    if not xml_content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O arquivo XML da NF-e está vazio.",
         )
+    if len(xml_content) > MAX_XML_IMPORT_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="O arquivo XML da NF-e deve ter no máximo 10 MB.",
+        )
+
+    try:
+        root = ET.fromstring(xml_content)
+    except ET.ParseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="XML da NF-e inválido ou corrompido.",
+        ) from exc
 
     # XML namespaces dictionary for NF-e
     ns = {'ns': 'http://www.portalfiscal.inf.br/nfe'}
