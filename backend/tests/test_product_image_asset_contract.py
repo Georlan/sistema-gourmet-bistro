@@ -23,6 +23,7 @@ def test_product_image_delete_clears_public_reference_and_keeps_tenant_scope():
     source = _source("backend/app/routes/cardapio_digital.py")
 
     assert '@router.delete("/assets/product/{produto_id}")' in source
-    assert 'object_path = _storage_object_path(current_url, rest_id, "products")' in source
+    delete_source = source.split('async def delete_product_asset(', 1)[1].split('@router.post', 1)[0]
+    assert '_delete_storage_object_best_effort' not in delete_source
     assert 'produto.imagem = ""' in source
     assert 'notify_catalog_update(background_tasks, "Foto do produto removida", rest_id)' in source

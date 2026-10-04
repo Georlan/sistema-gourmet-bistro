@@ -2040,3 +2040,22 @@ class DirectPixReceipt(Base):
         UniqueConstraint("restaurante_id","bank_reference", name="uq_direct_pix_receipt_reference"),
         Index("ix_direct_pix_receipts_tenant_date", "restaurante_id", "confirmed_at"),
     )
+
+
+class ProductImageRetirement(Base):
+    """Durable retention queue; terminal rows prevent reuse after remote deletion."""
+    __tablename__ = 'product_image_retirements'
+    __table_args__ = (
+        UniqueConstraint('restaurante_id', 'object_path', name='uq_image_retirement_object'),
+        Index('ix_image_retirement_due', 'restaurante_id', 'state', 'eligible_after'),
+    )
+    id = Column(Integer, primary_key=True)
+    restaurante_id = Column(Integer, ForeignKey('restaurantes.id'), nullable=False)
+    object_path = Column(String, nullable=False)
+    retired_at = Column(DateTime, nullable=False)
+    eligible_after = Column(DateTime, nullable=False)
+    state = Column(String, nullable=False, default='pending')
+    reason = Column(String, nullable=False, default='replaced')
+    attempts = Column(Integer, nullable=False, default=0)
+    last_result = Column(String, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)

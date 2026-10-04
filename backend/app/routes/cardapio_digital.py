@@ -2,7 +2,7 @@ from ..services.online_payments.service import OnlinePaymentService
 from contextlib import contextmanager
 import logging
 from typing import Optional
-from urllib.parse import quote, unquote
+from urllib.parse import quote
 import uuid
 
 import httpx
@@ -41,6 +41,7 @@ from ..websocket_manager import manager
 from ..services.plan_entitlements import ENTITLEMENT_COUPONS, ENTITLEMENT_LOYALTY, resolve_plan_entitlements
 from ..services.restaurant_profile import apply_restaurant_profile_update
 from ..services.image_optimization import ImageOptimizerBusy, InvalidImage, optimize_image
+from ..services.storage_paths import storage_object_path as _storage_object_path
 from ..services.online_order_policy import (
     evaluate_online_order_policy,
     next_schedule_opening,
@@ -104,30 +105,6 @@ async def _prepare_public_image(content: bytes, kind: str):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ImageOptimizerBusy as exc:
         raise HTTPException(status_code=429, detail=str(exc), headers={"Retry-After": "2"}) from exc
-
-
-def _storage_object_path(
-    asset_url: Optional[str],
-    restaurante_id: int,
-    asset_type: str,
-) -> Optional[str]:
-    if not asset_url:
-        return None
-    marker = "/storage/v1/object/public/cardapio-assets/"
-    if marker in asset_url:
-        clean_path = asset_url.split(marker, 1)[1].split("?", 1)[0]
-    else:
-        clean_path = asset_url.lstrip("/")
-    if clean_path.startswith("cardapio-assets/"):
-        clean_path = clean_path.removeprefix("cardapio-assets/")
-
-    clean_path = unquote(clean_path)
-    expected_prefix = f"{restaurante_id}/{asset_type}/"
-    if not clean_path.startswith(expected_prefix):
-        return None
-    if any(part in {"", ".", ".."} for part in clean_path.split("/")):
-        return None
-    return clean_path
 
 
 def _supabase_storage_headers(content_type: Optional[str] = None) -> dict:
@@ -563,7 +540,7 @@ async def upload_product_asset(
     )
     produto = db.query(Produto).filter(
         Produto.restaurante_id == rest_id, Produto.id == produto_id,
-    ).first()
+    ).populate_existing().with_for_update().first()
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
     produto.imagem = public_url
@@ -571,7 +548,7 @@ async def upload_product_asset(
     db.commit()
     db.refresh(produto)
 
-    # Keep the previous object available for reference rollback; no automatic deletion.
+    # The database lifecycle trigger retains replaced references for seven days.
     notify_catalog_update(background_tasks, "Foto do produto atualizada", rest_id)
     return {
         "id": produto.id,
@@ -597,23 +574,13 @@ async def delete_product_asset(
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
 
-    current_url = produto.imagem or next(
-        (str(url) for url in (produto.imagens_galeria or []) if str(url).strip()),
-        "",
-    )
-    object_path = _storage_object_path(current_url, rest_id, "products")
     produto.imagem = ""
     produto.imagens_galeria = []
     db.commit()
     db.refresh(produto)
 
-    if object_path:
-        background_tasks.add_task(
-            _delete_storage_object_best_effort,
-            object_path,
-            rest_id,
-            "foto de produto",
-        )
+    # Removal clears the public reference immediately. The durable lifecycle queue
+    # retires all removed primary/gallery URLs; shared objects remain protected.
     notify_catalog_update(background_tasks, "Foto do produto removida", rest_id)
     return {
         "id": produto.id,

@@ -93,12 +93,15 @@ async def lifespan(app: FastAPI):
     worker_enabled = os.getenv("ENABLE_OUTBOX_WORKER", "true").lower() == "true" and os.getenv("ENVIRONMENT") != "test"
     outbox_task = None
     signup_task = None
+    image_gc_task = None
     if worker_enabled:
         from .services.outbox import default_outbox_worker
         outbox_task = default_outbox_worker.start()
         import asyncio
         from .services.signup_notifications import run_worker
         signup_task = asyncio.create_task(run_worker())
+        from .services.product_image_worker import run_worker as run_image_gc
+        image_gc_task = asyncio.create_task(run_image_gc())
         print("[OUTBOX] Worker de integração assíncrona iniciado no lifespan.", flush=True)
 
     from .services.order_chat_hub import order_chat_hub
@@ -111,6 +114,11 @@ async def lifespan(app: FastAPI):
         import asyncio
         await asyncio.to_thread(order_chat_hub.stop)
         await asyncio.to_thread(manager.stop)
+        if image_gc_task:
+            import contextlib
+            image_gc_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await image_gc_task
         if signup_task:
             import contextlib
             signup_task.cancel()

@@ -1,0 +1,54 @@
+name: Product Image Lifecycle
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/product_image*'
+      - 'backend/app/services/storage_paths.py'
+      - 'backend/app/routes/cardapio_digital.py'
+      - 'backend/app/database.py'
+      - 'backend/app/models.py'
+      - 'backend/app/main.py'
+      - 'backend/alembic/versions/*product_image*'
+      - 'backend/tests/test_product_image*'
+      - 'backend/tools/product_image_gc.py'
+      - '.github/workflows/product-image-lifecycle.yml'
+permissions:
+  contents: read
+jobs:
+  retention:
+    name: Product image retention and PostgreSQL races
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: image-retention-ci-test-only-secret
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      PYTHONPATH: backend
+      KOMA_IMAGE_GC_TEST_DATABASE_URL: postgresql+psycopg2://postgres@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.15'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: python -m pip install -r backend/requirements-dev.txt
+      - run: >-
+          python -m pytest -q -ra
+          backend/tests/test_product_image_lifecycle.py
+          backend/tests/test_product_image_lifecycle_postgres.py
+          backend/tests/test_product_image_asset_contract.py
+          backend/tests/test_image_optimization.py
+          backend/tests/test_cardapio_digital.py
