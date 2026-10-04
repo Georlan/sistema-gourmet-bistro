@@ -523,7 +523,7 @@ class PrintingApplicationService:
         intent: PrintIntent,
         comanda: Comanda,
     ) -> list[PrintJob]:
-        """Centraliza as vias de despacho sem alterar o layout físico atual."""
+        """Centraliza as vias de despacho e a hierarquia operacional do entregador."""
         courier_name = str(intent.courier_name or "").strip()
         if not courier_name:
             raise UniversalPrintingError(
