@@ -132,6 +132,159 @@ def _append_bold_amount_line(lines: list[str], left: str, right: str, width: int
     lines[-1] += ESC_BOLD_OFF
 
 
+def _append_bold_wrapped(
+    lines: list[str],
+    text: str,
+    width: int,
+    prefix: str = "",
+) -> None:
+    first_line = len(lines)
+    _append_wrapped(lines, text, width, prefix)
+    lines[first_line] = ESC_BOLD_ON + lines[first_line]
+    lines[-1] += ESC_BOLD_OFF
+
+
+def _append_composition_group(
+    lines: list[str],
+    text: str,
+    width: int,
+    prefix: str = "   ",
+) -> None:
+    """Destaca a linha do grupo sem quebrar o texto visível com comandos ESC/POS."""
+    clean = _single_line(text).upper()
+    _append_bold_wrapped(lines, clean, width, prefix)
+
+
+def _critical_center(text: str, width: int) -> str:
+    return (
+        ESC_DOUBLE_HEIGHT_ON
+        + ESC_BOLD_ON
+        + align_center(text, width)
+        + ESC_BOLD_OFF
+        + ESC_NORMAL_SIZE
+    )
+
+
+def _payment_method_label_for_print(value: object) -> Optional[str]:
+    raw = _single_line(value)
+    if not raw:
+        return None
+    normalized = " ".join(raw.lower().replace("_", " ").replace("-", " ").split())
+    return {
+        "pix": "PIX",
+        "dinheiro": "DINHEIRO",
+        "cartao credito": "CARTÃO DE CRÉDITO",
+        "cartao de credito": "CARTÃO DE CRÉDITO",
+        "credito": "CARTÃO DE CRÉDITO",
+        "cartao debito": "CARTÃO DE DÉBITO",
+        "cartao de debito": "CARTÃO DE DÉBITO",
+        "debito": "CARTÃO DE DÉBITO",
+    }.get(normalized, raw.upper())
+
+
+def _delivery_ticket_total(comanda) -> float:
+    items_total = sum(
+        float(getattr(item, "preco_unit", 0.0) or 0.0)
+        for item in getattr(comanda, "itens", [])
+        if getattr(item, "status", None) != "cancelado"
+    )
+    delivery_fee = max(float(getattr(comanda, "delivery_taxa", 0.0) or 0.0), 0.0)
+    discounts = max(
+        float(getattr(comanda, "valor_desconto_cupom", 0.0) or 0.0)
+        + float(getattr(comanda, "valor_desconto_cashback", 0.0) or 0.0),
+        0.0,
+    )
+    return max(items_total + delivery_fee - discounts, 0.0)
+
+
+def _append_delivery_address(
+    lines: list[str],
+    comanda,
+    width: int,
+    address_snapshot: Optional[dict] = None,
+) -> None:
+    lines.append(ESC_BOLD_ON + align_center("ENDEREÇO DE ENTREGA", width) + ESC_BOLD_OFF)
+
+    snapshot = address_snapshot or {}
+    street = _single_line(snapshot.get("logradouro"))
+    number = _single_line(snapshot.get("numero"))
+    if street or number:
+        main = ", ".join(part for part in (street, number) if part)
+        _append_bold_wrapped(lines, main.upper(), width)
+
+        complement = _single_line(snapshot.get("complemento"))
+        neighborhood = _single_line(snapshot.get("bairro"))
+        city = _single_line(snapshot.get("cidade"))
+        state = _single_line(snapshot.get("uf")).upper()
+        postal_code = "".join(
+            char for char in str(snapshot.get("cep") or "") if char.isdigit()
+        )
+        reference = _single_line(snapshot.get("referencia"))
+
+        if complement:
+            _append_wrapped(lines, f"COMPLEMENTO: {complement}".upper(), width)
+        if neighborhood:
+            _append_wrapped(lines, f"BAIRRO: {neighborhood}".upper(), width)
+        if city or state:
+            place = " / ".join(part for part in (city, state) if part)
+            _append_wrapped(lines, f"CIDADE: {place}".upper(), width)
+        if len(postal_code) == 8:
+            postal_code = f"{postal_code[:5]}-{postal_code[5:]}"
+        if postal_code:
+            lines.append(f"CEP: {postal_code}")
+        if reference:
+            _append_bold_wrapped(lines, f"REF.: {reference}".upper(), width)
+        return
+
+    legacy_address = _single_line(getattr(comanda, "delivery_endereco", None)) or "NÃO INFORMADO"
+    _append_bold_wrapped(lines, legacy_address.upper(), width)
+    neighborhood = _single_line(getattr(comanda, "delivery_bairro", None))
+    if neighborhood and neighborhood.casefold() not in legacy_address.casefold():
+        _append_wrapped(lines, f"BAIRRO: {neighborhood}".upper(), width)
+
+
+def _delivery_payment_lines(comanda, *, total: float, width: int) -> list[str]:
+    amount_paid = max(float(getattr(comanda, "valor_pago", 0.0) or 0.0), 0.0)
+    amount_due = max(float(total) - amount_paid, 0.0)
+    online_paid = (
+        _single_line(getattr(comanda, "online_payment_status", None)).casefold()
+        == "approved"
+    )
+    fully_paid = online_paid or bool(getattr(comanda, "fechada", False)) or amount_due < 0.01
+    method = _payment_method_label_for_print(
+        getattr(comanda, "delivery_forma_pagamento", None)
+    )
+
+    block = [ESC_BOLD_ON + align_center("PAGAMENTO", width) + ESC_BOLD_OFF]
+    if fully_paid:
+        if method:
+            block.append(ESC_BOLD_ON + f"FORMA: {method}" + ESC_BOLD_OFF)
+        block.append(_critical_center("PAGO ONLINE" if online_paid else "PAGO", width))
+        block.append(_critical_center("NÃO COBRAR", width))
+        return block
+
+    block.append(_critical_center(f"COBRAR {_format_brl(amount_due)}", width))
+    if method:
+        block.append(ESC_BOLD_ON + f"FORMA: {method}" + ESC_BOLD_OFF)
+
+    change_for = getattr(comanda, "delivery_troco_para", None)
+    if change_for is not None and float(change_for or 0.0) > 0:
+        change_for_value = float(change_for)
+        block.append(
+            ESC_BOLD_ON
+            + f"TROCO PARA: {_format_brl(change_for_value)}"
+            + ESC_BOLD_OFF
+        )
+        change_to_take = max(change_for_value - amount_due, 0.0)
+        if change_to_take >= 0.01:
+            block.append(
+                ESC_BOLD_ON
+                + f"LEVAR TROCO: {_format_brl(change_to_take)}"
+                + ESC_BOLD_OFF
+            )
+    return block
+
+
 def safe_get(obj, key, default=""):
     if obj is None:
         return default
@@ -491,6 +644,7 @@ class PrinterService:
         taxa_servico_padrao: float = 10.0,
         apenas_valores: bool = False,
         restaurant_name_position: str = "cabecalho",
+        production_hierarchy: bool = False,
     ) -> str:
         """Renderizador canônico de mesa.
 
@@ -608,14 +762,30 @@ class PrinterService:
             for (product_code, product_name, unit_price, observation, composition, _signature), qty in grouped_items.items():
                 item_total = qty * unit_price
                 client_subtotal += item_total
-                _append_bold_amount_line(
-                    lines,
-                    f"{qty}x {_printable_product_name(product_code, product_name).upper()}",
-                    _format_brl(item_total),
-                    width,
+                item_label = (
+                    f"{qty}x {_printable_product_name(product_code, product_name).upper()}"
                 )
-                for composition_line in composition:
-                    _append_wrapped(lines, composition_line.upper(), width, "   ")
+                if production_hierarchy:
+                    _append_bold_wrapped(lines, item_label, width)
+                else:
+                    _append_bold_amount_line(
+                        lines,
+                        item_label,
+                        _format_brl(item_total),
+                        width,
+                    )
+                for composition_index, composition_line in enumerate(composition):
+                    if production_hierarchy:
+                        if composition_index:
+                            lines.append("")
+                        _append_composition_group(
+                            lines,
+                            composition_line,
+                            width,
+                            "   ",
+                        )
+                    else:
+                        _append_wrapped(lines, composition_line.upper(), width, "   ")
                 if not apenas_valores and observation:
                     _append_wrapped_in_font(
                         lines, observation.upper(), width, "   OBS: ", ESC_FONT_A
@@ -675,135 +845,125 @@ class PrinterService:
         lines.append("")
         return "\n".join(lines)
 
-    def generate_delivery_unified_ticket(self, comanda, motoboy_nome: str) -> str:
+    def _generate_delivery_courier_ticket(
+        self,
+        comanda,
+        motoboy_nome: str,
+        *,
+        address_snapshot: Optional[dict] = None,
+    ) -> str:
         width = self.width
+        total = _delivery_ticket_total(comanda)
+        now = get_operational_now()
+        customer = (
+            _single_line(getattr(comanda, "identificador", None)).upper()
+            or "NÃO INFORMADO"
+        )
+
         lines = [
+            ESC_RECEIPT_LINE + ESC_FONT_A,
             draw_separator("=", width),
-            align_center("*** VIA ÚNICA DELIVERY ***", width),
-            align_center("KÔMA GOURMET BISTRÔ", width),
+            _critical_center("ENTREGA", width),
+            _critical_center(f"PEDIDO #{comanda.numero_pedido}", width),
             draw_separator("=", width),
+            ESC_BOLD_ON + f"CLIENTE: {customer}" + ESC_BOLD_OFF,
+            f"TELEFONE: {format_phone_for_print(comanda.delivery_telefone)}",
+            draw_separator("-", width),
         ]
-        lines.append(
-            f"CLIENTE: {comanda.identificador.upper() if comanda.identificador else 'NÃO INFORMADO'}"
+
+        _append_delivery_address(
+            lines,
+            comanda,
+            width,
+            address_snapshot=address_snapshot,
         )
-        lines.append(f"TELEFONE: {format_phone_for_print(comanda.delivery_telefone)}")
-        lines.append(f"PEDIDO: #{comanda.numero_pedido} | ENTREGA")
-        lines.append(f"MOTOBOY: {motoboy_nome.upper()}")
-        lines.append(f"DATA: {get_operational_now().strftime('%d/%m/%Y %H:%M')}")
         lines.append(draw_separator("-", width))
-        lines.append("ITENS:")
-        total = 0.0
-        for it in comanda.itens:
-            if it.status != "cancelado":
-                lines.append(
-                    format_kitchen_item(
-                        1,
-                        it.produto.nome,
-                        it.observacao or "",
-                        it.cliente_nome or "",
-                        width,
-                    )
+        lines.extend(_delivery_payment_lines(comanda, total=total, width=width))
+        lines.append(draw_separator("-", width))
+
+        lines.append(ESC_BOLD_ON + "ITENS" + ESC_BOLD_OFF)
+        for item in getattr(comanda, "itens", []):
+            if getattr(item, "status", None) == "cancelado":
+                continue
+            lines.append(
+                format_kitchen_item(
+                    1,
+                    item.produto.nome,
+                    item.observacao or "",
+                    item.cliente_nome or "",
+                    width,
                 )
-                total += it.preco_unit
-        lines.append(draw_separator("-", width))
-        lines.append("ENDEREÇO DE ENTREGA:")
-        lines.extend(textwrap.wrap(comanda.delivery_endereco or "Não informado", width=width))
-        lines.append(draw_separator("-", width))
-        total_com_taxa = total + (comanda.delivery_taxa or 0.0)
-        remaining = total_com_taxa - comanda.valor_pago
-        pay_status = (
-            "[PAGO ONLINE - NÃO COBRAR]"
-            if remaining <= 0.01 or comanda.fechada
-            else f"[COBRAR R$ {remaining:.2f} NO CARTÃO/DINHEIRO]"
+            )
+
+        lines.extend(
+            [
+                draw_separator("-", width),
+                ESC_BOLD_ON + f"MOTOBOY: {motoboy_nome.upper()}" + ESC_BOLD_OFF,
+                f"DATA: {now.strftime('%d/%m/%Y %H:%M')}",
+                draw_separator("=", width),
+                align_center("Gerenciado por Kôma", width),
+                align_center("Documento não fiscal", width),
+            ]
         )
-        lines.append(align_center("PAGAMENTO:", width))
-        lines.append(align_center(pay_status, width))
-        lines.append(draw_separator("=", width))
-        lines.append(align_center("Obrigado pela preferência!", width))
-        lines.append(align_center("Documento não fiscal", width))
         return "\n".join(lines)
+
+    def generate_delivery_unified_ticket(
+        self,
+        comanda,
+        motoboy_nome: str,
+        *,
+        address_snapshot: Optional[dict] = None,
+    ) -> str:
+        return self._generate_delivery_courier_ticket(
+            comanda,
+            motoboy_nome,
+            address_snapshot=address_snapshot,
+        )
 
     def generate_delivery_kitchen_ticket(self, comanda) -> str:
         width = self.width
         lines = [
+            ESC_RECEIPT_LINE + ESC_FONT_A,
             draw_separator("=", width),
-            align_center("*** VIA COZINHA (DELIVERY) ***", width),
+            ESC_BOLD_ON + align_center("VIA COZINHA - DELIVERY", width) + ESC_BOLD_OFF,
             draw_separator("=", width),
         ]
         lines.append(
+            ESC_BOLD_ON
+            + f"PEDIDO #{comanda.numero_pedido} | ENTREGA"
+            + ESC_BOLD_OFF
+        )
+        lines.append(
             f"CLIENTE: {comanda.identificador.upper() if comanda.identificador else 'NÃO INFORMADO'}"
         )
-        lines.append(f"PEDIDO: #{comanda.numero_pedido} | ENTREGA")
         lines.append(f"DATA: {get_operational_now().strftime('%d/%m/%Y %H:%M')}")
         lines.append(draw_separator("-", width))
-        for it in comanda.itens:
-            if it.status != "cancelado":
+        for item in comanda.itens:
+            if item.status != "cancelado":
                 lines.append(
                     format_kitchen_item(
                         1,
-                        it.produto.nome,
-                        it.observacao or "",
-                        it.cliente_nome or "",
+                        item.produto.nome,
+                        item.observacao or "",
+                        item.cliente_nome or "",
                         width,
                     )
                 )
         lines.append(draw_separator("=", width))
         return "\n".join(lines)
 
-    def generate_delivery_motoboy_ticket(self, comanda, motoboy_nome: str) -> str:
-        width = self.width
-        lines = [
-            draw_separator("=", width),
-            align_center("*** VIA MOTOBOY / ENTREGA ***", width),
-            align_center("KÔMA GOURMET BISTRÔ", width),
-            draw_separator("=", width),
-        ]
-        lines.append(
-            f"CLIENTE: {comanda.identificador.upper() if comanda.identificador else 'NÃO INFORMADO'}"
+    def generate_delivery_motoboy_ticket(
+        self,
+        comanda,
+        motoboy_nome: str,
+        *,
+        address_snapshot: Optional[dict] = None,
+    ) -> str:
+        return self._generate_delivery_courier_ticket(
+            comanda,
+            motoboy_nome,
+            address_snapshot=address_snapshot,
         )
-        lines.append(f"TELEFONE: {format_phone_for_print(comanda.delivery_telefone)}")
-        lines.append(f"PEDIDO: #{comanda.numero_pedido}")
-        lines.append(f"MOTOBOY: {motoboy_nome.upper()}")
-        lines.append(f"DATA: {get_operational_now().strftime('%d/%m/%Y %H:%M')}")
-        lines.append(draw_separator("-", width))
-        lines.append("RESUMO DE VALORES:")
-        total = 0.0
-        for it in comanda.itens:
-            if it.status != "cancelado":
-                lines.append(
-                    split_justified(
-                        it.produto.nome[:22], f"R$ {it.preco_unit:.2f}", width
-                    )
-                )
-                total += it.preco_unit
-        lines.append(
-            split_justified(
-                "TAXA DE ENTREGA:",
-                f"R$ {comanda.delivery_taxa or 0.0:.2f}",
-                width,
-            )
-        )
-        total_com_taxa = total + (comanda.delivery_taxa or 0.0)
-        lines.append(draw_separator("-", width))
-        lines.append(
-            split_justified("TOTAL GERAL:", f"R$ {total_com_taxa:.2f}", width)
-        )
-        lines.append(draw_separator("-", width))
-        lines.append("ENDEREÇO DE ENTREGA:")
-        lines.extend(textwrap.wrap(comanda.delivery_endereco or "Não informado", width=width))
-        lines.append(draw_separator("-", width))
-        remaining = total_com_taxa - comanda.valor_pago
-        pay_status = (
-            "[PAGO ONLINE - NÃO COBRAR]"
-            if remaining <= 0.01 or comanda.fechada
-            else f"[COBRAR R$ {remaining:.2f} NO CARTÃO/DINHEIRO]"
-        )
-        lines.append(align_center("PAGAMENTO:", width))
-        lines.append(align_center(pay_status, width))
-        lines.append(draw_separator("=", width))
-        lines.append(align_center("Obrigado pela preferência!", width))
-        lines.append(align_center("Documento não fiscal", width))
-        return "\n".join(lines)
 
 
 def format_phone_for_print(phone: Optional[str]) -> str:

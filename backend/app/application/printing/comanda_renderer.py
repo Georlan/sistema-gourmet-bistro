@@ -442,30 +442,47 @@ def _insert_payment_block(
     if not variant.payment_required and not payment_label and not paid_online and not has_change:
         return
 
-    block: list[str] = ["-" * width, ESC_BOLD_ON + "PAGAMENTO" + ESC_BOLD_OFF]
+    def critical(text: str) -> str:
+        return (
+            ESC_DOUBLE_HEIGHT_ON
+            + ESC_BOLD_ON
+            + align_center(text, width)
+            + ESC_BOLD_OFF
+            + ESC_NORMAL_SIZE
+        )
+
+    block: list[str] = [
+        "-" * width,
+        ESC_BOLD_ON + align_center("PAGAMENTO", width) + ESC_BOLD_OFF,
+    ]
     if payment_label:
         block.append(ESC_BOLD_ON + f"FORMA: {payment_label}" + ESC_BOLD_OFF)
     elif variant.payment_required:
-        # Pedidos legados não podem esconder a ausência do dado operacional.
         block.append(ESC_BOLD_ON + "FORMA: NÃO INFORMADA" + ESC_BOLD_OFF)
+
     if has_change:
-        block.append(f"TROCO PARA: {_format_brl(float(variant.change_for or 0.0))}")
+        change_for = float(variant.change_for or 0.0)
+        block.append(
+            ESC_BOLD_ON
+            + f"TROCO PARA: {_format_brl(change_for)}"
+            + ESC_BOLD_OFF
+        )
+        change_to_take = max(change_for - amount_due, 0.0)
+        if variant.payment_required and amount_due >= 0.01 and change_to_take >= 0.01:
+            block.append(
+                ESC_BOLD_ON
+                + f"LEVAR TROCO: {_format_brl(change_to_take)}"
+                + ESC_BOLD_OFF
+            )
 
     if paid_online or fully_paid:
         if amount_paid > 0:
             block.append(f"VALOR PAGO: {_format_brl(amount_paid)}")
-        status_label = "PAGO ONLINE" if paid_online else "PAGO"
         block.extend(
             [
                 "=" * width,
-                (
-                    ESC_DOUBLE_HEIGHT_ON
-                    + ESC_BOLD_ON
-                    + align_center(status_label, width)
-                    + ESC_BOLD_OFF
-                    + ESC_NORMAL_SIZE
-                ),
-                ESC_BOLD_ON + align_center("NÃO COBRAR DO CLIENTE", width) + ESC_BOLD_OFF,
+                critical("PAGO ONLINE" if paid_online else "PAGO"),
+                critical("NÃO COBRAR"),
                 "=" * width,
             ]
         )
@@ -473,9 +490,7 @@ def _insert_payment_block(
         block.extend(
             [
                 "=" * width,
-                ESC_BOLD_ON
-                + align_center(f"A COBRAR: {_format_brl(amount_due)}", width)
-                + ESC_BOLD_OFF,
+                critical(f"A COBRAR: {_format_brl(amount_due)}"),
                 "=" * width,
             ]
         )
@@ -483,16 +498,24 @@ def _insert_payment_block(
     block.append("")
     lines[total_index:total_index] = block
 
-
-def _style_items_header(lines: list[str], *, width: int) -> None:
+def _style_items_header(
+    lines: list[str],
+    *,
+    width: int,
+    show_values: bool = True,
+) -> None:
     for index, line in enumerate(lines):
-        if line == ESC_BOLD_ON + "ITENS" + ESC_BOLD_OFF:
+        if line != ESC_BOLD_ON + "ITENS" + ESC_BOLD_OFF:
+            continue
+        if show_values:
             lines[index] = (
                 ESC_BOLD_ON
                 + split_justified("ITENS", "VALOR", width)
                 + ESC_BOLD_OFF
             )
-            break
+        else:
+            lines[index] = ESC_BOLD_ON + "ITENS" + ESC_BOLD_OFF
+        break
 
 
 def apply_operational_visual_hierarchy(
@@ -505,6 +528,7 @@ def apply_operational_visual_hierarchy(
     location_label: Optional[str] = None,
     identity_label: str = "PEDIDO",
     document_title: Optional[str] = None,
+    show_item_values: bool = True,
 ) -> str:
     """Aplica o sistema visual compartilhado a qualquer documento operacional."""
     width = int(getattr(printer_service, "width", 40) or 40)
@@ -531,7 +555,7 @@ def apply_operational_visual_hierarchy(
         identity_label=resolved_identity,
         width=width,
     )
-    _style_items_header(lines, width=width)
+    _style_items_header(lines, width=width, show_values=show_item_values)
     _style_koma_footer(lines)
     return "\n".join(lines)
 
@@ -623,6 +647,7 @@ def render_canonical_comanda(
     (fechamento, caixa, despacho e delta de item) permanecem fora deste modelo.
     """
     width = int(getattr(printer_service, "width", 40) or 40)
+    production_hierarchy = _order_type_label(order_type) in {"RETIRADA", "DELIVERY"}
     receipt = printer_service.generate_receipt(
         num_pedido=order_number,
         tipo=order_type,
@@ -645,6 +670,7 @@ def render_canonical_comanda(
         taxa_servico_ativa=False,
         apenas_valores=False,
         restaurant_name_position=restaurant_name_position,
+        production_hierarchy=production_hierarchy,
     )
     receipt = apply_operational_visual_hierarchy(
         receipt,
@@ -653,6 +679,7 @@ def render_canonical_comanda(
         operator_label=variant.operator_label,
         operator_name=operator_name,
         location_label=variant.location_label,
+        show_item_values=not production_hierarchy,
     )
     lines = receipt.split("\n")
     _insert_variant_header(lines, tipo=order_type, variant=variant, width=width)

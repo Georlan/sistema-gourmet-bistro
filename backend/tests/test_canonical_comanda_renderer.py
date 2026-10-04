@@ -85,7 +85,7 @@ def test_online_pickup_hides_operator_and_prints_customer_payment_and_paid_warni
     assert ESC_BOLD_ON + "FORMA: PIX ONLINE" + ESC_BOLD_OFF in ticket
     assert "VALOR PAGO: R$ 12,00" in ticket
     assert "PAGO ONLINE" in ticket
-    assert "NÃO COBRAR DO CLIENTE" in ticket
+    assert "NÃO COBRAR" in ticket
     assert "SUBTOTAL ITENS:" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
     assert "TOTAL GERAL DA MESA:" not in ticket
@@ -210,7 +210,7 @@ def test_pickup_payment_block_is_structural_even_for_legacy_order_without_method
     assert "PAGAMENTO" in ticket
     assert "FORMA: NÃO INFORMADA" in ticket
     assert "A COBRAR: R$ 10,90" in ticket
-    assert "NÃO COBRAR DO CLIENTE" not in ticket
+    assert "NÃO COBRAR" not in ticket
 
 
 def test_paid_fulfillment_never_instructs_operator_to_charge_again():
@@ -234,7 +234,7 @@ def test_paid_fulfillment_never_instructs_operator_to_charge_again():
     assert "FORMA: CARTÃO DE DÉBITO" in ticket
     assert "VALOR PAGO: R$ 15,90" in ticket
     assert "PAGO" in ticket
-    assert "NÃO COBRAR DO CLIENTE" in ticket
+    assert "NÃO COBRAR" in ticket
     assert "A COBRAR:" not in ticket
 
 
@@ -271,7 +271,8 @@ def test_secondary_sector_still_uses_same_visual_base():
     assert "VIA: BAR" in ticket
     assert "PEDIDO #93" in ticket
     assert "ITENS" in ticket
-    assert "VALOR" in ticket
+    item_line = next(line for line in ticket.splitlines() if "1x DRINK DA CASA" in line)
+    assert "R$" not in item_line
     assert f"Gerenciado por {ESC_BOLD_ON}Kôma{ESC_BOLD_OFF}" in ticket
 
 
@@ -326,7 +327,7 @@ def test_online_dine_in_without_table_prints_customer_pix_and_never_fakes_delive
     assert "1x COCA-COLA LATA" in ticket
     assert "FORMA: PIX ONLINE" in ticket
     assert "PAGO ONLINE" in ticket
-    assert "NÃO COBRAR DO CLIENTE" in ticket
+    assert "NÃO COBRAR" in ticket
     assert "DESCONTO CUPOM:" in ticket
     assert "DESCONTO CASHBACK:" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
@@ -356,3 +357,69 @@ def test_online_dine_in_reprint_after_table_association_keeps_online_customer_an
     assert "TELEFONE: (88) 99660-1927" in ticket
     assert "FORMA: DINHEIRO" in ticket
     assert ticket.count("REIMPRESSÃO") == 1
+
+def test_remote_production_separates_and_bolds_marmitaria_groups_without_item_price():
+    ticket = _render(
+        [
+            PrintItem(
+                codigo="quentinha-g",
+                nome="QUENTINHA G",
+                preco_unit=10.0,
+                composicao=(
+                    "PROTEÍNAS: Filé de frango acebolado",
+                    "GUARNIÇÕES: Arroz refogado, cuscuz temperado, feijão de corda",
+                    "SALADAS: Salada tropical",
+                ),
+            )
+        ],
+        ComandaVariant(
+            origin_label="CARDÁPIO ONLINE",
+            location_label=None,
+            operator_label=None,
+            customer_name="SAMIRA ELEN",
+            payment_method="dinheiro",
+            change_for=100.0,
+            payment_required=True,
+            amount_due=70.0,
+            show_financial_breakdown=True,
+        ),
+        order_type="Retirada",
+    )
+
+    item_line = next(line for line in ticket.splitlines() if "1x QUENTINHA G" in line)
+    assert "R$" not in item_line
+    for label in ("PROTEÍNAS:", "GUARNIÇÕES:", "SALADAS:"):
+        group_line = next(line for line in ticket.splitlines() if label in line)
+        assert group_line.startswith(ESC_BOLD_ON + "   ")
+    assert "\n\n" + ESC_BOLD_ON + "   GUARNIÇÕES:" in ticket
+    assert "\n\n" + ESC_BOLD_ON + "   SALADAS:" in ticket
+    assert ESC_BOLD_ON + "TROCO PARA: R$ 100,00" + ESC_BOLD_OFF in ticket
+    assert ESC_BOLD_ON + "LEVAR TROCO: R$ 30,00" + ESC_BOLD_OFF in ticket
+    charge_line = next(line for line in ticket.splitlines() if "A COBRAR: R$ 70,00" in line)
+    assert charge_line.startswith(ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON)
+
+
+def test_remote_paid_online_makes_do_not_charge_a_large_operational_warning():
+    ticket = _render(
+        [PrintItem(codigo="quentinha-g", nome="QUENTINHA G", preco_unit=22.0)],
+        ComandaVariant(
+            origin_label="CARDÁPIO ONLINE",
+            location_label=None,
+            operator_label=None,
+            customer_name="DAIANE",
+            payment_method="pix",
+            online_payment_status="approved",
+            amount_paid=22.0,
+            payment_required=True,
+            amount_due=0.0,
+            show_financial_breakdown=True,
+        ),
+        order_type="Delivery",
+    )
+
+    assert "PAGO ONLINE" in ticket
+    assert "NÃO COBRAR" in ticket
+    assert "NÃO COBRAR DO CLIENTE" not in ticket
+    warning_line = next(line for line in ticket.splitlines() if "NÃO COBRAR" in line)
+    assert warning_line.startswith(ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON)
+

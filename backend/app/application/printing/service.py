@@ -9,6 +9,7 @@ from ...domain.printing import (
     PrintItem,
     group_items_by_print_destination,
 )
+from ...delivery_address_snapshot import load_delivery_address_snapshot
 from ...models import Comanda, ConfiguracaoRestaurante, Item, Lancamento, PrintJob
 from ...printer_service import printer_service
 from ...domain.orders.composition import composition_presentation
@@ -522,7 +523,7 @@ class PrintingApplicationService:
         intent: PrintIntent,
         comanda: Comanda,
     ) -> list[PrintJob]:
-        """Centraliza as vias de despacho sem alterar o layout físico atual."""
+        """Centraliza as vias de despacho e a hierarquia operacional do entregador."""
         courier_name = str(intent.courier_name or "").strip()
         if not courier_name:
             raise UniversalPrintingError(
@@ -534,6 +535,11 @@ class PrintingApplicationService:
             ConfiguracaoRestaurante.restaurante_id == intent.restaurant_id,
         ).first()
         unified = bool(config.unificar_vias_delivery) if config else False
+        address_snapshot = load_delivery_address_snapshot(
+            db,
+            restaurante_id=intent.restaurant_id,
+            comanda_id=comanda.id,
+        )
 
         payloads: list[tuple[str, str]]
         if unified:
@@ -543,6 +549,7 @@ class PrintingApplicationService:
                     printer_service.generate_delivery_unified_ticket(
                         comanda,
                         courier_name,
+                        address_snapshot=address_snapshot,
                     ),
                 )
             ]
@@ -557,6 +564,7 @@ class PrintingApplicationService:
                     printer_service.generate_delivery_motoboy_ticket(
                         comanda,
                         courier_name,
+                        address_snapshot=address_snapshot,
                     ),
                 ),
             ]

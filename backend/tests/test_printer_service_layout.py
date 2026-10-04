@@ -1,4 +1,5 @@
 import datetime
+from types import SimpleNamespace
 
 from app.printer_service import (
     ESC_BOLD_ON,
@@ -442,3 +443,97 @@ def test_restaurant_name_can_move_to_footer_or_be_hidden():
         "TOTAL GERAL DA MESA"
     )
     assert "MEU RESTAURANTE" not in hidden_ticket
+
+def _delivery_order_for_layout(*, paid_online: bool = False):
+    items = [
+        SimpleNamespace(
+            status="preparando",
+            preco_unit=10.0,
+            produto=SimpleNamespace(nome="Quentinha G"),
+            observacao=(
+                "PROTEÍNAS: Suíno trinchado, GUARNIÇÕES: Baião, "
+                "cuscuz temperado, SALADAS: Verdura de maionese"
+            ),
+            cliente_nome="Daiane",
+        ),
+        SimpleNamespace(
+            status="preparando",
+            preco_unit=10.0,
+            produto=SimpleNamespace(nome="Quentinha G"),
+            observacao="",
+            cliente_nome="Daiane",
+        ),
+    ]
+    return SimpleNamespace(
+        numero_pedido=51,
+        identificador="Daiane",
+        delivery_telefone="88994478345",
+        delivery_endereco="Avenida Expedicionário, 202",
+        delivery_bairro="Centro",
+        delivery_taxa=2.0,
+        valor_desconto_cupom=0.0,
+        valor_desconto_cashback=0.0,
+        valor_pago=22.0 if paid_online else 0.0,
+        online_payment_status="approved" if paid_online else None,
+        delivery_forma_pagamento="pix" if paid_online else "dinheiro",
+        delivery_troco_para=None if paid_online else 50.0,
+        fechada=False,
+        itens=items,
+    )
+
+
+def test_delivery_unified_prioritizes_address_payment_and_compact_items():
+    ticket = _service().generate_delivery_unified_ticket(
+        _delivery_order_for_layout(),
+        "Entregador 1",
+        address_snapshot={
+            "logradouro": "Avenida Expedicionário",
+            "numero": "202",
+            "complemento": "Apartamento",
+            "bairro": "Centro",
+            "cidade": "Limoeiro do Norte",
+            "uf": "CE",
+            "cep": "62930000",
+            "referencia": "Em frente ao açaí",
+        },
+    )
+
+    assert ticket.startswith(ESC_RECEIPT_LINE + ESC_FONT_A)
+    assert "ENTREGA" in ticket
+    assert "PEDIDO #51" in ticket
+    assert ticket.index("ENDEREÇO DE ENTREGA") < ticket.index("PAGAMENTO")
+    assert ticket.index("PAGAMENTO") < ticket.index("ITENS")
+    assert "AVENIDA EXPEDICIONÁRIO, 202" in ticket
+    assert "COMPLEMENTO: APARTAMENTO" in ticket
+    assert "REF.: EM FRENTE AO AÇAÍ" in ticket
+    assert "COBRAR R$ 22,00" in ticket
+    assert "FORMA: DINHEIRO" in ticket
+    assert "TROCO PARA: R$ 50,00" in ticket
+    assert "LEVAR TROCO: R$ 28,00" in ticket
+    assert "1x Quentinha G\n  * PROTEÍNAS:" in ticket
+    assert ticket.index("ITENS") < ticket.index("MOTOBOY: ENTREGADOR 1")
+
+
+def test_delivery_unified_paid_online_makes_do_not_charge_unmistakable():
+    ticket = _service().generate_delivery_unified_ticket(
+        _delivery_order_for_layout(paid_online=True),
+        "Entregador 1",
+    )
+
+    assert "PAGO ONLINE" in ticket
+    assert "NÃO COBRAR" in ticket
+    assert "COBRAR R$" not in ticket
+    assert "FORMA: PIX" in ticket
+    assert ticket.index("PAGAMENTO") < ticket.index("ITENS")
+
+
+def test_delivery_motoboy_uses_same_hierarchy_as_unified_ticket():
+    order = _delivery_order_for_layout()
+    service = _service()
+    unified = service.generate_delivery_unified_ticket(order, "Entregador 1")
+    motoboy = service.generate_delivery_motoboy_ticket(order, "Entregador 1")
+
+    assert motoboy == unified
+    assert "ENDEREÇO DE ENTREGA" in motoboy
+    assert "COBRAR R$ 22,00" in motoboy
+
