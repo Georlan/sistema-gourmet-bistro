@@ -27,7 +27,7 @@ export interface DurableOrderResume {
   restaurante_id: number;
   tipo: string;
   total: number;
-  idempotency_key: "";
+  idempotency_key: string;
   status?: string;
   state?: unknown;
   fechado?: boolean;
