@@ -419,7 +419,7 @@ def test_remote_paid_online_makes_do_not_charge_a_large_operational_warning():
 
     assert "PAGO ONLINE" in ticket
     assert "NÃO COBRAR" in ticket
-    assert "NÃO COBRAR" not in ticket
+    assert "NÃO COBRAR DO CLIENTE" not in ticket
     warning_line = next(line for line in ticket.splitlines() if "NÃO COBRAR" in line)
     assert warning_line.startswith(ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON)
 
