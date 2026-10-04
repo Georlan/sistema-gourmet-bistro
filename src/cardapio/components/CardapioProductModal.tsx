@@ -450,7 +450,7 @@ export default function CardapioProductModal({
         </div>
 
         <div className="shrink-0 border-t border-koma-border bg-koma-panel p-4 sm:px-6">
-          <p className="mb-2 text-xs text-koma-muted">Quantidade de {product.marmitaria ? "marmitas" : "itens"}{quantity > 1 ? " · Mesma montagem para todas as unidades" : ""}</p>
+          <p className="mb-2 text-xs text-koma-muted">Quantidade de itens{quantity > 1 ? " · Mesma montagem para todas as unidades" : ""}</p>
           <div className="flex items-center gap-3">
           <div className="flex shrink-0 items-center rounded-xl border border-koma-border bg-koma-card p-1">
             <button

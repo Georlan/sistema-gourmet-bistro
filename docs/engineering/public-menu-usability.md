@@ -19,7 +19,8 @@ Tempero da Mama e Naza. Mudanças grandes na estrutura exigem direção do usuá
 - Sacola e revisão reutilizam OrderItemComposition por um adaptador de rascunho.
   Marmitaria agrupa pelas identidades canônicas de grupo; outros perfis continuam
   com complementos. Observações livres continuam separadas e intactas.
-- Ação do cartão Marmitaria diz Montar quentinha. Pagamento não anuncia cartão
+- Textos de quantidade e cartões permanecem gerais: o perfil Marmitaria inclui
+  também bebidas e sobremesas. Pagamento não anuncia cartão
   ausente: explica o momento de pagamento das opções presenciais habilitadas.
 
 ## Preservado / pendente
@@ -37,9 +38,18 @@ em pedido de três G não foi reproduzido e não é declarado corrigido por esta
 
 ## Verificação
 
-TypeScript, 936 testes unitários, build de produção e 43 testes de navegador em
+TypeScript, 937 testes unitários, build de produção e 53 testes de navegador em
 390 px e desktop 1366 px. Testes usam API simulada e não enviam pedidos reais.
 Cobrem regras por tipos/porções, entrada canônica, edição/cancelamento, quantidade,
 total e preservação de contato. Mudança restrita ao frontend: não altera backend.
 
 Cinco casos não se aplicam aos viewports selecionados: toque exclusivo de celular e CEP exclusivo de desktop 1024. Os fluxos de CEP não foram revalidados nesta execução.
+
+## Integração e cadastro
+
+Preserva os trabalhos já integrados de mínimo zero/adicionais (#960, #966, #988),
+retomada do pedido (#992) e remoção de endereço antigo de visitante (#996).
+Atualizado com main após #998. P e G recebem o mesmo grupo opcional de adicionais
+na leitura pública atual; a ausência anterior da P era no vínculo do cadastro.
+Nenhuma regra de composição é injetada no frontend. Acesso direto à composição
+no caixa abre a configuração salva sem exigir gravação dos dados básicos.
