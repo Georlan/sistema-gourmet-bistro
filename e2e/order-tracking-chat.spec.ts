@@ -444,8 +444,19 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
       return saved.find((order: { id: string }) => order.id === targetOrderId)?.tracking_token || '';
     }, orderId)).toBe(trackingToken);
 
-    await expect(reopened.locator('#btn-my-orders-header')).toBeVisible();
-    await reopened.locator('#btn-my-orders-header').click();
+    if ((reopened.viewportSize()?.width || 0) <= 640) {
+      const ordersTrigger = reopened.locator('#mobile-nav-orders');
+      await expect(ordersTrigger).toBeVisible();
+      await ordersTrigger.click();
+      await reopened.locator('#orders-drawer-panel')
+        .getByRole('button', { name: /Abrir mensagem|Chat & Status/ })
+        .first()
+        .click();
+    } else {
+      const chatTrigger = reopened.locator('#floating-order-chat-trigger');
+      await expect(chatTrigger).toBeVisible();
+      await chatTrigger.click();
+    }
 
     const resumedChat = reopened.locator('#inline-order-chat-panel');
     await expect(resumedChat.getByText('Pedido #4321')).toBeVisible();
