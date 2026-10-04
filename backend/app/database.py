@@ -233,6 +233,13 @@ def _guard_tenant_writes(session, flush_context, instances):
             )
 
 
+@event.listens_for(Session, "before_flush")
+def _track_sqlite_product_images(session, flush_context, instances):
+    from .services.product_image_lifecycle import sqlite_track_changes
+    with session.no_autoflush:
+        sqlite_track_changes(session)
+
+
 @event.listens_for(Session, "do_orm_execute")
 def _add_tenant_id_filtering_criteria(execute_state):
     # Garante que a filtragem se aplica apenas a consultas SELECT comuns de entidades.
