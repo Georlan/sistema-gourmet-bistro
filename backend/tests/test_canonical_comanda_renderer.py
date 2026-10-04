@@ -271,7 +271,8 @@ def test_secondary_sector_still_uses_same_visual_base():
     assert "VIA: BAR" in ticket
     assert "PEDIDO #93" in ticket
     assert "ITENS" in ticket
-    assert "VALOR" in ticket
+    item_line = next(line for line in ticket.splitlines() if "1x DRINK DA CASA" in line)
+    assert "R$" not in item_line
     assert f"Gerenciado por {ESC_BOLD_ON}Kôma{ESC_BOLD_OFF}" in ticket
 
 
@@ -356,3 +357,75 @@ def test_online_dine_in_reprint_after_table_association_keeps_online_customer_an
     assert "TELEFONE: (88) 99660-1927" in ticket
     assert "FORMA: DINHEIRO" in ticket
     assert ticket.count("REIMPRESSÃO") == 1
+
+def test_remote_production_separates_and_bolds_marmitaria_groups_without_item_price():
+    ticket = _render(
+        [
+            PrintItem(
+                codigo="quentinha-g",
+                nome="QUENTINHA G",
+                preco_unit=10.0,
+                composicao=(
+                    "PROTEÍNAS: Filé de frango acebolado",
+                    "GUARNIÇÕES: Arroz refogado, cuscuz temperado, feijão de corda",
+                    "SALADAS: Salada tropical",
+                ),
+            )
+        ],
+        ComandaVariant(
+            origin_label="CARDÁPIO ONLINE",
+            location_label=None,
+            operator_label=None,
+            customer_name="SAMIRA ELEN",
+            payment_method="dinheiro",
+            change_for=100.0,
+            payment_required=True,
+            amount_due=70.0,
+            show_financial_breakdown=True,
+        ),
+        order_type="Retirada",
+    )
+
+    item_line = next(line for line in ticket.splitlines() if "1x QUENTINHA G" in line)
+    assert "R$" not in item_line
+    assert f"{ESC_BOLD_ON}PROTEÍNAS:{ESC_BOLD_OFF}" in ticket
+    assert f"{ESC_BOLD_ON}GUARNIÇÕES:{ESC_BOLD_OFF}" in ticket
+    assert f"{ESC_BOLD_ON}SALADAS:{ESC_BOLD_OFF}" in ticket
+    assert "\n\n   " + ESC_BOLD_ON + "GUARNIÇÕES:" in ticket
+    assert "\n\n   " + ESC_BOLD_ON + "SALADAS:" in ticket
+    assert ESC_BOLD_ON + "TROCO PARA: R$ 100,00" + ESC_BOLD_OFF in ticket
+    assert ESC_BOLD_ON + "LEVAR TROCO: R$ 30,00" + ESC_BOLD_OFF in ticket
+    assert (
+        ESC_DOUBLE_HEIGHT_ON
+        + ESC_BOLD_ON
+        + "          A COBRAR: R$ 70,00"
+    ) in ticket
+
+
+def test_remote_paid_online_makes_do_not_charge_a_large_operational_warning():
+    ticket = _render(
+        [PrintItem(codigo="quentinha-g", nome="QUENTINHA G", preco_unit=22.0)],
+        ComandaVariant(
+            origin_label="CARDÁPIO ONLINE",
+            location_label=None,
+            operator_label=None,
+            customer_name="DAIANE",
+            payment_method="pix",
+            online_payment_status="approved",
+            amount_paid=22.0,
+            payment_required=True,
+            amount_due=0.0,
+            show_financial_breakdown=True,
+        ),
+        order_type="Delivery",
+    )
+
+    assert "PAGO ONLINE" in ticket
+    assert "NÃO COBRAR" in ticket
+    assert "NÃO COBRAR DO CLIENTE" not in ticket
+    assert (
+        ESC_DOUBLE_HEIGHT_ON
+        + ESC_BOLD_ON
+        + "              NÃO COBRAR"
+    ) in ticket
+
