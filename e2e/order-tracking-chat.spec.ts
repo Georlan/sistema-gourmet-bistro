@@ -491,7 +491,8 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
     await expect(conversasBtn.getByRole("status")).toHaveText(/[1-9]/);
 
     await conversasBtn.click();
-    if ((page.viewportSize()?.width || 0) > 768) {
+    const chatPanelBox = await page.locator('#cashier-chat-panel').boundingBox();
+    if (chatPanelBox && chatPanelBox.x > 4) {
       await page.locator('#cashier-chat-overlay').click({ position: { x: 4, y: 100 } });
       await expect(page.locator('#cashier-chat-panel')).toHaveCount(0);
       await conversasBtn.click();
@@ -537,4 +538,24 @@ test('card do Caixa permite salvar a observação durante o preparo', async ({ p
   await expect(page.getByText('Observação salva.', { exact: true })).toBeVisible();
   expect(update).toEqual({ observacao: 'Sem sal' });
   await expect(page.locator('.orders-detail-modal__observation')).toHaveText('Sem sal');
+});
+test('pedido salvo de outro restaurante não aparece nem abre chat no cardápio atual', async ({ page }) => {
+  await page.addInitScript(({ token, id }) => {
+    sessionStorage.setItem('koma_active_orders', JSON.stringify([{
+      id, numero_pedido: 4321, restaurante_id: 99002, timestamp: Date.now(),
+      tracking_token: token, status: 'producao', total: 48, tipo: 'Delivery',
+    }]));
+  }, { token: trackingToken, id: orderId });
+  await setupChatRoutes(page);
+  await page.goto('/cardapio?restaurante_id=99001#koma-order=c-online-e2e');
+  await expect(page.getByText('Bistrô Gourmet E2E', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('#active-order-banner')).toHaveCount(0);
+  await expect(page.locator('#inline-order-chat-panel')).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('koma_active_orders') || '[]')
+    .some((order: { restaurante_id: number }) => order.restaurante_id === 99002))).toBe(true);
+  const mobileOrders = page.locator('#mobile-nav-orders');
+  if (await mobileOrders.isVisible()) await mobileOrders.click();
+  else await page.getByRole('button', { name: 'Abrir pedidos e chat', exact: true }).click();
+  await expect(page.locator('#orders-drawer-panel')).toBeVisible();
+  await expect(page.locator('#orders-drawer-panel').getByText('Pedido #4321')).toHaveCount(0);
 });

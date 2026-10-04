@@ -320,6 +320,12 @@ test('sacola orienta o visitante até cada campo inválido e bloqueia a página 
   await page.getByRole('button', { name: /^Entrega\b/ }).click();
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.locator('#btn-confirm-order').click();
+  const address = page.locator('#delivery-address-logradouro');
+  await expect(address).toBeFocused();
+  await expect(page.locator('#cart-checkout-error')).toHaveText('Informe o logradouro.');
+  await fillDeliveryAddress(page);
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
+  await page.locator('#btn-confirm-order').click();
   const name = page.locator('#input-guest-name');
   await expect(name).toBeFocused();
   await expect(name).toHaveAttribute('aria-invalid', 'true');
@@ -333,13 +339,6 @@ test('sacola orienta o visitante até cada campo inválido e bloqueia a página 
   await expect(phone).toHaveAttribute('aria-invalid', 'true');
 
   await phone.fill('85999999999');
-  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
-  await page.locator('#btn-confirm-order').click();
-  const address = page.locator('#delivery-address-logradouro');
-  await expect(address).toBeFocused();
-  await expect(page.locator('#cart-checkout-error')).toHaveText('Informe o logradouro.');
-
-  await fillDeliveryAddress(page);
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.locator('#btn-confirm-order').click();
   const email = page.locator('#input-customer-email');
@@ -689,7 +688,7 @@ test('observação do produto chega à revisão e ao envio', async ({ page }) =>
   await page.getByRole('button', { name: /Adicionar/ }).last().click();
   await openCart(page);
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Itens', exact: true }).click();
-  await expect(page.getByText('Obs.: Sem manjericão')).toBeVisible();
+  await expect(page.locator('#cart-drawer-container').getByText('Obs.: Sem manjericão')).toBeVisible();
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('Como devemos chamar você?').fill('Ana Teste');
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
@@ -700,7 +699,7 @@ test('observação do produto chega à revisão e ao envio', async ({ page }) =>
   await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
-  await expect(page.getByText('Obs.: Sem manjericão')).toBeVisible();
+  await expect(page.locator('#checkout-card').getByText('Obs.: Sem manjericão')).toBeVisible();
   await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
   await expect.poll(() => capturedOrders.length).toBe(1);
   expect(capturedOrders[0].itens?.[0]).toMatchObject({ observacao: 'Sem manjericão' });
@@ -802,4 +801,56 @@ test('configuração assíncrona não seleciona retirada antes de carregar', asy
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
   await expect(page.getByRole('button', { name: /^Entrega\b/ })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('avançar valida entrega e troco antes da revisão, preservando os dados', async ({ page }) => {
+  const orders: CapturedOrder[] = [];
+  await mockPublicMenuBackend(page, orders);
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#btn-fast-add-101').click();
+  await openCart(page);
+  const cart = page.locator('#cart-drawer-container');
+  const advance = cart.locator('#btn-confirm-order');
+  await advance.click();
+  await expect(cart.locator('#cart-receive-methods-content')).toBeVisible();
+  await expect(cart.locator('#cart-payment-methods-content')).toBeHidden();
+  await expect(cart.locator('#delivery-address-logradouro')).toBeFocused();
+  await cart.locator('#delivery-address-logradouro').fill('Rua Teste');
+  await cart.locator('#delivery-address-numero').fill('12');
+  await cart.locator('#delivery-address-bairro').fill('Centro');
+  await advance.click();
+  await expect(cart.locator('#cart-payment-methods-content')).toBeVisible();
+  await cart.getByRole('button', { name: 'Dinheiro', exact: true }).click();
+  await cart.getByRole('button', { name: 'Sim', exact: true }).click();
+  await cart.locator('#payment-change-for').fill('10');
+  await advance.click();
+  await expect(cart.locator('#cart-payment-methods-content')).toBeVisible();
+  await expect(cart.locator('#payment-change-for')).toBeFocused();
+  await cart.locator('#payment-change-for').fill('100');
+  await advance.click();
+  await expect(cart.locator('#cart-identification-content')).toBeVisible();
+  await cart.locator('#input-guest-name').fill('Cliente Teste');
+  await cart.getByPlaceholder('(00) 00000-0000').fill('85999999999');
+  await advance.click();
+  await expect(page.getByRole('heading', { name: 'Revise e confirme' })).toBeVisible();
+  await page.getByRole('button', { name: 'Fechar revisão do pedido' }).click();
+  await openCart(page);
+  await expect(cart.locator('#delivery-address-logradouro')).toHaveValue('Rua Teste');
+  await expect(cart.locator('#input-guest-name')).toHaveValue('Cliente Teste');
+  expect(orders).toHaveLength(0);
+});
+
+test('mínimo é validado ao avançar e retirada ignora endereço de entrega', async ({ page }) => {
+  await mockPublicMenuBackend(page, [], { restaurant: { pedido_minimo: 100 } });
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#btn-fast-add-101').click();
+  await openCart(page);
+  const cart = page.locator('#cart-drawer-container');
+  await cart.locator('#btn-confirm-order').click();
+  await expect(cart.locator('#cart-receive-methods-content')).toBeVisible();
+  await expect(cart.locator('#cart-payment-methods-content')).toBeHidden();
+  await expect(cart.locator('#cart-checkout-error')).toContainText('O pedido mínimo para entrega');
+  await cart.getByRole('button', { name: /Retirada/ }).click();
+  await cart.locator('#btn-confirm-order').click();
+  await expect(cart.locator('#cart-payment-methods-content')).toBeVisible();
 });

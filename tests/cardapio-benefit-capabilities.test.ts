@@ -29,7 +29,7 @@ test('checkout omite descontos e saldo legado sem capacidades, inclusive enquant
     const html = cart(capabilities);
     assert.doesNotMatch(html, /cart-discounts|Código do cupom|Saldo de Cashback|Pix é pago agora/);
     assert.match(html, /3\. Como quer pagar/);
-    assert.match(html, /4\. Identificação/);
+    assert.match(html, /4\. Seu contato/);
   }
 });
 

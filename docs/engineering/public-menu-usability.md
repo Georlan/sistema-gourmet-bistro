@@ -53,3 +53,38 @@ Atualizado com main após #998. P e G recebem o mesmo grupo opcional de adiciona
 na leitura pública atual; a ausência anterior da P era no vínculo do cadastro.
 Nenhuma regra de composição é injetada no frontend. Acesso direto à composição
 no caixa abre a configuração salva sem exigir gravação dos dados básicos.
+
+
+## Segunda entrega — fluidez do pedido
+
+Escopo aprovado em 04/10: corrigir gaps observados, aplicar os seis pontos da
+revisão do guia, testar em paralelo e integrar após checks verdes.
+
+- Recebimento e pagamento validam antes de Continuar. Títulos/atalhos permitem
+  voltar livremente; a revisão final conserva a validação completa. O campo de
+  endereço pendente recebe foco. Troco vazio, inválido ou abaixo do total não avança.
+- Produtos com montagem usam foto compacta. Somente grupos min=0 inteiramente
+  pagos podem recolher; cabeçalho conserva quantidade e acréscimo por unidade.
+  Grupos mistos e obrigatórios permanecem expandidos. Escolhas e total não se apagam.
+- Marmitaria mostra resumo das escolhas obrigatórias reais do produto. Não infere
+  peso, volume ou nomes P/G nem troca produtos/tamanhos automaticamente.
+- Montar outra diferente inicia uma nova composição de uma unidade; a linha
+  anterior e os campos da sacola ficam preservados. Composições iguais continuam
+  somadas pela assinatura canônica já existente.
+- Contato explica a finalidade do celular e remove termos internos. Reconhecimento
+  mantém proteção de dados e não expõe nome/endereço de cadastro por telefone.
+- Acompanhamento: testes preservam retomada após fechar aba, recusas, conversa e
+  isolamento entre restaurantes. Não cria novas consultas/subscriptions de rastreio.
+
+Observação em produção antes da correção: restaurante 6 aberto, P de R$7 com
+composição válida avançava a pagamento com endereço vazio e abaixo do mínimo R$10;
+a revisão final bloqueava o pedido. Nenhum pedido ou mensagem real foi enviado.
+
+Os novos cenários detectaram perda do endereço ao fechar a revisão. A sacola agora
+permanece montada, mas oculta, enquanto há itens; o rascunho é mantido somente em
+memória, reiniciado por restaurante e descartado quando o pedido esvazia a sacola.
+Não reintroduz persistência de endereço de visitante removida em #996.
+
+Trocar cupom externo limpa o desconto aplicado anterior; a impressão de validação
+inclui o código normalizado para descartar respostas atrasadas de outro cupom.
+O total continua vindo das mesmas regras e os descontos são revalidados no envio.

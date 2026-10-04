@@ -97,6 +97,7 @@ interface CardapioCartDrawerProps {
   onUpdateQty: (itemId: string, newQty: number) => void;
   onRemoveItem: (itemId: string) => void;
   onEditItem?: (item: CartItem) => void;
+  onComposeAnother?: (item: CartItem) => void;
   onAddToCart?: (product: Product, quantity: number, options?: Record<string, ProductOption[]>, notes?: string) => void;
   initialCouponCode?: string;
   onPlaceOrder: (orderData: CardapioCheckoutRequest) => void;
@@ -127,6 +128,7 @@ export default function CardapioCartDrawer({
   onUpdateQty,
   onRemoveItem,
   onEditItem,
+  onComposeAnother,
   onAddToCart,
   initialCouponCode = "",
   onPlaceOrder,
@@ -223,6 +225,14 @@ export default function CardapioCartDrawer({
   } | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [couponError, setCouponError] = useState("");
+
+  useEffect(() => {
+    if (!initialCouponCode.trim()) return;
+    setCouponCode(initialCouponCode);
+    setAppliedCoupon(null);
+    appliedCouponFingerprintRef.current = null;
+    setCouponError("");
+  }, [initialCouponCode]);
 
   // Cashback state
   const [useCashback, setUseCashback] = useState(false);
@@ -322,7 +332,7 @@ export default function CardapioCartDrawer({
   }, 0), [cart]);
 
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const couponValidationFingerprint = `${restaurantId}:${couponsEnabled}:${subtotal.toFixed(2)}:${normalizeBrazilianPhone(user?.phone || guestPhone)}`;
+  const couponValidationFingerprint = `${restaurantId}:${couponsEnabled}:${subtotal.toFixed(2)}:${normalizeBrazilianPhone(user?.phone || guestPhone)}:${couponCode.trim().toUpperCase()}`;
   const couponFingerprintRef = useRef(couponValidationFingerprint);
   const appliedCouponFingerprintRef = useRef<string | null>(null);
   couponFingerprintRef.current = couponValidationFingerprint;
@@ -330,7 +340,7 @@ export default function CardapioCartDrawer({
   useEffect(() => {
     if (appliedCoupon && appliedCouponFingerprintRef.current !== couponValidationFingerprint) {
       setAppliedCoupon(null);
-      setCouponError("O pedido ou celular mudou. Confira o cupom novamente.");
+      setCouponError("O pedido, celular ou cupom mudou. Confira o cupom novamente.");
     }
   }, [appliedCoupon, couponValidationFingerprint]);
 
@@ -399,7 +409,7 @@ export default function CardapioCartDrawer({
 
       const data = await res.json();
       if (couponFingerprintRef.current !== requestFingerprint) {
-        setCouponError("O pedido ou celular mudou. Confira o cupom novamente.");
+        setCouponError("O pedido, celular ou cupom mudou. Confira o cupom novamente.");
         return;
       }
       if (!data.valido) {
@@ -445,6 +455,66 @@ export default function CardapioCartDrawer({
     : activeSection === "cart-receive-methods" || activeSection === "cart-discounts" ? "cart-payment-methods"
     : activeSection === "cart-payment-methods" ? "cart-identification" : null;
 
+  const validateSection = (sectionId: string) => {
+    if (sectionId === "cart-items" && cart.length === 0) {
+      reportValidationError("Sua sacola está vazia.", "cart-items");
+      return false;
+    }
+    if (sectionId === "cart-receive-methods") {
+      if (!deliveryMethod) {
+        reportValidationError("Nenhuma modalidade de recebimento disponível.", "cart-receive-methods");
+        return false;
+      }
+
+      // Check minimum order
+      const pedidoMin = brandConfig?.pedidoMinimo || 0;
+      const isDeliveryBelowMinimum = deliveryMethod === "delivery" && pedidoMin > 0 && subtotal < pedidoMin;
+      const isPickupBelowMinimum = deliveryMethod === "pickup" && Boolean(brandConfig?.pedidoMinimoRetirada) && pedidoMin > 0 && subtotal < pedidoMin;
+      if (isDeliveryBelowMinimum || isPickupBelowMinimum) {
+        const modeLabel = deliveryMethod === "delivery" ? "para entrega" : "para retirada";
+        reportValidationError(`O pedido mínimo ${modeLabel} é de ${formatPrice(pedidoMin)} (faltam ${formatPrice(pedidoMin - subtotal)}).`, "cart-receive-methods");
+        return false;
+      }
+
+      if (deliveryMethod === "delivery" && !deliveryEnabled) {
+        reportValidationError("O delivery está desativado para este restaurante. Escolha retirada.", "cart-receive-methods");
+        return false;
+      }
+
+      const addressSnapshot = deliveryMethod === "delivery"
+        ? deliveryAddressDraftToSnapshot(deliveryAddressDraft)
+        : null;
+      if (deliveryMethod === "delivery" && !addressSnapshot) {
+        reportValidationError(
+          getDeliveryAddressValidationError(deliveryAddressDraft) || "Informe o endereço completo de entrega.",
+          !deliveryAddressDraft.logradouro.trim() ? "delivery-address-logradouro"
+            : !deliveryAddressDraft.numero.trim() ? "delivery-address-numero"
+              : deliveryAddressDraft.cep.replace(/\D/g, "").length !== 8 && deliveryAddressDraft.cep.trim() ? "delivery-address-cep"
+                : "cart-receive-methods",
+        );
+        return false;
+      }
+
+    }
+    if (sectionId === "cart-payment-methods") {
+      if (paymentError || !paymentDetail) {
+        reportValidationError(paymentError || "Escolha uma forma de pagamento.", "cart-payment-methods");
+        return false;
+      }
+      if (paymentDetail === "dinheiro" && precisaTroco && (!trocoPara.trim() || !Number.isFinite(Number(trocoPara)) || trocoValorNum <= 0 || trocoValorNum < total)) {
+        reportValidationError(`O valor para troco deve ser igual ou maior que o total do pedido (${formatPrice(total)}).`, "payment-change-for");
+        return false;
+      }
+
+    }
+    return true;
+  };
+
+  const continueToSection = (sectionId: string) => {
+    clearValidation();
+    if (validateSection(activeSection)) jumpToSection(sectionId);
+  };
+
   const handleCheckout = () => {
     setErrorMessage("");
     setInvalidField("");
@@ -465,30 +535,7 @@ export default function CardapioCartDrawer({
       onAuthClick?.();
       return;
     }
-    if (paymentError || !paymentDetail) {
-      reportValidationError(paymentError || "Escolha uma forma de pagamento.", "cart-payment-methods");
-      return;
-    }
-
-    if (!deliveryMethod) {
-      reportValidationError("Nenhuma modalidade de recebimento disponível.", "cart-receive-methods");
-      return;
-    }
-
-    // Check minimum order
-    const pedidoMin = brandConfig?.pedidoMinimo || 0;
-    const isDeliveryBelowMinimum = deliveryMethod === "delivery" && pedidoMin > 0 && subtotal < pedidoMin;
-    const isPickupBelowMinimum = deliveryMethod === "pickup" && Boolean(brandConfig?.pedidoMinimoRetirada) && pedidoMin > 0 && subtotal < pedidoMin;
-    if (isDeliveryBelowMinimum || isPickupBelowMinimum) {
-      const modeLabel = deliveryMethod === "delivery" ? "para entrega" : "para retirada";
-      reportValidationError(`O pedido mínimo ${modeLabel} é de ${formatPrice(pedidoMin)} (faltam ${formatPrice(pedidoMin - subtotal)}).`, "cart-receive-methods");
-      return;
-    }
-
-    if (deliveryMethod === "delivery" && !deliveryEnabled) {
-      reportValidationError("O delivery está desativado para este restaurante. Escolha retirada.", "cart-receive-methods");
-      return;
-    }
+    if (!validateSection("cart-receive-methods") || !validateSection("cart-payment-methods") || !deliveryMethod) return;
 
     if (!recognizedExistingCustomer && customerName.trim().length < 2) {
       reportValidationError("Informe seu nome para o restaurante identificar o pedido.", "input-guest-name");
@@ -502,21 +549,9 @@ export default function CardapioCartDrawer({
     const addressSnapshot = deliveryMethod === "delivery"
       ? deliveryAddressDraftToSnapshot(deliveryAddressDraft)
       : null;
-    if (deliveryMethod === "delivery" && !addressSnapshot) {
-      reportValidationError(
-        getDeliveryAddressValidationError(deliveryAddressDraft) || "Informe o endereço completo de entrega.",
-        "delivery-address-logradouro",
-      );
-      return;
-    }
 
     if (paymentDetail === "pix" && !/^\S+@\S+\.\S+$/.test(guestEmail.trim())) {
       reportValidationError("Informe um e-mail válido para gerar o pagamento Pix.", "input-customer-email");
-      return;
-    }
-
-    if (paymentDetail === "dinheiro" && precisaTroco && trocoValorNum < total) {
-      reportValidationError(`O valor para troco deve ser maior que o total do pedido (${formatPrice(total)}).`, "payment-change-for");
       return;
     }
 
@@ -735,6 +770,7 @@ export default function CardapioCartDrawer({
                           <h4 className="text-sm font-bold text-koma-foreground">{item.quantity}× {item.product.name}</h4>
                           <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-koma-muted" />
                           {onEditItem && <button type="button" onClick={() => onEditItem(item)} className="mt-2 min-h-11 text-xs font-bold text-emerald-400" aria-label={`Editar montagem de ${item.product.name}`}>Editar montagem</button>}
+                          {onComposeAnother && Boolean(item.product.modifiers?.length || item.product.modifierGroups?.length) && <button type="button" onClick={() => onComposeAnother(item)} className="mt-2 block min-h-11 text-xs font-bold text-emerald-400" aria-label={`Montar outra diferente de ${item.product.name}`}>Montar outra diferente</button>}
                           {item.notes && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-amber-400">Obs.: {item.notes}</p>}
                           {item.quantity > 1 && <p className="mt-1 text-xs text-koma-muted">{formatPrice(unitPrice)} cada · Mesma montagem</p>}
                           <strong className="mt-2 block text-sm font-black text-emerald-400">{formatPrice(unitPrice * item.quantity)}</strong>
@@ -758,7 +794,7 @@ export default function CardapioCartDrawer({
                   })}
                 </div>
 
-                  <button type="button" onClick={() => jumpToSection("cart-receive-methods")} className="mt-4 min-h-11 w-full rounded-xl border border-emerald-500/30 px-4 text-sm font-bold text-emerald-400">Continuar para recebimento</button>
+                  <button type="button" onClick={() => continueToSection("cart-receive-methods")} className="mt-4 min-h-11 w-full rounded-xl border border-emerald-500/30 px-4 text-sm font-bold text-emerald-400">Continuar para recebimento</button>
                 </div>
               </section>
 
@@ -872,7 +908,7 @@ export default function CardapioCartDrawer({
                   </div>
                 )}
 
-                  <button type="button" onClick={() => jumpToSection("cart-payment-methods")} className="mt-4 min-h-11 w-full rounded-xl border border-emerald-500/30 px-4 text-sm font-bold text-emerald-400">Continuar para pagamento</button>
+                  <button type="button" onClick={() => continueToSection("cart-payment-methods")} className="mt-4 min-h-11 w-full rounded-xl border border-emerald-500/30 px-4 text-sm font-bold text-emerald-400">Continuar para pagamento</button>
                 </div>
               </section>
 
@@ -953,7 +989,7 @@ export default function CardapioCartDrawer({
                   </div>
                 )}
 
-                  <button type="button" onClick={() => jumpToSection("cart-payment-methods")} className="mt-4 min-h-11 w-full rounded-xl border border-emerald-500/30 px-4 text-sm font-bold text-emerald-400">Continuar para pagamento</button>
+                  <button type="button" onClick={() => continueToSection("cart-payment-methods")} className="mt-4 min-h-11 w-full rounded-xl border border-emerald-500/30 px-4 text-sm font-bold text-emerald-400">Continuar para pagamento</button>
                 </div>
               </section>}
 
@@ -1036,13 +1072,13 @@ export default function CardapioCartDrawer({
                   </div>
                 )}
 
-                  <button type="button" onClick={() => jumpToSection("cart-identification")} className="mt-4 min-h-11 w-full rounded-xl border border-emerald-500/30 px-4 text-sm font-bold text-emerald-400">Continuar para contato</button>
+                  <button type="button" onClick={() => continueToSection("cart-identification")} className="mt-4 min-h-11 w-full rounded-xl border border-emerald-500/30 px-4 text-sm font-bold text-emerald-400">Continuar para contato</button>
                 </div>
               </section>
 
               {/* Section 5: Identification */}
               <section className="border-t border-koma-border pt-5" id="cart-identification" tabIndex={-1}>
-                <h3><button type="button" onClick={() => jumpToSection("cart-identification")} aria-expanded={activeSection === "cart-identification"} aria-controls="cart-identification-content" className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted">{showDiscounts ? 5 : 4}. Identificação</button></h3>
+                <h3><button type="button" onClick={() => jumpToSection("cart-identification")} aria-expanded={activeSection === "cart-identification"} aria-controls="cart-identification-content" className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted">{showDiscounts ? 5 : 4}. Seu contato</button></h3>
                 <div id="cart-identification-content" hidden={activeSection !== "cart-identification"}>
                 {user ? (
                   <div className="mt-3 flex items-start gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-3.5">
@@ -1074,17 +1110,18 @@ export default function CardapioCartDrawer({
                       <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Celular com DDD</span>
                       <span className="relative block"><Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="tel" inputMode="numeric" autoComplete="tel" placeholder="(00) 00000-0000" value={guestPhone} onChange={(event) => { setGuestPhone(formatBrazilianPhone(event.target.value)); clearValidation("input-guest-phone"); }} aria-invalid={invalidField === "input-guest-phone"} aria-describedby={invalidField === "input-guest-phone" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-xl border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500 ${invalidField === "input-guest-phone" ? "border-rose-500" : "border-koma-border"}`} id="input-guest-phone" /></span>
                     </label>
+                    <p className="text-xs leading-relaxed text-koma-muted">Usamos seu celular para identificar o pedido e permitir que o restaurante entre em contato se precisar.</p>
                     {customerRecognition === "checking" && (
-                      <p className="text-[10px] font-semibold text-koma-muted" role="status">Verificando se este número já está no restaurante...</p>
+                      <p className="text-[10px] font-semibold text-koma-muted" role="status">Conferindo seu celular...</p>
                     )}
                     {customerRecognition === "found" && (
                       <div className="flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] px-3 py-2.5" role="status">
                         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                        <p className="text-[10px] font-semibold leading-relaxed text-emerald-300">Cliente identificado. Por segurança, não exibimos seus dados aqui; o pedido será vinculado à ficha já cadastrada.</p>
+                        <p className="text-[10px] font-semibold leading-relaxed text-emerald-300">Reconhecemos seu celular. Você pode continuar sem informar seu nome novamente.</p>
                       </div>
                     )}
                     {customerRecognition === "new" && (
-                      <p className="text-[10px] font-semibold leading-relaxed text-koma-muted" role="status">Número novo — criaremos a ficha comercial ao enviar o pedido.</p>
+                      <p className="text-[10px] font-semibold leading-relaxed text-koma-muted" role="status">Primeiro pedido com este celular? Informe seu nome abaixo.</p>
                     )}
                     {customerRecognition !== "found" && (
                       <label className="block">
@@ -1140,7 +1177,7 @@ export default function CardapioCartDrawer({
               )}
               <button
                 type="button"
-                onClick={() => nextSection ? jumpToSection(nextSection) : handleCheckout()}
+                onClick={() => nextSection ? continueToSection(nextSection) : handleCheckout()}
                 disabled={!orderingEnabled || availablePayments.length === 0}
                 className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-koma-raised disabled:text-koma-muted"
                 id="btn-confirm-order"

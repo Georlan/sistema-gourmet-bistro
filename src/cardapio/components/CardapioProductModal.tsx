@@ -6,6 +6,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Minus,
@@ -69,6 +70,7 @@ export default function CardapioProductModal({
   const [currentImgIndex, setCurrentImgIndex] = useState(0);
   const [feedback, setFeedback] = useState("");
   const [showToast, setShowToast] = useState(false);
+  const [expandedExtras, setExpandedExtras] = useState<Record<string, boolean>>({});
 
   const galleryImages = useMemo(
     () => (product.imagesGallery && product.imagesGallery.length > 0
@@ -116,6 +118,7 @@ export default function CardapioProductModal({
     const previousCount = Object.values(initialItem?.selectedOptions || {}).flat().length;
     setFeedback(previousCount > Object.values(initial).flat().length ? "Algumas opções não estão mais disponíveis. Confira a montagem antes de salvar." : "");
     setCurrentImgIndex(0);
+    setExpandedExtras({});
   }, [allModifiers, product, initialItem]);
 
   const unitPrice = useMemo(() => {
@@ -201,6 +204,7 @@ export default function CardapioProductModal({
 
     if (unsatisfied.length > 0) {
       setFeedback(`Confira as escolhas em ${unsatisfied.map((m) => m.title).join(", ")} antes de ${initialItem ? "salvar" : "adicionar"}.`);
+      setExpandedExtras(current => ({ ...current, [unsatisfied[0].id]: true }));
       const group = groupRefs.current.get(unsatisfied[0].id);
       group?.scrollIntoView({ block: "center", behavior: "smooth" });
       group?.focus({ preventScroll: true });
@@ -222,7 +226,7 @@ export default function CardapioProductModal({
       <div className="relative flex max-h-[94vh] w-full flex-col overflow-hidden rounded-t-[30px] border border-koma-border bg-koma-panel shadow-2xl sm:max-w-lg sm:rounded-[30px] animate-slide-up">
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 h-1.5 w-12 rounded-full bg-white/40 sm:hidden" />
 
-        <div className="relative h-52 w-full shrink-0 overflow-hidden bg-koma-card sm:h-60">
+        <div className={`relative w-full shrink-0 overflow-hidden bg-koma-card ${allModifiers.length > 0 ? "h-28 sm:h-32" : "h-52 sm:h-60"}`}>
           <img
             src={getProductImageUrl(galleryImages[currentImgIndex] || product.image)}
             alt={product.name}
@@ -308,6 +312,17 @@ export default function CardapioProductModal({
             <strong className="shrink-0 text-lg font-black text-emerald-400">{formatPrice(product.price)}</strong>
           </div>
 
+          {product.marmitaria === true && allModifiers.some(modifier => (modifier.minSelection ?? 0) > 0) && (
+            <div className="mt-3 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-xs text-koma-muted">
+              <p className="font-bold text-koma-foreground">Montagem de {product.name}</p>
+              {allModifiers.filter(modifier => (modifier.minSelection ?? 0) > 0).map(modifier => {
+                const min = modifier.minSelection ?? 0;
+                const max = Math.max(1, Number(modifier.maxSelection || 1));
+                return <p key={modifier.id}>{modifier.title}: {min === max ? min : `${min} a ${max}`} {modifier.selectionMode === "porcoes" ? (max === 1 ? "porção" : "porções") : (max === 1 ? "opção" : "opções")}</p>;
+              })}
+            </div>
+          )}
+
           {allModifiers.length > 0 && (
             <div className="mt-6 space-y-5 border-t border-koma-border pt-5">
               {allModifiers.map((modifier) => {
@@ -328,12 +343,20 @@ export default function CardapioProductModal({
                   : `Escolha até ${max} ${unit}`;
                 const simpleSelection = modifier.selectionMode === "tipos" || max === 1;
                 const complete = modifier.required && selectionWithinRules(rules, selectedIds);
+                const collapsible = min === 0 && modifier.options.length > 0 && modifier.options.every(option => option.extraPrice > 0);
+                const expanded = !collapsible || expandedExtras[modifier.id] === true;
+                const surcharge = selections.reduce((total, option) => total + option.extraPrice, 0);
+                const Heading = collapsible ? "button" : "div";
 
                 return (
                   <section key={modifier.id} tabIndex={-1} aria-label={modifier.title} ref={node => { if (node) groupRefs.current.set(modifier.id, node); else groupRefs.current.delete(modifier.id); }}>
-                    <div className="flex items-start justify-between gap-3">
+                    <Heading
+                      {...(collapsible ? { type: "button" as const, "aria-expanded": expanded, "aria-controls": `modifier-options-${modifier.id}`, onClick: () => setExpandedExtras(current => ({ ...current, [modifier.id]: !expanded })) } : {})}
+                      className={`flex w-full items-start justify-between gap-3 text-left ${collapsible ? "rounded-xl border border-koma-border bg-koma-card p-3" : ""}`}
+                    >
                       <div>
                         <h3 className="text-sm font-black text-koma-foreground">{modifier.title}</h3>
+                        {collapsible && <p className="mt-1 text-xs font-bold text-emerald-400">{selections.length === 0 ? "Nenhum selecionado · Sem acréscimo" : `${selections.length} ${selections.length === 1 ? "adicional" : "adicionais"} · + ${formatPrice(surcharge)} por item`}</p>}
                         <p className="mt-0.5 text-xs text-koma-muted">
                           {instruction}
                           {modifier.selectionMode === "porcoes" && max > 1 && " · Pode repetir"}
@@ -341,6 +364,7 @@ export default function CardapioProductModal({
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
+                        {collapsible && <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-koma-muted transition-transform ${expanded ? "rotate-180" : ""}`} />}
                         {(max > 1 || modifier.required) && (
                           <span className="text-[10px] font-black text-emerald-400">
                             {freeGarnishes
@@ -357,9 +381,9 @@ export default function CardapioProductModal({
                           {complete ? "Completo" : modifier.required ? "Obrigatório" : "Opcional"}
                         </span>
                       </div>
-                    </div>
+                    </Heading>
 
-                    <div className="mt-3 space-y-2">
+                    <div id={`modifier-options-${modifier.id}`} hidden={!expanded} className="mt-3 space-y-2">
                       {modifier.options.map((option) => {
                         const optionQuantity = modifierOptionQuantity(selectedIds, option.id);
                         const selected = optionQuantity > 0;

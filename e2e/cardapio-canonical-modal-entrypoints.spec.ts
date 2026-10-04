@@ -227,6 +227,7 @@ test('editar montagem preserva quantidade e contato; cancelar não altera a saco
   await cart.locator('#btn-confirm-order').click();
   await expect(cart.locator('#cart-receive-methods-content')).toBeVisible();
   await expect(cart.locator('#cart-items-content')).toBeHidden();
+  await cart.getByRole('button', { name: /Retirada/ }).click();
   await cart.locator('#btn-confirm-order').click();
   await expect(cart.locator('#cart-payment-methods-content')).toBeVisible();
   await cart.locator('#btn-confirm-order').click();
@@ -234,4 +235,37 @@ test('editar montagem preserva quantidade e contato; cancelar não altera a saco
   await cart.getByRole('button', { name: 'Itens', exact: true }).click();
   await expect(cart.locator('#input-guest-name')).toHaveValue('Cliente local');
   await cart.locator('#cart-items').evaluate(element => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
+});
+
+test('montar outra diferente começa em uma unidade e mantém a montagem original', async ({ page }) => {
+  await mockCardapio(page);
+  await page.route('**/api/cardapio-digital/public?**', route => route.fulfill({ json: {
+    ...publicMenuPayload,
+    produtos: [{ ...publicMenuPayload.produtos[0], nome: 'Quentinha P', marmitaria: true,
+      grupos_modificadores: [{ id: 'proteins', nome: 'Proteínas', min_selecoes: 1, max_selecoes: 1,
+        modo_selecao: 'tipos', tipo: 'obrigatorio', opcoes: [
+          { id: 'chicken', nome: 'Frango', ativo: true, preco_adicional: 0 },
+          { id: 'beef', nome: 'Carne', ativo: true, preco_adicional: 0 },
+        ] }],
+    }],
+  } }));
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#product-card-101').getByRole('button', { name: /ver detalhes/ }).click();
+  const modal = page.locator('#product-details-modal');
+  await modal.getByRole('checkbox', { name: 'Selecionar Frango', exact: true }).check();
+  await modal.locator('#btn-qty-plus').click();
+  await modal.locator('#btn-add-to-cart-action').click();
+  if (!await page.locator('#cart-drawer-container').isVisible()) await page.locator('#btn-cart-header').click();
+  const cart = page.locator('#cart-drawer-container');
+  await cart.getByRole('button', { name: 'Itens', exact: true }).click();
+  await cart.getByRole('button', { name: 'Montar outra diferente de Quentinha P', exact: true }).click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toHaveAccessibleName(/Adicionar 1 × Quentinha P/);
+  await expect(modal.getByRole('checkbox', { name: 'Selecionar Frango', exact: true })).not.toBeChecked();
+  await modal.getByRole('checkbox', { name: 'Selecionar Carne', exact: true }).check();
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(cart.locator('[id^="cart-item-"]')).toHaveCount(2);
+  await expect(cart.locator('#cart-items')).toContainText('2× Quentinha P');
+  await expect(cart.locator('#cart-items')).toContainText('1× Quentinha P');
+  await expect(cart.locator('#cart-items')).toContainText('PROTEÍNAS: Frango');
+  await expect(cart.locator('#cart-items')).toContainText('PROTEÍNAS: Carne');
 });
