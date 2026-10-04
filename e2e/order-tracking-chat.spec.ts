@@ -395,6 +395,78 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
     await expect(inlineChat.getByText('Por favor enviar talheres descartáveis')).toBeVisible();
   });
 
+  test('cliente retoma pedido e chat depois de fechar a aba', async ({ page }) => {
+    await setupChatRoutes(page);
+
+    await page.goto(`/acompanhar/${trackingToken}`);
+    await page.waitForURL(/\/cardapio\?restaurante_id=99001/);
+
+    await expect.poll(() => page.evaluate(async () => {
+      const databases = typeof indexedDB.databases === 'function'
+        ? await indexedDB.databases()
+        : [];
+      if (!databases.some((database) => database.name === 'koma_order_resume_v1')) return 0;
+
+      return new Promise<number>((resolve) => {
+        const request = indexedDB.open('koma_order_resume_v1');
+        request.onerror = () => resolve(0);
+        request.onsuccess = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains('orders')) {
+            db.close();
+            resolve(0);
+            return;
+          }
+          const tx = db.transaction('orders', 'readonly');
+          const countRequest = tx.objectStore('orders').count();
+          countRequest.onerror = () => {
+            db.close();
+            resolve(0);
+          };
+          countRequest.onsuccess = () => {
+            const count = countRequest.result;
+            db.close();
+            resolve(count);
+          };
+        };
+      });
+    })).toBeGreaterThan(0);
+
+    const context = page.context();
+    await page.close();
+
+    const reopened = await context.newPage();
+    await setupChatRoutes(reopened);
+    await reopened.goto('/cardapio?restaurante_id=99001');
+
+    await expect.poll(() => reopened.evaluate((targetOrderId) => {
+      const saved = JSON.parse(sessionStorage.getItem('koma_active_orders') || '[]');
+      return saved.find((order: { id: string }) => order.id === targetOrderId)?.tracking_token || '';
+    }, orderId)).toBe(trackingToken);
+
+    if ((reopened.viewportSize()?.width || 0) <= 640) {
+      const ordersTrigger = reopened.locator('#mobile-nav-orders');
+      await expect(ordersTrigger).toBeVisible();
+      await ordersTrigger.click();
+      await reopened.locator('#orders-drawer-panel')
+        .getByRole('button', { name: /Abrir mensagem|Chat & Status/ })
+        .first()
+        .click();
+    } else {
+      const chatTrigger = reopened.locator('#floating-order-chat-trigger');
+      await expect(chatTrigger).toBeVisible();
+      await chatTrigger.click();
+    }
+
+    const resumedChat = reopened.locator('#inline-order-chat-panel');
+    await expect(resumedChat.getByText('Pedido #4321')).toBeVisible();
+    await expect(resumedChat.getByText('Em preparo').first()).toBeVisible();
+    await expect(resumedChat.getByPlaceholder(/Escreva para o restaurante/i)).toBeVisible();
+    expect(await reopened.evaluate(() => localStorage.getItem('koma_active_orders'))).toBeNull();
+
+    await reopened.close();
+  });
+
   test('caixa visualiza notificação de conversa, abre drawer e responde ao cliente', async ({
     page,
   }) => {
