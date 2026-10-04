@@ -234,5 +234,4 @@ test('editar montagem preserva quantidade e contato; cancelar não altera a saco
   await cart.getByRole('button', { name: 'Itens', exact: true }).click();
   await expect(cart.locator('#input-guest-name')).toHaveValue('Cliente local');
   await cart.locator('#cart-items').evaluate(element => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
-  await page.screenshot({ path: `/home/testuser/Documents/Codex/2026-10-04/co/outputs/sacola-${test.info().project.name}.png` });
 });
