@@ -190,10 +190,15 @@ test('bloqueio autoritativo encerra o checkout sem reenviar o pedido', async ({ 
   await page.goto('/cardapio?restaurante_id=2');
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('Como devemos chamar você?').fill('Ana Teste');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('(00) 00000-0000').fill('85999999999');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
   await page.getByRole('button', { name: /Retirada/ }).click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Pagamento', exact: true }).click();
   await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
   await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
 
@@ -215,6 +220,7 @@ async function openCart(page: Page) {
     else await page.locator('#floating-cart-trigger').click();
   }
   await expect(page.getByRole('heading', { name: 'Sua sacola', exact: true })).toBeVisible();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
 }
 
 test('sacola abre no primeiro toque real pela navegação móvel', async ({ page }, testInfo) => {
@@ -261,6 +267,7 @@ test('sacola abre no primeiro toque real pela navegação móvel', async ({ page
 });
 
 async function fillDeliveryAddress(page: Page) {
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
   await page.locator('#delivery-address-bairro').fill('Centro');
   await page.locator('#delivery-address-logradouro').fill('Rua das Flores');
   await page.locator('#delivery-address-numero').fill('123');
@@ -309,7 +316,9 @@ test('sacola orienta o visitante até cada campo inválido e bloqueia a página 
   await expect(page.locator('#btn-cart-header')).toHaveAttribute('aria-label', 'Sua sacola, 1 item');
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden');
 
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
   await page.getByRole('button', { name: /^Entrega\b/ }).click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.locator('#btn-confirm-order').click();
   const name = page.locator('#input-guest-name');
   await expect(name).toBeFocused();
@@ -317,18 +326,21 @@ test('sacola orienta o visitante até cada campo inválido e bloqueia a página 
   await expect(page.locator('#cart-checkout-error')).toHaveText('Informe seu nome para o restaurante identificar o pedido.');
 
   await name.fill('Cliente Teste');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.locator('#btn-confirm-order').click();
   const phone = page.locator('#input-guest-phone');
   await expect(phone).toBeFocused();
   await expect(phone).toHaveAttribute('aria-invalid', 'true');
 
   await phone.fill('85999999999');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.locator('#btn-confirm-order').click();
   const address = page.locator('#delivery-address-logradouro');
   await expect(address).toBeFocused();
   await expect(page.locator('#cart-checkout-error')).toHaveText('Informe o logradouro.');
 
   await fillDeliveryAddress(page);
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.locator('#btn-confirm-order').click();
   const email = page.locator('#input-customer-email');
   await expect(email).toBeFocused();
@@ -355,10 +367,15 @@ test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos d
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
 
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('Como devemos chamar você?').fill('Ana Teste');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('(00) 00000-0000').fill('85999999999');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
   await page.getByRole('button', { name: /Retirada/ }).click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Pagamento', exact: true }).click();
   await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
 
   await expect(page.getByRole('heading', { name: 'Revise e confirme', exact: true })).toBeVisible();
@@ -400,12 +417,16 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
   await page.goto('/cardapio?restaurante_id=2');
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('Como devemos chamar você?').fill('Bruno Cliente');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('(00) 00000-0000').fill('85988887777');
   const deliveryButton = page.getByRole('button', { name: /^Entrega\b/ });
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
   await deliveryButton.click();
   await expect(deliveryButton).toHaveAttribute('aria-pressed', 'true');
   await fillDeliveryAddress(page);
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
 
   const canonicalAddress = 'Rua das Flores, 123, Centro';
@@ -437,14 +458,18 @@ test('consulta de CEP alimenta o snapshot universal e permite correção manual'
   await page.goto('/cardapio?restaurante_id=2');
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('Como devemos chamar você?').fill('Cliente CEP');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('(00) 00000-0000').fill('85988887777');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
   await page.getByRole('button', { name: /^Entrega\b/ }).click();
   await page.locator('#delivery-address-cep').fill('60165121');
 
   await expect(page.locator('#delivery-address-logradouro')).toHaveValue('Avenida Beira Mar');
   await expect(page.locator('#delivery-address-bairro')).toHaveValue('Meireles');
   await page.locator('#delivery-address-numero').fill('1001');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
   await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
   await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
@@ -478,6 +503,7 @@ test('consulta de CEP ignora resposta antiga que chega fora de ordem', async ({ 
   await page.goto('/cardapio?restaurante_id=2');
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
   await page.getByRole('button', { name: /^Entrega\b/ }).click();
   const cep = page.locator('#delivery-address-cep');
   await cep.fill('60000000');
@@ -509,9 +535,13 @@ test('delivery pausado mantém retirada abaixo do mínimo e cartão presencial',
   await expect(page.getByRole('button', { name: 'Pix', exact: true })).toHaveCount(0);
   await expect(page.getByText(/Faltam .* pedido mínimo/)).toHaveCount(0);
 
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('Como devemos chamar você?').fill('Carla Retirada');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('(00) 00000-0000').fill('85977776666');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Pagamento', exact: true }).click();
   await page.getByRole('button', { name: 'Cartão de crédito', exact: true }).click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
   await expect(page.getByText(/^Cartão de crédito\s*· na retirada$/)).toBeVisible();
   await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
@@ -658,11 +688,17 @@ test('observação do produto chega à revisão e ao envio', async ({ page }) =>
   await page.locator('#notes-textarea').fill('Sem manjericão');
   await page.getByRole('button', { name: /Adicionar/ }).last().click();
   await openCart(page);
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Itens', exact: true }).click();
   await expect(page.getByText('Obs.: Sem manjericão')).toBeVisible();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('Como devemos chamar você?').fill('Ana Teste');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('(00) 00000-0000').fill('85999999999');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
   await page.getByRole('button', { name: /Retirada/ }).click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Pagamento', exact: true }).click();
   await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
   await expect(page.getByText('Obs.: Sem manjericão')).toBeVisible();
   await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
@@ -697,6 +733,7 @@ test('sugestões usam bebidas e sobremesas do catálogo real e adicionam sem err
   await page.goto('/cardapio?restaurante_id=2');
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Itens', exact: true }).click();
   const suggestions = page.getByRole('heading', { name: 'Uma bebida ou sobremesa para acompanhar?' }).locator('../..');
   await expect(suggestions).toContainText('Suco de laranja');
   await expect(suggestions).toContainText('Pudim');
@@ -724,16 +761,24 @@ test('default entrega e escolha manual sobrevivem ao fechamento da sacola e revi
   await openCart(page);
   await expect(delivery).toHaveAttribute('aria-pressed', 'true');
   await pickup.click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('Como devemos chamar você?').fill('Ana Teste');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('(00) 00000-0000').fill('85999999999');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Pagamento', exact: true }).click();
   await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
   await page.getByRole('button', { name: 'Fechar revisão do pedido' }).click();
   await openCart(page);
   await expect(pickup).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('Como devemos chamar você?').fill('Ana Teste');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByPlaceholder('(00) 00000-0000').fill('85999999999');
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Pagamento', exact: true }).click();
   await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
   await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
   await expect.poll(() => orders.length).toBe(1);

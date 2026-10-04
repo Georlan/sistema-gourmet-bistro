@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ChevronLeft,
@@ -32,6 +32,7 @@ import {
 
 interface CardapioProductModalProps {
   product: Product;
+  initialItem?: { quantity: number; selectedOptions: Record<string, ProductOption[]>; notes: string };
   onClose: () => void;
   onAddToCart: (
     product: Product,
@@ -57,9 +58,11 @@ const rulesForModifier = (modifier: QuantityModifier): ModifierQuantityRules => 
 
 export default function CardapioProductModal({
   product,
+  initialItem,
   onClose,
   onAddToCart,
 }: CardapioProductModalProps) {
+  const groupRefs = useRef(new Map<string, HTMLElement>());
   const [quantity, setQuantity] = useState(1);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, ProductOption[]>>({});
   const [notes, setNotes] = useState("");
@@ -104,14 +107,16 @@ export default function CardapioProductModal({
   useEffect(() => {
     const initial: Record<string, ProductOption[]> = {};
     allModifiers.forEach((modifier) => {
-      initial[modifier.id] = [];
+      const options = new Map(modifier.options.map(option => [option.id, option]));
+      initial[modifier.id] = (initialItem?.selectedOptions[modifier.id] || []).flatMap(option => options.has(option.id) ? [options.get(option.id)!] : []);
     });
     setSelectedOptions(initial);
-    setQuantity(1);
-    setNotes("");
-    setFeedback("");
+    setQuantity(initialItem?.quantity || 1);
+    setNotes(initialItem?.notes || "");
+    const previousCount = Object.values(initialItem?.selectedOptions || {}).flat().length;
+    setFeedback(previousCount > Object.values(initial).flat().length ? "Algumas opções não estão mais disponíveis. Confira a montagem antes de salvar." : "");
     setCurrentImgIndex(0);
-  }, [allModifiers, product]);
+  }, [allModifiers, product, initialItem]);
 
   const unitPrice = useMemo(() => {
     let value = product.price;
@@ -195,7 +200,10 @@ export default function CardapioProductModal({
     });
 
     if (unsatisfied.length > 0) {
-      setFeedback(`Selecione as opções obrigatórias em ${unsatisfied.map((m) => m.title).join(", ")} antes de adicionar.`);
+      setFeedback(`Confira as escolhas em ${unsatisfied.map((m) => m.title).join(", ")} antes de ${initialItem ? "salvar" : "adicionar"}.`);
+      const group = groupRefs.current.get(unsatisfied[0].id);
+      group?.scrollIntoView({ block: "center", behavior: "smooth" });
+      group?.focus({ preventScroll: true });
       return;
     }
 
@@ -312,36 +320,41 @@ export default function CardapioProductModal({
                   && modifier.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase() === "guarnicoes"
                   && max >= 20 && (modifier.minSelection ?? 0) === 0;
 
+                const min = rules.minSelection || 0;
+                const unit = modifier.selectionMode === "porcoes" ? (max === 1 ? "porção" : "porções") : (max === 1 ? "opção" : "opções");
+                const instruction = freeGarnishes ? "Escolha à vontade"
+                  : min === max ? `Escolha ${max} ${unit}`
+                  : min > 0 ? `Escolha de ${min} a ${max} ${unit}`
+                  : `Escolha até ${max} ${unit}`;
+                const simpleSelection = modifier.selectionMode === "tipos" || max === 1;
+                const complete = modifier.required && selectionWithinRules(rules, selectedIds);
+
                 return (
-                  <section key={modifier.id}>
+                  <section key={modifier.id} tabIndex={-1} aria-label={modifier.title} ref={node => { if (node) groupRefs.current.set(modifier.id, node); else groupRefs.current.delete(modifier.id); }}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-black text-koma-foreground">{modifier.title}</h3>
                         <p className="mt-0.5 text-xs text-koma-muted">
-                          {freeGarnishes
-                            ? (modifier.selectionMode === "porcoes" ? "Escolha à vontade (pode repetir)" : "Escolha à vontade (tipos diferentes)")
-                            : modifier.selectionMode
-                            ? `Escolha de ${modifier.minSelection || 0} até ${max} ${modifier.selectionMode === "porcoes" ? "porções (pode repetir)" : "tipos diferentes"}`
-                            : max === 1
-                            ? "Escolha uma opção"
-                            : `Até ${max} tipos · quantidade livre por adicional`}
+                          {instruction}
+                          {modifier.selectionMode === "porcoes" && max > 1 && " · Pode repetir"}
+                          {!modifier.selectionMode && max > 1 && " · Quantidade livre por adicional"}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        {max > 1 && (
+                        {(max > 1 || modifier.required) && (
                           <span className="text-[10px] font-black text-emerald-400">
                             {freeGarnishes
                               ? (selectedTypes > 0
                                 ? `${selectedTypes} ${modifier.selectionMode === "porcoes" ? (selectedTypes === 1 ? "porção" : "porções") : (selectedTypes === 1 ? "tipo" : "tipos")}`
                                 : "Livre")
-                              : `${selectedTypes}/${max} ${modifier.selectionMode === "porcoes" ? "porções" : "tipos"}`}
+                              : `${selectedTypes}/${max}`}
                           </span>
                         )}
                         <span className={modifier.required
                           ? "rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-400"
                           : "rounded-lg border border-koma-border bg-koma-card px-2.5 py-1 text-[10px] font-black uppercase text-koma-muted"}
                         >
-                          {modifier.required ? "Obrigatório" : "Opcional"}
+                          {complete ? "Completo" : modifier.required ? "Obrigatório" : "Opcional"}
                         </span>
                       </div>
                     </div>
@@ -353,10 +366,11 @@ export default function CardapioProductModal({
                         const canIncrement = canIncrementSelectionQuantity(rules, selectedIds, option.id)
                           || (max === 1 && optionQuantity === 0);
 
+                        const OptionRow = simpleSelection ? "label" : "div";
                         return (
-                          <div
+                          <OptionRow
                             key={option.id}
-                            className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 transition ${
+                            className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 transition ${simpleSelection ? "cursor-pointer" : ""} ${
                               selected
                                 ? "border-emerald-500/50 bg-emerald-500/10 shadow-sm"
                                 : "border-koma-border bg-koma-card"
@@ -368,6 +382,18 @@ export default function CardapioProductModal({
                                 <span className="mt-0.5 block text-xs font-bold text-emerald-400">+ {formatPrice(option.extraPrice)} cada</span>
                               )}
                             </span>
+                            {simpleSelection ? (
+                              <span className="flex min-h-11 min-w-11 shrink-0 items-center justify-center">
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Selecionar ${option.name}`}
+                                  checked={selected}
+                                  disabled={!selected && !canIncrement}
+                                  onChange={() => handleOptionQuantity(modifier, option, selected ? -1 : 1)}
+                                  className="h-5 w-5 accent-emerald-500"
+                                />
+                              </span>
+                            ) : (
                             <span className="flex shrink-0 items-center rounded-xl border border-koma-border bg-koma-raised p-1">
                               <button
                                 type="button"
@@ -391,7 +417,8 @@ export default function CardapioProductModal({
                                 <Plus className="h-4 w-4" />
                               </button>
                             </span>
-                          </div>
+                            )}
+                          </OptionRow>
                         );
                       })}
                     </div>
@@ -422,7 +449,9 @@ export default function CardapioProductModal({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-3 border-t border-koma-border bg-koma-panel p-4 sm:px-6">
+        <div className="shrink-0 border-t border-koma-border bg-koma-panel p-4 sm:px-6">
+          <p className="mb-2 text-xs text-koma-muted">Quantidade de itens{quantity > 1 ? " · Mesma montagem para todas as unidades" : ""}</p>
+          <div className="flex items-center gap-3">
           <div className="flex shrink-0 items-center rounded-xl border border-koma-border bg-koma-card p-1">
             <button
               type="button"
@@ -449,14 +478,16 @@ export default function CardapioProductModal({
           <button
             type="button"
             onClick={handleAdd}
-            className="flex h-12 min-w-0 flex-1 items-center justify-between gap-3 rounded-xl bg-emerald-500 px-5 text-white shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-600 active:scale-[0.99]"
+            className="flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-500 px-3 text-white shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-600 active:scale-[0.99]"
             id="btn-add-to-cart-action"
+            aria-label={`${initialItem ? "Salvar" : "Adicionar"} ${quantity} × ${product.name} · ${formatPrice(totalPrice)}`}
           >
-            <span className="flex items-center gap-2 text-xs font-black uppercase tracking-wider">
-              <ShoppingBag className="h-4 w-4" /> Adicionar
+            <span className="flex items-center gap-2 text-xs font-black">
+              <ShoppingBag className="hidden h-4 w-4 shrink-0 sm:block" /> {initialItem ? "Salvar" : "Adicionar"} {quantity}×
             </span>
             <strong className="text-sm font-black">{formatPrice(totalPrice)}</strong>
           </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,3 +1,5 @@
+import { OrderItemComposition } from "../../components/shared/OrderItemComposition";
+import { cardapioCompositionSource } from "../orderItems";
 import { QRCodeSVG } from 'qrcode.react';
 /**
  * @license
@@ -664,9 +666,8 @@ export default function CardapioDigital({
                 <div className="space-y-2">
                   {cart.map((item) => {
                     let unitPrice = item.product.price;
-                    const optionNames: string[] = [];
-                    Object.values(item.selectedOptions).forEach((options) => options.forEach((option) => { unitPrice += option.extraPrice; optionNames.push(option.name); }));
-                    return <div key={item.id} className="flex items-start justify-between gap-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs"><div className="min-w-0"><span className="block font-black text-koma-foreground">{item.quantity}x {item.product.name}</span>{optionNames.length > 0 && <span className="mt-0.5 block truncate text-[10px] text-koma-muted">{optionNames.join(", ")}</span>}{item.notes && <span className="mt-1 block text-[10px] leading-relaxed text-amber-500">Obs.: {item.notes}</span>}</div><span className="shrink-0 font-black text-koma-foreground">{formatPrice(unitPrice * item.quantity)}</span></div>;
+                    Object.values(item.selectedOptions).forEach((options) => options.forEach((option) => { unitPrice += option.extraPrice; }));
+                    return <div key={item.id} className="flex items-start justify-between gap-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs"><div className="min-w-0"><span className="block font-black text-koma-foreground">{item.quantity}x {item.product.name}</span><OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-koma-muted" />{item.notes && <span className="mt-1 block text-[10px] leading-relaxed text-amber-500">Obs.: {item.notes}</span>}</div><span className="shrink-0 font-black text-koma-foreground">{formatPrice(unitPrice * item.quantity)}</span></div>;
                   })}
                 </div>
               </section>

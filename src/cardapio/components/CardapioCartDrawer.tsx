@@ -4,13 +4,15 @@
  */
 
 import { getFulfillmentAvailability, resolveFulfillmentSelection, type CardapioFulfillment } from "../fulfillment";
+import { OrderItemComposition } from "../../components/shared/OrderItemComposition";
+import { cardapioCompositionSource } from "../orderItems";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { 
-  Product, 
-  ProductOption, 
-  BrandConfig, 
-  getProductImageUrl, 
-  LOCAL_PRODUCT_PLACEHOLDER 
+import {
+  Product,
+  ProductOption,
+  BrandConfig,
+  getProductImageUrl,
+  LOCAL_PRODUCT_PLACEHOLDER
 } from "../CardapioTypes";
 import {
   AlertCircle,
@@ -94,6 +96,7 @@ interface CardapioCartDrawerProps {
   onClose: () => void;
   onUpdateQty: (itemId: string, newQty: number) => void;
   onRemoveItem: (itemId: string) => void;
+  onEditItem?: (item: CartItem) => void;
   onAddToCart?: (product: Product, quantity: number, options?: Record<string, ProductOption[]>, notes?: string) => void;
   initialCouponCode?: string;
   onPlaceOrder: (orderData: CardapioCheckoutRequest) => void;
@@ -123,6 +126,7 @@ export default function CardapioCartDrawer({
   onClose,
   onUpdateQty,
   onRemoveItem,
+  onEditItem,
   onAddToCart,
   initialCouponCode = "",
   onPlaceOrder,
@@ -157,6 +161,7 @@ export default function CardapioCartDrawer({
   const [customerRecognition, setCustomerRecognition] = useState<CustomerRecognitionStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [invalidField, setInvalidField] = useState("");
+  const [activeSection, setActiveSection] = useState("cart-items");
 
   const clearValidation = (fieldId?: string) => {
     if (!fieldId || invalidField === fieldId) setInvalidField("");
@@ -167,6 +172,8 @@ export default function CardapioCartDrawer({
     setErrorMessage(message);
     setInvalidField(fieldId || "");
     if (!fieldId) return;
+    const section = document.getElementById(fieldId)?.closest("section[id]");
+    if (section?.id) setActiveSection(section.id);
     window.requestAnimationFrame(() => {
       const target = document.getElementById(fieldId);
       target?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -426,10 +433,17 @@ export default function CardapioCartDrawer({
   const customerPhone = user?.phone || normalizeBrazilianPhone(guestPhone);
 
   const jumpToSection = (sectionId: string) => {
-    const target = document.getElementById(sectionId);
-    target?.scrollIntoView({ behavior: "smooth", block: "start" });
-    target?.focus({ preventScroll: true });
+    setActiveSection(sectionId);
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(sectionId);
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+      target?.focus({ preventScroll: true });
+    });
   };
+
+  const nextSection = activeSection === "cart-items" ? "cart-receive-methods"
+    : activeSection === "cart-receive-methods" || activeSection === "cart-discounts" ? "cart-payment-methods"
+    : activeSection === "cart-payment-methods" ? "cart-identification" : null;
 
   const handleCheckout = () => {
     setErrorMessage("");
@@ -574,8 +588,8 @@ export default function CardapioCartDrawer({
               ["Cupom", "cart-discounts"],
               ["Pagamento", "cart-payment-methods"],
               ["Contato", "cart-identification"],
-            ].map(([label, sectionId]) => (
-              <button key={sectionId} type="button" onClick={() => jumpToSection(sectionId)} className="min-h-10 shrink-0 rounded-xl border border-koma-border bg-koma-card px-3 text-[11px] font-bold text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-400">
+            ].filter(([, sectionId]) => sectionId !== "cart-discounts" || showDiscounts).map(([label, sectionId]) => (
+              <button key={sectionId} type="button" aria-expanded={activeSection === sectionId} aria-controls={`${sectionId}-content`} onClick={() => jumpToSection(sectionId)} className="min-h-10 shrink-0 rounded-xl border border-koma-border bg-koma-card px-3 text-[11px] font-bold text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-400">
                 {label}
               </button>
             ))}
@@ -678,7 +692,7 @@ export default function CardapioCartDrawer({
                         <span className="text-emerald-400 font-bold">Frete Grátis</span>
                       </div>
                       <div className="w-full h-1.5 bg-koma-card rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-emerald-500 rounded-full transition-all duration-300"
                           style={{ width: `${Math.min(100, (subtotal / freeDeliveryThreshold) * 100)}%` }}
                         />
@@ -691,17 +705,16 @@ export default function CardapioCartDrawer({
               {/* Section 1: Cart Items */}
               <section id="cart-items" tabIndex={-1}>
                 <div className="mb-2.5 flex items-center justify-between">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">1. Seu pedido</h3>
+                  <h3><button type="button" onClick={() => jumpToSection("cart-items")} aria-expanded={activeSection === "cart-items"} aria-controls="cart-items-content" className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted">1. Seu pedido</button></h3>
                   <span className="text-xs font-bold text-koma-subtle">{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
                 </div>
+                <div id="cart-items-content" hidden={activeSection !== "cart-items"}>
                 <div className="space-y-2.5">
                   {cart.map((item) => {
                     let unitPrice = item.product.price;
-                    const optionNames: string[] = [];
                     Object.values(item.selectedOptions).forEach((opts) => {
                       opts.forEach((option) => {
                         unitPrice += option.extraPrice;
-                        optionNames.push(option.name);
                       });
                     });
 
@@ -719,9 +732,11 @@ export default function CardapioCartDrawer({
                           }}
                         />
                         <div className="min-w-0 flex-1">
-                          <h4 className="truncate text-sm font-bold text-koma-foreground">{item.product.name}</h4>
-                          {optionNames.length > 0 && <p className="mt-0.5 truncate text-xs text-koma-muted">{optionNames.join(", ")}</p>}
+                          <h4 className="text-sm font-bold text-koma-foreground">{item.quantity}× {item.product.name}</h4>
+                          <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-koma-muted" />
+                          {onEditItem && <button type="button" onClick={() => onEditItem(item)} className="mt-2 min-h-11 text-xs font-bold text-emerald-400" aria-label={`Editar montagem de ${item.product.name}`}>Editar montagem</button>}
                           {item.notes && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-amber-400">Obs.: {item.notes}</p>}
+                          {item.quantity > 1 && <p className="mt-1 text-xs text-koma-muted">{formatPrice(unitPrice)} cada · Mesma montagem</p>}
                           <strong className="mt-2 block text-sm font-black text-emerald-400">{formatPrice(unitPrice * item.quantity)}</strong>
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-2.5">
@@ -742,10 +757,13 @@ export default function CardapioCartDrawer({
                     );
                   })}
                 </div>
+
+                  <button type="button" onClick={() => jumpToSection("cart-receive-methods")} className="mt-4 min-h-11 w-full rounded-xl border border-emerald-500/30 px-4 text-sm font-bold text-emerald-400">Continuar para recebimento</button>
+                </div>
               </section>
 
               {/* Upselling / Cross-selling Carousel */}
-              {upsellSuggestions.length > 0 && onAddToCart && (
+              {activeSection === "cart-items" && upsellSuggestions.length > 0 && onAddToCart && (
                 <section className="border-t border-koma-border pt-4">
                   <div className="flex items-center gap-1.5 mb-2.5">
                     <Sparkles className="w-3.5 h-3.5 text-amber-400" />
@@ -785,7 +803,8 @@ export default function CardapioCartDrawer({
 
               {/* Section 2: Delivery Method & Address */}
               <section className="border-t border-koma-border pt-5" id="cart-receive-methods" tabIndex={-1} aria-describedby={invalidField === "cart-receive-methods" ? "cart-checkout-error" : undefined}>
-                <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">2. Como quer receber?</h3>
+                <h3><button type="button" onClick={() => jumpToSection("cart-receive-methods")} aria-expanded={activeSection === "cart-receive-methods"} aria-controls="cart-receive-methods-content" className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted">2. Como quer receber?</button></h3>
+                <div id="cart-receive-methods-content" hidden={activeSection !== "cart-receive-methods"}>
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   <button type="button" disabled={!pickupEnabled} aria-pressed={deliveryMethod === "pickup"} onClick={() => { if (pickupEnabled) setDeliveryMethod("pickup"); clearValidation("cart-receive-methods"); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-55 ${deliveryMethod === "pickup" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
                     <span className="flex items-center justify-between gap-2"><ShoppingBag className={deliveryMethod === "pickup" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "pickup" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>
@@ -852,12 +871,16 @@ export default function CardapioCartDrawer({
                     </p>
                   </div>
                 )}
+
+                  <button type="button" onClick={() => jumpToSection("cart-payment-methods")} className="mt-4 min-h-11 w-full rounded-xl border border-emerald-500/30 px-4 text-sm font-bold text-emerald-400">Continuar para pagamento</button>
+                </div>
               </section>
 
               {/* Section 3: Cupons & Descontos */}
               {showDiscounts && <section className="border-t border-koma-border pt-5" id="cart-discounts" tabIndex={-1}>
-                <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted mb-2.5">3. Descontos & Benefícios</h3>
-                
+                <h3><button type="button" onClick={() => jumpToSection("cart-discounts")} aria-expanded={activeSection === "cart-discounts"} aria-controls="cart-discounts-content" className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted">3. Descontos & Benefícios</button></h3>
+                <div id="cart-discounts-content" hidden={activeSection !== "cart-discounts"}>
+
                 {/* Coupon Box */}
                 {couponsEnabled && (appliedCoupon ? (
                   <div className="flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs">
@@ -929,13 +952,17 @@ export default function CardapioCartDrawer({
                     </label>
                   </div>
                 )}
+
+                  <button type="button" onClick={() => jumpToSection("cart-payment-methods")} className="mt-4 min-h-11 w-full rounded-xl border border-emerald-500/30 px-4 text-sm font-bold text-emerald-400">Continuar para pagamento</button>
+                </div>
               </section>}
 
               {/* Section 4: Forma de Pagamento & Troco */}
               <section className="border-t border-koma-border pt-5" id="cart-payment-methods" tabIndex={-1} aria-describedby={invalidField === "cart-payment-methods" ? "cart-checkout-error" : undefined}>
-                <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">{showDiscounts ? 4 : 3}. Como quer pagar?</h3>
-                <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">{availablePayments.includes("pix") && "Pix é pago agora e só libera o pedido após confirmação. "}Dinheiro e cartão habilitados são pagos pessoalmente {deliveryMethod === "delivery" ? "na entrega" : deliveryMethod === "dine_in" ? "no restaurante" : "na retirada"}.</p>
-                
+                <h3><button type="button" onClick={() => jumpToSection("cart-payment-methods")} aria-expanded={activeSection === "cart-payment-methods"} aria-controls="cart-payment-methods-content" className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted">{showDiscounts ? 4 : 3}. Como quer pagar?</button></h3>
+                <div id="cart-payment-methods-content" hidden={activeSection !== "cart-payment-methods"}>
+                <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">{availablePayments.includes("pix") && "Pix é pago agora e só libera o pedido após confirmação. "}{availablePayments.some(method => method !== "pix") && <>Nas opções presenciais, você paga {deliveryMethod === "delivery" ? "na entrega" : deliveryMethod === "dine_in" ? "no restaurante" : "na retirada"}.</>}</p>
+
                 <CardapioPaymentOptions available={availablePayments} selected={paymentDetail} onSelect={selectPayment} />
 
                 {/* Troco Calculator for Dinheiro */}
@@ -1008,11 +1035,15 @@ export default function CardapioCartDrawer({
                     )}
                   </div>
                 )}
+
+                  <button type="button" onClick={() => jumpToSection("cart-identification")} className="mt-4 min-h-11 w-full rounded-xl border border-emerald-500/30 px-4 text-sm font-bold text-emerald-400">Continuar para contato</button>
+                </div>
               </section>
 
               {/* Section 5: Identification */}
               <section className="border-t border-koma-border pt-5" id="cart-identification" tabIndex={-1}>
-                <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">{showDiscounts ? 5 : 4}. Identificação</h3>
+                <h3><button type="button" onClick={() => jumpToSection("cart-identification")} aria-expanded={activeSection === "cart-identification"} aria-controls="cart-identification-content" className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted">{showDiscounts ? 5 : 4}. Identificação</button></h3>
+                <div id="cart-identification-content" hidden={activeSection !== "cart-identification"}>
                 {user ? (
                   <div className="mt-3 flex items-start gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-3.5">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
@@ -1070,6 +1101,7 @@ export default function CardapioCartDrawer({
                     <span className="relative block"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="email" autoComplete="email" maxLength={254} placeholder="voce@exemplo.com" value={guestEmail} onChange={(event) => { setGuestEmail(event.target.value); clearValidation("input-customer-email"); }} aria-invalid={invalidField === "input-customer-email"} aria-describedby={invalidField === "input-customer-email" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-xl border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500 ${invalidField === "input-customer-email" ? "border-rose-500" : "border-koma-border"}`} id="input-customer-email" /></span>
                   </label>
                 )}
+                </div>
               </section>
 
             </div>
@@ -1108,12 +1140,12 @@ export default function CardapioCartDrawer({
               )}
               <button
                 type="button"
-                onClick={handleCheckout}
+                onClick={() => nextSection ? jumpToSection(nextSection) : handleCheckout()}
                 disabled={!orderingEnabled || availablePayments.length === 0}
                 className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-koma-raised disabled:text-koma-muted"
                 id="btn-confirm-order"
               >
-                <span>{!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : "Revisar pedido"}</span>
+                <span>{!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextSection ? "Continuar" : "Revisar pedido"}</span>
                 {orderingEnabled && <ArrowRight className="h-4 w-4" />}
               </button>
             </div>
