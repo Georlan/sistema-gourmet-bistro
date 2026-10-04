@@ -2050,7 +2050,7 @@ class ProductImageRetirement(Base):
         Index('ix_image_retirement_due', 'restaurante_id', 'state', 'eligible_after'),
     )
     id = Column(Integer, primary_key=True)
-    restaurante_id = Column(Integer, ForeignKey('restaurantes.id'), nullable=False)
+    restaurante_id = Column(Integer, ForeignKey('restaurantes.id'), default=lambda: current_restaurante_id.get(), nullable=False)
     object_path = Column(String, nullable=False)
     retired_at = Column(DateTime, nullable=False)
     eligible_after = Column(DateTime, nullable=False)
