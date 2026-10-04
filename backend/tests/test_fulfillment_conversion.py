@@ -100,13 +100,14 @@ def test_pickup_delivery_pickup_preserves_state_history_and_totals(char_client, 
             restaurante_id=order['restaurant_id'],
             action='CONVERT_FULFILLMENT',
         ).all()
-        correction_log = next(
-            json.loads(log.details) for log in reversed(logs)
+        correction_entry = next(
+            log for log in reversed(logs)
             if json.loads(log.details)['comanda_id'] == order['id']
             and json.loads(log.details).get('endereco_corrigido')
         )
+        correction_log = json.loads(correction_entry.details)
         assert correction_log['address_revision_id']
-        assert 'Rua das Flores' not in log.details
+        assert 'Rua das Flores' not in correction_entry.details
 
 
 @pytest.mark.parametrize('address', [None, {}, {**ADDRESS, 'numero': ''}])
