@@ -126,6 +126,7 @@ export default function CardapioPage() {
   const [activeCategory, setActiveCategory] = useState("");
   const [fulfillmentChoice, setFulfillmentChoice] = useState<{ restaurantId: string | number; method: CardapioFulfillment } | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -161,6 +162,7 @@ export default function CardapioPage() {
     // Garante uma única superfície interativa ao abrir a sacola.
     // Em celulares reais, FABs sobrepostos podem disputar o mesmo toque.
     setSelectedProduct(null);
+    setEditingCartItem(null);
     setIsOrdersDrawerOpen(false);
     setIsBenefitsOpen(false);
     setIsStoreInfoOpen(false);
@@ -624,6 +626,17 @@ export default function CardapioPage() {
       .sort()
       .join("-");
     const itemId = `${product.id}-${optionIds}-${notes.trim()}`;
+    if (editingCartItem) {
+      setCart(current => {
+        const remaining = current.filter(item => item.id !== editingCartItem.id);
+        const existing = remaining.find(item => item.id === itemId);
+        return existing ? remaining.map(item => item.id === itemId ? { ...item, product, selectedOptions, notes, quantity: item.quantity + quantity } : item)
+          : [...remaining, { id: itemId, product, quantity, selectedOptions, notes }];
+      });
+      setEditingCartItem(null);
+      showNotification("Montagem atualizada na sacola");
+      return;
+    }
     setCart((current) => {
       const existing = current.find((item) => item.id === itemId);
       if (existing) {
@@ -1157,7 +1170,7 @@ export default function CardapioPage() {
       )}
 
       {selectedProduct && (
-        <CardapioProductModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onAddToCart={handleAddToCart} />
+        <CardapioProductModal product={selectedProduct} initialItem={editingCartItem || undefined} onClose={() => { setSelectedProduct(null); setEditingCartItem(null); }} onAddToCart={handleAddToCart} />
       )}
 
       {isCartOpen && (
@@ -1174,6 +1187,12 @@ export default function CardapioPage() {
           initialCouponCode={couponToApply}
           onClose={() => { setIsCartOpen(false); setCouponToApply(""); }}
           onUpdateQty={(itemId, quantity) => setCart((current) => quantity <= 0 ? current.filter((item) => item.id !== itemId) : current.map((item) => item.id === itemId ? { ...item, quantity } : item))}
+          onEditItem={item => {
+            const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
+            if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para edição."); return; }
+            setEditingCartItem(item);
+            setSelectedProduct(product);
+          }}
           onRemoveItem={(itemId) => setCart((current) => current.filter((item) => item.id !== itemId))}
           onPlaceOrder={(request) => {
             setCheckoutRequest(request);

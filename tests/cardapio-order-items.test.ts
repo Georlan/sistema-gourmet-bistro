@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { CartItem } from '../src/cardapio/components/CardapioCartDrawer';
-import { buildCardapioOrderItems } from '../src/cardapio/orderItems';
+import { itemCompositionPresentation } from '../src/domain/orderItemComposition';
+import { buildCardapioOrderItems, cardapioCompositionSource } from '../src/cardapio/orderItems';
 
 function cartItem(overrides: Partial<CartItem> = {}): CartItem {
   return {
@@ -145,4 +146,22 @@ test('serialização não altera o carrinho e aceita carrinho vazio', () => {
 
   assert.deepEqual(cart, before);
   assert.deepEqual(buildCardapioOrderItems([], 'Ana'), []);
+});
+
+
+test('rascunho de marmita usa composição canônica sem perder porções repetidas ou observação do cliente', () => {
+  const item = cartItem({
+    product: { ...cartItem().product, marmitaria: true, modifierGroups: [{ id: 'protein', name: 'Proteínas', minSelection: 0, maxSelection: 2, type: 'opcional', selectionMode: 'porcoes', options: [] }] },
+    selectedOptions: { protein: [{ id: 'egg', name: 'Ovo', extraPrice: 2 }, { id: 'egg', name: 'Ovo', extraPrice: 2 }] },
+    notes: 'Opções: Ovo',
+  });
+  assert.deepEqual(itemCompositionPresentation(cardapioCompositionSource(item)).lines, ['PROTEÍNAS: 2x Ovo']);
+  assert.equal(item.notes, 'Opções: Ovo');
+  assert.deepEqual(buildCardapioOrderItems([item], 'Ana')[0].modificador_ids, ['egg', 'egg']);
+});
+
+test('nomes de alimentos não ativam agrupamento de marmitaria em outros perfis', () => {
+  const item = cartItem({ selectedOptions: { protein: [{ id: 'egg', name: 'Ovo', extraPrice: 2 }] } });
+  assert.equal(cardapioCompositionSource(item).composicao_agrupada, false);
+  assert.deepEqual(itemCompositionPresentation(cardapioCompositionSource(item)).lines, ['COMPLEMENTOS: Ovo']);
 });

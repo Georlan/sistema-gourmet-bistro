@@ -95,7 +95,7 @@ export default function CardapioProductCard({
             </strong>
             {available && (
               hasModifiers ? (
-                <span className="text-xs font-bold text-emerald-400">Escolher opções</span>
+                <span className="text-xs font-bold text-emerald-400">{product.marmitaria ? "Montar quentinha" : "Escolher opções"}</span>
               ) : cartQuantity > 0 ? (
                 <div
                   className="cardapio-product-card__stepper relative z-10 inline-flex items-center gap-1 rounded-xl bg-emerald-500/20 border border-emerald-500/40 p-0.5 shadow-sm"

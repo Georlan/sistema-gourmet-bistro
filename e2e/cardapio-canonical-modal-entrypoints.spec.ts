@@ -14,6 +14,7 @@ const publicMenuPayload = {
     endereco: 'Av. Principal, 100 - Centro',
     google_maps_url: '',
     status_override: 'Forçado Aberto',
+    aceitando_pedidos: true,
     delivery_ativo: true,
     pagamento_online_ativo: false,
     formas_pagamento_aceitas: ['Dinheiro', 'Cartão de crédito'],
@@ -170,14 +171,68 @@ test(`marmita grande respeita contagem por ${mode} e limita a duas escolhas`, as
   await page.goto('/cardapio?restaurante_id=2');
   await page.locator('#product-card-101').getByRole('button', { name: /Marmita grande.*ver detalhes/ }).click();
   const modal = page.locator('#product-details-modal');
-  await modal.getByRole('button', { name: 'Adicionar uma unidade de Frango', exact: true }).click();
+  await modal.getByRole(mode === 'tipos' ? 'checkbox' : 'button', { name: mode === 'tipos' ? 'Selecionar Frango' : 'Adicionar uma unidade de Frango', exact: true }).click();
   await modal.locator('#btn-add-to-cart-action').click();
-  await expect(modal.getByText('Selecione as opções obrigatórias em Proteínas antes de adicionar.', { exact: true })).toBeVisible();
-  if (mode === 'tipos') await expect(modal.getByRole('button', { name: 'Adicionar uma unidade de Frango', exact: true })).toBeDisabled();
-  await modal.getByRole('button', { name: `Adicionar uma unidade de ${mode === 'porcoes' ? 'Frango' : 'Carne'}`, exact: true }).click();
-  await expect(modal.getByRole('button', { name: 'Adicionar uma unidade de Peixe', exact: true })).toBeDisabled();
+  await expect(modal.getByText('Confira as escolhas em Proteínas antes de adicionar.', { exact: true })).toBeVisible();
+  if (mode === 'tipos') await expect(modal.getByRole('checkbox', { name: 'Selecionar Frango', exact: true })).toBeChecked();
+  await modal.getByRole(mode === 'tipos' ? 'checkbox' : 'button', { name: mode === 'tipos' ? 'Selecionar Carne' : 'Adicionar uma unidade de Frango', exact: true }).click();
+  await expect(modal.getByRole(mode === 'tipos' ? 'checkbox' : 'button', { name: mode === 'tipos' ? 'Selecionar Peixe' : 'Adicionar uma unidade de Peixe', exact: true })).toBeDisabled();
   await modal.locator('#btn-add-to-cart-action').click();
   await expect(modal).toHaveCount(0);
 });
 
 }
+
+
+test('editar montagem preserva quantidade e contato; cancelar não altera a sacola', async ({ page }) => {
+  await mockCardapio(page);
+  await page.route('**/api/cardapio-digital/public?**', route => route.fulfill({ json: {
+    ...publicMenuPayload,
+    produtos: [{ ...publicMenuPayload.produtos[0], nome: 'Quentinha G', marmitaria: true,
+      grupos_modificadores: [{ id: 'proteins', nome: 'Proteínas', min_selecoes: 0, max_selecoes: 2,
+        modo_selecao: 'porcoes', tipo: 'opcional', opcoes: [
+          { id: 'chicken', nome: 'Frango', ativo: true, preco_adicional: 0 },
+          { id: 'egg', nome: 'Ovo', ativo: true, preco_adicional: 2 },
+        ] }],
+    }],
+  } }));
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#product-card-101').getByRole('button', { name: /ver detalhes/ }).click();
+  const modal = page.locator('#product-details-modal');
+  await modal.getByRole('button', { name: 'Adicionar uma unidade de Frango', exact: true }).click();
+  await modal.locator('#btn-qty-plus').click();
+  await modal.locator('#btn-qty-plus').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toHaveAccessibleName(/Adicionar 3 × Quentinha G/);
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toHaveCount(0);
+  if (!await page.locator('#cart-drawer-container').isVisible()) await page.locator('#btn-cart-header').click();
+  const cart = page.locator('#cart-drawer-container');
+  await cart.getByRole('button', { name: 'Contato', exact: true }).click();
+  await cart.locator('#input-guest-name').fill('Cliente local');
+  await cart.getByRole('button', { name: 'Itens', exact: true }).click();
+  await cart.getByRole('button', { name: 'Editar montagem de Quentinha G', exact: true }).click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toHaveAccessibleName(/Salvar 3 × Quentinha G/);
+  await modal.getByRole('button', { name: 'Adicionar uma unidade de Ovo', exact: true }).click();
+  await modal.getByRole('button', { name: 'Fechar detalhes do produto' }).click();
+  await expect(cart.locator('#cart-items')).not.toContainText('Ovo');
+  await expect(cart.locator('#input-guest-name')).toHaveValue('Cliente local');
+  await cart.getByRole('button', { name: 'Editar montagem de Quentinha G', exact: true }).click();
+  await modal.getByRole('button', { name: 'Adicionar uma unidade de Ovo', exact: true }).click();
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(cart.locator('#cart-items')).toContainText('3× Quentinha G');
+  await expect(cart.locator('#cart-items')).toContainText('PROTEÍNAS: Frango, Ovo');
+  await expect(cart.locator('#cart-items')).toContainText(/R\$\s*150,00/);
+  await expect(cart.locator('#input-guest-name')).toHaveValue('Cliente local');
+  await expect(cart.locator('[id^="cart-item-"]')).toHaveCount(1);
+  await cart.locator('#btn-confirm-order').click();
+  await expect(cart.locator('#cart-receive-methods-content')).toBeVisible();
+  await expect(cart.locator('#cart-items-content')).toBeHidden();
+  await cart.locator('#btn-confirm-order').click();
+  await expect(cart.locator('#cart-payment-methods-content')).toBeVisible();
+  await cart.locator('#btn-confirm-order').click();
+  await expect(cart.locator('#cart-identification-content')).toBeVisible();
+  await cart.getByRole('button', { name: 'Itens', exact: true }).click();
+  await expect(cart.locator('#input-guest-name')).toHaveValue('Cliente local');
+  await cart.locator('#cart-items').evaluate(element => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
+  await page.screenshot({ path: `/home/testuser/Documents/Codex/2026-10-04/co/outputs/sacola-${test.info().project.name}.png` });
+});

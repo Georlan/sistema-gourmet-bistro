@@ -46,3 +46,16 @@ export function buildCardapioOrderItems(
     };
   });
 }
+
+
+/** Adapt draft choices to the same presentation used by persisted orders. */
+export function cardapioCompositionSource(item: CartItem) {
+  return {
+    composicao_agrupada: item.product.marmitaria === true,
+    modificadores: Object.entries(item.selectedOptions).flatMap(([groupId, options]) => {
+      const name = item.product.modifierGroups?.find(group => group.id === groupId)?.name
+        || item.product.modifiers?.find(group => group.id === groupId)?.title;
+      return options.map(option => ({ id: option.id, nome: option.name, preco: option.extraPrice, grupo_id: groupId, grupo_nome: name }));
+    }),
+  };
+}
