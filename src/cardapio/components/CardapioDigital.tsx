@@ -42,6 +42,8 @@ interface CreatedOrder {
   comanda_id: string;
   numero_pedido: string | number;
   total?: number;
+  fulfillment?: CardapioFulfillment;
+  delivery_address?: string;
   pagamento?: OnlinePaymentResponse;
   scheduled_for?: string | null;
   tracking_token?: string;
@@ -463,6 +465,8 @@ export default function CardapioDigital({
         comanda_id: comandaId,
         numero_pedido: numeroPedido,
         total: orderTotal,
+        fulfillment: deliveryMethod,
+        delivery_address: deliveryMethod === "delivery" ? normalizedAddress : "",
         pagamento: data.pagamento,
         scheduled_for: confirmedSchedule,
         tracking_token: data.tracking_token,
@@ -587,7 +591,7 @@ export default function CardapioDigital({
               )}
 
               <div className="mt-5 grid w-full max-w-md gap-2 text-left sm:grid-cols-2">
-                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Modalidade</span><p className="mt-1 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? `Entrega · ${address}` : deliveryMethod === "dine_in" ? "Consumo no local" : "Retirada no balcão"}</p></div>
+                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Modalidade</span><p className="mt-1 text-[11px] font-semibold leading-relaxed text-koma-foreground">{createdOrder.fulfillment === "delivery" ? `Entrega · ${createdOrder.delivery_address || ""}` : createdOrder.fulfillment === "dine_in" ? "Consumo no local" : "Retirada no balcão"}</p></div>
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Total</span><p className="mt-1 text-base font-black text-emerald-500">{formatPrice(createdOrder.total ?? estimatedTotal)}</p></div>
                 {isCreatedOrderScheduled && (
                   <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3.5 sm:col-span-2"><span className="text-[9px] font-black uppercase tracking-wider text-emerald-500">Agendado para</span><p className="mt-1 text-[11px] font-bold text-koma-foreground">{createdScheduleLabel}</p></div>
