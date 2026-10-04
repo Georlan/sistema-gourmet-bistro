@@ -388,9 +388,10 @@ def test_remote_production_separates_and_bolds_marmitaria_groups_without_item_pr
 
     item_line = next(line for line in ticket.splitlines() if "1x QUENTINHA G" in line)
     assert "R$" not in item_line
-    assert f"{ESC_BOLD_ON}PROTEÍNAS:{ESC_BOLD_OFF}" in ticket
-    assert f"{ESC_BOLD_ON}GUARNIÇÕES:{ESC_BOLD_OFF}" in ticket
-    assert f"{ESC_BOLD_ON}SALADAS:{ESC_BOLD_OFF}" in ticket
+    for label in ("PROTEÍNAS:", "GUARNIÇÕES:", "SALADAS:"):
+        group_line = next(line for line in ticket.splitlines() if label in line)
+        assert group_line.startswith("   " + ESC_BOLD_ON)
+        assert group_line.endswith(ESC_BOLD_OFF)
     assert "\n\n   " + ESC_BOLD_ON + "GUARNIÇÕES:" in ticket
     assert "\n\n   " + ESC_BOLD_ON + "SALADAS:" in ticket
     assert ESC_BOLD_ON + "TROCO PARA: R$ 100,00" + ESC_BOLD_OFF in ticket
