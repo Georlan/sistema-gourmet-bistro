@@ -113,7 +113,8 @@ def test_online_remote_order_uses_same_renderer_without_operator_or_counter_chan
     assert "PAGAMENTO" in ticket
     assert "FORMA: DINHEIRO" in ticket
     assert "SUBTOTAL ITENS:" in ticket
-    assert "VALOR" in ticket
+    item_line = next(line for line in ticket.splitlines() if "1x BURGUER PÔR DO SOL" in line)
+    assert "R$" not in item_line
 
 
 def test_dine_in_engine_calls_canonical_renderer_instead_of_table_formatter():
