@@ -15,7 +15,10 @@ const normalizeContact = (value: unknown): GuestCheckoutContact | null => {
     name: String(raw.name || "").slice(0, 100),
     phone: String(raw.phone || "").replace(/\D/g, "").slice(0, 11),
     email: String(raw.email || "").trim().toLowerCase().slice(0, 254),
-    address: String(raw.address || "").slice(0, 300),
+    // Endereço de entrega pertence ao pedido, não à sessão do visitante.
+    // Reaproveitar esse campo silenciosamente pode enviar um pedido para um
+    // endereço de outra compra/pessoa no mesmo navegador.
+    address: "",
   };
 };
 
