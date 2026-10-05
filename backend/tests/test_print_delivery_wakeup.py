@@ -51,6 +51,30 @@ def test_wakeup_hub_retries_real_hint_without_idle_polling(monkeypatch):
     asyncio.run(scenario())
 
 
+def test_wakeup_retry_is_cancelled_after_claim(monkeypatch):
+    monkeypatch.setattr(
+        print_delivery,
+        "PRINT_WAKEUP_RETRY_DELAYS_SECONDS",
+        (0.03,),
+    )
+
+    async def scenario():
+        hub = PrintWakeupHub(listen_to_postgres=False)
+        subscription_id, queue = hub.subscribe(11)
+        try:
+            hub.publish(11, reason="test")
+            immediate = await asyncio.wait_for(queue.get(), timeout=0.2)
+            assert immediate["restaurante_id"] == 11
+            hub.acknowledge_claim(11)
+            await asyncio.sleep(0.06)
+            assert queue.empty()
+        finally:
+            hub.unsubscribe(11, subscription_id)
+            hub.stop()
+
+    asyncio.run(scenario())
+
+
 def test_sse_contains_only_transport_hint():
     rendered = _sse(
         "print-job",
