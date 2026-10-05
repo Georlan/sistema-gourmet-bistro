@@ -43,6 +43,7 @@ from ..services.clientes import (
     registrar_movimento_fidelidade,
 )
 from ..services.capabilities import has_capability
+from ..services.delivery_area_policy import normalize_allowed_cities, normalize_allowed_neighborhoods
 from ..services.delivery_fee_policy import (
     normalize_distance_fee_config,
     normalize_neighborhood_fee_table,
@@ -1887,6 +1888,20 @@ def atualizar_configuracoes(
             [normalized_distance_config]
             if normalized_distance_config is not None
             else config_in.tabela_taxas_km
+        )
+    if config_in.delivery_area_restriction_enabled is not None:
+        config.delivery_area_restriction_enabled = bool(config_in.delivery_area_restriction_enabled)
+    if config_in.delivery_allowed_cities is not None:
+        normalized_cities = normalize_allowed_cities(config_in.delivery_allowed_cities)
+        if config_in.delivery_allowed_cities and not normalized_cities:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Informe as cidades atendidas no formato Cidade + UF.",
+            )
+        config.delivery_allowed_cities = list(normalized_cities)
+    if config_in.delivery_allowed_neighborhoods is not None:
+        config.delivery_allowed_neighborhoods = list(
+            normalize_allowed_neighborhoods(config_in.delivery_allowed_neighborhoods)
         )
 
     if config_in.taxa_servico_ativa is not None:
