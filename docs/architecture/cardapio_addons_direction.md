@@ -1,5 +1,14 @@
 # Cardápio: direção de produto para adicionais
 
+## Adicionais sincronizados no cardápio diário — 05/10/2026
+
+Opções com origem sincronizada são informativas, sem checkbox, rótulo clicável
+ou aparência de seleção. Disponibilidade e preço continuam visíveis e acompanham
+o rascunho da origem. Um grupo composto somente por essas opções mostra Automático
+em vez de Cadastrar / editar; o cadastro e os preços permanecem em Cadastros.
+Opções independentes, inclusive num grupo misto, continuam selecionáveis.
+Nenhum payload de disponibilidade ou regra de sincronização é alterado.
+
 ## Cadastro direto de opções — 05/10/2026
 
 Na marmitaria, o editor oferece um campo separado para o nome e o valor da nova

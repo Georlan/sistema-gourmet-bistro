@@ -58,20 +58,26 @@ export function CardapioDiarioEditor({ grupos, apiBaseUrl, authHeaders, onSaved,
     {error && <div role="alert" className="rounded-xl border border-rose-500/40 bg-koma-panel p-4 text-sm text-koma-foreground">{error}<button disabled={saving} onClick={async () => { discard(); await onReload(); }} className="ml-3 underline">Descartar seleção e atualizar</button></div>}
     {saved && <p role="status" className="rounded-xl bg-emerald-500/10 p-4 text-sm text-emerald-700 dark:text-emerald-300">Cardápio do dia salvo. Adicionais vinculados acompanham a origem.</p>}
     <div className="space-y-3">
-      {visible.map(group => <section key={group.id} aria-label={`Opções de ${group.nome}`} className="rounded-2xl border border-koma-border bg-koma-panel p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold text-koma-foreground">{group.nome}</h3><span className="text-xs text-koma-muted">{group.opcoes.filter(o => o.id && active(o.opcao_origem_id || o.id)).length} na seleção</span><button type="button" disabled={saving || changes.length > 0} onClick={() => onEditGroup(group)} className="rounded-lg border border-koma-border px-3 py-1.5 text-xs font-semibold text-koma-foreground disabled:opacity-40">Cadastrar / editar</button></div>
-        {group.grupo_origem_id && <p className="mb-3 text-xs text-koma-muted">Acompanha {grupos.find(g => g.id === group.grupo_origem_id)?.nome || 'a origem'}. Marque as opções no grupo de origem.</p>}
+      {visible.map(group => {
+        const automatic = Boolean(group.grupo_origem_id) && group.opcoes.every(option => Boolean(option.opcao_origem_id));
+        return <section key={group.id} aria-label={`Opções de ${group.nome}`} className="rounded-2xl border border-koma-border bg-koma-panel p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold text-koma-foreground">{group.nome}</h3><span className="text-xs text-koma-muted">{group.opcoes.filter(o => o.id && active(o.opcao_origem_id || o.id)).length} {automatic ? 'disponíveis' : 'na seleção'}</span>{!automatic && <button type="button" disabled={saving || changes.length > 0} onClick={() => onEditGroup(group)} className="rounded-lg border border-koma-border px-3 py-1.5 text-xs font-semibold text-koma-foreground disabled:opacity-40">Cadastrar / editar</button>}{automatic && <span className="rounded-full bg-koma-raised px-2 py-1 text-xs text-koma-muted">Automático</span>}</div>
+        {group.grupo_origem_id && <p className="mb-3 text-xs text-koma-muted">Disponibilidade automática: acompanha {grupos.find(g => g.id === group.grupo_origem_id)?.nome || 'a origem'}. Altere as opções no grupo de origem.</p>}
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{group.opcoes.map(option => {
           const id = option.id || '';
           const checked = active(option.opcao_origem_id || id);
           const changed = !option.opcao_origem_id && draft[id] != null && draft[id] !== original.get(id);
+          if (option.opcao_origem_id) return <article key={id || option.nome} aria-label={`${option.nome} — ${group.nome}`} className="flex items-center gap-3 rounded-lg border border-koma-border bg-koma-raised/30 px-3 py-2">
+            <span aria-hidden="true" className={clsx('h-2 w-2 shrink-0 rounded-full', checked ? 'bg-emerald-500' : 'bg-koma-muted/40')} />
+            <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-koma-foreground">{option.nome}</span><span className="mt-1 block text-xs text-koma-muted">{checked ? 'Disponível' : 'Pausado'}{option.preco_adicional > 0 ? ` · + ${Number(option.preco_adicional).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}</span></span>
+          </article>;
           return <label key={id || option.nome} className={clsx('flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors', checked ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-raised/30', option.opcao_origem_id ? 'cursor-default' : 'cursor-pointer')}>
             <input type="checkbox" aria-label={`${option.nome} — ${group.nome}`} checked={checked} disabled={saving || review || !id || Boolean(option.opcao_origem_id)} onChange={e => { setDraft(d => ({ ...d, [id]: e.target.checked })); setSaved(false); }} className="h-4 w-4 shrink-0 accent-emerald-600" />
             <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-koma-foreground">{option.nome}</span><span className="mt-1 block text-xs text-koma-muted">{checked ? 'Disponível' : 'Pausado'}{changed ? ' · alteração pendente' : ''}{option.preco_adicional > 0 ? ` · + ${Number(option.preco_adicional).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}</span></span>
             {checked && <Check size={16} className="shrink-0 text-emerald-700 dark:text-emerald-300" />}
           </label>;
         })}</div>
-      </section>)}
+      </section>; })}
     </div>
     {!visible.length && <p className="rounded-xl border border-koma-border p-6 text-center text-koma-muted">Nenhuma opção nesta busca. Cadastre grupos e opções na aba Cadastros.</p>}
     {review && <section aria-label="Revisão do cardápio diário" className="rounded-2xl border border-emerald-500/40 bg-koma-panel p-5">
