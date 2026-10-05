@@ -51,6 +51,7 @@ import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import { resolveKomaHost } from "../domain/komaHost";
 import { smartSearchMatch } from "../domain";
 import { buildKomaAttributionUrl } from "./komaAttribution";
+import { captureOrderAttribution } from "./orderAttribution";
 import {
   CustomerProfile,
   clearCustomerSession,
@@ -369,6 +370,16 @@ export default function CardapioPage() {
               fallback_sem_localizacao: 'minima' as const,
             }))
           : [],
+        deliveryAreaPolicy: restaurant.delivery_area_policy && typeof restaurant.delivery_area_policy === "object"
+          ? {
+              enabled: restaurant.delivery_area_policy.enabled === true,
+              city: String(restaurant.delivery_area_policy.city || ""),
+              state: String(restaurant.delivery_area_policy.state || "").toUpperCase(),
+              neighborhoods: Array.isArray(restaurant.delivery_area_policy.neighborhoods)
+                ? restaurant.delivery_area_policy.neighborhoods.map((item: unknown) => String(item || "")).filter(Boolean)
+                : [],
+            }
+          : null,
         taxaEntregaPadrao: Number(restaurant.taxa_entrega_fixa ?? restaurant.taxa_entrega_padrao ?? 0),
         storeStatus: acceptingOrders ? "open" : "closed",
         acceptingOrders,
@@ -382,6 +393,9 @@ export default function CardapioPage() {
       setActiveCategory((current) => current && brand.categories.includes(current) ? current : brand.categories[0] || "");
       const rid = Number(brand.id);
       if (Number.isFinite(rid)) {
+        // First-touch por aba/restaurante. Não envia IP e não interfere na
+        // idempotência do pedido.
+        captureOrderAttribution(rid);
         const stored = loadStoredOrders(rid);
         setStoredOrders(stored);
         // Pedidos modernos são reconciliados pelo SSE/summary do drawer.
