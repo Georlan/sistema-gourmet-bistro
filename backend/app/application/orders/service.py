@@ -217,19 +217,30 @@ class OrderApplicationService:
         distance_fee: Decimal | None = None
 
         if tipo_taxa == "bairro":
+            try:
+                tabela = normalize_neighborhood_fee_table(config.tabela_taxas_bairros or [])
+            except ValueError as exc:
+                raise OrderValidationError(str(exc)) from exc
+
             clean_bairro = " ".join(str(neighborhood or "").strip().split())
-            if clean_bairro:
+            if tabela:
+                if not clean_bairro:
+                    raise OrderValidationError(
+                        "Informe o bairro para validar a área de entrega deste restaurante."
+                    )
                 normalized_target = normalize_neighborhood(clean_bairro)
-                try:
-                    tabela = normalize_neighborhood_fee_table(config.tabela_taxas_bairros or [])
-                except ValueError as exc:
-                    raise OrderValidationError(str(exc)) from exc
                 for b in tabela:
                     if normalize_neighborhood(b["bairro"]) == normalized_target:
                         matched_bairro_taxa = _validated_configured_delivery_fee(b.get("taxa"))
                         break
-
-            if matched_bairro_taxa is None:
+                if matched_bairro_taxa is None:
+                    raise OrderValidationError(
+                        "Este bairro está fora da área de entrega deste restaurante. "
+                        "Escolha outro endereço ou use Retirada."
+                    )
+            else:
+                # Compatibilidade: restaurantes que ainda não configuraram bairros
+                # continuam usando a taxa padrão até publicarem uma área explícita.
                 fallback_fee = getattr(config, "taxa_entrega_fixa", None)
                 matched_bairro_taxa = (
                     _validated_configured_delivery_fee(fallback_fee)
