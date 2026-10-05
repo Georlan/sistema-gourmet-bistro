@@ -77,6 +77,16 @@ test('cardapio usa SSE e resumo leve em vez de polling contínuo de pedidos', ()
   assert.match(cardapioPage, /onRealtimeStatus=\{handleRealtimeOrderStatus\}/);
 });
 
+test('SSE de vários pedidos coalesce reconciliação e preserva conexões estáveis', () => {
+  assert.match(drawer, /activeChatOrdersRef/);
+  assert.match(drawer, /realtimeTargetsKey/);
+  assert.match(drawer, /scheduleRealtimeRefresh/);
+  assert.match(drawer, /fullRefreshRequested/);
+  assert.match(drawer, /\[realtimeTargetsKey, onRealtimeRefresh, onRealtimeStatus, refreshUnreadCounts\]/);
+  assert.doesNotMatch(drawer, /\[activeChatOrders, onRealtimeRefresh, onRealtimeStatus, refreshUnreadCounts\]/);
+});
+
+
 test('mudança de fulfillment acorda o Cardápio sem fingir novo status', () => {
   assert.match(clientPanel, /addEventListener\("refresh"/);
   assert.match(drawer, /addEventListener\("refresh"/);
