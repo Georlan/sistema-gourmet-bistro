@@ -8,6 +8,13 @@ type BairroTaxaRow = {
   taxa: number;
 };
 
+type DeliveryAreaPolicy = {
+  enabled: boolean;
+  city: string;
+  state: string;
+  neighborhoods: string[];
+};
+
 type DeliveryConfig = {
   delivery_ativo: boolean;
   pedido_minimo: number;
@@ -16,6 +23,7 @@ type DeliveryConfig = {
   tipo_taxa_entrega: 'bairro';
   taxa_entrega_fixa: number;
   tabela_taxas_bairros: BairroTaxaRow[];
+  delivery_area_policy: DeliveryAreaPolicy;
 };
 
 interface Props {
@@ -39,6 +47,18 @@ function normalizeNeighborhoods(value: unknown): BairroTaxaRow[] {
     .filter((row) => row.bairro);
 }
 
+function normalizeDeliveryAreaPolicy(value: unknown): DeliveryAreaPolicy {
+  const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return {
+    enabled: raw.enabled === true,
+    city: String(raw.city || '').trim(),
+    state: String(raw.state || '').trim().toUpperCase().slice(0, 2),
+    neighborhoods: Array.isArray(raw.neighborhoods)
+      ? raw.neighborhoods.map((item) => String(item || '').trim()).filter(Boolean)
+      : [],
+  };
+}
+
 function normalizeConfig(data: Record<string, unknown>): DeliveryConfig {
   return {
     delivery_ativo: data.delivery_ativo !== false,
@@ -48,6 +68,7 @@ function normalizeConfig(data: Record<string, unknown>): DeliveryConfig {
     tipo_taxa_entrega: 'bairro',
     taxa_entrega_fixa: Number(data.taxa_entrega_fixa ?? 0),
     tabela_taxas_bairros: normalizeNeighborhoods(data.tabela_taxas_bairros),
+    delivery_area_policy: normalizeDeliveryAreaPolicy(data.delivery_area_policy),
   };
 }
 
@@ -64,6 +85,14 @@ function persistedPayload(config: DeliveryConfig) {
     taxa_entrega_fixa: Math.max(0, Number(config.taxa_entrega_fixa) || 0),
     tabela_taxas_bairros: neighborhoods,
     tabela_taxas_km: [],
+    delivery_area_policy: {
+      enabled: config.delivery_area_policy.enabled,
+      city: config.delivery_area_policy.city.trim(),
+      state: config.delivery_area_policy.state.trim().toUpperCase(),
+      neighborhoods: config.delivery_area_policy.neighborhoods
+        .map((item) => item.trim())
+        .filter(Boolean),
+    },
   };
 }
 
@@ -84,6 +113,12 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
     tipo_taxa_entrega: 'bairro',
     taxa_entrega_fixa: 0,
     tabela_taxas_bairros: [],
+    delivery_area_policy: {
+      enabled: false,
+      city: '',
+      state: '',
+      neighborhoods: [],
+    },
   });
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -210,6 +245,95 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
             {config.delivery_ativo ? 'Ativa' : 'Pausada'}
           </button>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-raised text-emerald-600 dark:text-emerald-300">
+              <MapPin size={17} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-koma-foreground">Área permitida para entrega</h3>
+              <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+                O cardápio continua público para qualquer pessoa. Esta regra bloqueia somente pedidos de Entrega fora da cidade e dos bairros permitidos.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={config.delivery_area_policy.enabled}
+            onClick={() => setConfig((current) => ({
+              ...current,
+              delivery_area_policy: {
+                ...current.delivery_area_policy,
+                enabled: !current.delivery_area_policy.enabled,
+              },
+            }))}
+            className={clsx(
+              'inline-flex min-w-32 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black transition',
+              config.delivery_area_policy.enabled
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                : 'border-koma-border bg-koma-raised text-koma-muted',
+            )}
+          >
+            <span className={clsx('h-2 w-2 rounded-full', config.delivery_area_policy.enabled ? 'bg-emerald-500' : 'bg-koma-border')} />
+            {config.delivery_area_policy.enabled ? 'Restrição ativa' : 'Sem restrição'}
+          </button>
+        </div>
+
+        {config.delivery_area_policy.enabled && (
+          <div className="mt-4 grid gap-3 border-t border-koma-border pt-4 sm:grid-cols-[minmax(0,1fr)_110px]">
+            <label>
+              <FieldLabel>Cidade atendida</FieldLabel>
+              <input
+                value={config.delivery_area_policy.city}
+                onChange={(event) => setConfig((current) => ({
+                  ...current,
+                  delivery_area_policy: { ...current.delivery_area_policy, city: event.target.value },
+                }))}
+                className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs text-koma-foreground outline-none focus:border-emerald-500/60"
+                placeholder="Ex.: Limoeiro do Norte"
+              />
+            </label>
+            <label>
+              <FieldLabel>UF</FieldLabel>
+              <input
+                maxLength={2}
+                value={config.delivery_area_policy.state}
+                onChange={(event) => setConfig((current) => ({
+                  ...current,
+                  delivery_area_policy: {
+                    ...current.delivery_area_policy,
+                    state: event.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2),
+                  },
+                }))}
+                className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-bold uppercase text-koma-foreground outline-none focus:border-emerald-500/60"
+                placeholder="CE"
+              />
+            </label>
+            <label className="sm:col-span-2">
+              <FieldLabel>Bairros permitidos (opcional)</FieldLabel>
+              <textarea
+                rows={4}
+                value={config.delivery_area_policy.neighborhoods.join('\n')}
+                onChange={(event) => setConfig((current) => ({
+                  ...current,
+                  delivery_area_policy: {
+                    ...current.delivery_area_policy,
+                    neighborhoods: event.target.value.split(/\r?\n/),
+                  },
+                }))}
+                className="w-full rounded-lg border border-koma-border bg-koma-input px-3 py-2.5 text-xs text-koma-foreground outline-none focus:border-emerald-500/60"
+                placeholder={"Centro\nBairro de Fátima\nCidade Alta"}
+              />
+              <span className="mt-1.5 block text-[9px] leading-relaxed text-koma-muted">
+                Um bairro por linha. Se deixar vazio, qualquer bairro dentro da cidade/UF será aceito.
+              </span>
+            </label>
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
