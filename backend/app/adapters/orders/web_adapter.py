@@ -11,7 +11,9 @@ import datetime
 from decimal import Decimal
 import logging
 import unicodedata
+import uuid
 from typing import Any, Optional
+from urllib.parse import urlsplit
 from fastapi import BackgroundTasks, HTTPException, Request, status
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
@@ -211,6 +213,49 @@ def _enforce_public_order_rate_limits(
         restaurante_id=restaurante_id,
         telefone=telefone,
     )
+
+
+def _coarse_client_surface(user_agent: str) -> str:
+    ua = (user_agent or "").lower()
+    if "instagram" in ua:
+        return "instagram_in_app"
+    if "fban" in ua or "fbav" in ua or "facebook" in ua:
+        return "facebook_in_app"
+    if "whatsapp" in ua:
+        return "whatsapp_in_app"
+    return "browser"
+
+
+def _safe_referrer(value: str | None) -> str | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = urlsplit(raw)
+    except ValueError:
+        return None
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"[:300]
+
+
+def _order_acquisition_payload(payload: CardapioPedidoCreate, request: Request) -> dict[str, Any]:
+    provided = getattr(payload, "acquisition", None)
+    data = provided.model_dump(exclude_none=True) if provided is not None else {}
+    surface = str(data.get("client_surface") or _coarse_client_surface(request.headers.get("user-agent", "")))
+    data.setdefault("session_id", f"server-{uuid.uuid4()}")
+    data.setdefault("client_surface", surface)
+    data.setdefault("referrer", _safe_referrer(request.headers.get("referer")))
+    if not data.get("source") and surface == "instagram_in_app":
+        data["source"] = "instagram"
+        data.setdefault("medium", "in_app_browser")
+    elif not data.get("source") and surface == "facebook_in_app":
+        data["source"] = "facebook"
+        data.setdefault("medium", "in_app_browser")
+    elif not data.get("source") and surface == "whatsapp_in_app":
+        data["source"] = "whatsapp"
+        data.setdefault("medium", "in_app_browser")
+    return {key: value for key, value in data.items() if value not in (None, "")}
 
 
 def _persist_order_acquisition_best_effort(
@@ -760,14 +805,12 @@ class CardapioWebAdapter:
                 {"event": "new_delivery_order", "message": f"Novo pedido online de {cliente_nome} recebido!"},
                 rest_id,
             )
-        acquisition = getattr(payload, "acquisition", None)
-        if acquisition is not None:
-            background_tasks.add_task(
-                _persist_order_acquisition_best_effort,
-                rest_id,
-                order_dto.comanda_id,
-                acquisition.model_dump(exclude_none=True),
-            )
+        background_tasks.add_task(
+            _persist_order_acquisition_best_effort,
+            rest_id,
+            order_dto.comanda_id,
+            _order_acquisition_payload(payload, request),
+        )
 
         if cliente is not None:
             background_tasks.add_task(
