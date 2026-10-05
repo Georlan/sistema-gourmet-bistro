@@ -1149,6 +1149,39 @@ class CardapioItemPedido(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+class CardapioAcquisitionInput(BaseModel):
+    session_id: str = Field(min_length=8, max_length=80)
+    source: Optional[str] = Field(default=None, max_length=160)
+    medium: Optional[str] = Field(default=None, max_length=160)
+    campaign: Optional[str] = Field(default=None, max_length=160)
+    content: Optional[str] = Field(default=None, max_length=160)
+    term: Optional[str] = Field(default=None, max_length=160)
+    referrer: Optional[str] = Field(default=None, max_length=300)
+    landing_path: Optional[str] = Field(default=None, max_length=300)
+    client_surface: Optional[str] = Field(default=None, max_length=80)
+
+    @field_validator(
+        "session_id",
+        "source",
+        "medium",
+        "campaign",
+        "content",
+        "term",
+        "referrer",
+        "landing_path",
+        "client_surface",
+        mode="before",
+    )
+    @classmethod
+    def normalize_attribution_text(cls, value):
+        if value is None:
+            return None
+        normalized = " ".join(str(value).strip().split())
+        return normalized or None
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class CardapioPedidoCreate(BaseModel):
     restaurante_id: int = Field(gt=0)
     itens: List[CardapioItemPedido] = Field(min_length=1, max_length=100)
@@ -1166,6 +1199,7 @@ class CardapioPedidoCreate(BaseModel):
     usar_cashback: bool = Field(default=False)
     tipo_pedido: Literal["delivery", "retirada", "consumo_local"] = "delivery"
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
+    acquisition: Optional[CardapioAcquisitionInput] = None
 
     @field_validator("cliente_nome")
     @classmethod
