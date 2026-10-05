@@ -1,7 +1,7 @@
 """add delivery area policy and order acquisition attribution
 
 Revision ID: a9f0b1c2d3e4
-Revises: z8e9f0a1b2c3
+Revises: a3af4de4e221
 Create Date: 2026-10-05
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "a9f0b1c2d3e4"
-down_revision = "z8e9f0a1b2c3"
+down_revision = "a3af4de4e221"
 branch_labels = None
 depends_on = None
 
