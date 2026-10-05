@@ -639,40 +639,60 @@ def get_order_attribution(
     limit: int = Query(default=200, ge=1, le=500),
     admin: dict = Depends(get_current_admin),
 ):
-    """Leitura cross-tenant privada de origem dos pedidos convertidos."""
+    """Consolida origem de pedidos por tenant sem contornar o isolamento RLS."""
     db = SessionLocal()
+    items: list[dict[str, Any]] = []
     try:
-        rows = (
-            db.query(PublicOrderAttribution, Restaurante, Comanda)
-            .join(Restaurante, Restaurante.id == PublicOrderAttribution.restaurante_id)
-            .join(Comanda, Comanda.id == PublicOrderAttribution.comanda_id)
-            .order_by(PublicOrderAttribution.created_at.desc())
-            .limit(limit)
-            .all()
+        for restaurant_id in _discover_restaurant_ids(db):
+            with tenant_session_scope(db, restaurant_id):
+                restaurante = (
+                    db.query(Restaurante)
+                    .filter(Restaurante.id == restaurant_id)
+                    .one_or_none()
+                )
+                if restaurante is None:
+                    continue
+                rows = (
+                    db.query(PublicOrderAttribution, Comanda)
+                    .join(
+                        Comanda,
+                        Comanda.id == PublicOrderAttribution.comanda_id,
+                    )
+                    .order_by(PublicOrderAttribution.created_at.desc())
+                    .limit(limit)
+                    .all()
+                )
+                for attribution, comanda in rows:
+                    items.append({
+                        "id": attribution.id,
+                        "restauranteId": attribution.restaurante_id,
+                        "restaurantName": restaurante.nome,
+                        "orderId": attribution.comanda_id,
+                        "orderNumber": comanda.numero_pedido,
+                        "sourcePlatform": attribution.source_platform,
+                        "utmSource": attribution.utm_source,
+                        "utmMedium": attribution.utm_medium,
+                        "utmCampaign": attribution.utm_campaign,
+                        "utmContent": attribution.utm_content,
+                        "referrerHost": attribution.referrer_host,
+                        "landingPath": attribution.landing_path,
+                        "createdAt": attribution.created_at.isoformat() if attribution.created_at else None,
+                    })
+
+        items.sort(key=lambda item: item.get("createdAt") or "", reverse=True)
+        logger.info(
+            "SUPERADMIN ORDER ATTRIBUTION actor=%s item_count=%s source=rls_scoped",
+            admin.get("user"),
+            min(len(items), limit),
         )
-        return {
-            "items": [
-                {
-                    "id": attribution.id,
-                    "restauranteId": attribution.restaurante_id,
-                    "restaurantName": restaurante.nome,
-                    "orderId": attribution.comanda_id,
-                    "orderNumber": comanda.numero_pedido,
-                    "sourcePlatform": attribution.source_platform,
-                    "utmSource": attribution.utm_source,
-                    "utmMedium": attribution.utm_medium,
-                    "utmCampaign": attribution.utm_campaign,
-                    "utmContent": attribution.utm_content,
-                    "referrerHost": attribution.referrer_host,
-                    "landingPath": attribution.landing_path,
-                    "createdAt": attribution.created_at.isoformat() if attribution.created_at else None,
-                }
-                for attribution, restaurante, comanda in rows
-            ],
-            "dataStatus": "real",
-        }
+        return {"items": items[:limit], "dataStatus": "real"}
+    except HTTPException:
+        raise
     except Exception:
-        logger.exception("SUPERADMIN ORDER ATTRIBUTION LIST FAILED actor=%s", admin.get("user"))
+        logger.exception(
+            "SUPERADMIN ORDER ATTRIBUTION LIST FAILED actor=%s",
+            admin.get("user"),
+        )
         _unavailable("Não foi possível consolidar a atribuição dos pedidos.")
     finally:
         db.close()
