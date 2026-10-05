@@ -219,6 +219,9 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
             ConfiguracaoRestaurante.taxa_entrega_fixa,
             ConfiguracaoRestaurante.tabela_taxas_bairros,
             ConfiguracaoRestaurante.tabela_taxas_km,
+            ConfiguracaoRestaurante.delivery_area_restriction_enabled,
+            ConfiguracaoRestaurante.delivery_allowed_cities,
+            ConfiguracaoRestaurante.delivery_allowed_neighborhoods,
             raiseload=True,
         ),
         raiseload(ConfiguracaoRestaurante.restaurante),
@@ -275,6 +278,9 @@ def _public_restaurant_payload(
         "taxa_entrega_fixa": float(configuracao.taxa_entrega_fixa) if configuracao and configuracao.taxa_entrega_fixa is not None else None,
         "tabela_taxas_bairros": configuracao.tabela_taxas_bairros if configuracao and configuracao.tabela_taxas_bairros else [],
         "tabela_taxas_km": configuracao.tabela_taxas_km if configuracao and configuracao.tabela_taxas_km else [],
+        "delivery_area_restriction_enabled": bool(configuracao.delivery_area_restriction_enabled) if configuracao else False,
+        "delivery_allowed_cities": configuracao.delivery_allowed_cities if configuracao and configuracao.delivery_allowed_cities else [],
+        "delivery_allowed_neighborhoods": configuracao.delivery_allowed_neighborhoods if configuracao and configuracao.delivery_allowed_neighborhoods else [],
         "taxa_entrega_padrao": float(configuracao.taxa_entrega_fixa) if configuracao and configuracao.taxa_entrega_fixa is not None else None,
     }
 
