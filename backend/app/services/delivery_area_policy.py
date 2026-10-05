@@ -74,19 +74,16 @@ def validate_public_delivery_area(
     if not normalized_city or len(normalized_state) != 2:
         return "Não foi possível confirmar a cidade e a UF deste endereço. Revise o CEP/endereço para pedir entrega."
 
-    if cities:
-        allowed_city_keys = {(_normalized(item["cidade"]), item["uf"]) for item in cities}
-        if (normalized_city, normalized_state) not in allowed_city_keys:
-            return "Este endereço fica fora da área de entrega deste restaurante. Você pode alterar o endereço ou escolher Retirada."
+    if not cities:
+        return "A área de entrega deste restaurante ainda não foi configurada. Escolha Retirada ou fale com o estabelecimento."
+
+    allowed_city_keys = {(_normalized(item["cidade"]), item["uf"]) for item in cities}
+    if (normalized_city, normalized_state) not in allowed_city_keys:
+        return "Este endereço fica fora da área de entrega deste restaurante. Você pode alterar o endereço ou escolher Retirada."
 
     if neighborhoods:
         allowed_neighborhood_keys = {_normalized(item) for item in neighborhoods}
         if not normalized_neighborhood or normalized_neighborhood not in allowed_neighborhood_keys:
             return "Este bairro fica fora da área de entrega deste restaurante. Você pode alterar o endereço ou escolher Retirada."
-
-    # Fail closed: ativar a proteção sem configurar nenhuma área não pode abrir
-    # delivery para o país inteiro por acidente.
-    if not cities and not neighborhoods:
-        return "A área de entrega deste restaurante ainda não foi configurada. Escolha Retirada ou fale com o estabelecimento."
 
     return None
