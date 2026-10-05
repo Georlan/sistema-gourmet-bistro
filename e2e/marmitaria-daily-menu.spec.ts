@@ -42,9 +42,19 @@ test('daily marmitaria selection reviews once, preserves draft on failure and sy
   const beef = page.getByRole('checkbox', { name: 'Acém cozido — Proteínas', exact: true });
   await expect(chicken).toBeChecked();
   await expect(beef).not.toBeChecked();
+  const extras = page.getByRole('region', { name: 'Opções de Adicionais pagos' });
+  const extra = extras.getByRole('article', { name: 'Frango cozido adicional — Adicionais pagos' });
+  await expect(extras.getByRole('checkbox')).toHaveCount(0);
+  await expect(extras.getByRole('button', { name: 'Cadastrar / editar' })).toHaveCount(0);
+  await expect(extras.getByText('Automático', { exact: true })).toBeVisible();
+  await expect(extra).toContainText('Disponível');
+  await extra.click();
+  expect(writes).toBe(0);
+  await expect(page.getByRole('button', { name: 'Revisar alterações', exact: true })).toBeDisabled();
   await chicken.uncheck(); await beef.check();
   expect(writes).toBe(0);
-  await expect(page.getByRole('checkbox', { name: 'Frango cozido adicional — Adicionais pagos' })).not.toBeChecked();
+  await expect(extra).toContainText('Pausado');
+  await expect(extra).toContainText('R$ 5,00');
   await expect(page.getByRole('button', { name: 'Cadastros', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Revisar alterações', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Revisão do cardápio diário' })).toBeVisible();
@@ -62,6 +72,15 @@ test('daily marmitaria selection reviews once, preserves draft on failure and sy
   await page.getByLabel('Filtrar opções do dia').selectOption('pausadas');
   await expect(chicken).toBeVisible(); await expect(beef).toHaveCount(0);
   await page.getByLabel('Filtrar opções do dia').selectOption('todos');
+  (groups[3].opcoes as any[]).push({ id: 'manual-extra', nome: 'Farofa extra', preco_adicional: 3, ativo: false });
+  await page.reload();
+  const manualExtra = extras.getByRole('checkbox', { name: 'Farofa extra — Adicionais pagos', exact: true });
+  await expect(manualExtra).toBeEnabled();
+  await expect(extras.getByRole('checkbox')).toHaveCount(1);
+  await manualExtra.check();
+  await expect(page.getByRole('button', { name: 'Revisar alterações', exact: true })).toBeEnabled();
+  expect(writes).toBe(2);
+  await page.getByRole('button', { name: 'Desfazer seleção', exact: true }).click();
   if (process.env.KOMA_DAILY_SCREENSHOTS) {
     await mkdir(process.env.KOMA_DAILY_SCREENSHOTS, { recursive: true });
     await page.screenshot({ path: `${process.env.KOMA_DAILY_SCREENSHOTS}/cardapio-diario-${info.project.name}.png`, fullPage: true });
