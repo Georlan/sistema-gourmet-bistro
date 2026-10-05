@@ -333,7 +333,7 @@ export default function ComplementosTab({
 
   const filteredGrupos = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('pt-BR');
-    return [...grupos].filter((group) => group.nome.toLocaleLowerCase('pt-BR').includes(query) || group.opcoes.some(option => option.nome.toLocaleLowerCase('pt-BR').includes(query))).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    return [...grupos].filter((group) => group.nome.toLocaleLowerCase('pt-BR').includes(query) || group.opcoes.some(option => option.nome.toLocaleLowerCase('pt-BR').includes(query))).sort((a, b) => Number(Boolean(a.grupo_origem_id)) - Number(Boolean(b.grupo_origem_id)) || a.nome.localeCompare(b.nome, 'pt-BR'));
   }, [grupos, search]);
 
   return (
