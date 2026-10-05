@@ -47,6 +47,7 @@ class PrintWakeupHub:
         self._listener_ready = threading.Event()
         self._listener_thread: threading.Thread | None = None
         self._publish_generation: dict[int, int] = {}
+        self._retry_timers: dict[int, list[threading.Timer]] = {}
 
     def ensure_started(self) -> None:
         if engine.dialect.name != "postgresql" or not self._listen_to_postgres:
@@ -65,6 +66,9 @@ class PrintWakeupHub:
 
     def stop(self) -> None:
         self._stop.set()
+        with self._lock:
+            for tenant_id in list(self._retry_timers):
+                self._cancel_retries_locked(tenant_id)
         thread = self._listener_thread
         if thread is not None and thread.is_alive():
             thread.join(timeout=2.0)
@@ -100,7 +104,10 @@ class PrintWakeupHub:
                 return
             tenant_subscribers.pop(subscription_id, None)
             if not tenant_subscribers:
-                self._subscribers.pop(int(restaurante_id), None)
+                tenant_id = int(restaurante_id)
+                self._subscribers.pop(tenant_id, None)
+                self._cancel_retries_locked(tenant_id)
+                self._publish_generation[tenant_id] = self._publish_generation.get(tenant_id, 0) + 1
 
     def publish(self, restaurante_id: int, *, reason: str) -> None:
         tenant_id = int(restaurante_id)
@@ -110,6 +117,7 @@ class PrintWakeupHub:
             "emitted_at_monotonic": time.monotonic(),
         }
         with self._lock:
+            self._cancel_retries_locked(tenant_id)
             targets = list(self._subscribers.get(tenant_id, {}).values())
             generation = self._publish_generation.get(tenant_id, 0) + 1
             self._publish_generation[tenant_id] = generation
@@ -123,22 +131,27 @@ class PrintWakeupHub:
         # or adding continuous database polling. A newer notification cancels
         # older retries by generation, so busy restaurants get one small burst
         # instead of one timer fan-out per PrintJob.
-        for delay in PRINT_WAKEUP_RETRY_DELAYS_SECONDS:
-            timer = threading.Timer(
-                delay,
-                self._retry_publish_if_current,
-                args=(tenant_id, generation, payload),
-            )
-            timer.daemon = True
-            timer.start()
-
-    def acknowledge_claim(self, restaurante_id: int) -> None:
-        """Cancela retries do último wake-up assim que um job foi reservado."""
-        tenant_id = int(restaurante_id)
+        # A claim can reserve older jobs while a newer hint is published, or
+        # belong to another sector's agent. It must not cancel tenant retries.
         with self._lock:
-            self._publish_generation[tenant_id] = (
-                self._publish_generation.get(tenant_id, 0) + 1
-            )
+            if self._stop.is_set() or self._publish_generation.get(tenant_id) != generation:
+                return
+            timers = [
+                threading.Timer(
+                    delay,
+                    self._retry_publish_if_current,
+                    args=(tenant_id, generation, payload),
+                )
+                for delay in PRINT_WAKEUP_RETRY_DELAYS_SECONDS
+            ]
+            self._retry_timers[tenant_id] = timers
+            for timer in timers:
+                timer.daemon = True
+                timer.start()
+
+    def _cancel_retries_locked(self, restaurante_id: int) -> None:
+        for timer in self._retry_timers.pop(restaurante_id, []):
+            timer.cancel()
 
     def _retry_publish_if_current(
         self,
