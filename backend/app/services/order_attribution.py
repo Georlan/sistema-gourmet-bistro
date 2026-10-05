@@ -63,12 +63,17 @@ def _safe_first_seen(value: object) -> str:
 
 
 def build_order_attribution(client_data: Any, request: Request) -> dict[str, Any]:
-    raw = client_data if isinstance(client_data, dict) else {}
+    if hasattr(client_data, "model_dump"):
+        raw = client_data.model_dump()
+    else:
+        raw = client_data if isinstance(client_data, dict) else {}
     user_agent = request.headers.get("user-agent", "")
     platform = _platform_from_user_agent(user_agent)
 
     header_referrer = request.headers.get("referer")
-    referrer_host = _safe_referrer_host(header_referrer) or _safe_referrer_host(raw.get("referrer_host"))
+    # O Referer do POST para a API tende a ser o próprio app. O referrer_host
+    # first-touch do navegador preserva melhor a origem externa (quando existe).
+    referrer_host = _safe_referrer_host(raw.get("referrer_host")) or _safe_referrer_host(header_referrer)
 
     utm_source = _clean(raw.get("utm_source"))
     source = utm_source or platform
