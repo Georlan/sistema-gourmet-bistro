@@ -13,6 +13,10 @@ on:
       - 'backend/app/models.py'
       - 'backend/alembic/versions/*marmitaria*.py'
       - 'backend/tests/test_marmitaria*.py'
+      - 'backend/tests/test_modificadores.py'
+      - 'src/components/cardapio/CardapioDiarioEditor.tsx'
+      - 'src/components/cardapio/ComplementosTab.tsx'
+      - 'e2e/marmitaria-daily-menu.spec.ts'
   workflow_dispatch:
 
 concurrency:
@@ -66,4 +70,5 @@ jobs:
       - name: Verify adoption, composition, migration and simultaneous creation
         run: >-
           python -m pytest backend/tests/test_marmitaria_sizes.py
-          backend/tests/test_marmitaria_size_migration.py -q -ra
+          backend/tests/test_marmitaria_size_migration.py
+          backend/tests/test_modificadores.py -q -ra

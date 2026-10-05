@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Edit3, Layers, Plus, Search, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
+import { CardapioDiarioEditor } from './CardapioDiarioEditor';
 
 export interface OpcaoModificador {
   id?: string;
@@ -52,6 +53,9 @@ export default function ComplementosTab({
   const [categorias, setCategorias] = useState<CategoriaHierarquia[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [dailyMode, setDailyMode] = useState(true);
+  const [dailyPending, setDailyPending] = useState(false);
+  const [catalogError, setCatalogError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGrupo, setEditingGrupo] = useState<GrupoModificador | null>(null);
 
@@ -74,6 +78,7 @@ export default function ComplementosTab({
   const fetchCatalogBindings = async () => {
     try {
       setLoading(true);
+      setCatalogError(false);
       const [groupsRes, categoriesRes] = await Promise.all([
         fetch(`${apiBaseUrl}/cardapio/modificadores/grupos`, { headers: authHeaders }),
         fetch(`${apiBaseUrl}/cardapio/modificadores/categorias-hierarquia`, { headers: authHeaders }),
@@ -90,6 +95,7 @@ export default function ComplementosTab({
         setCategorias(Array.isArray(categoriesData) ? categoriesData : []);
       }
     } catch (err) {
+      setCatalogError(true);
       console.error('Erro ao buscar modificadores:', err);
       onShowNotification?.('Não foi possível carregar os complementos.', 'error');
     } finally {
@@ -327,7 +333,14 @@ export default function ComplementosTab({
 
   return (
     <div className="space-y-6">
-      <details open className="space-y-4">
+      {marmitariaCadastro && <div className="flex flex-wrap items-center gap-2" aria-label="Modo de edição dos complementos">
+        <button onClick={() => setDailyMode(true)} className={clsx('rounded-xl border px-4 py-2 text-sm font-bold', dailyMode ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-koma-border text-koma-muted')}>Cardápio do dia</button>
+        <button disabled={dailyPending} onClick={() => setDailyMode(false)} className={clsx('rounded-xl border px-4 py-2 text-sm font-bold disabled:opacity-40', !dailyMode ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-koma-border text-koma-muted')}>Cadastros</button>
+        {dailyPending && <span className="text-xs text-koma-muted">Salve ou desfaça a seleção antes de abrir Cadastros.</span>}
+      </div>}
+      {catalogError && <div role="alert" className="rounded-2xl border border-rose-500/40 p-5 text-sm text-koma-foreground">Não foi possível conferir o cadastro atual. <button onClick={() => void fetchCatalogBindings()} className="underline">Tentar novamente</button></div>}
+      {marmitariaCadastro && dailyMode && !catalogError && (loading ? <p role="status" className="p-6 text-koma-muted">Carregando cardápio do dia…</p> : <CardapioDiarioEditor grupos={grupos} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onDirtyChange={setDailyPending} onReload={fetchCatalogBindings} onSaved={async () => { onShowNotification?.('Cardápio do dia salvo.', 'success'); await fetchCatalogBindings(); }} />)}
+      {(!marmitariaCadastro || !dailyMode) && !catalogError && <details open className="space-y-4">
         <summary className="cursor-pointer font-bold text-koma-foreground">{marmitariaCadastro ? 'Proteínas, guarnições e saladas' : 'Complementos e adicionais'}</summary>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-koma-card border border-koma-border p-5 rounded-2xl">
         <div>
@@ -460,7 +473,7 @@ export default function ComplementosTab({
         </div>
       )}
 
-      </details>
+      </details>}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-fade-in overflow-y-auto">
           <div className="bg-koma-panel border border-koma-border rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-5 my-8 max-h-[92vh] flex flex-col animate-scale-up">

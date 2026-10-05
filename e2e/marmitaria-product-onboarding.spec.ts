@@ -107,6 +107,7 @@ test('Produtos define limites próprios por quentinha e Complementos mantém som
   await page.getByRole('button', { name: 'Complementos', exact: true }).last().click();
   await expect(page.getByRole('region', { name: 'Cadastro de marmitas' })).toHaveCount(0);
   await expect(page.getByText('De 0 a 3 opções', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Cadastros', exact: true }).click();
   await expect(page.getByText('3 opções cadastradas', { exact: true }).first()).toBeVisible();
   await page.getByTitle('Editar').first().click();
   await expect(page.getByText('Mínimo', { exact: true })).toBeHidden();
