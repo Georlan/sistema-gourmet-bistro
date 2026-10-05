@@ -47,6 +47,7 @@ AGENT_COMMAND_TIMEOUT_SECONDS = 45
 # Stuck/expired recovery has minute/hour thresholds; running its UPDATE probes on
 # every 0.5s agent claim only competes with real orders for the database pool.
 PRINT_QUEUE_MAINTENANCE_INTERVAL_SECONDS = 30.0
+PRINT_HISTORY_MAINTENANCE_INTERVAL_SECONDS = 30.0
 UNRESOLVED_JOB_STATUSES = ("pending", "claimed", "printing")
 TERMINAL_JOB_STATUSES = ("printed", "failed", "cancelled")
 
@@ -61,6 +62,8 @@ _invalid_agent_token_cache_lock = threading.Lock()
 
 _print_queue_maintenance_last_run: dict[int, float] = {}
 _print_queue_maintenance_lock = threading.Lock()
+_print_history_maintenance_last_scheduled: dict[int, float] = {}
+_print_history_maintenance_lock = threading.Lock()
 
 
 def _should_run_print_queue_maintenance(
@@ -85,6 +88,12 @@ def _clear_print_queue_maintenance_cache() -> None:
     """Test/support helper; production state is only an in-process throttle."""
     with _print_queue_maintenance_lock:
         _print_queue_maintenance_last_run.clear()
+
+
+def _clear_print_history_maintenance_cache() -> None:
+    """Test/support helper for the coalesced retention task."""
+    with _print_history_maintenance_lock:
+        _print_history_maintenance_last_scheduled.clear()
 
 
 def _invalid_agent_token_is_cached(token_hash: str, *, now: float | None = None) -> bool:
@@ -376,15 +385,20 @@ def _schedule_print_history_maintenance(
     restaurante_id: int,
     now: datetime.datetime,
 ) -> None:
-    """
-    Compacta após cada confirmação, fora do tempo de resposta ao agente.
-
-    Assim cada restaurante conserva no máximo 20 cupons completos do dia,
-    mesmo em um turno com alto volume de impressão.
-    """
+    """Compacta o histórico fora do ACK, no máximo uma vez/30s por tenant."""
+    tenant_id = int(restaurante_id)
+    current = time.monotonic()
+    with _print_history_maintenance_lock:
+        previous = _print_history_maintenance_last_scheduled.get(tenant_id)
+        if (
+            previous is not None
+            and current - previous < PRINT_HISTORY_MAINTENANCE_INTERVAL_SECONDS
+        ):
+            return
+        _print_history_maintenance_last_scheduled[tenant_id] = current
     background_tasks.add_task(
         _run_print_history_maintenance,
-        restaurante_id,
+        tenant_id,
         now,
     )
 
