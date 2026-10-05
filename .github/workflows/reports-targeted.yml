@@ -42,6 +42,7 @@ jobs:
           backend/tests/test_relatorios.py
           backend/tests/test_report_snapshot_civil.py
           backend/tests/test_financial_read_stage3b.py
+          backend/tests/test_financial_final_reconciliation_stage3d.py
           backend/tests/test_financial_cash_stage3c.py
           backend/tests/test_financial_refund_history_stage3c.py
           backend/tests/test_financial_cash_extreme_stage3c.py
