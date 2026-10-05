@@ -54,6 +54,9 @@ export default function ComplementosTab({
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [optionSearch, setOptionSearch] = useState('');
+  const [newOptionName, setNewOptionName] = useState('');
+  const [newOptionPrice, setNewOptionPrice] = useState('0');
+  const [newOptionError, setNewOptionError] = useState('');
   const [dailyMode, setDailyMode] = useState(true);
   const [dailyPending, setDailyPending] = useState(false);
   const [catalogError, setCatalogError] = useState(false);
@@ -148,6 +151,9 @@ export default function ComplementosTab({
 
   const handleOpenModal = (grupo?: GrupoModificador) => {
     setOptionSearch('');
+    setNewOptionName('');
+    setNewOptionPrice('0');
+    setNewOptionError('');
     if (grupo) {
       setEditingGrupo(grupo);
       setNome(grupo.nome);
@@ -157,7 +163,7 @@ export default function ComplementosTab({
       setOpcoes(
         grupo.opcoes.length > 0
           ? [...grupo.opcoes].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })).map((option) => ({ ...option }))
-          : [{ nome: '', preco_adicional: 0, ativo: true }],
+          : marmitariaCadastro ? [] : [{ nome: '', preco_adicional: 0, ativo: true }],
       );
       setSelectedProductIds([...(grupo.produto_ids || [])]);
       setSelectedCategoryIds([...(grupo.categoria_ids || [])]);
@@ -168,7 +174,7 @@ export default function ComplementosTab({
       setTipo('opcional');
       setMinSelecoes('0');
       setMaxSelecoes('1');
-      setOpcoes([{ nome: '', preco_adicional: 0, ativo: true }]);
+      setOpcoes(marmitariaCadastro ? [] : [{ nome: '', preco_adicional: 0, ativo: true }]);
       setSelectedProductIds([]);
       setSelectedCategoryIds([]);
       setIncludeSubcategories(true);
@@ -179,9 +185,34 @@ export default function ComplementosTab({
     setIsModalOpen(true);
   };
 
+  const prepareNewOption = (): OpcaoModificador | null => {
+    const optionName = newOptionName.trim();
+    const normalized = (value: string) => value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+    if (!optionName) return null;
+    if (opcoes.some(option => normalized(option.nome) === normalized(optionName))) {
+      setNewOptionError('Essa opção já está na lista. Use a busca para encontrá-la.');
+      return null;
+    }
+    const price = Number(newOptionPrice);
+    if (!Number.isFinite(price) || price < 0) {
+      setNewOptionError('Informe um valor igual ou maior que zero.');
+      return null;
+    }
+    return { nome: optionName, preco_adicional: price, ativo: true };
+  };
+
   const handleAddOpcao = () => {
+    if (marmitariaCadastro) {
+      const option = prepareNewOption();
+      if (!option) return;
+      setOpcoes(prev => [option, ...prev]);
+      setNewOptionName('');
+      setNewOptionPrice('0');
+      setNewOptionError('');
+    } else {
+      setOpcoes(prev => [{ nome: '', preco_adicional: 0, ativo: true }, ...prev]);
+    }
     setOptionSearch('');
-    setOpcoes((prev) => [{ nome: '', preco_adicional: 0, ativo: true }, ...prev]);
   };
 
   const handleRemoveOpcao = (idx: number) => {
@@ -224,7 +255,9 @@ export default function ComplementosTab({
       return;
     }
 
-    const validOptions = opcoes.filter((option) => option.nome.trim().length > 0);
+    const pendingOption = marmitariaCadastro && newOptionName.trim() ? prepareNewOption() : null;
+    if (marmitariaCadastro && newOptionName.trim() && !pendingOption) return;
+    const validOptions = [...(pendingOption ? [pendingOption] : []), ...opcoes].filter((option) => option.nome.trim().length > 0);
     if (validOptions.length === 0 && !editingGrupo) {
       onShowNotification?.('Adicione ao menos 1 opção de complemento.', 'error');
       return;
@@ -496,7 +529,7 @@ export default function ComplementosTab({
               </button>
             </div>
 
-            <form onSubmit={handleSaveGrupo} className="space-y-4 overflow-y-auto flex-1 pr-1">
+            <form id="complement-group-form" onSubmit={handleSaveGrupo} className="space-y-4 overflow-y-auto flex-1 pr-1">
               <div>
                 <label className="block text-xs font-bold text-koma-muted mb-1">Nome do Grupo</label>
                 <input
@@ -551,33 +584,32 @@ export default function ComplementosTab({
                   Este grupo define apenas os itens disponíveis. O mínimo e o máximo pertencem a cada Quentinha P, M ou G e são configurados em Produtos.
                 </div>
               )}
-              {marmitariaCadastro && (
-                <div className="space-y-2 rounded-xl border border-koma-border p-3">
-                  <label className="block text-xs font-bold text-koma-muted" htmlFor="complement-source">Sincronizar adicionais com</label>
-                  <select id="complement-source" value={grupoOrigemId} onChange={event => setGrupoOrigemId(event.target.value)} className="w-full rounded-lg bg-koma-card border border-koma-border p-2 text-sm">
-                    <option value="">Cadastro independente</option>
-                    {grupos.filter(group => group.id !== editingGrupo?.id && !group.grupo_origem_id).map(group => <option key={group.id} value={group.id}>{group.nome}</option>)}
-                  </select>
-                  {grupoOrigemId && <>
-                    <p className="text-xs text-koma-muted">Nome e disponibilidade acompanham o grupo escolhido. Os preços existentes são mantidos.</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <label className="text-xs">Novos adicionais (R$)<input aria-label="Preço de novos adicionais" type="number" min="0.01" step="0.01" required value={precoNovoAdicional} onChange={event => setPrecoNovoAdicional(event.target.value)} className="mt-1 w-full rounded-lg bg-koma-card border border-koma-border p-2" /></label>
-                      <label className="text-xs">Novos ovos (R$)<input aria-label="Preço de novos ovos" type="number" min="0.01" step="0.01" required value={precoNovoOvo} onChange={event => setPrecoNovoOvo(event.target.value)} className="mt-1 w-full rounded-lg bg-koma-card border border-koma-border p-2" /></label>
-                    </div>
-                  </>}
+              {marmitariaCadastro && <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+                <h4 className="text-sm font-bold text-koma-foreground">Adicionar em {nome || 'novo grupo'}</h4>
+                <label className="block text-xs text-koma-muted">Nome da nova opção
+                  <input aria-label="Nome da nova opção" placeholder="Ex.: Costela cozida" value={newOptionName} disabled={saving} onChange={event => { setNewOptionName(event.target.value); setNewOptionError(''); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); handleAddOpcao(); } }} className="mt-1 w-full rounded-lg border border-koma-border bg-koma-card px-3 py-2 text-sm text-koma-foreground" />
+                </label>
+                <div className="flex items-end gap-3">
+                  <label className="min-w-0 flex-1 text-xs text-koma-muted">Valor desta opção (R$)
+                    <input aria-label="Valor da nova opção" type="number" min="0" step="0.01" value={newOptionPrice} disabled={saving} onChange={event => { setNewOptionPrice(event.target.value); setNewOptionError(''); }} className="mt-1 w-full rounded-lg border border-koma-border bg-koma-card px-3 py-2 text-sm text-koma-foreground" />
+                  </label>
+                  <button type="button" onClick={handleAddOpcao} disabled={saving || !newOptionName.trim()} className="koma-btn-primary shrink-0 rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50">Adicionar à lista</button>
                 </div>
-              )}
+                <p className="text-xs text-koma-muted">Zero significa sem cobrança nesta opção. As alterações só entram no cardápio ao salvar o grupo.</p>
+                {editingGrupo && grupos.some(group => group.grupo_origem_id === editingGrupo.id) && <p className="text-xs text-koma-muted">O adicional pago será criado automaticamente com o preço configurado no grupo de adicionais.</p>}
+                {newOptionError && <p role="alert" className="text-xs text-rose-400">{newOptionError}</p>}
+              </div>}
               <div className="space-y-2 pt-2 border-t border-koma-border">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-koma-muted">Opções / Adicionais</label>
-                  <button
+                  {!marmitariaCadastro && <button
                     type="button"
                     onClick={handleAddOpcao}
                     className="text-xs font-bold text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Adicionar Opção</span>
-                  </button>
+                  </button>}
                 </div>
                 <label className="block text-xs text-koma-muted">Buscar opção neste grupo<input aria-label="Buscar opção neste grupo" value={optionSearch} onChange={event => setOptionSearch(event.target.value)} placeholder="Ex.: costela" className="mt-1 w-full rounded-lg border border-koma-border bg-koma-raised px-3 py-2 text-sm text-koma-foreground" /></label>
                 <p className="text-xs text-koma-muted">Opções em ordem alfabética. Remover retira do cadastro e preserva os pedidos antigos.</p>
@@ -620,6 +652,25 @@ export default function ComplementosTab({
                   ))}
                 </div>
               </div>
+
+              {marmitariaCadastro && (
+                <details className="space-y-2 rounded-xl border border-koma-border p-3">
+                  <summary className="cursor-pointer text-xs font-bold text-koma-foreground">Configuração dos adicionais pagos</summary>
+                  <p className="text-xs text-koma-muted">Use esta configuração no grupo de adicionais para acompanhar outro grupo. Para cadastrar uma proteína, basta adicionar seu nome acima.</p>
+                  <label className="block text-xs font-bold text-koma-muted" htmlFor="complement-source">Sincronizar adicionais com</label>
+                  <select id="complement-source" value={grupoOrigemId} onChange={event => setGrupoOrigemId(event.target.value)} className="w-full rounded-lg bg-koma-card border border-koma-border p-2 text-sm">
+                    <option value="">Cadastro independente</option>
+                    {grupos.filter(group => group.id !== editingGrupo?.id && !group.grupo_origem_id).map(group => <option key={group.id} value={group.id}>{group.nome}</option>)}
+                  </select>
+                  {grupoOrigemId && <>
+                    <p className="text-xs text-koma-muted">Nome e disponibilidade acompanham o grupo escolhido. Os preços existentes são mantidos.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="text-xs">Novos adicionais (R$)<input aria-label="Preço de novos adicionais" type="number" min="0.01" step="0.01" required value={precoNovoAdicional} onChange={event => setPrecoNovoAdicional(event.target.value)} className="mt-1 w-full rounded-lg bg-koma-card border border-koma-border p-2" /></label>
+                      <label className="text-xs">Novos ovos (R$)<input aria-label="Preço de novos ovos" type="number" min="0.01" step="0.01" required value={precoNovoOvo} onChange={event => setPrecoNovoOvo(event.target.value)} className="mt-1 w-full rounded-lg bg-koma-card border border-koma-border p-2" /></label>
+                    </div>
+                  </>}
+                </details>
+              )}
 
               <div className={marmitariaCadastro ? 'hidden' : 'space-y-2 pt-2 border-t border-koma-border'}>
                 <div>
@@ -719,6 +770,7 @@ export default function ComplementosTab({
                 </div>
               </div>
 
+            </form>
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-koma-border shrink-0">
                 <button
                   type="button"
@@ -729,13 +781,13 @@ export default function ComplementosTab({
                 </button>
                 <button
                   type="submit"
+                  form="complement-group-form"
                   disabled={saving}
                   className="koma-btn-primary px-5 py-2 text-xs font-bold rounded-xl disabled:opacity-50"
                 >
                   {saving ? 'Salvando...' : editingGrupo ? 'Atualizar Grupo' : 'Criar Grupo'}
                 </button>
               </div>
-            </form>
           </div>
         </div>
       )}
