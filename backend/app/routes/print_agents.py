@@ -30,6 +30,7 @@ from ..database import (
 )
 from ..models import PrintJob, PrintAgentToken, Usuario
 from ..security import ensure_permission, get_current_user, require_permission
+from ..services.print_delivery import print_wakeup_hub
 from ..websocket_manager import manager
 from ..timezone_utils import OPERATIONAL_TIMEZONE
 
@@ -883,6 +884,8 @@ def _claim_pending_jobs(
             for row in ordered_rows
         ]
         db.commit()
+        if payload:
+            print_wakeup_hub.acknowledge_claim(agent.restaurante_id)
         _log_claim_batch(agent, payload)
         return payload
 
@@ -936,6 +939,8 @@ def _claim_pending_jobs(
         claimed_jobs.append(_claimed_job_payload(job, now))
 
     db.commit()
+    if claimed_jobs:
+        print_wakeup_hub.acknowledge_claim(agent.restaurante_id)
     _log_claim_batch(agent, claimed_jobs)
     return claimed_jobs
 
