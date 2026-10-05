@@ -826,7 +826,7 @@ export function CardapioDigitalSettingsPanel({
                 <SettingsSection
                   separated
                   title="Taxas de entrega, bairros e pedido mínimo"
-                  description="Defina o valor mínimo para entrega, regras de frete grátis e taxas personalizadas por bairro."
+                  description="Defina o valor mínimo, o frete grátis e os bairros realmente atendidos. Ao cadastrar bairros, a lista passa a limitar a área de delivery."
                 >
                   <div className="space-y-4">
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -861,7 +861,7 @@ export function CardapioDigitalSettingsPanel({
                       <div className="flex items-center justify-between">
                         <div>
                           <FieldLabel>Tabela de Taxas por Bairro</FieldLabel>
-                          <span className="block text-[10px] text-koma-muted">O cliente seleciona o bairro no cardápio e a taxa é calculada automaticamente.</span>
+                          <span className="block text-[10px] text-koma-muted">O cliente seleciona um bairro atendido; endereços fora da lista não podem finalizar delivery.</span>
                         </div>
                         <button
                           type="button"
@@ -910,7 +910,7 @@ export function CardapioDigitalSettingsPanel({
 
                       {config.tabela_taxas_bairros.length === 0 && (
                         <div className="rounded-xl border border-dashed border-koma-border p-4 text-center text-[10px] text-koma-muted">
-                          Nenhum bairro cadastrado. O valor padrão de entrega do restaurante será aplicado.
+                          Nenhum bairro cadastrado. Até publicar a área atendida, o delivery mantém a regra legada de taxa padrão.
                         </div>
                       )}
                     </div>
