@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from ..config import settings
 from ..database import SessionLocal, engine, tenant_session_scope
-from ..models import Lancamento, Pagamento, RestaurantPaymentAccount, Restaurante, SuperAdminAuditLog
+from ..models import Comanda, Lancamento, Pagamento, PublicOrderAttribution, RestaurantPaymentAccount, Restaurante, SuperAdminAuditLog
 from ..security import IPRateLimiter, create_access_token, verify_password, superadmin_session_generation
 from ..subscription import VALID_SUBSCRIPTION_PLANS
 from .super_admin_services import (
@@ -632,6 +632,50 @@ def list_audit_logs(
 @router.post("/restaurantes/{tenant_id}/flush-cache")
 async def flush_tenant_cache(tenant_id: str, admin: dict = Depends(get_current_admin)):
     _unavailable("Flush de cache não possui executor real configurado.", not_implemented=True)
+
+
+@router.get("/order-attribution")
+def get_order_attribution(
+    limit: int = Query(default=200, ge=1, le=500),
+    admin: dict = Depends(get_current_admin),
+):
+    """Leitura cross-tenant privada de origem dos pedidos convertidos."""
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(PublicOrderAttribution, Restaurante, Comanda)
+            .join(Restaurante, Restaurante.id == PublicOrderAttribution.restaurante_id)
+            .join(Comanda, Comanda.id == PublicOrderAttribution.comanda_id)
+            .order_by(PublicOrderAttribution.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return {
+            "items": [
+                {
+                    "id": attribution.id,
+                    "restauranteId": attribution.restaurante_id,
+                    "restaurantName": restaurante.nome,
+                    "orderId": attribution.comanda_id,
+                    "orderNumber": comanda.numero_pedido,
+                    "sourcePlatform": attribution.source_platform,
+                    "utmSource": attribution.utm_source,
+                    "utmMedium": attribution.utm_medium,
+                    "utmCampaign": attribution.utm_campaign,
+                    "utmContent": attribution.utm_content,
+                    "referrerHost": attribution.referrer_host,
+                    "landingPath": attribution.landing_path,
+                    "createdAt": attribution.created_at.isoformat() if attribution.created_at else None,
+                }
+                for attribution, restaurante, comanda in rows
+            ],
+            "dataStatus": "real",
+        }
+    except Exception:
+        logger.exception("SUPERADMIN ORDER ATTRIBUTION LIST FAILED actor=%s", admin.get("user"))
+        _unavailable("Não foi possível consolidar a atribuição dos pedidos.")
+    finally:
+        db.close()
 
 
 # --- DEVOPS & INFRASTRUCTURE ---
