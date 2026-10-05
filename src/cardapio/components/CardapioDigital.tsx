@@ -21,6 +21,8 @@ import {
   X,
 } from "lucide-react";
 import { BrandConfig } from "../CardapioTypes";
+import { deliveryAreaError } from "../deliveryArea";
+import { getOrderAttribution } from "../orderAttribution";
 import { CartItem, type CardapioFulfillment } from "./CardapioCartDrawer";
 import { API_BASE_URL } from "../../config/api";
 import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/whatsappUtils";
@@ -350,6 +352,14 @@ export default function CardapioDigital({
       scheduledForIso = target.toISOString();
     }
 
+    if (deliveryMethod === "delivery") {
+      const areaError = deliveryAreaError(activeBrand.deliveryAreaPolicy, addressSnapshot);
+      if (areaError) {
+        setErrorMessage(areaError);
+        return;
+      }
+    }
+
     // Mesa não é inferida pelo Cardápio Online. Consumo local nasce sem mesa
     // e pode receber uma associação operacional depois, no Caixa.
     const cleanedItems = buildCardapioOrderItems(cart, normalizedName);
@@ -371,6 +381,7 @@ export default function CardapioDigital({
       usar_cashback: usarCashback,
       tipo_pedido: publicFulfillmentValue(deliveryMethod),
       scheduled_for: scheduledForIso || null,
+      attribution: getOrderAttribution(targetRestauranteId),
     };
     const fingerprint = buildOrderSubmissionFingerprint(orderRequest);
     let idempotencyKey: string;
