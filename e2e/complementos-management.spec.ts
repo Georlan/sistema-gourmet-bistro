@@ -75,7 +75,7 @@ test('catalog search, alphabetical daily choices, add and remove preserve a fail
   await expect(page.getByPlaceholder('Nome da opção (ex: Bacon Crocante)').first()).toHaveValue('Porco cozido');
   await page.getByRole('button', { name: 'Atualizar Grupo', exact: true }).click();
   await expect(proteins.getByRole('checkbox', { name: 'Porco cozido — Proteínas' })).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: 'Costela cozida adicional — Adicionais pagos' })).toHaveCount(0);
+  await expect(page.getByRole('article', { name: 'Costela cozida adicional — Adicionais pagos' })).toHaveCount(0);
   expect(writes).toBe(2);
   await proteins.getByRole('button', { name: 'Cadastrar / editar' }).click();
   await page.getByLabel('Nome da nova opção').fill('Peixe cozido');
@@ -99,10 +99,12 @@ test('catalog search, alphabetical daily choices, add and remove preserve a fail
     const proteinNames = ['Acém cozido', 'Bisteca', 'Calabresa acebolada', 'Costela cozida', 'Costela suína cozida', 'Coxa e sobrecoxa assada', 'Fígado acebolado', 'Fígado de boi', 'Filé de frango acebolado', 'Filé de frango ao molho branco', 'Frango cozido', 'Linguiça', 'Ovo frito', 'Peixe cozido', 'Picadinho suíno cozido', 'Porco cozido', 'Porco trinchado', 'Suíno trinchado'];
     groups[0].opcoes = proteinNames.map((nome, index) => ({ id: `demo-protein-${index}`, nome, preco_adicional: 0, ativo: index % 3 !== 0 }));
     groups[1].opcoes = groups[0].opcoes.map((option: any) => ({ ...option, id: `${option.id}-extra`, opcao_origem_id: option.id, nome: `${option.nome} adicional`, preco_adicional: option.nome === 'Ovo frito' ? 2 : 5 }));
+    groups.splice(2);
     groups.push({ id: 'sides', nome: 'Guarnições', tipo: 'opcional', min_selecoes: 0, max_selecoes: 20, produto_ids: [], opcoes: ['Arroz à grega', 'Arroz colorido', 'Arroz de leite', 'Arroz refogado', 'Baião', 'Cuscuz', 'Cuscuz temperado', 'Farofa', 'Feijão de corda', 'Feijoada', 'Macarrão', 'Purê'].map((nome, index) => ({ id: `side-${index}`, nome, ativo: index % 3 !== 0, preco_adicional: 0 })) });
     groups.push({ id: 'salads', nome: 'Saladas', tipo: 'opcional', min_selecoes: 0, max_selecoes: 20, produto_ids: [], opcoes: ['Batata doce', 'Salada tropical', 'Salada verde', 'Verdura de maionese', 'Vinagrete'].map((nome, index) => ({ id: `salad-${index}`, nome, ativo: index > 0, preco_adicional: 0 })) });
     await page.reload();
-    await expect(page.getByRole('checkbox')).toHaveCount(53);
+    await expect(page.getByRole('checkbox')).toHaveCount(35);
+    await expect(page.getByRole('article')).toHaveCount(18);
     await page.screenshot({ path: `${process.env.KOMA_DAILY_SCREENSHOTS}/complementos-compactos-${info.project.name}.png`, fullPage: true });
   }
 });
