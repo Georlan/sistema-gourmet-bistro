@@ -11,6 +11,7 @@ from ..models import Categoria, Item as ComandaItem, Produto, ProdutoInsumo, Usu
 from ..security import require_entitled_permission
 from ..services.financeiro import money
 from ..services.financial_read import load_financial_snapshot
+from ..services.menu_intelligence import complete_recipe_unit_cost
 
 
 def get_relatorio_produtos_operacional(
@@ -88,22 +89,12 @@ def get_relatorio_produtos_operacional(
             if quantity
             else Decimal("0.00")
         )
-        recipe_items = list(product.ficha_tecnica or [])
-        recipe_has_cost = bool(recipe_items) and all(
-            item.insumo is not None
-            and Decimal(str(item.insumo.preco_medio_custo or 0)) > Decimal("0")
-            for item in recipe_items
-        )
-        unit_cost = None
+        unit_cost = complete_recipe_unit_cost(product)
+        recipe_has_cost = unit_cost is not None
         consumed_cost = None
         contribution_margin = None
         contribution_margin_pct = None
         if recipe_has_cost:
-            unit_cost = money(sum(
-                Decimal(str(item.quantidade or 0))
-                * Decimal(str(item.insumo.preco_medio_custo or 0))
-                for item in recipe_items
-            ))
             consumed_cost = money(unit_cost * quantity)
             contribution_margin = money(consumed_value - consumed_cost)
             contribution_margin_pct = (
@@ -144,3 +135,19 @@ def get_relatorio_produtos_operacional(
     for index, row in enumerate(result, start=1):
         row["ranking"] = index
     return result
+
+
+def get_inteligencia_cardapio(
+    data_inicio: Optional[str] = Query(None),
+    data_fim: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_entitled_permission(
+        "relatorios:consultar", "advanced_reports",
+        detail="Relatórios avançados não estão disponíveis no plano atual.",
+    )),
+):
+    from ..services.menu_intelligence import menu_intelligence
+    try:
+        return menu_intelligence(db, require_tenant_id(), data_inicio, data_fim)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

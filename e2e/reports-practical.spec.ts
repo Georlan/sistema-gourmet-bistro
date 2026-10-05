@@ -17,9 +17,11 @@ test('reports preserve explicit civil interval across tabs and reload', async ({
     await route.fulfill({ json: { faturamento_total: total, vendas_brutas: total, estornos: 0,
       total_pedidos: accounts, ticket_medio: accounts ? total / accounts : 0, clientes_ativos: 72,
       meta_mensal: 0, vendas_por_dia: rows,
+      entrada_pedidos_por_hora: rows.length ? [{ hora: '11h', total_pedidos: 26 }] : [],
       horarios_pico: rows.length ? [{ hora: '15h', total_pedidos: 29, faturamento: 749 }] : [],
       comparativo_anterior: { tem_base_anterior: false } } });
   });
+  await page.route('**/relatorios/inteligencia-cardapio?*', route => route.fulfill({ json: { inicio_anterior: '2026-09-29', fim_anterior: '2026-10-01', unidades: 0, produtos: [] } }));
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
   await seedCashierSession(page);
   await page.addInitScript(() => {
@@ -34,8 +36,10 @@ test('reports preserve explicit civil interval across tabs and reload', async ({
   await page.getByLabel('Data Fim:').fill('2026-10-04');
   await page.getByRole('button', { name: /Aplicar/ }).click();
   await expect(page.getByRole('button', { name: 'Alterar período: 02/10/2026 — 04/10/2026' })).toBeVisible();
+  await expect(page.getByText('Pico de movimento às 11h', { exact: true })).toBeVisible();
+  await expect(page.getByText('Pico de movimento às 15h', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Contas', exact: true }).click();
-  for (const tab of ['Financeiro', 'Produtos', 'Equipe', 'Visão Geral']) {
+  for (const tab of ['Financeiro', 'Produtos', 'Gestão do cardápio', 'Equipe', 'Visão Geral']) {
     await page.getByRole('button', { name: tab, exact: true }).last().click();
     await expect(page.getByRole('button', { name: 'Alterar período: 02/10/2026 — 04/10/2026' })).toBeVisible();
   }
@@ -60,4 +64,41 @@ test('reports preserve explicit civil interval across tabs and reload', async ({
     await page.screenshot({ path: `${process.env.KOMA_REPORT_SCREENSHOTS}/relatorios-${info.project.name}.png`, fullPage: true });
   }
 
+});
+
+
+test('menu decisions show unknown costs and filter active products without output', async ({ page }, info) => {
+  test.skip(!['mobile-390', 'desktop-1366'].includes(info.project.name));
+  await mockCashierBackend(page);
+  await page.route('**/relatorios/inteligencia-cardapio?*', route => route.fulfill({ json: {
+    inicio_anterior: '2026-09-29', fim_anterior: '2026-10-01', unidades: 3,
+    produtos: [
+      { produto_id: 'acerola', nome: 'Suco de acerola', categoria: 'Bebidas', ativo: true, unidades: 3, unidades_anteriores: 6, variacao_pct: -50, participacao_pct: 100, preco_medio: 7, preco_cardapio: 7, custo_unitario: null, margem_unitaria_cardapio: null, margem_pct_cardapio: null, sugestoes: [{ tipo: 'sem_custo', titulo: 'Completar os custos', motivo: 'Ficha técnica incompleta.' }] },
+      { produto_id: 'manga', nome: 'Suco de manga', categoria: 'Bebidas', ativo: true, unidades: 0, unidades_anteriores: 0, variacao_pct: null, participacao_pct: 0, preco_medio: null, preco_cardapio: 7, custo_unitario: 8, margem_unitaria_cardapio: -1, margem_pct_cardapio: -14.3, sugestoes: [{ tipo: 'sem_saida', titulo: 'Verificar disponibilidade e destaque', motivo: 'Confira disponibilidade antes de retirar.' }, { tipo: 'rever_preco', titulo: 'Revisar preço ou custos', motivo: 'Preço abaixo do custo.' }] },
+    ],
+  } }));
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'relatorios');
+    sessionStorage.setItem('koma_active_subtab', 'gestao_cardapio');
+    sessionStorage.setItem('koma_reports_period', JSON.stringify({ inicio: '2026-10-02', fim: '2026-10-04' }));
+  });
+  await page.goto('/?view=caixa');
+  await expect(page.getByText('Suco de acerola', { exact: true })).toBeVisible();
+  await expect(page.getByText('Completar os custos', { exact: true })).toBeVisible();
+  await expect(page.getByText('Não calculado', { exact: false }).first()).toBeVisible();
+  await page.getByLabel('Filtrar atenção do cardápio').selectOption('sem_saida');
+  await expect(page.getByText('Suco de acerola', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Suco de manga', { exact: true })).toBeVisible();
+  await expect(page.getByText('Sem base anterior', { exact: false })).toBeVisible();
+  await page.getByLabel('Filtrar atenção do cardápio').selectOption('todos');
+  await page.getByLabel('Buscar produto no desempenho').fill('acerola');
+  await expect(page.getByText('Suco de manga', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Alterar período: 02/10/2026 — 04/10/2026' })).toBeVisible();
+  await page.getByLabel('Buscar produto no desempenho').fill('');
+  if (process.env.KOMA_REPORT_SCREENSHOTS) {
+    await mkdir(process.env.KOMA_REPORT_SCREENSHOTS, { recursive: true });
+    await page.screenshot({ path: `${process.env.KOMA_REPORT_SCREENSHOTS}/cardapio-${info.project.name}.png`, fullPage: true });
+  }
 });

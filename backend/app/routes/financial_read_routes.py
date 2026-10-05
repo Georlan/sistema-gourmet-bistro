@@ -29,6 +29,8 @@ from ..services.financial_read import (
     peak_hour_rows,
 )
 
+from ..services.menu_intelligence import order_entry_hour_rows
+
 COMMERCIAL_ROLES = {"garcom", "caixa", "atendente", "operador_caixa"}
 
 
@@ -184,6 +186,8 @@ def get_relatorio_visao_geral_financeiro(
         "meta_media_diaria_necessaria": _float(daily_needed),
         "vendas_por_dia": daily_financial_rows(snapshot),
         "horarios_pico": peak_hour_rows(snapshot),
+        "entrada_pedidos_por_hora": order_entry_hour_rows(db, rest_id, snapshot.period),
+        "fonte_pico": "lancamentos_por_data_entrada",
         "breakdown_pagamentos": _method_dict(snapshot.totals.liquido_por_metodo),
         "breakdown_bruto": _method_dict(snapshot.totals.bruto_por_metodo),
         "breakdown_estornos": _method_dict(snapshot.totals.estornos_por_metodo),

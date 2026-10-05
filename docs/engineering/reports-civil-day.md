@@ -13,3 +13,22 @@ Cada snapshot financeiro populado exige quatro consultas (pagamentos, estornos, 
 A conferência somente de leitura em 05/10/2026 encontrou 77 pagamentos e nenhum estorno para o tenant 6. O plano de leitura atual é uma varredura pequena, custo estimado 5,52. Não se justifica uma migração de índices nesta entrega; reavaliar um índice tenant/data parcial para pagamentos aprovados e tenant/data para estornos quando volume e plano medido justificarem.
 
 A CI específica cobre relatórios, pagamentos, estornos e fechamento de caixa, além dos fluxos de período, troca de abas, recarga, atalhos e CSV em desktop e mobile.
+
+
+## Entrada de pedidos e gestão do cardápio
+
+O pico da visão geral usa `entrada_pedidos_por_hora`: cada Lancamento com itens
+conta uma vez pela sua entrada no dia civil local, mesmo aberto ou depois cancelado.
+Pedidos vazios e onboarding_test ficam fora. `horarios_pico` permanece como
+projeção financeira legada para compatibilidade; não alimenta a escala operacional.
+Recebimentos, estornos e metas continuam pela data do evento financeiro.
+
+`/relatorios/inteligencia-cardapio` usa itens por entrada, incluindo pedidos abertos,
+excluindo itens cancelados e pedidos recusados/cancelados. Uma linha de Item é uma
+unidade. Comparação usa o intervalo anterior de mesma duração. Produto ativo hoje
+não comprova disponibilidade histórica: ausência de saída exige revisão humana.
+Custo e margem são estimativas pela ficha técnica atual; margem do preço atual
+não inclui adicionais, impostos, taxas ou despesas e não é lucro histórico.
+Custo incompleto permanece desconhecido; base anterior zero não vira crescimento 0%.
+A leitura faz três consultas fixas, sem polling novo, escrita ou alteração automática
+no cardápio. Permissão e plano são os mesmos dos relatórios avançados existentes.
