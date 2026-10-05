@@ -35,7 +35,7 @@ function currentAttribution(): OrderAttribution {
     utm_content: clean(url.searchParams.get('utm_content')),
     utm_term: clean(url.searchParams.get('utm_term')),
     referrer_host: clean(referrerHost),
-    entry_path: clean(`${url.pathname}${url.search}`, 240),
+    entry_path: clean(url.pathname, 240),
     first_seen_at: new Date().toISOString(),
   };
 }
