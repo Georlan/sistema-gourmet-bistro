@@ -29,6 +29,7 @@ import { createSecureIdempotencyKey } from "../../utils/secureIdempotency";
 import { authRequestErrorMessage } from "../../utils/authRequest";
 import { formatCardapioApiError } from "../orderApiErrors";
 import { saveStoredOrder } from "../orderTracking";
+import { captureOrderAttribution } from "../orderAttribution";
 import { buildCardapioOrderItems } from "../orderItems";
 import { isOrderingBlockConflict } from "../orderingBlockUi";
 import CardapioPaymentSummary from "./CardapioPaymentSummary";
@@ -167,6 +168,7 @@ export default function CardapioDigital({
   const isSubmittingRef = useRef(false);
   const idempotencyKeyRef = useRef<string>("");
   const idempotencyFingerprintRef = useRef<string | null>(null);
+  const orderAttribution = useMemo(() => captureOrderAttribution(), []);
 
   const subtotal = useMemo(() => cart.reduce((acc, item) => {
     let unitPrice = item.product.price;
@@ -371,6 +373,7 @@ export default function CardapioDigital({
       usar_cashback: usarCashback,
       tipo_pedido: publicFulfillmentValue(deliveryMethod),
       scheduled_for: scheduledForIso || null,
+      attribution: orderAttribution,
     };
     const fingerprint = buildOrderSubmissionFingerprint(orderRequest);
     let idempotencyKey: string;
