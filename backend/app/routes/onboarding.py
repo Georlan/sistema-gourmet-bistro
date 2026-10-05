@@ -532,13 +532,14 @@ def _enqueue_release_ready_owner_notification(
         return False
 
     restaurant = snapshot.get("restaurant") or {}
-    enqueue_onboarding_ready_owner(
-        db,
-        tenant_id=restaurant.get("id"),
-        restaurant_name=str(restaurant.get("name") or "Restaurante"),
-        plan=restaurant.get("plan"),
+    return bool(
+        enqueue_onboarding_ready_owner(
+            db,
+            tenant_id=restaurant.get("id"),
+            restaurant_name=str(restaurant.get("name") or "Restaurante"),
+            plan=restaurant.get("plan"),
+        )
     )
-    return True
 
 
 @router.get("/status")
