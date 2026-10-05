@@ -236,6 +236,34 @@ def enqueue_release_required(db, *, protocol, restaurant_name, plan, billing_cyc
     )
 
 
+def enqueue_onboarding_ready_owner(
+    db, *, tenant_id, restaurant_name, plan,
+):
+    """Queue one durable owner alert when the four essential setup items are complete."""
+    owner_email = settings.KOMA_OWNER_EMAIL
+    owner_telegram = _owner_telegram_chat()
+    if not (owner_email or owner_telegram):
+        return
+
+    plan_label = str(plan or "").strip() or "não informado"
+    message = (
+        f"Implantação concluída: {restaurant_name} (#{tenant_id}) completou os 4 itens essenciais "
+        f"e está aguardando liberação KÔMA. Plano: {plan_label}. "
+        "Revise a implantação e libere a operação no SuperAdmin: "
+        f"{settings.KOMA_PUBLIC_APP_URL}/super-admin"
+    )
+    enqueue(
+        db,
+        protocol=f"tenant-{tenant_id}",
+        kind="onboarding-ready-owner",
+        email=owner_email,
+        phone=None,
+        telegram_chat=owner_telegram,
+        subject="Implantação pronta para liberação — KÔMA",
+        message=message,
+    )
+
+
 def _deliver(payload, delivery_id):
     if payload["channel"] == "email":
         if not settings.RESEND_API_KEY or not settings.EMAIL_FROM:
