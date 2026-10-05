@@ -27,7 +27,7 @@ from ...application.orders.commands import (
 from ...application.orders.idempotency import compute_fingerprint_for_public_payload
 from ...application.orders.service import OrderApplicationService
 from ...config import settings
-from ...database import current_restaurante_id
+from ...database import SessionLocal, current_restaurante_id, tenant_session_scope
 from ...domain.orders.errors import (
     EmptyOrderItemsError,
     IdempotencyConflictError,
@@ -49,6 +49,7 @@ from ...models import (
     Comanda,
     ConfiguracaoRestaurante,
     OnlinePaymentIntent,
+    OrderAcquisitionAttribution,
     Restaurante,
     Usuario,
 )
@@ -210,6 +211,52 @@ def _enforce_public_order_rate_limits(
         restaurante_id=restaurante_id,
         telefone=telefone,
     )
+
+
+def _persist_order_acquisition_best_effort(
+    restaurante_id: int,
+    comanda_id: str,
+    acquisition: dict[str, Any],
+) -> None:
+    """Persiste atribuição em transação isolada; nunca interfere no pedido."""
+    if not acquisition or not acquisition.get("session_id"):
+        return
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, restaurante_id):
+            exists = db.query(OrderAcquisitionAttribution.id).filter(
+                OrderAcquisitionAttribution.restaurante_id == restaurante_id,
+                OrderAcquisitionAttribution.comanda_id == comanda_id,
+            ).first()
+            if exists:
+                return
+            db.add(
+                OrderAcquisitionAttribution(
+                    restaurante_id=restaurante_id,
+                    comanda_id=comanda_id,
+                    session_id=str(acquisition.get("session_id") or ""),
+                    source=acquisition.get("source"),
+                    medium=acquisition.get("medium"),
+                    campaign=acquisition.get("campaign"),
+                    content=acquisition.get("content"),
+                    term=acquisition.get("term"),
+                    referrer=acquisition.get("referrer"),
+                    landing_path=acquisition.get("landing_path"),
+                    client_surface=acquisition.get("client_surface"),
+                )
+            )
+            db.commit()
+    except IntegrityError:
+        db.rollback()
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Falha não bloqueante ao persistir atribuição do pedido %s do restaurante %s.",
+            comanda_id,
+            restaurante_id,
+        )
+    finally:
+        db.close()
 
 
 def _configured_payment_methods(raw_methods: Any) -> set[str]:
@@ -713,6 +760,15 @@ class CardapioWebAdapter:
                 {"event": "new_delivery_order", "message": f"Novo pedido online de {cliente_nome} recebido!"},
                 rest_id,
             )
+        acquisition = getattr(payload, "acquisition", None)
+        if acquisition is not None:
+            background_tasks.add_task(
+                _persist_order_acquisition_best_effort,
+                rest_id,
+                order_dto.comanda_id,
+                acquisition.model_dump(exclude_none=True),
+            )
+
         if cliente is not None:
             background_tasks.add_task(
                 manager.broadcast,
