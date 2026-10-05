@@ -43,6 +43,7 @@ from ..services.clientes import (
     registrar_movimento_fidelidade,
 )
 from ..services.capabilities import has_capability
+from ..services.delivery_area_policy import normalize_delivery_area_policy
 from ..services.delivery_fee_policy import (
     normalize_distance_fee_config,
     normalize_neighborhood_fee_table,
@@ -1837,6 +1838,17 @@ def atualizar_configuracoes(
     effective_fee_mode = config_in.tipo_taxa_entrega or config.tipo_taxa_entrega
     normalized_neighborhoods = None
     normalized_distance_config = None
+    normalized_delivery_area = None
+    if config_in.delivery_area_policy is not None:
+        try:
+            normalized_delivery_area = normalize_delivery_area_policy(
+                config_in.delivery_area_policy
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(exc),
+            ) from exc
     if effective_fee_mode == "bairro":
         try:
             normalized_neighborhoods = normalize_neighborhood_fee_table(
@@ -1888,6 +1900,8 @@ def atualizar_configuracoes(
             if normalized_distance_config is not None
             else config_in.tabela_taxas_km
         )
+    if config_in.delivery_area_policy is not None:
+        config.delivery_area_policy = normalized_delivery_area
 
     if config_in.taxa_servico_ativa is not None:
         config.taxa_servico_ativa = config_in.taxa_servico_ativa
