@@ -313,7 +313,7 @@ def effective_modifier_payloads_by_product(
         .filter(
             OpcaoModificador.restaurante_id == restaurante_id,
             OpcaoModificador.grupo_id.in_(needed_group_ids),
-            OpcaoModificador.ativo.is_(True),
+            OpcaoModificador.ativo.is_(True), OpcaoModificador.arquivada.is_(False),
         )
         .all()
     )
@@ -609,6 +609,8 @@ def ensure_hamburger_addon_suggestions(db: Session, restaurante_id: int) -> dict
                 )
                 created_options += 1
             else:
+                if option.arquivada:
+                    continue
                 changed = float(option.preco_adicional or 0.0) != float(price) or not bool(option.ativo)
                 option.preco_adicional = price
                 option.ativo = True

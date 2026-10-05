@@ -40,7 +40,7 @@ test('link extras to proteins, preserve prices and refresh both groups after a s
   });
   await page.getByRole('button', { name: 'Cadastros', exact: true }).click();
   await expect(page.getByText('Adicionais pagos', { exact: true })).toBeVisible();
-  await page.getByTitle('Editar', { exact: true }).nth(1).click();
+  await page.locator('.break-inside-avoid').filter({ has: page.getByRole('heading', { name: 'Adicionais pagos', exact: true }) }).getByTitle('Editar', { exact: true }).click();
   await page.getByLabel('Sincronizar adicionais com').selectOption('proteins');
   await expect(page.getByLabel('Preço de novos adicionais')).toHaveValue('5');
   await page.getByRole('button', { name: 'Atualizar Grupo' }).click();

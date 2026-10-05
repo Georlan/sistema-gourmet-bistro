@@ -22,8 +22,8 @@ def sync_linked_complements(db: Session, restaurante_id: int, changed_group_id: 
     changed_groups = []
     for group in groups:
         changed = False
-        source = db.query(OpcaoModificador).filter_by(restaurante_id=restaurante_id, grupo_id=group.grupo_origem_id).all()
-        targets = db.query(OpcaoModificador).filter_by(restaurante_id=restaurante_id, grupo_id=group.id).all()
+        source = db.query(OpcaoModificador).filter_by(restaurante_id=restaurante_id, grupo_id=group.grupo_origem_id, arquivada=False).all()
+        targets = db.query(OpcaoModificador).filter_by(restaurante_id=restaurante_id, grupo_id=group.id, arquivada=False).all()
         linked = {option.opcao_origem_id: option for option in targets if option.opcao_origem_id}
         for original in source:
             target = linked.get(original.id)

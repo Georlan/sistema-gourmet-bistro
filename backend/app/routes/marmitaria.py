@@ -104,7 +104,7 @@ def _save(payload, db, tenant, background_tasks, product_id=None):
     if len(groups) != len(group_ids):
         raise HTTPException(422, 'Um grupo não pertence ao restaurante ou não está disponível.')
     if payload.ativo:
-        options = db.query(OpcaoModificador).filter(OpcaoModificador.restaurante_id == tenant, OpcaoModificador.grupo_id.in_(group_ids), OpcaoModificador.ativo.is_(True)).all()
+        options = db.query(OpcaoModificador).filter(OpcaoModificador.restaurante_id == tenant, OpcaoModificador.grupo_id.in_(group_ids), OpcaoModificador.ativo.is_(True), OpcaoModificador.arquivada.is_(False)).all()
         for rule in payload.regras:
             available = sum(o.grupo_id == rule.grupo_id for o in options)
             required = rule.minimo if rule.modo_selecao == 'tipos' else min(rule.minimo, 1)

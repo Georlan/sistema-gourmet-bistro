@@ -53,6 +53,7 @@ export default function ComplementosTab({
   const [categorias, setCategorias] = useState<CategoriaHierarquia[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [optionSearch, setOptionSearch] = useState('');
   const [dailyMode, setDailyMode] = useState(true);
   const [dailyPending, setDailyPending] = useState(false);
   const [catalogError, setCatalogError] = useState(false);
@@ -146,6 +147,7 @@ export default function ComplementosTab({
   };
 
   const handleOpenModal = (grupo?: GrupoModificador) => {
+    setOptionSearch('');
     if (grupo) {
       setEditingGrupo(grupo);
       setNome(grupo.nome);
@@ -154,7 +156,7 @@ export default function ComplementosTab({
       setMaxSelecoes(String(grupo.max_selecoes));
       setOpcoes(
         grupo.opcoes.length > 0
-          ? grupo.opcoes.map((option) => ({ ...option }))
+          ? [...grupo.opcoes].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })).map((option) => ({ ...option }))
           : [{ nome: '', preco_adicional: 0, ativo: true }],
       );
       setSelectedProductIds([...(grupo.produto_ids || [])]);
@@ -178,10 +180,12 @@ export default function ComplementosTab({
   };
 
   const handleAddOpcao = () => {
-    setOpcoes((prev) => [...prev, { nome: '', preco_adicional: 0, ativo: true }]);
+    setOptionSearch('');
+    setOpcoes((prev) => [{ nome: '', preco_adicional: 0, ativo: true }, ...prev]);
   };
 
   const handleRemoveOpcao = (idx: number) => {
+    if (opcoes[idx].id && !confirm(`Remover ${opcoes[idx].nome} do cadastro? Os adicionais vinculados também serão removidos. O histórico dos pedidos será preservado.`)) return;
     setOpcoes((prev) => prev.filter((_, index) => index !== idx));
   };
 
@@ -221,7 +225,7 @@ export default function ComplementosTab({
     }
 
     const validOptions = opcoes.filter((option) => option.nome.trim().length > 0);
-    if (validOptions.length === 0) {
+    if (validOptions.length === 0 && !editingGrupo) {
       onShowNotification?.('Adicione ao menos 1 opção de complemento.', 'error');
       return;
     }
@@ -294,7 +298,8 @@ export default function ComplementosTab({
         headers: authHeaders,
       });
       if (!response.ok) {
-        throw new Error('Erro ao excluir grupo.');
+        const body = await response.json().catch(() => null);
+        throw new Error(typeof body?.detail === 'string' ? body.detail : 'Erro ao excluir grupo.');
       }
       onShowNotification?.('Grupo excluído com sucesso.', 'success');
       setGrupos((prev) => prev.filter((group) => group.id !== id));
@@ -328,7 +333,7 @@ export default function ComplementosTab({
 
   const filteredGrupos = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('pt-BR');
-    return grupos.filter((group) => group.nome.toLocaleLowerCase('pt-BR').includes(query));
+    return [...grupos].filter((group) => group.nome.toLocaleLowerCase('pt-BR').includes(query) || group.opcoes.some(option => option.nome.toLocaleLowerCase('pt-BR').includes(query))).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   }, [grupos, search]);
 
   return (
@@ -339,7 +344,7 @@ export default function ComplementosTab({
         {dailyPending && <span className="text-xs text-koma-muted">Salve ou desfaça a seleção antes de abrir Cadastros.</span>}
       </div>}
       {catalogError && <div role="alert" className="rounded-2xl border border-rose-500/40 p-5 text-sm text-koma-foreground">Não foi possível conferir o cadastro atual. <button onClick={() => void fetchCatalogBindings()} className="underline">Tentar novamente</button></div>}
-      {marmitariaCadastro && dailyMode && !catalogError && (loading ? <p role="status" className="p-6 text-koma-muted">Carregando cardápio do dia…</p> : <CardapioDiarioEditor grupos={grupos} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onDirtyChange={setDailyPending} onReload={fetchCatalogBindings} onSaved={async () => { onShowNotification?.('Cardápio do dia salvo.', 'success'); await fetchCatalogBindings(); }} />)}
+      {marmitariaCadastro && dailyMode && !catalogError && (loading ? <p role="status" className="p-6 text-koma-muted">Carregando cardápio do dia…</p> : <CardapioDiarioEditor grupos={grupos} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onEditGroup={handleOpenModal} onDirtyChange={setDailyPending} onReload={fetchCatalogBindings} onSaved={async () => { onShowNotification?.('Cardápio do dia salvo.', 'success'); await fetchCatalogBindings(); }} />)}
       {(!marmitariaCadastro || !dailyMode) && !catalogError && <details open className="space-y-4">
         <summary className="cursor-pointer font-bold text-koma-foreground">{marmitariaCadastro ? 'Proteínas, guarnições e saladas' : 'Complementos e adicionais'}</summary>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-koma-card border border-koma-border p-5 rounded-2xl">
@@ -388,9 +393,9 @@ export default function ComplementosTab({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="columns-1 md:columns-2 xl:columns-3 gap-4">
           {filteredGrupos.map((group) => (
-            <div key={group.id} className="bg-koma-card border border-koma-border rounded-2xl p-4 flex flex-col justify-between">
+            <div key={group.id} className="bg-koma-card border border-koma-border rounded-2xl mb-4 break-inside-avoid p-4 flex flex-col justify-between">
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -434,8 +439,8 @@ export default function ComplementosTab({
                 </div>
 
                 {group.grupo_origem_id && <p className="mt-2 text-xs text-emerald-400">Sincronizado com {grupos.find(item => item.id === group.grupo_origem_id)?.nome || 'complementos'}. Altere a disponibilidade na origem.</p>}
-                <div className="mt-3 space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                  {group.opcoes.map((option) => (
+                <div className="mt-3 space-y-1.5">
+                  {[...group.opcoes].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })).map((option) => (
                     <div key={option.id || option.nome} className="flex items-center justify-between text-xs bg-koma-raised/60 px-2.5 py-1.5 rounded-lg">
                       <span className="text-koma-foreground font-medium">{option.nome}{option.ativo === false && <small className="ml-2 text-amber-500">Pausado</small>}</span>
                       <span className="text-koma-muted font-mono font-semibold">
@@ -574,19 +579,23 @@ export default function ComplementosTab({
                     <span>Adicionar Opção</span>
                   </button>
                 </div>
+                <label className="block text-xs text-koma-muted">Buscar opção neste grupo<input aria-label="Buscar opção neste grupo" value={optionSearch} onChange={event => setOptionSearch(event.target.value)} placeholder="Ex.: costela" className="mt-1 w-full rounded-lg border border-koma-border bg-koma-raised px-3 py-2 text-sm text-koma-foreground" /></label>
+                <p className="text-xs text-koma-muted">Opções em ordem alfabética. Remover retira do cadastro e preserva os pedidos antigos.</p>
                 <div className="space-y-2">
-                  {opcoes.map((option, index) => (
+                  {opcoes.map((option, index) => ({ option, index })).filter(({ option }) => !option.nome || option.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').includes(optionSearch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR'))).map(({ option, index }) => (
                     <div key={`${option.id || 'new'}-${index}`} className="flex items-center gap-2 bg-koma-card p-2 rounded-xl border border-koma-border">
                       <input
                         type="text"
+                        autoFocus={!option.id && !option.nome}
                         disabled={Boolean(grupoOrigemId && option.opcao_origem_id)}
+                        aria-label={`Nome da opção ${index + 1}`}
                         placeholder="Nome da opção (ex: Bacon Crocante)"
                         value={option.nome}
                         onChange={(event) => handleOpcaoChange(index, 'nome', event.target.value)}
-                        className="flex-1 px-2.5 py-1.5 bg-koma-raised border border-koma-border rounded-lg text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
+                        className="min-w-0 flex-1 px-2.5 py-1.5 bg-koma-raised border border-koma-border rounded-lg text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
                         required
                       />
-                      <div className="w-28 relative">
+                      <div className="w-20 shrink-0 relative">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-koma-muted">R$</span>
                         <input
                           type="number"
@@ -597,7 +606,7 @@ export default function ComplementosTab({
                           className="w-full pl-7 pr-2 py-1.5 bg-koma-raised border border-koma-border rounded-lg text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 font-mono"
                         />
                       </div>
-                      {opcoes.length > 1 && !option.opcao_origem_id && (
+                      {!option.opcao_origem_id && (
                         <button
                           type="button"
                           onClick={() => handleRemoveOpcao(index)}

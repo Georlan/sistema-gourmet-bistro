@@ -14,6 +14,9 @@ on:
       - 'backend/alembic/versions/*marmitaria*.py'
       - 'backend/tests/test_marmitaria*.py'
       - 'backend/tests/test_modificadores.py'
+      - 'backend/tests/test_modifier_archive_migration.py'
+      - 'backend/alembic/versions/*archive_modifier*.py'
+      - 'backend/app/services/linked_complements.py'
       - 'src/components/cardapio/CardapioDiarioEditor.tsx'
       - 'src/components/cardapio/ComplementosTab.tsx'
       - 'e2e/marmitaria-daily-menu.spec.ts'
@@ -71,4 +74,6 @@ jobs:
         run: >-
           python -m pytest backend/tests/test_marmitaria_sizes.py
           backend/tests/test_marmitaria_size_migration.py
-          backend/tests/test_modificadores.py::test_daily_menu_is_atomic_preserves_prices_and_syncs_linked_extras -q -ra
+          backend/tests/test_modificadores.py::test_daily_menu_is_atomic_preserves_prices_and_syncs_linked_extras
+          backend/tests/test_modificadores.py::test_atualizar_grupo_preserva_opcao_referenciada_por_pedido_historico
+          backend/tests/test_modificadores.py::test_paid_complements_follow_source_and_preserve_existing_ids_prices -q -ra

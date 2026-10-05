@@ -72,7 +72,7 @@ class PricingDataLoader:
                 .filter(
                     OpcaoModificador.restaurante_id == restaurante_id,
                     OpcaoModificador.id.in_(all_mod_ids),
-                    OpcaoModificador.ativo == True,
+                    OpcaoModificador.ativo == True, OpcaoModificador.arquivada.is_(False),
                 )
                 .all()
             )
