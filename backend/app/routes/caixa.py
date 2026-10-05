@@ -1904,6 +1904,15 @@ def atualizar_configuracoes(
             normalize_allowed_neighborhoods(config_in.delivery_allowed_neighborhoods)
         )
 
+    if (
+        bool(getattr(config, "delivery_area_restriction_enabled", False))
+        and not normalize_allowed_cities(getattr(config, "delivery_allowed_cities", None))
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Cadastre ao menos uma cidade e UF antes de ativar a restrição de entrega.",
+        )
+
     if config_in.taxa_servico_ativa is not None:
         config.taxa_servico_ativa = config_in.taxa_servico_ativa
     if config_in.taxa_servico_padrao is not None:
