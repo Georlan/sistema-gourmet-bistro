@@ -120,6 +120,18 @@ test('only a full scoped order snapshot can establish order readiness', () => {
   assert.match(tables, /requestScopeKey !== scopeKeyRef\.current/);
 });
 
+test('full order snapshots coalesce realtime bursts instead of aborting in-flight reads', () => {
+  const orders = read('src/components/app/data/useOperationalOrders.ts').text;
+  const fullStart = orders.indexOf('const fetchOrdersFromAPI');
+  const targetedStart = orders.indexOf('const fetchOrderByIdFromAPI');
+  const fullFetch = orders.slice(fullStart, targetedStart);
+  assert.match(orders, /const fetchOrdersDirtyRef = useRef\(false\)/);
+  assert.match(fullFetch, /fetchOrdersDirtyRef\.current = true;\s*return;/);
+  assert.match(fullFetch, /queueMicrotask\(\(\) => \{ void fetchOrdersFromAPI\(\); \}\)/);
+  assert.doesNotMatch(fullFetch, /fetchOrdersAbortControllerRef\.current\.abort\(\)/);
+});
+
+
 test('remote order and item IDs stay in private Map caches, never object properties', () => {
   const orders = read('src/components/app/data/useOperationalOrders.ts');
   for (const name of ['targetedOrderRequestRef', 'optimisticItemStatusRef']) {
