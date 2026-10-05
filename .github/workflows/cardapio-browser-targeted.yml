@@ -21,6 +21,7 @@ on:
       - 'e2e/marmitaria-product-onboarding.spec.ts'
       - 'e2e/marmitaria-daily-menu.spec.ts'
       - 'e2e/linked-complements.spec.ts'
+      - 'e2e/complementos-management.spec.ts'
       - 'e2e/marmitaria-composition-presentation.spec.ts'
       - 'src/domain/orderItemComposition.ts'
       - 'src/components/shared/OrderItemComposition.tsx'
@@ -72,6 +73,7 @@ jobs:
           e2e/marmitaria-product-onboarding.spec.ts
           e2e/marmitaria-daily-menu.spec.ts
           e2e/linked-complements.spec.ts
+          e2e/complementos-management.spec.ts
           e2e/marmitaria-composition-presentation.spec.ts
           e2e/cashier-delivery-new-order.spec.ts
           e2e/cashier-sale-recovery.spec.ts

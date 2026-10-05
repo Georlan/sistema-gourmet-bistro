@@ -9,12 +9,13 @@ type Props = {
   authHeaders: Record<string, string>;
   onSaved: () => Promise<void>;
   onReload: () => Promise<void>;
+  onEditGroup: (group: GrupoModificador) => void;
   onDirtyChange: (dirty: boolean) => void;
 };
 const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
 
 /** Availability draft; never recreates options or edits composition/prices. */
-export function CardapioDiarioEditor({ grupos, apiBaseUrl, authHeaders, onSaved, onReload, onDirtyChange }: Props) {
+export function CardapioDiarioEditor({ grupos, apiBaseUrl, authHeaders, onSaved, onReload, onEditGroup, onDirtyChange }: Props) {
   const original = useMemo(() => new Map(grupos.flatMap(g => g.opcoes.filter(o => o.id).map(o => [o.id!, o.ativo !== false] as const))), [grupos]);
   const [draft, setDraft] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState('');
@@ -30,7 +31,7 @@ export function CardapioDiarioEditor({ grupos, apiBaseUrl, authHeaders, onSaved,
   const visible = groups.map(group => ({ ...group, opcoes: group.opcoes.filter(o =>
     (normalize(o.nome).includes(normalize(search)) || normalize(group.nome).includes(normalize(search)))
     && (filter === 'todos' || (o.id && active(o.opcao_origem_id || o.id) === (filter === 'disponiveis')))
-  ).sort((a, b) => Number(b.id && active(b.opcao_origem_id || b.id)) - Number(a.id && active(a.opcao_origem_id || a.id)) || a.nome.localeCompare(b.nome, 'pt-BR')) })).filter(g => g.opcoes.length > 0);
+  ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })) })).filter(g => g.opcoes.length > 0);
   const save = async () => {
     if (saving || !changes.length) return;
     setSaving(true); setError(''); setSaved(false);
@@ -45,7 +46,7 @@ export function CardapioDiarioEditor({ grupos, apiBaseUrl, authHeaders, onSaved,
   };
   const discard = () => { setDraft({}); setReview(false); setError(''); setSaved(false); };
   return <section aria-label="Cardápio do dia" className="space-y-5">
-    <div className="rounded-3xl border border-koma-border bg-koma-panel p-5 sm:p-6">
+    <div className="rounded-2xl border border-koma-border bg-koma-panel p-4">
       <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300"><CalendarDays size={20} /><h2 className="text-lg font-bold">O que vamos servir?</h2></div>
       <p className="mt-2 text-sm text-koma-muted">Marque as opções disponíveis por grupo. Revise e salve quando terminar.</p>
       <p className="mt-1 text-xs text-koma-muted">A disponibilidade vale para todas as quentinhas e canais vinculados. Preços, tamanhos e pedidos registrados são preservados. Esta tela não agenda dias futuros.</p>
@@ -56,16 +57,16 @@ export function CardapioDiarioEditor({ grupos, apiBaseUrl, authHeaders, onSaved,
     </div>
     {error && <div role="alert" className="rounded-xl border border-rose-500/40 bg-koma-panel p-4 text-sm text-koma-foreground">{error}<button disabled={saving} onClick={async () => { discard(); await onReload(); }} className="ml-3 underline">Descartar seleção e atualizar</button></div>}
     {saved && <p role="status" className="rounded-xl bg-emerald-500/10 p-4 text-sm text-emerald-700 dark:text-emerald-300">Cardápio do dia salvo. Adicionais vinculados acompanham a origem.</p>}
-    <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-3">
+    <div className="space-y-3">
       {visible.map(group => <section key={group.id} aria-label={`Opções de ${group.nome}`} className="rounded-2xl border border-koma-border bg-koma-panel p-4">
-        <div className="mb-4 flex items-center justify-between gap-2"><h3 className="font-bold text-koma-foreground">{group.nome}</h3><span className="text-xs text-koma-muted">{group.opcoes.filter(o => o.id && active(o.opcao_origem_id || o.id)).length} na seleção</span></div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold text-koma-foreground">{group.nome}</h3><span className="text-xs text-koma-muted">{group.opcoes.filter(o => o.id && active(o.opcao_origem_id || o.id)).length} na seleção</span><button type="button" disabled={saving || changes.length > 0} onClick={() => onEditGroup(group)} className="rounded-lg border border-koma-border px-3 py-1.5 text-xs font-semibold text-koma-foreground disabled:opacity-40">Cadastrar / editar</button></div>
         {group.grupo_origem_id && <p className="mb-3 text-xs text-koma-muted">Acompanha {grupos.find(g => g.id === group.grupo_origem_id)?.nome || 'a origem'}. Marque as opções no grupo de origem.</p>}
-        <div className="space-y-2">{group.opcoes.map(option => {
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{group.opcoes.map(option => {
           const id = option.id || '';
           const checked = active(option.opcao_origem_id || id);
           const changed = !option.opcao_origem_id && draft[id] != null && draft[id] !== original.get(id);
-          return <label key={id || option.nome} className={clsx('flex items-center gap-3 rounded-xl border p-3 transition-colors', checked ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-raised/30', option.opcao_origem_id ? 'cursor-default' : 'cursor-pointer')}>
-            <input type="checkbox" aria-label={`${option.nome} — ${group.nome}`} checked={checked} disabled={saving || review || !id || Boolean(option.opcao_origem_id)} onChange={e => { setDraft(d => ({ ...d, [id]: e.target.checked })); setSaved(false); }} className="h-5 w-5 shrink-0 accent-emerald-600" />
+          return <label key={id || option.nome} className={clsx('flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors', checked ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-raised/30', option.opcao_origem_id ? 'cursor-default' : 'cursor-pointer')}>
+            <input type="checkbox" aria-label={`${option.nome} — ${group.nome}`} checked={checked} disabled={saving || review || !id || Boolean(option.opcao_origem_id)} onChange={e => { setDraft(d => ({ ...d, [id]: e.target.checked })); setSaved(false); }} className="h-4 w-4 shrink-0 accent-emerald-600" />
             <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-koma-foreground">{option.nome}</span><span className="mt-1 block text-xs text-koma-muted">{checked ? 'Disponível' : 'Pausado'}{changed ? ' · alteração pendente' : ''}{option.preco_adicional > 0 ? ` · + ${Number(option.preco_adicional).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}</span></span>
             {checked && <Check size={16} className="shrink-0 text-emerald-700 dark:text-emerald-300" />}
           </label>;

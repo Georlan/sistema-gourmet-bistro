@@ -109,7 +109,7 @@ class ValidationDataLoader:
                     restaurant_id=m.restaurante_id,
                     name=m.nome,
                     price=to_money_decimal(m.preco_adicional or 0.0),
-                    is_active=bool(m.ativo),
+                    is_active=bool(m.ativo) and not bool(m.arquivada),
                 )
 
         # 4. Mapear Itens de Entrada

@@ -1124,6 +1124,7 @@ class OpcaoModificador(Base):
     nome = Column(String, nullable=False)
     preco_adicional = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     ativo = Column(Boolean, default=True)
+    arquivada = Column(Boolean, default=False, server_default=text("false"), nullable=False)
 
 
 class ProdutoGrupoModificador(Base):

@@ -1,5 +1,25 @@
 # Cardápio: direção de produto para adicionais
 
+## Remoção de complementos e cadastro diário — 05/10/2026
+
+Escopo solicitado pelo usuário: opções em ordem alfabética, listas compactas,
+busca no editor e remoção de complementos mesmo quando já utilizados ou ligados
+a adicionais. A revisão do grupo aplica a remoção ao salvar; cancelar mantém o
+cadastro anterior.
+
+Remover significa retirar do cadastro ativo, sem apagar referências de pedidos.
+`OpcaoModificador.arquivada=true` e `ativo=false` preservam ID, grupo, nome e
+preço. Os adicionais que apontam para a opção removida recebem as mesmas flags
+na mesma transação. Pausar continua permitindo reativação; uma opção removida
+não pode ser reativada por um cliente desatualizado nem reaparecer por sincronização.
+A leitura histórica não filtra esse arquivo, mantendo composição e preço aplicado.
+Cadastrar novamente um nome removido cria uma nova opção, sem alterar o histórico.
+
+Excluir um grupo permitido também mantém seu registro e suas opções como arquivo.
+Grupos vinculados a tamanhos ou sincronização continuam exigindo resolver esses
+vínculos antes da exclusão. Nenhum tamanho, preço de venda ou seleção real do
+restaurante é modificado automaticamente.
+
 Decisão informada pelo usuário em 30/08/2026, durante a correção da sacola pública.
 
 ## [ALVO] Categoria especial de adicionais
