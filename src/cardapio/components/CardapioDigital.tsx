@@ -28,6 +28,7 @@ import type { DeliveryAddressSnapshot } from "../../domain/deliveryAddress";
 import { createSecureIdempotencyKey } from "../../utils/secureIdempotency";
 import { authRequestErrorMessage } from "../../utils/authRequest";
 import { formatCardapioApiError } from "../orderApiErrors";
+import { getCardapioAcquisition } from "../acquisitionAttribution";
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems } from "../orderItems";
 import { isOrderingBlockConflict } from "../orderingBlockUi";
@@ -403,6 +404,7 @@ export default function CardapioDigital({
         body: JSON.stringify({
           ...orderRequest,
           idempotency_key: idempotencyKey,
+          acquisition: getCardapioAcquisition(),
         }),
       });
 
