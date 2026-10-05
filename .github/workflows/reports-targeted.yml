@@ -4,6 +4,10 @@ on:
     branches: [main]
     paths:
       - 'backend/app/services/financial_read.py'
+      - 'backend/app/services/menu_intelligence.py'
+      - 'backend/tests/test_menu_intelligence.py'
+      - 'src/components/caixa/navigation/cashierNavigation.ts'
+      - 'src/components/caixa/reports/CashierReports.tsx'
       - 'backend/app/routes/financial*_routes.py'
       - 'backend/tests/test_financial*.py'
       - 'backend/tests/test_relatorios.py'
@@ -41,6 +45,7 @@ jobs:
           python -m pytest -q -ra
           backend/tests/test_relatorios.py
           backend/tests/test_report_snapshot_civil.py
+          backend/tests/test_menu_intelligence.py
           backend/tests/test_financial_read_stage3b.py
           backend/tests/test_financial_final_reconciliation_stage3d.py
           backend/tests/test_financial_cash_stage3c.py

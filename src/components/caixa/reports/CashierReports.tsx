@@ -5,6 +5,7 @@ import type { CatalogCategory } from '../../../catalog/catalog';
 import { localCalendarDate } from '../../../utils/dateTime';
 import { EquipeDesempenhoTab } from '../../equipe/EquipeDesempenhoTab';
 import { RelatorioFinanceiroTab } from '../../relatorios/RelatorioFinanceiroTab';
+import { RelatoriosCardapioTab } from '../../relatorios/RelatoriosCardapioTab';
 import { RelatoriosProdutosTab } from '../../relatorios/RelatoriosProdutosTab';
 import { RelatoriosVisaoGeralTab } from '../../relatorios/RelatoriosVisaoGeralTab';
 import type { CashierNotice } from '../cashierContracts';
@@ -443,6 +444,9 @@ export default function CashierReports({
             showToast={showToast}
           />
         )}
+      {(activeTab === 'relatorios' || activeTab === 'dashboard') && activeSubTab === 'gestao_cardapio' && (
+        <RelatoriosCardapioTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+      )}
       {(activeTab === 'relatorios' || activeTab === 'dashboard') && activeSubTab === 'equipe' && (
         <EquipeDesempenhoTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />
       )}

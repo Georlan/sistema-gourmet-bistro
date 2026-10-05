@@ -190,12 +190,11 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
     pedidos: item.quantidade_pedidos || 0,
   }));
 
-  const horariosPicoChartData = (data?.horarios_pico || [])
+  const horariosPicoChartData = (data?.entrada_pedidos_por_hora || [])
     .filter((h: any) => h.total_pedidos > 0)
     .map((h: any) => ({
       hora: h.hora,
       pedidos: h.total_pedidos,
-      faturamento: h.faturamento || 0,
     }));
 
   const quickRead = useMemo(() => {
@@ -206,7 +205,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
     );
     const revenueDelta = Number(comparison.variacao_faturamento_pct || 0);
     const ordersDelta = Number(comparison.variacao_pedidos_pct || 0);
-    const peak = [...(data?.horarios_pico || [])]
+    const peak = [...(data?.entrada_pedidos_por_hora || [])]
       .filter((row: any) => Number(row.total_pedidos || 0) > 0)
       .sort((a: any, b: any) => Number(b.total_pedidos || 0) - Number(a.total_pedidos || 0))[0];
     const gross = Number(data?.vendas_brutas || 0);
@@ -314,9 +313,9 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             <div className="flex items-start gap-3">
               <Clock size={17} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
               <div>
-                <strong className="block text-xs text-koma-foreground">{quickRead.peak ? `Pico de movimento às ${quickRead.peak.hora}` : 'Sem horário de pico'}</strong>
+                <strong className="block text-xs text-koma-foreground">{quickRead.peak ? `Pico de movimento às ${quickRead.peak.hora}` : Array.isArray(data?.entrada_pedidos_por_hora) ? 'Sem horário de pico' : 'Horário de pico indisponível'}</strong>
                 <span className="mt-1 block text-[10px] text-koma-muted">
-                  {quickRead.peak ? `${quickRead.peak.total_pedidos} conta${quickRead.peak.total_pedidos === 1 ? '' : 's'} recebida${quickRead.peak.total_pedidos === 1 ? '' : 's'} nessa faixa; planeje a equipe para esse momento.` : 'Ainda não há vendas suficientes no período para orientar a escala.'}
+                  {quickRead.peak ? `${quickRead.peak.total_pedidos} pedido${quickRead.peak.total_pedidos === 1 ? ' entrou' : 's entraram'} nessa faixa; planeje a equipe para esse momento.` : Array.isArray(data?.entrada_pedidos_por_hora) ? 'Ainda não há entradas de pedidos no período para orientar a escala.' : 'A leitura por entrada ainda não está disponível nesta atualização.'}
                 </span>
               </div>
             </div>
@@ -373,9 +372,10 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-4 shadow-xs">
           <div className="flex items-center gap-2 border-b border-koma-border pb-3">
             <Clock size={16} className="text-emerald-700 dark:text-emerald-400" />
-            <span className="font-serif font-bold text-sm text-koma-foreground">Movimento por horário</span>
+            <span className="font-serif font-bold text-sm text-koma-foreground">Entrada de pedidos por horário</span>
           </div>
 
+          <p className="text-xs text-koma-muted">Pela entrada, incluindo pedidos abertos e depois cancelados. Cada pedido conta uma vez.</p>
           <div className="h-64 w-full pt-2">
             {horariosPicoChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -384,7 +384,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                   <XAxis dataKey="hora" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={28} tickLine={false} axisLine={false} />
                   <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)', opacity: 0.3 }} />
-                  <Bar isAnimationActive={false} dataKey="pedidos" name="Contas com recebimento" fill="#059669" radius={[6, 6, 0, 0]} />
+                  <Bar isAnimationActive={false} dataKey="pedidos" name="Pedidos que entraram" fill="#059669" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -555,20 +555,16 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
               <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold sticky top-0">
                 <tr>
                   <th className="p-3">Horário</th>
-                  <th className="p-3 font-mono text-center">Contas com recebimento</th>
-                  <th className="p-3 font-mono text-right">Recebido</th>
+                  <th className="p-3 font-mono text-center">Pedidos que entraram</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-koma-border">
-                {(data?.horarios_pico || [])
+                {(data?.entrada_pedidos_por_hora || [])
                   .filter((h: any) => h.total_pedidos > 0)
                   .map((h: any) => (
                     <tr key={h.hora} className="hover:bg-koma-raised/50 transition-colors">
                       <td className="p-3 font-mono font-bold text-koma-foreground">{h.hora}</td>
                       <td className="p-3 font-mono text-center text-koma-foreground font-bold">{h.total_pedidos}</td>
-                      <td className="p-3 font-mono text-right font-bold text-emerald-400">
-                        {formatMoney(h.faturamento)}
-                      </td>
                     </tr>
                   ))}
               </tbody>

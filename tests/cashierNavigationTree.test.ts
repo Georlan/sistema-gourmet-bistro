@@ -123,6 +123,7 @@ test('gestão expõe relatórios e equipe como destinos canônicos', () => {
     'Visão Geral',
     'Financeiro',
     'Produtos',
+    'Gestão do cardápio',
     'Equipe',
   ]);
   assert.deepEqual(equipe?.children?.map((child) => child.label), [
