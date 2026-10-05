@@ -4,6 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.routes.print_agent_events import _authenticate_agent_token, _sse
+from app.services import print_delivery
 from app.services.print_delivery import PrintWakeupHub
 
 
@@ -21,6 +22,30 @@ def test_wakeup_hub_is_tenant_scoped():
         finally:
             hub.unsubscribe(11, first_id)
             hub.unsubscribe(22, second_id)
+            hub.stop()
+
+    asyncio.run(scenario())
+
+
+def test_wakeup_hub_retries_real_hint_without_idle_polling(monkeypatch):
+    monkeypatch.setattr(
+        print_delivery,
+        "PRINT_WAKEUP_RETRY_DELAYS_SECONDS",
+        (0.01, 0.02),
+    )
+
+    async def scenario():
+        hub = PrintWakeupHub(listen_to_postgres=False)
+        subscription_id, queue = hub.subscribe(11)
+        try:
+            hub.publish(11, reason="test")
+            immediate = await asyncio.wait_for(queue.get(), timeout=0.2)
+            retry = await asyncio.wait_for(queue.get(), timeout=0.2)
+            assert immediate["restaurante_id"] == 11
+            assert retry["restaurante_id"] == 11
+            assert retry["reason"] == "test"
+        finally:
+            hub.unsubscribe(11, subscription_id)
             hub.stop()
 
     asyncio.run(scenario())
