@@ -935,6 +935,26 @@ class OnlinePaymentWebhookEvent(Base):
 Garcom = Usuario
 
 
+class PublicOrderAttribution(Base):
+    __tablename__ = "public_order_attributions"
+    __table_args__ = (
+        UniqueConstraint("comanda_id", name="uq_public_order_attribution_comanda"),
+        Index("ix_public_order_attributions_tenant_created", "restaurante_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), nullable=False, index=True)
+    comanda_id = Column(String, ForeignKey("comandas.id", ondelete="CASCADE"), nullable=False)
+    source_platform = Column(String(40), nullable=False, default="direct")
+    utm_source = Column(String(160), nullable=True)
+    utm_medium = Column(String(160), nullable=True)
+    utm_campaign = Column(String(160), nullable=True)
+    utm_content = Column(String(160), nullable=True)
+    referrer_host = Column(String(255), nullable=True)
+    landing_path = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc), nullable=False)
+
+
 class ConfiguracaoRestaurante(Base):
     __tablename__ = "configuracoes_restaurante"
     __table_args__ = (
@@ -963,6 +983,9 @@ class ConfiguracaoRestaurante(Base):
     taxa_entrega_fixa = Column(Numeric(14, 2, asdecimal=False), default=7.0, nullable=False)
     tabela_taxas_bairros = Column(JSON, default=list)
     tabela_taxas_km = Column(JSON, default=list)
+    delivery_area_restriction_enabled = Column(Boolean, default=False, nullable=False)
+    delivery_allowed_cities = Column(JSON, default=list, nullable=False)
+    delivery_allowed_neighborhoods = Column(JSON, default=list, nullable=False)
     taxa_servico_ativa = Column(Boolean, default=True)
     taxa_servico_padrao = Column(Float, default=10.0)
     meta_mensal = Column(Numeric(14, 2, asdecimal=False), default=0.0)
