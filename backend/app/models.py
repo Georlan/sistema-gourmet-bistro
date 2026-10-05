@@ -943,7 +943,7 @@ class PublicOrderAttribution(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), nullable=False, index=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), nullable=False)
     comanda_id = Column(String, ForeignKey("comandas.id", ondelete="CASCADE"), nullable=False)
     source_platform = Column(String(40), nullable=False, default="direct")
     utm_source = Column(String(160), nullable=True)
