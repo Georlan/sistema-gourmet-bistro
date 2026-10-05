@@ -49,12 +49,14 @@ from ...models import (
     Comanda,
     ConfiguracaoRestaurante,
     OnlinePaymentIntent,
+    PublicOrderAttribution,
     Restaurante,
     Usuario,
 )
 from ...schemas import CardapioPedidoCreate
 from ...services.clientes import normalizar_telefone_cliente
 from ...services.order_financials import payable_total
+from ...services.delivery_area_policy import validate_public_delivery_area
 from ...services.online_order_policy import evaluate_online_order_policy
 from ...services.operational_modes import mode_is_allowed
 from ...services.online_payments import (
@@ -86,6 +88,69 @@ logger = logging.getLogger("koma.adapters.web")
 MAX_PUBLIC_ORDER_UNITS = 200
 ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
 PHYSICAL_CARD_METHODS = {"cartao_credito", "cartao_debito"}
+def _clean_attribution_value(value: object, max_length: int) -> str | None:
+    text = " ".join(str(value or "").strip().split())
+    return text[:max_length] or None
+
+
+def _source_platform(request: Request, payload) -> str:
+    attribution = getattr(payload, "attribution", None)
+    utm_source = _clean_attribution_value(getattr(attribution, "utm_source", None), 160)
+    referrer = (_clean_attribution_value(getattr(attribution, "referrer_host", None), 255) or "").lower()
+    user_agent = (request.headers.get("user-agent") or "").lower()
+
+    candidate = (utm_source or "").lower()
+    combined = " ".join((candidate, referrer, user_agent))
+    if "instagram" in combined:
+        return "instagram"
+    if "facebook" in combined or "fb_iab" in combined:
+        return "facebook"
+    if "whatsapp" in combined:
+        return "whatsapp"
+    if "tiktok" in combined:
+        return "tiktok"
+    if "google" in combined:
+        return "google"
+    return candidate[:40] or ("referral" if referrer else "direct")
+
+
+def _persist_attribution_best_effort(
+    db: Session,
+    *,
+    request: Request,
+    payload,
+    restaurante_id: int,
+    comanda_id: str,
+) -> None:
+    attribution = getattr(payload, "attribution", None)
+    try:
+        existing = db.query(PublicOrderAttribution.id).filter(
+            PublicOrderAttribution.comanda_id == comanda_id,
+        ).first()
+        if existing:
+            return
+        db.add(PublicOrderAttribution(
+            restaurante_id=restaurante_id,
+            comanda_id=comanda_id,
+            source_platform=_source_platform(request, payload),
+            utm_source=_clean_attribution_value(getattr(attribution, "utm_source", None), 160),
+            utm_medium=_clean_attribution_value(getattr(attribution, "utm_medium", None), 160),
+            utm_campaign=_clean_attribution_value(getattr(attribution, "utm_campaign", None), 160),
+            utm_content=_clean_attribution_value(getattr(attribution, "utm_content", None), 160),
+            referrer_host=_clean_attribution_value(getattr(attribution, "referrer_host", None), 255),
+            landing_path=_clean_attribution_value(getattr(attribution, "landing_path", None), 500),
+        ))
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.warning(
+            "Falha não bloqueante ao persistir atribuição do pedido %s do restaurante %s.",
+            comanda_id,
+            restaurante_id,
+            exc_info=True,
+        )
+
+
 PAYMENT_METHOD_ALIASES = {
     "pix": "pix",
     "dinheiro": "dinheiro",
@@ -422,6 +487,29 @@ class CardapioWebAdapter:
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Esta modalidade de pedido está desativada para o restaurante.",
                 )
+
+            if modalidade == "delivery" and bool(
+                getattr(configuracao, "delivery_area_restriction_enabled", False)
+            ):
+                if address_snapshot is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                        detail="Para entrega, confirme um endereço completo com CEP, cidade e UF.",
+                    )
+                area_error = validate_public_delivery_area(
+                    enabled=True,
+                    allowed_cities=getattr(configuracao, "delivery_allowed_cities", None),
+                    allowed_neighborhoods=getattr(configuracao, "delivery_allowed_neighborhoods", None),
+                    city=address_snapshot.city,
+                    state=address_snapshot.state,
+                    neighborhood=address_snapshot.neighborhood,
+                )
+                if area_error:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                        detail=area_error,
+                    )
+
             policy_now = None
             if normalized_schedule is not None:
                 operational_tz = get_operational_now().tzinfo
@@ -608,6 +696,14 @@ class CardapioWebAdapter:
                     payer_email=payload.cliente_email or "",
                     account=payment_account,
                 )
+
+            _persist_attribution_best_effort(
+                db,
+                request=request,
+                payload=payload,
+                restaurante_id=rest_id,
+                comanda_id=order_dto.comanda_id,
+            )
 
         except HTTPException:
             db.rollback()
