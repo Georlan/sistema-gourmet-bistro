@@ -183,7 +183,7 @@ def add_payment(
     return payment
 
 
-def test_payment_after_midnight_stays_on_turn_operational_day():
+def test_payment_after_midnight_uses_payment_local_day():
     db = TestingSessionLocal()
     try:
         # 21:00 UTC = 18:00 em Fortaleza no dia 16.
@@ -210,13 +210,19 @@ def test_payment_after_midnight_stays_on_turn_operational_day():
         headers=headers,
     )
     assert day16.status_code == 200, day16.text
-    data = day16.json()
+    assert day16.json()["faturamento_total"] == 0.0
+    day17 = client.get(
+        "/relatorios/visao-geral?data_inicio=2026-08-17&data_fim=2026-08-17",
+        headers=headers,
+    )
+    assert day17.status_code == 200
+    data = day17.json()
     assert data["faturamento_total"] == 100.0
     assert data["vendas_brutas"] == 100.0
     assert data["estornos"] == 0.0
     assert data["vendas_por_dia"] == [
         {
-            "data": "2026-08-16",
+            "data": "2026-08-17",
             "bruto": 100.0,
             "estornos": 0.0,
             "total": 100.0,
@@ -226,13 +232,6 @@ def test_payment_after_midnight_stays_on_turn_operational_day():
     assert next(row for row in data["horarios_pico"] if row["hora"] == "00h")[
         "faturamento"
     ] == 100.0
-
-    day17 = client.get(
-        "/relatorios/visao-geral?data_inicio=2026-08-17&data_fim=2026-08-17",
-        headers=headers,
-    )
-    assert day17.status_code == 200
-    assert day17.json()["faturamento_total"] == 0.0
 
 
 def test_two_commands_of_same_account_are_one_financial_sale():
@@ -334,11 +333,11 @@ def test_one_payment_split_across_two_merged_families_counts_two_accounts_withou
     assert sum(row["valor_bruto"] for row in details) == 50.0
 
 
-def test_refund_hits_refund_turn_day_and_reports_reconcile_with_dashboard():
+def test_refund_uses_event_day_even_when_turn_belongs_to_previous_day():
     db = TestingSessionLocal()
     try:
         add_turn(db, 4, datetime.datetime(2026, 8, 16, 21, 0))
-        add_turn(db, 5, datetime.datetime(2026, 8, 17, 21, 0))
+        add_turn(db, 5, datetime.datetime(2026, 8, 16, 21, 0))
         add_account(db, "att-90", 90, ["cmd-90"])
         payment = add_payment(
             db,
@@ -404,3 +403,48 @@ def test_refund_hits_refund_turn_day_and_reports_reconcile_with_dashboard():
         "pix": 0.0,
         "cartao": 80.0,
     }
+
+
+def test_many_turns_do_not_determine_payment_day_and_split_account_is_unique():
+    from app.services.financial_read import load_financial_snapshot, daily_financial_rows
+
+    db = TestingSessionLocal()
+    try:
+        for turn_id in range(1, 31):
+            add_turn(db, turn_id, datetime.datetime(2026, 10, 2, 18), status="aberto")
+        add_account(db, "att-split", 91, ["cmd-split"])
+        for turn_id in range(1, 31):
+            add_payment(db, f"pay-{turn_id}", turn_id, "cmd-split", 10,
+                        datetime.datetime(2026, 10, 3, 15),
+                        allocations=[("cmd-split", "att-split", 10)])
+        add_payment(db, "pay-next", 1, "cmd-split", 80,
+                    datetime.datetime(2026, 10, 4, 15),
+                    allocations=[("cmd-split", "att-split", 80)])
+        db.commit()
+        snapshot = load_financial_snapshot(db, TENANT, "2026-10-02", "2026-10-04")
+        rows = daily_financial_rows(snapshot)
+        assert len(snapshot.sales) == 1
+        assert [(row["data"], row["total"], row["quantidade_pedidos"]) for row in rows] == [
+            ("2026-10-03", 300.0, 1), ("2026-10-04", 80.0, 1)]
+        assert not load_financial_snapshot(db, TENANT, "2026-10-02", "2026-10-02").payments
+    finally:
+        db.close()
+
+
+@pytest.mark.parametrize("utc_time, expected_day", [
+    (datetime.datetime(2027, 1, 1, 2, 59, 59), "2026-12-31"),
+    (datetime.datetime(2027, 1, 1, 3, 0), "2027-01-01"),
+])
+def test_civil_day_boundary_across_year(utc_time, expected_day):
+    from app.services.financial_read import load_financial_snapshot, daily_financial_rows
+
+    db = TestingSessionLocal()
+    try:
+        add_turn(db, 1, datetime.datetime(2026, 12, 30, 18))
+        add_account(db, "att-year", 92, ["cmd-year"])
+        add_payment(db, "pay-year", 1, "cmd-year", 20, utc_time)
+        db.commit()
+        snapshot = load_financial_snapshot(db, TENANT, expected_day, expected_day)
+        assert daily_financial_rows(snapshot)[0]["total"] == 20.0
+    finally:
+        db.close()

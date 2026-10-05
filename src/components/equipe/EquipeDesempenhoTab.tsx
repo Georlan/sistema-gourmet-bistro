@@ -1,3 +1,4 @@
+import { ReportPeriodButton } from '../relatorios/ReportPeriodButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { AlertTriangle, Calendar as CalendarIcon, Download, Filter, BarChart2 } from 'lucide-react';
@@ -84,9 +85,13 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [chartMetric, setChartMetric] = useState<'faturamento' | 'pedidos'>('faturamento');
   const requestRef = useRef(0);
+  const reportAbortRef = useRef<AbortController | null>(null);
 
   const fetchDesempenho = useCallback(async () => {
     const requestId = ++requestRef.current;
+    reportAbortRef.current?.abort();
+    const controller = new AbortController();
+    reportAbortRef.current = controller;
     setIsLoading(true);
     setHasError(false);
     try {
@@ -99,6 +104,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
       const json = await fetchReportJson<any>(
         `${apiBaseUrl}/relatorios/equipe/desempenho?${params.toString()}`,
         authHeaders,
+        controller.signal,
       );
       if (requestRef.current === requestId) {
         setTaxaAtiva(json.taxa_servico_ativa);
@@ -106,6 +112,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
         setMembros(json.membros || []);
       }
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error('Erro ao carregar desempenho da equipe:', err);
       if (requestRef.current === requestId) setHasError(true);
     } finally {
@@ -115,7 +122,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
 
   useEffect(() => {
     void fetchDesempenho();
-    return () => { requestRef.current += 1; };
+    return () => { requestRef.current += 1; reportAbortRef.current?.abort(); };
   }, [fetchDesempenho]);
 
   useReportRealtimeRefresh(fetchDesempenho);
@@ -198,14 +205,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             </select>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowCalendarModal(true)}
-            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
-          >
-            <CalendarIcon size={14} className="text-emerald-700 dark:text-emerald-400" />
-            Período
-          </button>
+          <ReportPeriodButton inicio={dataInicio} fim={dataFim} onClick={() => setShowCalendarModal(true)} />
 
           <button
             type="button"

@@ -29,7 +29,7 @@ def get_relatorio_produtos_operacional(
     """Métrica operacional de produtos, deliberadamente separada de receita."""
     rest_id = require_tenant_id()
     try:
-        snapshot = load_financial_snapshot(db, rest_id, data_inicio, data_fim)
+        snapshot = load_financial_snapshot(db, rest_id, data_inicio, data_fim, include_refunds=False)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
