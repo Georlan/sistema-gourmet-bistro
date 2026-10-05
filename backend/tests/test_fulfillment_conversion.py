@@ -140,7 +140,7 @@ def test_configuration_lock_does_not_lock_nullable_joined_restaurant(char_client
     assert all('FOR UPDATE OF configuracoes_restaurante' in sql for sql in statements)
 
 
-def test_neighborhood_unlisted_uses_canonical_fallback(char_client, order):
+def test_neighborhood_unlisted_is_blocked_when_coverage_is_configured(char_client, order):
     with SessionLocal(restaurante_id=order['restaurant_id']) as db:
         config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=order['restaurant_id']).one()
         config.tipo_taxa_entrega = 'bairro'
@@ -148,8 +148,13 @@ def test_neighborhood_unlisted_uses_canonical_fallback(char_client, order):
         db.commit()
     _, matched = quote(char_client, order)
     assert matched['delivery_fee'] == 9
-    _, fallback = quote(char_client, order, address_snapshot={**ADDRESS, 'bairro': 'Outro'})
-    assert fallback['delivery_fee'] == 7
+
+    outside = call(char_client, order, '/previa', {
+        'fulfillment': 'delivery',
+        'address_snapshot': {**ADDRESS, 'bairro': 'Outro'},
+    })
+    assert outside.status_code == 422
+    assert 'fora da área de entrega' in outside.json()['detail']
 
 
 @pytest.mark.parametrize('field,value', [('fechada', True), ('delivery_status', 'transito'), ('delivery_status', 'finalizado'),
