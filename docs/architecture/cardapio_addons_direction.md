@@ -1,5 +1,15 @@
 # Cardápio: direção de produto para adicionais
 
+## Cadastro direto de opções — 05/10/2026
+
+Na marmitaria, o editor oferece um campo separado para o nome e o valor da nova
+opção, com Adicionar à lista. Enter adiciona ao rascunho; salvar também inclui
+um nome ainda digitado nesse campo. Nomes equivalentes por caixa/acentos são
+recusados na inclusão. Salvar/cancelar ficam fora da lista rolável. A configuração
+de sincronização permanece disponível numa seção recolhida abaixo da lista,
+com os vínculos e preços existentes preservados. Cadastro geral fora da marmitaria
+mantém seu fluxo anterior. Nenhuma gravação acontece ao adicionar ao rascunho.
+
 ## Ordem de cadastro e próxima evolução — 05/10/2026
 
 Os grupos de origem vêm antes dos adicionais sincronizados em Cadastros, como
