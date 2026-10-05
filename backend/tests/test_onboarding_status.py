@@ -333,7 +333,7 @@ def test_ready_owner_notification_only_fires_for_completed_commercial_setup(monk
     monkeypatch.setattr(
         onboarding_routes,
         "enqueue_onboarding_ready_owner",
-        lambda db, **kwargs: calls.append((db, kwargs)),
+        lambda db, **kwargs: calls.append((db, kwargs)) or True,
     )
     db = object()
     base = {
