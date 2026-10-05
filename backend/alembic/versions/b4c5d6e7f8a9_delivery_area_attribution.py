@@ -49,8 +49,28 @@ def upgrade() -> None:
         ["restaurante_id", "created_at"],
     )
 
+    if op.get_bind().dialect.name == "postgresql":
+        tenant_expr = "NULLIF(current_setting('app.current_restaurante_id', true), '')::integer"
+        op.execute("ALTER TABLE public.public_order_attributions ENABLE ROW LEVEL SECURITY")
+        op.execute("ALTER TABLE public.public_order_attributions FORCE ROW LEVEL SECURITY")
+        op.execute("REVOKE ALL ON public.public_order_attributions FROM PUBLIC")
+        op.execute(
+            "CREATE POLICY tenant_isolation ON public.public_order_attributions "
+            "FOR ALL TO koma_app "
+            f"USING (restaurante_id = {tenant_expr}) "
+            f"WITH CHECK (restaurante_id = {tenant_expr})"
+        )
+        op.execute(
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON public.public_order_attributions TO koma_app"
+        )
+        op.execute(
+            "GRANT USAGE, SELECT ON SEQUENCE public.public_order_attributions_id_seq TO koma_app"
+        )
+
 
 def downgrade() -> None:
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP POLICY IF EXISTS tenant_isolation ON public.public_order_attributions")
     op.drop_index("ix_public_order_attributions_tenant_created", table_name="public_order_attributions")
     op.drop_table("public_order_attributions")
     op.drop_column("configuracoes_restaurante", "delivery_allowed_neighborhoods")
