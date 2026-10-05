@@ -397,6 +397,8 @@ class Comanda(Base):
     idempotency_key = Column(String(128), nullable=True, index=True)
     idempotency_fingerprint = Column(String(64), nullable=True)
     idempotency_fingerprint_version = Column(SmallInteger, nullable=True)
+    # First-touch acquisition metadata. Nunca armazena IP ou User-Agent bruto.
+    acquisition_attribution = Column(JSON, nullable=True)
 
     @hybrid_property
     def identificador(self):
@@ -963,6 +965,8 @@ class ConfiguracaoRestaurante(Base):
     taxa_entrega_fixa = Column(Numeric(14, 2, asdecimal=False), default=7.0, nullable=False)
     tabela_taxas_bairros = Column(JSON, default=list)
     tabela_taxas_km = Column(JSON, default=list)
+    # Restrição de área é opt-in; NULL preserva o comportamento histórico.
+    delivery_area_policy = Column(JSON, nullable=True)
     taxa_servico_ativa = Column(Boolean, default=True)
     taxa_servico_padrao = Column(Float, default=10.0)
     meta_mensal = Column(Numeric(14, 2, asdecimal=False), default=0.0)
