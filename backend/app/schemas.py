@@ -612,6 +612,9 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     taxa_entrega_fixa: Optional[float] = None
     tabela_taxas_bairros: Optional[list] = []
     tabela_taxas_km: Optional[list] = []
+    delivery_area_restriction_enabled: bool = False
+    delivery_allowed_cities: Optional[list] = []
+    delivery_allowed_neighborhoods: Optional[list] = []
     delivery_origin_configured: bool = False
     plano: Optional[str] = "pocket"
     plano_efetivo: Optional[str] = "pocket"
@@ -646,6 +649,9 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     taxa_entrega_fixa: Optional[float] = None
     tabela_taxas_bairros: Optional[list] = None
     tabela_taxas_km: Optional[list] = None
+    delivery_area_restriction_enabled: Optional[bool] = None
+    delivery_allowed_cities: Optional[list] = None
+    delivery_allowed_neighborhoods: Optional[list] = None
     taxa_servico_ativa: Optional[bool] = None
     taxa_servico_padrao: Optional[float] = None
     meta_mensal: Optional[float] = None
@@ -1149,6 +1155,17 @@ class CardapioItemPedido(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+class OrderAttributionInput(BaseModel):
+    utm_source: Optional[str] = Field(default=None, max_length=160)
+    utm_medium: Optional[str] = Field(default=None, max_length=160)
+    utm_campaign: Optional[str] = Field(default=None, max_length=160)
+    utm_content: Optional[str] = Field(default=None, max_length=160)
+    referrer_host: Optional[str] = Field(default=None, max_length=255)
+    landing_path: Optional[str] = Field(default=None, max_length=500)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class CardapioPedidoCreate(BaseModel):
     restaurante_id: int = Field(gt=0)
     itens: List[CardapioItemPedido] = Field(min_length=1, max_length=100)
@@ -1166,6 +1183,7 @@ class CardapioPedidoCreate(BaseModel):
     usar_cashback: bool = Field(default=False)
     tipo_pedido: Literal["delivery", "retirada", "consumo_local"] = "delivery"
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
+    attribution: Optional[OrderAttributionInput] = None
 
     @field_validator("cliente_nome")
     @classmethod
