@@ -71,4 +71,4 @@ jobs:
         run: >-
           python -m pytest backend/tests/test_marmitaria_sizes.py
           backend/tests/test_marmitaria_size_migration.py
-          backend/tests/test_modificadores.py -q -ra
+          backend/tests/test_modificadores.py::test_daily_menu_is_atomic_preserves_prices_and_syncs_linked_extras -q -ra
