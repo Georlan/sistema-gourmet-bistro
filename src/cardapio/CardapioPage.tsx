@@ -370,6 +370,19 @@ export default function CardapioPage() {
             }))
           : [],
         taxaEntregaPadrao: Number(restaurant.taxa_entrega_fixa ?? restaurant.taxa_entrega_padrao ?? 0),
+        deliveryAreaRestrictionEnabled: restaurant.delivery_area_restriction_enabled === true,
+        deliveryAllowedCities: Array.isArray(restaurant.delivery_allowed_cities)
+          ? restaurant.delivery_allowed_cities
+              .filter((item: unknown) => item && typeof item === "object")
+              .map((item: any) => ({
+                cidade: String(item.cidade || "").trim(),
+                uf: String(item.uf || "").trim().toUpperCase(),
+              }))
+              .filter((item: { cidade: string; uf: string }) => item.cidade && item.uf.length === 2)
+          : [],
+        deliveryAllowedNeighborhoods: Array.isArray(restaurant.delivery_allowed_neighborhoods)
+          ? restaurant.delivery_allowed_neighborhoods.map((item: unknown) => String(item || "").trim()).filter(Boolean)
+          : [],
         storeStatus: acceptingOrders ? "open" : "closed",
         acceptingOrders,
         orderingMessage: String(restaurant.motivo_indisponibilidade || ""),
