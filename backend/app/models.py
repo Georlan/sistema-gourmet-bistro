@@ -1988,6 +1988,53 @@ class ExternalOrderReference(Base):
     )
 
 
+class OrderAcquisitionAttribution(Base):
+    """Privacidade mínima: atribuição de aquisição do pedido, visível só ao SuperAdmin."""
+    __tablename__ = "order_acquisition_attributions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    comanda_id = Column(
+        String,
+        ForeignKey("comandas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    session_id = Column(String(80), nullable=False)
+    source = Column(String(160), nullable=True)
+    medium = Column(String(160), nullable=True)
+    campaign = Column(String(160), nullable=True)
+    content = Column(String(160), nullable=True)
+    term = Column(String(160), nullable=True)
+    referrer = Column(String(300), nullable=True)
+    landing_path = Column(String(300), nullable=True)
+    client_surface = Column(String(80), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "restaurante_id",
+            "comanda_id",
+            name="uq_order_acquisition_tenant_order",
+        ),
+        Index(
+            "ix_order_acquisition_tenant_created",
+            "restaurante_id",
+            "created_at",
+        ),
+    )
+
+
 class RestaurantDirectPixConfig(Base):
     __tablename__ = "restaurant_direct_pix_configs"
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), primary_key=True, default=lambda: current_restaurante_id.get())
