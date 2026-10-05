@@ -110,9 +110,18 @@ export default function CardapioOrdersDrawer({
     () => ordersWithChat.filter((order) => !resolveOrderState(order).terminal),
     [ordersWithChat],
   );
+  const activeChatOrdersRef = React.useRef<StoredOrder[]>(activeChatOrders);
+  activeChatOrdersRef.current = activeChatOrders;
+  // Status/unread updates replace order objects frequently. The SSE topology only
+  // needs to restart when the tracked order ids/tokens actually change.
+  const realtimeTargetsKey = React.useMemo(
+    () => JSON.stringify(activeChatOrders.map((order) => [order.id, resolveTrackingToken(order)])),
+    [activeChatOrders],
+  );
 
   const refreshUnreadCounts = React.useCallback(async () => {
-    const targets = activeChatOrders
+    const currentOrders = activeChatOrdersRef.current;
+    const targets = currentOrders
       .map((order) => ({ order, token: resolveTrackingToken(order) }))
       .filter((item): item is { order: StoredOrder; token: string } => Boolean(item.token));
 
@@ -157,25 +166,41 @@ export default function CardapioOrdersDrawer({
       results.forEach((result) => {
         if (result) next[result[0]] = result[1];
       });
+      const activeIds = new Set(currentOrders.map((order) => order.id));
       Object.keys(next).forEach((orderId) => {
-        if (!activeChatOrders.some((order) => order.id === orderId)) delete next[orderId];
+        if (!activeIds.has(orderId)) delete next[orderId];
       });
       return next;
     });
-  }, [activeChatOrders, onRealtimeStatus]);
+  }, [onRealtimeStatus]);
 
   React.useEffect(() => {
     chatOrderIdRef.current = chatOrderId;
   }, [chatOrderId]);
 
   React.useEffect(() => {
+    const trackedOrders = activeChatOrdersRef.current;
     void refreshUnreadCounts();
-    if (activeChatOrders.length === 0) return;
+    if (trackedOrders.length === 0) return;
 
     const sources: EventSource[] = [];
     const healthyOrders = new Set<string>();
     const openedOrders = new Set<string>();
     let fallbackInterval: number | null = null;
+    let realtimeRefreshTimer: number | null = null;
+    let fullRefreshRequested = false;
+
+    const scheduleRealtimeRefresh = (fullRefresh = false) => {
+      fullRefreshRequested = fullRefreshRequested || fullRefresh;
+      if (realtimeRefreshTimer !== null) return;
+      realtimeRefreshTimer = window.setTimeout(() => {
+        realtimeRefreshTimer = null;
+        const shouldRefreshAll = fullRefreshRequested;
+        fullRefreshRequested = false;
+        void refreshUnreadCounts();
+        if (shouldRefreshAll) onRealtimeRefresh?.();
+      }, 100);
+    };
 
     const stopFallback = () => {
       if (fallbackInterval !== null) {
@@ -191,14 +216,14 @@ export default function CardapioOrdersDrawer({
     };
     const markHealthy = (orderId: string) => {
       healthyOrders.add(orderId);
-      if (healthyOrders.size === activeChatOrders.length) stopFallback();
+      if (healthyOrders.size === trackedOrders.length) stopFallback();
     };
     const markDegraded = (orderId: string) => {
       healthyOrders.delete(orderId);
       startFallback();
     };
 
-    activeChatOrders.forEach((order) => {
+    trackedOrders.forEach((order) => {
       const token = resolveTrackingToken(order);
       if (!token) return;
       const source = new EventSource(
@@ -210,15 +235,12 @@ export default function CardapioOrdersDrawer({
         const isReconnect = openedOrders.has(order.id);
         openedOrders.add(order.id);
         markHealthy(order.id);
-        if (isReconnect) {
-          void refreshUnreadCounts();
-          onRealtimeRefresh?.();
-        }
+        if (isReconnect) scheduleRealtimeRefresh(true);
       };
       source.onerror = () => markDegraded(order.id);
-      source.addEventListener("connected", () => { void refreshUnreadCounts(); });
+      source.addEventListener("connected", () => { scheduleRealtimeRefresh(false); });
 
-      source.addEventListener("refresh", () => { onRealtimeRefresh?.(); });
+      source.addEventListener("refresh", () => { scheduleRealtimeRefresh(true); });
 
       source.addEventListener("message", (event: MessageEvent) => {
         try {
@@ -278,9 +300,10 @@ export default function CardapioOrdersDrawer({
     return () => {
       sources.forEach((source) => source.close());
       stopFallback();
+      if (realtimeRefreshTimer !== null) window.clearTimeout(realtimeRefreshTimer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [activeChatOrders, onRealtimeRefresh, onRealtimeStatus, refreshUnreadCounts]);
+  }, [realtimeTargetsKey, onRealtimeRefresh, onRealtimeStatus, refreshUnreadCounts]);
 
   React.useEffect(() => {
     if (chatOrderId && !orders.some((order) => order.id === chatOrderId)) {
