@@ -132,6 +132,18 @@ test('full order snapshots coalesce realtime bursts instead of aborting in-fligh
 });
 
 
+test('table snapshots coalesce realtime bursts without aborting useful reads', () => {
+  const tables = read('src/components/app/data/useOperationalTables.ts').text;
+  const fullStart = tables.indexOf('const fetchTables = async');
+  const mutationStart = tables.indexOf('const handleCreateMesa');
+  const fullFetch = tables.slice(fullStart, mutationStart);
+  assert.match(tables, /const fetchTablesDirtyRef = useRef\(false\)/);
+  assert.match(fullFetch, /fetchTablesDirtyRef\.current = true;\s*return;/);
+  assert.match(fullFetch, /queueMicrotask\(\(\) => \{ void fetchTables\(\); \}\)/);
+  assert.doesNotMatch(fullFetch, /fetchTablesAbortControllerRef\.current\.abort\(\)/);
+});
+
+
 test('remote order and item IDs stay in private Map caches, never object properties', () => {
   const orders = read('src/components/app/data/useOperationalOrders.ts');
   for (const name of ['targetedOrderRequestRef', 'optimisticItemStatusRef']) {
