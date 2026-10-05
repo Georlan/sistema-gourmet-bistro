@@ -36,6 +36,7 @@ type SectionId =
   | "team"
   | "payments"
   | "operation"
+  | "acquisition"
   | "history";
 
 type TrialRecord = {
@@ -106,6 +107,20 @@ type TenantIncident = {
   action_target_id?: string | null;
 };
 
+type AcquisitionItem = {
+  orderId: string;
+  orderNumber?: number | null;
+  createdAt?: string | null;
+  source?: string | null;
+  medium?: string | null;
+  campaign?: string | null;
+  content?: string | null;
+  term?: string | null;
+  referrer?: string | null;
+  landingPath?: string | null;
+  clientSurface?: string | null;
+};
+
 type CapabilitySnapshot = {
   plan: string;
   baseline: Record<string, boolean>;
@@ -165,6 +180,7 @@ const sections: Array<{
   { id: "team", label: "Equipe", icon: UsersRound },
   { id: "payments", label: "Pagamentos", icon: CreditCard },
   { id: "operation", label: "Operação", icon: Wrench },
+  { id: "acquisition", label: "Aquisição", icon: Activity },
   { id: "history", label: "Histórico", icon: History },
 ];
 
@@ -265,6 +281,9 @@ export function SuperAdminRestaurant360({
   const [incidentsAvailable, setIncidentsAvailable] = useState(false);
   const [capabilities, setCapabilities] = useState<CapabilitySnapshot | null>(null);
   const [capabilitiesAvailable, setCapabilitiesAvailable] = useState(false);
+  const [acquisition, setAcquisition] = useState<AcquisitionItem[]>([]);
+  const [acquisitionLoading, setAcquisitionLoading] = useState(false);
+  const [acquisitionError, setAcquisitionError] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [trialOpen, setTrialOpen] = useState(false);
@@ -372,6 +391,33 @@ export function SuperAdminRestaurant360({
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (section !== "acquisition") return;
+    let cancelled = false;
+    setAcquisitionLoading(true);
+    setAcquisitionError(null);
+    void superAdminFetch(
+      "/api/super-admin/restaurantes/" + encodeURIComponent(tenant.id) + "/acquisition?limit=100",
+    )
+      .then(async response => {
+        const body = await response.json();
+        if (!response.ok || !Array.isArray(body)) {
+          throw new Error(body?.detail || "Aquisição do cardápio indisponível.");
+        }
+        if (!cancelled) setAcquisition(body as AcquisitionItem[]);
+      })
+      .catch(error => {
+        if (!cancelled) {
+          setAcquisition([]);
+          setAcquisitionError(superAdminErrorMessage(error));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAcquisitionLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [section, tenant.id]);
 
   const refreshAll = async () => {
     onRefreshTenant();
@@ -1352,6 +1398,58 @@ export function SuperAdminRestaurant360({
           {incidentActionNotice && (
             <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3 text-xs text-emerald-300">
               {incidentActionNotice}
+            </div>
+          )}
+        </div>
+      )}
+
+      {section === "acquisition" && (
+        <div className="rounded-xl border border-zinc-800 bg-koma-card">
+          <div className="border-b border-zinc-800 p-5">
+            <h3 className="text-base font-bold text-koma-foreground">Aquisição do Cardápio Online</h3>
+            <p className="mt-1 text-xs text-koma-muted">
+              Visível somente no SuperAdmin. Registra UTM, origem sanitizada e superfície do navegador; IP bruto e dados pessoais não são persistidos aqui.
+            </p>
+          </div>
+          {acquisitionLoading ? (
+            <div className="p-6 text-xs text-koma-muted">Carregando origens…</div>
+          ) : acquisitionError ? (
+            <div className="p-6 text-xs text-rose-300">{acquisitionError}</div>
+          ) : acquisition.length === 0 ? (
+            <div className="p-6 text-xs text-koma-muted">Ainda não há pedidos com atribuição registrada neste restaurante.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-xs">
+                <thead className="border-b border-zinc-800 text-[10px] uppercase text-koma-muted">
+                  <tr>
+                    <th className="px-4 py-3">Pedido</th>
+                    <th className="px-4 py-3">Origem</th>
+                    <th className="px-4 py-3">Campanha</th>
+                    <th className="px-4 py-3">Entrada</th>
+                    <th className="px-4 py-3">Data</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/60">
+                  {acquisition.map(item => (
+                    <tr key={item.orderId}>
+                      <td className="px-4 py-3 font-bold text-koma-foreground">#{item.orderNumber ?? item.orderId}</td>
+                      <td className="px-4 py-3">
+                        <strong className="block text-koma-foreground">{item.source || item.clientSurface || "direto / desconhecido"}</strong>
+                        <span className="text-[10px] text-koma-muted">{item.medium || item.clientSurface || "—"}</span>
+                      </td>
+                      <td className="px-4 py-3 text-koma-secondary">
+                        {item.campaign || "—"}
+                        {item.content && <div className="mt-0.5 text-[10px] text-koma-muted">{item.content}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-koma-secondary">
+                        {item.referrer || item.landingPath || "Acesso direto"}
+                        {item.landingPath && item.referrer && <div className="mt-0.5 text-[10px] text-koma-muted">{item.landingPath}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-koma-muted">{formatDate(item.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
