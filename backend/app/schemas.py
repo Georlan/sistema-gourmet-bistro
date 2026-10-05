@@ -960,7 +960,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     tabela_taxas_km: Optional[Any] = []
     taxa_entrega_padrao: Optional[float] = None
     delivery_area_restriction_enabled: bool = False
-    delivery_allowed_cities: Optional[List[Dict[str, str]]] = []
+    delivery_allowed_cities: Optional[List[dict[str, str]]] = []
     delivery_allowed_neighborhoods: Optional[List[str]] = []
 
 
