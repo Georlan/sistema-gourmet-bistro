@@ -24,21 +24,29 @@ export function captureOrderAttribution(): OrderAttributionPayload {
     // Navegadores privados podem bloquear sessionStorage.
   }
 
-  const url = new URL(window.location.href);
+  let url: URL | null = null;
+  try {
+    const href = typeof window.location?.href === 'string' ? window.location.href : '';
+    if (href) url = new URL(href, 'http://localhost');
+  } catch {
+    url = null;
+  }
+
   let referrerHost: string | undefined;
   try {
-    referrerHost = document.referrer ? new URL(document.referrer).hostname : undefined;
+    const referrer = typeof document !== 'undefined' ? document.referrer : '';
+    referrerHost = referrer ? new URL(referrer, 'http://localhost').hostname : undefined;
   } catch {
     referrerHost = undefined;
   }
 
   const payload: OrderAttributionPayload = {
-    utm_source: clean(url.searchParams.get('utm_source')),
-    utm_medium: clean(url.searchParams.get('utm_medium')),
-    utm_campaign: clean(url.searchParams.get('utm_campaign')),
-    utm_content: clean(url.searchParams.get('utm_content')),
+    utm_source: clean(url?.searchParams.get('utm_source')),
+    utm_medium: clean(url?.searchParams.get('utm_medium')),
+    utm_campaign: clean(url?.searchParams.get('utm_campaign')),
+    utm_content: clean(url?.searchParams.get('utm_content')),
     referrer_host: clean(referrerHost, 255),
-    landing_path: clean(`${url.pathname}${url.search}`, 500),
+    landing_path: url ? clean(`${url.pathname}${url.search}`, 500) : undefined,
   };
 
   try {
