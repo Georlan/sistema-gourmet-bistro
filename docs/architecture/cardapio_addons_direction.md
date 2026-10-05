@@ -1,5 +1,14 @@
 # Cardápio: direção de produto para adicionais
 
+## Ordem de cadastro e próxima evolução — 05/10/2026
+
+Os grupos de origem vêm antes dos adicionais sincronizados em Cadastros, como
+no Cardápio do dia; as opções de cada grupo continuam em ordem alfabética.
+O usuário considera redundante editar duas listas e propôs, para uma próxima
+etapa, reunir disponibilidade e preço do adicional na mesma linha da origem.
+Essa proposta ainda não altera cobrança, vínculos ou registros: a implementação
+de uma interface unificada deve preservar os IDs atuais e preços históricos.
+
 ## Remoção de complementos e cadastro diário — 05/10/2026
 
 Escopo solicitado pelo usuário: opções em ordem alfabética, listas compactas,

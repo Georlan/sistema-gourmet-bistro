@@ -45,6 +45,7 @@ test('link extras to proteins, preserve prices and refresh both groups after a s
   await expect(page.getByLabel('Preço de novos adicionais')).toHaveValue('5');
   await page.getByRole('button', { name: 'Atualizar Grupo' }).click();
   await expect(page.getByText('Sincronizado com Proteínas.', { exact: false })).toBeVisible();
+  await expect(page.locator('.break-inside-avoid').getByRole('heading')).toHaveText(['Proteínas', 'Adicionais pagos']);
   await expect(page.getByRole('button', { name: 'Pausar Frango adicional', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Pausar Frango', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Reativar Frango', exact: true })).toBeVisible();
