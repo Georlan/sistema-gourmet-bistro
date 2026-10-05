@@ -9,27 +9,51 @@ test('prévia de entrega tem taxa própria, independente da retirada selecionada
   assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8 }, 25, ''), { fee: 8, awaitingNeighborhood: false });
 });
 
-test('bairro não selecionado aplica taxa padrão imediatamente como taxa mínima', () => {
-  assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8, tabelaTaxasBairros: neighborhoods }, 25, ''), { fee: 8, awaitingNeighborhood: false });
+test('área configurada exige bairro antes de continuar com delivery', () => {
+  assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8, tabelaTaxasBairros: neighborhoods }, 25, ''), {
+    fee: 0,
+    awaitingNeighborhood: true,
+    outsideCoverage: false,
+  });
 });
 
 test('bairro selecionado mantém taxa e comparação sem diferença entre maiúsculas', () => {
-  assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8, tabelaTaxasBairros: neighborhoods }, 25, 'CENTRO'), { fee: 5, awaitingNeighborhood: false });
+  assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8, tabelaTaxasBairros: neighborhoods }, 25, 'CENTRO'), {
+    fee: 5,
+    awaitingNeighborhood: false,
+    outsideCoverage: false,
+  });
 });
 
-test('bairro fora da lista não barra a operação e aplica a taxa padrão de fallback', () => {
-  assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8, tabelaTaxasBairros: neighborhoods }, 25, 'Outro'), { fee: 8, awaitingNeighborhood: false });
+test('bairro fora da lista é marcado como fora da área antes do checkout', () => {
+  assert.deepEqual(getDeliveryQuote({ taxaEntregaPadrao: 8, tabelaTaxasBairros: neighborhoods }, 25, 'Outro'), {
+    fee: 0,
+    awaitingNeighborhood: false,
+    outsideCoverage: true,
+  });
 });
 
 test('taxa zero do bairro permanece gratuita', () => {
-  assert.deepEqual(getDeliveryQuote({ tabelaTaxasBairros: neighborhoods }, 25, 'Retiro'), { fee: 0, awaitingNeighborhood: false });
+  assert.deepEqual(getDeliveryQuote({ tabelaTaxasBairros: neighborhoods }, 25, 'Retiro'), {
+    fee: 0,
+    awaitingNeighborhood: false,
+    outsideCoverage: false,
+  });
 });
 
 test('limiar de frete grátis preserva cálculo por subtotal e precedência sobre bairro', () => {
   const config = { freteGratisValor: 75, taxaEntregaPadrao: 8, tabelaTaxasBairros: neighborhoods };
   assert.equal(getDeliveryQuote(config, 74.99, 'Centro').fee, 5);
-  assert.deepEqual(getDeliveryQuote(config, 75, 'Centro'), { fee: 0, awaitingNeighborhood: false });
-  assert.deepEqual(getDeliveryQuote(config, 75, ''), { fee: 0, awaitingNeighborhood: false });
+  assert.deepEqual(getDeliveryQuote(config, 75, 'Centro'), {
+    fee: 0,
+    awaitingNeighborhood: false,
+    outsideCoverage: false,
+  });
+  assert.deepEqual(getDeliveryQuote(config, 75, ''), {
+    fee: 0,
+    awaitingNeighborhood: true,
+    outsideCoverage: false,
+  });
 });
 
 test('taxa configurada zero não se confunde com configuração ausente no cálculo', () => {
@@ -116,6 +140,9 @@ test('checkout opera por taxa por bairro sem GPS automático e com campos simpli
   assert.doesNotMatch(deliveryAddressFields, />Cidade</);
 });
 
-test('bairro não preenchido exibe aplicação da taxa padrão no resumo', () => {
-  assert.match(cart, /Taxa padrão de \$\{formatPrice\(deliveryQuote\.fee\)\} incluída no resumo\./);
+test('UI avisa cobertura e bloqueia bairro fora da área antes de enviar', () => {
+  assert.match(cart, /deliveryQuote\.awaitingNeighborhood/);
+  assert.match(cart, /deliveryQuote\.outsideCoverage/);
+  assert.match(cart, /Este bairro está fora da área de entrega/);
+  assert.match(cart, /use Retirada/);
 });
