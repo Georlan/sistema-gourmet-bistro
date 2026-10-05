@@ -54,6 +54,8 @@ from ...models import (
 )
 from ...schemas import CardapioPedidoCreate
 from ...services.clientes import normalizar_telefone_cliente
+from ...services.delivery_area_policy import delivery_area_unavailability
+from ...services.order_attribution import build_order_attribution
 from ...services.order_financials import payable_total
 from ...services.online_order_policy import evaluate_online_order_policy
 from ...services.operational_modes import mode_is_allowed
@@ -438,6 +440,19 @@ class CardapioWebAdapter:
                     detail=policy.reason or "O restaurante não está aceitando pedidos online no momento.",
                 )
 
+            # A área restringe somente Delivery. Cardápio, retirada e consumo
+            # local continuam disponíveis independentemente da localização.
+            if modalidade == "delivery":
+                area_error = delivery_area_unavailability(
+                    configuracao.delivery_area_policy if configuracao is not None else None,
+                    address_snapshot,
+                )
+                if area_error:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=area_error,
+                    )
+
             _enforce_public_order_rate_limits(
                 db,
                 request=request,
@@ -528,6 +543,7 @@ class CardapioWebAdapter:
                 idempotency_key=idempotency_key or None,
                 idempotency_fingerprint=fingerprint_intent.fingerprint if idempotency_key else None,
                 idempotency_fingerprint_version=fingerprint_intent.version if idempotency_key else None,
+                acquisition_attribution=build_order_attribution(payload.attribution, request),
                 operator_user_id=garcom.id,
                 defer_operational_publish=online_payment or is_scheduled,
             )
