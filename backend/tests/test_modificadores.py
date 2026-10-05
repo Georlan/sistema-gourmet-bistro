@@ -486,3 +486,47 @@ def test_paid_links_reject_actual_other_tenant_and_ambiguous_existing_copies():
     assert saved['grupo_origem_id'] is None
     assert {option['id'] for option in saved['opcoes']} == {option['id'] for option in target['opcoes']}
     assert sorted(option['preco_adicional'] for option in saved['opcoes']) == [5, 9]
+
+
+def test_daily_menu_is_atomic_preserves_prices_and_syncs_linked_extras():
+    headers = _auth_headers()
+    source = client.post('/cardapio/modificadores/grupos', headers=headers, json={
+        'nome': 'Diário proteínas', 'opcoes': [
+            {'nome': 'Frango diário', 'preco_adicional': 0, 'ativo': True},
+            {'nome': 'Peixe diário', 'preco_adicional': 2, 'ativo': False},
+        ], 'produto_ids': ['prod-burger-1'],
+    }).json()
+    extra = client.post('/cardapio/modificadores/grupos', headers=headers, json={
+        'nome': 'Diário extras', 'grupo_origem_id': source['id'],
+        'preco_novo_adicional': 5, 'preco_novo_ovo': 2,
+        'opcoes': [{'nome': 'Frango diário adicional', 'preco_adicional': 7}],
+    }).json()
+    chicken, fish = source['opcoes']
+    original_extra = next(o for o in extra['opcoes'] if o['opcao_origem_id'] == chicken['id'])
+    changes = [{'id': chicken['id'], 'ativo_anterior': True, 'ativo': False},
+               {'id': fish['id'], 'ativo_anterior': False, 'ativo': True}]
+    url = '/cardapio/modificadores/cardapio-diario'
+    assert client.patch(url, json={'opcoes': changes}).status_code == 401
+    response = client.patch(url, headers=headers, json={'opcoes': changes})
+    assert response.status_code == 200, response.text
+    assert response.json()['atualizadas'] == 2
+    groups = client.get('/cardapio/modificadores/grupos', headers=headers).json()
+    saved = next(g for g in groups if g['id'] == source['id'])
+    saved_extra = next(g for g in groups if g['id'] == extra['id'])
+    assert saved['produto_ids'] == ['prod-burger-1']
+    assert [(o['id'], o['preco_adicional'], o['ativo']) for o in saved['opcoes']] == [(chicken['id'], 0, False), (fish['id'], 2, True)]
+    linked = next(o for o in saved_extra['opcoes'] if o['opcao_origem_id'] == chicken['id'])
+    assert (linked['id'], linked['preco_adicional'], linked['ativo']) == (original_extra['id'], 7, False)
+    # A competing stale change must not partially pause the other option.
+    stale = [{'id': fish['id'], 'ativo_anterior': True, 'ativo': False},
+             {'id': chicken['id'], 'ativo_anterior': True, 'ativo': False}]
+    assert client.patch(url, headers=headers, json={'opcoes': stale}).status_code == 409
+    current = client.get('/cardapio/modificadores/grupos', headers=headers).json()
+    assert next(o for g in current if g['id'] == source['id'] for o in g['opcoes'] if o['id'] == fish['id'])['ativo'] is True
+    foreign = [{'id': fish['id'], 'ativo_anterior': True, 'ativo': False},
+               {'id': 'missing-or-foreign-option', 'ativo_anterior': True, 'ativo': False}]
+    assert client.patch(url, headers=headers, json={'opcoes': foreign}).status_code == 404
+    assert client.patch(url, headers=headers, json={'opcoes': [{'id': linked['id'], 'ativo_anterior': False, 'ativo': True}]}).status_code == 409
+    assert client.patch(url, headers=headers, json={'opcoes': [changes[0], changes[0]]}).status_code == 422
+    assert client.patch(url, headers=headers, json={'opcoes': [{'id': chicken['id'], 'ativo_anterior': False, 'ativo': 'true'}]}).status_code == 422
+    assert client.patch(url, headers=headers, json={'opcoes': [], 'preco': 0}).status_code == 422

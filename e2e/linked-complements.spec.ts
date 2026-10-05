@@ -38,6 +38,7 @@ test('link extras to proteins, preserve prices and refresh both groups after a s
     document.body.replaceChildren(host);
     ReactDOM.createRoot(host).render(React.createElement(ComplementosTab, { apiBaseUrl: '/addon-test', authHeaders: {}, produtos: [], marmitariaCadastro: true }));
   });
+  await page.getByRole('button', { name: 'Cadastros', exact: true }).click();
   await expect(page.getByText('Adicionais pagos', { exact: true })).toBeVisible();
   await page.getByTitle('Editar', { exact: true }).nth(1).click();
   await page.getByLabel('Sincronizar adicionais com').selectOption('proteins');

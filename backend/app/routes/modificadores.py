@@ -438,6 +438,71 @@ class OpcaoDisponibilidadeUpdate(BaseModel):
     ativo: StrictBool
 
 
+class OpcaoDisponibilidadeDiaria(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str = Field(min_length=1, max_length=200)
+    ativo: StrictBool
+    ativo_anterior: StrictBool
+
+
+class CardapioDiarioUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    opcoes: List[OpcaoDisponibilidadeDiaria] = Field(min_length=1, max_length=500)
+
+
+@router.patch("/cardapio-diario")
+def atualizar_cardapio_diario(
+    payload: CardapioDiarioUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """One transaction for availability only; preserve identities, prices and size rules."""
+    del current_user
+    rest_id = require_tenant_id()
+    ids = [option.id for option in payload.opcoes]
+    if len(ids) != len(set(ids)):
+        raise HTTPException(422, "Há opções repetidas na revisão do cardápio.")
+    _lock_catalog(db, rest_id)
+    options = db.query(OpcaoModificador).join(
+        GrupoModificador,
+        (GrupoModificador.id == OpcaoModificador.grupo_id)
+        & (GrupoModificador.restaurante_id == OpcaoModificador.restaurante_id),
+    ).filter(
+        OpcaoModificador.restaurante_id == rest_id,
+        OpcaoModificador.id.in_(ids),
+        GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
+    ).all()
+    by_id = {option.id: option for option in options}
+    if len(by_id) != len(ids):
+        db.rollback()
+        raise HTTPException(404, "Uma opção não está mais disponível neste cadastro. Atualize antes de revisar.")
+    for change in payload.opcoes:
+        option = by_id[change.id]
+        if option.opcao_origem_id:
+            db.rollback()
+            raise HTTPException(409, "Altere a disponibilidade no complemento de origem.")
+        # Refuse a stale availability snapshot rather than overwriting a concurrent edit.
+        if option.ativo != change.ativo_anterior:
+            db.rollback()
+            raise HTTPException(409, "O cardápio foi alterado em outro acesso. Atualize e revise novamente.")
+    changed_groups = set()
+    updated = 0
+    for change in payload.opcoes:
+        option = by_id[change.id]
+        if option.ativo != change.ativo:
+            option.ativo = change.ativo
+            changed_groups.add(option.grupo_id)
+            updated += 1
+    db.flush()
+    for group_id in sorted(changed_groups):
+        sync_linked_complements(db, rest_id, group_id)
+    db.commit()
+    if updated:
+        _notify_catalog_update(background_tasks, rest_id, "Cardápio do dia atualizado.")
+    return {"atualizadas": updated}
+
+
 @router.patch("/opcoes/{opcao_id}/disponibilidade", response_model=OpcaoModificadorResponse)
 def atualizar_disponibilidade_opcao(
     opcao_id: str,
