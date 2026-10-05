@@ -110,6 +110,7 @@ def override_get_db():
 @pytest.fixture(autouse=True)
 def setup_database(monkeypatch):
     print_agents_route._clear_invalid_agent_token_cache()
+    print_agents_route._clear_print_queue_maintenance_cache()
     def test_session_local(**kwargs):
         kwargs.pop("restaurante_id", None)
         return TestingSessionLocal()
@@ -182,6 +183,7 @@ def setup_database(monkeypatch):
         yield
     finally:
         print_agents_route._clear_invalid_agent_token_cache()
+        print_agents_route._clear_print_queue_maintenance_cache()
         current_restaurante_id.reset(token_var)
         import os
         try:
@@ -228,6 +230,14 @@ def mark_agent_printer_ready(agent_id: str) -> None:
         db.commit()
     finally:
         db.close()
+
+
+def test_print_queue_recovery_probe_is_throttled_per_tenant():
+    print_agents_route._clear_print_queue_maintenance_cache()
+    assert print_agents_route._should_run_print_queue_maintenance(1, now_monotonic=100.0) is True
+    assert print_agents_route._should_run_print_queue_maintenance(1, now_monotonic=101.0) is False
+    assert print_agents_route._should_run_print_queue_maintenance(2, now_monotonic=101.0) is True
+    assert print_agents_route._should_run_print_queue_maintenance(1, now_monotonic=131.0) is True
 
 
 def test_invalid_agent_token_is_negative_cached_to_avoid_db_hammering():
