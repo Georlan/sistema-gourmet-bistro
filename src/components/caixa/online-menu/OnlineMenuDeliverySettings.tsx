@@ -220,7 +220,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
           <div>
             <h3 className="text-sm font-black text-koma-foreground">Taxas de Entrega por Bairro</h3>
             <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-              Configure a taxa padrão para outros bairros e cadastre taxas específicas para os bairros atendidos.
+              Cadastre os bairros atendidos. Quando existir ao menos um bairro na lista, pedidos de entrega fora dela serão bloqueados.
             </p>
           </div>
         </div>
@@ -239,7 +239,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
               placeholder="0,00"
             />
             <span className="mt-1.5 block text-[9px] leading-relaxed text-koma-muted">
-              Cobrada caso o cliente não informe o bairro ou digite um bairro não listado abaixo. Garante que nenhum pedido seja travado.
+              Usada somente enquanto nenhum bairro estiver cadastrado. Depois que você publicar a área de entrega, bairros fora da lista serão recusados.
             </span>
           </label>
         </div>
@@ -248,9 +248,9 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
         <div className="border-t border-koma-border pt-4">
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h4 className="text-xs font-black text-koma-foreground">Bairros com taxa diferenciada</h4>
+              <h4 className="text-xs font-black text-koma-foreground">Bairros atendidos</h4>
               <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">
-                Cadastre os bairros atendidos com valores específicos. O cliente poderá selecioná-los em 1 clique no cardápio.
+                Cada bairro cadastrado passa a fazer parte da área válida de delivery e pode ter sua própria taxa.
               </p>
             </div>
             <button
@@ -268,7 +268,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
           {config.tabela_taxas_bairros.length === 0 ? (
             <div className="rounded-xl border border-dashed border-koma-border bg-koma-card/50 p-4 text-center">
               <p className="text-xs text-koma-muted">Nenhum bairro cadastrado no momento.</p>
-              <p className="mt-1 text-[10px] text-koma-muted/80">Todos os pedidos usarão a taxa padrão configurada acima.</p>
+              <p className="mt-1 text-[10px] text-koma-muted/80">Enquanto a lista estiver vazia, o delivery continuará aceitando qualquer bairro usando a taxa padrão.</p>
             </div>
           ) : (
             <div className="space-y-2.5">
