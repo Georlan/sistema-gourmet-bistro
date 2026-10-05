@@ -1,4 +1,5 @@
 import hashlib
+import json
 import secrets
 import datetime
 import logging
@@ -29,6 +30,7 @@ from ..database import (
 )
 from ..models import PrintJob, PrintAgentToken, Usuario
 from ..security import ensure_permission, get_current_user, require_permission
+from ..services.print_delivery import print_wakeup_hub
 from ..websocket_manager import manager
 from ..timezone_utils import OPERATIONAL_TIMEZONE
 
@@ -43,6 +45,10 @@ PRINT_DELAY_THRESHOLD_SECONDS = 120
 PRINT_HISTORY_VISIBLE_LIMIT = 20
 PRINT_QUEUE_VISIBLE_LIMIT = 50
 AGENT_COMMAND_TIMEOUT_SECONDS = 45
+# Stuck/expired recovery has minute/hour thresholds; running its UPDATE probes on
+# every 0.5s agent claim only competes with real orders for the database pool.
+PRINT_QUEUE_MAINTENANCE_INTERVAL_SECONDS = 30.0
+PRINT_HISTORY_MAINTENANCE_INTERVAL_SECONDS = 30.0
 UNRESOLVED_JOB_STATUSES = ("pending", "claimed", "printing")
 TERMINAL_JOB_STATUSES = ("printed", "failed", "cancelled")
 
@@ -53,6 +59,42 @@ INVALID_AGENT_TOKEN_CACHE_TTL_SECONDS = 300
 INVALID_AGENT_TOKEN_CACHE_MAX_ENTRIES = 2048
 _invalid_agent_token_cache: dict[str, float] = {}
 _invalid_agent_token_cache_lock = threading.Lock()
+
+
+_print_queue_maintenance_last_run: dict[int, float] = {}
+_print_queue_maintenance_lock = threading.Lock()
+_print_history_maintenance_last_scheduled: dict[int, float] = {}
+_print_history_maintenance_lock = threading.Lock()
+
+
+def _should_run_print_queue_maintenance(
+    restaurante_id: int,
+    *,
+    now_monotonic: float | None = None,
+) -> bool:
+    current = time.monotonic() if now_monotonic is None else now_monotonic
+    tenant_id = int(restaurante_id)
+    with _print_queue_maintenance_lock:
+        previous = _print_queue_maintenance_last_run.get(tenant_id)
+        if (
+            previous is not None
+            and current - previous < PRINT_QUEUE_MAINTENANCE_INTERVAL_SECONDS
+        ):
+            return False
+        _print_queue_maintenance_last_run[tenant_id] = current
+        return True
+
+
+def _clear_print_queue_maintenance_cache() -> None:
+    """Test/support helper; production state is only an in-process throttle."""
+    with _print_queue_maintenance_lock:
+        _print_queue_maintenance_last_run.clear()
+
+
+def _clear_print_history_maintenance_cache() -> None:
+    """Test/support helper for the coalesced retention task."""
+    with _print_history_maintenance_lock:
+        _print_history_maintenance_last_scheduled.clear()
 
 
 def _invalid_agent_token_is_cached(token_hash: str, *, now: float | None = None) -> bool:
@@ -344,15 +386,20 @@ def _schedule_print_history_maintenance(
     restaurante_id: int,
     now: datetime.datetime,
 ) -> None:
-    """
-    Compacta após cada confirmação, fora do tempo de resposta ao agente.
-
-    Assim cada restaurante conserva no máximo 20 cupons completos do dia,
-    mesmo em um turno com alto volume de impressão.
-    """
+    """Compacta o histórico fora do ACK, no máximo uma vez/30s por tenant."""
+    tenant_id = int(restaurante_id)
+    current = time.monotonic()
+    with _print_history_maintenance_lock:
+        previous = _print_history_maintenance_last_scheduled.get(tenant_id)
+        if (
+            previous is not None
+            and current - previous < PRINT_HISTORY_MAINTENANCE_INTERVAL_SECONDS
+        ):
+            return
+        _print_history_maintenance_last_scheduled[tenant_id] = current
     background_tasks.add_task(
         _run_print_history_maintenance,
-        restaurante_id,
+        tenant_id,
         now,
     )
 
@@ -657,6 +704,34 @@ def _claimed_job_payload(job, claimed_at: datetime.datetime) -> dict:
     }
 
 
+def _log_claim_batch(agent: PrintAgentToken, jobs: list[dict]) -> None:
+    if not jobs:
+        return
+    latencies = [
+        int(job["queue_latency_ms"])
+        for job in jobs
+        if isinstance(job.get("queue_latency_ms"), int)
+    ]
+    log.info(
+        json.dumps(
+            {
+                "event": "print_claim_batch",
+                "restaurante_id": agent.restaurante_id,
+                "agent_id": agent.agent_id,
+                "job_count": len(jobs),
+                "queue_latency_max_ms": max(latencies) if latencies else None,
+                "queue_latency_avg_ms": (
+                    round(sum(latencies) / len(latencies), 2)
+                    if latencies
+                    else None
+                ),
+                "job_ids": [job["id"] for job in jobs],
+            },
+            separators=(",", ":"),
+        )
+    )
+
+
 def _release_stuck_jobs(
     db: Session,
     restaurante_id: int,
@@ -742,14 +817,19 @@ def _claim_pending_jobs(
 ) -> list[dict]:
     """Reserva atomicamente até ``limit`` trabalhos na ordem da fila."""
     safe_limit = max(1, min(limit, MAX_CLAIM_BATCH_SIZE))
-    expired_jobs = _expire_stale_unresolved_jobs(
-        db,
-        agent.restaurante_id,
-        now,
-    )
-    released_jobs = _release_stuck_jobs(db, agent.restaurante_id, now)
-    if expired_jobs or released_jobs:
-        db.flush()
+    # The recovery probes are intentionally off the hot claim path. Their own
+    # thresholds are five minutes / hours, so checking once per tenant every
+    # 30s preserves recovery semantics while removing two write-capable queries
+    # from virtually every idle poll made by installed agents.
+    if _should_run_print_queue_maintenance(agent.restaurante_id):
+        expired_jobs = _expire_stale_unresolved_jobs(
+            db,
+            agent.restaurante_id,
+            now,
+        )
+        released_jobs = _release_stuck_jobs(db, agent.restaurante_id, now)
+        if expired_jobs or released_jobs:
+            db.flush()
 
     if db.get_bind().dialect.name == "postgresql":
         claimed_rows = db.execute(
@@ -804,6 +884,9 @@ def _claim_pending_jobs(
             for row in ordered_rows
         ]
         db.commit()
+        if payload:
+            print_wakeup_hub.acknowledge_claim(agent.restaurante_id)
+        _log_claim_batch(agent, payload)
         return payload
 
     # SQLite é usado nos testes e no desenvolvimento. Cada UPDATE continua
@@ -856,6 +939,9 @@ def _claim_pending_jobs(
         claimed_jobs.append(_claimed_job_payload(job, now))
 
     db.commit()
+    if claimed_jobs:
+        print_wakeup_hub.acknowledge_claim(agent.restaurante_id)
+    _log_claim_batch(agent, claimed_jobs)
     return claimed_jobs
 
 
