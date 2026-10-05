@@ -1152,6 +1152,19 @@ class CardapioItemPedido(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+class OrderAttributionInput(BaseModel):
+    utm_source: Optional[str] = Field(default=None, max_length=160)
+    utm_medium: Optional[str] = Field(default=None, max_length=160)
+    utm_campaign: Optional[str] = Field(default=None, max_length=160)
+    utm_content: Optional[str] = Field(default=None, max_length=160)
+    utm_term: Optional[str] = Field(default=None, max_length=160)
+    referrer_host: Optional[str] = Field(default=None, max_length=160)
+    entry_path: Optional[str] = Field(default=None, max_length=240)
+    first_seen_at: Optional[str] = Field(default=None, max_length=64)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class CardapioPedidoCreate(BaseModel):
     restaurante_id: int = Field(gt=0)
     itens: List[CardapioItemPedido] = Field(min_length=1, max_length=100)
@@ -1169,7 +1182,7 @@ class CardapioPedidoCreate(BaseModel):
     usar_cashback: bool = Field(default=False)
     tipo_pedido: Literal["delivery", "retirada", "consumo_local"] = "delivery"
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
-    attribution: Optional[dict[str, Any]] = None
+    attribution: Optional[OrderAttributionInput] = None
 
     @field_validator("cliente_nome")
     @classmethod
