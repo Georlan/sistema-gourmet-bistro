@@ -480,6 +480,20 @@ export default function CardapioCartDrawer({
         reportValidationError("O delivery está desativado para este restaurante. Escolha retirada.", "cart-receive-methods");
         return false;
       }
+      if (deliveryMethod === "delivery" && deliveryQuote.awaitingNeighborhood) {
+        reportValidationError(
+          "Informe um bairro atendido pelo restaurante para continuar com entrega.",
+          "delivery-address-bairro",
+        );
+        return false;
+      }
+      if (deliveryMethod === "delivery" && deliveryQuote.outsideCoverage) {
+        reportValidationError(
+          "Este bairro está fora da área de entrega. Escolha outro endereço ou use Retirada.",
+          "delivery-address-bairro",
+        );
+        return false;
+      }
 
       const addressSnapshot = deliveryMethod === "delivery"
         ? deliveryAddressDraftToSnapshot(deliveryAddressDraft)
@@ -896,14 +910,19 @@ export default function CardapioCartDrawer({
                       legacyHint={legacyAddressHint}
                       idPrefix="delivery-address"
                     />
-                    <p className="break-words text-xs leading-relaxed text-koma-muted" aria-live="polite">
-                      {selectedBairro
-                        ? (brandConfig?.tabelaTaxasBairros || []).some((item) => item.bairro.toLowerCase() === selectedBairro.trim().toLowerCase())
-                          ? `${selectedBairro}: taxa de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`
-                          : `${selectedBairro}: taxa padrão de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`
-                        : deliveryQuote.fee === 0
-                          ? "Sem taxa de entrega neste pedido."
-                          : `Taxa padrão de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`}
+                    <p className={
+                      "break-words text-xs leading-relaxed " +
+                      (deliveryQuote.outsideCoverage ? "font-semibold text-rose-400" : "text-koma-muted")
+                    } aria-live="polite">
+                      {deliveryQuote.outsideCoverage
+                        ? "Este bairro está fora da área de entrega. Escolha outro endereço ou use Retirada."
+                        : deliveryQuote.awaitingNeighborhood
+                          ? "Informe um dos bairros atendidos para calcular a entrega."
+                          : selectedBairro
+                            ? `${selectedBairro}: taxa de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`
+                            : deliveryQuote.fee === 0
+                              ? "Sem taxa de entrega neste pedido."
+                              : `Taxa padrão de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`}
                     </p>
                   </div>
                 )}
