@@ -132,6 +132,14 @@ class PrintWakeupHub:
             timer.daemon = True
             timer.start()
 
+    def acknowledge_claim(self, restaurante_id: int) -> None:
+        """Cancela retries do último wake-up assim que um job foi reservado."""
+        tenant_id = int(restaurante_id)
+        with self._lock:
+            self._publish_generation[tenant_id] = (
+                self._publish_generation.get(tenant_id, 0) + 1
+            )
+
     def _retry_publish_if_current(
         self,
         restaurante_id: int,
