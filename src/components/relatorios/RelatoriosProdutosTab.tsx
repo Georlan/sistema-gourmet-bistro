@@ -1,3 +1,4 @@
+import { ReportPeriodButton } from './ReportPeriodButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { BarChart2, Calendar as CalendarIcon, Download, Info, Search } from 'lucide-react';
@@ -62,9 +63,13 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [hasError, setHasError] = useState(false);
   const requestRef = useRef(0);
+  const reportAbortRef = useRef<AbortController | null>(null);
 
   const fetchProdutosReport = useCallback(async () => {
     const requestId = ++requestRef.current;
+    reportAbortRef.current?.abort();
+    const controller = new AbortController();
+    reportAbortRef.current = controller;
     setIsLoading(true);
     setHasError(false);
     try {
@@ -72,7 +77,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       if (buscaAplicada) url += `&busca=${encodeURIComponent(buscaAplicada)}`;
       if (categoriaId) url += `&categoria_id=${categoriaId}`;
 
-      const json = await fetchReportJson<any[]>(url, authHeaders);
+      const json = await fetchReportJson<any[]>(url, authHeaders, controller.signal);
       const normalized: ProdutoRelatorioItem[] = (Array.isArray(json) ? json : []).map((row: any) => ({
         ranking: Number(row.ranking || 0),
         produto_id: row.produto_id,
@@ -90,6 +95,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       }));
       if (requestRef.current === requestId) setProdutos(normalized);
     } catch (error) {
+      if (controller.signal.aborted) return;
       console.error('Erro ao carregar relatório de produtos:', error);
       if (requestRef.current === requestId) setHasError(true);
     } finally {
@@ -98,8 +104,9 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
   }, [apiBaseUrl, authHeaders, buscaAplicada, categoriaId, dataFim, dataInicio, ordenacao]);
 
   useEffect(() => {
+    setProdutos([]);
     void fetchProdutosReport();
-    return () => { requestRef.current += 1; };
+    return () => { requestRef.current += 1; reportAbortRef.current?.abort(); };
   }, [fetchProdutosReport]);
 
   useReportRealtimeRefresh(fetchProdutosReport);
@@ -153,11 +160,11 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
         eyebrow="PRODUTOS"
         title="O que mais"
         accent="movimenta o cardápio"
-        description="Consumo real das contas recebidas, separado do faturamento financeiro."
+        description="Consumo associado às contas com recebimento no período selecionado."
         metrics={[
           { label: produtosComConsumo === 1 ? 'produto vendido' : 'produtos vendidos', value: produtosComConsumo },
-          { label: 'unidades consumidas', value: totalUnidades },
-          { label: 'valor de consumo', value: totalConsumo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+          { label: buscaAplicada || categoriaId ? 'unidades filtradas' : 'unidades consumidas', value: totalUnidades },
+          { label: buscaAplicada || categoriaId ? 'consumo filtrado' : 'valor de consumo', value: totalConsumo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
           { label: 'custos mapeados', value: `${produtosComCusto}/${produtosComConsumo}` },
         ]}
       />
@@ -168,10 +175,8 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
           <span><strong className="text-koma-foreground">Consumo não é faturamento.</strong> CMV e margem aparecem somente quando a ficha técnica tem todos os custos cadastrados.</span>
         </div>
       )}>
-          <button type="button" onClick={() => setShowCalendarModal(true)} className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3.5 py-2 text-[10px] font-bold uppercase tracking-wider text-koma-foreground transition-all hover:bg-koma-card">
-            <CalendarIcon size={14} className="text-emerald-700 dark:text-emerald-400" /> Período
-          </button>
-          <button type="button" onClick={handleExportCsv} disabled={!produtos.length} className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3.5 py-2 text-[10px] font-bold text-koma-muted transition-all hover:bg-koma-card hover:text-koma-foreground disabled:opacity-50">
+          <ReportPeriodButton inicio={dataInicio} fim={dataFim} onClick={() => setShowCalendarModal(true)} />
+          <button type="button" onClick={handleExportCsv} disabled={!produtos.length || isLoading || hasError} className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3.5 py-2 text-[10px] font-bold text-koma-muted transition-all hover:bg-koma-card hover:text-koma-foreground disabled:opacity-50">
             <Download size={14} /> Exportar
           </button>
       </ReportActionBar>

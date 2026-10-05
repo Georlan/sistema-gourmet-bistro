@@ -6,10 +6,11 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Iterable
 
-from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.orm import Session, load_only
 
 from ..financial_models import PagamentoAlocacao, PagamentoEstorno
-from ..models import CaixaTurno, Pagamento
+from ..models import Pagamento
 from ..operational_models import AtendimentoComanda
 from ..timezone_utils import (
     get_operational_now,
@@ -57,7 +58,6 @@ class FinancialSnapshot:
     period: FinancialPeriod
     payments: list[Pagamento]
     refunds: list[PagamentoEstorno]
-    turn_day_map: dict[int, datetime.date]
     allocations: list[AllocationProjection]
     sales: dict[str, SaleProjection]
     totals: FinancialTotals
@@ -70,25 +70,7 @@ def _db_bounds(start_day: datetime.date, end_day: datetime.date) -> tuple[dateti
 
 
 def current_operational_day(db: Session, restaurante_id: int) -> datetime.date:
-    """Dia operacional atual.
-
-    Enquanto existir turno aberto, o Kôma considera como "hoje" financeiro o
-    dia local em que esse turno foi aberto. Assim uma operação iniciada às 18h
-    continua pertencendo ao mesmo dia após 00:00.
-    """
-    turno = (
-        db.query(CaixaTurno)
-        .filter(
-            CaixaTurno.restaurante_id == restaurante_id,
-            CaixaTurno.status == "aberto",
-        )
-        .order_by(CaixaTurno.aberto_em.desc(), CaixaTurno.id.desc())
-        .first()
-    )
-    if turno and turno.aberto_em:
-        local_open = to_operational_local_time(turno.aberto_em)
-        if local_open is not None:
-            return local_open.date()
+    """Dia civil gerencial no fuso do restaurante; fechamento continua por turno."""
     return get_operational_now().date()
 
 
@@ -106,7 +88,7 @@ def resolve_financial_period(
         start_day = (
             datetime.date.fromisoformat(data_inicio)
             if data_inicio
-            else end_day - datetime.timedelta(days=default_days)
+            else end_day - datetime.timedelta(days=default_days - 1)
         )
     except ValueError as exc:
         raise ValueError("Período inválido. Use datas no formato AAAA-MM-DD.") from exc
@@ -117,69 +99,44 @@ def resolve_financial_period(
     return FinancialPeriod(start_day, end_day, start_utc, end_utc)
 
 
-def _turns_in_period(
-    db: Session,
-    restaurante_id: int,
-    period: FinancialPeriod,
-) -> list[CaixaTurno]:
-    return (
-        db.query(CaixaTurno)
-        .filter(
-            CaixaTurno.restaurante_id == restaurante_id,
-            CaixaTurno.aberto_em >= period.start_utc,
-            CaixaTurno.aberto_em < period.end_utc,
-        )
-        .order_by(CaixaTurno.aberto_em, CaixaTurno.id)
-        .all()
-    )
-
-
-def _turn_day_map(turns: Iterable[CaixaTurno]) -> dict[int, datetime.date]:
-    result: dict[int, datetime.date] = {}
-    for turno in turns:
-        if turno.aberto_em is None:
-            continue
-        local_open = to_operational_local_time(turno.aberto_em)
-        if local_open is not None:
-            result[int(turno.id)] = local_open.date()
-    return result
-
-
-def _payments_for_turns(
-    db: Session,
-    restaurante_id: int,
-    turn_ids: list[int],
-) -> list[Pagamento]:
-    if not turn_ids:
-        return []
+def _payments_in_period(db: Session, restaurante_id: int, period: FinancialPeriod) -> list[Pagamento]:
     return (
         db.query(Pagamento)
-        .filter(
-            Pagamento.restaurante_id == restaurante_id,
-            Pagamento.status == "aprovado",
-            Pagamento.turno_id.in_(turn_ids),
-        )
-        .order_by(Pagamento.criado_em, Pagamento.id)
-        .all()
+        .options(load_only(Pagamento.id, Pagamento.comanda_id, Pagamento.valor,
+                           Pagamento.metodo, Pagamento.criado_em,
+                           Pagamento.cliente_id, Pagamento.cpf_cliente))
+        .filter(Pagamento.restaurante_id == restaurante_id,
+                Pagamento.status == "aprovado",
+                Pagamento.criado_em >= period.start_utc,
+                Pagamento.criado_em < period.end_utc)
+        .order_by(Pagamento.criado_em, Pagamento.id).all()
     )
 
 
-def _refunds_for_turns(
-    db: Session,
-    restaurante_id: int,
-    turn_ids: list[int],
-) -> list[PagamentoEstorno]:
-    if not turn_ids:
-        return []
+def _refunds_in_period(db: Session, restaurante_id: int, period: FinancialPeriod) -> list[PagamentoEstorno]:
     return (
         db.query(PagamentoEstorno)
-        .filter(
-            PagamentoEstorno.restaurante_id == restaurante_id,
-            PagamentoEstorno.turno_id.in_(turn_ids),
-        )
-        .order_by(PagamentoEstorno.criado_em, PagamentoEstorno.id)
-        .all()
+        .options(load_only(PagamentoEstorno.id, PagamentoEstorno.valor,
+                           PagamentoEstorno.metodo, PagamentoEstorno.criado_em))
+        .filter(PagamentoEstorno.restaurante_id == restaurante_id,
+                PagamentoEstorno.criado_em >= period.start_utc,
+                PagamentoEstorno.criado_em < period.end_utc)
+        .order_by(PagamentoEstorno.criado_em, PagamentoEstorno.id).all()
     )
+
+
+def load_period_totals(db: Session, restaurante_id: int, start_day: str, end_day: str) -> FinancialTotals:
+    """Duas agregações limitadas ao período, sem carregar identidades/ledger inteiro."""
+    period = resolve_financial_period(db, restaurante_id, start_day, end_day)
+    payments = (db.query(Pagamento.metodo, func.sum(Pagamento.valor).label("valor"))
+                .filter(Pagamento.restaurante_id == restaurante_id, Pagamento.status == "aprovado",
+                        Pagamento.criado_em >= period.start_utc, Pagamento.criado_em < period.end_utc)
+                .group_by(Pagamento.metodo).all())
+    refunds = (db.query(PagamentoEstorno.metodo, func.sum(PagamentoEstorno.valor).label("valor"))
+               .filter(PagamentoEstorno.restaurante_id == restaurante_id,
+                       PagamentoEstorno.criado_em >= period.start_utc, PagamentoEstorno.criado_em < period.end_utc)
+               .group_by(PagamentoEstorno.metodo).all())
+    return totais_financeiros(payments, refunds)
 
 
 def _fallback_attendance_map(
@@ -226,7 +183,6 @@ def project_payment_allocations(
     db: Session,
     restaurante_id: int,
     payments: list[Pagamento],
-    turn_day_map: dict[int, datetime.date],
 ) -> list[AllocationProjection]:
     """Projeta pagamentos no grão Conta/Atendimento sem alterar o ledger.
 
@@ -248,11 +204,10 @@ def project_payment_allocations(
 
     projections: list[AllocationProjection] = []
     for payment in payments:
-        operational_day = turn_day_map.get(int(payment.turno_id))
-        if operational_day is None:
-            # Um Pagamento obrigatório sem turno legível é anomalia de dados.
-            # Não o deslocamos silenciosamente para a data civil do pagamento.
+        local_paid_at = to_operational_local_time(payment.criado_em)
+        if local_paid_at is None:
             continue
+        operational_day = local_paid_at.date()
 
         rows = by_payment.get(str(payment.id), [])
         payment_total = money(payment.valor)
@@ -379,6 +334,7 @@ def load_financial_snapshot(
     data_fim: str | None,
     *,
     default_days: int = 30,
+    include_refunds: bool = True,
 ) -> FinancialSnapshot:
     period = resolve_financial_period(
         db,
@@ -387,24 +343,15 @@ def load_financial_snapshot(
         data_fim,
         default_days=default_days,
     )
-    turns = _turns_in_period(db, restaurante_id, period)
-    turn_day_map = _turn_day_map(turns)
-    turn_ids = list(turn_day_map)
-    payments = _payments_for_turns(db, restaurante_id, turn_ids)
-    refunds = _refunds_for_turns(db, restaurante_id, turn_ids)
-    allocations = project_payment_allocations(
-        db,
-        restaurante_id,
-        payments,
-        turn_day_map,
-    )
+    payments = _payments_in_period(db, restaurante_id, period)
+    refunds = _refunds_in_period(db, restaurante_id, period) if include_refunds else []
+    allocations = project_payment_allocations(db, restaurante_id, payments)
     sales = aggregate_sales(allocations)
     totals = totais_financeiros(payments, refunds)
     return FinancialSnapshot(
         period=period,
         payments=payments,
         refunds=refunds,
-        turn_day_map=turn_day_map,
         allocations=allocations,
         sales=sales,
         totals=totals,
@@ -417,11 +364,13 @@ def daily_financial_rows(snapshot: FinancialSnapshot) -> list[dict[str, object]]
     sale_keys_by_day: dict[datetime.date, set[str]] = defaultdict(set)
 
     for payment in snapshot.payments:
-        day = snapshot.turn_day_map.get(int(payment.turno_id))
+        local = to_operational_local_time(payment.criado_em)
+        day = local.date() if local else None
         if day is not None:
             gross_by_day[day] += money(payment.valor)
     for refund in snapshot.refunds:
-        day = snapshot.turn_day_map.get(int(refund.turno_id))
+        local = to_operational_local_time(refund.criado_em)
+        day = local.date() if local else None
         if day is not None:
             refunds_by_day[day] += money(refund.valor)
     for allocation in snapshot.allocations:

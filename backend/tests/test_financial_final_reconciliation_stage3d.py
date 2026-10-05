@@ -160,7 +160,7 @@ def test_report_dashboard_cash_and_closing_reconcile_from_same_events():
     Cenário deliberadamente adversarial:
     - turno abre com R$ 100 em espécie;
     - recebe R$ 100 em dinheiro, R$ 80 no cartão e R$ 20 no Pix;
-    - o Pix acontece 00:30 do dia civil seguinte, mas pertence ao mesmo dia operacional;
+    - o Pix acontece 00:30 do dia civil seguinte e aparece nesse dia gerencial;
     - R$ 30 da venda no cartão são devolvidos em DINHEIRO;
     - há R$ 20 de suprimento e R$ 10 de sangria;
     - fechamento declara exatamente o que a liquidação espera.
@@ -251,6 +251,8 @@ def test_report_dashboard_cash_and_closing_reconcile_from_same_events():
             metodo_devolucao="dinheiro",
         )
         db.commit()
+        refund.criado_em = datetime.datetime(2026, 8, 15, 23, 0)
+        db.commit()
         assert refund.metodo == "cartao_credito"
 
         cash = cash_shift_totals(db, TENANT, shift)
@@ -268,7 +270,7 @@ def test_report_dashboard_cash_and_closing_reconcile_from_same_events():
 
     client = TestClient(app)
     headers = auth_headers()
-    period = "?data_inicio=2026-08-15&data_fim=2026-08-15"
+    period = "?data_inicio=2026-08-15&data_fim=2026-08-16"
 
     report_response = client.get(f"/relatorios/visao-geral{period}", headers=headers)
     dashboard_response = client.get(f"/comandas/estatisticas/geral{period}", headers=headers)
@@ -293,13 +295,20 @@ def test_report_dashboard_cash_and_closing_reconcile_from_same_events():
         "cartao": 50.0,
     }
 
-    # O pagamento de 00:30 não escapa para o dia civil seguinte.
+    # O pagamento de 00:30 pertence ao dia civil seguinte, sem alterar o caixa por turno.
     next_day = client.get(
         "/relatorios/visao-geral?data_inicio=2026-08-16&data_fim=2026-08-16",
         headers=headers,
     )
     assert next_day.status_code == 200
-    assert next_day.json()["vendas_brutas"] == 0.0
+    assert next_day.json()["vendas_brutas"] == 20.0
+    assert next_day.json()["vendas_liquidas"] == 20.0
+    first_day = client.get(
+        "/relatorios/visao-geral?data_inicio=2026-08-15&data_fim=2026-08-15", headers=headers,
+    ).json()
+    assert first_day["vendas_brutas"] == 180.0
+    assert first_day["estornos"] == 30.0
+    assert first_day["vendas_liquidas"] == 150.0
 
     # Liquidação/caixa usa o meio REAL da devolução, sem reclassificar a venda original.
     assert cash_summary["total_vendas"] == 170.0
