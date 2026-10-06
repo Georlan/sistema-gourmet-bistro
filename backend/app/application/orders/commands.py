@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 import math
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 from ...domain.orders.types import FulfillmentType, OrderChannel
 from ...domain.orders.errors import (
     EmptyOrderItemsError,
@@ -220,6 +220,7 @@ class CreateOrderCommand:
     idempotency_key: Optional[str] = None
     idempotency_fingerprint: Optional[str] = None
     idempotency_fingerprint_version: Optional[int] = None
+    acquisition_attribution: Optional[dict[str, Any]] = None
     external_reference: Optional[ExternalOrderReference] = None
     operator_user_id: Optional[str | int] = None
     onboarding_test: bool = False

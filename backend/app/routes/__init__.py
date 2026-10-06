@@ -15,6 +15,7 @@ from . import super_admin as _super_admin  # noqa: E402,F401
 from .super_admin_access import router as _super_admin_access_router  # noqa: E402
 from .super_admin_support import router as _super_admin_support_router  # noqa: E402
 from .super_admin_incidents import router as _super_admin_incidents_router  # noqa: E402
+from .super_admin_acquisition import router as _super_admin_acquisition_router  # noqa: E402
 from .super_admin_contracts import router as _super_admin_contracts_router  # noqa: E402
 from .super_admin_profile_onboarding import router as _super_admin_profile_onboarding_router  # noqa: E402
 from .super_admin_catalog_maintenance import router as _super_admin_catalog_maintenance_router  # noqa: E402
@@ -29,6 +30,7 @@ _super_admin.router.include_router(_super_admin_capabilities_router)
 _super_admin.router.include_router(_super_admin_access_router)
 _super_admin.router.include_router(_super_admin_support_router)
 _super_admin.router.include_router(_super_admin_incidents_router)
+_super_admin.router.include_router(_super_admin_acquisition_router)
 _super_admin.router.include_router(_super_admin_contracts_router)
 _super_admin.router.include_router(_super_admin_profile_onboarding_router)
 _super_admin.router.include_router(_super_admin_catalog_maintenance_router)

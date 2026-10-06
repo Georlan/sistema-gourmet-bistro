@@ -172,6 +172,97 @@ class TestCardapioWebAdapter:
         finally:
             db.close()
 
+    def test_delivery_area_rejects_outside_city_before_creating_order(self, char_client, char_setup):
+        db = SessionLocal()
+        try:
+            config = db.query(ConfiguracaoRestaurante).filter(
+                ConfiguracaoRestaurante.restaurante_id == CHAR_RESTAURANT_ID
+            ).one()
+            config.delivery_area_policy = {
+                "enabled": True,
+                "city": "Limoeiro do Norte",
+                "state": "CE",
+                "neighborhoods": [],
+            }
+            db.commit()
+        finally:
+            db.close()
+
+        try:
+            payload = {
+                "restaurante_id": CHAR_RESTAURANT_ID,
+                "cliente_nome": "Cliente Fora da Área",
+                "cliente_telefone": "21966677127",
+                "tipo_pedido": "delivery",
+                "address_snapshot": {
+                    "logradouro": "Rua Nossa Senhora Aparecida",
+                    "numero": "46",
+                    "bairro": "Fazenda Sobradinho",
+                    "cidade": "Magé",
+                    "uf": "RJ",
+                    "cep": "25932520",
+                },
+                "itens": [{
+                    "produto_id": "prod-char-simples",
+                    "quantidade": 1,
+                    "modificador_ids": [],
+                }],
+            }
+            res = char_client.post("/cardapio/pedidos", json=payload)
+            assert res.status_code == 409, res.text
+            assert "fora da área de entrega" in res.json()["detail"].lower()
+        finally:
+            db = SessionLocal()
+            try:
+                config = db.query(ConfiguracaoRestaurante).filter(
+                    ConfiguracaoRestaurante.restaurante_id == CHAR_RESTAURANT_ID
+                ).one()
+                config.delivery_area_policy = None
+                db.commit()
+            finally:
+                db.close()
+
+    def test_delivery_area_never_blocks_pickup(self, char_client, char_setup):
+        db = SessionLocal()
+        try:
+            config = db.query(ConfiguracaoRestaurante).filter(
+                ConfiguracaoRestaurante.restaurante_id == CHAR_RESTAURANT_ID
+            ).one()
+            config.delivery_area_policy = {
+                "enabled": True,
+                "city": "Limoeiro do Norte",
+                "state": "CE",
+                "neighborhoods": ["Centro"],
+            }
+            db.commit()
+        finally:
+            db.close()
+
+        try:
+            payload = {
+                "restaurante_id": CHAR_RESTAURANT_ID,
+                "cliente_nome": "Cliente Retirada Livre",
+                "cliente_telefone": "21966677128",
+                "tipo_pedido": "retirada",
+                "itens": [{
+                    "produto_id": "prod-char-simples",
+                    "quantidade": 1,
+                    "modificador_ids": [],
+                }],
+            }
+            res = char_client.post("/cardapio/pedidos", json=payload)
+            assert res.status_code == 201, res.text
+        finally:
+            db = SessionLocal()
+            try:
+                config = db.query(ConfiguracaoRestaurante).filter(
+                    ConfiguracaoRestaurante.restaurante_id == CHAR_RESTAURANT_ID
+                ).one()
+                config.delivery_area_policy = None
+                db.commit()
+            finally:
+                db.close()
+
     def test_web_adapter_response_contract_matches_legacy(self, char_client, char_setup):
         """[CONTRATO] A resposta HTTP possui exatamente as chaves e tipos esperados pelo frontend."""
         payload = {

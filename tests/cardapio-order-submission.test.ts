@@ -43,6 +43,19 @@ test('identificação da tentativa cobre pagamento, descontos e dados de entrega
   }
 });
 
+test('atribuição de marketing não altera a identidade idempotente do checkout', () => {
+  const first = buildOrderSubmissionFingerprint({
+    ...baseRequest,
+    attribution: { utm_source: 'instagram', utm_campaign: 'almoco' },
+  });
+  const second = buildOrderSubmissionFingerprint({
+    ...baseRequest,
+    attribution: { utm_source: 'whatsapp', utm_campaign: 'domingo' },
+  });
+  assert.equal(first, second);
+  assert.equal(first, buildOrderSubmissionFingerprint(baseRequest));
+});
+
 test('timeout reutiliza a chave apenas quando a intenção do pedido é a mesma', () => {
   const fingerprint = buildOrderSubmissionFingerprint(baseRequest);
   const pending: PendingOrderSubmission = { key: 'same-attempt', fingerprint, createdAt: 1_000 };

@@ -56,6 +56,13 @@ export interface BairroTaxa {
   taxa: number;
 }
 
+export interface DeliveryAreaPolicy {
+  enabled: boolean;
+  city?: string;
+  state?: string;
+  neighborhoods?: string[];
+}
+
 export interface DistanceFeeConfig {
   taxa_minima: number;
   valor_por_km?: number;
@@ -123,6 +130,7 @@ export interface BrandConfig {
   tipoTaxaEntrega?: string;
   tabelaTaxasBairros?: BairroTaxa[];
   tabelaTaxasKm?: DistanceFeeConfig[];
+  deliveryAreaPolicy?: DeliveryAreaPolicy | null;
   taxaEntregaPadrao?: number;
 }
 

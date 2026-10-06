@@ -21,7 +21,10 @@ interface ResolveOrderSubmissionKeyInput {
 }
 
 export function buildOrderSubmissionFingerprint(request: Record<string, unknown>): string {
-  return JSON.stringify(request);
+  // Aquisição descreve como o cliente chegou, não o conteúdo comercial da
+  // intenção. Mudar UTM/referrer nunca pode criar outro pedido após um retry.
+  const { attribution: _attribution, ...orderIntent } = request;
+  return JSON.stringify(orderIntent);
 }
 
 export function normalizePendingOrderSubmissions(

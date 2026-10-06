@@ -9,6 +9,7 @@ import {
   Menu,
   X,
   AlertOctagon,
+  MousePointerClick,
 } from "lucide-react";
 import type { Tenant } from "./superAdminTypes";
 import {
@@ -20,6 +21,7 @@ import {
 } from "./superAdminApi";
 import { SuperAdminOverviewTab } from "./SuperAdminOverviewTab";
 import { SuperAdminIncidentCenterTab } from "./SuperAdminIncidentCenterTab";
+import { SuperAdminAcquisitionTab } from "./SuperAdminAcquisitionTab";
 import {
   SuperAdminClientsHub,
   type ClientsView,
@@ -32,7 +34,7 @@ import {
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import type { AuditLogItem } from "./SuperAdminAuditTab";
 
-type TabId = "overview" | "clients" | "incidents" | "platform";
+type TabId = "overview" | "clients" | "incidents" | "acquisition" | "platform";
 
 export default function SuperAdminPanel() {
   const frontendBuildSha = import.meta.env.VITE_BUILD_SHA || "desconhecido";
@@ -207,6 +209,7 @@ export default function SuperAdminPanel() {
     { id: "overview" as TabId, label: "Início", icon: LayoutDashboard, badge: 0 },
     { id: "clients" as TabId, label: "Clientes", icon: Store, badge: pendingContractsCount },
     { id: "incidents" as TabId, label: "Incidentes", icon: AlertOctagon, badge: 0 },
+    { id: "acquisition" as TabId, label: "Aquisição", icon: MousePointerClick, badge: 0 },
     { id: "platform" as TabId, label: "Plataforma", icon: Settings, badge: 0 },
   ];
 
@@ -374,6 +377,9 @@ export default function SuperAdminPanel() {
             />
           )}
           </>}
+          {activeTab === "acquisition" && (
+            <SuperAdminAcquisitionTab />
+          )}
           {activeTab === "platform" && (
             <SuperAdminPlatformHub
               activeView={platformView}

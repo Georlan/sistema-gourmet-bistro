@@ -689,6 +689,7 @@ class OrderApplicationService:
                     idempotency_key=cmd.idempotency_key,
                     idempotency_fingerprint=cmd.idempotency_fingerprint,
                     idempotency_fingerprint_version=cmd.idempotency_fingerprint_version,
+                    acquisition_attribution=cmd.acquisition_attribution,
                 )
                 db.add(comanda)
                 db.flush()

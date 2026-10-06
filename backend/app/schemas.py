@@ -612,6 +612,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     taxa_entrega_fixa: Optional[float] = None
     tabela_taxas_bairros: Optional[list] = []
     tabela_taxas_km: Optional[list] = []
+    delivery_area_policy: Optional[dict[str, Any]] = None
     delivery_origin_configured: bool = False
     plano: Optional[str] = "pocket"
     plano_efetivo: Optional[str] = "pocket"
@@ -646,6 +647,7 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     taxa_entrega_fixa: Optional[float] = None
     tabela_taxas_bairros: Optional[list] = None
     tabela_taxas_km: Optional[list] = None
+    delivery_area_policy: Optional[dict[str, Any]] = None
     taxa_servico_ativa: Optional[bool] = None
     taxa_servico_padrao: Optional[float] = None
     meta_mensal: Optional[float] = None
@@ -952,6 +954,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     taxa_entrega_fixa: Optional[float] = None
     tabela_taxas_bairros: Optional[Any] = []
     tabela_taxas_km: Optional[Any] = []
+    delivery_area_policy: Optional[dict[str, Any]] = None
     taxa_entrega_padrao: Optional[float] = None
 
 
@@ -1149,6 +1152,19 @@ class CardapioItemPedido(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+class OrderAttributionInput(BaseModel):
+    utm_source: Optional[str] = Field(default=None, max_length=160)
+    utm_medium: Optional[str] = Field(default=None, max_length=160)
+    utm_campaign: Optional[str] = Field(default=None, max_length=160)
+    utm_content: Optional[str] = Field(default=None, max_length=160)
+    utm_term: Optional[str] = Field(default=None, max_length=160)
+    referrer_host: Optional[str] = Field(default=None, max_length=160)
+    entry_path: Optional[str] = Field(default=None, max_length=240)
+    first_seen_at: Optional[str] = Field(default=None, max_length=64)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class CardapioPedidoCreate(BaseModel):
     restaurante_id: int = Field(gt=0)
     itens: List[CardapioItemPedido] = Field(min_length=1, max_length=100)
@@ -1166,6 +1182,7 @@ class CardapioPedidoCreate(BaseModel):
     usar_cashback: bool = Field(default=False)
     tipo_pedido: Literal["delivery", "retirada", "consumo_local"] = "delivery"
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
+    attribution: Optional[OrderAttributionInput] = None
 
     @field_validator("cliente_nome")
     @classmethod
