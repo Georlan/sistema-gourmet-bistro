@@ -1225,6 +1225,42 @@ def block_super_admin_audit_log_delete(mapper, connection, target):
     raise PermissionError("Super admin audit logs are immutable and cannot be deleted.")
 
 
+class ExternalIssueLink(Base):
+    __tablename__ = "external_issue_links"
+    __table_args__ = (
+        Index("ix_external_issue_links_tenant_created", "restaurante_id", "created_at"),
+        Index("ix_external_issue_links_identifier", "external_identifier"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    provider = Column(String(32), default="linear", nullable=False)
+    external_issue_id = Column(String(128), nullable=False)
+    external_identifier = Column(String(64), nullable=False)
+    external_url = Column(String(512), nullable=False)
+    title_snapshot = Column(String(255), nullable=False)
+    status_snapshot = Column(String(64), nullable=True)
+    priority_snapshot = Column(String(32), nullable=True)
+    actor = Column(String(255), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+
+
 class Insumo(Base):
     __tablename__ = "insumos"
     

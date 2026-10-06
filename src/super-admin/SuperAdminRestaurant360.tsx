@@ -3,13 +3,16 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowLeft,
+  BarChart2,
   CalendarClock,
   CreditCard,
   ExternalLink,
   Headphones,
   History,
+  Layers,
   Lock,
   Pencil,
+  Plus,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -19,6 +22,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { formatCurrency, getSubscriptionPlan } from "../config/subscriptionPlans";
+import { SuperAdminCreateIssueModal } from "./SuperAdminCreateIssueModal";
 import { SuperAdminReleaseModal } from "./SuperAdminReleaseModal";
 import { SuperAdminTrialModal } from "./SuperAdminTrialModal";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
@@ -37,6 +41,28 @@ type SectionId =
   | "payments"
   | "operation"
   | "history";
+
+type LinkedIssue = {
+  id: number;
+  provider: string;
+  external_issue_id: string;
+  external_identifier: string;
+  external_url: string;
+  title: string;
+  status: string;
+  priority: string;
+  actor: string;
+  created_at: string | null;
+};
+
+type TenantAnalytics = {
+  posthog: {
+    operational_dashboard_url: string;
+    tenant_group_url: string;
+    events_url: string;
+    project_id: string;
+  };
+};
 
 type TrialRecord = {
   restaurantId: string;
@@ -283,6 +309,41 @@ export function SuperAdminRestaurant360({
   const [incidentBusy, setIncidentBusy] = useState(false);
   const [incidentActionError, setIncidentActionError] = useState<string | null>(null);
   const [incidentActionNotice, setIncidentActionNotice] = useState<string | null>(null);
+  const [linkedIssues, setLinkedIssues] = useState<LinkedIssue[]>([]);
+  const [issuesLoading, setIssuesLoading] = useState(false);
+  const [issuesSyncing, setIssuesSyncing] = useState(false);
+  const [analytics, setAnalytics] = useState<TenantAnalytics | null>(null);
+  const [createIssueOpen, setCreateIssueOpen] = useState(false);
+
+  const loadIssues = useCallback(async (refreshLive = false) => {
+    if (refreshLive) setIssuesSyncing(true);
+    else setIssuesLoading(true);
+    try {
+      const url = `/api/super-admin/restaurantes/${tenant.id}/issues${refreshLive ? "?refresh_live=true" : ""}`;
+      const res = await superAdminFetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setLinkedIssues(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      // Ignora erro suavemente
+    } finally {
+      setIssuesLoading(false);
+      setIssuesSyncing(false);
+    }
+  }, [tenant.id]);
+
+  const loadAnalytics = useCallback(async () => {
+    try {
+      const res = await superAdminFetch(`/api/super-admin/restaurantes/${tenant.id}/analytics`);
+      if (res.ok) {
+        const data = await res.json();
+        setAnalytics(data);
+      }
+    } catch {
+      // Ignora erro suavemente
+    }
+  }, [tenant.id]);
 
   const linkedContract = useMemo(
     () => contracts.find(item => item.linkedRestaurantId === tenant.id) || null,
@@ -294,6 +355,8 @@ export function SuperAdminRestaurant360({
   const loadData = useCallback(async () => {
     setLoading(true);
     const nextErrors: string[] = [];
+    void loadIssues();
+    void loadAnalytics();
 
     const results = await Promise.allSettled([
       superAdminFetch("/api/super-admin/trials").then(async response => {
@@ -1282,6 +1345,149 @@ export function SuperAdminRestaurant360({
           </div>
           </div>
 
+          {/* Cockpit 360: Control Plane & Engenharia (PostHog & Linear) */}
+          <div className="rounded-xl border border-zinc-800 bg-koma-card">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 p-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-koma-foreground flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-[#00b894]" /> Control Plane & Engenharia
+                  </h3>
+                  <span className="rounded-md border border-[#00b894]/30 bg-[#00b894]/10 px-2 py-0.5 text-[9px] font-black uppercase text-[#00b894]">
+                    KOM-10
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-koma-muted">
+                  Diagnóstico cruzado no PostHog e gestão de tarefas no Linear vinculadas a este restaurante.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => loadIssues(true)}
+                  disabled={issuesSyncing}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-koma-page px-2.5 py-1.5 text-xs font-bold text-koma-secondary hover:text-koma-foreground cursor-pointer"
+                  title="Sincronizar status com o Linear"
+                >
+                  <RefreshCw className={`h-3 w-3 ${issuesSyncing ? "animate-spin text-[#00b894]" : ""}`} />
+                  Sincronizar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreateIssueOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#00b894] px-3 py-1.5 text-xs font-black text-black hover:bg-[#00a383] cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Criar issue no Linear
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 grid gap-4 lg:grid-cols-2">
+              {/* Observabilidade & Analytics (PostHog) */}
+              <div className="rounded-lg border border-zinc-800 bg-koma-page p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BarChart2 className="h-4 w-4 text-[#00b894]" />
+                    <h4 className="text-xs font-bold text-koma-foreground">PostHog Analytics</h4>
+                  </div>
+                  <span className="text-[10px] font-medium text-koma-muted">Projeto 648305</span>
+                </div>
+                <p className="mt-2 text-[11px] text-koma-secondary">
+                  Acompanhe conversões do cardápio, funis, sessões e erros reais do restaurante.
+                </p>
+                <div className="mt-3 grid gap-2">
+                  <a
+                    href={analytics?.posthog?.tenant_group_url || `https://us.posthog.com/project/648305/groups/restaurant/${tenant.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-between rounded-lg border border-zinc-700/80 bg-zinc-900/60 px-3 py-2 text-xs font-semibold text-koma-foreground hover:border-[#00b894]/50 hover:text-emerald-300"
+                  >
+                    <span>Ver Grupo do Restaurante (Tenant #{tenant.id})</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                  <a
+                    href={analytics?.posthog?.operational_dashboard_url || "https://us.posthog.com/project/648305/dashboard/2178362"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-between rounded-lg border border-zinc-700/80 bg-zinc-900/60 px-3 py-2 text-xs font-semibold text-koma-foreground hover:border-[#00b894]/50 hover:text-emerald-300"
+                  >
+                    <span>Visão Diária do Produto (Dashboard 2178362)</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                  <a
+                    href={analytics?.posthog?.events_url || `https://us.posthog.com/project/648305/events`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-between rounded-lg border border-zinc-700/80 bg-zinc-900/60 px-3 py-2 text-xs font-semibold text-koma-foreground hover:border-[#00b894]/50 hover:text-emerald-300"
+                  >
+                    <span>Histórico de Eventos Brutos</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              </div>
+
+              {/* Backlog do Restaurante no Linear */}
+              <div className="rounded-lg border border-zinc-800 bg-koma-page p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-[#00b894]" />
+                    <h4 className="text-xs font-bold text-koma-foreground">Issues no Linear</h4>
+                  </div>
+                  <span className="text-[10px] font-mono text-koma-muted">{linkedIssues.length} vinculada(s)</span>
+                </div>
+                <p className="mt-2 text-[11px] text-koma-secondary">
+                  Tarefas e correções cadastradas e rastreadas no Control Plane.
+                </p>
+
+                <div className="mt-3 space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {issuesLoading ? (
+                    <div className="rounded-lg border border-zinc-800 p-4 text-center text-[11px] text-koma-muted">
+                      Carregando issues do restaurante...
+                    </div>
+                  ) : linkedIssues.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-zinc-800 p-4 text-center text-[11px] text-koma-muted">
+                      Nenhuma issue vinculada a este restaurante ainda.
+                    </div>
+                  ) : (
+                    linkedIssues.map((issue) => (
+                      <div
+                        key={issue.id}
+                        className="flex items-center justify-between rounded-lg border border-zinc-800 bg-koma-card p-2.5 text-xs hover:border-zinc-700"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-[#00b894] text-[11px]">
+                              {issue.external_identifier}
+                            </span>
+                            <span className="truncate font-semibold text-koma-foreground text-[11px]" title={issue.title}>
+                              {issue.title}
+                            </span>
+                          </div>
+                          <div className="mt-1 flex items-center gap-2 text-[10px] text-koma-muted">
+                            <span>Status: <strong className="text-koma-secondary">{issue.status}</strong></span>
+                            <span>•</span>
+                            <span>Por: {issue.actor}</span>
+                          </div>
+                        </div>
+                        <a
+                          href={issue.external_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-2 flex-shrink-0 p-1.5 text-koma-muted hover:text-koma-foreground"
+                          title="Abrir no Linear"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="rounded-xl border border-zinc-800 bg-koma-card">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-800 p-4">
             <div>
@@ -1398,6 +1604,29 @@ export function SuperAdminRestaurant360({
 
       {trialOpen && <SuperAdminTrialModal tenant={tenant} onClose={() => setTrialOpen(false)} onUpdated={() => void refreshAll()} />}
       {releaseOpen && <SuperAdminReleaseModal restaurantId={tenant.id} onClose={() => setReleaseOpen(false)} onReleased={() => void refreshAll()} />}
+      {createIssueOpen && (
+        <SuperAdminCreateIssueModal
+          tenant={tenant}
+          onClose={() => setCreateIssueOpen(false)}
+          onCreated={(newIssue) => {
+            setLinkedIssues((prev) => [
+              {
+                id: Date.now(),
+                provider: "linear",
+                external_issue_id: newIssue.id,
+                external_identifier: newIssue.identifier,
+                external_url: newIssue.url,
+                title: newIssue.title,
+                status: newIssue.status || "Todo",
+                priority: "2",
+                actor: "SuperAdmin",
+                created_at: new Date().toISOString(),
+              },
+              ...prev,
+            ]);
+          }}
+        />
+      )}
     </section>
   );
 }
