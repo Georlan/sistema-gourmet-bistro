@@ -149,11 +149,11 @@ def setup_database(monkeypatch):
             status="ativo",
         ))
 
-        # Agente 1 e Agente 2
+        # Agente 1 (principal) e Agente 2 (secundário)
         t1 = hash_token("token_agent_1")
         t2 = hash_token("token_agent_2")
-        db.add(PrintAgentToken(id="a1", restaurante_id=1, agent_id="agent-box-1", token_hash=t1, ativo=True))
-        db.add(PrintAgentToken(id="a2", restaurante_id=1, agent_id="agent-box-2", token_hash=t2, ativo=True))
+        db.add(PrintAgentToken(id="a1", restaurante_id=1, agent_id="agent-box-1", token_hash=t1, ativo=True, is_primary=True))
+        db.add(PrintAgentToken(id="a2", restaurante_id=1, agent_id="agent-box-2", token_hash=t2, ativo=True, is_primary=False))
 
         # Print Job pendente
         db.add(PrintJob(
