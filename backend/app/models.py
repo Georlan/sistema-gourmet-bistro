@@ -1917,6 +1917,7 @@ class PrintAgentToken(Base):
     command_requested_at = Column(DateTime(timezone=True), nullable=True)
     last_command_result = Column(JSON, nullable=True)
     command_completed_at = Column(DateTime(timezone=True), nullable=True)
+    is_primary = Column(Boolean, default=False, nullable=False, server_default=text("false"))
 
     __table_args__ = (
         UniqueConstraint("restaurante_id", "agent_id", name="uq_print_agent_tokens_restaurante_agent"),
