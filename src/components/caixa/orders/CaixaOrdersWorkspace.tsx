@@ -133,7 +133,7 @@ const renderCompactItemsList = (
             <strong className={"orders-card__item-qty font-mono mr-1"}>{it.qty}x</strong> {it.name}
           </span>
           {it.source && (it.source.composicao_agrupada || it.source.modificadores?.length
-            ? <OrderItemComposition item={it.source} className="text-emerald-700 dark:text-emerald-400" />
+            ? <OrderItemComposition item={it.source} className="mt-1.5 text-emerald-700 dark:text-emerald-400" />
             : it.source.observacao && <span className="block whitespace-pre-wrap break-words text-[11px] text-emerald-700 dark:text-emerald-400">{it.source.observacao}</span>)}
         </div>
       ))}

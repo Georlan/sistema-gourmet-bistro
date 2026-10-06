@@ -17,7 +17,7 @@ MODIFIERS = [
 def test_grouped_composition_preserves_customer_note_and_portion_quantity():
     assert composition_presentation(
         "Sem salada - Opções: Frango, Arroz à grega, 2x Ovo", MODIFIERS, grouped=True,
-    ) == (("PROTEÍNAS: Frango", "GUARNIÇÕES: Arroz à grega", "ADICIONAIS PAGOS: 2x Ovo"), "Sem salada")
+    ) == (("GUARNIÇÕES: Arroz à grega", "PROTEÍNAS: Frango", "ADICIONAIS PAGOS: 2x Ovo"), "Sem salada")
     assert composition_presentation("Opções: Frango, Arroz à grega, Ovo, Ovo", MODIFIERS, grouped=True)[1] == ""
 
 
@@ -44,12 +44,14 @@ def test_canonical_ticket_wraps_compact_groups_without_merging_different_meals()
                 variant=ComandaVariant(location_label=None),
             )
             assert ticket.count("1x QUENTINHA G") == 2
-            assert "PROTEÍNAS: FRANGO" in ticket
-            assert "PROTEÍNAS: COSTELA" in ticket
-            assert "ADICIONAIS PAGOS: 2X OVO" in ticket
-            assert ticket.count("OBS: SEM SALADA") == 2
             # ESC/POS controls do not occupy printable paper columns.
             clean = re.sub(r"\x1b(?:[!ME3][\x00-\xff])", "", ticket)
+            assert "GUARNIÇÕES: ARROZ À GREGA" in clean
+            assert "PROTEÍNAS: FRANGO" in clean
+            assert "PROTEÍNAS: COSTELA" in clean
+            assert "ADICIONAIS PAGOS: 2X OVO" in clean
+            assert clean.index("GUARNIÇÕES:") < clean.index("PROTEÍNAS: FRANGO")
+            assert ticket.count("OBS: SEM SALADA") == 2
             assert all(len(line) <= width for line in clean.splitlines())
             assert "R$ 28,00" in ticket
     finally:
@@ -61,7 +63,26 @@ def test_verified_generated_suffix_is_independent_of_modifier_row_order():
         "Sem salada - Opções: Frango, Arroz à grega, 2x Ovo", list(reversed(MODIFIERS)), grouped=True,
     )
     assert notes == "Sem salada"
-    assert set(lines) == {"PROTEÍNAS: Frango", "GUARNIÇÕES: Arroz à grega", "ADICIONAIS PAGOS: 2x Ovo"}
+    assert lines == ("GUARNIÇÕES: Arroz à grega", "PROTEÍNAS: Frango", "ADICIONAIS PAGOS: 2x Ovo")
+
+
+def test_grouped_composition_prioritizes_garnish_protein_and_salad_before_other_groups():
+    lines, _ = composition_presentation(
+        "",
+        [
+            SelectedModifier("extra", "Ovo", 2, "extras", "Adicionais pagos"),
+            SelectedModifier("salad", "Vinagrete", grupo_id="salad", grupo_nome="Saladas"),
+            SelectedModifier("protein", "Frango", grupo_id="protein", grupo_nome="Proteínas"),
+            SelectedModifier("side", "Arroz", grupo_id="side", grupo_nome="Guarnições"),
+        ],
+        grouped=True,
+    )
+    assert lines == (
+        "GUARNIÇÕES: Arroz",
+        "PROTEÍNAS: Frango",
+        "SALADAS: Vinagrete",
+        "ADICIONAIS PAGOS: Ovo",
+    )
 
 
 def test_generic_print_never_merges_same_name_and_note_with_different_choices():
