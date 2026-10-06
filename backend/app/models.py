@@ -477,6 +477,7 @@ class Lancamento(Base):
             "status IN ('pendente', 'aceito', 'producao', 'pronto', 'finalizado', 'recusado', 'cancelado')",
             name="ck_lancamentos_status",
         ),
+        Index("ix_lancamentos_tenant_timestamp", "restaurante_id", "timestamp").ddl_if(dialect="postgresql"),
     )
 
     id = Column(String, primary_key=True, index=True)
@@ -1154,6 +1155,9 @@ class ProdutoGrupoModificador(Base):
 
 class ItemModificador(Base):
     __tablename__ = "item_modificadores"
+    __table_args__ = (
+        Index("ix_item_modificadores_tenant_item", "restaurante_id", "item_id").ddl_if(dialect="postgresql"),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)

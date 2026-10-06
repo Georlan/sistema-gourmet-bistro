@@ -36,6 +36,20 @@ def complete_recipe_unit_cost(product: Produto):
     return money(sum(Decimal(str(item.quantidade)) * Decimal(str(item.insumo.preco_medio_custo)) for item in recipe))
 
 
+def scope_entered_items(query, tenant: int, start_utc, end_utc):
+    """Single definition of operational "saída": one Item row per unit, by order
+    entry, open orders included, cancelled/refused orders and items excluded.
+    The query must already have ``Item`` in its FROM clause."""
+    return query.join(Lancamento, and_(Lancamento.id == Item.lancamento_id, Lancamento.restaurante_id == Item.restaurante_id)
+    ).join(Comanda, and_(Comanda.id == Lancamento.comanda_id, Comanda.restaurante_id == Lancamento.restaurante_id)
+    ).filter(
+        Item.restaurante_id == tenant, Lancamento.restaurante_id == tenant,
+        Comanda.restaurante_id == tenant, Comanda.onboarding_test.is_(False),
+        Item.status != "cancelado", Lancamento.status.notin_(["cancelado", "recusado"]),
+        Lancamento.timestamp >= start_utc, Lancamento.timestamp < end_utc,
+    )
+
+
 def menu_intelligence(db: Session, tenant: int, start: str | None, end: str | None):
     period = resolve_financial_period(db, tenant, start, end)
     days = (period.end_day - period.start_day).days + 1
@@ -43,19 +57,12 @@ def menu_intelligence(db: Session, tenant: int, start: str | None, end: str | No
     previous_start = previous_end - datetime.timedelta(days=days - 1)
     previous = resolve_financial_period(db, tenant, previous_start.isoformat(), previous_end.isoformat())
     current = Lancamento.timestamp >= period.start_utc
-    aggregates = db.query(
+    aggregates = scope_entered_items(db.query(
         Item.produto_id,
         func.sum(case((current, 1), else_=0)),
         func.sum(case((current, Item.preco_unit), else_=0)),
         func.sum(case((~current, 1), else_=0)),
-    ).join(Lancamento, and_(Lancamento.id == Item.lancamento_id, Lancamento.restaurante_id == Item.restaurante_id)
-    ).join(Comanda, and_(Comanda.id == Lancamento.comanda_id, Comanda.restaurante_id == Lancamento.restaurante_id)
-    ).filter(
-        Item.restaurante_id == tenant, Lancamento.restaurante_id == tenant,
-        Comanda.restaurante_id == tenant, Comanda.onboarding_test.is_(False),
-        Item.status != "cancelado", Lancamento.status.notin_(["cancelado", "recusado"]),
-        Lancamento.timestamp >= previous.start_utc, Lancamento.timestamp < period.end_utc,
-    ).group_by(Item.produto_id).all()
+    ), tenant, previous.start_utc, period.end_utc).group_by(Item.produto_id).all()
     output = {str(pid): (int(qty or 0), money(value or 0), int(old or 0)) for pid, qty, value, old in aggregates}
     products = db.query(Produto).filter(Produto.restaurante_id == tenant).options(
         joinedload(Produto.ficha_tecnica).joinedload(ProdutoInsumo.insumo)
