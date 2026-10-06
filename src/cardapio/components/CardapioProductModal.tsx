@@ -30,6 +30,7 @@ import {
   getProductImageUrl,
   LOCAL_PRODUCT_PLACEHOLDER,
 } from "../CardapioTypes";
+import { trackAnalyticsEvent } from "../../analytics";
 
 interface CardapioProductModalProps {
   product: Product;
@@ -41,6 +42,7 @@ interface CardapioProductModalProps {
     selectedOptions: Record<string, ProductOption[]>,
     notes: string,
   ) => void;
+  restaurantId?: string | number;
 }
 
 type QuantityModifier = ProductModifier & { minSelection?: number };
@@ -62,6 +64,7 @@ export default function CardapioProductModal({
   initialItem,
   onClose,
   onAddToCart,
+  restaurantId,
 }: CardapioProductModalProps) {
   const groupRefs = useRef(new Map<string, HTMLElement>());
   const [quantity, setQuantity] = useState(1);
@@ -71,6 +74,23 @@ export default function CardapioProductModal({
   const [feedback, setFeedback] = useState("");
   const [showToast, setShowToast] = useState(false);
   const [expandedExtras, setExpandedExtras] = useState<Record<string, boolean>>({});
+
+  const reportedViewRef = useRef(false);
+  useEffect(() => {
+    if (reportedViewRef.current) return;
+    reportedViewRef.current = true;
+    trackAnalyticsEvent('public_product_viewed', {
+      restaurant_id: restaurantId || '',
+      product_id: product.id,
+      product_name: product.name,
+      category: product.category,
+      price: product.price,
+      has_modifiers: Boolean(
+        (product.modifiers && product.modifiers.length > 0)
+        || (product.modifierGroups && product.modifierGroups.length > 0)
+      ),
+    });
+  }, [product.id, restaurantId]);
 
   const galleryImages = useMemo(
     () => (product.imagesGallery && product.imagesGallery.length > 0

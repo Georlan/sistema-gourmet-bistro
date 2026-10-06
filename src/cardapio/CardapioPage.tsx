@@ -73,6 +73,7 @@ import {
   updateStoredOrderStatus,
 } from "./orderTracking";
 import { rebuildOrderFromCurrentCatalog } from "./repeatOrder";
+import { trackAnalyticsEvent } from "../analytics";
 
 const KOMA_PRIMARY = "#00b894";
 const KOMA_BACKGROUND = "#090a0f";
@@ -148,6 +149,7 @@ export default function CardapioPage() {
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recentAddedCountRef = useRef(0);
   const isProgrammaticScroll = useRef(false);
+  const lastReportedMenuIdRef = useRef<string | number | null>(null);
 
   const showNotification = useCallback((message: string) => {
     setNotice(message);
@@ -379,6 +381,16 @@ export default function CardapioPage() {
       };
 
       setActiveBrand(brand);
+      if (!background && lastReportedMenuIdRef.current !== brand.id) {
+        lastReportedMenuIdRef.current = brand.id;
+        trackAnalyticsEvent('public_menu_viewed', {
+          restaurant_id: brand.id,
+          restaurant_name: brand.name,
+          categories_count: brand.categories.length,
+          products_count: brand.products.length,
+          store_status: brand.storeStatus,
+        });
+      }
       setActiveCategory((current) => current && brand.categories.includes(current) ? current : brand.categories[0] || "");
       const rid = Number(brand.id);
       if (Number.isFinite(rid)) {
@@ -650,6 +662,25 @@ export default function CardapioPage() {
     } else {
       showNotification(`${product.name} adicionado à sacola`);
     }
+
+    const optionsCount = Object.values(selectedOptions).reduce((acc, list) => acc + list.length, 0);
+    let unitPrice = product.price;
+    Object.values(selectedOptions).forEach((list) => {
+      list.forEach((opt) => {
+        unitPrice += (opt.extraPrice || 0);
+      });
+    });
+    trackAnalyticsEvent('public_cart_item_added', {
+      restaurant_id: activeBrand?.id || '',
+      product_id: product.id,
+      product_name: product.name,
+      category: product.category,
+      price: product.price,
+      quantity,
+      total_price: unitPrice * quantity,
+      options_count: optionsCount,
+    });
+
     if (revealCart && window.innerWidth >= 1024) setIsCartOpen(true);
   };
 
@@ -1170,7 +1201,13 @@ export default function CardapioPage() {
       )}
 
       {selectedProduct && (
-        <CardapioProductModal product={selectedProduct} initialItem={editingCartItem || undefined} onClose={() => { setSelectedProduct(null); setEditingCartItem(null); }} onAddToCart={handleAddToCart} />
+        <CardapioProductModal
+          product={selectedProduct}
+          restaurantId={activeBrand.id}
+          initialItem={editingCartItem || undefined}
+          onClose={() => { setSelectedProduct(null); setEditingCartItem(null); }}
+          onAddToCart={handleAddToCart}
+        />
       )}
 
       {(isCartOpen || cart.length > 0) && (
@@ -1202,6 +1239,18 @@ export default function CardapioPage() {
           }}
           onRemoveItem={(itemId) => setCart((current) => current.filter((item) => item.id !== itemId))}
           onPlaceOrder={(request) => {
+            trackAnalyticsEvent('public_checkout_initiated', {
+              restaurant_id: activeBrand.id,
+              delivery_method: request.deliveryMethod,
+              items_count: cart.reduce((tot, item) => tot + item.quantity, 0),
+              cart_total: cartTotal,
+              delivery_fee: request.deliveryFee,
+              has_coupon: Boolean(request.cupomCodigo),
+              coupon_discount: request.descontoCupom || 0,
+              has_cashback: Boolean(request.usarCashback),
+              cashback_discount: request.descontoCashback || 0,
+              payment_method: request.paymentMethodDetail || 'nao_definido',
+            });
             setCheckoutRequest(request);
             setIsCartOpen(false);
             setIsCheckoutOpen(true);

@@ -12,6 +12,7 @@ import { initializeKomaTheme } from "./config/theme";
 import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
 import { SupportCodeNotice } from "./components/app/SupportCodeNotice";
 import { installSupportCodeObserver } from "./utils/supportCode";
+import { AnalyticsProvider, initAnalytics } from "./analytics";
 
 import {
   KOMA_OPERATIONAL_APP_URL,
@@ -208,6 +209,8 @@ if (sentryDsn) {
   });
 }
 
+initAnalytics();
+
 const pathname = window.location.pathname;
 const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isPrintSimulatorRoute = pathname.startsWith("/ferramentas/simulador-impressao");
@@ -285,14 +288,16 @@ const RouteLoading = () => (pathname === "/recuperar-senha" || pathname === "/co
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <AppRecoveryBoundary>
-    <TenantSuspensionBoundary disabled={bypassTenantSuspensionBoundary()}>
-      <React.Suspense fallback={<RouteLoading />}>
-        <RootApp />
-      </React.Suspense>
-      {hasCustomerSupportSurface ? <CustomerSupportWidget /> : null}
-      <SupportCodeNotice />
-    </TenantSuspensionBoundary>
-    </AppRecoveryBoundary>
+    <AnalyticsProvider>
+      <AppRecoveryBoundary>
+      <TenantSuspensionBoundary disabled={bypassTenantSuspensionBoundary()}>
+        <React.Suspense fallback={<RouteLoading />}>
+          <RootApp />
+        </React.Suspense>
+        {hasCustomerSupportSurface ? <CustomerSupportWidget /> : null}
+        <SupportCodeNotice />
+      </TenantSuspensionBoundary>
+      </AppRecoveryBoundary>
+    </AnalyticsProvider>
   </React.StrictMode>,
 );
