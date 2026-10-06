@@ -32,3 +32,14 @@ não inclui adicionais, impostos, taxas ou despesas e não é lucro histórico.
 Custo incompleto permanece desconhecido; base anterior zero não vira crescimento 0%.
 A leitura faz três consultas fixas, sem polling novo, escrita ou alteração automática
 no cardápio. Permissão e plano são os mesmos dos relatórios avançados existentes.
+
+`/relatorios/complementos` reutiliza o mesmo escopo de saída (`scope_entered_items`):
+cada `ItemModificador` de um Item válido conta uma seleção. Como Item já é uma unidade,
+3 × Quentinha G com Frango gera 3 seleções de Frango sem multiplicação no relatório.
+Agregação no banco por produto × opção; a resposta preserva `mix_por_produto`
+(produto → grupo → opção → quantidade) para custo médio ponderado futuro. O pedido não
+congela nome da opção nem grupo: exibimos o cadastro atual pelo ID estável (opções e
+grupos são arquivados, não apagados). Seleção cujo ID não existe mais no cadastro fica em
+"Opções sem cadastro" e é contada em `selecoes_sem_cadastro`. Participação é dentro do
+grupo; grupo sem seleções tem participação `null` (não calculável), não 0%. Opções com
+zero saída listadas são somente as ativas hoje nos grupos vinculados ao produto/categoria.

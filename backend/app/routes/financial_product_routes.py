@@ -151,3 +151,21 @@ def get_inteligencia_cardapio(
         return menu_intelligence(db, require_tenant_id(), data_inicio, data_fim)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def get_consumo_complementos(
+    data_inicio: Optional[str] = Query(None),
+    data_fim: Optional[str] = Query(None),
+    produto_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_entitled_permission(
+        "relatorios:consultar", "advanced_reports",
+        detail="Relatórios avançados não estão disponíveis no plano atual.",
+    )),
+):
+    """Seleções de complementos pela entrada do pedido (mesma saída de Gestão do cardápio)."""
+    from ..services.modifier_consumption import modifier_consumption
+    try:
+        return modifier_consumption(db, require_tenant_id(), data_inicio, data_fim, produto_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
