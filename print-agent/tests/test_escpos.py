@@ -186,6 +186,75 @@ class EscPosPayloadTest(unittest.TestCase):
         self.assertIn("MESA: 6", body)
         self.assertIn("PEDIDO #51", body)
 
+    def test_compact_58mm_preserves_previous_marmitaria_composition_order(self):
+        source = "\n".join(
+            [
+                "=" * 48,
+                "1x QUENTINHA G",
+                "",
+                "\x1b!\x10   \x1bE\x01GUARNIÇÕES:\x1bE\x00 ARROZ, FAROFA\x1b!\x00",
+                "",
+                "\x1b!\x10   \x1bE\x01PROTEÍNAS:\x1bE\x00 FRANGO ACEBOLADO\x1b!\x00",
+                "",
+                "\x1b!\x10   \x1bE\x01SALADAS:\x1bE\x00 VINAGRETE\x1b!\x00",
+                "",
+                "\x1b!\x10   \x1bE\x01ADICIONAIS PAGOS:\x1bE\x00 OVO\x1b!\x00",
+                "",
+                "   OBS: SEM CEBOLA",
+                "-" * 48,
+            ]
+        )
+        payload = build_escpos_payload(
+            source,
+            profile_options={
+                "columns": 32,
+                "compact_layout": True,
+                "supports_cut": False,
+                "feed_lines": 2,
+                "allow_double_height": False,
+                "charset_policy": "ascii_safe",
+                "semantic_layout": "compact_58",
+            },
+        )
+        body = payload[
+            len(INITIALIZE) + len(PORTUGUESE_CODE_PAGE):
+        ].decode("ascii", errors="ignore")
+
+        self.assertLess(body.index("PROTEINAS:"), body.index("GUARNICOES:"))
+        self.assertLess(body.index("GUARNICOES:"), body.index("SALADAS:"))
+        self.assertLess(body.index("SALADAS:"), body.index("ADICIONAIS PAGOS:"))
+        self.assertNotIn("\x1b!\x10", body)
+        self.assertNotIn("\n\n", body)
+
+    def test_standard_80mm_keeps_new_marmitaria_composition_order(self):
+        source = "\n".join(
+            [
+                "\x1b!\x10   \x1bE\x01GUARNIÇÕES:\x1bE\x00 ARROZ\x1b!\x00",
+                "\x1b!\x10   \x1bE\x01PROTEÍNAS:\x1bE\x00 FRANGO\x1b!\x00",
+                "\x1b!\x10   \x1bE\x01SALADAS:\x1bE\x00 VINAGRETE\x1b!\x00",
+            ]
+        )
+        payload = build_escpos_payload(
+            source,
+            profile_options={
+                "columns": 48,
+                "compact_layout": False,
+                "supports_cut": True,
+                "feed_lines": 3,
+                "allow_double_height": True,
+                "charset_policy": "native_cp860",
+                "semantic_layout": "standard",
+            },
+        )
+        body = payload[
+            len(INITIALIZE) + len(PORTUGUESE_CODE_PAGE):
+            -len(b"\n\n\n" + PARTIAL_CUT)
+        ].decode("cp860")
+
+        self.assertLess(body.index("GUARNIÇÕES:"), body.index("PROTEÍNAS:"))
+        self.assertLess(body.index("PROTEÍNAS:"), body.index("SALADAS:"))
+        self.assertIn("\x1b!\x10", body)
+
     def test_standard_80mm_preserves_canonical_labels_accents_and_controls(self):
         source = "\n".join(
             [
