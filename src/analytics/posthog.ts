@@ -138,8 +138,9 @@ export function initAnalytics(): Promise<boolean> {
         capture_pageview: false,
         // Desabilita endpoint /decide e injeção remota de scripts (toolbar/surveys/flags) em conformidade com CSP
         advanced_disable_decide: true,
+        // Permite ingestão de sessões automatizadas e testes de navegador (Headless/WebDriver)
+        opt_out_useragent_filter: true,
         persistence: 'localStorage+cookie',
-        sanitize_properties: (properties: any) => sanitizeProperties(properties),
       });
 
       posthogInstance = posthog;

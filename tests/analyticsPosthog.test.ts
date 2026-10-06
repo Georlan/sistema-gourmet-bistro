@@ -168,6 +168,7 @@ test('react initialization and error tracking are configured cleanly in main and
   // Session replay disabled
   assert.match(posthogConfig, /disable_session_recording:\s*true/);
   assert.match(posthogConfig, /autocapture:\s*false/);
+  assert.match(posthogConfig, /opt_out_useragent_filter:\s*true/);
 
   // React initialization in main.tsx
   assert.match(main, /initAnalytics\(\)/);
