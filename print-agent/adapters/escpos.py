@@ -14,6 +14,8 @@ PARTIAL_CUT: Final[bytes] = b"\x1d\x56\x42\x00"
 SIMULATED_CUT_MARKER: Final[str] = "[CUT]"
 DOUBLE_HEIGHT_ON: Final[str] = "\x1b!\x10"
 NORMAL_SIZE: Final[str] = "\x1b!\x00"
+BOLD_ON: Final[str] = "\x1bE\x01"
+BOLD_OFF: Final[str] = "\x1bE\x00"
 
 _EDGE_CONTROL_RE: Final[re.Pattern[str]] = re.compile(
     r"(?:\x1b(?:M|E|!|3).)"
@@ -319,6 +321,110 @@ def _project_compact_semantics(payload_text: str, columns: int) -> str:
     return "\n".join(lines)
 
 
+def _normalize_label(value: str) -> str:
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKD", str(value or "").casefold())
+        if not unicodedata.combining(character)
+    )
+
+
+def _composition_label_rank(value: str) -> int | None:
+    normalized = _normalize_label(value)
+    if normalized.startswith("protein"):
+        return 0
+    if normalized.startswith("guarnic"):
+        return 1
+    if normalized.startswith("salad"):
+        return 2
+    return None
+
+
+def _composition_label(value: str) -> str | None:
+    visible = _visible_text(value).strip()
+    match = re.match(r"^([^:]{2,40}):\s*", visible)
+    return match.group(1).strip() if match else None
+
+
+def _restore_compact_58_composition_layout(payload_text: str) -> str:
+    """Preserva a disposição já homologada da composição na bobina de 58 mm.
+
+    O documento canônico de 80 mm pode evoluir visualmente sem alterar a KA7.
+    Nesta projeção compacta, Proteínas volta antes de Guarnições e Saladas, e o
+    grupo inteiro permanece em negrito como no layout compacto anterior.
+    """
+    lines = (payload_text or "").split("\n")
+    index = 0
+    while index < len(lines):
+        first_label = _composition_label(lines[index])
+        if first_label is None or _composition_label_rank(first_label) is None:
+            index += 1
+            continue
+
+        chunks: list[tuple[str, list[str], int]] = []
+        current_label: str | None = None
+        current_lines: list[str] = []
+        chunk_order = 0
+        cursor = index
+
+        while cursor < len(lines):
+            raw_line = lines[cursor]
+            visible = _visible_text(raw_line).strip()
+            if visible and len(set(visible)) == 1 and visible[0] in "-=":
+                break
+            if re.match(r"^\d+x\s+", visible, flags=re.IGNORECASE):
+                break
+            if visible.upper().startswith("OBS:") or visible.upper() in {"PAGAMENTO", "ITENS"}:
+                break
+            if visible.upper().startswith(("SUBTOTAL ", "TOTAL DO ", "TOTAL GERAL ")):
+                break
+            if not visible:
+                cursor += 1
+                continue
+
+            label = _composition_label(raw_line)
+            if label is not None:
+                if current_lines and current_label is not None:
+                    chunks.append((current_label, current_lines, chunk_order))
+                    chunk_order += 1
+                current_label = label
+                current_lines = [raw_line]
+            elif current_lines:
+                current_lines.append(raw_line)
+            else:
+                break
+            cursor += 1
+
+        if current_lines and current_label is not None:
+            chunks.append((current_label, current_lines, chunk_order))
+
+        if not chunks:
+            index += 1
+            continue
+
+        def compact_rank(entry: tuple[str, list[str], int]) -> tuple[int, int]:
+            label, _, original_order = entry
+            rank = _composition_label_rank(label)
+            return (rank if rank is not None else 3, original_order)
+
+        projected: list[str] = []
+        for _, chunk_lines, _ in sorted(chunks, key=compact_rank):
+            normalized_lines = [
+                line.replace(BOLD_ON, "").replace(BOLD_OFF, "")
+                for line in chunk_lines
+            ]
+            if not normalized_lines:
+                continue
+            normalized_lines[0] = BOLD_ON + normalized_lines[0]
+            normalized_lines[-1] += BOLD_OFF
+            projected.extend(normalized_lines)
+
+        lines[index:cursor] = projected
+        index += len(projected)
+
+    return "\n".join(lines)
+
+
 def _apply_charset_policy(payload_text: str, policy: str) -> str:
     """Aplica charset por capability sem tocar em bytes de controle ESC/POS."""
     normalized_policy = str(policy or "native_cp860").strip().lower()
@@ -428,7 +534,9 @@ def build_escpos_payload(
     # ESC/POS. Isso elimina o texto literal "x00" sem alterar o protocolo.
     restored = (payload_text or "").replace("\\x00", "\x00")
     projected = (
-        _project_compact_semantics(restored, int(resolved_columns or 32))
+        _restore_compact_58_composition_layout(
+            _project_compact_semantics(restored, int(resolved_columns or 32))
+        )
         if semantic_layout == "compact_58"
         else restored
     )
