@@ -366,8 +366,8 @@ def test_remote_production_separates_and_bolds_marmitaria_groups_without_item_pr
                 nome="QUENTINHA G",
                 preco_unit=10.0,
                 composicao=(
-                    "PROTEÍNAS: Filé de frango acebolado",
                     "GUARNIÇÕES: Arroz refogado, cuscuz temperado, feijão de corda",
+                    "PROTEÍNAS: Filé de frango acebolado",
                     "SALADAS: Salada tropical",
                 ),
             )
@@ -388,11 +388,14 @@ def test_remote_production_separates_and_bolds_marmitaria_groups_without_item_pr
 
     item_line = next(line for line in ticket.splitlines() if "1x QUENTINHA G" in line)
     assert "R$" not in item_line
-    for label in ("PROTEÍNAS:", "GUARNIÇÕES:", "SALADAS:"):
+    for label in ("GUARNIÇÕES:", "PROTEÍNAS:", "SALADAS:"):
         group_line = next(line for line in ticket.splitlines() if label in line)
-        assert group_line.startswith(ESC_BOLD_ON + "   ")
-    assert "\n\n" + ESC_BOLD_ON + "   GUARNIÇÕES:" in ticket
-    assert "\n\n" + ESC_BOLD_ON + "   SALADAS:" in ticket
+        assert group_line.startswith(ESC_DOUBLE_HEIGHT_ON + "   " + ESC_BOLD_ON + label + ESC_BOLD_OFF)
+        assert group_line.endswith(ESC_NORMAL_SIZE)
+    assert ticket.index("GUARNIÇÕES:") < ticket.index("PROTEÍNAS:") < ticket.index("SALADAS:")
+    assert "\n\n" + ESC_DOUBLE_HEIGHT_ON + "   " + ESC_BOLD_ON + "GUARNIÇÕES:" in ticket
+    assert "\n\n" + ESC_DOUBLE_HEIGHT_ON + "   " + ESC_BOLD_ON + "PROTEÍNAS:" in ticket
+    assert ESC_BOLD_OFF + " ARROZ REFOGADO" in ticket
     assert ESC_BOLD_ON + "TROCO PARA: R$ 100,00" + ESC_BOLD_OFF in ticket
     assert ESC_BOLD_ON + "LEVAR TROCO: R$ 30,00" + ESC_BOLD_OFF in ticket
     charge_line = next(line for line in ticket.splitlines() if "A COBRAR: R$ 70,00" in line)
