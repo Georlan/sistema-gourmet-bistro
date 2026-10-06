@@ -132,6 +132,45 @@ def test_new_signup_queues_telegram_only_for_owner(signup_client, monkeypatch):
         ]
 
 
+
+
+def test_onboarding_ready_queues_email_and_telegram_once(signup_client, monkeypatch):
+    _, Session = signup_client
+    monkeypatch.setattr(settings, "KOMA_OWNER_EMAIL", "owner@example.com")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-bot-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "owner-chat")
+
+    with Session() as db:
+        signup_notifications.enqueue_onboarding_ready_owner(
+            db,
+            tenant_id=42,
+            restaurant_name="Restaurante 42",
+            plan="pro",
+        )
+        db.commit()
+
+    expected_ids = {
+        "tenant-42:onboarding-ready-owner:email",
+        "tenant-42:onboarding-ready-owner:telegram",
+    }
+    with Session() as db:
+        notices = db.query(SignupNotification).all()
+        assert {notice.id for notice in notices} == expected_ids
+
+        signup_notifications.enqueue_onboarding_ready_owner(
+            db,
+            tenant_id=42,
+            restaurant_name="Restaurante 42",
+            plan="pro",
+        )
+        db.commit()
+
+    with Session() as db:
+        notices = db.query(SignupNotification).all()
+        assert {notice.id for notice in notices} == expected_ids
+        assert len(notices) == 2
+
+
 def test_telegram_delivery_uses_configured_chat_and_rejects_provider_failure(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-bot-token")
     calls = []
