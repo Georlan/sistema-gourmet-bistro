@@ -1,4 +1,5 @@
 import React from 'react';
+import { captureAnalyticsException } from '../../analytics';
 
 const CHUNK_RELOAD_KEY = 'koma_chunk_reload_attempt';
 const AUTO_RELOAD_INTERVAL_MS = 15000;
@@ -51,6 +52,7 @@ export class AppRecoveryBoundary extends React.Component<React.PropsWithChildren
 
   componentDidCatch(error: unknown) {
     console.error('[app-recovery] Não foi possível abrir a aplicação.', error);
+    captureAnalyticsException(error, { source: 'AppRecoveryBoundary' });
     tryAutoRecoverChunkSkew(error);
   }
 

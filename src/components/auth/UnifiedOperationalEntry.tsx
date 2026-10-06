@@ -15,6 +15,7 @@ import {
   saveOperatorSession,
   type OperationalPortal,
 } from '../../utils/authSession';
+import { identifyOperator, resetAnalytics } from '../../analytics';
 import { KomaLoading } from '../app/KomaLoading';
 import { OnboardingOperationalBoundary } from '../onboarding/OnboardingOperationalBoundary';
 import { OperationalLogin, type LoginRestaurantOption } from './OperationalLogin';
@@ -70,6 +71,7 @@ export default function UnifiedOperationalEntry() {
         // O App legado ainda remove primeiro o alias do portal atual ao sair.
         // Finalizamos somente essa sessão, preservando o outro portal em outra aba.
         clearOperatorSession(activePortal);
+        resetAnalytics();
         setActivePortal(null);
       }
     }, 250);
@@ -159,6 +161,12 @@ export default function UnifiedOperationalEntry() {
 
       // O login substitui a identidade apenas desta aba e vincula seu portal.
       saveOperatorSession(data.access_token, { ...data.usuario, role });
+      identifyOperator({
+        id: data.usuario.id,
+        role,
+        cargo: data.usuario.cargo,
+        restaurante_id: restauranteId,
+      });
 
       setUsername('');
       setPassword('');

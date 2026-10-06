@@ -39,6 +39,7 @@ import {
   resolveOrderSubmissionKey,
   upsertPendingOrderSubmission,
 } from "../orderSubmission";
+import { trackAnalyticsEvent } from "../../analytics";
 
 interface CreatedOrder {
   comanda_id: string;
@@ -463,6 +464,19 @@ export default function CardapioDigital({
       }
 
       clearPendingSubmission(idempotencyKey);
+      trackAnalyticsEvent('public_order_submitted', {
+        restaurant_id: targetRestauranteId,
+        comanda_id: comandaId,
+        numero_pedido: numeroPedido,
+        total: orderTotal,
+        fulfillment: deliveryMethod,
+        payment_method: orderRequest.forma_pagamento,
+        payment_method_detail: paymentMethodDetail || 'nao_definido',
+        items_count: cart.reduce((tot, item) => tot + item.quantity, 0),
+        is_scheduled: Boolean(confirmedSchedule),
+        has_coupon: Boolean(cupomCodigo),
+        has_cashback: Boolean(usarCashback),
+      });
       setCreatedOrder({
         comanda_id: comandaId,
         numero_pedido: numeroPedido,
