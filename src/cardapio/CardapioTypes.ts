@@ -56,6 +56,11 @@ export interface BairroTaxa {
   taxa: number;
 }
 
+export interface DeliveryAllowedCity {
+  cidade: string;
+  uf: string;
+}
+
 export interface DistanceFeeConfig {
   taxa_minima: number;
   valor_por_km?: number;
@@ -124,6 +129,9 @@ export interface BrandConfig {
   tabelaTaxasBairros?: BairroTaxa[];
   tabelaTaxasKm?: DistanceFeeConfig[];
   taxaEntregaPadrao?: number;
+  deliveryAreaRestrictionEnabled?: boolean;
+  deliveryAllowedCities?: DeliveryAllowedCity[];
+  deliveryAllowedNeighborhoods?: string[];
 }
 
 export const LOCAL_PRODUCT_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIComponent(`

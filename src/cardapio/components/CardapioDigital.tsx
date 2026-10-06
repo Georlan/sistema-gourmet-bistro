@@ -29,6 +29,7 @@ import { createSecureIdempotencyKey } from "../../utils/secureIdempotency";
 import { authRequestErrorMessage } from "../../utils/authRequest";
 import { formatCardapioApiError } from "../orderApiErrors";
 import { saveStoredOrder } from "../orderTracking";
+import { captureOrderAttribution } from "../orderAttribution";
 import { buildCardapioOrderItems } from "../orderItems";
 import { isOrderingBlockConflict } from "../orderingBlockUi";
 import CardapioPaymentSummary from "./CardapioPaymentSummary";
@@ -136,6 +137,39 @@ const checkoutFulfillmentLabel = (fulfillment: CardapioFulfillment) => {
   return "Retirada";
 };
 
+const normalizeAreaText = (value: unknown) => String(value || "")
+  .trim()
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLocaleLowerCase("pt-BR");
+
+const getDeliveryAreaError = (
+  brand: BrandConfig,
+  snapshot?: DeliveryAddressSnapshot | null,
+): string | null => {
+  if (!brand.deliveryAreaRestrictionEnabled) return null;
+  if (!snapshot?.cidade?.trim() || !snapshot?.uf?.trim()) {
+    return "Para entrega, confirme um endereço completo com CEP, cidade e UF.";
+  }
+  const cities = brand.deliveryAllowedCities || [];
+  if (cities.length === 0) {
+    return "A área de entrega deste restaurante ainda não foi configurada. Escolha Retirada ou fale com o estabelecimento.";
+  }
+  const city = normalizeAreaText(snapshot.cidade);
+  const state = snapshot.uf.trim().toUpperCase();
+  if (!cities.some((item) => normalizeAreaText(item.cidade) === city && item.uf.trim().toUpperCase() === state)) {
+    return "Este endereço fica fora da área de entrega deste restaurante. Você pode alterar o endereço ou escolher Retirada.";
+  }
+  const neighborhoods = brand.deliveryAllowedNeighborhoods || [];
+  if (
+    neighborhoods.length > 0
+    && !neighborhoods.some((item) => normalizeAreaText(item) === normalizeAreaText(snapshot.bairro))
+  ) {
+    return "Este bairro fica fora da área de entrega deste restaurante. Você pode alterar o endereço ou escolher Retirada.";
+  }
+  return null;
+};
+
 export default function CardapioDigital({
   activeBrand,
   cart,
@@ -168,6 +202,7 @@ export default function CardapioDigital({
   const isSubmittingRef = useRef(false);
   const idempotencyKeyRef = useRef<string>("");
   const idempotencyFingerprintRef = useRef<string | null>(null);
+  const orderAttribution = useMemo(() => captureOrderAttribution(), []);
 
   const subtotal = useMemo(() => cart.reduce((acc, item) => {
     let unitPrice = item.product.price;
@@ -325,6 +360,13 @@ export default function CardapioDigital({
       setErrorMessage("Informe o endereço completo de entrega.");
       return;
     }
+    if (deliveryMethod === "delivery") {
+      const areaError = getDeliveryAreaError(activeBrand, addressSnapshot);
+      if (areaError) {
+        setErrorMessage(areaError);
+        return;
+      }
+    }
     if (cart.length === 0) {
       setErrorMessage("Sua sacola está vazia.");
       return;
@@ -372,6 +414,7 @@ export default function CardapioDigital({
       usar_cashback: usarCashback,
       tipo_pedido: publicFulfillmentValue(deliveryMethod),
       scheduled_for: scheduledForIso || null,
+      attribution: orderAttribution,
     };
     const fingerprint = buildOrderSubmissionFingerprint(orderRequest);
     let idempotencyKey: string;

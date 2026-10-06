@@ -9,6 +9,7 @@ import {
   Menu,
   X,
   AlertOctagon,
+  TrendingUp,
 } from "lucide-react";
 import type { Tenant } from "./superAdminTypes";
 import {
@@ -31,8 +32,9 @@ import {
 } from "./SuperAdminPlatformHub";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import type { AuditLogItem } from "./SuperAdminAuditTab";
+import { SuperAdminAcquisitionTab } from "./SuperAdminAcquisitionTab";
 
-type TabId = "overview" | "clients" | "incidents" | "platform";
+type TabId = "overview" | "clients" | "acquisition" | "incidents" | "platform";
 
 export default function SuperAdminPanel() {
   const frontendBuildSha = import.meta.env.VITE_BUILD_SHA || "desconhecido";
@@ -206,6 +208,7 @@ export default function SuperAdminPanel() {
   const navItems = [
     { id: "overview" as TabId, label: "Início", icon: LayoutDashboard, badge: 0 },
     { id: "clients" as TabId, label: "Clientes", icon: Store, badge: pendingContractsCount },
+    { id: "acquisition" as TabId, label: "Aquisição", icon: TrendingUp, badge: 0 },
     { id: "incidents" as TabId, label: "Incidentes", icon: AlertOctagon, badge: 0 },
     { id: "platform" as TabId, label: "Plataforma", icon: Settings, badge: 0 },
   ];
@@ -349,6 +352,7 @@ export default function SuperAdminPanel() {
               runtimeHealth={runtimeHealth}
             />
           )}
+          {activeTab === "acquisition" && <SuperAdminAcquisitionTab />}
           {activeTab === "incidents" && (
             <SuperAdminIncidentCenterTab
               tenants={tenants}

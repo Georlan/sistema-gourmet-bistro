@@ -8,6 +8,8 @@ type BairroTaxaRow = {
   taxa: number;
 };
 
+type AllowedCity = { cidade: string; uf: string };
+
 type DeliveryConfig = {
   delivery_ativo: boolean;
   pedido_minimo: number;
@@ -16,6 +18,9 @@ type DeliveryConfig = {
   tipo_taxa_entrega: 'bairro';
   taxa_entrega_fixa: number;
   tabela_taxas_bairros: BairroTaxaRow[];
+  delivery_area_restriction_enabled: boolean;
+  delivery_allowed_cities: AllowedCity[];
+  delivery_allowed_neighborhoods: string[];
 };
 
 interface Props {
@@ -48,6 +53,19 @@ function normalizeConfig(data: Record<string, unknown>): DeliveryConfig {
     tipo_taxa_entrega: 'bairro',
     taxa_entrega_fixa: Number(data.taxa_entrega_fixa ?? 0),
     tabela_taxas_bairros: normalizeNeighborhoods(data.tabela_taxas_bairros),
+    delivery_area_restriction_enabled: data.delivery_area_restriction_enabled === true,
+    delivery_allowed_cities: Array.isArray(data.delivery_allowed_cities)
+      ? data.delivery_allowed_cities
+          .filter((item) => item && typeof item === 'object')
+          .map((item) => {
+            const row = item as Record<string, unknown>;
+            return { cidade: String(row.cidade || '').trim(), uf: String(row.uf || '').trim().toUpperCase() };
+          })
+          .filter((item) => item.cidade && item.uf.length === 2)
+      : [],
+    delivery_allowed_neighborhoods: Array.isArray(data.delivery_allowed_neighborhoods)
+      ? data.delivery_allowed_neighborhoods.map((item) => String(item || '').trim()).filter(Boolean)
+      : [],
   };
 }
 
@@ -64,6 +82,9 @@ function persistedPayload(config: DeliveryConfig) {
     taxa_entrega_fixa: Math.max(0, Number(config.taxa_entrega_fixa) || 0),
     tabela_taxas_bairros: neighborhoods,
     tabela_taxas_km: [],
+    delivery_area_restriction_enabled: Boolean(config.delivery_area_restriction_enabled),
+    delivery_allowed_cities: config.delivery_allowed_cities,
+    delivery_allowed_neighborhoods: config.delivery_allowed_neighborhoods,
   };
 }
 
@@ -84,11 +105,17 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
     tipo_taxa_entrega: 'bairro',
     taxa_entrega_fixa: 0,
     tabela_taxas_bairros: [],
+    delivery_area_restriction_enabled: false,
+    delivery_allowed_cities: [],
+    delivery_allowed_neighborhoods: [],
   });
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [newCity, setNewCity] = useState('');
+  const [newUf, setNewUf] = useState('');
+  const [newNeighborhood, setNewNeighborhood] = useState('');
 
   const loadConfig = useCallback(async () => {
     setIsLoading(true);
@@ -209,6 +236,74 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
             <span className={clsx('h-2 w-2 rounded-full', config.delivery_ativo ? 'bg-emerald-500' : 'bg-koma-border')} />
             {config.delivery_ativo ? 'Ativa' : 'Pausada'}
           </button>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-black text-koma-foreground">Área permitida para entrega</h3>
+              <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+                Restringe apenas delivery do cardápio online. Retirada continua disponível para qualquer cliente.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={config.delivery_area_restriction_enabled}
+              onClick={() => setConfig((current) => ({ ...current, delivery_area_restriction_enabled: !current.delivery_area_restriction_enabled }))}
+              className={clsx(
+                'inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black transition',
+                config.delivery_area_restriction_enabled
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                  : 'border-koma-border bg-koma-raised text-koma-muted',
+              )}
+            >
+              {config.delivery_area_restriction_enabled ? 'Restrita' : 'Livre'}
+            </button>
+          </div>
+
+          {config.delivery_area_restriction_enabled && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-koma-border bg-koma-card p-4">
+                <h4 className="text-xs font-black text-koma-foreground">Cidades atendidas</h4>
+                <p className="mt-1 text-[9px] text-koma-muted">O endereço precisa pertencer a uma destas cidades/UF.</p>
+                <div className="mt-3 grid grid-cols-[1fr_72px_auto] gap-2">
+                  <input value={newCity} onChange={(event) => setNewCity(event.target.value)} placeholder="Cidade" className="h-10 rounded-lg border border-koma-border bg-koma-input px-3 text-xs outline-none focus:border-emerald-500/60" />
+                  <input value={newUf} onChange={(event) => setNewUf(event.target.value.toUpperCase().slice(0, 2))} placeholder="UF" className="h-10 rounded-lg border border-koma-border bg-koma-input px-3 text-xs uppercase outline-none focus:border-emerald-500/60" />
+                  <button type="button" onClick={() => {
+                    const cidade = newCity.trim();
+                    const uf = newUf.trim().toUpperCase();
+                    if (!cidade || uf.length !== 2) return;
+                    setConfig((current) => ({ ...current, delivery_allowed_cities: [...current.delivery_allowed_cities.filter((item) => !(item.cidade.toLowerCase() === cidade.toLowerCase() && item.uf === uf)), { cidade, uf }] }));
+                    setNewCity(''); setNewUf('');
+                  }} className="grid h-10 w-10 place-items-center rounded-lg border border-emerald-500/25 bg-emerald-500/10 text-emerald-700"><Plus size={14} /></button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {config.delivery_allowed_cities.map((item) => <button key={`${item.cidade}-${item.uf}`} type="button" onClick={() => setConfig((current) => ({ ...current, delivery_allowed_cities: current.delivery_allowed_cities.filter((city) => city !== item) }))} className="rounded-full border border-koma-border px-2.5 py-1 text-[10px] font-bold text-koma-secondary">{item.cidade} · {item.uf} ×</button>)}
+                  {config.delivery_allowed_cities.length === 0 && <span className="text-[10px] text-amber-600">Adicione ao menos uma cidade antes de publicar a restrição.</span>}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-koma-border bg-koma-card p-4">
+                <h4 className="text-xs font-black text-koma-foreground">Bairros permitidos (opcional)</h4>
+                <p className="mt-1 text-[9px] text-koma-muted">Se deixar vazio, qualquer bairro das cidades acima será aceito.</p>
+                <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                  <input value={newNeighborhood} onChange={(event) => setNewNeighborhood(event.target.value)} placeholder="Bairro" className="h-10 rounded-lg border border-koma-border bg-koma-input px-3 text-xs outline-none focus:border-emerald-500/60" />
+                  <button type="button" onClick={() => {
+                    const bairro = newNeighborhood.trim();
+                    if (!bairro) return;
+                    setConfig((current) => ({ ...current, delivery_allowed_neighborhoods: [...current.delivery_allowed_neighborhoods.filter((item) => item.toLowerCase() !== bairro.toLowerCase()), bairro] }));
+                    setNewNeighborhood('');
+                  }} className="grid h-10 w-10 place-items-center rounded-lg border border-emerald-500/25 bg-emerald-500/10 text-emerald-700"><Plus size={14} /></button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {config.delivery_allowed_neighborhoods.map((item) => <button key={item} type="button" onClick={() => setConfig((current) => ({ ...current, delivery_allowed_neighborhoods: current.delivery_allowed_neighborhoods.filter((bairro) => bairro !== item) }))} className="rounded-full border border-koma-border px-2.5 py-1 text-[10px] font-bold text-koma-secondary">{item} ×</button>)}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
