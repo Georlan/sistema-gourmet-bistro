@@ -98,11 +98,17 @@ class EdicaoLoteResponse(BaseModel):
 
 CATEGORY_DISPLAY_ORDER = [
     "Quentinhas",
+    "BURGERS", "Burgers",
+    "COMBOS", "Combos",
+    "PORÇÕES", "Porções",
     "Pizzas Tradicionais", "Pizzas Especiais", "Hambúrgueres Bovinos",
     "Hambúrgueres de Frango", "Hambúrgueres Suínos", "Baguetes",
     "Pastéis Tradicionais", "Pastelões Especiais", "Pastéis Doces",
-    "Petiscos", "Combos Promocionais", "Sucos", "Refrigerantes e Águas",
-    "Bebidas & Vinhos", "Cervejas", "Bebidas Quentes", "Sobremesas",
+    "Petiscos", "Combos Promocionais",
+    "BEBIDAS",
+    "Sucos", "Refrigerantes e Águas", "Bebidas & Vinhos", "Cervejas", "Bebidas Quentes",
+    "SOBREMESAS", "Sobremesas",
+    "Bebidas",
 ]
 
 def ordered_categories(categories: List[Categoria]) -> List[Categoria]:

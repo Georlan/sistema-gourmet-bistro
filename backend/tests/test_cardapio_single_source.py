@@ -176,3 +176,22 @@ def test_hidden_caixa_bridge_does_not_query_database():
     assert response.json()["id"] == TEST_RESTAURANTE_ID
     assert response.json()["deprecated_bridge"] is True
     assert statements == []
+
+
+def test_hamburgueria_category_display_order():
+    categories = [
+        SimpleNamespace(nome="SOBREMESAS"),
+        SimpleNamespace(nome="PORÇÕES"),
+        SimpleNamespace(nome="BEBIDAS"),
+        SimpleNamespace(nome="BURGERS"),
+        SimpleNamespace(nome="COMBOS"),
+    ]
+    ordered = cardapio_digital._ordered_categories(categories)
+    assert [category.nome for category in ordered] == [
+        "BURGERS",
+        "COMBOS",
+        "PORÇÕES",
+        "BEBIDAS",
+        "SOBREMESAS",
+    ]
+
