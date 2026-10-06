@@ -136,6 +136,8 @@ export function initAnalytics(): Promise<boolean> {
         autocapture: false,
         // Não cria visualizações de página sintéticas em rotas SPA internas
         capture_pageview: false,
+        // Desabilita endpoint /decide e injeção remota de scripts (toolbar/surveys/flags) em conformidade com CSP
+        advanced_disable_decide: true,
         persistence: 'localStorage+cookie',
         sanitize_properties: (properties: any) => sanitizeProperties(properties),
       });
