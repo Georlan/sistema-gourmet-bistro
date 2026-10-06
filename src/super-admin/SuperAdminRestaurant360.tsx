@@ -3,13 +3,17 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowLeft,
+  BarChart2,
   CalendarClock,
   CreditCard,
   ExternalLink,
   Headphones,
   History,
+  Layers,
   Lock,
   Pencil,
+  Plus,
+  Printer,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -17,8 +21,10 @@ import {
   Unlock,
   UsersRound,
   Wrench,
+  AlertTriangle,
 } from "lucide-react";
 import { formatCurrency, getSubscriptionPlan } from "../config/subscriptionPlans";
+import { SuperAdminCreateIssueModal } from "./SuperAdminCreateIssueModal";
 import { SuperAdminReleaseModal } from "./SuperAdminReleaseModal";
 import { SuperAdminTrialModal } from "./SuperAdminTrialModal";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
@@ -37,6 +43,50 @@ type SectionId =
   | "payments"
   | "operation"
   | "history";
+
+type LinkedIssue = {
+  id: number;
+  provider: string;
+  external_issue_id: string;
+  external_identifier: string;
+  external_url: string;
+  title: string;
+  status: string;
+  priority: string;
+  actor: string;
+  created_at: string | null;
+};
+
+type TenantAnalytics = {
+  posthog: {
+    operational_dashboard_url: string;
+    events_url: string;
+    project_id: string;
+  };
+};
+
+type TenantPrintStatus = {
+  configured?: boolean;
+  status: "online" | "offline" | "degraded" | "not_configured";
+  agent_id: string | null;
+  version: string | null;
+  is_primary: boolean;
+  last_seen_at: string | null;
+  seconds_since_heartbeat: number | null;
+  queue: {
+    pending: number;
+    claimed: number;
+    failed: number;
+  };
+  last_job: {
+    id: string;
+    status: string;
+    document_type: string;
+    printer_name: string | null;
+    created_at: string | null;
+  } | null;
+  last_error: string | null;
+};
 
 type TrialRecord = {
   restaurantId: string;
@@ -283,6 +333,58 @@ export function SuperAdminRestaurant360({
   const [incidentBusy, setIncidentBusy] = useState(false);
   const [incidentActionError, setIncidentActionError] = useState<string | null>(null);
   const [incidentActionNotice, setIncidentActionNotice] = useState<string | null>(null);
+  const [linkedIssues, setLinkedIssues] = useState<LinkedIssue[]>([]);
+  const [issuesLoading, setIssuesLoading] = useState(false);
+  const [issuesSyncing, setIssuesSyncing] = useState(false);
+  const [analytics, setAnalytics] = useState<TenantAnalytics | null>(null);
+  const [printStatus, setPrintStatus] = useState<TenantPrintStatus | null>(null);
+  const [printStatusLoading, setPrintStatusLoading] = useState(false);
+  const [createIssueOpen, setCreateIssueOpen] = useState(false);
+
+  const loadIssues = useCallback(async (refreshLive = false) => {
+    if (refreshLive) setIssuesSyncing(true);
+    else setIssuesLoading(true);
+    try {
+      const url = `/api/super-admin/restaurantes/${tenant.id}/issues${refreshLive ? "?refresh_live=true" : ""}`;
+      const res = await superAdminFetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setLinkedIssues(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      // Ignora erro suavemente
+    } finally {
+      setIssuesLoading(false);
+      setIssuesSyncing(false);
+    }
+  }, [tenant.id]);
+
+  const loadAnalytics = useCallback(async () => {
+    try {
+      const res = await superAdminFetch(`/api/super-admin/restaurantes/${tenant.id}/analytics`);
+      if (res.ok) {
+        const data = await res.json();
+        setAnalytics(data);
+      }
+    } catch {
+      // Ignora erro suavemente
+    }
+  }, [tenant.id]);
+
+  const loadPrintStatus = useCallback(async () => {
+    setPrintStatusLoading(true);
+    try {
+      const res = await superAdminFetch(`/api/super-admin/restaurantes/${tenant.id}/print-status`);
+      if (res.ok) {
+        const data = await res.json();
+        setPrintStatus(data);
+      }
+    } catch {
+      // Ignora erro suavemente
+    } finally {
+      setPrintStatusLoading(false);
+    }
+  }, [tenant.id]);
 
   const linkedContract = useMemo(
     () => contracts.find(item => item.linkedRestaurantId === tenant.id) || null,
@@ -294,6 +396,9 @@ export function SuperAdminRestaurant360({
   const loadData = useCallback(async () => {
     setLoading(true);
     const nextErrors: string[] = [];
+    void loadIssues();
+    void loadAnalytics();
+    void loadPrintStatus();
 
     const results = await Promise.allSettled([
       superAdminFetch("/api/super-admin/trials").then(async response => {
@@ -1282,6 +1387,261 @@ export function SuperAdminRestaurant360({
           </div>
           </div>
 
+          {/* Cockpit 360: Control Plane & Engenharia (PostHog & Linear) */}
+          <div className="rounded-xl border border-zinc-800 bg-koma-card">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 p-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-koma-foreground flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-[#00b894]" /> Control Plane & Engenharia
+                  </h3>
+                  <span className="rounded-md border border-[#00b894]/30 bg-[#00b894]/10 px-2 py-0.5 text-[9px] font-black uppercase text-[#00b894]">
+                    KOM-10
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-koma-muted">
+                  Diagnóstico cruzado no PostHog e gestão de tarefas no Linear vinculadas a este restaurante.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void loadIssues(true);
+                    void loadPrintStatus();
+                  }}
+                  disabled={issuesSyncing || printStatusLoading}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-koma-page px-2.5 py-1.5 text-xs font-bold text-koma-secondary hover:text-koma-foreground cursor-pointer"
+                  title="Sincronizar status com o Linear e Print Agent"
+                >
+                  <RefreshCw className={`h-3 w-3 ${issuesSyncing || printStatusLoading ? "animate-spin text-[#00b894]" : ""}`} />
+                  Sincronizar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreateIssueOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#00b894] px-3 py-1.5 text-xs font-black text-black hover:bg-[#00a383] cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Criar issue no Linear
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 grid gap-4 xl:grid-cols-3 lg:grid-cols-2">
+              {/* Observabilidade & Analytics (PostHog) */}
+              <div className="rounded-lg border border-zinc-800 bg-koma-page p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <BarChart2 className="h-4 w-4 text-[#00b894]" />
+                      <h4 className="text-xs font-bold text-koma-foreground">PostHog Analytics</h4>
+                    </div>
+                    <span className="text-[10px] font-medium text-koma-muted">Projeto 648305</span>
+                  </div>
+                  <p className="mt-2 text-[11px] text-koma-secondary">
+                    Acompanhe conversões do cardápio, funis, sessões e erros reais do restaurante.
+                  </p>
+                  <div className="mt-3 grid gap-2">
+                    <a
+                      href={analytics?.posthog?.operational_dashboard_url || "https://us.posthog.com/project/648305/dashboard/2178362"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-between rounded-lg border border-zinc-700/80 bg-zinc-900/60 px-3 py-2 text-xs font-semibold text-koma-foreground hover:border-[#00b894]/50 hover:text-emerald-300"
+                    >
+                      <span>Visão Diária do Produto (Dashboard 2178362)</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                    <a
+                      href={analytics?.posthog?.events_url || "https://us.posthog.com/project/648305/events"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-between rounded-lg border border-zinc-700/80 bg-zinc-900/60 px-3 py-2 text-xs font-semibold text-koma-foreground hover:border-[#00b894]/50 hover:text-emerald-300"
+                    >
+                      <span>Histórico de Eventos Brutos</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Diagnóstico do Print Agent & Fila (KOM-10 / KOM-19) */}
+              <div className="rounded-lg border border-zinc-800 bg-koma-page p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Printer className="h-4 w-4 text-[#00b894]" />
+                      <h4 className="text-xs font-bold text-koma-foreground">Print Agent & Fila</h4>
+                    </div>
+                    <span
+                      className={
+                        "rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase " +
+                        (printStatus?.status === "online"
+                          ? "border-emerald-800/60 bg-emerald-950/30 text-emerald-300"
+                          : printStatus?.status === "degraded"
+                            ? "border-amber-800/60 bg-amber-950/30 text-amber-300"
+                            : printStatus?.status === "offline"
+                              ? "border-rose-800/60 bg-rose-950/30 text-rose-300"
+                              : "border-zinc-700 bg-zinc-900 text-koma-muted")
+                      }
+                    >
+                      {printStatus?.status === "online"
+                        ? "Online"
+                        : printStatus?.status === "degraded"
+                          ? "Degradado"
+                          : printStatus?.status === "offline"
+                            ? "Offline"
+                            : "Não configurado"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[11px] text-koma-secondary">
+                    Status do daemon local de impressão e volumetria da fila por tenant.
+                  </p>
+
+                  <div className="mt-3 space-y-2 text-xs">
+                    <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/60 p-2.5">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-koma-muted">Agente primário:</span>
+                        <strong className="text-koma-foreground truncate max-w-[140px]" title={printStatus?.agent_id || "—"}>
+                          {printStatus?.agent_id || "Nenhum"}
+                        </strong>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-[11px]">
+                        <span className="text-koma-muted">Versão:</span>
+                        <span className="text-koma-secondary">{printStatus?.version ? `v${printStatus.version}` : "—"}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-[11px]">
+                        <span className="text-koma-muted">Último heartbeat:</span>
+                        <span className="text-koma-secondary">
+                          {printStatus?.last_seen_at
+                            ? `${formatDate(printStatus.last_seen_at)} ${
+                                printStatus.seconds_since_heartbeat !== null
+                                  ? `(${printStatus.seconds_since_heartbeat}s atrás)`
+                                  : ""
+                              }`
+                            : "—"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5 text-center text-[10px]">
+                      <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-1.5">
+                        <span className="text-koma-muted block">Pendentes</span>
+                        <strong className="text-xs text-koma-foreground font-mono">
+                          {printStatus?.queue?.pending ?? 0}
+                        </strong>
+                      </div>
+                      <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-1.5">
+                        <span className="text-koma-muted block">Em proc.</span>
+                        <strong className="text-xs text-koma-foreground font-mono">
+                          {printStatus?.queue?.claimed ?? 0}
+                        </strong>
+                      </div>
+                      <div
+                        className={
+                          "rounded-md border p-1.5 " +
+                          ((printStatus?.queue?.failed ?? 0) > 0
+                            ? "border-rose-900/60 bg-rose-950/20 text-rose-300"
+                            : "border-zinc-800 bg-zinc-900/40 text-koma-foreground")
+                        }
+                      >
+                        <span className="text-koma-muted block">Falhas</span>
+                        <strong className="text-xs font-mono">
+                          {printStatus?.queue?.failed ?? 0}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {printStatus?.last_error && (
+                      <div className="rounded-lg border border-rose-900/60 bg-rose-950/20 p-2 text-[10px] text-rose-300 flex items-start gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-rose-400 mt-0.5" />
+                        <span className="truncate" title={printStatus.last_error}>
+                          {printStatus.last_error}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onSupport(tenant, {
+                        tab: "impressao_salao",
+                        subTab: "impressao",
+                        label: "Impressão",
+                      })
+                    }
+                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700/80 bg-zinc-900/60 px-3 py-2 text-xs font-semibold text-koma-foreground hover:border-[#00b894]/50 hover:text-emerald-300 cursor-pointer"
+                  >
+                    <Headphones className="h-3.5 w-3.5 text-amber-400" />
+                    <span>Diagnosticar no Modo Suporte</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Backlog do Restaurante no Linear */}
+              <div className="rounded-lg border border-zinc-800 bg-koma-page p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-[#00b894]" />
+                    <h4 className="text-xs font-bold text-koma-foreground">Issues no Linear</h4>
+                  </div>
+                  <span className="text-[10px] font-mono text-koma-muted">{linkedIssues.length} vinculada(s)</span>
+                </div>
+                <p className="mt-2 text-[11px] text-koma-secondary">
+                  Tarefas e correções cadastradas e rastreadas no Control Plane.
+                </p>
+
+                <div className="mt-3 space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {issuesLoading ? (
+                    <div className="rounded-lg border border-zinc-800 p-4 text-center text-[11px] text-koma-muted">
+                      Carregando issues do restaurante...
+                    </div>
+                  ) : linkedIssues.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-zinc-800 p-4 text-center text-[11px] text-koma-muted">
+                      Nenhuma issue vinculada a este restaurante ainda.
+                    </div>
+                  ) : (
+                    linkedIssues.map((issue) => (
+                      <div
+                        key={issue.id}
+                        className="flex items-center justify-between rounded-lg border border-zinc-800 bg-koma-card p-2.5 text-xs hover:border-zinc-700"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-[#00b894] text-[11px]">
+                              {issue.external_identifier}
+                            </span>
+                            <span className="truncate font-semibold text-koma-foreground text-[11px]" title={issue.title}>
+                              {issue.title}
+                            </span>
+                          </div>
+                          <div className="mt-1 flex items-center gap-2 text-[10px] text-koma-muted">
+                            <span>Status: <strong className="text-koma-secondary">{issue.status}</strong></span>
+                            <span>•</span>
+                            <span>Por: {issue.actor}</span>
+                          </div>
+                        </div>
+                        <a
+                          href={issue.external_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-2 flex-shrink-0 p-1.5 text-koma-muted hover:text-koma-foreground"
+                          title="Abrir no Linear"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="rounded-xl border border-zinc-800 bg-koma-card">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-800 p-4">
             <div>
@@ -1398,6 +1758,29 @@ export function SuperAdminRestaurant360({
 
       {trialOpen && <SuperAdminTrialModal tenant={tenant} onClose={() => setTrialOpen(false)} onUpdated={() => void refreshAll()} />}
       {releaseOpen && <SuperAdminReleaseModal restaurantId={tenant.id} onClose={() => setReleaseOpen(false)} onReleased={() => void refreshAll()} />}
+      {createIssueOpen && (
+        <SuperAdminCreateIssueModal
+          tenant={tenant}
+          onClose={() => setCreateIssueOpen(false)}
+          onCreated={(newIssue) => {
+            setLinkedIssues((prev) => [
+              {
+                id: Date.now(),
+                provider: "linear",
+                external_issue_id: newIssue.id,
+                external_identifier: newIssue.identifier,
+                external_url: newIssue.url,
+                title: newIssue.title,
+                status: newIssue.status || "Todo",
+                priority: "2",
+                actor: "SuperAdmin",
+                created_at: new Date().toISOString(),
+              },
+              ...prev,
+            ]);
+          }}
+        />
+      )}
     </section>
   );
 }
