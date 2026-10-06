@@ -5,7 +5,13 @@ from unittest.mock import AsyncMock, patch
 
 from app.database import SessionLocal, tenant_session_scope
 from app.main import app
-from app.models import ExternalIssueLink, Restaurante, SuperAdminAuditLog
+from app.models import (
+    ExternalIssueLink,
+    PrintAgentToken,
+    PrintJob,
+    Restaurante,
+    SuperAdminAuditLog,
+)
 from app.routes import super_admin
 from app.security import create_access_token, get_password_hash
 from app.integrations.sanitizer import sanitize_text, sanitize_payload
@@ -49,9 +55,13 @@ def mock_restaurants():
         if not r2:
             r2 = Restaurante(id=902, nome="Bistrô Beta Teste", slug="beta-test")
             db.add(r2)
+        db.query(PrintJob).filter(PrintJob.restaurante_id.in_([901, 902])).delete()
+        db.query(PrintAgentToken).filter(PrintAgentToken.restaurante_id.in_([901, 902])).delete()
         db.commit()
     yield
     with SessionLocal() as db:
+        db.query(PrintJob).filter(PrintJob.restaurante_id.in_([901, 902])).delete()
+        db.query(PrintAgentToken).filter(PrintAgentToken.restaurante_id.in_([901, 902])).delete()
         db.query(ExternalIssueLink).filter(ExternalIssueLink.restaurante_id.in_([901, 902])).delete()
         db.query(SuperAdminAuditLog).filter(SuperAdminAuditLog.restaurante_id.in_([901, 902])).delete()
         db.query(Restaurante).filter(Restaurante.id.in_([901, 902])).delete()
@@ -261,11 +271,117 @@ def test_list_issues_tenant_isolation(mock_restaurants):
 
 
 def test_get_analytics_links(mock_restaurants):
-    """Garante que os links do PostHog são gerados corretamente com o ID do tenant."""
+    """Garante que os links do PostHog são gerados sem a dependência do add-on pago de groups."""
     headers = _superadmin_headers()
     response = client.get("/api/super-admin/restaurantes/901/analytics", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert "posthog" in data
     assert "2178362" in data["posthog"]["operational_dashboard_url"]
-    assert "/groups/restaurant/901" in data["posthog"]["tenant_group_url"]
+    assert "events" in data["posthog"]["events_url"]
+    assert "tenant_group_url" not in data["posthog"]
+
+
+def test_print_status_requires_superadmin(mock_restaurants):
+    """Garante autenticação obrigatória de superadmin para acessar diagnóstico de impressão."""
+    res_no_auth = client.get("/api/super-admin/restaurantes/901/print-status")
+    assert res_no_auth.status_code == 401
+
+
+def test_print_status_not_found():
+    """Garante 404 para restaurante inexistente."""
+    headers = _superadmin_headers()
+    response = client.get("/api/super-admin/restaurantes/99999/print-status", headers=headers)
+    assert response.status_code == 404
+
+
+def test_print_status_not_configured(mock_restaurants):
+    """Garante retorno limpo para restaurante sem Print Agent configurado."""
+    headers = _superadmin_headers()
+    response = client.get("/api/super-admin/restaurantes/901/print-status", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["configured"] is False
+    assert data["status"] == "not_configured"
+    assert data["agent_id"] is None
+    assert data["queue"]["pending"] == 0
+    assert data["queue"]["claimed"] == 0
+    assert data["queue"]["failed"] == 0
+    assert data["last_job"] is None
+
+
+def test_print_status_with_agents_and_queue(mock_restaurants):
+    """Garante leitura correta de agente online, fila particionada e jobs por tenant."""
+    headers = _superadmin_headers()
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    with SessionLocal() as db:
+        with tenant_session_scope(db, 901):
+            agent = PrintAgentToken(
+                id="agent-token-test-901",
+                restaurante_id=901,
+                agent_id="caixa-balcao",
+                token_hash="fakehash123",
+                ativo=True,
+                is_primary=True,
+                last_seen_at=now,
+                printer_diagnostics={
+                    "agent_version": "1.4.2",
+                    "printers": [{"name": "EPSON_TM_T20", "available": True, "present": True, "configured": True}],
+                },
+            )
+            db.add(agent)
+
+            pj1 = PrintJob(
+                id="pj-test-1",
+                restaurante_id=901,
+                document_type="producao",
+                destination="COZINHA",
+                source_type="pedido",
+                source_id="101",
+                payload_text="Item 1\n",
+                status="pending",
+                idempotency_key="idemp-pj-1",
+            )
+            pj2 = PrintJob(
+                id="pj-test-2",
+                restaurante_id=901,
+                document_type="fechamento",
+                destination="FECHAMENTO",
+                source_type="comanda",
+                source_id="202",
+                payload_text="Conta R$ 50\n",
+                status="claimed",
+                idempotency_key="idemp-pj-2",
+            )
+            pj3 = PrintJob(
+                id="pj-test-3",
+                restaurante_id=901,
+                document_type="producao",
+                destination="BAR",
+                source_type="pedido",
+                source_id="103",
+                payload_text="Drink 1\n",
+                status="failed",
+                last_error="Printer out of paper",
+                idempotency_key="idemp-pj-3",
+            )
+            db.add_all([pj1, pj2, pj3])
+            db.commit()
+
+    response = client.get("/api/super-admin/restaurantes/901/print-status", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["configured"] is True
+    assert data["status"] == "online"
+    assert data["agent_id"] == "caixa-balcao"
+    assert data["version"] == "1.4.2"
+    assert data["is_primary"] is True
+    assert data["seconds_since_heartbeat"] is not None
+    assert data["seconds_since_heartbeat"] <= 5
+    assert data["queue"]["pending"] == 1
+    assert data["queue"]["claimed"] == 1
+    assert data["queue"]["failed"] == 1
+    assert data["last_error"] == "Printer out of paper"
+    assert data["last_job"] is not None
+

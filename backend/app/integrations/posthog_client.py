@@ -38,16 +38,9 @@ class PostHogClient:
         """Gera URL direta para o Dashboard de Visão Diária do Produto."""
         return f"{self.app_url}/project/{self.project_id}/dashboard/{dashboard_id}"
 
-    def get_tenant_group_url(self, restaurant_id: int) -> str:
-        """Gera deep link para o grupo analítico do restaurante."""
-        return f"{self.app_url}/project/{self.project_id}/groups/restaurant/{restaurant_id}"
-
-    def get_events_url(self, restaurant_id: Optional[int] = None) -> str:
-        """Gera deep link para a lista de eventos brutos."""
-        base = f"{self.app_url}/project/{self.project_id}/events"
-        if restaurant_id is not None:
-            return f"{base}?properties=%5B%7B%22key%22%3A%22restaurant_id%22%2C%22value%22%3A%22{restaurant_id}%22%7D%5D"
-        return base
+    def get_events_url(self) -> str:
+        """Gera deep link oficial para a lista de eventos brutos."""
+        return f"{self.app_url}/project/{self.project_id}/events"
 
     async def check_health(self) -> Dict[str, Any]:
         """

@@ -12,10 +12,16 @@ from typing import Any, Dict, List, Optional
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import func, text
 
 from ..database import SessionLocal, tenant_session_scope
-from ..models import ExternalIssueLink, Restaurante, SuperAdminAuditLog
+from ..models import (
+    ExternalIssueLink,
+    PrintAgentToken,
+    PrintJob,
+    Restaurante,
+    SuperAdminAuditLog,
+)
 from .super_admin import get_current_admin
 from ..integrations.linear_client import LinearClient
 from ..integrations.posthog_client import PostHogClient
@@ -588,6 +594,7 @@ async def get_restaurant_analytics_links(
 ):
     """
     KOM-10: Retorna deep links seguros de observabilidade no PostHog para este tenant.
+    Não utiliza Group Analytics para garantir conformidade com a política de custo zero.
     """
     with SessionLocal() as db:
         restaurante = db.query(Restaurante).filter(Restaurante.id == restaurant_id).first()
@@ -597,8 +604,169 @@ async def get_restaurant_analytics_links(
     return {
         "posthog": {
             "operational_dashboard_url": posthog_client.get_dashboard_url(),
-            "tenant_group_url": posthog_client.get_tenant_group_url(restaurant_id),
-            "events_url": posthog_client.get_events_url(restaurant_id),
+            "events_url": posthog_client.get_events_url(),
             "project_id": posthog_client.project_id,
         }
     }
+
+
+@router.get("/restaurantes/{restaurant_id}/print-status")
+async def get_restaurant_print_status(
+    restaurant_id: int,
+    admin: dict = Depends(get_current_admin),
+):
+    """
+    KOM-10: Diagnóstico em tempo real do Print Agent e fila do tenant para o cockpit SuperAdmin.
+    Permite visualizar status, agente principal, heartbeat e filas sem necessidade de entrar em Modo Suporte.
+    """
+    with SessionLocal() as db:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == restaurant_id).first()
+        if not restaurante:
+            raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+
+        with tenant_session_scope(db, restaurant_id):
+            active_agents = (
+                db.query(PrintAgentToken)
+                .filter(
+                    PrintAgentToken.restaurante_id == restaurant_id,
+                    PrintAgentToken.ativo == True,
+                )
+                .all()
+            )
+
+            all_agents = (
+                db.query(PrintAgentToken)
+                .filter(PrintAgentToken.restaurante_id == restaurant_id)
+                .all()
+            )
+
+            configured = len(all_agents) > 0
+
+            # Priorizar agente principal ou mais recentemente ativo
+            selected_agent = None
+            if active_agents:
+                primary = next((a for a in active_agents if getattr(a, "is_primary", False)), None)
+                if primary:
+                    selected_agent = primary
+                else:
+                    selected_agent = sorted(
+                        active_agents,
+                        key=lambda a: (a.last_seen_at or a.created_at or datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)),
+                        reverse=True,
+                    )[0]
+            elif all_agents:
+                selected_agent = all_agents[0]
+
+            now = datetime.datetime.now(datetime.timezone.utc)
+            last_seen = selected_agent.last_seen_at if selected_agent else None
+            if last_seen and last_seen.tzinfo is None:
+                last_seen = last_seen.replace(tzinfo=datetime.timezone.utc)
+
+            seconds_since_heartbeat = None
+            if last_seen:
+                seconds_since_heartbeat = max(0, round((now - last_seen).total_seconds()))
+
+            is_online = bool(
+                selected_agent
+                and getattr(selected_agent, "ativo", False)
+                and seconds_since_heartbeat is not None
+                and seconds_since_heartbeat <= 90
+            )
+
+            diagnostics = (
+                selected_agent.printer_diagnostics
+                if selected_agent and isinstance(selected_agent.printer_diagnostics, dict)
+                else {}
+            )
+            agent_version = diagnostics.get("agent_version") or diagnostics.get("version")
+            printer_error = diagnostics.get("error")
+
+            printers = diagnostics.get("printers") or []
+            has_ready_printer = any(
+                isinstance(p, dict) and p.get("available") and p.get("present") and p.get("configured")
+                for p in printers
+            ) if printers else True
+
+            if not configured:
+                print_status = "not_configured"
+            elif is_online:
+                if printer_error or not has_ready_printer:
+                    print_status = "degraded"
+                else:
+                    print_status = "online"
+            else:
+                print_status = "offline"
+
+            # Fila de trabalhos do restaurante
+            pending_count = (
+                db.query(func.count(PrintJob.id))
+                .filter(
+                    PrintJob.restaurante_id == restaurant_id,
+                    PrintJob.status == "pending",
+                )
+                .scalar()
+                or 0
+            )
+
+            claimed_count = (
+                db.query(func.count(PrintJob.id))
+                .filter(
+                    PrintJob.restaurante_id == restaurant_id,
+                    PrintJob.status.in_(["claimed", "printing"]),
+                )
+                .scalar()
+                or 0
+            )
+
+            failed_count = (
+                db.query(func.count(PrintJob.id))
+                .filter(
+                    PrintJob.restaurante_id == restaurant_id,
+                    PrintJob.status == "failed",
+                )
+                .scalar()
+                or 0
+            )
+
+            # Último job executado ou criado
+            last_job_record = (
+                db.query(PrintJob)
+                .filter(PrintJob.restaurante_id == restaurant_id)
+                .order_by(PrintJob.created_at.desc(), PrintJob.id.desc())
+                .first()
+            )
+
+            last_job_data = None
+            job_error = None
+            if last_job_record:
+                last_job_created = last_job_record.created_at
+                if last_job_created and last_job_created.tzinfo is None:
+                    last_job_created = last_job_created.replace(tzinfo=datetime.timezone.utc)
+
+                last_job_data = {
+                    "id": last_job_record.id,
+                    "status": last_job_record.status,
+                    "document_type": last_job_record.document_type,
+                    "printer_name": last_job_record.printer_name,
+                    "created_at": last_job_created.isoformat() if last_job_created else None,
+                }
+                job_error = last_job_record.last_error
+
+            effective_last_error = job_error or printer_error
+
+            return {
+                "configured": configured,
+                "status": print_status,
+                "agent_id": selected_agent.agent_id if selected_agent else None,
+                "version": agent_version,
+                "is_primary": bool(getattr(selected_agent, "is_primary", False)) if selected_agent else False,
+                "last_seen_at": last_seen.isoformat() if last_seen else None,
+                "seconds_since_heartbeat": seconds_since_heartbeat,
+                "queue": {
+                    "pending": pending_count,
+                    "claimed": claimed_count,
+                    "failed": failed_count,
+                },
+                "last_job": last_job_data,
+                "last_error": effective_last_error,
+            }
