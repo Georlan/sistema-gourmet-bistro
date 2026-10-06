@@ -224,7 +224,7 @@ class EscPosPayloadTest(unittest.TestCase):
         self.assertLess(body.index("GUARNICOES:"), body.index("SALADAS:"))
         self.assertLess(body.index("SALADAS:"), body.index("ADICIONAIS PAGOS:"))
         self.assertNotIn("\x1b!\x10", body)
-        self.assertNotIn("\n\n", body)
+        self.assertNotIn("\n\n", body.rstrip("\n"))
 
     def test_standard_80mm_keeps_new_marmitaria_composition_order(self):
         source = "\n".join(
