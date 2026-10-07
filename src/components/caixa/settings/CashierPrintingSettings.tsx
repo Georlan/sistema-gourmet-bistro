@@ -23,6 +23,7 @@ type BoundaryProps = Pick<
   hasPrinting: boolean;
   setActiveTab: (tab: CashierTab) => void;
   setActiveSubTab: (tab: string) => void;
+  isWsConnected?: boolean;
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
 };
@@ -38,6 +39,7 @@ export function CashierPrintingSettings({
   hasPrinting,
   setActiveTab,
   setActiveSubTab,
+  isWsConnected = false,
   apiBaseUrl,
   authHeaders,
   handleTestPrinter,
@@ -127,6 +129,7 @@ export function CashierPrintingSettings({
           </div>
         ) : (
           <PrintMonitorPanel
+                isWsConnected={isWsConnected}
             apiBaseUrl={apiBaseUrl}
             authHeaders={authHeaders}
             onTestPrint={handleTestPrinter}

@@ -8,6 +8,13 @@ on:
       - src/components/caixa/online-menu/OnlineOrderEmergencyControl.tsx
       - src/components/caixa/navigation/**
       - src/components/CaixaPanel.tsx
+      - src/components/caixa/realtime/**
+      - src/components/caixa/orders/CashierPickups.tsx
+      - src/components/caixa/orders/CashierCouriers.tsx
+      - src/components/caixa/settings/**
+      - src/components/printing/PrintMonitorPanel.tsx
+      - e2e/idle-reconciliation.spec.ts
+      - e2e/fixtures/idle-reconciliation.html
       - e2e/online-control-idle.spec.ts
       - e2e/online-control-request-coordination.spec.ts
       - e2e/fixtures/online-control.html
@@ -38,6 +45,9 @@ jobs:
         env:
           KOMA_E2E_PORT: '4283'
       - run: npx playwright test e2e/online-control-request-coordination.spec.ts --project=desktop-1366 --project=mobile-390 --workers=2
+        env:
+          KOMA_E2E_PORT: '4283'
+      - run: npx playwright test e2e/idle-reconciliation.spec.ts --project=desktop-1366 --project=mobile-390 --project=tablet-768 --workers=2
         env:
           KOMA_E2E_PORT: '4283'
       - uses: actions/upload-artifact@v6
