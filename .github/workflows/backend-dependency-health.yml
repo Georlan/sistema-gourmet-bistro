@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'backend/requirements*.txt'
+      - 'backend/requirements.lock'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/backend-dependency-health.yml'
