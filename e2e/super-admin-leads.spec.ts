@@ -9,7 +9,7 @@ test('QR de apresentação abre sem login e mostra o destino legível', async ({
 });
 
 test('CRM salva qualificação, mantém consentimento e apresenta histórico', async ({ page }) => {
-  let lead = { id: 1, nome: 'Ana Teste', whatsapp_raw: '(85) 99999-1234', whatsapp_normalizado: '5585999991234', empresa_nome: 'Bistrô Teste', event_slug: 'ceara-tech-summit-2026', source: 'qr_tela', status: 'new', consent_whatsapp: true, consent_at: '2026-10-07T01:00:00Z', consent_version: 'v1_cearatech_2026', history: [] as unknown[] };
+  let lead = { id: 1, nome: 'Ana Teste', whatsapp_raw: '(85) 99999-1234', whatsapp_normalizado: '5585999991234', empresa_nome: 'Bistrô Teste', event_slug: 'ceara-tech-summit-2026', source: 'qr_tela', status: 'new', consent_whatsapp: true, consent_at: '2026-10-07T01:00:00Z', consent_version: 'v1_cearatech_2026', owner_notification: { queue_status: 'sent', delivery_status: 'bounced' }, history: [] as unknown[] };
   await page.addInitScript(() => sessionStorage.setItem('koma_super_admin_token', 'local-test-admin'));
   await page.route('**/api/super-admin/**', route => route.fulfill({ json: [] }));
   await page.route('**/health/live', route => route.fulfill({ json: { status: 'ok' } }));
@@ -28,6 +28,7 @@ test('CRM salva qualificação, mantém consentimento e apresenta histórico', a
   if (page.viewportSize()!.width < 768) await page.getByRole('button').filter({ hasText: 'Ana Teste' }).click();
   else await page.getByRole('button', { name: 'Ver lead', exact: true }).click();
   const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('Falha na entrega', { exact: true })).toBeVisible();
   await expect(dialog.getByText('v1_cearatech_2026', { exact: false })).toBeVisible();
   await dialog.getByLabel('Status', { exact: true }).selectOption('qualified');
   await dialog.getByLabel('Cidade', { exact: true }).fill('Fortaleza');

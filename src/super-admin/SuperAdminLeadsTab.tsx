@@ -465,7 +465,7 @@ export function SuperAdminLeadsTab() {
                 <p className="mt-2 text-sm font-bold text-koma-foreground">{eventLabel(draft.event_slug)}</p>
                 <p className="mt-1 text-xs text-koma-muted">Fonte: {draft.source}</p>
                 <div className="mt-3 border-t border-zinc-800 pt-3 text-xs text-koma-muted">
-                  <p>Email ao proprietário: <strong>{draft.owner_notification?.delivery_status === "delivered" ? "Entregue" : draft.owner_notification?.queue_status === "sent" ? "Aceito pelo provedor" : draft.owner_notification?.queue_status === "pending" ? "Na fila" : draft.owner_notification?.queue_status === "failed" ? "Falhou" : "Sem confirmação"}</strong></p>
+                  <p>Email ao proprietário: <strong>{draft.owner_notification?.delivery_status === "delivered" ? "Entregue" : ["bounced", "complained", "failed", "suppressed"].includes(draft.owner_notification?.delivery_status || "") ? "Falha na entrega" : draft.owner_notification?.queue_status === "sent" ? "Aceito pelo provedor" : draft.owner_notification?.queue_status === "pending" ? "Na fila" : draft.owner_notification?.queue_status === "failed" ? "Falhou" : "Sem confirmação"}</strong></p>
                   <p>Consentimento WhatsApp: <strong className="text-koma-foreground">{draft.consent_whatsapp ? "Sim" : "Não"}</strong></p>
                   <p className="mt-1">Registrado em: {formatDate(draft.consent_at)}</p>
                   <p className="mt-1">Versão: {draft.consent_version || "—"}</p>
