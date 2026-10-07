@@ -385,3 +385,67 @@ def test_print_status_with_agents_and_queue(mock_restaurants):
     assert data["last_error"] == "Printer out of paper"
     assert data["last_job"] is not None
 
+
+
+@pytest.mark.parametrize("path,method,expected", [
+    ("issues", "GET", 200), ("analytics", "GET", 200), ("print-status", "GET", 200), ("issues", "POST", 503),
+])
+def test_tenant_lookup_is_scoped_before_first_query(mock_restaurants, monkeypatch, path, method, expected):
+    """SQLite is permissive: explicitly enforce the production RLS precondition."""
+    from sqlalchemy import event
+    from types import SimpleNamespace
+    from app.routes import super_admin_integrations as routes
+
+    def scoped_session():
+        db = SessionLocal()
+        def assert_scope(state):
+            assert db.restaurante_id == 901, "ORM accessed outside target tenant scope"
+        event.listen(db, "do_orm_execute", assert_scope)
+        return db
+
+    monkeypatch.setattr(routes, "SessionLocal", scoped_session)
+    monkeypatch.setattr(routes, "linear_client", SimpleNamespace(is_configured=False))
+    response = client.request(method, f"/api/super-admin/restaurantes/901/{path}", headers=_superadmin_headers(), **({"json": {"title": "Teste", "description": "Teste de escopo"}} if method == "POST" else {}))
+    assert response.status_code == expected, response.text
+
+
+def test_issue_refresh_releases_sql_and_persists_in_target_scope(mock_restaurants, monkeypatch):
+    from sqlalchemy import event
+    from types import SimpleNamespace
+    from app.routes import super_admin_integrations as routes
+
+    with SessionLocal() as db:
+        with tenant_session_scope(db, 901):
+            db.add(ExternalIssueLink(restaurante_id=901, provider="linear", external_issue_id="scope-901", external_identifier="KOM-SCOPE", external_url="https://linear.app/example", title_snapshot="Scoped", status_snapshot="Todo", actor="test"))
+            db.commit()
+    active = 0
+    def scoped_session():
+        nonlocal active
+        db = SessionLocal()
+        active += 1
+        original_close = db.close
+        closed = False
+        def close():
+            nonlocal active, closed
+            if not closed:
+                active -= 1
+                closed = True
+            original_close()
+        db.close = close
+        def assert_scope(state):
+            assert db.restaurante_id == 901
+        event.listen(db, "do_orm_execute", assert_scope)
+        return db
+    async def read_status(identifier):
+        assert active == 0, "SQL session held while awaiting Linear"
+        assert identifier == "KOM-SCOPE"
+        return {"status": "Done"}
+    monkeypatch.setattr(routes, "SessionLocal", scoped_session)
+    monkeypatch.setattr(routes, "linear_client", SimpleNamespace(is_configured=True, get_issue_status=read_status))
+    response = client.get("/api/super-admin/restaurantes/901/issues?refresh_live=true", headers=_superadmin_headers())
+    assert response.status_code == 200, response.text
+    assert response.json()[0]["status"] == "Done"
+    assert active == 0
+    with SessionLocal() as db:
+        with tenant_session_scope(db, 901):
+            assert db.query(ExternalIssueLink).filter_by(external_identifier="KOM-SCOPE").one().status_snapshot == "Done"
