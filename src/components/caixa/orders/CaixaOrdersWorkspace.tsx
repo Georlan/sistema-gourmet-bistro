@@ -416,6 +416,15 @@ export function CaixaOrdersWorkspace({
                         <span>{order.endereco}</span>
                       </span>
                     )}
+                    {order.paymentMethod && (
+                      <div className="text-[11px] text-koma-secondary space-y-0.5" aria-label="Pagamento do pedido">
+                        <p>Pagamento: <strong className="text-koma-foreground">{order.paymentMethod}</strong></p>
+                        {order.paymentMethod.trim().toLowerCase() === 'dinheiro'
+                          && Number.isFinite(order.changeFor) && Number(order.changeFor) > 0 && (
+                          <p className="font-semibold text-amber-700 dark:text-amber-300">Troco para {formatCurrency(Number(order.changeFor))}</p>
+                        )}
+                      </div>
+                    )}
                     <div className={"flex gap-2 pt-1"}>
                       <button
                         type="button"
