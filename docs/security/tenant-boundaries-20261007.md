@@ -46,7 +46,7 @@ Regressões de autenticação devem passar com essas versões antes da publicaç
 ## Exceções verificadas e gaps restantes
 
 - `notificacoes_whatsapp`: gap confirmado, tenant-owned com DML direto e sem RLS.
-  A segunda etapa deve aplicar ENABLE/FORCE e política com USING/WITH CHECK.
+  A migração `47a6b7c8d9e0` aplica ENABLE/FORCE e política com USING/WITH CHECK.
   Linhas legadas com restaurante nulo devem ser preservadas e permanecer negadas.
 - `koma_event_leads`: contatos globais da plataforma, sem restaurante_id. A API
   pública pode somente submeter; a leitura é exclusiva do Super Admin. Não impor
@@ -62,7 +62,7 @@ Regressões de autenticação devem passar com essas versões antes da publicaç
   intencional; não criar USING(true) para silenciar o advisor.
 - Produção apresentou grants anon SELECT em restaurantes, categorias e produtos
   que não constam mais no contrato de acesso canônico (frontend consulta API).
-  Revisar/remover a permissão legada após simulação do cardápio. Sem grants de
+  A segunda etapa revoga a permissão legada, com simulação real do cardápio sob a role restrita. Sem grants de
   escrita browser e sem views públicas privilegiadas observadas.
 - Storage `cardapio-assets`: público para servir imagens; limite 5 MiB, MIME de
   imagem restrito, nenhuma policy de objetos. Isso não libera upload/listagem
@@ -96,3 +96,19 @@ Fontes: [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-le
 `docs/engineering/infra-contract.md` e migrações Alembic atuais. Esta rodada não
 é certificação de ausência de todas as vulnerabilidades; registrar publicação,
 SHA servido e validação passiva antes de considerar as correções concluídas.
+
+## Ativação da segunda etapa
+
+A migração `47a6b7c8d9e0` deve ser publicada somente após observar a primeira
+versão servida. Trata tanto schema criado do zero (policy já existe) quanto o
+schema de produção com drift (policy ausente/RLS desativada). Recria somente a
+policy canônica em transação, com lock_timeout de cinco segundos. Não altera
+nenhuma linha nem cria índices: os índices de restaurante/wamid já existem.
+Revoga grants browser em notificações e nas três tabelas legadas do cardápio.
+
+Os testes PostgreSQL cobrem SQL bruto sem tenant, leitura/escrita/movimentação
+entre tenants, contexto não retido após rollback, preservação de órfãos legados,
+callback de ambos os tenants, privilégios browser, cardápio pela API e ciclo de
+migração com comparação integral dos registros sintéticos. O downgrade é
+intencionalmente sem reabertura de permissões; para rollback do backend manter
+pelo menos a implementação compatível da primeira etapa.
