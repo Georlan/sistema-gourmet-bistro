@@ -42,7 +42,8 @@ function isPublicCommercialRoute(): boolean {
   return resolved.surface === "landing"
     || pathname.startsWith("/landing")
     || pathname.startsWith("/legal")
-    || pathname.startsWith("/contratar");
+    || pathname.startsWith("/contratar")
+    || pathname.startsWith("/cearatech");
 }
 
 function isOperationalUtilityRoute(): boolean {
@@ -129,6 +130,7 @@ function bypassTenantSuspensionBoundary(): boolean {
     || pathname.startsWith("/ativar")
     || pathname.startsWith("/acompanhar")
     || pathname.startsWith("/entregador")
+    || pathname.startsWith("/cearatech")
     || resolved.surface === "public"
     || resolved.surface === "landing"
     || resolved.surface === "central"
@@ -216,6 +218,7 @@ const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isPrintSimulatorRoute = pathname.startsWith("/ferramentas/simulador-impressao");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
+const isCearaTechRoute = pathname.startsWith("/cearatech");
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
 const isOnboardingAwareManagementRoute = isHostedManagementEntryRoute();
 const isInternalSupportOperationalRoute =
@@ -271,11 +274,13 @@ const RootApp = React.lazy(
       ? () => import("./legal/LegalPage")
       : isPlanContractRoute
         ? () => import("./legal/PlanContractPageV2")
-        : isUnifiedOperationalRoute
-          ? () => import("./components/auth/UnifiedOperationalEntry")
-          : isOnboardingAwareManagementRoute
-            ? () => import("./components/onboarding/OnboardingAwareOperationalEntry")
-            : () => import("./App"),
+        : isCearaTechRoute
+          ? () => import("./landing/CearaTechLeadPage")
+          : isUnifiedOperationalRoute
+            ? () => import("./components/auth/UnifiedOperationalEntry")
+            : isOnboardingAwareManagementRoute
+              ? () => import("./components/onboarding/OnboardingAwareOperationalEntry")
+              : () => import("./App"),
 );
 
 const RouteLoading = () => (pathname === "/recuperar-senha" || pathname === "/confirmar-cadastro")

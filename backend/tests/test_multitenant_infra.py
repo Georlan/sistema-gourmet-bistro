@@ -21,6 +21,7 @@ GLOBAL_MODEL_TABLES = {
     "restaurantes",
     "fiscal_official_reference_states",
     "fiscal_official_reference_snapshots",
+    "koma_event_leads",
 }
 
 # Tabelas tenant-owned manipuladas exclusivamente pelo control plane recebem

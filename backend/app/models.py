@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     event,
+    func,
     text,
 )
 from sqlalchemy.orm import relationship
@@ -2101,3 +2102,34 @@ class ProductImageRetirement(Base):
     attempts = Column(Integer, nullable=False, default=0)
     last_result = Column(String, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
+
+
+class KomaEventLead(Base):
+    """Captação de leads comerciais e institucionais em eventos (ex: Ceará Tech Summit).
+
+    Não é cliente de restaurante (não usa a tabela 'clientes').
+    Não possui 'restaurante_id' pois pertence à plataforma KÔMA.
+    """
+    __tablename__ = "koma_event_leads"
+    __table_args__ = (
+        UniqueConstraint("event_slug", "whatsapp_normalizado", name="uq_koma_event_leads_event_whatsapp"),
+        Index("ix_koma_event_leads_event_created", "event_slug", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome = Column(String(120), nullable=False)
+    whatsapp_raw = Column(String(32), nullable=False)
+    whatsapp_normalizado = Column(String(20), nullable=False, index=True)
+    empresa_nome = Column(String(120), nullable=True)
+    segmento = Column(String(80), nullable=True)
+    event_slug = Column(String(64), nullable=False, default="ceara-tech-summit-2026", index=True)
+    source = Column(String(32), nullable=False, default="qr_impresso")
+    consent_whatsapp = Column(Boolean, nullable=False, default=True)
+    consent_at = Column(DateTime(timezone=True), nullable=False)
+    consent_version = Column(String(32), nullable=False, default="v1_cearatech_2026")
+    status = Column(String(32), nullable=False, default="new")
+    ip_hash = Column(String(64), nullable=True)
+    user_agent = Column(String(255), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
