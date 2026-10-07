@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CalendarClock,
   CheckCircle2,
   ExternalLink,
   MessageCircle,
+  QrCode,
   RefreshCw,
   Save,
   Search,
@@ -139,7 +140,7 @@ export function SuperAdminLeadsTab() {
     return params.toString();
   }, [eventFilter, searchQuery, statusFilter]);
 
-  const loadLeads = async () => {
+  const loadLeads = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -155,11 +156,11 @@ export function SuperAdminLeadsTab() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [queryString]);
 
   useEffect(() => {
     void loadLeads();
-  }, [queryString]);
+  }, [loadLeads]);
 
   const openLead = async (lead: Lead) => {
     setSelectedLead(lead);
@@ -252,15 +253,26 @@ export function SuperAdminLeadsTab() {
             Acompanhe quem demonstrou interesse, faça o primeiro contato e mova cada oportunidade até conversão.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void loadLeads()}
-          disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-koma-card px-3 py-2 text-xs font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          Atualizar
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href="/cearatech/qr"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#00b894] px-3 py-2 text-xs font-black text-black hover:bg-emerald-400"
+          >
+            <QrCode className="h-4 w-4" />
+            Abrir QR da apresentação
+          </a>
+          <button
+            type="button"
+            onClick={() => void loadLeads()}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-koma-card px-3 py-2 text-xs font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Atualizar
+          </button>
+        </div>
       </div>
 
       {error && (
