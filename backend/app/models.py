@@ -2165,3 +2165,18 @@ class KomaEventLeadHistory(Base):
 @event.listens_for(KomaEventLeadHistory, "before_delete")
 def block_event_lead_history_mutation(mapper, connection, target):
     raise PermissionError("Lead history is immutable.")
+
+
+class KomaEventVisit(Base):
+    __tablename__ = "koma_event_visits"
+    visit_id = Column(String(36), primary_key=True)
+    event_slug = Column(String(64), nullable=False, index=True)
+    source = Column(String(32), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class KomaEventAttribution(Base):
+    __tablename__ = "koma_event_attributions"
+    signup_id = Column(String(36), primary_key=True)
+    lead_id = Column(Integer, ForeignKey("koma_event_leads.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

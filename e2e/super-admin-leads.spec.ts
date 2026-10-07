@@ -42,3 +42,27 @@ test('endereço antigo ainda abre o QR de Siará', async ({ page }) => {
   await expect(page.getByText('Siará Tech Summit 2026', { exact: true })).toBeVisible();
   await expect(page.getByText('komafood.com.br/siaratech', { exact: true })).toBeVisible();
 });
+
+test('formulário Siará salva qualificação opcional e mostra Instagram e planos corretos', async ({ page }) => {
+  await page.route('**/api/leads/siaratech/visits', route => route.fulfill({ status: 204 }));
+  await page.route('**/api/leads/siaratech', async route => {
+    const payload = route.request().postDataJSON();
+    expect(payload.sistema_atual).toBe('Sistema Teste');
+    expect(payload.principal_dor).toBe('Fechar o caixa');
+    expect(payload.source).toBe('qr_tela');
+    expect(payload.visit_id).toMatch(/^[a-f0-9-]{36}$/);
+    await route.fulfill({ status: 201, json: { success: true, lead_id: 42, signup_url: '/contratar?event_ref=test-reference' } });
+  });
+  await page.goto('/siaratech?source=qr_tela');
+  await page.locator('#lead-nome').fill('Cliente Teste');
+  await page.locator('#lead-whatsapp').fill('85999991234');
+  await page.locator('summary').click();
+  await page.getByLabel('Qual sistema você usa hoje?').fill('Sistema Teste');
+  await page.getByLabel('Qual é sua maior dor de cabeça?').fill('Fechar o caixa');
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'QUERO CONHECER O KÔMA' }).click();
+  await expect(page.getByRole('heading', { name: 'Contato recebido ✓' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Seguir @georlanjunior no Instagram' })).toHaveAttribute('href', 'https://instagram.com/georlanjunior');
+  await expect(page.getByRole('link', { name: 'Ver planos do KÔMA' })).toHaveAttribute('href', '/contratar?event_ref=test-reference');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

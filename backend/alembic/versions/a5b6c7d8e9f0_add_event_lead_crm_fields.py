@@ -15,6 +15,58 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.create_table("koma_event_visits",
+        sa.Column("visit_id", sa.String(36), primary_key=True),
+        sa.Column("event_slug", sa.String(64), nullable=False),
+        sa.Column("source", sa.String(32), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False))
+    op.create_index("ix_koma_event_visits_event_slug", "koma_event_visits", ["event_slug"])
+    # Attribution survives expiry/purge of the resumable signup. No signup FK.
+    op.create_table("koma_event_attributions",
+        sa.Column("signup_id", sa.String(36), primary_key=True),
+        sa.Column("lead_id", sa.Integer(), sa.ForeignKey("koma_event_leads.id"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False))
+    op.create_index("ix_koma_event_attributions_lead_id", "koma_event_attributions", ["lead_id"])
+    if op.get_bind().dialect.name == "postgresql":
+        for table in ("koma_event_visits", "koma_event_attributions"):
+            op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+            op.execute(f"REVOKE ALL ON {table} FROM PUBLIC")
+            op.execute(f"""DO $$ BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='koma_app') THEN
+                    GRANT SELECT, INSERT ON {table} TO koma_app;
+                    CREATE POLICY event_acquisition_backend ON {table}
+                        FOR ALL TO koma_app USING (true) WITH CHECK (true);
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN REVOKE ALL ON {table} FROM anon; END IF;
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN REVOKE ALL ON {table} FROM authenticated; END IF;
+            END $$""")
+        # Only aggregates cross the existing private legal/billing capability boundary.
+        op.execute("""CREATE FUNCTION koma_internal.event_funnel_stats(event text)
+        RETURNS TABLE(visits bigint, signups bigint, accounts bigint, confirmed_plans bigint)
+        LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $fn$
+        SELECT (SELECT count(*) FROM public.koma_event_visits WHERE event_slug=event),
+            count(DISTINCT a.signup_id), count(DISTINCT r.restaurante_id),
+            count(DISTINCT CASE WHEN b.status='ready' THEN b.protocol END)
+        FROM public.koma_event_attributions a
+        JOIN public.koma_event_leads l ON l.id=a.lead_id
+        LEFT JOIN public.contract_acceptances c ON c.request_id=a.signup_id
+        LEFT JOIN public.restaurant_contract_acceptances r ON r.acceptance_id=c.id
+        LEFT JOIN public.saas_billing_setups b ON b.protocol=c.protocol
+        WHERE l.event_slug=event
+        $fn$""")
+        op.execute("""CREATE FUNCTION koma_internal.event_notice_status(notice_id text)
+        RETURNS TABLE(queue_status text, delivery_status text)
+        LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $fn$
+        SELECT n.status::text, r.status::text FROM public.signup_notifications n
+        LEFT JOIN public.email_delivery_receipts r ON r.notification_id=n.id
+        WHERE n.id=notice_id AND n.id LIKE 'event-lead-%:event-lead-owner:email'
+        $fn$""")
+        op.execute("REVOKE ALL ON FUNCTION koma_internal.event_notice_status(text) FROM PUBLIC")
+        op.execute("REVOKE ALL ON FUNCTION koma_internal.event_funnel_stats(text) FROM PUBLIC")
+        op.execute("""DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='koma_app') THEN
+            GRANT EXECUTE ON FUNCTION koma_internal.event_funnel_stats(text) TO koma_app;
+            GRANT EXECUTE ON FUNCTION koma_internal.event_notice_status(text) TO koma_app;
+        END IF; END $$""")
     op.create_table(
         "koma_event_lead_history",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
@@ -65,6 +117,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP FUNCTION IF EXISTS koma_internal.event_notice_status(text)")
+        op.execute("DROP FUNCTION IF EXISTS koma_internal.event_funnel_stats(text)")
+    op.drop_table("koma_event_attributions")
+    op.drop_table("koma_event_visits")
     if op.get_bind().dialect.name == "postgresql":
         op.execute("DROP POLICY IF EXISTS event_leads_backend ON koma_event_leads")
         op.execute("ALTER TABLE koma_event_leads DISABLE ROW LEVEL SECURITY")

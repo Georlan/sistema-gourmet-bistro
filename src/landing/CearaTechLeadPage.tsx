@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle2, Instagram, Send, Sparkles, Store, UtensilsCrossed, Phone, User, Building2 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 import { aplicarMascaraTelefoneInput } from '../utils/phonePresentation';
@@ -32,6 +32,10 @@ interface FormState {
   whatsapp: string;
   empresa_nome: string;
   segmento: string;
+  cidade: string;
+  sistema_atual: string;
+  principal_dor: string;
+  interesse: string;
   consent: boolean;
 }
 
@@ -58,8 +62,24 @@ export default function CearaTechLeadPage() {
     whatsapp: '',
     empresa_nome: '',
     segmento: '',
+    cidade: '', sistema_atual: '', principal_dor: '', interesse: '',
     consent: false,
   });
+
+  const [signupUrl, setSignupUrl] = useState<string | null>(null);
+  const [visitId] = useState(() => {
+    try {
+      const key = "koma-siara-visit";
+      const id = sessionStorage.getItem(key) || crypto.randomUUID();
+      sessionStorage.setItem(key, id); return id;
+    } catch { return crypto.randomUUID(); }
+  });
+  useEffect(() => {
+    void fetch(`${API_BASE_URL}/api/leads/siaratech/visits`, { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visit_id: visitId, source: resolveLeadSource() }),
+    }).catch(() => undefined);
+  }, [visitId]);
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -100,6 +120,11 @@ export default function CearaTechLeadPage() {
           whatsapp: form.whatsapp,
           empresa_nome: form.empresa_nome.trim() || undefined,
           segmento: form.segmento.trim() || undefined,
+          cidade: form.cidade.trim() || undefined,
+          sistema_atual: form.sistema_atual.trim() || undefined,
+          principal_dor: form.principal_dor.trim() || undefined,
+          interesse: form.interesse.trim() || undefined,
+          visit_id: visitId,
           consent_whatsapp: true,
           event_slug: 'siara-tech-summit-2026',
           source: resolveLeadSource(),
@@ -111,6 +136,8 @@ export default function CearaTechLeadPage() {
         throw new Error(errorData.detail || 'Ocorreu um erro ao enviar seus dados. Tente novamente.');
       }
 
+      const data = await response.json();
+      setSignupUrl(typeof data.signup_url === "string" && data.signup_url.startsWith("/contratar?") ? data.signup_url : null);
       setSuccess(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
@@ -168,26 +195,28 @@ export default function CearaTechLeadPage() {
               </p>
             </div>
 
+            {signupUrl && <a href={signupUrl} className="mb-4 flex w-full justify-center rounded-xl bg-emerald-500 p-4 font-bold text-black">Ver planos do KÔMA</a>}
             <a
-              href="https://instagram.com/komafood"
+              href="https://instagram.com/georlanjunior"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-3 w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 text-white font-bold text-base shadow-lg shadow-purple-500/20 hover:opacity-95 active:scale-[0.98] transition-all"
+              className="inline-flex items-center justify-center gap-3 w-full py-4 px-6 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-base  hover:opacity-95 active:scale-[0.98] transition-all"
             >
               <Instagram className="w-5 h-5" />
-              <span>Seguir @komafood no Instagram</span>
+              <span>Seguir @georlanjunior no Instagram</span>
             </a>
           </div>
         ) : (
           /* Form Card */
-          <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-md">
+          <div className="bg-[#111916] border border-emerald-900/60 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-md">
             {/* Lead Title & Pitch */}
             <div className="mb-6">
-              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-snug mb-2">
-                O sistema operacional definitivo para restaurantes.
+              <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight mb-4">
+                Seu restaurante.
+                <span className="block text-emerald-400">Pedidos, cozinha e caixa juntos.</span>
               </h1>
               <p className="text-zinc-400 text-sm sm:text-base leading-relaxed">
-                Gostou da demonstração no palco? Deixe seu contato para agendarmos uma apresentação personalizada do KÔMA para a sua operação.
+                Conheça o KÔMA na sua operação. Deixe seu contato e conte o que mais dá trabalho no seu restaurante.
               </p>
             </div>
 
@@ -290,6 +319,17 @@ export default function CearaTechLeadPage() {
                 </div>
               </div>
 
+              <details className="rounded-xl border border-zinc-800 p-4">
+                <summary className="cursor-pointer text-sm font-semibold text-emerald-300">Conte um pouco da sua operação (opcional)</summary>
+                <div className="mt-4 space-y-3">
+                  {([['cidade', 'Cidade', 120], ['sistema_atual', 'Qual sistema você usa hoje?', 120], ['principal_dor', 'Qual é sua maior dor de cabeça?', 2000], ['interesse', 'O que gostaria de melhorar?', 2000]] as const).map(([key, label, max]) => (
+                    <label key={key} className="block text-sm text-zinc-300">{label}
+                      <input value={form[key]} maxLength={max} onChange={e => setForm({ ...form, [key]: e.target.value })} className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-white focus:border-emerald-500" />
+                    </label>
+                  ))}
+                </div>
+              </details>
+
               {/* Consentimento LGPD */}
               <div className="pt-2">
                 <label className="flex items-start gap-3 cursor-pointer select-none">
@@ -350,12 +390,12 @@ export default function CearaTechLeadPage() {
         </p>
         <p>
           <a
-            href="https://instagram.com/komafood"
+            href="https://instagram.com/georlanjunior"
             target="_blank"
             rel="noopener noreferrer"
             className="text-zinc-500 hover:text-zinc-300 transition-colors underline-offset-2 hover:underline"
           >
-            @komafood
+            @georlanjunior
           </a>
           {' · '}
           <span>Siará Tech Summit 2026</span>

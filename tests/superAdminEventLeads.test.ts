@@ -30,7 +30,7 @@ test("Siará Tech QR screen is presentation-first and targets the canonical lead
   assert.match(main, /CearaTechQrPage/);
   assert.match(qr, /https:\/\/komafood\.com\.br\/siaratech\?source=qr_tela/);
   assert.match(qr, /QRCodeSVG/);
-  assert.match(qr, /@komafood/);
+  assert.match(qr, /@georlanjunior/);
   assert.match(lead, /consent: false/);
   assert.match(lead, /resolveLeadSource/);
 });

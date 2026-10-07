@@ -111,7 +111,7 @@ def generate_cearatech_promo_image(
     y += 14
 
     # Instagram oficial
-    draw.text((PAPER_WIDTH_DOTS / 2, y), "Instagram: @komafood", font=font_instagram, fill=0, anchor="mt")
+    draw.text((PAPER_WIDTH_DOTS / 2, y), "Instagram: @georlanjunior", font=font_instagram, fill=0, anchor="mt")
     y += 22
 
     # Identificação do evento

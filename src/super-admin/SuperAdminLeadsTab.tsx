@@ -38,6 +38,7 @@ type Lead = {
   consent_whatsapp?: boolean;
   consent_at?: string | null;
   consent_version?: string | null;
+  owner_notification?: { queue_status: string; delivery_status?: string | null };
   history?: Array<{ id: number; actor: string; created_at: string; changes: Record<string, { before: unknown; after: unknown }> }>;
 
 };
@@ -49,6 +50,7 @@ type LeadStats = Record<LeadStatus, number> & {
 
 type LeadsResponse = {
   total: number;
+  acquisition?: Record<string, number>;
   stats: LeadStats;
   leads: Lead[];
   events: Array<{ event_slug: string; count: number; last_created_at?: string | null }>;
@@ -118,6 +120,7 @@ export function SuperAdminLeadsTab() {
   const listRequest = useRef(0);
   const detailRequest = useRef(0);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [acquisition, setAcquisition] = useState<Record<string, number>>({});
   const [stats, setStats] = useState<LeadStats>(EMPTY_STATS);
   const [events, setEvents] = useState<LeadsResponse["events"]>([]);
   const [eventFilter, setEventFilter] = useState("ceara-tech-summit-2026");
@@ -153,6 +156,7 @@ export function SuperAdminLeadsTab() {
       const payload = await response.json() as LeadsResponse;
       if (requestId !== listRequest.current) return;
       setLeads(Array.isArray(payload.leads) ? payload.leads : []);
+      setAcquisition(payload.acquisition || {});
       setStats(payload.stats || EMPTY_STATS);
       setEvents(Array.isArray(payload.events) ? payload.events : []);
     } catch (err) {
@@ -299,6 +303,10 @@ export function SuperAdminLeadsTab() {
         </div>
       )}
 
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {([['visits', 'Visitas por sessão'], ['signups', 'Inscrições iniciadas'], ['accounts', 'Contas criadas'], ['confirmed_plans', 'Planos confirmados']] as const).map(([key, label]) => <div key={key} className="rounded-xl border border-emerald-900 bg-koma-card p-4"><p className="text-xs text-koma-muted">{label}</p><p className="mt-1 text-2xl font-black">{acquisition[key] ?? '—'}</p></div>)}
+      </div>
+      <p className="text-xs text-koma-muted">Visitas e atribuição de contas medidas a partir desta atualização. Planos confirmados exigem contrato e autorização de cobrança; o estágio comercial é separado.</p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {cards.map(([label, value]) => (
           <div key={label} className="rounded-xl border border-zinc-800 bg-koma-card p-4">
@@ -457,6 +465,7 @@ export function SuperAdminLeadsTab() {
                 <p className="mt-2 text-sm font-bold text-koma-foreground">{eventLabel(draft.event_slug)}</p>
                 <p className="mt-1 text-xs text-koma-muted">Fonte: {draft.source}</p>
                 <div className="mt-3 border-t border-zinc-800 pt-3 text-xs text-koma-muted">
+                  <p>Email ao proprietário: <strong>{draft.owner_notification?.delivery_status === "delivered" ? "Entregue" : draft.owner_notification?.queue_status === "sent" ? "Aceito pelo provedor" : draft.owner_notification?.queue_status === "pending" ? "Na fila" : draft.owner_notification?.queue_status === "failed" ? "Falhou" : "Sem confirmação"}</strong></p>
                   <p>Consentimento WhatsApp: <strong className="text-koma-foreground">{draft.consent_whatsapp ? "Sim" : "Não"}</strong></p>
                   <p className="mt-1">Registrado em: {formatDate(draft.consent_at)}</p>
                   <p className="mt-1">Versão: {draft.consent_version || "—"}</p>

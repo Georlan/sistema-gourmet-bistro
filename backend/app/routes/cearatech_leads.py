@@ -8,6 +8,8 @@ import datetime
 import hashlib
 import re
 from typing import Any, Optional
+from uuid import UUID
+from ..services.event_acquisition import enqueue_owner, signup_url, record_visit, funnel_stats, owner_notice_status
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -28,6 +30,7 @@ router = APIRouter(prefix="/api/leads", tags=["Leads Institucionais & Eventos"])
 # O telefone+evento continua deduplicado no banco; este limite protege abuso bruto sem
 # bloquear uma turma inteira que envie o formulário no mesmo minuto.
 _lead_submission_limiter = IPRateLimiter(requests_per_minute=120)
+_visit_submission_limiter = IPRateLimiter(requests_per_minute=240)
 
 _ALLOWED_BATCH_COPIES = {1, 20, 30, 50}
 LEAD_STATUSES = (
@@ -46,6 +49,11 @@ class CearaTechLeadInput(BaseModel):
     whatsapp: str = Field(min_length=10, max_length=30)
     empresa_nome: Optional[str] = Field(default=None, max_length=120)
     segmento: Optional[str] = Field(default=None, max_length=80)
+    cidade: Optional[str] = Field(default=None, max_length=120)
+    sistema_atual: Optional[str] = Field(default=None, max_length=120)
+    principal_dor: Optional[str] = Field(default=None, max_length=2000)
+    interesse: Optional[str] = Field(default=None, max_length=2000)
+    visit_id: Optional[UUID] = None
     consent_whatsapp: bool = Field(default=False)
     event_slug: str = Field(default="siara-tech-summit-2026", max_length=64)
     source: str = Field(default="link_direto", max_length=32)
@@ -175,6 +183,7 @@ def _lead_detail(db: Session, lead: KomaEventLead) -> dict[str, Any]:
     entries = (db.query(KomaEventLeadHistory)
         .filter(KomaEventLeadHistory.lead_id == lead.id)
         .order_by(KomaEventLeadHistory.id.desc()).limit(50).all())
+    payload["owner_notification"] = owner_notice_status(db, lead.id)
     payload["history"] = [{"id": entry.id, "actor": entry.actor,
         "changes": entry.changes, "created_at": entry.created_at.isoformat()}
         for entry in entries]
@@ -264,11 +273,18 @@ def submit_cearatech_lead(
         if user_agent:
             existing.user_agent = user_agent
 
+        for field in ("cidade", "sistema_atual", "principal_dor", "interesse"):
+            if not getattr(existing, field) and getattr(payload, field):
+                setattr(existing, field, getattr(payload, field))
+        enqueue_owner(db, existing)
+        if payload.visit_id:
+            record_visit(db, payload.visit_id, payload.source)
         db.commit()
         db.refresh(existing)
         return {
             "success": True,
             "lead_id": existing.id,
+            "signup_url": signup_url(existing),
             "message": "Contato recebido ✓",
             "deduplicated": True,
         }
@@ -279,6 +295,10 @@ def submit_cearatech_lead(
         whatsapp_normalizado=norm_phone,
         empresa_nome=payload.empresa_nome,
         segmento=payload.segmento,
+        cidade=payload.cidade,
+        sistema_atual=payload.sistema_atual,
+        principal_dor=payload.principal_dor,
+        interesse=payload.interesse,
         event_slug=event_slug,
         source=payload.source,
         consent_whatsapp=True,
@@ -291,15 +311,32 @@ def submit_cearatech_lead(
         updated_at=now_utc,
     )
     db.add(lead)
+    db.flush()
+    enqueue_owner(db, lead)
+    if payload.visit_id:
+        record_visit(db, payload.visit_id, payload.source)
     db.commit()
     db.refresh(lead)
 
     return {
         "success": True,
         "lead_id": lead.id,
+        "signup_url": signup_url(lead),
         "message": "Contato recebido ✓",
         "deduplicated": False,
     }
+
+
+class EventVisitInput(BaseModel):
+    visit_id: UUID
+    source: str = Field(default="link_direto", max_length=32)
+
+
+@router.post("/siaratech/visits", status_code=204)
+def submit_visit(payload: EventVisitInput, request: Request, db: Session = Depends(get_db)):
+    _visit_submission_limiter.check(request)
+    record_visit(db, payload.visit_id, payload.source if payload.source in LEAD_SOURCES else "link_direto")
+    db.commit()
 
 
 @router.get("/siaratech", summary="Listar leads comerciais (Super Admin)")
@@ -365,6 +402,7 @@ def list_cearatech_leads(
     return {
         "event_slug": event_slug,
         "total": int(total),
+        "acquisition": funnel_stats(db, _event_storage_slug(event_slug or "siara-tech-summit-2026")),
         "stats": {
             "total": base_total,
             **counts,

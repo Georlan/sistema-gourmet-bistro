@@ -17,6 +17,15 @@ from app.services.cearatech_promo_printer import (
 )
 
 
+@pytest.fixture(autouse=True)
+def acquisition_schema():
+    from app.database import engine
+    from app.signup_models import SignupBase
+    from app.contract_models import ContractEvidenceBase
+    SignupBase.metadata.create_all(engine)
+    ContractEvidenceBase.metadata.create_all(engine)
+
+
 @pytest.fixture
 def client():
     _lead_submission_limiter.history.clear()
@@ -294,3 +303,47 @@ def test_siara_canonical_routes_require_superadmin(client):
     assert client.get('/api/leads/siaratech').status_code == 401
     assert client.get('/api/leads/siaratech/1').status_code == 401
     assert client.patch('/api/leads/siaratech/1', json={'status':'contacted'}).status_code == 401
+
+
+def test_event_visit_dedup_and_qualification_owner_queue(admin_client, monkeypatch):
+    import uuid
+    from app.config import settings
+    from app.signup_models import SignupNotification
+    from app.models import KomaEventVisit
+    from app.crypt import decrypt_field
+    monkeypatch.setattr(settings, "EVENT_LEADS_OWNER_EMAIL", "owner@example.test")
+    visit_id = str(uuid.uuid4())
+    for _ in range(2):
+        assert admin_client.post("/api/leads/siaratech/visits", json={"visit_id": visit_id, "source": "qr_tela"}).status_code == 204
+    payload = {"nome": "Acquisition Test", "whatsapp": "85991239876", "consent_whatsapp": True,
+        "sistema_atual": "Sistema existente", "principal_dor": "Fechamento de caixa", "visit_id": visit_id}
+    response = admin_client.post("/api/leads/siaratech", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["signup_url"].startswith("/contratar?event_ref=")
+    assert admin_client.post("/api/leads/siaratech", json={**payload, "sistema_atual": ""}).status_code == 201
+    with SessionLocal() as db:
+        assert db.query(KomaEventVisit).filter_by(visit_id=visit_id).count() == 1
+        lead = db.get(KomaEventLead, data["lead_id"])
+        assert lead.sistema_atual == "Sistema existente"
+        assert lead.principal_dor == "Fechamento de caixa"
+        notices = db.query(SignupNotification).filter(SignupNotification.id == f"event-lead-{lead.id}:event-lead-owner:email").all()
+        assert len(notices) == 1
+        assert 'owner@example.test' in decrypt_field(notices[0].payload_encrypted)
+    assert admin_client.get("/api/leads/siaratech").json()["acquisition"]["visits"] >= 1
+
+
+def test_signed_attribution_does_not_accept_auth_token_or_tampering(admin_client):
+    from app.services.event_acquisition import attribute_signup, signup_url
+    from app.models import KomaEventAttribution
+    import uuid
+    response = admin_client.post("/api/leads/siaratech", json={"nome": "Referral Test", "whatsapp": "85991239877", "consent_whatsapp": True})
+    with SessionLocal() as db:
+        lead = db.get(KomaEventLead, response.json()["lead_id"])
+        token = signup_url(lead).split("event_ref=")[1]
+        good, bad = str(uuid.uuid4()), str(uuid.uuid4())
+        attribute_signup(db, good, token)
+        attribute_signup(db, bad, token + "tampered")
+        db.commit()
+        assert db.get(KomaEventAttribution, good).lead_id == lead.id
+        assert db.get(KomaEventAttribution, bad) is None

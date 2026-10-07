@@ -37,7 +37,7 @@ export default function CearaTechQrPage() {
           <p className="font-mono text-sm text-zinc-400">komafood.com.br/siaratech</p>
           <div className="flex items-center gap-2 text-base font-bold text-zinc-200">
             <Instagram className="h-5 w-5 text-emerald-400" />
-            @komafood
+            @georlanjunior
           </div>
         </div>
 
