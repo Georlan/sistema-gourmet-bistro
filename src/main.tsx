@@ -218,6 +218,7 @@ const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isPrintSimulatorRoute = pathname.startsWith("/ferramentas/simulador-impressao");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
+const isCearaTechQrRoute = pathname === "/cearatech/qr";
 const isCearaTechRoute = pathname.startsWith("/cearatech");
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
 const isOnboardingAwareManagementRoute = isHostedManagementEntryRoute();
@@ -274,9 +275,11 @@ const RootApp = React.lazy(
       ? () => import("./legal/LegalPage")
       : isPlanContractRoute
         ? () => import("./legal/PlanContractPageV2")
-        : isCearaTechRoute
-          ? () => import("./landing/CearaTechLeadPage")
-          : isUnifiedOperationalRoute
+        : isCearaTechQrRoute
+          ? () => import("./landing/CearaTechQrPage")
+          : isCearaTechRoute
+            ? () => import("./landing/CearaTechLeadPage")
+            : isUnifiedOperationalRoute
             ? () => import("./components/auth/UnifiedOperationalEntry")
             : isOnboardingAwareManagementRoute
               ? () => import("./components/onboarding/OnboardingAwareOperationalEntry")
