@@ -121,3 +121,9 @@ A auditoria npm revelou source-map-js 1.2.1 (dependência transitiva). O lock
 atualiza somente esse pacote para 1.2.2, com integridade conferida no registry.
 CI passa a auditar também o lock do frontend. Referência:
 [advisory](https://github.com/advisories/GHSA-68fv-2mgg-jv7q).
+
+Reenvio público de lead não é autorização para editar um contato global já
+existente. A segunda etapa mantém a resposta de sucesso/deduplicação, mas não
+reescreve nome, empresa, telefone ou recibo de consentimento. Além da proteção
+contra alteração por quem apenas conhece o telefone, o retry dispensa commit.
+Correções cadastrais pertencem ao fluxo administrativo autenticado.

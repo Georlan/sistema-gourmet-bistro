@@ -130,24 +130,8 @@ def submit_cearatech_lead(
     )
 
     if existing:
-        # Atualiza os dados mantendo histórico e consentimento renovado
-        existing.nome = payload.nome
-        if payload.empresa_nome:
-            existing.empresa_nome = payload.empresa_nome
-        if payload.segmento:
-            existing.segmento = payload.segmento
-        existing.whatsapp_raw = payload.whatsapp
-        existing.consent_whatsapp = True
-        existing.consent_at = now_utc
-        existing.consent_version = "v1_cearatech_2026"
-        existing.updated_at = now_utc
-        if ip_hash:
-            existing.ip_hash = ip_hash
-        if user_agent:
-            existing.user_agent = user_agent
-
-        db.commit()
-        db.refresh(existing)
+        # Knowing a phone number is not authorization to edit a global contact
+        # or renew its consent. A public retry is acknowledgement only.
         return {
             "success": True,
             "lead_id": existing.id,

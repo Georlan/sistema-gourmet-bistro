@@ -48,6 +48,8 @@ def test_submit_lead_success_and_deduplication(client):
         assert lead.nome == "Maria Empreendedora"
         assert lead.whatsapp_normalizado == "5585998765432"
         assert lead.consent_whatsapp is True
+        original_consent = lead.consent_at
+        original_user_agent = lead.user_agent
 
         # 2. Reenvio com o mesmo WhatsApp (deduplicação graciosa sem erro 409)
         payload_update = {
@@ -58,18 +60,22 @@ def test_submit_lead_success_and_deduplication(client):
             "consent_whatsapp": True,
             "event_slug": "ceara-tech-summit-2026",
         }
-        response2 = client.post("/api/leads/cearatech", json=payload_update)
+        response2 = client.post("/api/leads/cearatech", json=payload_update, headers={"User-Agent": "synthetic-hostile-retry"})
         assert response2.status_code == 201
         data2 = response2.json()
         assert data2["success"] is True
         assert data2["lead_id"] == lead_id
         assert data2["deduplicated"] is True
 
-        # O registro deve ter sido atualizado sem criar duplicata
+        # Um reenvio público não autoriza editar o contato ou renovar consentimento.
         db_session.expire_all()
         lead_updated = db_session.query(KomaEventLead).filter(KomaEventLead.id == lead_id).first()
-        assert lead_updated.nome == "Maria Empreendedora Atualizada"
-        assert lead_updated.empresa_nome == "Bistrô das Dunas Premium"
+        assert lead_updated.nome == "Maria Empreendedora"
+        assert lead_updated.empresa_nome == "Bistrô das Dunas"
+        assert lead_updated.whatsapp_raw == "(85) 99876-5432"
+        assert lead_updated.consent_at == original_consent
+        assert lead_updated.user_agent == original_user_agent
+        assert db_session.query(KomaEventLead).filter(KomaEventLead.id == lead_id).count() == 1
     finally:
         db_session.close()
 
