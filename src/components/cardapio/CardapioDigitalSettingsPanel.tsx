@@ -67,6 +67,7 @@ interface CardapioDigitalSettingsPanelProps {
   onSectionChange: (section: CardapioDigitalSettingsSection) => void;
   onSetupComplete?: () => Promise<void>;
   onSetupDirtyChange?: (dirty: boolean) => void;
+  onSetupSavingChange?: (saving: boolean) => void;
 }
 
 const KOMA_MENU_PRIMARY = '#00b894';
@@ -378,6 +379,7 @@ export function CardapioDigitalSettingsPanel({
   onSectionChange,
   onSetupComplete,
   onSetupDirtyChange,
+  onSetupSavingChange,
 }: CardapioDigitalSettingsPanelProps) {
   const activeTab = activeSection;
   const setupMode = Boolean(onSetupComplete) || isInitialSetup();
@@ -387,6 +389,7 @@ export function CardapioDigitalSettingsPanel({
   const [hasLoadedConfig, setHasLoadedConfig] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  useEffect(() => { onSetupSavingChange?.(isSaving); }, [isSaving, onSetupSavingChange]);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadConfig = useCallback(async () => {
@@ -604,6 +607,7 @@ export function CardapioDigitalSettingsPanel({
                   <label className="sm:col-span-2">
                     <FieldLabel>Nome público do restaurante</FieldLabel>
                     <input
+                      disabled={Boolean(onSetupComplete) && isSaving}
                       value={config.nome}
                       onChange={(event) => updateConfig('nome', event.target.value)}
                       maxLength={120}
@@ -628,6 +632,7 @@ export function CardapioDigitalSettingsPanel({
                     <div className="relative">
                       <MessageCircle size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
                       <input
+                        disabled={Boolean(onSetupComplete) && isSaving}
                         value={String(config.socials.whatsapp || '')}
                         onChange={(event) => updateSocial('whatsapp', event.target.value)}
                         className="h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-9 pr-3 text-sm text-koma-foreground outline-none focus:border-emerald-500/60"
@@ -640,6 +645,7 @@ export function CardapioDigitalSettingsPanel({
                     <div className="relative">
                       <MapPin size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
                       <input
+                        disabled={Boolean(onSetupComplete) && isSaving}
                         value={config.endereco}
                         onChange={(event) => updateConfig('endereco', event.target.value)}
                         maxLength={240}

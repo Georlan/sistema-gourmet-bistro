@@ -177,6 +177,7 @@ test('cadastro comercial salva dados e horários na própria tela e só avança 
   let snapshot = baseSnapshot({ mode: 'commercial', operationsReady: true, orderTypes: ['retirada'], progress: 1 });
   let config = { nome: '', endereco: '', socials: { whatsapp: '' }, horarios_funcionamento: [], status_override: 'Automático' };
   let failSave = true;
+  let releaseFailedSave: (() => void) | undefined;
   let failValidation = false;
   let statusReads = 0;
   await page.route('**/api/onboarding/status', route => {
@@ -185,7 +186,10 @@ test('cadastro comercial salva dados e horários na própria tela e só avança 
   });
   await page.route('**/api/cardapio-digital/config', async route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: config });
-    if (failSave) return route.fulfill({ status: 500, json: { detail: 'Falha simulada ao salvar' } });
+    if (failSave) {
+      await new Promise<void>(resolve => { releaseFailedSave = resolve; });
+      return route.fulfill({ status: 500, json: { detail: 'Falha simulada ao salvar' } });
+    }
     config = { ...config, ...route.request().postDataJSON() };
     snapshot.steps.profile = true;
     snapshot.steps.hours = config.horarios_funcionamento.length > 0;
@@ -197,6 +201,9 @@ test('cadastro comercial salva dados e horários na própria tela e só avança 
   await guided.getByLabel('WhatsApp', { exact: true }).fill('85999999999');
   await guided.getByLabel('Endereço físico', { exact: true }).fill('Rua de teste, 100');
   await guided.getByRole('button', { name: 'Salvar e continuar', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Editar modalidades', exact: true })).toBeDisabled();
+  await expect(guided.getByLabel('Nome público do restaurante', { exact: true })).toBeDisabled();
+  releaseFailedSave!();
   await expect(guided.getByText('Falha simulada ao salvar')).toBeVisible();
   await expect(guided.getByLabel('Nome público do restaurante', { exact: true })).toHaveValue('Restaurante simulado');
   failSave = false;

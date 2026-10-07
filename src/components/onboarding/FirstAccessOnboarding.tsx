@@ -207,6 +207,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     target?.scrollIntoView({ block: 'start' });
     setGuidedFocusTarget(null);
   }, [guidedFocusTarget]);
+  const [guidedSaving, setGuidedSaving] = useState(false);
   const [guidedDirty, setGuidedDirty] = useState(false);
   const [editingEssential, setEditingEssential] = useState<'profile' | 'hours' | null>(null);
   const [state, setState] = useState<LoadState>('loading');
@@ -261,6 +262,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     }
     applySnapshot(next);
     setGuidedDirty(false);
+    setGuidedSaving(false);
     setEditingEssential(null);
     setGuidedFocusTarget(!next.steps.profile || !next.steps.hours ? 'setup-guided-current'
       : !next.steps.catalog ? 'setup-guided-catalog' : !next.steps.operations ? 'setup-modalities' : 'setup-guided-review');
@@ -585,7 +587,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
         <section className="w-full max-w-lg rounded-3xl border border-koma-border bg-koma-card p-7 text-center shadow-2xl">
           <h1 className="text-xl font-black">Não foi possível validar a implantação inicial.</h1>
           <p className="mt-2 text-sm text-koma-muted">{errorMessage || 'A implantação não pôde ser carregada agora.'}</p>
-          <button type="button" onClick={() => { if (!guidedDirty || window.confirm('Há alterações não salvas. Descartar e atualizar a implantação?')) void loadSnapshot(); }} className="mt-6 rounded-xl border border-koma-border px-4 py-3 text-xs font-black text-koma-foreground hover:border-emerald-500/40">
+          <button type="button" disabled={guidedSaving} onClick={() => { if (!guidedDirty || window.confirm('Há alterações não salvas. Descartar e atualizar a implantação?')) void loadSnapshot(); }} className="mt-6 rounded-xl border border-koma-border px-4 py-3 text-xs font-black text-koma-foreground hover:border-emerald-500/40">
             Tentar novamente
           </button>
           <button type="button" onClick={returnToLogin} className="mt-3 block w-full text-xs font-bold text-koma-muted">Ir para o login</button>
@@ -672,7 +674,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                     : `Falta pouco — ${snapshot.progress.completed} de ${snapshot.progress.total} concluídos`}
                 </p>
               </div>
-              <button type="button" onClick={() => { if (!guidedDirty || window.confirm('Há alterações não salvas. Descartar e atualizar a implantação?')) void loadSnapshot(); }} className="inline-flex items-center gap-2 self-start rounded-xl border border-koma-border px-3 py-2 text-[10px] font-black text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-400">
+              <button type="button" disabled={guidedSaving} onClick={() => { if (!guidedDirty || window.confirm('Há alterações não salvas. Descartar e atualizar a implantação?')) void loadSnapshot(); }} className="inline-flex items-center gap-2 self-start rounded-xl border border-koma-border px-3 py-2 text-[10px] font-black text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-400">
                 <RefreshCw size={12} /> Atualizar
               </button>
             </div>
@@ -687,9 +689,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               <section id="setup-guided-current" tabIndex={-1} className="mt-4" aria-label="Etapa atual do cadastro">
                 <p role="status" className="mb-3 text-sm font-bold">{guidedStep === 'profile' ? 'Vamos começar pelos dados do restaurante' : 'Agora informe os horários'} · salve para continuar</p>
                 {guidedStep === 'profile' ? (
-                  <CardapioDigitalSettingsPanel apiBaseUrl={API_BASE_URL} authHeaders={headers} publicMenuUrl={null} activeSection="perfil" onSectionChange={() => {}} onSetupDirtyChange={setGuidedDirty} onSetupComplete={() => finishGuidedStep('profile')} />
+                  <CardapioDigitalSettingsPanel apiBaseUrl={API_BASE_URL} authHeaders={headers} publicMenuUrl={null} activeSection="perfil" onSectionChange={() => {}} onSetupSavingChange={setGuidedSaving} onSetupDirtyChange={setGuidedDirty} onSetupComplete={() => finishGuidedStep('profile')} />
                 ) : (
-                  <OnlineMenuOrdersSettings apiBaseUrl={API_BASE_URL} authHeaders={headers} publicMenuUrl={null} onSetupDirtyChange={setGuidedDirty} onSetupComplete={() => finishGuidedStep('hours')} />
+                  <OnlineMenuOrdersSettings apiBaseUrl={API_BASE_URL} authHeaders={headers} publicMenuUrl={null} onSetupSavingChange={setGuidedSaving} onSetupDirtyChange={setGuidedDirty} onSetupComplete={() => finishGuidedStep('hours')} />
                 )}
               </section>
             )}
@@ -720,6 +722,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                       {step.done ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
                       <button
                         type="button"
+                        disabled={guidedSaving}
                         onClick={() => guidedMode && (step.id === 'profile' || step.id === 'hours')
                           ? (!guidedDirty || window.confirm('Há alterações não salvas. Descartar e abrir outra etapa?')) && setEditingEssential(step.id)
                           : step.id === 'operations'

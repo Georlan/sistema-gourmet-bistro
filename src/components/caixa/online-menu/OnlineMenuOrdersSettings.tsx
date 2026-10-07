@@ -31,6 +31,7 @@ interface Props {
   publicMenuUrl: string | null;
   onSetupComplete?: () => Promise<void>;
   onSetupDirtyChange?: (dirty: boolean) => void;
+  onSetupSavingChange?: (saving: boolean) => void;
 }
 
 const keyToDays: Record<string, string> = {
@@ -124,13 +125,14 @@ function openInitialSetup() {
   window.location.href = '/ativar?resume=1';
 }
 
-export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUrl, onSetupComplete, onSetupDirtyChange }: Props) {
+export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUrl, onSetupComplete, onSetupDirtyChange, onSetupSavingChange }: Props) {
   const [config, setConfig] = useState<OrdersConfig>({ status_override: 'Automático', horarios_funcionamento: [] });
   const [scheduledOrdersEnabled, setScheduledOrdersEnabled] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [hasLoadedConfig, setHasLoadedConfig] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  useEffect(() => { onSetupSavingChange?.(isSaving); }, [isSaving, onSetupSavingChange]);
   const [isSavingScheduledOrders, setIsSavingScheduledOrders] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const guidedMode = Boolean(onSetupComplete);
@@ -328,6 +330,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
                 <label>
                   <FieldLabel>Dias</FieldLabel>
                   <input
+                    disabled={guidedMode && isSaving}
                     value={row.days}
                     onChange={(event) => setConfig((current) => ({
                       ...current,
@@ -340,6 +343,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
                 <label>
                   <FieldLabel>Horário</FieldLabel>
                   <input
+                    disabled={guidedMode && isSaving}
                     value={row.hours}
                     onChange={(event) => setConfig((current) => ({
                       ...current,
