@@ -115,6 +115,7 @@ def test_notification_rls_is_forced_and_browser_table_access_is_revoked(database
     admin, _, _ = databases
     with admin.connect() as connection:
         assert connection.execute(text("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid='public.notificacoes_whatsapp'::regclass")).scalar()
+        assert connection.execute(text("SELECT count(*) FROM pg_policies WHERE schemaname='public' AND policyname IN ('leitura_publica_cardapio','leitura_publica_categorias','leitura_publica_produtos')")).scalar() == 0
         for role in ("anon", "authenticated"):
             for table in ("restaurantes", "categorias", "produtos", "notificacoes_whatsapp"):
                 assert not connection.execute(text("SELECT has_table_privilege(:role,:table,'SELECT,INSERT,UPDATE,DELETE')"), {"role": role, "table": "public." + table}).scalar()

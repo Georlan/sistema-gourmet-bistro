@@ -26,6 +26,12 @@ def upgrade():
         USING (restaurante_id = NULLIF((SELECT current_setting('app.current_restaurante_id', true)), '')::integer)
         WITH CHECK (restaurante_id = NULLIF((SELECT current_setting('app.current_restaurante_id', true)), '')::integer)
     """)
+    for table, policy in (
+        ("restaurantes", "leitura_publica_cardapio"),
+        ("categorias", "leitura_publica_categorias"),
+        ("produtos", "leitura_publica_produtos"),
+    ):
+        op.execute(f"DROP POLICY IF EXISTS {policy} ON public.{table}")
     for role in ("anon", "authenticated"):
         if op.get_bind().execute(sa.text("SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=:role)"), {"role": role}).scalar():
             for table in ("notificacoes_whatsapp", "restaurantes", "categorias", "produtos"):

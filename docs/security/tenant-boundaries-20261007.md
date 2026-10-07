@@ -104,7 +104,7 @@ versão servida. Trata tanto schema criado do zero (policy já existe) quanto o
 schema de produção com drift (policy ausente/RLS desativada). Recria somente a
 policy canônica em transação, com lock_timeout de cinco segundos. Não altera
 nenhuma linha nem cria índices: os índices de restaurante/wamid já existem.
-Revoga grants browser em notificações e nas três tabelas legadas do cardápio.
+Revoga grants browser em notificações e nas três tabelas legadas do cardápio; remove também suas policies anônimas antigas.
 
 Os testes PostgreSQL cobrem SQL bruto sem tenant, leitura/escrita/movimentação
 entre tenants, contexto não retido após rollback, preservação de órfãos legados,
@@ -112,3 +112,7 @@ callback de ambos os tenants, privilégios browser, cardápio pela API e ciclo d
 migração com comparação integral dos registros sintéticos. O downgrade é
 intencionalmente sem reabertura de permissões; para rollback do backend manter
 pelo menos a implementação compatível da primeira etapa.
+
+O processamento SQL do callback é executado fora do event loop. A simulação
+mantém a atualização do banco pendente enquanto outra requisição responde;
+uma rajada de callbacks não deve bloquear a execução das demais rotas async.
