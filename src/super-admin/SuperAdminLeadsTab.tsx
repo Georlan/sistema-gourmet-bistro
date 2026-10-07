@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { MessageCircle, RefreshCw, Search, Users, X } from "lucide-react";
 import { superAdminFetch, superAdminErrorMessage } from "./superAdminApi";
 
@@ -75,7 +75,7 @@ export function SuperAdminLeadsTab() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Lead>>({});
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -87,24 +87,17 @@ export function SuperAdminLeadsTab() {
       if (!response.ok) throw new Error(`Falha ao carregar leads (${response.status})`);
       const payload = await response.json() as LeadsResponse;
       setData(payload);
-      if (selected) {
-        const fresh = payload.leads.find(item => item.id === selected.id);
-        if (fresh) {
-          setSelected(fresh);
-          setForm(fresh);
-        }
-      }
     } catch (err) {
       setError(superAdminErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  };
+  }, [eventSlug, search, status]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 250);
     return () => window.clearTimeout(timer);
-  }, [eventSlug, status, search]);
+  }, [load]);
 
   const cards = useMemo(() => [
     ["Total", data?.total ?? 0],
