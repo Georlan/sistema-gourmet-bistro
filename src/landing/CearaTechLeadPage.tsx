@@ -45,13 +45,20 @@ const SEGMENTOS_SUGERIDOS = [
   'Outro',
 ];
 
+function resolveLeadSource(): 'qr_tela' | 'qr_impresso' | 'link_direto' {
+  if (typeof window === 'undefined') return 'link_direto';
+  const source = new URLSearchParams(window.location.search).get('source')?.trim().toLowerCase();
+  if (source === 'qr_tela' || source === 'qr_impresso') return source;
+  return 'link_direto';
+}
+
 export default function CearaTechLeadPage() {
   const [form, setForm] = useState<FormState>({
     nome: '',
     whatsapp: '',
     empresa_nome: '',
     segmento: '',
-    consent: true,
+    consent: false,
   });
 
   const [loading, setLoading] = useState(false);
@@ -95,7 +102,7 @@ export default function CearaTechLeadPage() {
           segmento: form.segmento.trim() || undefined,
           consent_whatsapp: true,
           event_slug: 'ceara-tech-summit-2026',
-          source: 'qr_impresso',
+          source: resolveLeadSource(),
         }),
       });
 
@@ -293,7 +300,7 @@ export default function CearaTechLeadPage() {
                     className="mt-0.5 w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 focus:ring-offset-transparent cursor-pointer"
                   />
                   <span className="text-xs text-zinc-400 leading-snug">
-                    Concordo em receber uma mensagem da equipe KÔMA via WhatsApp com informações e condições do Ceará Tech Summit.
+                    Aceito receber contato da equipe KÔMA pelo WhatsApp sobre o produto e a apresentação do Ceará Tech Summit. Posso pedir para não receber novas mensagens a qualquer momento.
                   </span>
                 </label>
               </div>
