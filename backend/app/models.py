@@ -2113,7 +2113,12 @@ class KomaEventLead(Base):
     __tablename__ = "koma_event_leads"
     __table_args__ = (
         UniqueConstraint("event_slug", "whatsapp_normalizado", name="uq_koma_event_leads_event_whatsapp"),
+        CheckConstraint(
+            "status IN ('new', 'contacted', 'qualified', 'demo_scheduled', 'converted', 'lost')",
+            name="ck_koma_event_leads_status",
+        ),
         Index("ix_koma_event_leads_event_created", "event_slug", "created_at"),
+        Index("ix_koma_event_leads_event_status_created", "event_slug", "status", "created_at"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -2128,6 +2133,13 @@ class KomaEventLead(Base):
     consent_at = Column(DateTime(timezone=True), nullable=False)
     consent_version = Column(String(32), nullable=False, default="v1_cearatech_2026")
     status = Column(String(32), nullable=False, default="new")
+    last_contact_at = Column(DateTime(timezone=True), nullable=True)
+    cidade = Column(String(120), nullable=True)
+    quantidade_unidades = Column(Integer, nullable=True)
+    sistema_atual = Column(String(120), nullable=True)
+    principal_dor = Column(Text, nullable=True)
+    interesse = Column(Text, nullable=True)
+    melhor_horario_contato = Column(String(120), nullable=True)
     ip_hash = Column(String(64), nullable=True)
     user_agent = Column(String(255), nullable=True)
     notes = Column(Text, nullable=True)
