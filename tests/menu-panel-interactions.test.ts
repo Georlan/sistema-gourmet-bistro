@@ -50,13 +50,12 @@ test('categorias do cardápio têm navegação horizontal explícita no desktop'
   assert.match(panel, /Ver próximas categorias/);
 });
 
-test('modal de personalização reserva espaço para o conteúdo passar acima do footer sticky', () => {
+test('modal de personalização separa conteúdo rolável do rodapé', () => {
   const panel = source('src/components/MenuPanel.tsx');
 
-  assert.match(
-    panel,
-    /max-h-\[92dvh\][^\n]*p-4 pb-24 sm:p-6 sm:pb-24[^\n]*overscroll-contain/,
-  );
-  assert.match(panel, /sticky bottom-0 z-20/);
+  assert.match(panel, /role="dialog"[^\n]*max-h-\[92dvh\][^\n]*flex-col overflow-hidden/);
+  assert.match(panel, /data-testid="waiter-config-body"[^\n]*min-h-0 flex-1 overflow-y-auto/);
+  assert.match(panel, /data-testid="waiter-config-footer"[^\n]*shrink-0/);
+  assert.doesNotMatch(panel, /sticky bottom-0 z-20/);
   assert.match(panel, /Adicionar ao pedido/);
 });
