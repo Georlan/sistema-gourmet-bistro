@@ -21,14 +21,14 @@ test("Super Admin exposes the event lead CRM and WhatsApp workflow", () => {
   assert.match(crm, /consent_whatsapp/);
 });
 
-test("Ceará Tech QR screen is presentation-first and targets the canonical lead landing", () => {
+test("Siará Tech QR screen is presentation-first and targets the canonical lead landing", () => {
   const main = source("src/main.tsx");
   const qr = source("src/landing/CearaTechQrPage.tsx");
   const lead = source("src/landing/CearaTechLeadPage.tsx");
 
   assert.match(main, /isCearaTechQrRoute/);
   assert.match(main, /CearaTechQrPage/);
-  assert.match(qr, /https:\/\/komafood\.com\.br\/cearatech\?source=qr_tela/);
+  assert.match(qr, /https:\/\/komafood\.com\.br\/siaratech\?source=qr_tela/);
   assert.match(qr, /QRCodeSVG/);
   assert.match(qr, /@komafood/);
   assert.match(lead, /consent: false/);

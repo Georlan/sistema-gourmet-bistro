@@ -5,7 +5,7 @@ if (!('window' in globalThis)) {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: {
-      location: { hostname: 'localhost', protocol: 'http:', pathname: '/cearatech' },
+      location: { hostname: 'localhost', protocol: 'http:', pathname: '/siaratech' },
       scrollTo() {},
     },
   });
@@ -19,7 +19,7 @@ import { aplicarMascaraTelefoneInput } from '../src/utils/phonePresentation';
 test('CearaTechLeadPage renders mobile-first lead capture form without requiring login', () => {
   const html = renderToStaticMarkup(createElement(CearaTechLeadPage));
   assert.ok(html.includes('KÔMA'));
-  assert.ok(html.includes('Ceará Tech Summit'));
+  assert.ok(html.includes('Siará Tech Summit'));
   assert.ok(html.includes('O sistema operacional definitivo para restaurantes.'));
   assert.ok(html.includes('Seu Nome *'));
   assert.ok(html.includes('WhatsApp com DDD *'));

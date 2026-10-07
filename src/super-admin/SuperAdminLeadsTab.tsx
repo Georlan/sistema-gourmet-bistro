@@ -84,7 +84,7 @@ const EMPTY_STATS: LeadStats = {
 };
 
 function eventLabel(slug: string): string {
-  if (slug === "ceara-tech-summit-2026") return "Ceará Tech Summit 2026";
+  if (slug === "ceara-tech-summit-2026") return "Siará Tech Summit 2026";
   return slug
     .split("-")
     .filter(Boolean)
@@ -149,7 +149,7 @@ export function SuperAdminLeadsTab() {
     setLoading(true);
     setError(null);
     try {
-      const response = await superAdminFetch(`/api/leads/cearatech?${queryString}`);
+      const response = await superAdminFetch(`/api/leads/siaratech?${queryString}`);
       const payload = await response.json() as LeadsResponse;
       if (requestId !== listRequest.current) return;
       setLeads(Array.isArray(payload.leads) ? payload.leads : []);
@@ -177,7 +177,7 @@ export function SuperAdminLeadsTab() {
     setWhatsappOpened(false);
     setDetailBusy(true);
     try {
-      const response = await superAdminFetch(`/api/leads/cearatech/${lead.id}`);
+      const response = await superAdminFetch(`/api/leads/siaratech/${lead.id}`);
       const detail = await response.json() as Lead;
       if (requestId !== detailRequest.current) return;
       setSelectedLead(detail);
@@ -206,7 +206,7 @@ export function SuperAdminLeadsTab() {
     const requestId = detailRequest.current;
     const effective = { ...draft, ...overrides };
     try {
-      const response = await superAdminFetch(`/api/leads/cearatech/${draft.id}`, {
+      const response = await superAdminFetch(`/api/leads/siaratech/${draft.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -238,7 +238,7 @@ export function SuperAdminLeadsTab() {
   const openWhatsapp = () => {
     if (!draft) return;
     const phone = String(draft.whatsapp_normalizado || "").replace(/\D/g, "");
-    const message = `Oi, ${draft.nome}! Aqui é o Georlan, do KÔMA. Você deixou seu contato depois da nossa apresentação no Ceará Tech Summit. Queria entender um pouco melhor como funciona a operação do seu restaurante hoje e ver se o KÔMA faz sentido para vocês.`;
+    const message = `Oi, ${draft.nome}! Aqui é o Georlan, do KÔMA. Você deixou seu contato depois da nossa apresentação no Siará Tech Summit. Queria entender um pouco melhor como funciona a operação do seu restaurante hoje e ver se o KÔMA faz sentido para vocês.`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
     setWhatsappOpened(true);
   };
@@ -272,7 +272,7 @@ export function SuperAdminLeadsTab() {
         </div>
         <div className="flex flex-wrap gap-2">
           <a
-            href="/cearatech/qr"
+            href="/siaratech/qr"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded-lg bg-[#00b894] px-3 py-2 text-xs font-black text-black hover:bg-emerald-400"
@@ -326,7 +326,7 @@ export function SuperAdminLeadsTab() {
         >
           <option value="all">Todos os eventos</option>
           {!events.some(item => item.event_slug === "ceara-tech-summit-2026") && (
-            <option value="ceara-tech-summit-2026">Ceará Tech Summit 2026</option>
+            <option value="ceara-tech-summit-2026">Siará Tech Summit 2026</option>
           )}
           {events.map(item => (
             <option key={item.event_slug} value={item.event_slug}>

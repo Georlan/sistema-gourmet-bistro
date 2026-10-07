@@ -43,7 +43,7 @@ function isPublicCommercialRoute(): boolean {
     || pathname.startsWith("/landing")
     || pathname.startsWith("/legal")
     || pathname.startsWith("/contratar")
-    || pathname.startsWith("/cearatech");
+    || (pathname.startsWith("/siaratech") || pathname.startsWith("/cearatech"));
 }
 
 function isOperationalUtilityRoute(): boolean {
@@ -130,7 +130,7 @@ function bypassTenantSuspensionBoundary(): boolean {
     || pathname.startsWith("/ativar")
     || pathname.startsWith("/acompanhar")
     || pathname.startsWith("/entregador")
-    || pathname.startsWith("/cearatech")
+    || (pathname.startsWith("/siaratech") || pathname.startsWith("/cearatech"))
     || resolved.surface === "public"
     || resolved.surface === "landing"
     || resolved.surface === "central"
@@ -218,8 +218,8 @@ const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isPrintSimulatorRoute = pathname.startsWith("/ferramentas/simulador-impressao");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
-const isCearaTechQrRoute = pathname === "/cearatech/qr";
-const isCearaTechRoute = pathname.startsWith("/cearatech");
+const isCearaTechQrRoute = ["/siaratech/qr", "/cearatech/qr"].includes(pathname.replace(/\/+$/, ""));
+const isCearaTechRoute = (pathname.startsWith("/siaratech") || pathname.startsWith("/cearatech"));
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
 const isOnboardingAwareManagementRoute = isHostedManagementEntryRoute();
 const isInternalSupportOperationalRoute =

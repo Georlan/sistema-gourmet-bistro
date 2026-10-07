@@ -1,5 +1,5 @@
 """
-Rotas para captação de leads e operação comercial do Ceará Tech Summit 2026.
+Rotas para captação de leads e operação comercial do Siará Tech Summit 2026.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ class CearaTechLeadInput(BaseModel):
     empresa_nome: Optional[str] = Field(default=None, max_length=120)
     segmento: Optional[str] = Field(default=None, max_length=80)
     consent_whatsapp: bool = Field(default=False)
-    event_slug: str = Field(default="ceara-tech-summit-2026", max_length=64)
+    event_slug: str = Field(default="siara-tech-summit-2026", max_length=64)
     source: str = Field(default="link_direto", max_length=32)
 
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
@@ -120,6 +120,14 @@ class PrintPromoRequest(BaseModel):
         return v
 
 
+def _event_storage_slug(value: str) -> str:
+    normalized = value.strip().lower()
+    # One event identity keeps existing leads and deduplication across old/new links.
+    if normalized in {"siara-tech-summit-2026", "ceara-tech-summit-2026", ""}:
+        return "ceara-tech-summit-2026"
+    return normalized
+
+
 def _normalize_phone(raw: str) -> str:
     digits = re.sub(r"\D", "", raw or "")
     if digits.startswith("55") and len(digits) in (12, 13):
@@ -184,7 +192,7 @@ def _audit_value(value):
 
 def _apply_event_and_search_filters(query, *, event_slug: Optional[str], search: Optional[str]):
     if event_slug:
-        query = query.filter(KomaEventLead.event_slug == event_slug.strip().lower())
+        query = query.filter(KomaEventLead.event_slug == _event_storage_slug(event_slug))
     term = (search or "").strip()
     if term:
         like = f"%{term}%"
@@ -201,7 +209,8 @@ def _apply_event_and_search_filters(query, *, event_slug: Optional[str], search:
     return query
 
 
-@router.post("/cearatech", status_code=status.HTTP_201_CREATED, summary="Registrar lead do Ceará Tech Summit")
+@router.post("/siaratech", status_code=status.HTTP_201_CREATED, summary="Registrar lead do Siará Tech Summit")
+@router.post("/cearatech", status_code=status.HTTP_201_CREATED, include_in_schema=False, summary="Registrar lead do Siará Tech Summit")
 def submit_cearatech_lead(
     payload: CearaTechLeadInput,
     request: Request,
@@ -220,7 +229,7 @@ def submit_cearatech_lead(
         )
 
     norm_phone = _normalize_phone(payload.whatsapp)
-    event_slug = payload.event_slug.strip().lower() or "ceara-tech-summit-2026"
+    event_slug = _event_storage_slug(payload.event_slug)
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     ip_header = (
@@ -274,7 +283,7 @@ def submit_cearatech_lead(
         source=payload.source,
         consent_whatsapp=True,
         consent_at=now_utc,
-        consent_version="v1_cearatech_2026",
+        consent_version="v1_siaratech_2026",
         status="new",
         ip_hash=ip_hash,
         user_agent=user_agent,
@@ -293,7 +302,8 @@ def submit_cearatech_lead(
     }
 
 
-@router.get("/cearatech", summary="Listar leads comerciais (Super Admin)")
+@router.get("/siaratech", summary="Listar leads comerciais (Super Admin)")
+@router.get("/cearatech", include_in_schema=False, summary="Listar leads comerciais (Super Admin)")
 def list_cearatech_leads(
     event_slug: Optional[str] = Query(default=None, max_length=64),
     status_filter: Optional[str] = Query(default=None, alias="status", max_length=32),
@@ -372,7 +382,8 @@ def list_cearatech_leads(
     }
 
 
-@router.get("/cearatech/{lead_id}", summary="Detalhar lead comercial (Super Admin)")
+@router.get("/siaratech/{lead_id}", summary="Detalhar lead comercial (Super Admin)")
+@router.get("/cearatech/{lead_id}", include_in_schema=False, summary="Detalhar lead comercial (Super Admin)")
 def get_cearatech_lead(
     lead_id: int,
     admin: dict = Depends(get_current_admin),
@@ -385,7 +396,8 @@ def get_cearatech_lead(
     return _lead_detail(db, lead)
 
 
-@router.patch("/cearatech/{lead_id}", summary="Atualizar funil e qualificação do lead (Super Admin)")
+@router.patch("/siaratech/{lead_id}", summary="Atualizar funil e qualificação do lead (Super Admin)")
+@router.patch("/cearatech/{lead_id}", include_in_schema=False, summary="Atualizar funil e qualificação do lead (Super Admin)")
 def update_cearatech_lead(
     lead_id: int,
     payload: CearaTechLeadUpdate,
@@ -437,7 +449,8 @@ def update_cearatech_lead(
     return _lead_detail(db, lead)
 
 
-@router.post("/cearatech/print", summary="Disparar impressão da ficha promocional (1, 20, 30, 50 cópias)")
+@router.post("/siaratech/print", summary="Disparar impressão da ficha promocional (1, 20, 30, 50 cópias)")
+@router.post("/cearatech/print", include_in_schema=False, summary="Disparar impressão da ficha promocional (1, 20, 30, 50 cópias)")
 def print_cearatech_promo(
     req: PrintPromoRequest,
     admin: dict = Depends(get_current_admin),

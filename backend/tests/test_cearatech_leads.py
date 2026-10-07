@@ -263,3 +263,34 @@ def test_crm_history_contact_timestamp_and_noop(admin_client):
 def test_crm_detail_and_patch_require_superadmin(client):
     assert client.get('/api/leads/cearatech/1').status_code == 401
     assert client.patch('/api/leads/cearatech/1', json={'status': 'converted'}).status_code == 401
+
+
+def test_siara_canonical_and_legacy_routes_share_leads_and_consent(admin_client, client):
+    old = admin_client.post('/api/leads/cearatech', json={
+        'nome': 'Siará Alias Teste', 'whatsapp': '85965432109',
+        'consent_whatsapp': True, 'event_slug': 'ceara-tech-summit-2026',
+    })
+    lead_id = old.json()['lead_id']
+    original = admin_client.get(f'/api/leads/cearatech/{lead_id}').json()
+    new = admin_client.post('/api/leads/siaratech', json={
+        'nome': 'Siará Alias Teste', 'whatsapp': '85965432109',
+        'consent_whatsapp': True, 'event_slug': 'siara-tech-summit-2026',
+    })
+    assert new.status_code == 201
+    assert new.json()['deduplicated'] is True
+    assert new.json()['lead_id'] == lead_id
+    detail = admin_client.get(f'/api/leads/siaratech/{lead_id}').json()
+    assert detail['consent_at'] == original['consent_at']
+    assert detail['consent_version'] == original['consent_version']
+    canonical = admin_client.get('/api/leads/siaratech', params={'event_slug':'siara-tech-summit-2026'}).json()
+    legacy = admin_client.get('/api/leads/cearatech', params={'event_slug':'ceara-tech-summit-2026'}).json()
+    assert canonical['total'] == legacy['total']
+    assert any(lead['id'] == lead_id for lead in canonical['leads'])
+    assert admin_client.patch(f'/api/leads/siaratech/{lead_id}', json={'status':'qualified'}).status_code == 200
+    assert admin_client.get(f'/api/leads/cearatech/{lead_id}').json()['status'] == 'qualified'
+
+
+def test_siara_canonical_routes_require_superadmin(client):
+    assert client.get('/api/leads/siaratech').status_code == 401
+    assert client.get('/api/leads/siaratech/1').status_code == 401
+    assert client.patch('/api/leads/siaratech/1', json={'status':'contacted'}).status_code == 401

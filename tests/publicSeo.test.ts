@@ -118,3 +118,13 @@ test('structured data uses canonical prices and safely serializes text', () => {
   assert.ok(!encoded.includes('</script>'));
   assert.deepEqual(JSON.parse(encoded), data);
 });
+
+test('old event links redirect to Siará and preserve source/query parameters', async () => {
+  const worker = createSeoWorker({ 'X-Frame-Options': 'DENY' });
+  for (const path of ['/cearatech', '/cearatech/qr', '/cearatech/qr/']) {
+    const response = await worker.fetch(new Request(`https://komafood.com.br${path}?source=qr_impresso&x=1`), { ASSETS: { fetch: async () => { throw new Error('Redirect should not fetch assets'); } } });
+    assert.equal(response.status, 308);
+    assert.equal(response.headers.get('Location'), `https://komafood.com.br${path.replace('/cearatech','/siaratech')}?source=qr_impresso&x=1`);
+    assert.equal(response.headers.get('X-Frame-Options'), 'DENY');
+  }
+});

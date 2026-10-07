@@ -1,5 +1,5 @@
 """
-Gerador de ficha promocional térmica para o Ceará Tech Summit 2026.
+Gerador de ficha promocional térmica para o Siará Tech Summit 2026.
 Gera raster ESC/POS monocromático (384 dots / 58 mm) com alto contraste,
 quiet zone preservada e QR code de leitura instantânea por câmeras de celular.
 """
@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 from . import qrcodegen
 
 PAPER_WIDTH_DOTS = 384
-DEFAULT_CANONICAL_URL = "https://komafood.com.br/cearatech?source=qr_impresso"
+DEFAULT_CANONICAL_URL = "https://komafood.com.br/siaratech?source=qr_impresso"
 
 # Caminhos de fontes comuns no Linux / Debian / Ubuntu com fallback
 FONT_CANDIDATES_BOLD = [
@@ -115,7 +115,7 @@ def generate_cearatech_promo_image(
     y += 22
 
     # Identificação do evento
-    draw.text((PAPER_WIDTH_DOTS / 2, y), "Ceará Tech Summit 2026", font=font_meta, fill=0, anchor="mt")
+    draw.text((PAPER_WIDTH_DOTS / 2, y), "Siará Tech Summit 2026", font=font_meta, fill=0, anchor="mt")
     y += 30
 
     # Recortar imagem na altura final com margem inferior limpa

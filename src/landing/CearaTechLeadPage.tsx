@@ -89,7 +89,7 @@ export default function CearaTechLeadPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/leads/cearatech`, {
+      const response = await fetch(`${API_BASE_URL}/api/leads/siaratech`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -101,7 +101,7 @@ export default function CearaTechLeadPage() {
           empresa_nome: form.empresa_nome.trim() || undefined,
           segmento: form.segmento.trim() || undefined,
           consent_whatsapp: true,
-          event_slug: 'ceara-tech-summit-2026',
+          event_slug: 'siara-tech-summit-2026',
           source: resolveLeadSource(),
         }),
       });
@@ -139,7 +139,7 @@ export default function CearaTechLeadPage() {
         </div>
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 text-xs font-semibold tracking-wide uppercase">
           <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Ceará Tech Summit</span>
+          <span>Siará Tech Summit</span>
         </div>
       </header>
 
@@ -159,7 +159,7 @@ export default function CearaTechLeadPage() {
               Contato recebido ✓
             </h1>
             <p className="text-zinc-300 text-sm sm:text-base leading-relaxed max-w-md mx-auto mb-7">
-              Obrigado pelo seu interesse! Nossa equipe entrará em contato diretamente pelo seu WhatsApp logo após o encerramento do <strong className="text-white">Ceará Tech Summit</strong>.
+              Obrigado pelo seu interesse! Nossa equipe entrará em contato diretamente pelo seu WhatsApp logo após o encerramento do <strong className="text-white">Siará Tech Summit</strong>.
             </p>
 
             <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 mb-7">
@@ -300,7 +300,7 @@ export default function CearaTechLeadPage() {
                     className="mt-0.5 w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 focus:ring-offset-transparent cursor-pointer"
                   />
                   <span className="text-xs text-zinc-400 leading-snug">
-                    Aceito receber contato da equipe KÔMA pelo WhatsApp sobre o produto e a apresentação do Ceará Tech Summit. Posso pedir para não receber novas mensagens a qualquer momento.
+                    Aceito receber contato da equipe KÔMA pelo WhatsApp sobre o produto e a apresentação do Siará Tech Summit. Posso pedir para não receber novas mensagens a qualquer momento.
                   </span>
                 </label>
               </div>
@@ -358,7 +358,7 @@ export default function CearaTechLeadPage() {
             @komafood
           </a>
           {' · '}
-          <span>Ceará Tech Summit 2026</span>
+          <span>Siará Tech Summit 2026</span>
         </p>
       </footer>
     </div>

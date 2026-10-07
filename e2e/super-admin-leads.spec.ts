@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
 
 test('QR de apresentação abre sem login e mostra o destino legível', async ({ page }) => {
-  await page.goto('/cearatech/qr');
+  await page.goto('/siaratech/qr');
   await expect(page.getByRole('heading', { name: 'Quer conhecer o KÔMA no seu restaurante?' })).toBeVisible();
   await expect(page.locator('svg').filter({ has: page.locator('title', { hasText: 'QR Code para conhecer o KÔMA' }) })).toBeVisible();
-  await expect(page.getByText('komafood.com.br/cearatech', { exact: true })).toBeVisible();
+  await expect(page.getByText('komafood.com.br/siaratech', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
@@ -13,7 +13,7 @@ test('CRM salva qualificação, mantém consentimento e apresenta histórico', a
   await page.addInitScript(() => sessionStorage.setItem('koma_super_admin_token', 'local-test-admin'));
   await page.route('**/api/super-admin/**', route => route.fulfill({ json: [] }));
   await page.route('**/health/live', route => route.fulfill({ json: { status: 'ok' } }));
-  await page.route('**/api/leads/cearatech**', async route => {
+  await page.route('**/api/leads/siaratech**', async route => {
     const req = route.request();
     if (req.method() === 'PATCH') {
       const patch = req.postDataJSON();
@@ -35,4 +35,10 @@ test('CRM salva qualificação, mantém consentimento e apresenta histórico', a
   await expect(dialog.getByText('Status: Novo → Qualificado', { exact: true })).toBeVisible();
   await expect(dialog.getByLabel('Cidade', { exact: true })).toHaveValue('Fortaleza');
   await expect(dialog.getByRole('button', { name: 'Chamar no WhatsApp' })).toBeVisible();
+});
+
+test('endereço antigo ainda abre o QR de Siará', async ({ page }) => {
+  await page.goto('/cearatech/qr');
+  await expect(page.getByText('Siará Tech Summit 2026', { exact: true })).toBeVisible();
+  await expect(page.getByText('komafood.com.br/siaratech', { exact: true })).toBeVisible();
 });

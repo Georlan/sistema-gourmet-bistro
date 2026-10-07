@@ -2,7 +2,7 @@ import React from 'react';
 import { Instagram, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
-const LEAD_URL = 'https://komafood.com.br/cearatech?source=qr_tela';
+const LEAD_URL = 'https://komafood.com.br/siaratech?source=qr_tela';
 
 export default function CearaTechQrPage() {
   return (
@@ -10,7 +10,7 @@ export default function CearaTechQrPage() {
       <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-5xl flex-col items-center justify-center text-center">
         <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-300">
           <QrCode className="h-4 w-4" />
-          Ceará Tech Summit 2026
+          Siará Tech Summit 2026
         </div>
 
         <div className="mb-7">
@@ -34,7 +34,7 @@ export default function CearaTechQrPage() {
         </div>
 
         <div className="mt-7 flex flex-col items-center gap-2">
-          <p className="font-mono text-sm text-zinc-400">komafood.com.br/cearatech</p>
+          <p className="font-mono text-sm text-zinc-400">komafood.com.br/siaratech</p>
           <div className="flex items-center gap-2 text-base font-bold text-zinc-200">
             <Instagram className="h-5 w-5 text-emerald-400" />
             @komafood
