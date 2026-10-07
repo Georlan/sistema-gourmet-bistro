@@ -15,6 +15,7 @@ import type { useCashierSettings } from './useCashierSettings';
 import { useCashierTableSettings } from './useCashierTableSettings';
 
 interface Props {
+  isWsConnected?: boolean;
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
   activeTab: string;
@@ -42,6 +43,7 @@ function openInitialSetup() {
 }
 
 export default function CashierSettings({
+  isWsConnected = false,
   apiBaseUrl,
   authHeaders,
   activeTab,
@@ -187,6 +189,7 @@ export default function CashierSettings({
           {operationalSettingsTab && settingsLoadState === 'loaded' && (
             <>
               <CashierPrintingSettings
+                isWsConnected={isWsConnected}
                 printingSettingsTab={operationalSettingsTab}
                 hasPrinting={hasPrinting}
                 setActiveTab={setActiveTab}
