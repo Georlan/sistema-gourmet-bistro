@@ -1,3 +1,4 @@
+import { parseBackendTimestamp } from "../utils/dateTime";
 import { summarizeIncidents } from "./incidentSummary";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -228,8 +229,8 @@ const stepLabels: Record<keyof ReleasePreview["steps"], string> = {
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("pt-BR");
+  const parsed = parseBackendTimestamp(value);
+  return parsed ? parsed.toLocaleString("pt-BR") : "—";
 }
 
 function paymentStatusLabel(status?: string | null) {

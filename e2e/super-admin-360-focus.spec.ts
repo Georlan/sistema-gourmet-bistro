@@ -1,12 +1,14 @@
 import { expect, test } from '@playwright/test';
 
+test.use({ timezoneId: 'America/Fortaleza' });
+
 test('360 administrativo mantém foco e agrupa resumo sem apagar evidências', async ({ page }) => {
   let writes = 0;
   await page.addInitScript(() => sessionStorage.setItem('koma_super_admin_token', 'e2e-token'));
   await page.route('**/api/super-admin/**', async route => {
     if (route.request().method() !== 'GET') writes++;
     const path = new URL(route.request().url()).pathname;
-    if (path.endsWith('/restaurantes')) return route.fulfill({ json: [{ id: '8', name: 'D8 QA', status: 'ACTIVE', plan: 'premium' }] });
+    if (path.endsWith('/restaurantes')) return route.fulfill({ json: [{ id: '8', name: 'D8 QA', status: 'ACTIVE', plan: 'premium', lastActivity: '2026-10-07T04:39:11' }] });
     if (path.endsWith('/contracts')) return route.fulfill({ json: { items: [], pendingCount: 0 } });
     if (path.endsWith('/trials')) return route.fulfill({ json: [] });
     if (path.endsWith('/incidents/attention')) return route.fulfill({ json: { checked_at: '2026-10-07T04:00:00Z', items: [] } });
@@ -26,11 +28,14 @@ test('360 administrativo mantém foco e agrupa resumo sem apagar evidências', a
   await page.route('**/health/live', route => route.fulfill({ json: { status: 'ok' } }));
   await page.goto('/super-admin');
   if (page.viewportSize()!.width < 768) await page.getByRole('button', { name: 'Abrir menu lateral' }).click();
+  await expect(page.getByText('07/10/2026, 01:39:11', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Clientes', exact: true }).click();
+  await expect(page.getByText('07/10/2026, 01:39:11', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Abrir 360°', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'D8 QA', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Gestão de Restaurantes' })).toHaveCount(0);
   await expect(page.getByText('hamburgueria', { exact: true })).toBeVisible();
+  await expect(page.getByText('07/10/2026, 01:39:11', { exact: true })).toBeVisible();
   await expect(page.getByText('Documento retido · 4 ocorrências', { exact: true })).toBeVisible();
   await expect(page.getByText('Algumas fontes estão indisponíveis.')).toHaveCount(0);
   await page.getByRole('button', { name: 'Ver os 4 incidentes e suas evidências na aba Operação' }).click();

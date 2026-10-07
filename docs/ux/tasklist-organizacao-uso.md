@@ -49,6 +49,8 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 
 Base inicial consultada: main `c7aa1888dd16`, PRs #970/#982/#983/#1021 já incorporadas e interface autenticada de produção. As três correções de organização/diagnóstico acima integram a onda atual; merge e revisão servida devem ser confirmados na entrega. A onda paralela #1028 avançou main para `745ddb2d26e3` durante a validação, sem alterar o backend/Super Admin desta onda. Carregamentos nas imagens não são falhas persistentes: prioridades e GitHub concluíram normalmente na consulta ao vivo.
 
+- [x] Super Admin — horários operacionais: Início, lista e 360° reutilizam o conversor canônico de timestamps UTC legados, preservando offsets explícitos e sem transformar data inválida em horário atual.
+
 ### P0 — operação real antes de novos indicadores
 
 - [ ] Revisar fila de impressão e agente da Quentinha (#6), incluindo falha antiga de 03/10; decidir documento por documento o que ainda deve ser impresso. Não reenviar em lote nem apagar histórico. Papel e alerta sonoro continuam validação manual.
