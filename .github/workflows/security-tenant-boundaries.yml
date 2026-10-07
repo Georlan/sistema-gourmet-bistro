@@ -1,0 +1,44 @@
+name: Security tenant boundaries
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/security-tenant-boundaries.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/security-tenant-boundaries.yml'
+jobs:
+  security-tenant-boundaries:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: koma_security
+          POSTGRES_PASSWORD: security-local-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d koma_security"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: security-test-only
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      DATABASE_URL: sqlite:///./security-ci.db
+      MIGRATION_DATABASE_URL: sqlite:///./security-ci.db
+      KOMA_SECURITY_TEST_DATABASE_URL: postgresql://postgres:security-local-only@127.0.0.1:5432/koma_security
+      PYTHONPATH: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r backend/requirements.txt pytest
+      - name: Migrate disposable PostgreSQL
+        run: |
+          DATABASE_URL="$KOMA_SECURITY_TEST_DATABASE_URL" MIGRATION_DATABASE_URL="$KOMA_SECURITY_TEST_DATABASE_URL" python -m alembic -c backend/alembic.ini upgrade head
+      - name: Validate authorization, signatures, replay and real tenant boundaries
+        run: |
+          python -m pytest -q -ra backend/tests/test_cearatech_lead_authorization.py backend/tests/test_whatsapp_webhook_replay_security.py backend/tests/test_meta_webhook_and_otp.py backend/tests/test_whatsapp_notification_postgres_security.py

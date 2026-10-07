@@ -14,8 +14,9 @@ from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import KomaEventLead, Usuario
-from ..security import IPRateLimiter, get_current_user
+from ..models import KomaEventLead
+from ..security import IPRateLimiter
+from .super_admin import get_current_admin
 from ..services.cearatech_promo_printer import (
     DEFAULT_CANONICAL_URL,
     build_cearatech_promo_escpos,
@@ -189,11 +190,11 @@ def list_cearatech_leads(
     event_slug: str = "ceara-tech-summit-2026",
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    current_user: Usuario = Depends(get_current_user),
+    current_admin: dict[str, Any] = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     """
-    Listagem segura de leads para operadores administrativos / super admin.
+    Listagem global de leads exclusiva do Super Admin da plataforma.
     Nunca exposto publicamente sem autenticação.
     """
     total = (
@@ -236,7 +237,7 @@ def list_cearatech_leads(
 @router.post("/cearatech/print", summary="Disparar impressão da ficha promocional (1, 20, 30, 50 cópias)")
 def print_cearatech_promo(
     req: PrintPromoRequest,
-    current_user: Usuario = Depends(get_current_user),
+    current_admin: dict[str, Any] = Depends(get_current_admin),
 ):
     """
     Dispara a impressão térmica de 1 ou múltiplas fichas promocionais do KÔMA.
