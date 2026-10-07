@@ -3,11 +3,15 @@ on:
   pull_request:
     paths:
       - 'backend/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/security-tenant-boundaries.yml'
   push:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/security-tenant-boundaries.yml'
 jobs:
   security-tenant-boundaries:
@@ -48,3 +52,14 @@ jobs:
       - name: Validate authorization, signatures, replay and real tenant boundaries
         run: |
           python -m pytest -q -ra backend/tests/test_cearatech_lead_authorization.py backend/tests/test_whatsapp_webhook_replay_security.py backend/tests/test_meta_webhook_and_otp.py backend/tests/test_whatsapp_notification_postgres_security.py
+
+  frontend-dependency-security:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=high

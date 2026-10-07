@@ -116,3 +116,8 @@ pelo menos a implementação compatível da primeira etapa.
 O processamento SQL do callback é executado fora do event loop. A simulação
 mantém a atualização do banco pendente enquanto outra requisição responde;
 uma rajada de callbacks não deve bloquear a execução das demais rotas async.
+
+A auditoria npm revelou source-map-js 1.2.1 (dependência transitiva). O lock
+atualiza somente esse pacote para 1.2.2, com integridade conferida no registry.
+CI passa a auditar também o lock do frontend. Referência:
+[advisory](https://github.com/advisories/GHSA-68fv-2mgg-jv7q).
