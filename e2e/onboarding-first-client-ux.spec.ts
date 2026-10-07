@@ -236,3 +236,36 @@ test('cadastro comercial salva dados e horários na própria tela e só avança 
   await expect(page.getByText('Ainda não iniciado', { exact: true })).toBeVisible();
   await page.screenshot({ path: `/tmp/koma-guided-${test.info().project.name}.png`, fullPage: true });
 });
+
+test('cardápio assistido acompanha publicação sem consultar enquanto há edição não salva', async ({ page }) => {
+  await page.route('**/api/**', route => route.fulfill({ json: {} }));
+  const snapshot = baseSnapshot({ mode: 'commercial', progress: 3, operationsReady: true, orderTypes: ['retirada'] });
+  snapshot.steps.profile = true;
+  snapshot.steps.hours = true;
+  Object.assign(snapshot, { catalogAssistance: { id: 'simulated-menu', filename: 'menu.webp', status: 'processing', createdAt: null, updatedAt: null } });
+  const config = { nome: 'Restaurante simulado', endereco: 'Rua de Teste, 100', socials: { whatsapp: '85999999999' }, horarios_funcionamento: [{ days: 'Segunda a Sexta', hours: '18:00 - 01:00' }] };
+  let reads = 0;
+  await page.route('**/api/onboarding/status', route => { reads++; return route.fulfill({ json: snapshot }); });
+  await page.route('**/api/cardapio-digital/config', route => route.fulfill({ json: { ...config, ...(route.request().method() === 'PUT' ? route.request().postDataJSON() : {}) } }));
+  await page.clock.install();
+  await activate(page);
+  await expect(page.getByRole('region', { name: 'Cardápio do cadastro' })).toBeVisible();
+  await expect(page.getByText('Falta pouco — 3 de 4 concluídos').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Revisar dados', exact: true }).click();
+  const guided = page.getByRole('region', { name: 'Etapa atual do cadastro' });
+  await guided.getByLabel('Nome público do restaurante', { exact: true }).fill('Nome em edição');
+  const beforeEditingWait = reads;
+  await page.clock.fastForward(30000);
+  expect(reads).toBe(beforeEditingWait);
+  await expect(guided.getByLabel('Nome público do restaurante', { exact: true })).toHaveValue('Nome em edição');
+  await guided.getByRole('button', { name: 'Salvar e continuar', exact: true }).click();
+  await expect(guided).toHaveCount(0);
+  snapshot.steps.catalog = true;
+  snapshot.progress = { completed: 4, total: 4, percent: 100 };
+  snapshot.readiness.configurationComplete = true;
+  snapshot.readyForRelease = true;
+  snapshot.onboarding.releaseState = 'awaiting_koma';
+  await page.clock.fastForward(30000);
+  await expect(page.getByText('Sua parte está concluída ✓', { exact: true })).toBeVisible();
+  await expect(page.getByText('Ainda não iniciado', { exact: true })).toBeVisible();
+});
