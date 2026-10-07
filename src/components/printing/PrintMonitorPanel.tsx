@@ -1,3 +1,4 @@
+import { useIdleReconciliation } from '../caixa/realtime/useIdleReconciliation';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -170,6 +171,7 @@ interface LocalAgentIdentity {
 }
 
 interface PrintMonitorPanelProps {
+  isWsConnected?: boolean;
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
   onTestPrint?: (agentId: string) => void | Promise<void>;
@@ -359,6 +361,7 @@ function friendlyUsbConnectionError(status: number, detail?: string): string {
 }
 
 export function PrintMonitorPanel({
+  isWsConnected = false,
   apiBaseUrl,
   authHeaders,
   onTestPrint,
@@ -424,30 +427,14 @@ export function PrintMonitorPanel({
     }
   }, [apiBaseUrl, authorization]);
 
-  useEffect(() => {
-    void loadMonitor(true);
-
-    // O heartbeat do agente publica print_monitor_updated pelo WebSocket.
-    // Este evento é a fonte primária de atualização da tela; o intervalo
-    // abaixo é apenas uma reconciliação de segurança caso o socket caia.
-    const refreshFromRealtime = () => void loadMonitor(false);
-    const fallbackIntervalId = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void loadMonitor(false);
-      }
-    }, 30_000);
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') void loadMonitor(false);
-    };
-
-    window.addEventListener('koma_print_monitor_refresh', refreshFromRealtime);
-    document.addEventListener('visibilitychange', refreshWhenVisible);
-    return () => {
-      window.clearInterval(fallbackIntervalId);
-      window.removeEventListener('koma_print_monitor_refresh', refreshFromRealtime);
-      document.removeEventListener('visibilitychange', refreshWhenVisible);
-    };
-  }, [loadMonitor]);
+  const reconcileMonitor = useCallback(() => loadMonitor(false), [loadMonitor]);
+  useIdleReconciliation({
+    isWsConnected,
+    eventName: 'koma_print_monitor_refresh',
+    // An offline agent cannot emit an event: preserve freshness of its status.
+    healthyIntervalMs: 30_000,
+    refresh: reconcileMonitor,
+  });
 
   const localAgents = useMemo(
     () => (
