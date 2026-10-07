@@ -3,20 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-const isLocalHost = window.location.hostname === 'localhost' ||
+const isLocalHost = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1' ||
-  /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname);
+  /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname)
+);
 
 const envApiUrl = (import.meta as any).env?.VITE_API_URL;
 const envWsUrl = (import.meta as any).env?.VITE_WS_URL;
 
 // Base HTTP API URL
-export const API_BASE_URL = envApiUrl || (isLocalHost
+export const API_BASE_URL = envApiUrl || (isLocalHost && typeof window !== 'undefined'
   ? `${window.location.protocol}//${window.location.hostname}:8000`
   : 'https://sistema-gourmet-bistro-production.up.railway.app');
 
 // Base WebSocket URL
-const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const wsHost = isLocalHost ? `${window.location.hostname}:8000` : 'sistema-gourmet-bistro-production.up.railway.app';
+const wsProtocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const wsHost = isLocalHost && typeof window !== 'undefined' ? `${window.location.hostname}:8000` : 'sistema-gourmet-bistro-production.up.railway.app';
 
 export const WS_BASE_URL = envWsUrl || `${wsProtocol}//${wsHost}`;
