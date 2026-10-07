@@ -54,3 +54,35 @@ test('plataforma distingue acesso opcional e verifica Telegram somente por leitu
   await expect(page.getByText('Bot e destino verificados', { exact: true })).toHaveCount(0);
   expect(writes).toBe(0);
 });
+
+
+test('integrações distingue não verificado e remove resultados antigos após falha', async ({ page }) => {
+  let failed = false;
+  await page.addInitScript(() => sessionStorage.setItem('koma_super_admin_token', 'e2e-token'));
+  await page.route('**/api/super-admin/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/restaurantes')) return route.fulfill({ json: [] });
+    if (path.endsWith('/contracts')) return route.fulfill({ json: { items: [], pendingCount: 0 } });
+    if (path.endsWith('/integrations/registry')) {
+      if (failed) return route.fulfill({ status: 503, json: { detail: 'Consulta indisponível' } });
+      return route.fulfill({ json: { checked_at: '2026-10-07T04:00:00Z', services: [
+        { id: 'posthog', name: 'PostHog', category: 'product_analytics', purpose: 'Análise de produto', status: 'unverified', configured: false, latency_ms: null, last_checked_at: null, console_url: 'https://us.posthog.com/project/648305', detail: 'Links disponíveis; projeto não verificado' },
+        { id: 'linear', name: 'Linear', category: 'control_plane', purpose: 'Engenharia', status: 'connected', configured: true, latency_ms: 20, last_checked_at: '2026-10-07T04:00:00Z', console_url: 'https://linear.app', detail: 'Acesso verificado' },
+      ] } });
+    }
+    return route.fulfill({ json: {} });
+  });
+  await page.route('**/health/live', route => route.fulfill({ json: { status: 'ok' } }));
+  await page.goto('/super-admin');
+  if (page.viewportSize()!.width < 1024) await page.getByRole('button', { name: 'Abrir menu lateral' }).click();
+  await page.getByRole('button', { name: 'Plataforma', exact: true }).click();
+  await page.getByRole('button', { name: 'Integrações', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Integrações da plataforma' })).toBeVisible();
+  await expect(page.locator('div.rounded-xl').filter({ has: page.getByRole('heading', { name: 'PostHog', exact: true }) }).getByText('Não verificado', { exact: true })).toBeVisible();
+  await expect(page.getByText('Conectado', { exact: true })).toBeVisible();
+  failed = true;
+  await page.getByRole('button', { name: 'Testar conexões agora' }).click();
+  await expect(page.getByText('Conectado', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'PostHog', exact: true })).toHaveCount(0);
+  await expect(page.getByText('Último probe:', { exact: false })).toHaveCount(0);
+});

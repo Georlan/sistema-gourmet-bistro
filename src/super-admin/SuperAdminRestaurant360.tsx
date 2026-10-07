@@ -1,3 +1,4 @@
+import { summarizeIncidents } from "./incidentSummary";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -104,7 +105,7 @@ type ReleasePreview = {
     paymentMethod: string | null;
     trialStartedAt: string | null;
     trialEndsAt: string | null;
-  };
+  } | null;
   steps: Record<"profile" | "hours" | "catalog" | "operations", boolean>;
   operations?: {
     configured?: boolean;
@@ -485,6 +486,7 @@ export function SuperAdminRestaurant360({
 
   const readySteps = release ? Object.values(release.steps).filter(Boolean).length : null;
   const criticalIncidentCount = incidents.filter(item => item.severity === "critical" || item.severity === "high").length;
+  const incidentSummary = useMemo(() => summarizeIncidents(incidents), [incidents]);
   const printingIncidents = incidents.filter(item => item.source === "impressao");
   const printingEnabled = capabilitiesAvailable ? capabilities?.effective?.printing === true : null;
 
@@ -1026,10 +1028,10 @@ export function SuperAdminRestaurant360({
             <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
               <h3 className="text-sm font-bold text-koma-foreground">Pontos de atenção</h3>
               <div className="mt-3 space-y-2">
-                {incidents.slice(0, 3).map(item => (
+                {incidentSummary.slice(0, 3).map(({ incident: item, count }) => (
                   <div key={item.id} className={"rounded-lg border p-3 text-[11px] " + incidentTone(item.severity)}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <strong>{item.title}</strong>
+                      <strong>{item.title}{count > 1 ? ` · ${count} ocorrências` : ""}</strong>
                       <span className="text-[9px] font-black uppercase opacity-75">{incidentSourceLabel(item.source)}</span>
                     </div>
                     <p className="mt-1 opacity-80">{item.recommended_action}</p>
@@ -1057,7 +1059,7 @@ export function SuperAdminRestaurant360({
                     Diagnóstico de incidentes indisponível; nenhum estado saudável foi presumido.
                   </div>
                 )}
-                {incidents.length > 3 && <p className="text-[10px] text-koma-muted">+ {incidents.length - 3} incidente(s) na aba Operação.</p>}
+                {incidents.length > 0 && <button type="button" onClick={() => setSection("operation")} className="text-[10px] font-bold text-[#00b894] hover:underline">Ver os {incidents.length} incidentes e suas evidências na aba Operação</button>}
               </div>
             </div>
           </div>

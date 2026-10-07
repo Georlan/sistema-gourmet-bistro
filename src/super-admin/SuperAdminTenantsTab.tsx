@@ -286,6 +286,7 @@ export function SuperAdminTenantsTab({
   return (
     <div className="space-y-6">
       {benefitsTenant && <SuperAdminCapabilitiesModal key={benefitsTenant.id} tenant={benefitsTenant} onClose={() => setBenefitsTenant(null)} />}
+      {!selectedTenant && <>
       <div className="space-y-4 rounded-xl border border-[#1e293b] bg-koma-card p-5 shadow-sm">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
@@ -403,6 +404,8 @@ export function SuperAdminTenantsTab({
           </table>
         </div>
       </div>
+
+      </>}
 
       {selectedTenant && (
         <SuperAdminRestaurant360
