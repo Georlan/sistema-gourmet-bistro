@@ -203,6 +203,7 @@ export function SuperAdminLeadsTab() {
     if (!draft) return;
     setDetailBusy(true);
     setError(null);
+    const requestId = detailRequest.current;
     const effective = { ...draft, ...overrides };
     try {
       const response = await superAdminFetch(`/api/leads/cearatech/${draft.id}`, {
@@ -221,14 +222,16 @@ export function SuperAdminLeadsTab() {
         }),
       });
       const saved = await response.json() as Lead;
-      setSelectedLead(saved);
-      setDraft(saved);
-      setWhatsappOpened(false);
+      if (requestId === detailRequest.current) {
+        setSelectedLead(saved);
+        setDraft(saved);
+        setWhatsappOpened(false);
+      }
       await loadLeads();
     } catch (err) {
-      setError(superAdminErrorMessage(err));
+      if (requestId === detailRequest.current) setError(superAdminErrorMessage(err));
     } finally {
-      setDetailBusy(false);
+      if (requestId === detailRequest.current) setDetailBusy(false);
     }
   };
 
