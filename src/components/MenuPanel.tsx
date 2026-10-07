@@ -212,7 +212,10 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   const reviewCta = `Revisar ${totalDraftQty} ${itemWord} · R$ ${money(draftTotal)}`;
   const submitCta = `Lançar ${totalDraftQty} ${itemWord} · R$ ${money(draftTotal)}`;
 
-  const currentGroups = productModifierGroups(selectedProductToConfigure);
+  const currentGroups = useMemo(() =>
+    [...productModifierGroups(selectedProductToConfigure)].sort((a, b) =>
+      Number(Number(b.min_selecoes || 0) > 0) - Number(Number(a.min_selecoes || 0) > 0)),
+  [selectedProductToConfigure]);
   const selectedModifierOptions = useMemo(
     () => modifierSelectionsFor(currentGroups, selectedModifierIds),
     [currentGroups, selectedModifierIds],
@@ -681,8 +684,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
       {selectedProductToConfigure && (
         <div className="fixed inset-0 z-50 bg-koma-overlay flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={(event) => event.target === event.currentTarget && closeProductConfig()}>
-          <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-koma-card border border-koma-border rounded-t-3xl sm:rounded-3xl p-4 pb-24 sm:p-6 sm:pb-24 space-y-4 shadow-2xl overscroll-contain">
-            <div className="flex items-start justify-between gap-3 border-b border-koma-border pb-3"><div><span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span><h4 className="font-serif font-bold text-lg text-koma-foreground">{selectedProductToConfigure.nome}</h4>{editingDraftItemId && <span className="text-[9px] uppercase font-bold text-amber-400">Editando item do pedido</span>}</div><button type="button" disabled={isSubmitting} onClick={closeProductConfig} className="p-1.5 rounded-full text-koma-muted hover:text-koma-foreground disabled:opacity-50" aria-label="Fechar configuração"><X size={18} /></button></div>
+          <div role="dialog" aria-modal="true" aria-labelledby="waiter-config-title" className="flex w-full max-w-lg max-h-[92dvh] flex-col overflow-hidden bg-koma-card border border-koma-border rounded-t-3xl sm:rounded-3xl shadow-2xl">
+            <div data-testid="waiter-config-body" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3 border-b border-koma-border pb-3"><div><span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span><h4 id="waiter-config-title" className="font-serif font-bold text-lg text-koma-foreground">{selectedProductToConfigure.nome}</h4>{editingDraftItemId && <span className="text-[9px] uppercase font-bold text-amber-400">Editando item do pedido</span>}</div><button type="button" disabled={isSubmitting} onClick={closeProductConfig} className="p-1.5 rounded-full text-koma-muted hover:text-koma-foreground disabled:opacity-50" aria-label="Fechar configuração"><X size={18} /></button></div>
             {selectedProductToConfigure.descricao && <p className="text-[11px] leading-relaxed text-koma-subtle bg-koma-raised border border-koma-border rounded-xl p-3">{selectedProductToConfigure.descricao}</p>}
 
             <div className="flex items-center justify-between gap-3">
@@ -706,7 +710,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
             <div className="space-y-2"><label htmlFor="config-client-name" className="text-[10px] uppercase font-bold text-koma-muted">Identificar cliente (opcional)</label><input id="config-client-name" value={configClient} disabled={isSubmitting} onChange={(event) => setConfigClient(event.target.value)} placeholder="Ex: Pedro, Cláudia, Mesa Direita..." className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 disabled:opacity-50" />{combinedSuggestions.length > 0 && <div className="flex flex-wrap gap-1">{combinedSuggestions.map((name) => <button key={name} type="button" disabled={isSubmitting} onClick={() => setConfigClient(name)} className="px-2 py-1 text-[9px] rounded-lg border border-koma-border bg-koma-raised text-koma-muted disabled:opacity-40">{name}</button>)}</div>}</div>
 
-            <div className="sticky bottom-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 pb-[calc(0.35rem+env(safe-area-inset-bottom))] sm:pb-1 bg-koma-card/95 backdrop-blur-xl border-t border-koma-border flex items-center gap-3">
+            </div>
+            <div data-testid="waiter-config-footer" className="shrink-0 px-4 sm:px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-koma-card border-t border-koma-border flex items-center gap-3">
               <button type="button" disabled={isSubmitting} onClick={closeProductConfig} className="flex-1 py-2.5 rounded-xl border border-koma-border text-xs font-bold text-koma-muted hover:text-koma-foreground disabled:opacity-50">Cancelar</button>
               <button type="button" onClick={handleConfirmAdd} disabled={isSubmitting || !modifierSelectionValid} className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-extrabold disabled:opacity-40 disabled:cursor-not-allowed">{isSubmitting ? 'Aguarde…' : !modifierSelectionValid ? 'Complete as escolhas' : editingDraftItemId ? 'Salvar alterações' : 'Adicionar ao pedido'}</button>
             </div>
