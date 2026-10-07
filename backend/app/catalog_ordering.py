@@ -214,8 +214,17 @@ def ordered_products(products: Sequence[Any]) -> list[Any]:
     )
 
 
-def resolve_restaurant_niche(db: Any, restaurante_id: int) -> str:
-    """Detecta o nicho operacional do restaurante de forma segura e resiliente."""
+def resolve_restaurant_niche(
+    db: Any,
+    restaurante_id: int,
+    fallback_niche: Optional[str] = None,
+) -> str:
+    """Detecta o nicho operacional sem reler configuração já carregada.
+
+    O perfil operacional explícito vence. Quando o chamador já possui o nicho
+    de ConfiguracaoRestaurante, ele é usado como fallback e evita uma segunda
+    consulta ao mesmo registro no hot path público.
+    """
     try:
         from .restaurant_profile_models import RestauranteOperationProfile
         profile = (
@@ -227,6 +236,9 @@ def resolve_restaurant_niche(db: Any, restaurante_id: int) -> str:
             return profile[0].strip().lower()
     except Exception:
         pass
+
+    if fallback_niche and str(fallback_niche).strip():
+        return str(fallback_niche).strip().lower()
 
     try:
         from .models import ConfiguracaoRestaurante
