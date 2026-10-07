@@ -35,12 +35,39 @@ export function getDeliveryQuote(config: DeliveryConfig | undefined, subtotal: n
   if (mode === 'bairro') {
     const neighborhoods = config?.tabelaTaxasBairros ?? [];
     const cleanBairro = (bairro || '').trim();
-    const selected = cleanBairro
-      ? neighborhoods.find((row) => row.bairro.toLowerCase() === cleanBairro.toLowerCase())
-      : undefined;
+
+    // Uma lista publicada é também a área de cobertura. Frete grátis não pode
+    // transformar um endereço fora da área em uma entrega válida.
+    if (neighborhoods.length > 0) {
+      if (!cleanBairro) {
+        return {
+          fee: 0,
+          awaitingNeighborhood: true,
+          outsideCoverage: false,
+        };
+      }
+      const selected = neighborhoods.find(
+        (row) => row.bairro.toLowerCase() === cleanBairro.toLowerCase(),
+      );
+      if (!selected) {
+        return {
+          fee: 0,
+          awaitingNeighborhood: false,
+          outsideCoverage: true,
+        };
+      }
+      return {
+        fee: freeBySubtotal ? 0 : selected.taxa,
+        awaitingNeighborhood: false,
+        outsideCoverage: false,
+      };
+    }
+
+    // Compatibilidade para restaurantes que ainda não publicaram uma área.
     return {
-      fee: freeBySubtotal ? 0 : selected?.taxa ?? config?.taxaEntregaPadrao ?? 0,
+      fee: freeBySubtotal ? 0 : config?.taxaEntregaPadrao ?? 0,
       awaitingNeighborhood: false,
+      outsideCoverage: false,
     };
   }
 

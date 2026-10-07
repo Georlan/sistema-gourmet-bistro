@@ -11,7 +11,9 @@ import datetime
 from decimal import Decimal
 import logging
 import unicodedata
+import uuid
 from typing import Any, Optional
+from urllib.parse import urlsplit
 from fastapi import BackgroundTasks, HTTPException, Request, status
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
@@ -27,7 +29,7 @@ from ...application.orders.commands import (
 from ...application.orders.idempotency import compute_fingerprint_for_public_payload
 from ...application.orders.service import OrderApplicationService
 from ...config import settings
-from ...database import current_restaurante_id
+from ...database import SessionLocal, current_restaurante_id, tenant_session_scope
 from ...domain.orders.errors import (
     EmptyOrderItemsError,
     IdempotencyConflictError,
@@ -49,6 +51,7 @@ from ...models import (
     Comanda,
     ConfiguracaoRestaurante,
     OnlinePaymentIntent,
+    OrderAcquisitionAttribution,
     Restaurante,
     Usuario,
 )
@@ -210,6 +213,95 @@ def _enforce_public_order_rate_limits(
         restaurante_id=restaurante_id,
         telefone=telefone,
     )
+
+
+def _coarse_client_surface(user_agent: str) -> str:
+    ua = (user_agent or "").lower()
+    if "instagram" in ua:
+        return "instagram_in_app"
+    if "fban" in ua or "fbav" in ua or "facebook" in ua:
+        return "facebook_in_app"
+    if "whatsapp" in ua:
+        return "whatsapp_in_app"
+    return "browser"
+
+
+def _safe_referrer(value: str | None) -> str | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = urlsplit(raw)
+    except ValueError:
+        return None
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"[:300]
+
+
+def _order_acquisition_payload(payload: CardapioPedidoCreate, request: Request) -> dict[str, Any]:
+    provided = getattr(payload, "acquisition", None)
+    data = provided.model_dump(exclude_none=True) if provided is not None else {}
+    surface = str(data.get("client_surface") or _coarse_client_surface(request.headers.get("user-agent", "")))
+    data.setdefault("session_id", f"server-{uuid.uuid4()}")
+    data.setdefault("client_surface", surface)
+    data.setdefault("referrer", _safe_referrer(request.headers.get("referer")))
+    if not data.get("source") and surface == "instagram_in_app":
+        data["source"] = "instagram"
+        data.setdefault("medium", "in_app_browser")
+    elif not data.get("source") and surface == "facebook_in_app":
+        data["source"] = "facebook"
+        data.setdefault("medium", "in_app_browser")
+    elif not data.get("source") and surface == "whatsapp_in_app":
+        data["source"] = "whatsapp"
+        data.setdefault("medium", "in_app_browser")
+    return {key: value for key, value in data.items() if value not in (None, "")}
+
+
+def _persist_order_acquisition_best_effort(
+    restaurante_id: int,
+    comanda_id: str,
+    acquisition: dict[str, Any],
+) -> None:
+    """Persiste atribuição em transação isolada; nunca interfere no pedido."""
+    if not acquisition or not acquisition.get("session_id"):
+        return
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, restaurante_id):
+            exists = db.query(OrderAcquisitionAttribution.id).filter(
+                OrderAcquisitionAttribution.restaurante_id == restaurante_id,
+                OrderAcquisitionAttribution.comanda_id == comanda_id,
+            ).first()
+            if exists:
+                return
+            db.add(
+                OrderAcquisitionAttribution(
+                    restaurante_id=restaurante_id,
+                    comanda_id=comanda_id,
+                    session_id=str(acquisition.get("session_id") or ""),
+                    source=acquisition.get("source"),
+                    medium=acquisition.get("medium"),
+                    campaign=acquisition.get("campaign"),
+                    content=acquisition.get("content"),
+                    term=acquisition.get("term"),
+                    referrer=acquisition.get("referrer"),
+                    landing_path=acquisition.get("landing_path"),
+                    client_surface=acquisition.get("client_surface"),
+                )
+            )
+            db.commit()
+    except IntegrityError:
+        db.rollback()
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Falha não bloqueante ao persistir atribuição do pedido %s do restaurante %s.",
+            comanda_id,
+            restaurante_id,
+        )
+    finally:
+        db.close()
 
 
 def _configured_payment_methods(raw_methods: Any) -> set[str]:
@@ -713,6 +805,13 @@ class CardapioWebAdapter:
                 {"event": "new_delivery_order", "message": f"Novo pedido online de {cliente_nome} recebido!"},
                 rest_id,
             )
+        background_tasks.add_task(
+            _persist_order_acquisition_best_effort,
+            rest_id,
+            order_dto.comanda_id,
+            _order_acquisition_payload(payload, request),
+        )
+
         if cliente is not None:
             background_tasks.add_task(
                 manager.broadcast,

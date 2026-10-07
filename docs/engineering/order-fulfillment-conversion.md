@@ -38,9 +38,11 @@ logísticas são repetidas na confirmação. Os fluxos existentes continuam send
 responsáveis por pagamento, atribuição, despacho e conclusão.
 
 A taxa usa `OrderApplicationService.resolve_server_delivery_fee`: fixa, bairro,
-distância e frete grátis. Bairro fora da tabela usa a taxa fixa configurada;
-distância sem coordenadas usa a mínima; limites de distância continuam bloqueando
-cobertura antes do frete grátis. Não existe um fallback canônico de taxa manual
+distância e frete grátis. Quando existe tabela de bairros publicada, ela é a
+allowlist de cobertura: bairro ausente ou fora da lista bloqueia delivery antes
+de qualquer frete grátis. Tabela vazia preserva temporariamente o fallback legado
+para restaurantes ainda não configurados. Distância sem coordenadas usa a mínima;
+limites de distância continuam bloqueando cobertura antes do frete grátis. Não existe um fallback canônico de taxa manual
 no Order Core atual: configuração ausente/inválida bloqueia a conversão.
 Taxas e totais enviados pelo cliente nunca são autoridade.
 

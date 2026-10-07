@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from ..config import settings
 from ..database import SessionLocal, engine, tenant_session_scope
-from ..models import Lancamento, Pagamento, RestaurantPaymentAccount, Restaurante, SuperAdminAuditLog
+from ..models import Comanda, Lancamento, OrderAcquisitionAttribution, Pagamento, RestaurantPaymentAccount, Restaurante, SuperAdminAuditLog
 from ..security import IPRateLimiter, create_access_token, verify_password, superadmin_session_generation
 from ..subscription import VALID_SUBSCRIPTION_PLANS
 from .super_admin_services import (
@@ -207,6 +207,58 @@ def _sanitize_audit_data(data: Any) -> Any:
         else:
             sanitized[k] = v
     return sanitized
+
+
+@router.get("/restaurantes/{tenant_id}/acquisition")
+def restaurant_acquisition(
+    tenant_id: int,
+    limit: int = Query(default=50, ge=1, le=200),
+    admin: dict = Depends(get_current_admin),
+):
+    """Últimas origens de pedidos do Cardápio, exclusivas do SuperAdmin."""
+    if tenant_id <= 0:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+
+    db = SessionLocal()
+    try:
+        known_ids = set(_discover_restaurant_ids(db))
+        if tenant_id not in known_ids:
+            raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+
+        with tenant_session_scope(db, tenant_id):
+            rows = (
+                db.query(OrderAcquisitionAttribution, Comanda.numero_pedido)
+                .outerjoin(
+                    Comanda,
+                    (Comanda.restaurante_id == OrderAcquisitionAttribution.restaurante_id)
+                    & (Comanda.id == OrderAcquisitionAttribution.comanda_id),
+                )
+                .filter(OrderAcquisitionAttribution.restaurante_id == tenant_id)
+                .order_by(OrderAcquisitionAttribution.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+
+            return [
+                {
+                    "orderId": attribution.comanda_id,
+                    "orderNumber": order_number,
+                    "createdAt": attribution.created_at.isoformat()
+                    if attribution.created_at
+                    else None,
+                    "source": attribution.source,
+                    "medium": attribution.medium,
+                    "campaign": attribution.campaign,
+                    "content": attribution.content,
+                    "term": attribution.term,
+                    "referrer": attribution.referrer,
+                    "landingPath": attribution.landing_path,
+                    "clientSurface": attribution.client_surface,
+                }
+                for attribution, order_number in rows
+            ]
+    finally:
+        db.close()
 
 
 @router.get("/restaurantes")
