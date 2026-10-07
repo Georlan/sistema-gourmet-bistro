@@ -34,26 +34,31 @@ export default function ModifierPicker({
   const [showAll, setShowAll] = useState(false);
   const [query, setQuery] = useState('');
 
+  // Keep catalog order within each tier; required choices lead the configuration.
+  const orderedGroups = useMemo(() => [...groups].sort((a, b) =>
+    Number(Number(b.min_selecoes || 0) > 0 || b.tipo === 'obrigatorio') -
+    Number(Number(a.min_selecoes || 0) > 0 || a.tipo === 'obrigatorio')), [groups]);
+
   const mandatoryOrRecommended = useMemo(
-    () => groups.filter((group) => group.recomendado !== false || Number(group.min_selecoes || 0) > 0 || group.tipo === 'obrigatorio'),
-    [groups],
+    () => orderedGroups.filter((group) => group.recomendado !== false || Number(group.min_selecoes || 0) > 0 || group.tipo === 'obrigatorio'),
+    [orderedGroups],
   );
   const additionalGroups = useMemo(
-    () => groups.filter((group) => !mandatoryOrRecommended.some((recommended) => recommended.id === group.id)),
-    [groups, mandatoryOrRecommended],
+    () => orderedGroups.filter((group) => !mandatoryOrRecommended.some((recommended) => recommended.id === group.id)),
+    [orderedGroups, mandatoryOrRecommended],
   );
 
   const normalizedQuery = normalize(query);
   const visibleGroups = useMemo(() => {
     if (normalizedQuery) {
-      return groups.filter((group) => {
+      return orderedGroups.filter((group) => {
         if (normalize(group.nome).includes(normalizedQuery)) return true;
         return group.opcoes.some((option) => normalize(option.nome).includes(normalizedQuery));
       });
     }
-    if (showAll || mandatoryOrRecommended.length === 0) return groups;
+    if (showAll || mandatoryOrRecommended.length === 0) return orderedGroups;
     return mandatoryOrRecommended;
-  }, [groups, mandatoryOrRecommended, normalizedQuery, showAll]);
+  }, [orderedGroups, mandatoryOrRecommended, normalizedQuery, showAll]);
 
   if (groups.length === 0) {
     return <p className="text-[10px] text-koma-muted">Nenhum adicional disponível neste restaurante.</p>;
@@ -66,7 +71,7 @@ export default function ModifierPicker({
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Buscar adicional..."
+          placeholder="Buscar opção ou adicional..."
           className="w-full rounded-xl border border-koma-border bg-koma-input py-2 pl-8 pr-3 text-[11px] text-koma-foreground outline-none focus:border-emerald-500"
         />
       </div>
@@ -104,15 +109,17 @@ export default function ModifierPicker({
           return (
             <div
               key={group.id}
+              data-testid="modifier-group"
+              data-group-id={group.id}
               className={`rounded-xl border p-3 ${valid ? 'border-koma-border bg-koma-raised/40' : 'border-amber-500/40 bg-amber-500/5'}`}
             >
               <div className="mb-2 flex items-start justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-xs font-bold text-koma-foreground">{group.nome}</span>
-                    {recommended && (
+                    {(min > 0 || group.tipo === 'obrigatorio' || recommended) && (
                       <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-emerald-400">
-                        Recomendado
+                        {min > 0 || group.tipo === 'obrigatorio' ? 'Obrigatório' : 'Recomendado'}
                       </span>
                     )}
                   </div>
