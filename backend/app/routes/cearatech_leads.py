@@ -1,5 +1,5 @@
 """
-Rotas para captação de leads e impressão promocional do Ceará Tech Summit 2026.
+Rotas para captação de leads e operação comercial do Siará Tech Summit 2026.
 """
 
 from __future__ import annotations
@@ -8,24 +8,40 @@ import datetime
 import hashlib
 import re
 from typing import Any, Optional
+from uuid import UUID
+from ..services.event_acquisition import enqueue_owner, signup_url, record_visit, funnel_stats, owner_notice_status
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import KomaEventLead
+from ..models import KomaEventLead, KomaEventLeadHistory
 from ..security import IPRateLimiter
-from .super_admin import get_current_admin
 from ..services.cearatech_promo_printer import (
     DEFAULT_CANONICAL_URL,
     build_cearatech_promo_escpos,
 )
+from .super_admin import get_current_admin
 
 router = APIRouter(prefix="/api/leads", tags=["Leads Institucionais & Eventos"])
-_lead_submission_limiter = IPRateLimiter(requests_per_minute=15)
+# Evento presencial pode concentrar dezenas de participantes atrás do mesmo NAT/Wi-Fi.
+# O telefone+evento continua deduplicado no banco; este limite protege abuso bruto sem
+# bloquear uma turma inteira que envie o formulário no mesmo minuto.
+_lead_submission_limiter = IPRateLimiter(requests_per_minute=120)
+_visit_submission_limiter = IPRateLimiter(requests_per_minute=240)
 
 _ALLOWED_BATCH_COPIES = {1, 20, 30, 50}
+LEAD_STATUSES = (
+    "new",
+    "contacted",
+    "qualified",
+    "demo_scheduled",
+    "converted",
+    "lost",
+)
+LEAD_SOURCES = {"qr_tela", "qr_impresso", "link_direto"}
 
 
 class CearaTechLeadInput(BaseModel):
@@ -33,9 +49,14 @@ class CearaTechLeadInput(BaseModel):
     whatsapp: str = Field(min_length=10, max_length=30)
     empresa_nome: Optional[str] = Field(default=None, max_length=120)
     segmento: Optional[str] = Field(default=None, max_length=80)
-    consent_whatsapp: bool = Field(default=True)
-    event_slug: str = Field(default="ceara-tech-summit-2026", max_length=64)
-    source: str = Field(default="qr_impresso", max_length=32)
+    cidade: Optional[str] = Field(default=None, max_length=120)
+    sistema_atual: Optional[str] = Field(default=None, max_length=120)
+    principal_dor: Optional[str] = Field(default=None, max_length=2000)
+    interesse: Optional[str] = Field(default=None, max_length=2000)
+    visit_id: Optional[UUID] = None
+    consent_whatsapp: bool = Field(default=False)
+    event_slug: str = Field(default="siara-tech-summit-2026", max_length=64)
+    source: str = Field(default="link_direto", max_length=32)
 
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
@@ -63,6 +84,36 @@ class CearaTechLeadInput(BaseModel):
             raise ValueError("DDD inválido.")
         return v.strip()
 
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, v: str) -> str:
+        normalized = (v or "").strip().lower()
+        return normalized if normalized in LEAD_SOURCES else "link_direto"
+
+
+class CearaTechLeadUpdate(BaseModel):
+    status: Optional[str] = None
+    notes: Optional[str] = Field(default=None, max_length=4000)
+    last_contact_at: Optional[datetime.datetime] = None
+    cidade: Optional[str] = Field(default=None, max_length=120)
+    quantidade_unidades: Optional[int] = Field(default=None, ge=1, le=999)
+    sistema_atual: Optional[str] = Field(default=None, max_length=120)
+    principal_dor: Optional[str] = Field(default=None, max_length=2000)
+    interesse: Optional[str] = Field(default=None, max_length=2000)
+    melhor_horario_contato: Optional[str] = Field(default=None, max_length=120)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        normalized = v.strip().lower()
+        if normalized not in LEAD_STATUSES:
+            raise ValueError(f"Status inválido. Use um de: {', '.join(LEAD_STATUSES)}")
+        return normalized
+
 
 class PrintPromoRequest(BaseModel):
     copies: int = Field(default=1)
@@ -77,6 +128,14 @@ class PrintPromoRequest(BaseModel):
         return v
 
 
+def _event_storage_slug(value: str) -> str:
+    normalized = value.strip().lower()
+    # One event identity keeps existing leads and deduplication across old/new links.
+    if normalized in {"siara-tech-summit-2026", "ceara-tech-summit-2026", ""}:
+        return "ceara-tech-summit-2026"
+    return normalized
+
+
 def _normalize_phone(raw: str) -> str:
     digits = re.sub(r"\D", "", raw or "")
     if digits.startswith("55") and len(digits) in (12, 13):
@@ -88,7 +147,79 @@ def _normalize_phone(raw: str) -> str:
     return f"55{national}"
 
 
-@router.post("/cearatech", status_code=status.HTTP_201_CREATED, summary="Registrar lead do Ceará Tech Summit")
+def _lead_payload(item: KomaEventLead, *, include_consent: bool = False) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "id": item.id,
+        "nome": item.nome,
+        "whatsapp_raw": item.whatsapp_raw,
+        "whatsapp_normalizado": item.whatsapp_normalizado,
+        "empresa_nome": item.empresa_nome,
+        "segmento": item.segmento,
+        "event_slug": item.event_slug,
+        "source": item.source,
+        "status": item.status,
+        "last_contact_at": item.last_contact_at.isoformat() if item.last_contact_at else None,
+        "cidade": item.cidade,
+        "quantidade_unidades": item.quantidade_unidades,
+        "sistema_atual": item.sistema_atual,
+        "principal_dor": item.principal_dor,
+        "interesse": item.interesse,
+        "melhor_horario_contato": item.melhor_horario_contato,
+        "notes": item.notes,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+    }
+    if include_consent:
+        payload.update({
+            "consent_whatsapp": bool(item.consent_whatsapp),
+            "consent_at": item.consent_at.isoformat() if item.consent_at else None,
+            "consent_version": item.consent_version,
+        })
+    return payload
+
+
+def _lead_detail(db: Session, lead: KomaEventLead) -> dict[str, Any]:
+    payload = _lead_payload(lead, include_consent=True)
+    entries = (db.query(KomaEventLeadHistory)
+        .filter(KomaEventLeadHistory.lead_id == lead.id)
+        .order_by(KomaEventLeadHistory.id.desc()).limit(50).all())
+    payload["owner_notification"] = owner_notice_status(db, lead.id)
+    payload["history"] = [{"id": entry.id, "actor": entry.actor,
+        "changes": entry.changes, "created_at": entry.created_at.isoformat()}
+        for entry in entries]
+    return payload
+
+
+def _audit_value(value):
+    if isinstance(value, datetime.datetime):
+        # SQLite returns naive UTC; compare it consistently with API UTC timestamps.
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=datetime.timezone.utc)
+        return value.astimezone(datetime.timezone.utc).isoformat()
+    return value
+
+
+def _apply_event_and_search_filters(query, *, event_slug: Optional[str], search: Optional[str]):
+    if event_slug:
+        query = query.filter(KomaEventLead.event_slug == _event_storage_slug(event_slug))
+    term = (search or "").strip()
+    if term:
+        like = f"%{term}%"
+        digits = re.sub(r"\D", "", term)
+        phone_like = f"%{digits}%" if digits else like
+        query = query.filter(
+            or_(
+                KomaEventLead.nome.ilike(like),
+                KomaEventLead.empresa_nome.ilike(like),
+                KomaEventLead.whatsapp_raw.ilike(like),
+                KomaEventLead.whatsapp_normalizado.ilike(phone_like),
+            )
+        )
+    return query
+
+
+@router.post("/siaratech", status_code=status.HTTP_201_CREATED, summary="Registrar lead do Siará Tech Summit")
+@router.post("/cearatech", status_code=status.HTTP_201_CREATED, include_in_schema=False, summary="Registrar lead do Siará Tech Summit")
 def submit_cearatech_lead(
     payload: CearaTechLeadInput,
     request: Request,
@@ -107,10 +238,9 @@ def submit_cearatech_lead(
         )
 
     norm_phone = _normalize_phone(payload.whatsapp)
-    event_slug = payload.event_slug.strip().lower() or "ceara-tech-summit-2026"
+    event_slug = _event_storage_slug(payload.event_slug)
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
-    # Identificadores de segurança / auditoria
     ip_header = (
         request.headers.get("CF-Connecting-IP")
         or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
@@ -119,7 +249,6 @@ def submit_cearatech_lead(
     ip_hash = hashlib.sha256(ip_header.encode()).hexdigest()[:32] if ip_header else None
     user_agent = (request.headers.get("User-Agent") or "")[:250] or None
 
-    # Deduplicação por WhatsApp dentro do mesmo evento
     existing = (
         db.query(KomaEventLead)
         .filter(
@@ -135,22 +264,26 @@ def submit_cearatech_lead(
         return {
             "success": True,
             "lead_id": existing.id,
+            "signup_url": signup_url(existing),
             "message": "Contato recebido ✓",
             "deduplicated": True,
         }
 
-    # Criar novo lead
     lead = KomaEventLead(
         nome=payload.nome,
         whatsapp_raw=payload.whatsapp,
         whatsapp_normalizado=norm_phone,
         empresa_nome=payload.empresa_nome,
         segmento=payload.segmento,
+        cidade=payload.cidade,
+        sistema_atual=payload.sistema_atual,
+        principal_dor=payload.principal_dor,
+        interesse=payload.interesse,
         event_slug=event_slug,
-        source=payload.source or "qr_impresso",
+        source=payload.source,
         consent_whatsapp=True,
         consent_at=now_utc,
-        consent_version="v1_cearatech_2026",
+        consent_version="v1_siaratech_2026",
         status="new",
         ip_hash=ip_hash,
         user_agent=user_agent,
@@ -158,80 +291,197 @@ def submit_cearatech_lead(
         updated_at=now_utc,
     )
     db.add(lead)
+    db.flush()
+    enqueue_owner(db, lead)
+    if payload.visit_id:
+        record_visit(db, payload.visit_id, payload.source)
     db.commit()
     db.refresh(lead)
 
     return {
         "success": True,
         "lead_id": lead.id,
+        "signup_url": signup_url(lead),
         "message": "Contato recebido ✓",
         "deduplicated": False,
     }
 
 
-@router.get("/cearatech", summary="Listar leads do Ceará Tech Summit (Administrativo)")
+class EventVisitInput(BaseModel):
+    visit_id: UUID
+    source: str = Field(default="link_direto", max_length=32)
+
+
+@router.post("/siaratech/visits", status_code=204)
+def submit_visit(payload: EventVisitInput, request: Request, db: Session = Depends(get_db)):
+    _visit_submission_limiter.check(request)
+    record_visit(db, payload.visit_id, payload.source if payload.source in LEAD_SOURCES else "link_direto")
+    db.commit()
+
+
+@router.get("/siaratech", summary="Listar leads comerciais (Super Admin)")
+@router.get("/cearatech", include_in_schema=False, summary="Listar leads comerciais (Super Admin)")
 def list_cearatech_leads(
-    event_slug: str = "ceara-tech-summit-2026",
+    event_slug: Optional[str] = Query(default=None, max_length=64),
+    status_filter: Optional[str] = Query(default=None, alias="status", max_length=32),
+    search: Optional[str] = Query(default=None, max_length=120),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    current_admin: dict[str, Any] = Depends(get_current_admin),
+    admin: dict = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """
-    Listagem global de leads exclusiva do Super Admin da plataforma.
-    Nunca exposto publicamente sem autenticação.
-    """
-    total = (
-        db.query(func.count(KomaEventLead.id))
-        .filter(KomaEventLead.event_slug == event_slug)
-        .scalar()
-        or 0
+    del admin
+    normalized_status = (status_filter or "").strip().lower() or None
+    if normalized_status and normalized_status not in LEAD_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Status de lead inválido.",
+        )
+
+    base_query = _apply_event_and_search_filters(
+        db.query(KomaEventLead),
+        event_slug=event_slug,
+        search=search,
     )
 
+    grouped = (
+        base_query.with_entities(KomaEventLead.status, func.count(KomaEventLead.id))
+        .group_by(KomaEventLead.status)
+        .all()
+    )
+    counts = {name: 0 for name in LEAD_STATUSES}
+    for name, count in grouped:
+        if name in counts:
+            counts[name] = int(count or 0)
+    base_total = sum(counts.values())
+
+    query = base_query
+    if normalized_status:
+        query = query.filter(KomaEventLead.status == normalized_status)
+
+    total = query.with_entities(func.count(KomaEventLead.id)).scalar() or 0
     leads = (
-        db.query(KomaEventLead)
-        .filter(KomaEventLead.event_slug == event_slug)
-        .order_by(desc(KomaEventLead.created_at))
+        query.order_by(desc(KomaEventLead.created_at))
         .offset(offset)
         .limit(limit)
         .all()
     )
 
+    event_rows = (
+        db.query(
+            KomaEventLead.event_slug,
+            func.count(KomaEventLead.id),
+            func.max(KomaEventLead.created_at),
+        )
+        .group_by(KomaEventLead.event_slug)
+        .order_by(desc(func.max(KomaEventLead.created_at)))
+        .all()
+    )
+
+    conversion_rate = (counts["converted"] / base_total * 100.0) if base_total else 0.0
     return {
         "event_slug": event_slug,
-        "total": total,
-        "leads": [
+        "total": int(total),
+        "acquisition": funnel_stats(db, _event_storage_slug(event_slug or "siara-tech-summit-2026")),
+        "stats": {
+            "total": base_total,
+            **counts,
+            "conversion_rate": round(conversion_rate, 1),
+        },
+        "events": [
             {
-                "id": item.id,
-                "nome": item.nome,
-                "whatsapp_raw": item.whatsapp_raw,
-                "whatsapp_normalizado": item.whatsapp_normalizado,
-                "empresa_nome": item.empresa_nome,
-                "segmento": item.segmento,
-                "source": item.source,
-                "status": item.status,
-                "created_at": item.created_at.isoformat() if item.created_at else None,
-                "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+                "event_slug": slug,
+                "count": int(count or 0),
+                "last_created_at": last.isoformat() if last else None,
             }
-            for item in leads
+            for slug, count, last in event_rows
         ],
+        "leads": [_lead_payload(item) for item in leads],
     }
 
 
-@router.post("/cearatech/print", summary="Disparar impressão da ficha promocional (1, 20, 30, 50 cópias)")
+@router.get("/siaratech/{lead_id}", summary="Detalhar lead comercial (Super Admin)")
+@router.get("/cearatech/{lead_id}", include_in_schema=False, summary="Detalhar lead comercial (Super Admin)")
+def get_cearatech_lead(
+    lead_id: int,
+    admin: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    del admin
+    lead = db.query(KomaEventLead).filter(KomaEventLead.id == lead_id).one_or_none()
+    if lead is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lead não encontrado.")
+    return _lead_detail(db, lead)
+
+
+@router.patch("/siaratech/{lead_id}", summary="Atualizar funil e qualificação do lead (Super Admin)")
+@router.patch("/cearatech/{lead_id}", include_in_schema=False, summary="Atualizar funil e qualificação do lead (Super Admin)")
+def update_cearatech_lead(
+    lead_id: int,
+    payload: CearaTechLeadUpdate,
+    admin: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    lead = (
+        db.query(KomaEventLead)
+        .filter(KomaEventLead.id == lead_id)
+        .with_for_update()
+        .one_or_none()
+    )
+    if lead is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lead não encontrado.")
+
+    changes = payload.model_dump(exclude_unset=True)
+    if "status" in changes and changes["status"] is None:
+        raise HTTPException(status_code=422, detail="Status não pode ser nulo.")
+    string_fields = {
+        "notes",
+        "cidade",
+        "sistema_atual",
+        "principal_dor",
+        "interesse",
+        "melhor_horario_contato",
+    }
+    for field_name in string_fields:
+        if field_name in changes and isinstance(changes[field_name], str):
+            changes[field_name] = changes[field_name].strip() or None
+
+    if changes.get("status") == "contacted" and not changes.get("last_contact_at") and lead.last_contact_at is None:
+        changes["last_contact_at"] = datetime.datetime.now(datetime.timezone.utc)
+
+    audited_changes = {}
+    for field_name, value in changes.items():
+        before = _audit_value(getattr(lead, field_name))
+        after = _audit_value(value)
+        if before != after:
+            audited_changes[field_name] = {"before": before, "after": after}
+            setattr(lead, field_name, value)
+
+    if not audited_changes:
+        return _lead_detail(db, lead)
+    db.add(KomaEventLeadHistory(lead_id=lead.id,
+        actor=str(admin.get("user") or "admin"), changes=audited_changes))
+    lead.updated_at = datetime.datetime.now(datetime.timezone.utc)
+    db.commit()
+    db.refresh(lead)
+    return _lead_detail(db, lead)
+
+
+@router.post("/siaratech/print", summary="Disparar impressão da ficha promocional (1, 20, 30, 50 cópias)")
+@router.post("/cearatech/print", include_in_schema=False, summary="Disparar impressão da ficha promocional (1, 20, 30, 50 cópias)")
 def print_cearatech_promo(
     req: PrintPromoRequest,
-    current_admin: dict[str, Any] = Depends(get_current_admin),
+    admin: dict = Depends(get_current_admin),
 ):
     """
-    Dispara a impressão térmica de 1 ou múltiplas fichas promocionais do KÔMA.
-    Pode ser acionado ao vivo no encerramento da apresentação ou para distribuição pré-evento.
+    Mantido como fallback operacional. A apresentação principal pode usar o QR
+    em tela e evitar consumo de papel.
     """
+    del admin
     escpos_bytes = build_cearatech_promo_escpos(req.target_url)
     dispatched_copies = 0
     errors = []
 
-    # 1. Tentar transporte Bluetooth direto para impressora pareada (ex: KA-1445)
     try:
         from ...adapters.transports import BluetoothRfcommTransport
     except ImportError:
@@ -260,7 +510,6 @@ def print_cearatech_promo(
                 errors.append("Falha no envio via Bluetooth RFCOMM")
                 break
 
-    # 2. Se Bluetooth não estava disponível ou falhou, tentar CUPS (ex: fila Kapbom ou G250)
     if dispatched_copies == 0:
         import subprocess
         for printer_name in ("Kapbom", "G250"):
@@ -292,9 +541,7 @@ def print_cearatech_promo(
     if dispatched_copies == 0:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                f"Nenhuma impressora térmica física respondeu ao comando. Erros: {errors}"
-            ),
+            detail=f"Nenhuma impressora térmica física respondeu ao comando. Erros: {errors}",
         )
 
     return {

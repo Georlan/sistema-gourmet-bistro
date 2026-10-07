@@ -379,6 +379,11 @@ def dispatch_batch():
 
 
 async def run_worker():
+    try:
+        from .event_acquisition import backfill_owner_notices
+        await asyncio.to_thread(backfill_owner_notices)
+    except Exception:
+        logger.exception("Event lead notification reconciliation failed")
     while True:
         try:
             await asyncio.to_thread(dispatch_batch)

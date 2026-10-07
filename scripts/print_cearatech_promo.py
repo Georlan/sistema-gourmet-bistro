@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script operacional para emissão física da ficha promocional do KÔMA no Ceará Tech Summit 2026.
+Script operacional para emissão física da ficha promocional do KÔMA no Siará Tech Summit 2026.
 Permite impressão unitária (ao vivo no palco) ou em lote (20, 30, 50 cópias para networking).
 """
 
@@ -77,7 +77,7 @@ def print_via_cups(data: bytes, queue_name: str, copies: int = 1) -> int:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Emissão da ficha promocional KÔMA para o Ceará Tech Summit 2026."
+        description="Emissão da ficha promocional KÔMA para o Siará Tech Summit 2026."
     )
     parser.add_argument(
         "--copies",
@@ -124,7 +124,7 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"=== KÔMA — Ficha Promocional Ceará Tech Summit 2026 ===")
+    print(f"=== KÔMA — Ficha Promocional Siará Tech Summit 2026 ===")
     print(f"URL Canônica: {args.target_url}")
     print(f"Cópias solicitadas: {args.copies}")
 

@@ -2115,7 +2115,12 @@ class KomaEventLead(Base):
     __tablename__ = "koma_event_leads"
     __table_args__ = (
         UniqueConstraint("event_slug", "whatsapp_normalizado", name="uq_koma_event_leads_event_whatsapp"),
+        CheckConstraint(
+            "status IN ('new', 'contacted', 'qualified', 'demo_scheduled', 'converted', 'lost')",
+            name="ck_koma_event_leads_status",
+        ),
         Index("ix_koma_event_leads_event_created", "event_slug", "created_at"),
+        Index("ix_koma_event_leads_event_status_created", "event_slug", "status", "created_at"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -2130,8 +2135,48 @@ class KomaEventLead(Base):
     consent_at = Column(DateTime(timezone=True), nullable=False)
     consent_version = Column(String(32), nullable=False, default="v1_cearatech_2026")
     status = Column(String(32), nullable=False, default="new")
+    last_contact_at = Column(DateTime(timezone=True), nullable=True)
+    cidade = Column(String(120), nullable=True)
+    quantidade_unidades = Column(Integer, nullable=True)
+    sistema_atual = Column(String(120), nullable=True)
+    principal_dor = Column(Text, nullable=True)
+    interesse = Column(Text, nullable=True)
+    melhor_horario_contato = Column(String(120), nullable=True)
     ip_hash = Column(String(64), nullable=True)
     user_agent = Column(String(255), nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class KomaEventLeadHistory(Base):
+    """Platform-only commercial audit, independent of restaurant customers."""
+    __tablename__ = "koma_event_lead_history"
+    __table_args__ = (Index("ix_event_lead_history_lead_id_id", "lead_id", "id"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    lead_id = Column(Integer, ForeignKey("koma_event_leads.id", ondelete="CASCADE"), nullable=False)
+    actor = Column(String(255), nullable=False)
+    changes = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+@event.listens_for(KomaEventLeadHistory, "before_update")
+@event.listens_for(KomaEventLeadHistory, "before_delete")
+def block_event_lead_history_mutation(mapper, connection, target):
+    raise PermissionError("Lead history is immutable.")
+
+
+class KomaEventVisit(Base):
+    __tablename__ = "koma_event_visits"
+    visit_id = Column(String(36), primary_key=True)
+    event_slug = Column(String(64), nullable=False, index=True)
+    source = Column(String(32), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class KomaEventAttribution(Base):
+    __tablename__ = "koma_event_attributions"
+    signup_id = Column(String(36), primary_key=True)
+    lead_id = Column(Integer, ForeignKey("koma_event_leads.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -46,9 +46,13 @@ def test_wrong_platform_identity_is_rejected(client):
     assert client.get("/api/leads/cearatech", headers={"Authorization": f"Bearer {token}"}).status_code == 401
 
 
-def test_real_platform_admin_can_list_contacts(client):
+def test_real_platform_admin_can_list_contacts(client, monkeypatch):
     class CountQuery:
         def filter(self, *args):
+            return self
+        def with_entities(self, *args):
+            return self
+        def group_by(self, *args):
             return self
         def scalar(self):
             return 0
@@ -61,6 +65,7 @@ def test_real_platform_admin_can_list_contacts(client):
         def all(self):
             return []
 
+    monkeypatch.setattr(cearatech_leads, "funnel_stats", lambda *args: {})
     client.app.dependency_overrides[get_db] = lambda: SimpleNamespace(query=lambda *args: CountQuery())
     token = create_access_token("security-admin", 0, role="superadmin")
     response = client.get("/api/leads/cearatech", headers={"Authorization": f"Bearer {token}"})
