@@ -15,7 +15,7 @@ permissions:
 jobs:
   verdict:
     name: Merge verdict
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 12
     steps:
       - name: Checkout

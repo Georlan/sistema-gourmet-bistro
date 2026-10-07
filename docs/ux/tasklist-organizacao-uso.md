@@ -20,7 +20,10 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 
 - [ ] Cardápio Online — onda 1: reconstruir bloqueio do cliente + motivo da recusa do PR #328 sobre a main atual.
 - [ ] Cardápio Online — onda 2: consolidar navegação/configurações e manter poucos fluxos canônicos.
-- [ ] Super Admin — onda única: organizar ações do tenant por tarefa operacional, suporte, plano e status; destacar ações perigosas.
+- [x] Super Admin — organização: ficha 360° por tarefa (implantação, plano, equipe, pagamentos, operação e histórico), suporte auditado e ações de status com motivo/confirmação. A ficha assume o foco ao abrir, preservando a lista/filtros ao voltar.
+- [x] Super Admin — diagnóstico: leitura canônica para implantação administrativa sem assinatura comercial; resumo agrupa alertas iguais, mantendo evidências e executores individuais na Operação. Liberação comercial continua exigindo assinatura.
+- [x] Super Admin — integrações: saúde baseada em evidência, Telegram por leitura, auditoria por tenant e links/ações reais Linear/PostHog. PostHog sem consulta autenticada fica não verificado; falha de atualização remove resultados antigos.
+- [ ] Super Admin — pendências operacionais e próximas ondas: seguir prioridades abaixo; não encerrar incidentes apenas porque uma melhoria de interface foi entregue.
 - [ ] Onboarding — onda única: reduzir primeiro acesso às decisões essenciais até chegar ao Caixa operacional.
 - [x] Equipe: espelhar Pessoas e Funções e acessos na mesma árvore canônica do menu vertical e da barra horizontal.
 - [ ] Equipe: manter gestão de pessoas e acessos sem telas paralelas.
@@ -41,6 +44,38 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 - [ ] Relatórios: manter somente atalhos e indicadores que levam a decisão operacional clara.
 - [x] Configurações: unificar Aparência, Impressão, Mesas, App do Garçom, Taxa de Serviço, Implantação inicial e Integrações na mesma árvore canônica, espelhada no menu vertical e na barra horizontal, sem cards internos de navegação.
 - [ ] Configurações: consolidar owners existentes e impedir novas telas paralelas para a mesma regra.
+
+## Super Admin — prioridades reconciliadas em 07/10/2026
+
+Base inicial consultada: main `c7aa1888dd16`, PRs #970/#982/#983/#1021 já incorporadas e interface autenticada de produção. As três correções de organização/diagnóstico acima integram a onda atual; PR #1029 mesclado com todos os checks verdes no head `9a6cfa630233`; backend e frontend serviram `83cfcf4a5eae` em 07/10 às 02:34 (Fortaleza). Smoke GET/OPTIONS concluído sem falhas; 2184 testes de backend, 962 unitários e 32 de navegador passaram. A onda paralela #1028 avançou main para `745ddb2d26e3` durante a validação, sem alterar o backend/Super Admin desta onda. A atualização paralela #1030 (`d826d89c867a`) também foi incorporada, preservando o fluxo de implantação. Carregamentos nas imagens não são falhas persistentes: prioridades e GitHub concluíram normalmente na consulta ao vivo.
+
+- [x] Super Admin — horários operacionais: Início, lista e 360° reutilizam o conversor canônico de timestamps UTC legados, preservando offsets explícitos e sem transformar data inválida em horário atual.
+
+### P0 — operação real antes de novos indicadores
+
+- [ ] Revisar fila de impressão e agente da Quentinha (#6), incluindo falha antiga de 03/10 e os dois agentes sem heartbeat vistos às 02:34; decidir documento por documento o que ainda deve ser impresso. Não reenviar em lote nem apagar histórico. Papel e alerta sonoro continuam validação manual.
+- [x] Reconciliar a leitura da fila do D8 (#8): após a correção publicada, o diagnóstico autenticado retornou pendentes=0, em processo=0, falhas=0 e nenhum incidente atual. O agente `desktop-0BRBobKlLYTz` estava configurado, com heartbeat de 26 segundos. Os 14 alertas iniciais não estavam mais presentes; esta onda não alterou documentos nem atribui sua resolução à mudança de interface.
+- [ ] D8 (#8): verificar falha local de impressão apesar de heartbeat recente (estado degradado, “Falha ao enviar à impressora local.”) e concluir o primeiro pedido de teste indicado pela fonte de implantação. Fila vazia não comprova impressão física.
+- [x] Super Admin — acesso ao diagnóstico: consultas de impressão, links e tarefas aplicam o escopo do restaurante antes da primeira leitura. Erros e respostas inválidas mostram fonte não verificada e valores indisponíveis; sincronização de tarefas libera SQL antes de aguardar o Linear.
+- [ ] Revisar blockers canônicos e liberação da Espetaria (#7). Somente o responsável pode confirmar que a implantação está pronta; ausência de atividade não comprova falha.
+
+### P1 — fechar integrações e trabalho paralelo com evidência
+
+- [ ] Incorporar falhas atuais de diagnóstico da impressora à fonte canônica de incidentes/atenção. No D8, o cartão de impressão mostrou estado degradado por erro local, enquanto a lista de incidentes retornou vazia; centralizar essa evidência no owner de incidentes, reutilizando a leitura existente de agentes e preservando a distinção entre fila e impressão física.
+
+- [x] Impressão no 360° já tem diagnóstico de agente/fila e links operacionais em #1021; não criar outro executor ou painel concorrente.
+- [x] Linear/PostHog já têm registry, links e rastreabilidade por restaurante em #1021; não reimplementar KOM-8/9/10.
+- [ ] Validar a utilidade do dashboard PostHog com eventos de negócio reais e janela explícita. Projeto conectado: KÔMA Production `648305`; consulta de erros ativos de sete dias retornou vazia em 07/10, sem provar ausência de falhas. Dados de teste do tenant #8 estão excluídos por padrão no projeto; respeitar esse filtro e explicitar quando comparar esse restaurante.
+- [ ] Integrar a onda de CRM pós-evento em uma única implementação: #1026 e #1027 estão abertas e sobrepõem painel/rotas/migração. Preservar essa tarefa paralela, reconciliar as duas antes de merge e não duplicar schema.
+- [x] Telegram: bot, destino e participação verificados por leitura em produção em 07/10 às 01:51 (Fortaleza). Nenhuma mensagem enviada; entrega continua não testada.
+- [ ] Habilitar acesso do backend ao Linear se a criação de issues dentro do KÔMA for usada: registry atual informa `LINEAR_API_KEY` ausente. Plugin conectado no Codex não configura o runtime do produto.
+- [ ] Investigar consulta administrativa do Resend que retornou HTTP 401 nesta leitura. A falha da consulta não confirma falha de entrega de e-mails; validar credencial/permissão e evidência de envio antes de alterar o fluxo.
+
+### P2 — eficiência e redução de ruído
+
+- [ ] Consolidar informações repetidas entre Início, Saúde e Integrações somente quando cada remoção preservar estado, evidência e próximo passo. Catálogo de taxas e referência mensal não representam receita recebida.
+- [ ] Agrupar visualmente incidentes repetidos na central com expansão por documento, preservando executores individuais e tenant; medir ganho antes de adicionar novos indicadores.
+- [ ] Medir duração/volume das consultas do diagnóstico antes de adicionar cache; manter atualização por navegação/ação, sem polling, novos serviços pagos ou consultas analíticas no banco operacional.
 
 ## Regra de execução — modo ondas
 

@@ -33,6 +33,7 @@ import { openAuthenticatedWebSocket } from './utils/authenticatedWebSocket';
 import { operationalFetch } from './utils/operationalRequest';
 import { createVisibleRefresh } from './utils/visibleRefresh';
 import { aplicarMascaraTelefoneInput } from './utils/phonePresentation';
+import { identifyOperator, resetAnalytics } from './analytics';
 
 // Route modules have stable identities and are downloaded only when selected.
 // Authentication stays in App; shared data and draft owners remain mounted here.
@@ -192,7 +193,16 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   useEffect(() => {
     setPagamentosPendentes([]);
     setPendingPaymentsLoadedScopeKey('');
-  }, [operationalScopeKey]);
+    if (isAuthenticated && activeWaiterId) {
+      identifyOperator({
+        id: activeWaiterId,
+        role: activeRole,
+        restaurante_id: activeRestaurantId || undefined,
+      });
+    } else {
+      resetAnalytics();
+    }
+  }, [operationalScopeKey, isAuthenticated, activeWaiterId, activeRole, activeRestaurantId]);
 
   // Helper to get headers for API calls including JWT
   const getAuthHeaders = useCallback((contentType = "application/json") => {
@@ -484,6 +494,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   // Logout handler
   const handleLogout = useCallback(() => {
     clearOperatorSession(portal);
+    resetAnalytics();
 
     setIsAuthenticated(false);
     setActiveWaiterId("");

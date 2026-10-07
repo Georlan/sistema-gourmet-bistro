@@ -324,6 +324,63 @@ def test_superadmin_release_preview_reuses_canonical_onboarding_projection(monke
     assert preview["readyForRelease"] is False
     assert preview["trialStarted"] is False
 
+    subscription = None
+    with pytest.raises(HTTPException) as error:
+        _commercial_release_preview(DbStub(), 7)
+    assert error.value.status_code == 409
+
+    snapshot["onboarding"] = {"mode": "administrative", "operationReleased": True}
+    administrative = _commercial_release_preview(DbStub(), 7, require_subscription=False)
+    assert administrative["subscription"] is None
+    assert administrative["restaurant"] is snapshot["restaurant"]
+    assert administrative["readiness"] is snapshot["readiness"]
+    assert administrative["onboarding"]["mode"] == "administrative"
+
+
+
+
+
+def test_ready_owner_notification_only_fires_for_completed_commercial_setup(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        onboarding_routes,
+        "enqueue_onboarding_ready_owner",
+        lambda db, **kwargs: calls.append((db, kwargs)) or True,
+    )
+    db = object()
+    base = {
+        "restaurant": {"id": "12", "name": "Restaurante 12", "plan": "pocket"},
+        "onboarding": {"mode": "commercial", "releaseState": "configuring"},
+        "readiness": {"configurationComplete": False},
+    }
+
+    assert onboarding_routes._enqueue_release_ready_owner_notification(db, base) is False
+    assert calls == []
+
+    administrative = {
+        **base,
+        "onboarding": {"mode": "administrative", "releaseState": "released"},
+        "readiness": {"configurationComplete": True},
+    }
+    assert onboarding_routes._enqueue_release_ready_owner_notification(db, administrative) is False
+    assert calls == []
+
+    ready = {
+        **base,
+        "onboarding": {"mode": "commercial", "releaseState": "awaiting_koma"},
+        "readiness": {"configurationComplete": True},
+    }
+    assert onboarding_routes._enqueue_release_ready_owner_notification(db, ready) is True
+    assert calls == [
+        (
+            db,
+            {
+                "tenant_id": "12",
+                "restaurant_name": "Restaurante 12",
+                "plan": "pocket",
+            },
+        )
+    ]
 
 
 def test_superadmin_operations_payload_is_narrow_and_requires_reason():

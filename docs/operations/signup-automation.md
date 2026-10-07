@@ -76,7 +76,7 @@ Métodos recorrentes podem cancelar as cobranças futuras. Se o cancelamento aco
 ## Notificações
 
 - E-mail: `RESEND_API_KEY`, `EMAIL_FROM`.
-- Aviso ao operador: `KOMA_OWNER_EMAIL` e/ou `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`. O Telegram recebe novos avisos de inscrição, início do trial e pedidos de liberação somente quando as duas variáveis estão configuradas. O canal WhatsApp do operador não é enfileirado para esses avisos.
+- Aviso ao operador: `KOMA_OWNER_EMAIL` e/ou `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`. O Telegram recebe novos avisos de inscrição, pedidos de liberação, conclusão dos 4 itens essenciais da implantação e início do trial somente quando as duas variáveis estão configuradas. A conclusão 4/4 gera uma única notificação por restaurante/canal, mesmo com recargas e polling do onboarding. O canal WhatsApp do operador não é enfileirado para esses avisos.
 - WhatsApp para clientes: integração existente + `KOMA_WHATSAPP_AUTOMATION_ENABLED=true`; manter desligada até homologar esse fluxo separadamente.
 - Worker: `ENABLE_OUTBOX_WORKER=true`.
 

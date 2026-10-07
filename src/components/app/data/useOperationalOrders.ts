@@ -36,6 +36,7 @@ export function useOperationalOrders({
   scopeKey,
 }: BoundaryProps) {
   const fetchOrdersAbortControllerRef = useRef<AbortController | null>(null);
+  const fetchOrdersDirtyRef = useRef(false);
 
   // Protocol IDs are data, never property names on a prototype-bearing object.
   const targetedOrderRequestRef = useRef(new Map<string, number>());
@@ -55,6 +56,7 @@ export function useOperationalOrders({
   useEffect(() => {
     fetchOrdersAbortControllerRef.current?.abort();
     fetchOrdersAbortControllerRef.current = null;
+    fetchOrdersDirtyRef.current = false;
     targetedOrderRequestRef.current.clear();
     optimisticItemStatusRef.current.clear();
     setOrders([]);
@@ -120,7 +122,12 @@ export function useOperationalOrders({
   const fetchOrdersFromAPI = async () => {
     if (!scopeKey) return;
     if (fetchOrdersAbortControllerRef.current) {
-      fetchOrdersAbortControllerRef.current.abort();
+      // Realtime can emit several order/table events while one slow snapshot is
+      // already crossing the network. Aborting and restarting each request
+      // creates a 499 storm and keeps the backend busy without producing a
+      // fresher usable snapshot. Coalesce the burst into one follow-up read.
+      fetchOrdersDirtyRef.current = true;
+      return;
     }
     const controller = new AbortController();
     const requestScopeKey = scopeKey;
@@ -166,6 +173,14 @@ export function useOperationalOrders({
     } finally {
       if (fetchOrdersAbortControllerRef.current === controller) {
         fetchOrdersAbortControllerRef.current = null;
+      }
+      if (
+        fetchOrdersDirtyRef.current
+        && requestScopeKey === scopeKeyRef.current
+        && requestHeaders.Authorization === getAuthHeaders().Authorization
+      ) {
+        fetchOrdersDirtyRef.current = false;
+        queueMicrotask(() => { void fetchOrdersFromAPI(); });
       }
     }
   };

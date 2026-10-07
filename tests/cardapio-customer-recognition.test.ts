@@ -61,7 +61,7 @@ test('checkout mantém telefone antes do nome e sinaliza reconhecimento sem expo
 
   assert.ok(source.indexOf('id="input-guest-phone"') < source.indexOf('id="input-guest-name"'));
   assert.match(source, /recognizePublicCustomer/);
-  assert.match(source, /Cliente identificado\. Por segurança/);
+  assert.match(source, /Reconhecemos seu celular/);
   assert.match(source, /customerRecognition !== "found"/);
   assert.match(source, /recognizedExistingCustomer/);
   assert.doesNotMatch(source, /recognizedCustomerName|recognizedCustomerAddress|recognizedCustomerBalance/);

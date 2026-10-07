@@ -51,6 +51,14 @@ test('Produtos define limites próprios por quentinha e Complementos mantém som
 
   await row('Quentinha G').getByRole('button', { name: 'Editar', exact: true }).click();
   const edit = page.getByRole('dialog', { name: 'Editar produto' });
+  await edit.getByRole('button', { name: 'Abrir composição diretamente sem salvar dados básicos', exact: true }).click();
+  const readOnlyComposition = page.getByRole('dialog', { name: 'Nova marmita' });
+  await expect(readOnlyComposition.getByLabel('Preço da marmita')).toHaveValue('10,00');
+  expect(products[0].preco).toBe(10);
+  expect(sizes[0].regras).toEqual([]);
+  await readOnlyComposition.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await readOnlyComposition.getByRole('button', { name: 'Fechar', exact: true }).click();
+  await row('Quentinha G').getByRole('button', { name: 'Editar', exact: true }).click();
   await edit.getByLabel('Preço de venda').fill('2800');
   await edit.getByRole('button', { name: 'Salvar e configurar composição da quentinha' }).click();
   const gDialog = page.getByRole('dialog', { name: 'Nova marmita' });
@@ -99,6 +107,7 @@ test('Produtos define limites próprios por quentinha e Complementos mantém som
   await page.getByRole('button', { name: 'Complementos', exact: true }).last().click();
   await expect(page.getByRole('region', { name: 'Cadastro de marmitas' })).toHaveCount(0);
   await expect(page.getByText('De 0 a 3 opções', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Cadastros', exact: true }).click();
   await expect(page.getByText('3 opções cadastradas', { exact: true }).first()).toBeVisible();
   await page.getByTitle('Editar').first().click();
   await expect(page.getByText('Mínimo', { exact: true })).toBeHidden();

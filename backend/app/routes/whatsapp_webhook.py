@@ -5,10 +5,12 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
+from sqlalchemy import text
 from sqlalchemy.exc import MultipleResultsFound
+from starlette.concurrency import run_in_threadpool
 
 from ..config import settings
-from ..database import SessionLocal
+from ..database import SessionLocal, tenant_session_scope
 from ..models import NotificacaoWhatsApp
 
 logger = logging.getLogger("koma.whatsapp_webhook")
@@ -199,6 +201,28 @@ def _status_error(status_payload: dict[str, Any]) -> tuple[int | None, str | Non
     return error_code, error_title
 
 
+def _resolve_notification_identity(db, wamid: str) -> tuple[int, int] | None:
+    """Resolve only identity; ambiguous/unknown message IDs never select a tenant."""
+    try:
+        if db.get_bind().dialect.name == "postgresql":
+            row = db.execute(
+                text("SELECT id, restaurante_id FROM koma_internal.lookup_whatsapp_notification(:wamid)"),
+                {"wamid": wamid},
+            ).one_or_none()
+        else:
+            row = (
+                db.query(NotificacaoWhatsApp.id, NotificacaoWhatsApp.restaurante_id)
+                .filter(NotificacaoWhatsApp.wamid == wamid, NotificacaoWhatsApp.restaurante_id.isnot(None))
+                .one_or_none()
+            )
+        return (int(row[0]), int(row[1])) if row is not None else None
+    except MultipleResultsFound:
+        return None
+    finally:
+        # End the unscoped discovery transaction before binding an identity.
+        db.rollback()
+
+
 def _update_known_statuses(values: list[dict[str, Any]]) -> None:
     status_payloads: list[dict[str, Any]] = []
     for value in values:
@@ -224,44 +248,46 @@ def _update_known_statuses(values: list[dict[str, Any]]) -> None:
             ):
                 continue
 
-            try:
+            identity = _resolve_notification_identity(db, wamid)
+            if identity is None:
+                continue
+            notification_id, restaurante_id = identity
+            with tenant_session_scope(db, restaurante_id):
                 notification = (
                     db.query(NotificacaoWhatsApp)
                     .filter(
+                        NotificacaoWhatsApp.id == notification_id,
+                        NotificacaoWhatsApp.restaurante_id == restaurante_id,
                         NotificacaoWhatsApp.wamid == wamid,
-                        NotificacaoWhatsApp.restaurante_id.isnot(None),
                     )
+                    .with_for_update()
                     .one_or_none()
                 )
-            except MultipleResultsFound:
-                # Duplicidade impede determinar o tenant de forma segura.
-                continue
+                if notification is None:
+                    continue
+                if not _should_apply_status_transition(notification.status, meta_status):
+                    continue
 
-            if notification is None:
-                # Um status não cria uma notificação sem vínculo de tenant.
-                continue
-            if not _should_apply_status_transition(notification.status, meta_status):
-                continue
+                error_code, error_title = _status_error(status_payload)
+                notification.status = meta_status
+                notification.status_envio = _META_STATUS_TO_STATUS_ENVIO[meta_status]
+                notification.error_code = error_code
+                notification.error_title = error_title
+                # Remove conteúdo legado; o corpo integral do webhook não deve ser persistido.
+                notification.raw_payload = None
 
-            error_code, error_title = _status_error(status_payload)
-            notification.status = meta_status
-            notification.status_envio = _META_STATUS_TO_STATUS_ENVIO[meta_status]
-            notification.error_code = error_code
-            notification.error_title = error_title
-            # Remove conteúdo legado; o corpo integral do webhook não deve ser persistido.
-            notification.raw_payload = None
+                if meta_status == "failed" and error_code == 130497:
+                    from ..services import whatsapp as whatsapp_service
 
-            if meta_status == "failed" and error_code == 130497:
-                from ..services import whatsapp as whatsapp_service
+                    whatsapp_service._META_COUNTRY_RESTRICTION = True
+                    whatsapp_service._META_LAST_ERROR = (
+                        "130497: Conta restrita para enviar ao país do destinatário. "
+                        "Vá para Etapa 2 (Configuração da produção) no Meta Developers "
+                        "e adicione um número de telefone real do Brasil."
+                    )
 
-                whatsapp_service._META_COUNTRY_RESTRICTION = True
-                whatsapp_service._META_LAST_ERROR = (
-                    "130497: Conta restrita para enviar ao país do destinatário. "
-                    "Vá para Etapa 2 (Configuração da produção) no Meta Developers "
-                    "e adicione um número de telefone real do Brasil."
-                )
+                db.commit()
 
-        db.commit()
     except Exception:
         db.rollback()
         logger.error("Falha ao atualizar status autenticados do webhook Meta.")
@@ -341,7 +367,7 @@ async def receive_meta_webhook(request: Request):
         ) from None
 
     values = _validate_event_payload(payload, expected_phone_number_id)
-    _update_known_statuses(values)
+    await run_in_threadpool(_update_known_statuses, values)
 
     # Mensagens inbound são reconhecidas, mas não há fluxo de negócio autorizado
     # para armazenar ou processar seu conteúdo nesta fase.

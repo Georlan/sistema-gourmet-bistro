@@ -108,6 +108,7 @@ def _serialize_grupo(
 ) -> GrupoModificadorResponseV2:
     options_query = db.query(OpcaoModificador).filter(
         OpcaoModificador.grupo_id == grupo.id,
+        OpcaoModificador.arquivada.is_(False),
         OpcaoModificador.restaurante_id == grupo.restaurante_id,
     )
     if not include_inactive_options:
@@ -166,6 +167,7 @@ def _serialize_grupos(
     options_query = db.query(OpcaoModificador).filter(
         OpcaoModificador.restaurante_id == restaurante_id,
         OpcaoModificador.grupo_id.in_(group_ids),
+        OpcaoModificador.arquivada.is_(False),
     )
     if not include_inactive_options:
         options_query = options_query.filter(OpcaoModificador.ativo.is_(True))
@@ -279,6 +281,7 @@ def _sync_group_options(
     existing = db.query(OpcaoModificador).filter(
         OpcaoModificador.restaurante_id == restaurante_id,
         OpcaoModificador.grupo_id == grupo_id,
+        OpcaoModificador.arquivada.is_(False),
     ).all()
     existing_by_id = {str(option.id): option for option in existing}
 
@@ -305,23 +308,8 @@ def _sync_group_options(
         for option_id in existing_by_id
         if option_id not in requested_existing_ids
     ]
-    if removed_ids:
-        if any(existing_by_id[option_id].opcao_origem_id for option_id in removed_ids):
-            raise HTTPException(409, "Pause o complemento de origem em vez de remover seu adicional sincronizado.")
-        if db.query(OpcaoModificador).filter(OpcaoModificador.restaurante_id == restaurante_id, OpcaoModificador.opcao_origem_id.in_(removed_ids)).first():
-            raise HTTPException(409, "Esta opção tem um adicional sincronizado. Pause-a em vez de excluir.")
-        historical_use = db.query(ItemModificador.opcao_modificador_id).filter(
-            ItemModificador.restaurante_id == restaurante_id,
-            ItemModificador.opcao_modificador_id.in_(removed_ids),
-        ).first()
-        if historical_use is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "Uma opção já usada em pedidos não pode ser excluída. "
-                    "Pause a opção para removê-la do cardápio sem apagar o histórico."
-                ),
-            )
+    if any(existing_by_id[option_id].opcao_origem_id for option_id in removed_ids):
+        raise HTTPException(409, "Remova o complemento no grupo de origem; seu adicional acompanha a remoção.")
 
     for option in requested_options:
         if option.id:
@@ -342,11 +330,14 @@ def _sync_group_options(
         )
 
     if removed_ids:
-        db.query(OpcaoModificador).filter(
+        # Keep option/group IDs and historical prices; remove only from active catalog.
+        followers = db.query(OpcaoModificador).filter(
             OpcaoModificador.restaurante_id == restaurante_id,
-            OpcaoModificador.grupo_id == grupo_id,
-            OpcaoModificador.id.in_(removed_ids),
-        ).delete(synchronize_session=False)
+            OpcaoModificador.opcao_origem_id.in_(removed_ids),
+        ).all()
+        for option in [existing_by_id[option_id] for option_id in removed_ids] + followers:
+            option.arquivada = True
+            option.ativo = False
 
 
 @router.get("/grupos", response_model=List[GrupoModificadorResponseV2])
@@ -438,6 +429,72 @@ class OpcaoDisponibilidadeUpdate(BaseModel):
     ativo: StrictBool
 
 
+class OpcaoDisponibilidadeDiaria(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str = Field(min_length=1, max_length=200)
+    ativo: StrictBool
+    ativo_anterior: StrictBool
+
+
+class CardapioDiarioUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    opcoes: List[OpcaoDisponibilidadeDiaria] = Field(min_length=1, max_length=500)
+
+
+@router.patch("/cardapio-diario")
+def atualizar_cardapio_diario(
+    payload: CardapioDiarioUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """One transaction for availability only; preserve identities, prices and size rules."""
+    del current_user
+    rest_id = require_tenant_id()
+    ids = [option.id for option in payload.opcoes]
+    if len(ids) != len(set(ids)):
+        raise HTTPException(422, "Há opções repetidas na revisão do cardápio.")
+    _lock_catalog(db, rest_id)
+    options = db.query(OpcaoModificador).join(
+        GrupoModificador,
+        (GrupoModificador.id == OpcaoModificador.grupo_id)
+        & (GrupoModificador.restaurante_id == OpcaoModificador.restaurante_id),
+    ).filter(
+        OpcaoModificador.restaurante_id == rest_id,
+        OpcaoModificador.id.in_(ids),
+        OpcaoModificador.arquivada.is_(False),
+        GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
+    ).all()
+    by_id = {option.id: option for option in options}
+    if len(by_id) != len(ids):
+        db.rollback()
+        raise HTTPException(404, "Uma opção não está mais disponível neste cadastro. Atualize antes de revisar.")
+    for change in payload.opcoes:
+        option = by_id[change.id]
+        if option.opcao_origem_id:
+            db.rollback()
+            raise HTTPException(409, "Altere a disponibilidade no complemento de origem.")
+        # Refuse a stale availability snapshot rather than overwriting a concurrent edit.
+        if option.ativo != change.ativo_anterior:
+            db.rollback()
+            raise HTTPException(409, "O cardápio foi alterado em outro acesso. Atualize e revise novamente.")
+    changed_groups = set()
+    updated = 0
+    for change in payload.opcoes:
+        option = by_id[change.id]
+        if option.ativo != change.ativo:
+            option.ativo = change.ativo
+            changed_groups.add(option.grupo_id)
+            updated += 1
+    db.flush()
+    for group_id in sorted(changed_groups):
+        sync_linked_complements(db, rest_id, group_id)
+    db.commit()
+    if updated:
+        _notify_catalog_update(background_tasks, rest_id, "Cardápio do dia atualizado.")
+    return {"atualizadas": updated}
+
+
 @router.patch("/opcoes/{opcao_id}/disponibilidade", response_model=OpcaoModificadorResponse)
 def atualizar_disponibilidade_opcao(
     opcao_id: str,
@@ -456,6 +513,7 @@ def atualizar_disponibilidade_opcao(
         & (GrupoModificador.restaurante_id == OpcaoModificador.restaurante_id),
     ).filter(
         OpcaoModificador.id == opcao_id,
+        OpcaoModificador.arquivada.is_(False),
         OpcaoModificador.restaurante_id == rest_id,
         GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
     ).one_or_none()
@@ -568,8 +626,8 @@ def deletar_grupo(
     db.query(OpcaoModificador).filter(
         OpcaoModificador.restaurante_id == rest_id,
         OpcaoModificador.grupo_id == grupo_id,
-    ).delete()
-    db.delete(grupo)
+    ).update({OpcaoModificador.ativo: False, OpcaoModificador.arquivada: True}, synchronize_session=False)
+    grupo.tipo = ARCHIVED_MODIFIER_TYPE
     db.commit()
     _notify_catalog_update(background_tasks, rest_id, "Grupo de complementos removido.")
     return None

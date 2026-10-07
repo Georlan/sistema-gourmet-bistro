@@ -1,5 +1,19 @@
 {
   "version": 1,
-  "include": ["/", "/index.html", "/landing", "/landing/", "/robots.txt", "/sitemap.xml", "/seo-landing.html", "/seo-landing", "/assets/*"],
+  "include": [
+    "/",
+    "/index.html",
+    "/landing",
+    "/landing/",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/seo-landing.html",
+    "/seo-landing",
+    "/assets/*",
+    "/cearatech",
+    "/cearatech/",
+    "/cearatech/qr",
+    "/cearatech/qr/"
+  ],
   "exclude": []
 }

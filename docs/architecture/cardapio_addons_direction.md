@@ -1,5 +1,53 @@
 # Cardápio: direção de produto para adicionais
 
+## Adicionais sincronizados no cardápio diário — 05/10/2026
+
+Opções com origem sincronizada são informativas, sem checkbox, rótulo clicável
+ou aparência de seleção. Disponibilidade e preço continuam visíveis e acompanham
+o rascunho da origem. Um grupo composto somente por essas opções mostra Automático
+em vez de Cadastrar / editar; o cadastro e os preços permanecem em Cadastros.
+Opções independentes, inclusive num grupo misto, continuam selecionáveis.
+Nenhum payload de disponibilidade ou regra de sincronização é alterado.
+
+## Cadastro direto de opções — 05/10/2026
+
+Na marmitaria, o editor oferece um campo separado para o nome e o valor da nova
+opção, com Adicionar à lista. Enter adiciona ao rascunho; salvar também inclui
+um nome ainda digitado nesse campo. Nomes equivalentes por caixa/acentos são
+recusados na inclusão. Salvar/cancelar ficam fora da lista rolável. A configuração
+de sincronização permanece disponível numa seção recolhida abaixo da lista,
+com os vínculos e preços existentes preservados. Cadastro geral fora da marmitaria
+mantém seu fluxo anterior. Nenhuma gravação acontece ao adicionar ao rascunho.
+
+## Ordem de cadastro e próxima evolução — 05/10/2026
+
+Os grupos de origem vêm antes dos adicionais sincronizados em Cadastros, como
+no Cardápio do dia; as opções de cada grupo continuam em ordem alfabética.
+O usuário considera redundante editar duas listas e propôs, para uma próxima
+etapa, reunir disponibilidade e preço do adicional na mesma linha da origem.
+Essa proposta ainda não altera cobrança, vínculos ou registros: a implementação
+de uma interface unificada deve preservar os IDs atuais e preços históricos.
+
+## Remoção de complementos e cadastro diário — 05/10/2026
+
+Escopo solicitado pelo usuário: opções em ordem alfabética, listas compactas,
+busca no editor e remoção de complementos mesmo quando já utilizados ou ligados
+a adicionais. A revisão do grupo aplica a remoção ao salvar; cancelar mantém o
+cadastro anterior.
+
+Remover significa retirar do cadastro ativo, sem apagar referências de pedidos.
+`OpcaoModificador.arquivada=true` e `ativo=false` preservam ID, grupo, nome e
+preço. Os adicionais que apontam para a opção removida recebem as mesmas flags
+na mesma transação. Pausar continua permitindo reativação; uma opção removida
+não pode ser reativada por um cliente desatualizado nem reaparecer por sincronização.
+A leitura histórica não filtra esse arquivo, mantendo composição e preço aplicado.
+Cadastrar novamente um nome removido cria uma nova opção, sem alterar o histórico.
+
+Excluir um grupo permitido também mantém seu registro e suas opções como arquivo.
+Grupos vinculados a tamanhos ou sincronização continuam exigindo resolver esses
+vínculos antes da exclusão. Nenhum tamanho, preço de venda ou seleção real do
+restaurante é modificado automaticamente.
+
 Decisão informada pelo usuário em 30/08/2026, durante a correção da sacola pública.
 
 ## [ALVO] Categoria especial de adicionais

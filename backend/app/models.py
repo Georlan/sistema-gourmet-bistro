@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     event,
+    func,
     text,
 )
 from sqlalchemy.orm import relationship
@@ -156,6 +157,7 @@ class Categoria(Base):
     nome = Column(String, nullable=False)
     marmitaria_tamanho = Column(Boolean, nullable=False, default=False, server_default="false")
     destino_impressao = Column(String, default="COZINHA")  # "COZINHA" | "BAR" | "NENHUM"
+    ordem_exibicao = Column(Integer, nullable=True, default=None)
     
     # Relationships
     produtos = relationship("Produto", back_populates="categoria")
@@ -194,6 +196,7 @@ class Produto(Base):
     imagem = Column(String, default="")
     imagens_galeria = Column(JSON, default=list)  # Up to 3 product gallery URLs
     ativo = Column(Boolean, default=True)  # Toggle product availability
+    ordem_exibicao = Column(Integer, nullable=True, default=None)
     
     # Relationships
     categoria = relationship("Categoria", back_populates="produtos")
@@ -477,6 +480,7 @@ class Lancamento(Base):
             "status IN ('pendente', 'aceito', 'producao', 'pronto', 'finalizado', 'recusado', 'cancelado')",
             name="ck_lancamentos_status",
         ),
+        Index("ix_lancamentos_tenant_timestamp", "restaurante_id", "timestamp").ddl_if(dialect="postgresql"),
     )
 
     id = Column(String, primary_key=True, index=True)
@@ -1124,6 +1128,7 @@ class OpcaoModificador(Base):
     nome = Column(String, nullable=False)
     preco_adicional = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     ativo = Column(Boolean, default=True)
+    arquivada = Column(Boolean, default=False, server_default=text("false"), nullable=False)
 
 
 class ProdutoGrupoModificador(Base):
@@ -1153,6 +1158,9 @@ class ProdutoGrupoModificador(Base):
 
 class ItemModificador(Base):
     __tablename__ = "item_modificadores"
+    __table_args__ = (
+        Index("ix_item_modificadores_tenant_item", "restaurante_id", "item_id").ddl_if(dialect="postgresql"),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
@@ -1218,6 +1226,42 @@ def block_super_admin_audit_log_update(mapper, connection, target):
 @event.listens_for(SuperAdminAuditLog, 'before_delete')
 def block_super_admin_audit_log_delete(mapper, connection, target):
     raise PermissionError("Super admin audit logs are immutable and cannot be deleted.")
+
+
+class ExternalIssueLink(Base):
+    __tablename__ = "external_issue_links"
+    __table_args__ = (
+        Index("ix_external_issue_links_tenant_created", "restaurante_id", "created_at"),
+        Index("ix_external_issue_links_identifier", "external_identifier"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    provider = Column(String(32), default="linear", nullable=False)
+    external_issue_id = Column(String(128), nullable=False)
+    external_identifier = Column(String(64), nullable=False)
+    external_url = Column(String(512), nullable=False)
+    title_snapshot = Column(String(255), nullable=False)
+    status_snapshot = Column(String(64), nullable=True)
+    priority_snapshot = Column(String(32), nullable=True)
+    actor = Column(String(255), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
 
 
 class Insumo(Base):
@@ -1912,6 +1956,7 @@ class PrintAgentToken(Base):
     command_requested_at = Column(DateTime(timezone=True), nullable=True)
     last_command_result = Column(JSON, nullable=True)
     command_completed_at = Column(DateTime(timezone=True), nullable=True)
+    is_primary = Column(Boolean, default=False, nullable=False, server_default=text("false"))
 
     __table_args__ = (
         UniqueConstraint("restaurante_id", "agent_id", name="uq_print_agent_tokens_restaurante_agent"),
@@ -2059,3 +2104,79 @@ class ProductImageRetirement(Base):
     attempts = Column(Integer, nullable=False, default=0)
     last_result = Column(String, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
+
+
+class KomaEventLead(Base):
+    """Captação de leads comerciais e institucionais em eventos (ex: Ceará Tech Summit).
+
+    Não é cliente de restaurante (não usa a tabela 'clientes').
+    Não possui 'restaurante_id' pois pertence à plataforma KÔMA.
+    """
+    __tablename__ = "koma_event_leads"
+    __table_args__ = (
+        UniqueConstraint("event_slug", "whatsapp_normalizado", name="uq_koma_event_leads_event_whatsapp"),
+        CheckConstraint(
+            "status IN ('new', 'contacted', 'qualified', 'demo_scheduled', 'converted', 'lost')",
+            name="ck_koma_event_leads_status",
+        ),
+        Index("ix_koma_event_leads_event_created", "event_slug", "created_at"),
+        Index("ix_koma_event_leads_event_status_created", "event_slug", "status", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome = Column(String(120), nullable=False)
+    whatsapp_raw = Column(String(32), nullable=False)
+    whatsapp_normalizado = Column(String(20), nullable=False, index=True)
+    empresa_nome = Column(String(120), nullable=True)
+    segmento = Column(String(80), nullable=True)
+    event_slug = Column(String(64), nullable=False, default="ceara-tech-summit-2026", index=True)
+    source = Column(String(32), nullable=False, default="qr_impresso")
+    consent_whatsapp = Column(Boolean, nullable=False, default=True)
+    consent_at = Column(DateTime(timezone=True), nullable=False)
+    consent_version = Column(String(32), nullable=False, default="v1_cearatech_2026")
+    status = Column(String(32), nullable=False, default="new")
+    last_contact_at = Column(DateTime(timezone=True), nullable=True)
+    cidade = Column(String(120), nullable=True)
+    quantidade_unidades = Column(Integer, nullable=True)
+    sistema_atual = Column(String(120), nullable=True)
+    principal_dor = Column(Text, nullable=True)
+    interesse = Column(Text, nullable=True)
+    melhor_horario_contato = Column(String(120), nullable=True)
+    ip_hash = Column(String(64), nullable=True)
+    user_agent = Column(String(255), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class KomaEventLeadHistory(Base):
+    """Platform-only commercial audit, independent of restaurant customers."""
+    __tablename__ = "koma_event_lead_history"
+    __table_args__ = (Index("ix_event_lead_history_lead_id_id", "lead_id", "id"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    lead_id = Column(Integer, ForeignKey("koma_event_leads.id", ondelete="CASCADE"), nullable=False)
+    actor = Column(String(255), nullable=False)
+    changes = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+@event.listens_for(KomaEventLeadHistory, "before_update")
+@event.listens_for(KomaEventLeadHistory, "before_delete")
+def block_event_lead_history_mutation(mapper, connection, target):
+    raise PermissionError("Lead history is immutable.")
+
+
+class KomaEventVisit(Base):
+    __tablename__ = "koma_event_visits"
+    visit_id = Column(String(36), primary_key=True)
+    event_slug = Column(String(64), nullable=False, index=True)
+    source = Column(String(32), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class KomaEventAttribution(Base):
+    __tablename__ = "koma_event_attributions"
+    signup_id = Column(String(36), primary_key=True)
+    lead_id = Column(Integer, ForeignKey("koma_event_leads.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

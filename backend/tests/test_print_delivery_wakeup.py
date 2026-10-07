@@ -4,6 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.routes.print_agent_events import _authenticate_agent_token, _sse
+from app.services import print_delivery
 from app.services.print_delivery import PrintWakeupHub
 
 
@@ -26,6 +27,54 @@ def test_wakeup_hub_is_tenant_scoped():
     asyncio.run(scenario())
 
 
+def test_wakeup_hub_retries_real_hint_without_idle_polling(monkeypatch):
+    monkeypatch.setattr(
+        print_delivery,
+        "PRINT_WAKEUP_RETRY_DELAYS_SECONDS",
+        (0.01, 0.02),
+    )
+
+    async def scenario():
+        hub = PrintWakeupHub(listen_to_postgres=False)
+        subscription_id, queue = hub.subscribe(11)
+        try:
+            hub.publish(11, reason="test")
+            immediate = await asyncio.wait_for(queue.get(), timeout=0.2)
+            retry = await asyncio.wait_for(queue.get(), timeout=0.2)
+            assert immediate["restaurante_id"] == 11
+            assert retry["restaurante_id"] == 11
+            assert retry["reason"] == "test"
+        finally:
+            hub.unsubscribe(11, subscription_id)
+            hub.stop()
+
+    asyncio.run(scenario())
+
+
+def test_wakeup_retry_is_cancelled_on_shutdown(monkeypatch):
+    monkeypatch.setattr(
+        print_delivery,
+        "PRINT_WAKEUP_RETRY_DELAYS_SECONDS",
+        (0.03,),
+    )
+
+    async def scenario():
+        hub = PrintWakeupHub(listen_to_postgres=False)
+        subscription_id, queue = hub.subscribe(11)
+        try:
+            hub.publish(11, reason="test")
+            immediate = await asyncio.wait_for(queue.get(), timeout=0.2)
+            assert immediate["restaurante_id"] == 11
+            hub.stop()
+            await asyncio.sleep(0.06)
+            assert queue.empty()
+        finally:
+            hub.unsubscribe(11, subscription_id)
+            hub.stop()
+
+    asyncio.run(scenario())
+
+
 def test_sse_contains_only_transport_hint():
     rendered = _sse(
         "print-job",
@@ -41,3 +90,55 @@ def test_event_stream_requires_agent_token():
     with pytest.raises(HTTPException) as exc_info:
         _authenticate_agent_token("")
     assert exc_info.value.status_code == 401
+
+
+def test_wakeup_burst_cancels_old_timers_and_preserves_other_tenants(monkeypatch):
+    timers = []
+
+    class FakeTimer:
+        def __init__(self, delay, callback, args):
+            self.callback = callback
+            self.args = args
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self):
+            pass
+
+        def cancel(self):
+            self.cancelled = True
+
+    monkeypatch.setattr(print_delivery.threading, "Timer", FakeTimer)
+
+    async def scenario():
+        hub = PrintWakeupHub(listen_to_postgres=False)
+        first_id, first_queue = hub.subscribe(11)
+        second_id, second_queue = hub.subscribe(22)
+        try:
+            hub.publish(22, reason="other-sector")
+            other_timers = timers[:]
+            for index in range(100):
+                hub.publish(11, reason=f"job-{index}")
+            assert len([timer for timer in timers if not timer.cancelled]) == 4
+            assert all(not timer.cancelled for timer in other_timers)
+            await asyncio.sleep(0)
+            while not first_queue.empty():
+                first_queue.get_nowait()
+            # Even a cancelled callback already running cannot emit an old hint.
+            stale_timer = timers[2]
+            stale_timer.callback(*stale_timer.args)
+            await asyncio.sleep(0)
+            assert first_queue.empty()
+            latest_timer = timers[-1]
+            latest_timer.callback(*latest_timer.args)
+            latest = await asyncio.wait_for(first_queue.get(), timeout=0.2)
+            assert latest["reason"] == "job-99"
+            hub.unsubscribe(11, first_id)
+            assert all(timer.cancelled for timer in timers[2:])
+            assert all(not timer.cancelled for timer in other_timers)
+        finally:
+            hub.unsubscribe(22, second_id)
+            hub.stop()
+        assert all(timer.cancelled for timer in timers)
+
+    asyncio.run(scenario())

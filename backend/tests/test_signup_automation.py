@@ -132,6 +132,45 @@ def test_new_signup_queues_telegram_only_for_owner(signup_client, monkeypatch):
         ]
 
 
+
+
+def test_onboarding_ready_queues_email_and_telegram_once(signup_client, monkeypatch):
+    _, Session = signup_client
+    monkeypatch.setattr(settings, "KOMA_OWNER_EMAIL", "owner@example.com")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-bot-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "owner-chat")
+
+    with Session() as db:
+        signup_notifications.enqueue_onboarding_ready_owner(
+            db,
+            tenant_id=42,
+            restaurant_name="Restaurante 42",
+            plan="pro",
+        )
+        db.commit()
+
+    expected_ids = {
+        "tenant-42:onboarding-ready-owner:email",
+        "tenant-42:onboarding-ready-owner:telegram",
+    }
+    with Session() as db:
+        notices = db.query(SignupNotification).all()
+        assert {notice.id for notice in notices} == expected_ids
+
+        signup_notifications.enqueue_onboarding_ready_owner(
+            db,
+            tenant_id=42,
+            restaurant_name="Restaurante 42",
+            plan="pro",
+        )
+        db.commit()
+
+    with Session() as db:
+        notices = db.query(SignupNotification).all()
+        assert {notice.id for notice in notices} == expected_ids
+        assert len(notices) == 2
+
+
 def test_telegram_delivery_uses_configured_chat_and_rejects_provider_failure(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-bot-token")
     calls = []
@@ -484,3 +523,41 @@ def test_signup_channels_never_enqueue_whatsapp_even_when_enabled(signup_client,
         db.commit()
         ids = {row.id for row in db.query(SignupNotification).all()}
         assert ids == {"channel-policy:activation:email", "channel-policy:activation:telegram"}
+
+
+def test_event_attribution_counts_signup_contract_and_account_without_manual_crm_conversion(signup_client):
+    from app.models import KomaEventLead
+    from app.services.event_acquisition import EVENT, signup_url, funnel_stats
+    client, Session = signup_client
+    with Session() as db:
+        from app.models import KomaEventVisit, KomaEventAttribution
+        for model in (KomaEventLead, KomaEventVisit, KomaEventAttribution):
+            model.__table__.create(db.get_bind(), checkfirst=True)
+        lead = KomaEventLead(nome='Evento Cliente', whatsapp_raw='85999999999',
+            whatsapp_normalizado='5585999999999', event_slug=EVENT, source='qr_tela',
+            consent_whatsapp=True, consent_at=dt.datetime.now(dt.timezone.utc), status='new')
+        db.add(lead)
+        db.commit()
+        token = signup_url(lead).split('event_ref=')[1]
+        before = funnel_stats(db)
+    created = client.post('/api/signups', json={**DATA, 'event_ref': token})
+    assert created.status_code == 201, created.text
+    saved = created.json()
+    with Session() as db:
+        started = funnel_stats(db)
+        assert started['signups'] == before['signups'] + 1
+        assert started['confirmed_plans'] == before['confirmed_plans']
+        assert started['accounts'] == before['accounts']
+    payload = _contract_payload()
+    payload.update(request_id=saved['id'], signup_token=saved['token'])
+    accepted = client.post('/api/contracts/accept', json=payload)
+    assert accepted.status_code == 201, accepted.text
+    with Session() as db:
+        assert funnel_stats(db)['confirmed_plans'] == before['confirmed_plans']
+    activated = client.post(f"/api/contracts/{accepted.json()['protocol']}/billing/setup",
+        json={'payment_method_type': 'credit_card', 'card_token_id': 'test-token'})
+    assert activated.status_code == 200, activated.text
+    with Session() as db:
+        confirmed = funnel_stats(db)
+        assert confirmed['confirmed_plans'] == before['confirmed_plans'] + 1
+        assert confirmed['accounts'] == before['accounts'] + 1

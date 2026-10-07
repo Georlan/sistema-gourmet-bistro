@@ -106,3 +106,40 @@ def test_signed_replay_cannot_downgrade_delivered_notification(tmp_path, monkeyp
         db.close()
         Base.metadata.drop_all(engine)
         engine.dispose()
+
+
+def test_database_work_does_not_block_parallel_requests(monkeypatch):
+    import asyncio
+    import threading
+    import httpx
+
+    entered = threading.Event()
+    released = threading.Event()
+    completed = threading.Event()
+    def update_statuses(values):
+        entered.set()
+        released.wait(timeout=2)
+        completed.set()
+
+    monkeypatch.setattr(whatsapp_webhook, "_update_known_statuses", update_statuses)
+    monkeypatch.setattr(settings, "META_APP_SECRET", APP_SECRET)
+    monkeypatch.setattr(settings, "META_PHONE_NUMBER_ID", PHONE_NUMBER_ID)
+    app = FastAPI()
+    app.include_router(whatsapp_webhook.router)
+    @app.get("/parallel-probe")
+    async def probe():
+        return {"database_completed": completed.is_set()}
+
+    async def scenario():
+        body = json.dumps(_payload("wamid.synthetic-thread", "delivered"), separators=(",", ":")).encode()
+        signature = "sha256=" + hmac.new(APP_SECRET.encode(), body, hashlib.sha256).hexdigest()
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            callback = asyncio.create_task(client.post("/api/whatsapp/webhook", content=body, headers={"content-type": "application/json", "x-hub-signature-256": signature}))
+            try:
+                assert await asyncio.to_thread(entered.wait, 2)
+                response = await client.get("/parallel-probe")
+                assert response.json() == {"database_completed": False}
+            finally:
+                released.set()
+                assert (await callback).status_code == 200
+    asyncio.run(scenario())

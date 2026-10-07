@@ -38,12 +38,15 @@ test('link extras to proteins, preserve prices and refresh both groups after a s
     document.body.replaceChildren(host);
     ReactDOM.createRoot(host).render(React.createElement(ComplementosTab, { apiBaseUrl: '/addon-test', authHeaders: {}, produtos: [], marmitariaCadastro: true }));
   });
+  await page.getByRole('button', { name: 'Cadastros', exact: true }).click();
   await expect(page.getByText('Adicionais pagos', { exact: true })).toBeVisible();
-  await page.getByTitle('Editar', { exact: true }).nth(1).click();
+  await page.locator('.break-inside-avoid').filter({ has: page.getByRole('heading', { name: 'Adicionais pagos', exact: true }) }).getByTitle('Editar', { exact: true }).click();
+  await page.getByText('Configuração dos adicionais pagos', { exact: true }).click();
   await page.getByLabel('Sincronizar adicionais com').selectOption('proteins');
   await expect(page.getByLabel('Preço de novos adicionais')).toHaveValue('5');
   await page.getByRole('button', { name: 'Atualizar Grupo' }).click();
   await expect(page.getByText('Sincronizado com Proteínas.', { exact: false })).toBeVisible();
+  await expect(page.locator('.break-inside-avoid').getByRole('heading')).toHaveText(['Proteínas', 'Adicionais pagos']);
   await expect(page.getByRole('button', { name: 'Pausar Frango adicional', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Pausar Frango', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Reativar Frango', exact: true })).toBeVisible();

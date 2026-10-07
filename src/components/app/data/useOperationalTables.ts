@@ -26,12 +26,14 @@ export function useOperationalTables({
   const [loadedScopeKey, setLoadedScopeKey] = useState('');
 
   const fetchTablesAbortControllerRef = useRef<AbortController | null>(null);
+  const fetchTablesDirtyRef = useRef(false);
   const scopeKeyRef = useRef(scopeKey);
   scopeKeyRef.current = scopeKey;
 
   useEffect(() => {
     fetchTablesAbortControllerRef.current?.abort();
     fetchTablesAbortControllerRef.current = null;
+    fetchTablesDirtyRef.current = false;
     setSalonTables([]);
     setLoadedScopeKey('');
   }, [scopeKey]);
@@ -39,7 +41,11 @@ export function useOperationalTables({
   const fetchTables = async () => {
     if (!scopeKey) return;
     if (fetchTablesAbortControllerRef.current) {
-      fetchTablesAbortControllerRef.current.abort();
+      // Realtime can invalidate tables several times while a previous snapshot
+      // is still in flight. Keep that request useful and collapse the burst into
+      // one follow-up read instead of creating client-aborted 499 traffic.
+      fetchTablesDirtyRef.current = true;
+      return;
     }
     const controller = new AbortController();
     const requestScopeKey = scopeKey;
@@ -85,6 +91,14 @@ export function useOperationalTables({
       globalThis.clearTimeout(timeoutId);
       if (fetchTablesAbortControllerRef.current === controller) {
         fetchTablesAbortControllerRef.current = null;
+      }
+      if (
+        fetchTablesDirtyRef.current
+        && requestScopeKey === scopeKeyRef.current
+        && requestHeaders.Authorization === getAuthHeaders().Authorization
+      ) {
+        fetchTablesDirtyRef.current = false;
+        queueMicrotask(() => { void fetchTables(); });
       }
     }
   };

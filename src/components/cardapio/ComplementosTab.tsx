@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Edit3, Layers, Plus, Search, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
+import { CardapioDiarioEditor } from './CardapioDiarioEditor';
 
 export interface OpcaoModificador {
   id?: string;
@@ -52,6 +53,13 @@ export default function ComplementosTab({
   const [categorias, setCategorias] = useState<CategoriaHierarquia[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [optionSearch, setOptionSearch] = useState('');
+  const [newOptionName, setNewOptionName] = useState('');
+  const [newOptionPrice, setNewOptionPrice] = useState('0');
+  const [newOptionError, setNewOptionError] = useState('');
+  const [dailyMode, setDailyMode] = useState(true);
+  const [dailyPending, setDailyPending] = useState(false);
+  const [catalogError, setCatalogError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGrupo, setEditingGrupo] = useState<GrupoModificador | null>(null);
 
@@ -74,6 +82,7 @@ export default function ComplementosTab({
   const fetchCatalogBindings = async () => {
     try {
       setLoading(true);
+      setCatalogError(false);
       const [groupsRes, categoriesRes] = await Promise.all([
         fetch(`${apiBaseUrl}/cardapio/modificadores/grupos`, { headers: authHeaders }),
         fetch(`${apiBaseUrl}/cardapio/modificadores/categorias-hierarquia`, { headers: authHeaders }),
@@ -90,6 +99,7 @@ export default function ComplementosTab({
         setCategorias(Array.isArray(categoriesData) ? categoriesData : []);
       }
     } catch (err) {
+      setCatalogError(true);
       console.error('Erro ao buscar modificadores:', err);
       onShowNotification?.('Não foi possível carregar os complementos.', 'error');
     } finally {
@@ -140,6 +150,10 @@ export default function ComplementosTab({
   };
 
   const handleOpenModal = (grupo?: GrupoModificador) => {
+    setOptionSearch('');
+    setNewOptionName('');
+    setNewOptionPrice('0');
+    setNewOptionError('');
     if (grupo) {
       setEditingGrupo(grupo);
       setNome(grupo.nome);
@@ -148,8 +162,8 @@ export default function ComplementosTab({
       setMaxSelecoes(String(grupo.max_selecoes));
       setOpcoes(
         grupo.opcoes.length > 0
-          ? grupo.opcoes.map((option) => ({ ...option }))
-          : [{ nome: '', preco_adicional: 0, ativo: true }],
+          ? [...grupo.opcoes].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })).map((option) => ({ ...option }))
+          : marmitariaCadastro ? [] : [{ nome: '', preco_adicional: 0, ativo: true }],
       );
       setSelectedProductIds([...(grupo.produto_ids || [])]);
       setSelectedCategoryIds([...(grupo.categoria_ids || [])]);
@@ -160,7 +174,7 @@ export default function ComplementosTab({
       setTipo('opcional');
       setMinSelecoes('0');
       setMaxSelecoes('1');
-      setOpcoes([{ nome: '', preco_adicional: 0, ativo: true }]);
+      setOpcoes(marmitariaCadastro ? [] : [{ nome: '', preco_adicional: 0, ativo: true }]);
       setSelectedProductIds([]);
       setSelectedCategoryIds([]);
       setIncludeSubcategories(true);
@@ -171,11 +185,38 @@ export default function ComplementosTab({
     setIsModalOpen(true);
   };
 
+  const prepareNewOption = (): OpcaoModificador | null => {
+    const optionName = newOptionName.trim();
+    const normalized = (value: string) => value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+    if (!optionName) return null;
+    if (opcoes.some(option => normalized(option.nome) === normalized(optionName))) {
+      setNewOptionError('Essa opção já está na lista. Use a busca para encontrá-la.');
+      return null;
+    }
+    const price = Number(newOptionPrice);
+    if (!Number.isFinite(price) || price < 0) {
+      setNewOptionError('Informe um valor igual ou maior que zero.');
+      return null;
+    }
+    return { nome: optionName, preco_adicional: price, ativo: true };
+  };
+
   const handleAddOpcao = () => {
-    setOpcoes((prev) => [...prev, { nome: '', preco_adicional: 0, ativo: true }]);
+    if (marmitariaCadastro) {
+      const option = prepareNewOption();
+      if (!option) return;
+      setOpcoes(prev => [option, ...prev]);
+      setNewOptionName('');
+      setNewOptionPrice('0');
+      setNewOptionError('');
+    } else {
+      setOpcoes(prev => [{ nome: '', preco_adicional: 0, ativo: true }, ...prev]);
+    }
+    setOptionSearch('');
   };
 
   const handleRemoveOpcao = (idx: number) => {
+    if (opcoes[idx].id && !confirm(`Remover ${opcoes[idx].nome} do cadastro? Os adicionais vinculados também serão removidos. O histórico dos pedidos será preservado.`)) return;
     setOpcoes((prev) => prev.filter((_, index) => index !== idx));
   };
 
@@ -214,8 +255,10 @@ export default function ComplementosTab({
       return;
     }
 
-    const validOptions = opcoes.filter((option) => option.nome.trim().length > 0);
-    if (validOptions.length === 0) {
+    const pendingOption = marmitariaCadastro && newOptionName.trim() ? prepareNewOption() : null;
+    if (marmitariaCadastro && newOptionName.trim() && !pendingOption) return;
+    const validOptions = [...(pendingOption ? [pendingOption] : []), ...opcoes].filter((option) => option.nome.trim().length > 0);
+    if (validOptions.length === 0 && !editingGrupo) {
       onShowNotification?.('Adicione ao menos 1 opção de complemento.', 'error');
       return;
     }
@@ -288,7 +331,8 @@ export default function ComplementosTab({
         headers: authHeaders,
       });
       if (!response.ok) {
-        throw new Error('Erro ao excluir grupo.');
+        const body = await response.json().catch(() => null);
+        throw new Error(typeof body?.detail === 'string' ? body.detail : 'Erro ao excluir grupo.');
       }
       onShowNotification?.('Grupo excluído com sucesso.', 'success');
       setGrupos((prev) => prev.filter((group) => group.id !== id));
@@ -322,12 +366,19 @@ export default function ComplementosTab({
 
   const filteredGrupos = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('pt-BR');
-    return grupos.filter((group) => group.nome.toLocaleLowerCase('pt-BR').includes(query));
+    return [...grupos].filter((group) => group.nome.toLocaleLowerCase('pt-BR').includes(query) || group.opcoes.some(option => option.nome.toLocaleLowerCase('pt-BR').includes(query))).sort((a, b) => Number(Boolean(a.grupo_origem_id)) - Number(Boolean(b.grupo_origem_id)) || a.nome.localeCompare(b.nome, 'pt-BR'));
   }, [grupos, search]);
 
   return (
     <div className="space-y-6">
-      <details open className="space-y-4">
+      {marmitariaCadastro && <div className="flex flex-wrap items-center gap-2" aria-label="Modo de edição dos complementos">
+        <button onClick={() => setDailyMode(true)} className={clsx('rounded-xl border px-4 py-2 text-sm font-bold', dailyMode ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-koma-border text-koma-muted')}>Cardápio do dia</button>
+        <button disabled={dailyPending} onClick={() => setDailyMode(false)} className={clsx('rounded-xl border px-4 py-2 text-sm font-bold disabled:opacity-40', !dailyMode ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-koma-border text-koma-muted')}>Cadastros</button>
+        {dailyPending && <span className="text-xs text-koma-muted">Salve ou desfaça a seleção antes de abrir Cadastros.</span>}
+      </div>}
+      {catalogError && <div role="alert" className="rounded-2xl border border-rose-500/40 p-5 text-sm text-koma-foreground">Não foi possível conferir o cadastro atual. <button onClick={() => void fetchCatalogBindings()} className="underline">Tentar novamente</button></div>}
+      {marmitariaCadastro && dailyMode && !catalogError && (loading ? <p role="status" className="p-6 text-koma-muted">Carregando cardápio do dia…</p> : <CardapioDiarioEditor grupos={grupos} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onEditGroup={handleOpenModal} onDirtyChange={setDailyPending} onReload={fetchCatalogBindings} onSaved={async () => { onShowNotification?.('Cardápio do dia salvo.', 'success'); await fetchCatalogBindings(); }} />)}
+      {(!marmitariaCadastro || !dailyMode) && !catalogError && <details open className="space-y-4">
         <summary className="cursor-pointer font-bold text-koma-foreground">{marmitariaCadastro ? 'Proteínas, guarnições e saladas' : 'Complementos e adicionais'}</summary>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-koma-card border border-koma-border p-5 rounded-2xl">
         <div>
@@ -375,9 +426,9 @@ export default function ComplementosTab({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="columns-1 md:columns-2 xl:columns-3 gap-4">
           {filteredGrupos.map((group) => (
-            <div key={group.id} className="bg-koma-card border border-koma-border rounded-2xl p-4 flex flex-col justify-between">
+            <div key={group.id} className="bg-koma-card border border-koma-border rounded-2xl mb-4 break-inside-avoid p-4 flex flex-col justify-between">
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -421,8 +472,8 @@ export default function ComplementosTab({
                 </div>
 
                 {group.grupo_origem_id && <p className="mt-2 text-xs text-emerald-400">Sincronizado com {grupos.find(item => item.id === group.grupo_origem_id)?.nome || 'complementos'}. Altere a disponibilidade na origem.</p>}
-                <div className="mt-3 space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                  {group.opcoes.map((option) => (
+                <div className="mt-3 space-y-1.5">
+                  {[...group.opcoes].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })).map((option) => (
                     <div key={option.id || option.nome} className="flex items-center justify-between text-xs bg-koma-raised/60 px-2.5 py-1.5 rounded-lg">
                       <span className="text-koma-foreground font-medium">{option.nome}{option.ativo === false && <small className="ml-2 text-amber-500">Pausado</small>}</span>
                       <span className="text-koma-muted font-mono font-semibold">
@@ -460,7 +511,7 @@ export default function ComplementosTab({
         </div>
       )}
 
-      </details>
+      </details>}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-fade-in overflow-y-auto">
           <div className="bg-koma-panel border border-koma-border rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-5 my-8 max-h-[92vh] flex flex-col animate-scale-up">
@@ -478,7 +529,7 @@ export default function ComplementosTab({
               </button>
             </div>
 
-            <form onSubmit={handleSaveGrupo} className="space-y-4 overflow-y-auto flex-1 pr-1">
+            <form id="complement-group-form" onSubmit={handleSaveGrupo} className="space-y-4 overflow-y-auto flex-1 pr-1">
               <div>
                 <label className="block text-xs font-bold text-koma-muted mb-1">Nome do Grupo</label>
                 <input
@@ -533,47 +584,50 @@ export default function ComplementosTab({
                   Este grupo define apenas os itens disponíveis. O mínimo e o máximo pertencem a cada Quentinha P, M ou G e são configurados em Produtos.
                 </div>
               )}
-              {marmitariaCadastro && (
-                <div className="space-y-2 rounded-xl border border-koma-border p-3">
-                  <label className="block text-xs font-bold text-koma-muted" htmlFor="complement-source">Sincronizar adicionais com</label>
-                  <select id="complement-source" value={grupoOrigemId} onChange={event => setGrupoOrigemId(event.target.value)} className="w-full rounded-lg bg-koma-card border border-koma-border p-2 text-sm">
-                    <option value="">Cadastro independente</option>
-                    {grupos.filter(group => group.id !== editingGrupo?.id && !group.grupo_origem_id).map(group => <option key={group.id} value={group.id}>{group.nome}</option>)}
-                  </select>
-                  {grupoOrigemId && <>
-                    <p className="text-xs text-koma-muted">Nome e disponibilidade acompanham o grupo escolhido. Os preços existentes são mantidos.</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <label className="text-xs">Novos adicionais (R$)<input aria-label="Preço de novos adicionais" type="number" min="0.01" step="0.01" required value={precoNovoAdicional} onChange={event => setPrecoNovoAdicional(event.target.value)} className="mt-1 w-full rounded-lg bg-koma-card border border-koma-border p-2" /></label>
-                      <label className="text-xs">Novos ovos (R$)<input aria-label="Preço de novos ovos" type="number" min="0.01" step="0.01" required value={precoNovoOvo} onChange={event => setPrecoNovoOvo(event.target.value)} className="mt-1 w-full rounded-lg bg-koma-card border border-koma-border p-2" /></label>
-                    </div>
-                  </>}
+              {marmitariaCadastro && <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+                <h4 className="text-sm font-bold text-koma-foreground">Adicionar em {nome || 'novo grupo'}</h4>
+                <label className="block text-xs text-koma-muted">Nome da nova opção
+                  <input aria-label="Nome da nova opção" placeholder="Ex.: Costela cozida" value={newOptionName} disabled={saving} onChange={event => { setNewOptionName(event.target.value); setNewOptionError(''); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); handleAddOpcao(); } }} className="mt-1 w-full rounded-lg border border-koma-border bg-koma-card px-3 py-2 text-sm text-koma-foreground" />
+                </label>
+                <div className="flex items-end gap-3">
+                  <label className="min-w-0 flex-1 text-xs text-koma-muted">Valor desta opção (R$)
+                    <input aria-label="Valor da nova opção" type="number" min="0" step="0.01" value={newOptionPrice} disabled={saving} onChange={event => { setNewOptionPrice(event.target.value); setNewOptionError(''); }} className="mt-1 w-full rounded-lg border border-koma-border bg-koma-card px-3 py-2 text-sm text-koma-foreground" />
+                  </label>
+                  <button type="button" onClick={handleAddOpcao} disabled={saving || !newOptionName.trim()} className="koma-btn-primary shrink-0 rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50">Adicionar à lista</button>
                 </div>
-              )}
+                <p className="text-xs text-koma-muted">Zero significa sem cobrança nesta opção. As alterações só entram no cardápio ao salvar o grupo.</p>
+                {editingGrupo && grupos.some(group => group.grupo_origem_id === editingGrupo.id) && <p className="text-xs text-koma-muted">O adicional pago será criado automaticamente com o preço configurado no grupo de adicionais.</p>}
+                {newOptionError && <p role="alert" className="text-xs text-rose-400">{newOptionError}</p>}
+              </div>}
               <div className="space-y-2 pt-2 border-t border-koma-border">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-koma-muted">Opções / Adicionais</label>
-                  <button
+                  {!marmitariaCadastro && <button
                     type="button"
                     onClick={handleAddOpcao}
                     className="text-xs font-bold text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Adicionar Opção</span>
-                  </button>
+                  </button>}
                 </div>
+                <label className="block text-xs text-koma-muted">Buscar opção neste grupo<input aria-label="Buscar opção neste grupo" value={optionSearch} onChange={event => setOptionSearch(event.target.value)} placeholder="Ex.: costela" className="mt-1 w-full rounded-lg border border-koma-border bg-koma-raised px-3 py-2 text-sm text-koma-foreground" /></label>
+                <p className="text-xs text-koma-muted">Opções em ordem alfabética. Remover retira do cadastro e preserva os pedidos antigos.</p>
                 <div className="space-y-2">
-                  {opcoes.map((option, index) => (
+                  {opcoes.map((option, index) => ({ option, index })).filter(({ option }) => !option.nome || option.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').includes(optionSearch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR'))).map(({ option, index }) => (
                     <div key={`${option.id || 'new'}-${index}`} className="flex items-center gap-2 bg-koma-card p-2 rounded-xl border border-koma-border">
                       <input
                         type="text"
+                        autoFocus={!option.id && !option.nome}
                         disabled={Boolean(grupoOrigemId && option.opcao_origem_id)}
+                        aria-label={`Nome da opção ${index + 1}`}
                         placeholder="Nome da opção (ex: Bacon Crocante)"
                         value={option.nome}
                         onChange={(event) => handleOpcaoChange(index, 'nome', event.target.value)}
-                        className="flex-1 px-2.5 py-1.5 bg-koma-raised border border-koma-border rounded-lg text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
+                        className="min-w-0 flex-1 px-2.5 py-1.5 bg-koma-raised border border-koma-border rounded-lg text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
                         required
                       />
-                      <div className="w-28 relative">
+                      <div className="w-20 shrink-0 relative">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-koma-muted">R$</span>
                         <input
                           type="number"
@@ -584,7 +638,7 @@ export default function ComplementosTab({
                           className="w-full pl-7 pr-2 py-1.5 bg-koma-raised border border-koma-border rounded-lg text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 font-mono"
                         />
                       </div>
-                      {opcoes.length > 1 && !option.opcao_origem_id && (
+                      {!option.opcao_origem_id && (
                         <button
                           type="button"
                           onClick={() => handleRemoveOpcao(index)}
@@ -598,6 +652,25 @@ export default function ComplementosTab({
                   ))}
                 </div>
               </div>
+
+              {marmitariaCadastro && (
+                <details className="space-y-2 rounded-xl border border-koma-border p-3">
+                  <summary className="cursor-pointer text-xs font-bold text-koma-foreground">Configuração dos adicionais pagos</summary>
+                  <p className="text-xs text-koma-muted">Use esta configuração no grupo de adicionais para acompanhar outro grupo. Para cadastrar uma proteína, basta adicionar seu nome acima.</p>
+                  <label className="block text-xs font-bold text-koma-muted" htmlFor="complement-source">Sincronizar adicionais com</label>
+                  <select id="complement-source" value={grupoOrigemId} onChange={event => setGrupoOrigemId(event.target.value)} className="w-full rounded-lg bg-koma-card border border-koma-border p-2 text-sm">
+                    <option value="">Cadastro independente</option>
+                    {grupos.filter(group => group.id !== editingGrupo?.id && !group.grupo_origem_id).map(group => <option key={group.id} value={group.id}>{group.nome}</option>)}
+                  </select>
+                  {grupoOrigemId && <>
+                    <p className="text-xs text-koma-muted">Nome e disponibilidade acompanham o grupo escolhido. Os preços existentes são mantidos.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="text-xs">Novos adicionais (R$)<input aria-label="Preço de novos adicionais" type="number" min="0.01" step="0.01" required value={precoNovoAdicional} onChange={event => setPrecoNovoAdicional(event.target.value)} className="mt-1 w-full rounded-lg bg-koma-card border border-koma-border p-2" /></label>
+                      <label className="text-xs">Novos ovos (R$)<input aria-label="Preço de novos ovos" type="number" min="0.01" step="0.01" required value={precoNovoOvo} onChange={event => setPrecoNovoOvo(event.target.value)} className="mt-1 w-full rounded-lg bg-koma-card border border-koma-border p-2" /></label>
+                    </div>
+                  </>}
+                </details>
+              )}
 
               <div className={marmitariaCadastro ? 'hidden' : 'space-y-2 pt-2 border-t border-koma-border'}>
                 <div>
@@ -697,6 +770,7 @@ export default function ComplementosTab({
                 </div>
               </div>
 
+            </form>
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-koma-border shrink-0">
                 <button
                   type="button"
@@ -707,13 +781,13 @@ export default function ComplementosTab({
                 </button>
                 <button
                   type="submit"
+                  form="complement-group-form"
                   disabled={saving}
                   className="koma-btn-primary px-5 py-2 text-xs font-bold rounded-xl disabled:opacity-50"
                 >
                   {saving ? 'Salvando...' : editingGrupo ? 'Atualizar Grupo' : 'Criar Grupo'}
                 </button>
               </div>
-            </form>
           </div>
         </div>
       )}

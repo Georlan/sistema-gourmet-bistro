@@ -30,6 +30,10 @@ _PIPELINE_JOBS_KEY = "print_pipeline_jobs"
 _PIPELINE_TENANTS_KEY = "print_wakeup_tenants"
 _PIPELINE_STARTED_KEY = "print_pipeline_tx_started_at"
 _PIPELINE_SAVEPOINTS_KEY = "print_pipeline_savepoints"
+# Existing agents wait up to 30s between safety polls while SSE is healthy.
+# Repeat only real queue-change hints (never idle polling) so a lost SSE frame
+# cannot turn into a visible print delay. Bursts are coalesced per tenant.
+PRINT_WAKEUP_RETRY_DELAYS_SECONDS = (0.75, 2.0)
 
 
 class PrintWakeupHub:
@@ -42,6 +46,8 @@ class PrintWakeupHub:
         self._stop = threading.Event()
         self._listener_ready = threading.Event()
         self._listener_thread: threading.Thread | None = None
+        self._publish_generation: dict[int, int] = {}
+        self._retry_timers: dict[int, list[threading.Timer]] = {}
 
     def ensure_started(self) -> None:
         if engine.dialect.name != "postgresql" or not self._listen_to_postgres:
@@ -60,6 +66,9 @@ class PrintWakeupHub:
 
     def stop(self) -> None:
         self._stop.set()
+        with self._lock:
+            for tenant_id in list(self._retry_timers):
+                self._cancel_retries_locked(tenant_id)
         thread = self._listener_thread
         if thread is not None and thread.is_alive():
             thread.join(timeout=2.0)
@@ -95,16 +104,75 @@ class PrintWakeupHub:
                 return
             tenant_subscribers.pop(subscription_id, None)
             if not tenant_subscribers:
-                self._subscribers.pop(int(restaurante_id), None)
+                tenant_id = int(restaurante_id)
+                self._subscribers.pop(tenant_id, None)
+                self._cancel_retries_locked(tenant_id)
+                self._publish_generation[tenant_id] = self._publish_generation.get(tenant_id, 0) + 1
 
     def publish(self, restaurante_id: int, *, reason: str) -> None:
+        tenant_id = int(restaurante_id)
         payload = {
-            "restaurante_id": int(restaurante_id),
+            "restaurante_id": tenant_id,
             "reason": reason,
             "emitted_at_monotonic": time.monotonic(),
         }
         with self._lock:
-            targets = list(self._subscribers.get(int(restaurante_id), {}).values())
+            self._cancel_retries_locked(tenant_id)
+            targets = list(self._subscribers.get(tenant_id, {}).values())
+            generation = self._publish_generation.get(tenant_id, 0) + 1
+            self._publish_generation[tenant_id] = generation
+        if not targets:
+            return
+        self._deliver(targets, payload)
+
+        # The installed agent already understands "print-job" and immediately
+        # calls claim-batch. Repeating the same non-authoritative hint after a
+        # short delay closes the 30s lost-frame gap without changing the agent
+        # or adding continuous database polling. A newer notification cancels
+        # older retries by generation, so busy restaurants get one small burst
+        # instead of one timer fan-out per PrintJob.
+        # A claim can reserve older jobs while a newer hint is published, or
+        # belong to another sector's agent. It must not cancel tenant retries.
+        with self._lock:
+            if self._stop.is_set() or self._publish_generation.get(tenant_id) != generation:
+                return
+            timers = [
+                threading.Timer(
+                    delay,
+                    self._retry_publish_if_current,
+                    args=(tenant_id, generation, payload),
+                )
+                for delay in PRINT_WAKEUP_RETRY_DELAYS_SECONDS
+            ]
+            self._retry_timers[tenant_id] = timers
+            for timer in timers:
+                timer.daemon = True
+                timer.start()
+
+    def _cancel_retries_locked(self, restaurante_id: int) -> None:
+        for timer in self._retry_timers.pop(restaurante_id, []):
+            timer.cancel()
+
+    def _retry_publish_if_current(
+        self,
+        restaurante_id: int,
+        generation: int,
+        payload: dict[str, Any],
+    ) -> None:
+        if self._stop.is_set():
+            return
+        with self._lock:
+            if self._publish_generation.get(restaurante_id) != generation:
+                return
+            targets = list(self._subscribers.get(restaurante_id, {}).values())
+        if targets:
+            self._deliver(targets, payload)
+
+    def _deliver(
+        self,
+        targets: list[tuple[asyncio.AbstractEventLoop, asyncio.Queue]],
+        payload: dict[str, Any],
+    ) -> None:
         for loop, queue in targets:
             try:
                 loop.call_soon_threadsafe(self._enqueue_latest, queue, payload)

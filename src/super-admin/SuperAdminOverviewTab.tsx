@@ -1,3 +1,4 @@
+import { parseBackendTimestamp } from "../utils/dateTime";
 import React, { useState } from "react";
 import {
   Store,
@@ -38,8 +39,8 @@ function planLabel(planId?: string) {
 
 function formatActivity(value?: string | null) {
   if (!value) return "Não disponível";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("pt-BR");
+  const parsed = parseBackendTimestamp(value);
+  return parsed ? parsed.toLocaleString("pt-BR") : "Não disponível";
 }
 
 export function SuperAdminOverviewTab({

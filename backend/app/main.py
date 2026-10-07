@@ -495,6 +495,8 @@ app.include_router(relatorios.router)
 app.include_router(restaurant_features.router)
 app.include_router(super_admin.router, prefix="/api")
 app.include_router(super_admin_onboarding.router, prefix="/api")
+from .routes import cearatech_leads
+app.include_router(cearatech_leads.router)
 
 if settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
     app.include_router(whatsapp_webhook.router)

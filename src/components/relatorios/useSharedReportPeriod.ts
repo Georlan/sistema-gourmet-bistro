@@ -1,25 +1,16 @@
 import { useCallback, useState } from 'react';
-import { localCalendarDate } from '../../utils/dateTime';
+import { reportShortcut, validReportPeriod, type ReportPeriod } from '../../domain/reportPeriod';
+export type { ReportPeriod } from '../../domain/reportPeriod';
 
 const STORAGE_KEY = 'koma_reports_period';
 
-export interface ReportPeriod {
-  inicio: string;
-  fim: string;
-}
-
-function defaultPeriod(): ReportPeriod {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(end.getDate() - 29);
-  return { inicio: localCalendarDate(start), fim: localCalendarDate(end) };
-}
+function defaultPeriod(): ReportPeriod { return reportShortcut(30); }
 
 function initialPeriod(): ReportPeriod {
   if (typeof window === 'undefined') return defaultPeriod();
   try {
     const stored = JSON.parse(window.sessionStorage.getItem(STORAGE_KEY) || 'null');
-    if (stored?.inicio && stored?.fim) return stored;
+    if (validReportPeriod(stored)) return stored;
   } catch {
     // A preferência é apenas um atalho; um valor inválido volta ao padrão.
   }
@@ -32,9 +23,10 @@ export function useSharedReportPeriod() {
 
   const applyPeriod = useCallback((inicio: string, fim: string) => {
     const next = { inicio, fim };
+    if (!validReportPeriod(next)) return;
     setPeriod(next);
     if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      try { window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* A seleção continua funcionando sem armazenamento. */ }
     }
   }, []);
 

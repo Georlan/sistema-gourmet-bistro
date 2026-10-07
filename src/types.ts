@@ -14,6 +14,7 @@ export interface Product {
   imagem?: string;
   imagens_galeria?: string[];
   ativo?: boolean;
+  ordem_exibicao?: number | null;
 }
 
 export interface DraftItem {

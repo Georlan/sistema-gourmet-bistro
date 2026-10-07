@@ -16,13 +16,15 @@ test("novo pedido emite uma única nota e não tenta tocar antes do desbloqueio 
   assert.doesNotMatch(alerts, /Bipe duplo suave e moderno de novo pedido/);
 });
 
-test("pedido digital pendente mantém alarme até aceite sem aviso fixo de áudio", () => {
-  assert.match(alerts, /hasPendingAcceptance = pendingAcceptanceOrders\.length > 0/);
-  assert.match(alerts, /window\.setInterval\(\(\) => \{/);
-  assert.match(alerts, /\}, 4000\)/);
-  assert.match(alerts, /window\.clearInterval\(alarmId\)/);
-  assert.match(caixa, /pedidos aguardando aceite/);
-  assert.doesNotMatch(caixa, /Som dos pedidos precisa ser ativado|Ativar som dos pedidos/);
+test("pedido digital pendente executa até 3 ciclos de alerta com cancelamento antecipado e sem banner amarelo invasivo", () => {
+  assert.match(alerts, /pendingAlertTimersRef = useRef<Map<string, number\[\]>>/);
+  assert.match(alerts, /window\.setTimeout\(\(\) => \{[\s\S]*?\}, 4000\)/);
+  assert.match(alerts, /window\.setTimeout\(\(\) => \{[\s\S]*?\}, 8000\)/);
+  assert.match(alerts, /window\.clearTimeout\(timerId\)/);
+  assert.doesNotMatch(alerts, /window\.setInterval/);
+  assert.match(caixa, /orders: pendingAcceptanceOrders/);
+  assert.doesNotMatch(caixa, /O alerta sonoro continua até todos serem aceitos ou recusados/);
+  assert.doesNotMatch(caixa, /bg-amber-300 px-5 py-3 text-left text-amber-950/);
 });
 
 test("banner de pedidos explica a próxima ação em vez de usar atenção genérica", () => {

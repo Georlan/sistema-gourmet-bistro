@@ -1,4 +1,5 @@
 """Presentation of persisted choices; never changes order prices or selections."""
+import unicodedata
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Sequence
@@ -11,6 +12,22 @@ class SelectedModifier:
     preco: float = 0.0
     grupo_id: str | None = None
     grupo_nome: str | None = None
+
+
+def _group_presentation_rank(label: str) -> int:
+    """Keep marmitaria composition in the physical assembly order."""
+    normalized = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", str(label or "").casefold())
+        if not unicodedata.combining(character)
+    )
+    if normalized.startswith("guarnic"):
+        return 0
+    if normalized.startswith("protein"):
+        return 1
+    if normalized.startswith("salad"):
+        return 2
+    return 3
 
 
 def composition_presentation(
@@ -60,8 +77,12 @@ def composition_presentation(
         label, options = groups.setdefault(key, (modifier.grupo_nome or "Complementos", OrderedDict()))
         name, count = options.get(modifier.id, (modifier.nome, 0))
         options[modifier.id] = (name, count + 1)
+    ordered_groups = sorted(
+        enumerate(groups.values()),
+        key=lambda entry: (_group_presentation_rank(entry[1][0]), entry[0]),
+    )
     lines = tuple(
         f"{label.upper()}: " + ", ".join(f"{count}x {name}" if count > 1 else name for name, count in options.values())
-        for label, options in groups.values()
+        for _, (label, options) in ordered_groups
     )
     return lines, notes

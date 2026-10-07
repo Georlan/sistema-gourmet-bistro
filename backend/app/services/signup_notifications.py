@@ -30,6 +30,7 @@ def enqueue(
 ):
     now = dt.datetime.now(dt.timezone.utc)
     channels = []
+    inserted = False
     if email:
         channels.append(("email", email))
     # Inscrições e convites usam Resend; Telegram é reservado ao proprietário.
@@ -57,19 +58,22 @@ def enqueue(
         if db.get_bind().dialect.name == "postgresql":
             from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-            db.execute(
+            result = db.execute(
                 pg_insert(SignupNotification.__table__)
                 .values(**values)
                 .on_conflict_do_nothing()
             )
+            inserted = inserted or bool(getattr(result, "rowcount", 0))
         else:
             from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-            db.execute(
+            result = db.execute(
                 sqlite_insert(SignupNotification.__table__)
                 .values(**values)
                 .on_conflict_do_nothing()
             )
+            inserted = inserted or bool(getattr(result, "rowcount", 0))
+    return inserted
 
 
 def enqueue_signup_started(db, *, signup_id, restaurant_name, plan, billing_cycle):
@@ -236,6 +240,34 @@ def enqueue_release_required(db, *, protocol, restaurant_name, plan, billing_cyc
     )
 
 
+def enqueue_onboarding_ready_owner(
+    db, *, tenant_id, restaurant_name, plan,
+):
+    """Queue one durable owner alert when the four essential setup items are complete."""
+    owner_email = settings.KOMA_OWNER_EMAIL
+    owner_telegram = _owner_telegram_chat()
+    if not (owner_email or owner_telegram):
+        return
+
+    plan_label = str(plan or "").strip() or "não informado"
+    message = (
+        f"Implantação concluída: {restaurant_name} (#{tenant_id}) completou os 4 itens essenciais "
+        f"e está aguardando liberação KÔMA. Plano: {plan_label}. "
+        "Revise a implantação e libere a operação no SuperAdmin: "
+        f"{settings.KOMA_PUBLIC_APP_URL}/super-admin"
+    )
+    return enqueue(
+        db,
+        protocol=f"tenant-{tenant_id}",
+        kind="onboarding-ready-owner",
+        email=owner_email,
+        phone=None,
+        telegram_chat=owner_telegram,
+        subject="Implantação pronta para liberação — KÔMA",
+        message=message,
+    )
+
+
 def _deliver(payload, delivery_id):
     if payload["channel"] == "email":
         if not settings.RESEND_API_KEY or not settings.EMAIL_FROM:
@@ -347,6 +379,11 @@ def dispatch_batch():
 
 
 async def run_worker():
+    try:
+        from .event_acquisition import backfill_owner_notices
+        await asyncio.to_thread(backfill_owner_notices)
+    except Exception:
+        logger.exception("Event lead notification reconciliation failed")
     while True:
         try:
             await asyncio.to_thread(dispatch_batch)

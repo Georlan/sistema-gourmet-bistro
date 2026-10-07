@@ -11,6 +11,12 @@ export function createSeoWorker(securityHeaders = {}) {
   return {
     async fetch(request, env) {
       const url = new URL(request.url);
+      if ((request.method === 'GET' || request.method === 'HEAD') && /^\/cearatech(?:\/qr)?\/?$/.test(url.pathname)) {
+        url.pathname = url.pathname.replace('/cearatech', '/siaratech');
+        return new Response(null, { status: 308, headers: {
+          ...securityHeaders, Location: url.href, 'Cache-Control': 'no-store',
+        } });
+      }
       if (url.pathname.startsWith('/assets/')) return serveAsset({ next: () => env.ASSETS.fetch(request) });
       const brandHost = BRAND_HOSTS.has(url.hostname);
       const privateHost = PRIVATE_HOSTS.has(url.hostname) || url.hostname.endsWith('.pages.dev');

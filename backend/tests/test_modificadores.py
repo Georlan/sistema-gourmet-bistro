@@ -231,7 +231,8 @@ def test_atualizar_grupo_preserva_opcao_referenciada_por_pedido_historico():
         headers=headers,
         json=removing_historical,
     )
-    assert refused.status_code == 409, refused.text
+    assert refused.status_code == 200, refused.text
+    assert referenced["id"] not in {option["id"] for option in refused.json()["opcoes"]}
 
     db = SessionLocal()
     tenant_token = current_restaurante_id.set(999)
@@ -246,8 +247,28 @@ def test_atualizar_grupo_preserva_opcao_referenciada_por_pedido_historico():
         ).one()
         assert historical.opcao_modificador_id == referenced["id"]
         assert saved_option.nome == "Frango grelhado"
+        assert saved_option.arquivada is True and saved_option.ativo is False
+        assert saved_option.grupo_id == group["id"]
+        from app.services.order_item_composition import load_item_modifiers
+        restored = load_item_modifiers(db, 999, [historical.item_id])[historical.item_id]
+        assert next(option for option in restored if option.id == referenced["id"]).grupo_id == group["id"]
     finally:
         current_restaurante_id.reset(tenant_token)
+        db.close()
+
+
+    # Removing the group also keeps all historical foreign keys and labels.
+    assert client.delete(f"/cardapio/modificadores/grupos/{group['id']}", headers=headers).status_code == 204
+    assert group['id'] not in {entry['id'] for entry in client.get('/cardapio/modificadores/grupos', headers=headers).json()}
+    db = SessionLocal()
+    token = current_restaurante_id.set(999)
+    try:
+        from app.services.order_item_composition import load_item_modifiers
+        history = load_item_modifiers(db, 999, [item_id])[item_id]
+        assert next(option for option in history if option.id == referenced['id']).grupo_nome == changed_group['nome']
+        assert db.query(OpcaoModificador).filter_by(id=referenced['id'], restaurante_id=999).one().arquivada is True
+    finally:
+        current_restaurante_id.reset(token)
         db.close()
 
 
@@ -449,7 +470,22 @@ def test_paid_complements_follow_source_and_preserve_existing_ids_prices():
     source = client.get('/cardapio/modificadores/grupos', headers=headers).json()
     source = next(group for group in source if group['id'] == target['grupo_origem_id'])
     source['opcoes'] = source['opcoes'][1:]
-    assert client.put(f"/cardapio/modificadores/grupos/{source['id']}", headers=headers, json=source).status_code == 409
+    assert client.put(f"/cardapio/modificadores/grupos/{source['id']}", headers=headers, json=source).status_code == 200
+    db = SessionLocal()
+    token = current_restaurante_id.set(999)
+    try:
+        archived = db.query(OpcaoModificador).filter_by(id=original_id, restaurante_id=999).one()
+        assert archived.arquivada is True and archived.ativo is False
+        assert archived.preco_adicional == 7 and archived.opcao_origem_id
+        source_option = db.query(OpcaoModificador).filter_by(id=archived.opcao_origem_id, restaurante_id=999).one()
+        assert source_option.arquivada is True
+        stale_id = source_option.id
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+    assert client.patch(f"/cardapio/modificadores/opcoes/{stale_id}/disponibilidade", headers=headers, json={"ativo": True}).status_code == 404
+    stale_batch = {"opcoes": [{"id": stale_id, "ativo_anterior": False, "ativo": True}]}
+    assert client.patch("/cardapio/modificadores/cardapio-diario", headers=headers, json=stale_batch).status_code == 404
     assert client.delete(f"/cardapio/modificadores/grupos/{source['id']}", headers=headers).status_code == 409
     public = client.get('/cardapio/modificadores/publico/999').json()
     public_target = next(group for group in public if group['id'] == target['id'])
@@ -486,3 +522,47 @@ def test_paid_links_reject_actual_other_tenant_and_ambiguous_existing_copies():
     assert saved['grupo_origem_id'] is None
     assert {option['id'] for option in saved['opcoes']} == {option['id'] for option in target['opcoes']}
     assert sorted(option['preco_adicional'] for option in saved['opcoes']) == [5, 9]
+
+
+def test_daily_menu_is_atomic_preserves_prices_and_syncs_linked_extras():
+    headers = _auth_headers()
+    source = client.post('/cardapio/modificadores/grupos', headers=headers, json={
+        'nome': 'Diário proteínas', 'opcoes': [
+            {'nome': 'Frango diário', 'preco_adicional': 0, 'ativo': True},
+            {'nome': 'Peixe diário', 'preco_adicional': 2, 'ativo': False},
+        ], 'produto_ids': ['prod-burger-1'],
+    }).json()
+    extra = client.post('/cardapio/modificadores/grupos', headers=headers, json={
+        'nome': 'Diário extras', 'grupo_origem_id': source['id'],
+        'preco_novo_adicional': 5, 'preco_novo_ovo': 2,
+        'opcoes': [{'nome': 'Frango diário adicional', 'preco_adicional': 7}],
+    }).json()
+    chicken, fish = source['opcoes']
+    original_extra = next(o for o in extra['opcoes'] if o['opcao_origem_id'] == chicken['id'])
+    changes = [{'id': chicken['id'], 'ativo_anterior': True, 'ativo': False},
+               {'id': fish['id'], 'ativo_anterior': False, 'ativo': True}]
+    url = '/cardapio/modificadores/cardapio-diario'
+    assert client.patch(url, json={'opcoes': changes}).status_code == 401
+    response = client.patch(url, headers=headers, json={'opcoes': changes})
+    assert response.status_code == 200, response.text
+    assert response.json()['atualizadas'] == 2
+    groups = client.get('/cardapio/modificadores/grupos', headers=headers).json()
+    saved = next(g for g in groups if g['id'] == source['id'])
+    saved_extra = next(g for g in groups if g['id'] == extra['id'])
+    assert saved['produto_ids'] == ['prod-burger-1']
+    assert [(o['id'], o['preco_adicional'], o['ativo']) for o in saved['opcoes']] == [(chicken['id'], 0, False), (fish['id'], 2, True)]
+    linked = next(o for o in saved_extra['opcoes'] if o['opcao_origem_id'] == chicken['id'])
+    assert (linked['id'], linked['preco_adicional'], linked['ativo']) == (original_extra['id'], 7, False)
+    # A competing stale change must not partially pause the other option.
+    stale = [{'id': fish['id'], 'ativo_anterior': True, 'ativo': False},
+             {'id': chicken['id'], 'ativo_anterior': True, 'ativo': False}]
+    assert client.patch(url, headers=headers, json={'opcoes': stale}).status_code == 409
+    current = client.get('/cardapio/modificadores/grupos', headers=headers).json()
+    assert next(o for g in current if g['id'] == source['id'] for o in g['opcoes'] if o['id'] == fish['id'])['ativo'] is True
+    foreign = [{'id': fish['id'], 'ativo_anterior': True, 'ativo': False},
+               {'id': 'missing-or-foreign-option', 'ativo_anterior': True, 'ativo': False}]
+    assert client.patch(url, headers=headers, json={'opcoes': foreign}).status_code == 404
+    assert client.patch(url, headers=headers, json={'opcoes': [{'id': linked['id'], 'ativo_anterior': False, 'ativo': True}]}).status_code == 409
+    assert client.patch(url, headers=headers, json={'opcoes': [changes[0], changes[0]]}).status_code == 422
+    assert client.patch(url, headers=headers, json={'opcoes': [{'id': chicken['id'], 'ativo_anterior': False, 'ativo': 'true'}]}).status_code == 422
+    assert client.patch(url, headers=headers, json={'opcoes': [], 'preco': 0}).status_code == 422

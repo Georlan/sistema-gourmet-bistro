@@ -110,6 +110,8 @@ def override_get_db():
 @pytest.fixture(autouse=True)
 def setup_database(monkeypatch):
     print_agents_route._clear_invalid_agent_token_cache()
+    print_agents_route._clear_print_queue_maintenance_cache()
+    print_agents_route._clear_print_history_maintenance_cache()
     def test_session_local(**kwargs):
         kwargs.pop("restaurante_id", None)
         return TestingSessionLocal()
@@ -147,11 +149,11 @@ def setup_database(monkeypatch):
             status="ativo",
         ))
 
-        # Agente 1 e Agente 2
+        # Agente 1 (principal) e Agente 2 (secundário)
         t1 = hash_token("token_agent_1")
         t2 = hash_token("token_agent_2")
-        db.add(PrintAgentToken(id="a1", restaurante_id=1, agent_id="agent-box-1", token_hash=t1, ativo=True))
-        db.add(PrintAgentToken(id="a2", restaurante_id=1, agent_id="agent-box-2", token_hash=t2, ativo=True))
+        db.add(PrintAgentToken(id="a1", restaurante_id=1, agent_id="agent-box-1", token_hash=t1, ativo=True, is_primary=True))
+        db.add(PrintAgentToken(id="a2", restaurante_id=1, agent_id="agent-box-2", token_hash=t2, ativo=True, is_primary=False))
 
         # Print Job pendente
         db.add(PrintJob(
@@ -182,6 +184,8 @@ def setup_database(monkeypatch):
         yield
     finally:
         print_agents_route._clear_invalid_agent_token_cache()
+        print_agents_route._clear_print_queue_maintenance_cache()
+        print_agents_route._clear_print_history_maintenance_cache()
         current_restaurante_id.reset(token_var)
         import os
         try:
@@ -228,6 +232,26 @@ def mark_agent_printer_ready(agent_id: str) -> None:
         db.commit()
     finally:
         db.close()
+
+
+def test_print_queue_recovery_probe_is_throttled_per_tenant():
+    print_agents_route._clear_print_queue_maintenance_cache()
+    assert print_agents_route._should_run_print_queue_maintenance(1, now_monotonic=100.0) is True
+    assert print_agents_route._should_run_print_queue_maintenance(1, now_monotonic=101.0) is False
+    assert print_agents_route._should_run_print_queue_maintenance(2, now_monotonic=101.0) is True
+    assert print_agents_route._should_run_print_queue_maintenance(1, now_monotonic=131.0) is True
+
+
+def test_print_history_maintenance_is_coalesced_per_tenant():
+    print_agents_route._clear_print_history_maintenance_cache()
+    background = BackgroundTasks()
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    print_agents_route._schedule_print_history_maintenance(background, 1, now)
+    print_agents_route._schedule_print_history_maintenance(background, 1, now)
+    print_agents_route._schedule_print_history_maintenance(background, 2, now)
+
+    assert len(background.tasks) == 2
 
 
 def test_invalid_agent_token_is_negative_cached_to_avoid_db_hammering():

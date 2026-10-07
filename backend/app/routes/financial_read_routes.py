@@ -25,8 +25,11 @@ from ..services.financial_read import (
     current_operational_day,
     daily_financial_rows,
     load_financial_snapshot,
+    load_period_totals,
     peak_hour_rows,
 )
+
+from ..services.menu_intelligence import order_entry_hour_rows
 
 COMMERCIAL_ROLES = {"garcom", "caixa", "atendente", "operador_caixa"}
 
@@ -150,8 +153,10 @@ def get_relatorio_visao_geral_financeiro(
     op_today = current_operational_day(db, rest_id)
     month_start = op_today.replace(day=1)
     month_days = calendar.monthrange(op_today.year, op_today.month)[1]
-    month_snapshot = _snapshot_or_400(db, rest_id, month_start.isoformat(), op_today.isoformat())
-    month_net = month_snapshot.totals.vendas_liquidas
+    month_totals = (snapshot.totals
+                    if snapshot.period.start_day == month_start and snapshot.period.end_day == op_today
+                    else load_period_totals(db, rest_id, month_start.isoformat(), op_today.isoformat()))
+    month_net = month_totals.vendas_liquidas
     month_goal = money(monthly_goal)
     remaining = max(Decimal("0.00"), money(month_goal - month_net))
     goal_pct = round(float(month_net / month_goal * Decimal("100")), 1) if month_goal > 0 else 0.0
@@ -181,12 +186,14 @@ def get_relatorio_visao_geral_financeiro(
         "meta_media_diaria_necessaria": _float(daily_needed),
         "vendas_por_dia": daily_financial_rows(snapshot),
         "horarios_pico": peak_hour_rows(snapshot),
+        "entrada_pedidos_por_hora": order_entry_hour_rows(db, rest_id, snapshot.period),
+        "fonte_pico": "lancamentos_por_data_entrada",
         "breakdown_pagamentos": _method_dict(snapshot.totals.liquido_por_metodo),
         "breakdown_bruto": _method_dict(snapshot.totals.bruto_por_metodo),
         "breakdown_estornos": _method_dict(snapshot.totals.estornos_por_metodo),
         "dia_operacional_inicio": snapshot.period.start_day.isoformat(),
         "dia_operacional_fim": snapshot.period.end_day.isoformat(),
-        "fonte_financeira": "pagamentos_aprovados_menos_estornos_por_turno",
+        "fonte_financeira": "pagamentos_aprovados_menos_estornos_por_data_evento",
         "comparativo_anterior": {
             "tem_base_anterior": bool(previous.sales),
             "faturamento_anterior": _float(previous.totals.vendas_liquidas),
@@ -291,7 +298,9 @@ def get_dashboard_financeiro(
     previous = _snapshot_or_400(db, rest_id, prev_start.isoformat(), prev_end.isoformat())
 
     op_today = current_operational_day(db, rest_id)
-    today_snapshot = _snapshot_or_400(db, rest_id, op_today.isoformat(), op_today.isoformat())
+    today_totals = (snapshot.totals
+                    if snapshot.period.start_day == op_today and snapshot.period.end_day == op_today
+                    else load_period_totals(db, rest_id, op_today.isoformat(), op_today.isoformat()))
 
     command_ids = {command_id for sale in snapshot.sales.values() for command_id in sale.command_ids}
     commands = (
@@ -369,9 +378,9 @@ def get_dashboard_financeiro(
         "vendas_brutas": _float(gross),
         "estornos": _float(refunds),
         "vendas_liquidas": _float(net),
-        "faturamento_hoje": _float(today_snapshot.totals.vendas_liquidas),
-        "vendas_brutas_hoje": _float(today_snapshot.totals.vendas_brutas),
-        "estornos_hoje": _float(today_snapshot.totals.estornos),
+        "faturamento_hoje": _float(today_totals.vendas_liquidas),
+        "vendas_brutas_hoje": _float(today_totals.vendas_brutas),
+        "estornos_hoje": _float(today_totals.estornos),
         "ticket_medio": _float(money(net / total_sales) if total_sales else 0),
         "ticket_medio_bruto": _float(money(gross / total_sales) if total_sales else 0),
         "total_pedidos": total_sales,
@@ -394,7 +403,7 @@ def get_dashboard_financeiro(
         "breakdown_estornos": _method_dict(snapshot.totals.estornos_por_metodo),
         "dia_operacional_inicio": snapshot.period.start_day.isoformat(),
         "dia_operacional_fim": snapshot.period.end_day.isoformat(),
-        "fonte_financeira": "pagamentos_aprovados_menos_estornos_por_turno",
+        "fonte_financeira": "pagamentos_aprovados_menos_estornos_por_data_evento",
         "comparativo_anterior": {
             "tem_base_anterior": bool(previous.sales),
             "recebido_anterior": _float(previous.totals.vendas_liquidas),
@@ -496,6 +505,6 @@ def get_equipe_desempenho_financeiro(
     return {
         "taxa_servico_ativa": service_active,
         "taxa_servico_padrao": _float(service_rate),
-        "fonte_financeira": "pagamentos_aprovados_alocados_por_turno",
+        "fonte_financeira": "pagamentos_aprovados_alocados_por_data_evento",
         "membros": result,
     }

@@ -1,3 +1,4 @@
+import { ReportPeriodButton } from './ReportPeriodButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import {
@@ -46,7 +47,7 @@ const CustomChartTooltip = ({ active, payload, label }: any) => {
         <p className="text-[10px] font-bold text-koma-subtle">{label}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-xs font-bold font-mono" style={{ color: entry.color }}>
-            {entry.name}: {typeof entry.value === 'number' && (entry.name.toLowerCase().includes('faturam') || entry.name.toLowerCase().includes('total')) ? formatMoney(entry.value) : entry.value}
+            {entry.name}: {typeof entry.value === 'number' && (entry.name.toLowerCase().includes('faturam') || entry.name.toLowerCase().includes('total') || entry.name.toLowerCase().includes('recebido')) ? formatMoney(entry.value) : entry.value}
           </p>
         ))}
       </div>
@@ -62,6 +63,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
 }) => {
   const { dataInicio, dataFim, applyPeriod } = useSharedReportPeriod();
   const [isLoading, setIsLoading] = useState(false);
+  const [dailyMetric, setDailyMetric] = useState<'faturamento' | 'pedidos'>('faturamento');
 
   // Modals & Drawers
   const [showCalendarModal, setShowCalendarModal] = useState(false);
@@ -74,18 +76,24 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
   const [vendasDetalhes, setVendasDetalhes] = useState<VendaDetalheItem[]>([]);
   const [isLoadingVendas, setIsLoadingVendas] = useState(false);
   const requestRef = useRef(0);
+  const reportAbortRef = useRef<AbortController | null>(null);
 
   const fetchVisaoGeral = useCallback(async (inicio = dataInicio, fim = dataFim) => {
     const requestId = ++requestRef.current;
+    reportAbortRef.current?.abort();
+    const controller = new AbortController();
+    reportAbortRef.current = controller;
     setIsLoading(true);
     setHasError(false);
     try {
       const json = await fetchReportJson<any>(
         `${apiBaseUrl}/relatorios/visao-geral?data_inicio=${inicio}&data_fim=${fim}`,
         authHeaders,
+        controller.signal,
       );
       if (requestRef.current === requestId) setData(json);
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error('Erro ao buscar visão geral:', err);
       if (requestRef.current === requestId) setHasError(true);
     } finally {
@@ -112,8 +120,9 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
   };
 
   useEffect(() => {
+    setData(null);
     void fetchVisaoGeral();
-    return () => { requestRef.current += 1; };
+    return () => { requestRef.current += 1; reportAbortRef.current?.abort(); };
   }, [fetchVisaoGeral]);
 
   useReportRealtimeRefresh(fetchVisaoGeral);
@@ -146,9 +155,9 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
 
   const handleExportCsv = () => {
     if (!data) return;
-    let csv = 'Métrica;Valor\n';
+    let csv = `Período;${formatDate(dataInicio)} a ${formatDate(dataFim)}\nCritério;Data do pagamento e do estorno\nMétrica;Valor\n`;
     csv += `Recebimentos Líquidos (R$);${data.faturamento_total}\n`;
-    csv += `Total de Pedidos;${data.total_pedidos}\n`;
+    csv += `Contas únicas;${data.total_pedidos}\n`;
     csv += `Ticket Médio (R$);${data.ticket_medio}\n`;
     csv += `Clientes Ativos;${data.clientes_ativos}\n`;
     csv += `Meta Mensal (R$);${data.meta_mensal}\n`;
@@ -158,7 +167,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
     csv += `Projeção Ritmo Atual (R$);${data.meta_projecao}\n`;
     csv += `Média Diária Necessária (R$);${data.meta_media_diaria_necessaria}\n`;
 
-    csv += '\nData;Pedidos por Dia;Recebido (R$)\n';
+    csv += '\nData;Contas com recebimento por Dia;Recebido (R$)\n';
     (data.vendas_por_dia || []).forEach((v: any) => {
       csv += `"${v.data}";${v.quantidade_pedidos};${v.total.toFixed(2)}\n`;
     });
@@ -171,6 +180,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Process data for charts
@@ -180,12 +190,11 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
     pedidos: item.quantidade_pedidos || 0,
   }));
 
-  const horariosPicoChartData = (data?.horarios_pico || [])
+  const horariosPicoChartData = (data?.entrada_pedidos_por_hora || [])
     .filter((h: any) => h.total_pedidos > 0)
     .map((h: any) => ({
       hora: h.hora,
       pedidos: h.total_pedidos,
-      faturamento: h.faturamento || 0,
     }));
 
   const quickRead = useMemo(() => {
@@ -196,7 +205,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
     );
     const revenueDelta = Number(comparison.variacao_faturamento_pct || 0);
     const ordersDelta = Number(comparison.variacao_pedidos_pct || 0);
-    const peak = [...(data?.horarios_pico || [])]
+    const peak = [...(data?.entrada_pedidos_por_hora || [])]
       .filter((row: any) => Number(row.total_pedidos || 0) > 0)
       .sort((a: any, b: any) => Number(b.total_pedidos || 0) - Number(a.total_pedidos || 0))[0];
     const gross = Number(data?.vendas_brutas || 0);
@@ -220,9 +229,9 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         accent="em uma leitura"
         description={`Resultados de ${formatDate(dataInicio)} a ${formatDate(dataFim)}, atualizados pela operação.`}
         metrics={[
-          { label: 'vendas líquidas', value: formatMoney(data?.faturamento_total) },
-          { label: data?.total_pedidos === 1 ? 'pedido recebido' : 'pedidos recebidos', value: data?.total_pedidos ?? 0 },
-          { label: 'ticket médio', value: formatMoney(data?.ticket_medio) },
+          { label: 'recebido líquido', value: data ? formatMoney(data.faturamento_total) : '—' },
+          { label: 'contas únicas', value: data?.total_pedidos ?? '—' },
+          { label: 'média por conta', value: data ? formatMoney(data.ticket_medio) : '—' },
           { label: data?.clientes_ativos === 1 ? 'cliente cadastrado' : 'clientes cadastrados', value: data?.clientes_ativos ?? 0 },
         ]}
       />
@@ -230,7 +239,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
       <ReportActionBar info={(
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className={clsx('h-2 w-2 rounded-full', isLoading ? 'animate-pulse bg-amber-500' : 'bg-emerald-500')} />
-          <span>{isLoading ? 'Atualizando indicadores…' : 'Pagamentos aprovados menos estornos'}</span>
+          <span>{isLoading ? 'Atualizando indicadores…' : 'Recebido no dia do pagamento, menos estornos do período'}</span>
           {quickRead.hasPrevious && (
             <span className={quickRead.revenueDelta < 0 ? 'font-bold text-rose-700 dark:text-rose-300' : 'font-bold text-emerald-700 dark:text-emerald-300'}>
               Recebido {quickRead.revenueDelta >= 0 ? '+' : ''}{quickRead.revenueDelta.toLocaleString('pt-BR')}% vs. período anterior
@@ -250,19 +259,12 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             Ver vendas
           </button>
 
-          <button
-            type="button"
-            onClick={() => setShowCalendarModal(true)}
-            className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
-          >
-            <CalendarIcon size={14} className="text-emerald-700 dark:text-emerald-400" />
-            Período
-          </button>
+          <ReportPeriodButton inicio={dataInicio} fim={dataFim} onClick={() => setShowCalendarModal(true)} />
 
           <button
             type="button"
             onClick={handleExportCsv}
-            disabled={!data}
+            disabled={!data || isLoading || hasError}
             className="px-3 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-muted hover:text-koma-foreground rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
             title="Exportar CSV"
           >
@@ -301,7 +303,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                   {quickRead.hasPrevious ? `Recebido ${quickRead.revenueDelta >= 0 ? 'subiu' : 'caiu'} ${Math.abs(quickRead.revenueDelta).toLocaleString('pt-BR')}%` : 'Primeiro período comparável'}
                 </strong>
                 <span className="mt-1 block text-[10px] text-koma-muted">
-                  {quickRead.hasPrevious ? `O volume de pedidos variou ${quickRead.ordersDelta >= 0 ? '+' : ''}${quickRead.ordersDelta.toLocaleString('pt-BR')}%.` : 'O próximo período mostrará a evolução dos recebimentos e pedidos.'}
+                  {quickRead.hasPrevious ? `O número de contas variou ${quickRead.ordersDelta >= 0 ? '+' : ''}${quickRead.ordersDelta.toLocaleString('pt-BR')}%.` : 'O próximo período mostrará a evolução dos recebimentos e contas.'}
                 </span>
               </div>
             </div>
@@ -311,9 +313,9 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             <div className="flex items-start gap-3">
               <Clock size={17} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
               <div>
-                <strong className="block text-xs text-koma-foreground">{quickRead.peak ? `Pico de movimento às ${quickRead.peak.hora}` : 'Sem horário de pico'}</strong>
+                <strong className="block text-xs text-koma-foreground">{quickRead.peak ? `Pico de movimento às ${quickRead.peak.hora}` : Array.isArray(data?.entrada_pedidos_por_hora) ? 'Sem horário de pico' : 'Horário de pico indisponível'}</strong>
                 <span className="mt-1 block text-[10px] text-koma-muted">
-                  {quickRead.peak ? `${quickRead.peak.total_pedidos} conta${quickRead.peak.total_pedidos === 1 ? '' : 's'} recebida${quickRead.peak.total_pedidos === 1 ? '' : 's'} nessa faixa; planeje a equipe para esse momento.` : 'Ainda não há vendas suficientes no período para orientar a escala.'}
+                  {quickRead.peak ? `${quickRead.peak.total_pedidos} pedido${quickRead.peak.total_pedidos === 1 ? ' entrou' : 's entraram'} nessa faixa; planeje a equipe para esse momento.` : Array.isArray(data?.entrada_pedidos_por_hora) ? 'Ainda não há entradas de pedidos no período para orientar a escala.' : 'A leitura por entrada ainda não está disponível nesta atualização.'}
                 </span>
               </div>
             </div>
@@ -331,12 +333,73 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         </section>
       )}
 
+      {/* Visão Gráfica: Evolução Diária & Horários de Pico */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+          <div className="flex flex-wrap justify-between items-center gap-3 border-b border-koma-border pb-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp size={16} className="text-emerald-700 dark:text-emerald-400" />
+                <span className="font-serif font-bold text-sm text-koma-foreground">{dailyMetric === 'faturamento' ? 'Recebimentos líquidos por dia' : 'Contas com recebimento por dia'}</span>
+            </div>
+            <div className="flex gap-1" role="group" aria-label="Métrica diária">
+              {([['faturamento', 'Recebido'], ['pedidos', 'Contas']] as const).map(([metric, label]) => <button key={metric} type="button" aria-pressed={dailyMetric === metric} onClick={() => setDailyMetric(metric)} className={clsx('cursor-pointer rounded-lg px-2 py-1 text-xs font-bold', dailyMetric === metric ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'text-koma-muted hover:bg-koma-raised')}>{label}</button>)}
+            </div>
+          </div>
+
+          <div className="h-64 w-full pt-2">
+            {vendasPorDiaChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={vendasPorDiaChartData} margin={{ top: 10, right: 10, left: 12, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="emeraldGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
+                  <XAxis dataKey="data" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={58} tickLine={false} axisLine={false} allowDecimals={dailyMetric === 'faturamento'} tickFormatter={(v) => dailyMetric === 'faturamento' ? Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : String(v)} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ stroke: '#059669', strokeWidth: 1, strokeDasharray: '3 3' }} />
+                  <Area isAnimationActive={false} type="linear" dataKey={dailyMetric} name={dailyMetric === 'faturamento' ? 'Recebido (R$)' : 'Contas'} stroke="#059669" strokeWidth={2.5} fillOpacity={1} fill="url(#emeraldGradient)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-koma-muted">Sem dados no período</div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-4 shadow-xs">
+          <div className="flex items-center gap-2 border-b border-koma-border pb-3">
+            <Clock size={16} className="text-emerald-700 dark:text-emerald-400" />
+            <span className="font-serif font-bold text-sm text-koma-foreground">Entrada de pedidos por horário</span>
+          </div>
+
+          <p className="text-xs text-koma-muted">Pela entrada, incluindo pedidos abertos e depois cancelados. Cada pedido conta uma vez.</p>
+          <div className="h-64 w-full pt-2">
+            {horariosPicoChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={horariosPicoChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
+                  <XAxis dataKey="hora" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={28} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)', opacity: 0.3 }} />
+                  <Bar isAnimationActive={false} dataKey="pedidos" name="Pedidos que entraram" fill="#059669" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-koma-muted">Nenhum pedido registrado nos horários</div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Meta Mensal Block */}
       <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
         <div className="flex justify-between items-center border-b border-koma-border pb-3">
           <div className="flex items-center gap-2">
             <Target size={18} className="text-emerald-700 dark:text-emerald-400" />
-            <span className="font-serif font-bold text-sm text-koma-foreground">Acompanhamento da Meta Mensal</span>
+            <span className="font-serif font-bold text-sm text-koma-foreground">Meta do mês atual</span>
           </div>
           {editingMeta ? (
             <div className="flex items-center gap-2">
@@ -380,7 +443,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         </div>
 
         {(data?.meta_mensal || 0) <= 0 && !editingMeta ? (
-          <div className="py-6 text-center space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-koma-muted font-medium">Defina uma meta para acompanhar o ritmo do mês.</p>
             <button
               type="button"
@@ -441,64 +504,6 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         )}
       </div>
 
-      {/* Visão Gráfica: Evolução Diária & Horários de Pico */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
-          <div className="flex justify-between items-center border-b border-koma-border pb-3">
-            <div className="flex items-center gap-2">
-              <TrendingUp size={16} className="text-emerald-700 dark:text-emerald-400" />
-                <span className="font-serif font-bold text-sm text-koma-foreground">Recebimentos líquidos por dia</span>
-            </div>
-            <span className="text-[10px] text-koma-subtle">Receita líquida por dia</span>
-          </div>
-
-          <div className="h-64 w-full pt-2">
-            {vendasPorDiaChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={vendasPorDiaChartData} margin={{ top: 10, right: 10, left: 12, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="emeraldGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
-                  <XAxis dataKey="data" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={58} tickLine={false} axisLine={false} tickFormatter={(v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })} />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{ stroke: '#059669', strokeWidth: 1, strokeDasharray: '3 3' }} />
-                  <Area type="monotone" dataKey="faturamento" name="Recebido (R$)" stroke="#059669" strokeWidth={2.5} fillOpacity={1} fill="url(#emeraldGradient)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-xs text-koma-muted">Sem dados no período</div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-4 shadow-xs">
-          <div className="flex items-center gap-2 border-b border-koma-border pb-3">
-            <Clock size={16} className="text-emerald-700 dark:text-emerald-400" />
-            <span className="font-serif font-bold text-sm text-koma-foreground">Movimento por horário</span>
-          </div>
-
-          <div className="h-64 w-full pt-2">
-            {horariosPicoChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={horariosPicoChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
-                  <XAxis dataKey="hora" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={28} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)', opacity: 0.3 }} />
-                  <Bar dataKey="pedidos" name="Pedidos atendidos" fill="#059669" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-xs text-koma-muted">Nenhum pedido registrado nos horários</div>
-            )}
-          </div>
-        </div>
-      </div>
-
       <details className="group overflow-hidden rounded-3xl border border-koma-border bg-koma-panel shadow-xs">
         <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-bold text-koma-foreground transition-colors hover:bg-koma-raised/60">
           <span>Ver detalhamento em tabelas</span>
@@ -508,7 +513,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
       <div className="grid grid-cols-1 gap-4 border-t border-koma-border p-3 sm:p-4 lg:grid-cols-2">
         <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-3 sm:space-y-4 shadow-xs">
           <div className="flex justify-between items-center border-b border-koma-border pb-2">
-            <span className="font-serif font-bold text-sm text-koma-foreground">Detalhamento dos Pedidos por Dia</span>
+            <span className="font-serif font-bold text-sm text-koma-foreground">Contas e recebimentos por dia</span>
           </div>
 
           <div className="overflow-x-auto border border-koma-border rounded-xl sm:rounded-2xl">
@@ -550,20 +555,16 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
               <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold sticky top-0">
                 <tr>
                   <th className="p-3">Horário</th>
-                  <th className="p-3 font-mono text-center">Total Pedidos</th>
-                  <th className="p-3 font-mono text-right">Recebido</th>
+                  <th className="p-3 font-mono text-center">Pedidos que entraram</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-koma-border">
-                {(data?.horarios_pico || [])
+                {(data?.entrada_pedidos_por_hora || [])
                   .filter((h: any) => h.total_pedidos > 0)
                   .map((h: any) => (
                     <tr key={h.hora} className="hover:bg-koma-raised/50 transition-colors">
                       <td className="p-3 font-mono font-bold text-koma-foreground">{h.hora}</td>
                       <td className="p-3 font-mono text-center text-koma-foreground font-bold">{h.total_pedidos}</td>
-                      <td className="p-3 font-mono text-right font-bold text-emerald-400">
-                        {formatMoney(h.faturamento)}
-                      </td>
                     </tr>
                   ))}
               </tbody>

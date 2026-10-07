@@ -338,7 +338,9 @@ def _parse_tenant_id(tenant_id: str) -> int:
         )
 
 
-def _commercial_release_preview(db, tenant_id: int) -> dict[str, Any]:
+def _commercial_release_preview(
+    db, tenant_id: int, *, require_subscription: bool = True
+) -> dict[str, Any]:
     # Import here to keep the existing route composition free of circular imports.
     from .onboarding import _build_onboarding_status
 
@@ -350,7 +352,7 @@ def _commercial_release_preview(db, tenant_id: int) -> dict[str, Any]:
         .filter(SaaSSubscription.restaurante_id == tenant_id)
         .one_or_none()
     )
-    if subscription is None:
+    if subscription is None and require_subscription:
         raise HTTPException(status_code=409, detail="Restaurante sem assinatura comercial vinculada.")
     return {
         "restaurant": snapshot["restaurant"],
@@ -360,7 +362,7 @@ def _commercial_release_preview(db, tenant_id: int) -> dict[str, Any]:
             "paymentMethod": subscription.payment_method_type,
             "trialStartedAt": _as_utc(subscription.trial_started_at).isoformat() if subscription.trial_started_at else None,
             "trialEndsAt": _as_utc(subscription.trial_ends_at).isoformat() if subscription.trial_ends_at else None,
-        },
+        } if subscription else None,
         "steps": {key: snapshot["steps"][key] for key in ("profile", "hours", "catalog", "operations")},
         "operations": snapshot["operations"],
         "counts": snapshot["counts"],
@@ -384,7 +386,7 @@ def preview_commercial_release(
     db = SessionLocal()
     try:
         with tenant_session_scope(db, tenant_id_int):
-            return _commercial_release_preview(db, tenant_id_int)
+            return _commercial_release_preview(db, tenant_id_int, require_subscription=False)
     finally:
         db.close()
 
@@ -425,7 +427,7 @@ def update_super_admin_operations(
             before = list(explicit_order_types(config) or [])
             after = list(dict.fromkeys(payload.order_types))
             if before == after:
-                return _commercial_release_preview(db, tenant_id_int)
+                return _commercial_release_preview(db, tenant_id_int, require_subscription=False)
 
             config.tipos_pedido_ativos = after
             db.add(
@@ -450,7 +452,7 @@ def update_super_admin_operations(
                 before,
                 after,
             )
-            return _commercial_release_preview(db, tenant_id_int)
+            return _commercial_release_preview(db, tenant_id_int, require_subscription=False)
     except HTTPException:
         if db.in_transaction():
             db.rollback()
@@ -515,7 +517,7 @@ def super_admin_bootstrap_tables(
                 )
             )
             db.commit()
-            return _commercial_release_preview(db, tenant_id_int)
+            return _commercial_release_preview(db, tenant_id_int, require_subscription=False)
     finally:
         db.close()
 

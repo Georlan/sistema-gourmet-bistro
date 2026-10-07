@@ -150,9 +150,26 @@ def _append_composition_group(
     width: int,
     prefix: str = "   ",
 ) -> None:
-    """Destaca a linha do grupo sem quebrar o texto visível com comandos ESC/POS."""
+    """Amplia a composição e mantém somente o rótulo da categoria em negrito."""
     clean = _single_line(text).upper()
-    _append_bold_wrapped(lines, clean, width, prefix)
+    wrapped_lines: list[str] = []
+    _append_wrapped(wrapped_lines, clean, width, prefix)
+    label, separator, _ = clean.partition(":")
+    label_token = f"{label}:" if separator else ""
+
+    for index, wrapped_line in enumerate(wrapped_lines):
+        styled_line = wrapped_line
+        if index == 0 and label_token:
+            visible_label = prefix + label_token
+            if wrapped_line.startswith(visible_label):
+                styled_line = (
+                    prefix
+                    + ESC_BOLD_ON
+                    + label_token
+                    + ESC_BOLD_OFF
+                    + wrapped_line[len(visible_label):]
+                )
+        lines.append(ESC_DOUBLE_HEIGHT_ON + styled_line + ESC_NORMAL_SIZE)
 
 
 def _critical_center(text: str, width: int) -> str:
@@ -774,6 +791,8 @@ class PrinterService:
                         _format_brl(item_total),
                         width,
                     )
+                if production_hierarchy and composition:
+                    lines.append("")
                 for composition_index, composition_line in enumerate(composition):
                     if production_hierarchy:
                         if composition_index:
@@ -787,6 +806,8 @@ class PrinterService:
                     else:
                         _append_wrapped(lines, composition_line.upper(), width, "   ")
                 if not apenas_valores and observation:
+                    if production_hierarchy and composition:
+                        lines.append("")
                     _append_wrapped_in_font(
                         lines, observation.upper(), width, "   OBS: ", ESC_FONT_A
                     )

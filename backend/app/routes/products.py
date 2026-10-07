@@ -3,6 +3,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Union, Literal
 from ..catalog_addons import effective_modifier_payloads_by_product
+from ..catalog_ordering import (
+    LEGACY_CATEGORY_DISPLAY_ORDER as CATEGORY_DISPLAY_ORDER,
+    ordered_categories,
+    ordered_products,
+    resolve_restaurant_niche,
+)
 from ..marmitaria_catalog import enabled as marmitaria_enabled, size_category, size_key
 from ..database import get_db, require_tenant_id
 from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario
@@ -51,11 +57,29 @@ def ensure_marmitas_available(db, tenant, products):
 class CategoriaUpdate(BaseModel):
     nome: Optional[str] = None
     destino_impressao: Optional[str] = None  # "COZINHA" | "BAR" | "NENHUM"
+    ordem_exibicao: Optional[int] = None
 
 class CategoriaCreate(BaseModel):
     id: str
     nome: str
     destino_impressao: str = "COZINHA"
+    ordem_exibicao: Optional[int] = None
+
+class CategoriaOrdemItem(BaseModel):
+    id: str
+    ordem_exibicao: int
+
+class CategoriasReordenarRequest(BaseModel):
+    categoria_ids: Optional[List[str]] = None
+    ordens: Optional[List[CategoriaOrdemItem]] = None
+
+class ProdutoOrdemItem(BaseModel):
+    id: str
+    ordem_exibicao: int
+
+class ProdutosReordenarRequest(BaseModel):
+    produto_ids: Optional[List[str]] = None
+    ordens: Optional[List[ProdutoOrdemItem]] = None
 
 class ObservacaoCreate(BaseModel):
     categoria_id: str
@@ -96,26 +120,6 @@ class EdicaoLoteResponse(BaseModel):
     categoria_id: Optional[str] = None
 
 
-CATEGORY_DISPLAY_ORDER = [
-    "Quentinhas",
-    "Pizzas Tradicionais", "Pizzas Especiais", "Hambúrgueres Bovinos",
-    "Hambúrgueres de Frango", "Hambúrgueres Suínos", "Baguetes",
-    "Pastéis Tradicionais", "Pastelões Especiais", "Pastéis Doces",
-    "Petiscos", "Combos Promocionais", "Sucos", "Refrigerantes e Águas",
-    "Bebidas & Vinhos", "Cervejas", "Bebidas Quentes", "Sobremesas",
-]
-
-def ordered_categories(categories: List[Categoria]) -> List[Categoria]:
-    positions = {name: index for index, name in enumerate(CATEGORY_DISPLAY_ORDER)}
-    return sorted(
-        categories,
-        key=lambda category: (
-            positions.get(category.nome, len(positions)),
-            category.nome.casefold(),
-        ),
-    )
-
-
 def _serialize_product_with_modifiers(product: Produto, modifier_payloads: dict[str, list[dict]]) -> dict:
     payload = ProdutoResponse.model_validate(product).model_dump()
     payload["grupos_modificadores"] = modifier_payloads.get(str(product.id), [])
@@ -128,7 +132,8 @@ def get_categorias(db: Session = Depends(get_db), current_user: Usuario = Depend
     """Retorna todas as categorias de produtos cadastradas no cardápio do restaurante ativo."""
     rest_id = require_tenant_id()
     categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
-    return ordered_categories(categorias)
+    niche = resolve_restaurant_niche(db, rest_id)
+    return ordered_categories(categorias, niche=niche)
 
 @router.post("/categorias", response_model=CategoriaResponse, status_code=status.HTTP_201_CREATED)
 def create_categoria(
@@ -141,17 +146,57 @@ def create_categoria(
     rest_id = require_tenant_id()
     if db.query(Categoria).filter_by(restaurante_id=rest_id, id=data.id).first():
         raise HTTPException(status_code=400, detail="ID de categoria já existe.")
+    
+    ordem = data.ordem_exibicao
+    if ordem is None:
+        existing_orders = [
+            c.ordem_exibicao
+            for c in db.query(Categoria).filter_by(restaurante_id=rest_id).all()
+            if c.ordem_exibicao is not None
+        ]
+        if existing_orders:
+            ordem = ((max(existing_orders) // 10) + 1) * 10
+
     cat = Categoria(
         id=data.id,
         restaurante_id=rest_id,
         nome=data.nome,
         destino_impressao=data.destino_impressao,
+        ordem_exibicao=ordem,
     )
     db.add(cat)
     db.commit()
     db.refresh(cat)
     notify_catalog_update(background_tasks, "Categoria criada", require_tenant_id())
     return cat
+
+@router.put("/categorias/reordenar", response_model=List[CategoriaResponse])
+def reordenar_categorias(
+    data: CategoriasReordenarRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Reordena categorias do restaurante autenticado de forma determinística."""
+    rest_id = require_tenant_id()
+    categorias = db.query(Categoria).filter_by(restaurante_id=rest_id).all()
+    cat_by_id = {cat.id: cat for cat in categorias}
+
+    if data.categoria_ids is not None:
+        for idx, cat_id in enumerate(data.categoria_ids):
+            if cat_id in cat_by_id:
+                cat_by_id[cat_id].ordem_exibicao = (idx + 1) * 10
+    elif data.ordens is not None:
+        for item in data.ordens:
+            if item.id in cat_by_id:
+                cat_by_id[item.id].ordem_exibicao = item.ordem_exibicao
+
+    db.commit()
+    for cat in categorias:
+        db.refresh(cat)
+    notify_catalog_update(background_tasks, "Categorias reordenadas", rest_id)
+    niche = resolve_restaurant_niche(db, rest_id)
+    return ordered_categories(categorias, niche=niche)
 
 @router.put("/categorias/{categoria_id}", response_model=CategoriaResponse)
 def update_categoria(
@@ -161,13 +206,15 @@ def update_categoria(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("catalogo:administrar"))
 ):
-    """Atualiza nome e/ou destino de impressão de uma categoria."""
+    """Atualiza nome, ordem e/ou destino de impressão de uma categoria."""
     rest_id = require_tenant_id()
     cat = db.query(Categoria).filter_by(restaurante_id=rest_id, id=categoria_id).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Categoria não encontrada.")
     if data.nome is not None:
         cat.nome = data.nome
+    if data.ordem_exibicao is not None:
+        cat.ordem_exibicao = data.ordem_exibicao
     if data.destino_impressao is not None:
         if data.destino_impressao not in ("COZINHA", "BAR", "NENHUM"):
             raise HTTPException(status_code=400, detail="destino_impressao deve ser COZINHA, BAR ou NENHUM.")
@@ -252,6 +299,34 @@ def delete_observacao(
 
 
 # ----------------- PRODUCTS ENDPOINTS -----------------
+@router.put("/reordenar", response_model=List[dict])
+def reordenar_produtos(
+    data: ProdutosReordenarRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Reordena produtos do restaurante autenticado de forma determinística."""
+    rest_id = require_tenant_id()
+    produtos = db.query(Produto).filter_by(restaurante_id=rest_id).all()
+    prod_by_id = {prod.id: prod for prod in produtos}
+
+    if data.produto_ids is not None:
+        for idx, prod_id in enumerate(data.produto_ids):
+            if prod_id in prod_by_id:
+                prod_by_id[prod_id].ordem_exibicao = (idx + 1) * 10
+    elif data.ordens is not None:
+        for item in data.ordens:
+            if item.id in prod_by_id:
+                prod_by_id[item.id].ordem_exibicao = item.ordem_exibicao
+
+    db.commit()
+    notify_catalog_update(background_tasks, "Produtos reordenados", rest_id)
+    produtos_ordenados = ordered_products(produtos)
+    modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos_ordenados)
+    return [_serialize_product_with_modifiers(prod, modifier_payloads) for prod in produtos_ordenados]
+
+@router.get("", response_model=List[dict])
 @router.get("/", response_model=List[dict])
 def get_produtos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Retorna todos os produtos do tenant, incluindo complementos efetivos por categoria."""
@@ -261,9 +336,9 @@ def get_produtos(db: Session = Depends(get_db), current_user: Usuario = Depends(
         db.query(Produto)
         .options(joinedload(Produto.categoria))
         .filter(Produto.restaurante_id == rest_id)
-        .order_by(Produto.id)
         .all()
     )
+    products = ordered_products(products)
     modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, products)
     return [_serialize_product_with_modifiers(product, modifier_payloads) for product in products]
 
@@ -275,24 +350,26 @@ def get_catalogo(
     """Snapshot único do catálogo usado pelo caixa e pelo app do garçom."""
     del current_user
     rest_id = require_tenant_id()
+    niche = resolve_restaurant_niche(db, rest_id)
     categorias = ordered_categories(
         db.query(Categoria)
         .filter(Categoria.restaurante_id == rest_id)
-        .all()
+        .all(),
+        niche=niche,
     )
-    produtos = (
+    products = (
         db.query(Produto)
         .options(joinedload(Produto.categoria))
         .filter(Produto.restaurante_id == rest_id)
-        .order_by(Produto.id)
         .all()
     )
-    modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
+    products = ordered_products(products)
+    modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, products)
     return {
         "categorias": categorias,
         "produtos": [
             _serialize_product_with_modifiers(product, modifier_payloads)
-            for product in produtos
+            for product in products
         ],
     }
 
@@ -450,8 +527,21 @@ def create_produto(
             detail="Já existe um produto cadastrado com este ID"
         )
 
+    payload = produto_data.model_dump()
+    if payload.get("ordem_exibicao") is None:
+        existing_orders = [
+            p.ordem_exibicao
+            for p in db.query(Produto).filter_by(
+                restaurante_id=rest_id,
+                categoria_id=produto_data.categoria_id,
+            ).all()
+            if p.ordem_exibicao is not None
+        ]
+        if existing_orders:
+            payload["ordem_exibicao"] = ((max(existing_orders) // 10) + 1) * 10
+
     novo_produto = Produto(
-        **produto_data.model_dump(),
+        **payload,
         restaurante_id=rest_id,
     )
     db.add(novo_produto)

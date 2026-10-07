@@ -1,3 +1,4 @@
+import { ReportPeriodButton } from './ReportPeriodButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Calendar as CalendarIcon, RefreshCw, WalletCards } from 'lucide-react';
 import { OperationalBanner } from '../shared/OperationalBanner';
@@ -25,18 +26,24 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const requestRef = useRef(0);
+  const reportAbortRef = useRef<AbortController | null>(null);
 
   const fetchFinanceiroData = useCallback(async () => {
     const requestId = ++requestRef.current;
+    reportAbortRef.current?.abort();
+    const controller = new AbortController();
+    reportAbortRef.current = controller;
     setIsLoading(true);
     setErrorMsg(null);
     try {
       const nextStats = await fetchReportJson<any>(
         `${apiBaseUrl}/comandas/estatisticas/geral?data_inicio=${dataInicio}&data_fim=${dataFim}`,
         authHeaders,
+        controller.signal,
       );
       if (requestRef.current === requestId) setStats(nextStats);
     } catch (error) {
+      if (controller.signal.aborted) return;
       console.error(error);
       if (requestRef.current === requestId) setErrorMsg('Não foi possível carregar a conciliação financeira.');
     } finally {
@@ -45,8 +52,9 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
   }, [apiBaseUrl, authHeaders, dataFim, dataInicio]);
 
   useEffect(() => {
+    setStats(null);
     void fetchFinanceiroData();
-    return () => { requestRef.current += 1; };
+    return () => { requestRef.current += 1; reportAbortRef.current?.abort(); };
   }, [fetchFinanceiroData]);
 
   useReportRealtimeRefresh(fetchFinanceiroData);
@@ -81,7 +89,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
         eyebrow="FINANCEIRO"
         title="Recebimentos"
         accent="sob controle"
-        description={`O que foi aprovado e devolvido, por dia operacional · ${operationalRange}.`}
+        description={`O que foi aprovado e devolvido, pela data de cada pagamento e estorno · ${operationalRange}.`}
         metrics={[
           { label: 'recebido após estornos', value: formatMoney(net) },
           { label: 'pagamentos aprovados', value: formatMoney(gross) },
@@ -97,9 +105,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
           {hasPrevious && <span className={netDelta < 0 ? 'font-bold text-rose-700 dark:text-rose-300' : 'font-bold text-emerald-700 dark:text-emerald-300'}>Recebido {netDelta >= 0 ? '+' : ''}{netDelta.toLocaleString('pt-BR')}% vs. período anterior</span>}
         </div>
       )}>
-          <button type="button" onClick={() => setShowCalendarModal(true)} className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3.5 py-2 text-[10px] font-bold uppercase tracking-wider text-koma-foreground transition-all hover:bg-koma-card">
-            <CalendarIcon size={14} className="text-emerald-700 dark:text-emerald-300" /> Período
-          </button>
+          <ReportPeriodButton inicio={dataInicio} fim={dataFim} onClick={() => setShowCalendarModal(true)} />
           <button type="button" onClick={() => void fetchFinanceiroData()} className="cursor-pointer rounded-xl border border-koma-border bg-koma-raised p-2 text-koma-subtle transition-all hover:text-koma-foreground" title="Atualizar relatório" aria-label="Atualizar relatório financeiro">
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
           </button>

@@ -950,23 +950,6 @@ export function CaixaPanel({
             ))}
           </div>
 
-      {pendingAcceptanceOrders.length > 0 && (
-        <button
-          type="button"
-          role="alert"
-          onClick={() => {
-            handleSidebarNavigation('vendas_pedidos');
-            setIsDrawerOpen(true);
-          }}
-          className="shrink-0 mx-5 mt-3 rounded-2xl border-2 border-amber-400 bg-amber-300 px-5 py-3 text-left text-amber-950"
-        >
-          <strong className="block text-sm font-black uppercase tracking-wide">
-            {pendingAcceptanceOrders.length === 1 ? 'Pedido aguardando aceite' : pendingAcceptanceOrders.length + ' pedidos aguardando aceite'}
-          </strong>
-          <span className="block text-[11px] font-bold">O alerta sonoro continua até todos serem aceitos ou recusados. Clique para abrir.</span>
-        </button>
-      )}
-
           <div ref={cashierContentRef} className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
             {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
               <div className={"absolute inset-0 bg-black/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-8 space-y-4"}>
@@ -1088,6 +1071,7 @@ export function CaixaPanel({
             <CashierKitchen mode={hasDedicatedKds ? 'kds' : 'queue'} activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
 
             <CashierPickups
+              isWsConnected={isWsConnected}
               activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
               deliveryOrders={deliveryOrders}
               deliveryOrdersLoadState={deliveryOrdersLoadState}
@@ -1108,6 +1092,7 @@ export function CaixaPanel({
               label="Configurações"
               load={loadCashierSettings}
               sectionProps={{
+                isWsConnected,
                 apiBaseUrl,
                 authHeaders,
                 activeTab,
@@ -1267,6 +1252,7 @@ export function CaixaPanel({
             )}
 
             <CashierCouriers
+              isWsConnected={isWsConnected}
               activeSubTab={activeSubTab}
               deliveryOrders={deliveryOrders}
               deliveryOrdersLoadState={deliveryOrdersLoadState}
