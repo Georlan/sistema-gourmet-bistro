@@ -324,6 +324,18 @@ def test_superadmin_release_preview_reuses_canonical_onboarding_projection(monke
     assert preview["readyForRelease"] is False
     assert preview["trialStarted"] is False
 
+    subscription = None
+    with pytest.raises(HTTPException) as error:
+        _commercial_release_preview(DbStub(), 7)
+    assert error.value.status_code == 409
+
+    snapshot["onboarding"] = {"mode": "administrative", "operationReleased": True}
+    administrative = _commercial_release_preview(DbStub(), 7, require_subscription=False)
+    assert administrative["subscription"] is None
+    assert administrative["restaurant"] is snapshot["restaurant"]
+    assert administrative["readiness"] is snapshot["readiness"]
+    assert administrative["onboarding"]["mode"] == "administrative"
+
 
 
 

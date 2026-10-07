@@ -1,3 +1,4 @@
+import { parseBackendTimestamp } from "../utils/dateTime";
 import React, { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -60,8 +61,8 @@ function paymentStatusLabel(status?: string | null) {
 
 function formatActivity(value?: string | null) {
   if (!value) return "Não disponível";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("pt-BR");
+  const parsed = parseBackendTimestamp(value);
+  return parsed ? parsed.toLocaleString("pt-BR") : "Não disponível";
 }
 
 export function SuperAdminTenantsTab({
@@ -286,6 +287,7 @@ export function SuperAdminTenantsTab({
   return (
     <div className="space-y-6">
       {benefitsTenant && <SuperAdminCapabilitiesModal key={benefitsTenant.id} tenant={benefitsTenant} onClose={() => setBenefitsTenant(null)} />}
+      {!selectedTenant && <>
       <div className="space-y-4 rounded-xl border border-[#1e293b] bg-koma-card p-5 shadow-sm">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
@@ -403,6 +405,8 @@ export function SuperAdminTenantsTab({
           </table>
         </div>
       </div>
+
+      </>}
 
       {selectedTenant && (
         <SuperAdminRestaurant360

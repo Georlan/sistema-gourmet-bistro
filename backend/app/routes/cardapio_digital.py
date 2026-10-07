@@ -401,10 +401,9 @@ def obter_cardapio_publico(
         ).all()
         produtos = _ordered_products(produtos)
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
-        profile = db.query(RestauranteOperationProfile.profile_key).filter(
+        profile_key = db.query(RestauranteOperationProfile.profile_key).filter(
             RestauranteOperationProfile.restaurante_id == rest_id,
-        ).first()
-        profile_key = profile[0] if profile else None
+        ).scalar()
         is_marmitaria = profile_key == "marmitaria"
 
         # Categorias vazias (sem produtos ativos) não aparecem no cardápio online
@@ -413,8 +412,8 @@ def obter_cardapio_publico(
         niche = resolve_restaurant_niche(
             db,
             rest_id,
+            loaded_profile_key=profile_key,
             fallback_niche=getattr(configuracao, "nicho", None) if configuracao else None,
-            stored_profile_key=profile_key,
         )
         categorias_ordenadas = _ordered_categories(categorias_com_produtos, niche=niche)
 

@@ -291,17 +291,13 @@ def test_api_reordenar_categorias_e_produtos(tmp_path):
 
 
 
-def test_niche_resolution_reuses_loaded_profile_without_requery():
+@pytest.mark.parametrize("profile,fallback,expected", [
+    (None, "pizzaria", "pizzaria"),
+    ("generic", "pizzaria", "pizzaria"),
+    (" Marmitaria ", "pizzaria", "marmitaria"),
+])
+def test_loaded_profile_avoids_another_query(profile, fallback, expected):
     from app.catalog_ordering import resolve_restaurant_niche
-
-    class NoQueryDatabase:
-        calls = 0
-        def query(self, *args):
-            self.calls += 1
-            raise AssertionError("Already loaded profile/configuration must not be queried again")
-
-    db = NoQueryDatabase()
-    assert resolve_restaurant_niche(db, 101, "pizzaria", stored_profile_key="marmitaria") == "marmitaria"
-    assert resolve_restaurant_niche(db, 101, "pizzaria", stored_profile_key=None) == "pizzaria"
-    assert resolve_restaurant_niche(db, 101, "pizzaria", stored_profile_key="generic") == "pizzaria"
-    assert db.calls == 0
+    db = MagicMock()
+    assert resolve_restaurant_niche(db, 1, fallback, loaded_profile_key=profile) == expected
+    db.query.assert_not_called()

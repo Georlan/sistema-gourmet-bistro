@@ -190,3 +190,24 @@ def test_marmitaria_profile_is_supported_without_creating_sizes_or_prices():
             db.close()
     finally:
         _cleanup_tenant(tenant_id)
+
+
+def test_administrative_preview_and_modes_preserve_commercial_release_guard():
+    tenant_id = None
+    try:
+        response = client.post("/api/super-admin/restaurantes/provisionar", headers=_superadmin_headers(), json=_payload("pizzaria"))
+        assert response.status_code == 201, response.text
+        tenant_id = int(response.json()["id"])
+        preview = client.get(f"/api/super-admin/onboarding/restaurantes/{tenant_id}/release", headers=_superadmin_headers())
+        assert preview.status_code == 200, preview.text
+        assert preview.json()["subscription"] is None
+        assert preview.json()["onboarding"]["mode"] == "administrative"
+        assert preview.json()["restaurant"]["operationProfile"] == "pizzaria"
+        updated = client.put(f"/api/super-admin/onboarding/restaurantes/{tenant_id}/operations", headers=_superadmin_headers(), json={"order_types": ["retirada"], "reason": "Ajuste administrativo QA"})
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["operations"]["orderTypes"] == ["retirada"]
+        assert updated.json()["subscription"] is None
+        forbidden = client.post(f"/api/super-admin/onboarding/restaurantes/{tenant_id}/release", headers=_superadmin_headers())
+        assert forbidden.status_code == 409, forbidden.text
+    finally:
+        _cleanup_tenant(tenant_id)
