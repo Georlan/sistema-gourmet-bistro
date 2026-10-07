@@ -314,17 +314,17 @@ export function KanbanOrderDetails({
             {tableMovement.transferredFromMesaIds.length > 0 && <p>Consumo transferido de: {tableMovement.transferredFromMesaIds.map(id => `Mesa ${id}`).join(', ')}.</p>}
           </div>}
           {!tableMovement && selectedKanbanOrder.mesaOrigemId && Number(selectedKanbanOrder.mesaOrigemId) !== Number(selectedKanbanOrder.mesaId) && (
-            <div className={"bg-emerald-950/20 p-3 rounded-2xl border border-emerald-900/40 text-xs text-emerald-600 dark:text-emerald-300 flex items-center justify-between shadow-sm font-sans"}>
+            <div className={"bg-emerald-50 dark:bg-emerald-950/20 p-3 rounded-2xl border border-emerald-300 dark:border-emerald-900/40 text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between shadow-sm font-sans"}>
               <div>
-                <strong className={"text-emerald-400 block text-[9px] uppercase tracking-wider font-bold"}>Consumo Mesclado:</strong>
+                <strong className={"text-emerald-800 dark:text-emerald-400 block text-[9px] uppercase tracking-wider font-bold"}>Consumo Mesclado:</strong>
                 <span className="leading-relaxed">Este lote possui consumo mesclado da <strong>Mesa {selectedKanbanOrder.mesaOrigemId}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
               </div>
             </div>
           )}
           {!tableMovement && selectedKanbanOrder.mesaTransferidaDe && Number(selectedKanbanOrder.mesaTransferidaDe) !== Number(selectedKanbanOrder.mesaId) && (
-            <div className={"bg-purple-950/20 p-3 rounded-2xl border border-purple-900/40 text-xs text-purple-300 flex items-center justify-between shadow-sm font-sans"}>
+            <div className={"bg-purple-50 dark:bg-purple-950/20 p-3 rounded-2xl border border-purple-300 dark:border-purple-900/40 text-xs text-purple-800 dark:text-purple-300 flex items-center justify-between shadow-sm font-sans"}>
               <div>
-                <strong className={"text-purple-400 block text-[9px] uppercase tracking-wider font-bold"}>Consumo Transferido:</strong>
+                <strong className={"text-purple-800 dark:text-purple-400 block text-[9px] uppercase tracking-wider font-bold"}>Consumo Transferido:</strong>
                 <span className="leading-relaxed">Este lote foi transferido da <strong>Mesa {selectedKanbanOrder.mesaTransferidaDe}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
               </div>
             </div>
