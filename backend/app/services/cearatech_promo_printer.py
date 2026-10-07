@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 from . import qrcodegen
 
 PAPER_WIDTH_DOTS = 384
-DEFAULT_CANONICAL_URL = "https://komafood.com.br/cearatech"
+DEFAULT_CANONICAL_URL = "https://komafood.com.br/cearatech?source=qr_impresso"
 
 # Caminhos de fontes comuns no Linux / Debian / Ubuntu com fallback
 FONT_CANDIDATES_BOLD = [
