@@ -246,36 +246,90 @@ export function useCashierAlerts({ orders, deliveryOrders, pendingAcceptanceOrde
   // WebSocket e reconciliações do mesmo id não geram outro som.
   const knownDigitalOrderIdsRef = useRef<Set<string> | null>(null);
 
+  // Guarda os timers de alerta ativos por id de pedido para cancelamento antecipado e cleanup.
+  const pendingAlertTimersRef = useRef<Map<string, number[]>>(new Map());
+
+  // Limpa todos os timers no unmount para evitar memory leaks.
+  useEffect(() => {
+    return () => {
+      pendingAlertTimersRef.current.forEach((timers) => {
+        timers.forEach((timerId) => window.clearTimeout(timerId));
+      });
+      pendingAlertTimersRef.current.clear();
+    };
+  }, []);
+
+  // Monitora cancelamento antecipado: se um pedido sair de pendingAcceptanceOrders
+  // (foi aceito, recusado ou cancelado), cancela imediatamente os alertas restantes dele.
+  useEffect(() => {
+    const activePendingIds = new Set(pendingAcceptanceOrders.map((o) => String(o.id)));
+    pendingAlertTimersRef.current.forEach((timers, orderId) => {
+      if (!activePendingIds.has(orderId)) {
+        timers.forEach((timerId) => window.clearTimeout(timerId));
+        pendingAlertTimersRef.current.delete(orderId);
+      }
+    });
+  }, [pendingAcceptanceOrders]);
+
+  // Ciclo de alerta para novos pedidos digitais pendentes:
+  // Máximo de 3 toques por pedido (t=0s, t~4s, t~8s).
+  // Deduplicado estritamente por id: refetch, polling e rerender nunca tocam novamente.
   useEffect(() => {
     const currentIds = new Set(deliveryOrders.map((order) => String(order.id)));
     if (knownDigitalOrderIdsRef.current === null) {
+      // Linha de base inicial: memoriza IDs já existentes e não dispara alertas retrospectivos.
       knownDigitalOrderIdsRef.current = currentIds;
       return;
     }
 
     const known = knownDigitalOrderIdsRef.current;
-    const hasNewOrder = Array.from(currentIds).some((id) => !known.has(id));
-    currentIds.forEach((id) => known.add(id));
+    if (!Array.from(currentIds).some((id) => !known.has(id))) return;
 
-    if (hasNewOrder) {
+    const pendingIdsSet = new Set(pendingAcceptanceOrders.map((o) => String(o.id)));
+
+    // Identifica novos pedidos que acabaram de surgir
+    const newlyArrivedOrders = deliveryOrders.filter((order) => {
+      const id = String(order.id);
+      return !known.has(id);
+    });
+
+    // Registra todos os novos IDs no conjunto de conhecidos imediatamente
+    newlyArrivedOrders.forEach((order) => known.add(String(order.id)));
+
+    // Dispara ciclo de até 3 alertas apenas para novos pedidos que estejam aguardando aceite
+    newlyArrivedOrders.forEach((order) => {
+      const orderId = String(order.id);
+      const isPending =
+        pendingIdsSet.has(orderId) ||
+        order.status === 'pendente' ||
+        order.status === 'analise';
+      if (!isPending) return;
+
+      // 1º Alerta (t = 0s)
       playOrderAlert('delivery_pending');
-    }
-  }, [deliveryOrders, playOrderAlert]);
 
-  const hasPendingAcceptance = pendingAcceptanceOrders.length > 0;
+      const timers: number[] = [];
 
-  // Um pedido online aguardando aceite é uma pendência operacional, não um toast.
-  // Após o navegador liberar áudio, o alarme continua até o pedido ser aceito/recusado.
-  useEffect(() => {
-    if (!soundEnabled || !audioReady || !hasPendingAcceptance) return;
+      // 2º Alerta (t ≈ 4s)
+      const t1 = window.setTimeout(() => {
+        if (pendingAlertTimersRef.current.has(orderId)) {
+          playOrderAlert('delivery_pending');
+        }
+      }, 4000);
+      timers.push(t1);
 
-    playOrderAlert('delivery_pending');
-    const alarmId = window.setInterval(() => {
-      playOrderAlert('delivery_pending');
-    }, 4000);
+      // 3º Alerta (t ≈ 8s)
+      const t2 = window.setTimeout(() => {
+        if (pendingAlertTimersRef.current.has(orderId)) {
+          playOrderAlert('delivery_pending');
+          pendingAlertTimersRef.current.delete(orderId);
+        }
+      }, 8000);
+      timers.push(t2);
 
-    return () => window.clearInterval(alarmId);
-  }, [audioReady, hasPendingAcceptance, playOrderAlert, soundEnabled]);
+      pendingAlertTimersRef.current.set(orderId, timers);
+    });
+  }, [deliveryOrders, pendingAcceptanceOrders, playOrderAlert]);
 
   return { soundEnabled, audioReady, activateAudio, toggleSound, playOrderAlert };
 }
