@@ -157,6 +157,7 @@ class Categoria(Base):
     nome = Column(String, nullable=False)
     marmitaria_tamanho = Column(Boolean, nullable=False, default=False, server_default="false")
     destino_impressao = Column(String, default="COZINHA")  # "COZINHA" | "BAR" | "NENHUM"
+    ordem_exibicao = Column(Integer, nullable=True, default=None)
     
     # Relationships
     produtos = relationship("Produto", back_populates="categoria")
@@ -195,6 +196,7 @@ class Produto(Base):
     imagem = Column(String, default="")
     imagens_galeria = Column(JSON, default=list)  # Up to 3 product gallery URLs
     ativo = Column(Boolean, default=True)  # Toggle product availability
+    ordem_exibicao = Column(Integer, nullable=True, default=None)
     
     # Relationships
     categoria = relationship("Categoria", back_populates="produtos")

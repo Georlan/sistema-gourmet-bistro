@@ -267,6 +267,7 @@ export default function CardapioPage() {
             }))
           : [],
         isAvailable: true,
+        ordem_exibicao: product.ordem_exibicao != null ? Number(product.ordem_exibicao) : null,
       }));
 
       let socials: SocialNetwork[] = [];
@@ -1128,10 +1129,17 @@ export default function CardapioPage() {
               )}
             </div>
           ) : visibleCategories.map((category) => {
-            const products = activeBrand.products.filter((product) => (
-              product.category === category
-              && smartSearchMatch(`${product.name} ${product.description || ""}`, searchQuery)
-            ));
+            const products = activeBrand.products
+              .filter((product) => (
+                product.category === category
+                && smartSearchMatch(`${product.name} ${product.description || ""}`, searchQuery)
+              ))
+              .sort((a, b) => {
+                const orderA = a.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
+                const orderB = b.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
+                if (orderA !== orderB) return orderA - orderB;
+                return 0;
+              });
             return (
               <section key={category} id={categorySectionId(category)} className="scroll-mt-[10.5rem]">
                 <div className="mb-3 flex items-center justify-between border-b border-koma-border pb-2.5">
