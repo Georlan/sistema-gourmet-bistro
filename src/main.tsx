@@ -4,6 +4,7 @@ import "./components/auth/customerRegistrationToken";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
+import "./landing/siara-event.css";
 import "./components/shared/operationalHeader.css";
 import { CustomerSupportWidget } from "./components/app/CustomerSupportWidget";
 import { KomaLoading } from "./components/app/KomaLoading";

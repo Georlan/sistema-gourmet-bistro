@@ -2,7 +2,7 @@ import { expect, test, type Route } from '@playwright/test';
 
 test('QR de apresentação abre sem login e mostra o destino legível', async ({ page }) => {
   await page.goto('/siaratech/qr');
-  await expect(page.getByRole('heading', { name: 'Quer conhecer o KÔMA no seu restaurante?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'SEU PRÓXIMO PASSO.' })).toBeVisible();
   await expect(page.locator('svg').filter({ has: page.locator('title', { hasText: 'QR Code para conhecer o KÔMA' }) })).toBeVisible();
   await expect(page.getByText('komafood.com.br/siaratech', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -40,7 +40,7 @@ test('CRM salva qualificação, mantém consentimento e apresenta histórico', a
 
 test('endereço antigo ainda abre o QR de Siará', async ({ page }) => {
   await page.goto('/cearatech/qr');
-  await expect(page.getByText('Siará Tech Summit 2026', { exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Siará Tech Summit 2026', exact: true })).toBeVisible();
   await expect(page.getByText('komafood.com.br/siaratech', { exact: true })).toBeVisible();
 });
 
