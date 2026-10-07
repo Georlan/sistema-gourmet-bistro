@@ -282,7 +282,14 @@ export function useCashierOrders({
   };
 
   const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>([]);
-  const [pendingAcceptanceOrders, setPendingAcceptanceOrders] = useState<DeliveryOrderView[]>([]);
+  const [pendingAcceptanceOrders, setPendingAcceptanceOrdersState] = useState<DeliveryOrderView[]>([]);
+  const pendingAcceptanceOrdersRef = useRef<DeliveryOrderView[]>([]);
+  const setPendingAcceptanceOrders: React.Dispatch<React.SetStateAction<DeliveryOrderView[]>> = (update) => {
+    const current = pendingAcceptanceOrdersRef.current;
+    const next = typeof update === 'function' ? update(current) : update;
+    pendingAcceptanceOrdersRef.current = next;
+    setPendingAcceptanceOrdersState(next);
+  };
   const [deliveryOrdersLoadState, setDeliveryOrdersLoadState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [pendingDeliveryOrderIds, setPendingDeliveryOrderIds] = useState<ReadonlySet<string>>(new Set());
   const deliveryOrdersRequestRef = useRef(0);
@@ -833,6 +840,7 @@ export function useCashierOrders({
     const orderKey = String(orderId);
     if (pendingDeliveryMutationRef.current[orderKey]) return false;
 
+    const previousPendingOrder = pendingAcceptanceOrdersRef.current.find((order) => String(order.id) === orderKey);
     const previousIndex = deliveryOrders.findIndex((order) => String(order.id) === orderKey);
     const previousOrder = previousIndex >= 0 ? deliveryOrders[previousIndex] : undefined;
     const optimisticStatus = readActiveDeliveryStatus(statusNovo) || undefined;
@@ -867,6 +875,10 @@ export function useCashierOrders({
 
     const rollbackCurrentMutation = () => {
       if (!finishCurrentMutation()) return false;
+      if (previousPendingOrder) {
+        setPendingAcceptanceOrders((current) => current.some((order) => String(order.id) === orderKey)
+          ? current : [...current, previousPendingOrder]);
+      }
       if (previousOrder && (optimisticStatus === 'producao' || optimisticStatus === 'aceito')) {
         setDeliveryOrders((current) => {
           const existingIndex = current.findIndex((order) => String(order.id) === orderKey);
@@ -1112,7 +1124,9 @@ export function useCashierOrders({
 
   const handleAcceptPendingDeliveryOrder = async (order: DeliveryOrderView) => {
     const accepted = await handleUpdateDeliveryStatus(order.id, order.modalidade === 'delivery' ? 'aceito' : 'producao');
-    if (accepted && pendingAcceptanceOrders.length <= 1) setIsDrawerOpen(false);
+    // Read the live queue after confirmation, including arrivals while the request ran.
+    if (accepted && pendingAcceptanceOrdersRef.current.length === 0
+      && Object.keys(pendingDeliveryMutationRef.current).length === 0) setIsDrawerOpen(false);
   };
 
   const handleRejectPendingDeliveryOrder = (order: DeliveryOrderView) => {
