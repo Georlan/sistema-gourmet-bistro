@@ -60,8 +60,10 @@ export function SuperAdminIntegrationRegistry() {
       }
       const data: IntegrationRegistryResponse = await response.json();
       setServices(data.services || []);
-      setLastChecked(data.checked_at || new Date().toISOString());
+      setLastChecked(data.checked_at || null);
     } catch (err) {
+      setServices([]);
+      setLastChecked(null);
       setErrorMessage(superAdminErrorMessage(err));
     } finally {
       setIsLoading(false);
@@ -94,10 +96,15 @@ export function SuperAdminIntegrationRegistry() {
           </span>
         );
       case "not_configured":
-      default:
         return (
           <span className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/80 px-2.5 py-0.5 text-[11px] font-bold text-zinc-400">
             <HelpCircle className="h-3 w-3" /> Não configurado
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/80 px-2.5 py-0.5 text-[11px] font-bold text-zinc-400">
+            <HelpCircle className="h-3 w-3" /> Não verificado
           </span>
         );
     }
@@ -120,10 +127,7 @@ export function SuperAdminIntegrationRegistry() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-koma-foreground">Integration Registry</h2>
-              <span className="rounded-md border border-[#00b894]/30 bg-[#00b894]/10 px-2 py-0.5 text-[10px] font-black uppercase text-[#00b894]">
-                KOM-8
-              </span>
+              <h2 className="text-lg font-bold text-koma-foreground">Integrações da plataforma</h2>
             </div>
             <p className="mt-1 text-xs text-koma-muted">
               Cockpit unificado de saúde, probes em tempo real e links operacionais dos subsistemas do KÔMA.

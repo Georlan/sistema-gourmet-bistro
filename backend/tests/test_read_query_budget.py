@@ -57,12 +57,8 @@ def test_public_menu_has_no_duplicate_link_reads_or_private_configuration(char_c
     assert 'webhook_secret' not in config_queries[0][0]
     assert 'whatsapp_recipient_phone' not in config_queries[0][0]
     assert 'JOIN restaurantes' not in config_queries[0][0]
-    # Canonical category ordering (#1025) reads the operational profile once.
-    profile_reads = [(sql, columns) for sql, columns in queries if 'FROM restaurante_operation_profiles' in sql]
-    # Existing marmitaria resolution + one scalar query for category ordering.
-    assert len(profile_reads) == 2
-    assert all(len(columns) == 1 for _, columns in profile_reads)
-    assert len(queries) <= 16
+    assert sum('FROM restaurante_operation_profiles' in sql for sql, _ in queries) == 1
+    assert len(queries) <= 15
     assert sum('FROM restaurante_capabilities' in sql for sql, _ in queries) == 1
     product = next(p for p in response.json()['produtos'] if p['id'] == 'prod-char-simples')
     group = next(g for g in product['grupos_modificadores'] if g['id'] == modifier_group)

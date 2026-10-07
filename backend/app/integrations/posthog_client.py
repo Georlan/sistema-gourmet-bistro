@@ -32,7 +32,7 @@ class PostHogClient:
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.api_key or self.project_token or self.project_id)
+        return bool(self.api_key or self.project_token)
 
     def get_dashboard_url(self, dashboard_id: str = POSTHOG_OPERATIONAL_DASHBOARD_ID) -> str:
         """Gera URL direta para o Dashboard de Visão Diária do Produto."""
@@ -67,7 +67,7 @@ class PostHogClient:
                         "configured": True,
                         "latency_ms": elapsed_ms,
                         "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                        "detail": f"Projeto '{proj_name}' (ID {self.project_id}) conectado.",
+                        "detail": f"Projeto '{proj_name}' (ID {self.project_id}): acesso verificado. Ingestão de eventos não verificada por esta consulta.",
                     }
                 else:
                     return {
@@ -77,41 +77,21 @@ class PostHogClient:
                         "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                         "detail": f"PostHog API retornou HTTP {resp.status_code}.",
                     }
-            except Exception as exc:
+            except Exception:
                 return {
                     "status": "disconnected",
                     "configured": True,
                     "latency_ms": round((time.perf_counter() - start_time) * 1000, 2),
                     "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "detail": f"Falha ao conectar com API do PostHog: {exc}",
+                    "detail": "Consulta do projeto PostHog indisponível; tente novamente.",
                 }
 
-        # Se tiver ao menos o project_token ou project_id configurado, testa probe HTTP no host de ingestão
-        token = self.project_token
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{POSTHOG_US_API_HOST}/decide/?v=3", params={"token": token} if token else {})
-            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
-            if resp.status_code in (200, 400):  # 200 ou 400 confirma que o host está respondendo normalmente
-                return {
-                    "status": "connected",
-                    "configured": True,
-                    "latency_ms": elapsed_ms,
-                    "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "detail": f"PostHog Cloud US operacional (Projeto {self.project_id}).",
-                }
-            return {
-                "status": "degraded",
-                "configured": True,
-                "latency_ms": elapsed_ms,
-                "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "detail": f"Ingestão PostHog retornou status {resp.status_code}.",
-            }
-        except Exception as exc:
-            return {
-                "status": "disconnected",
-                "configured": True,
-                "latency_ms": round((time.perf_counter() - start_time) * 1000, 2),
-                "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "detail": f"Host PostHog inacessível: {exc}",
-            }
+        # Deep links remain useful without enabling private project verification.
+        # A host response (including HTTP 400) cannot prove project health or ingestion.
+        return {
+            "status": "unverified",
+            "configured": self.is_configured,
+            "latency_ms": None,
+            "checked_at": None,
+            "detail": "Links disponíveis. Consulta autenticada do projeto não habilitada; ingestão de eventos não verificada por este painel.",
+        }

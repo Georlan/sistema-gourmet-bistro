@@ -289,3 +289,15 @@ def test_api_reordenar_categorias_e_produtos(tmp_path):
 
     app.dependency_overrides.pop(get_db, None)
 
+
+
+@pytest.mark.parametrize("profile,fallback,expected", [
+    (None, "pizzaria", "pizzaria"),
+    ("generic", "pizzaria", "pizzaria"),
+    (" Marmitaria ", "pizzaria", "marmitaria"),
+])
+def test_loaded_profile_avoids_another_query(profile, fallback, expected):
+    from app.catalog_ordering import resolve_restaurant_niche
+    db = MagicMock()
+    assert resolve_restaurant_niche(db, 1, fallback, loaded_profile_key=profile) == expected
+    db.query.assert_not_called()
