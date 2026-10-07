@@ -66,7 +66,7 @@ Base inicial consultada: main `c7aa1888dd16`, PRs #970/#982/#983/#1021 já incor
 - [x] Impressão no 360° já tem diagnóstico de agente/fila e links operacionais em #1021; não criar outro executor ou painel concorrente.
 - [x] Linear/PostHog já têm registry, links e rastreabilidade por restaurante em #1021; não reimplementar KOM-8/9/10.
 - [ ] Validar a utilidade do dashboard PostHog com eventos de negócio reais e janela explícita. Projeto conectado: KÔMA Production `648305`; consulta de erros ativos de sete dias retornou vazia em 07/10, sem provar ausência de falhas. Dados de teste do tenant #8 estão excluídos por padrão no projeto; respeitar esse filtro e explicitar quando comparar esse restaurante.
-- [ ] Integrar a onda de CRM pós-evento em uma única implementação: #1026 e #1027 estão abertas e sobrepõem painel/rotas/migração. Preservar essa tarefa paralela, reconciliar as duas antes de merge e não duplicar schema.
+- [ ] Reconciliar a PR #1027 com a implementação de CRM #1026 já incorporada em `2fd88b38875d` e preservada na rodada de segurança. #1027 segue aberta; revisar diferenças úteis sem duplicar painel, rotas ou schema.
 - [x] Telegram: bot, destino e participação verificados por leitura em produção em 07/10 às 01:51 (Fortaleza). Nenhuma mensagem enviada; entrega continua não testada.
 - [ ] Habilitar acesso do backend ao Linear se a criação de issues dentro do KÔMA for usada: registry atual informa `LINEAR_API_KEY` ausente. Plugin conectado no Codex não configura o runtime do produto.
 - [ ] Investigar consulta administrativa do Resend que retornou HTTP 401 nesta leitura. A falha da consulta não confirma falha de entrega de e-mails; validar credencial/permissão e evidência de envio antes de alterar o fluxo.
@@ -85,3 +85,19 @@ Base inicial consultada: main `c7aa1888dd16`, PRs #970/#982/#983/#1021 já incor
 4. Rodar unit/typecheck/build/E2E relevantes **uma vez por onda**, não uma vez por microajuste.
 5. Mergear somente com CI verde e head estável. Depois do merge, o Gemini testa a onda concluída enquanto o ChatGPT já avança para a próxima frente sem sobreposição de arquivos.
 6. Achados manuais entram na próxima onda do mesmo fluxo; não reabrir uma sequência de PRs microscópicos salvo regressão crítica.
+
+## Segurança e RLS — rodada publicada em 07/10/2026
+
+Evidência canônica: [contrato, simulações e publicação](../security/tenant-boundaries-20261007.md).
+Backend servido `be7c39639867`, após publicação compatível em duas etapas.
+
+- [x] Restringir contatos e impressão do evento ao Super Admin; preservar CRM paralelo e proteger contatos existentes de alterações por reenvio público.
+- [x] Preparar lookup mínimo para callbacks assinados e ativar ENABLE/FORCE RLS nas notificações WhatsApp, com leitura/escrita cross-tenant bloqueadas nas simulações PostgreSQL.
+- [x] Revogar grants/policies browser legados, preservando o cardápio pela API.
+- [x] Manter SQL do callback fora do event loop; testar resposta concorrente, replay, contexto e estado monotônico.
+- [x] Corrigir dependências vulneráveis, limitar importação XML e publicar scans de dependências/segredos. PRs #1031/#999 incorporadas; #1032 encerrada como incluída em #999.
+- [x] Confirmar versão servida, migração/policy reais e saúde passiva, sem QA destrutivo no D6. Cadastro e contagens preservados; cardápio HTTP 200.
+- [ ] Ensaiar restauração do backup em banco isolado.
+- [ ] Medir capacidade sob carga multitenant fora do D6; preservar orçamento de conexões e validar overlap de deploy antes de aumentar workers/réplicas.
+
+As pendências de impressão física, incidentes e integrações acima não são encerradas por esta rodada de segurança.
