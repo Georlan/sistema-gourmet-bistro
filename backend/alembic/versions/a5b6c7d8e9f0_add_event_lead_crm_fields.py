@@ -59,7 +59,7 @@ def upgrade() -> None:
         LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $fn$
         SELECT n.status::text, r.status::text FROM public.signup_notifications n
         LEFT JOIN public.email_delivery_receipts r ON r.notification_id=n.id
-        WHERE n.id=notice_id AND n.id LIKE 'event-lead-%:event-lead-owner:email'
+        WHERE n.id=notice_id AND n.id LIKE ('event-lead-%' || chr(58) || 'event-lead-owner' || chr(58) || 'email')
         $fn$""")
         op.execute("REVOKE ALL ON FUNCTION koma_internal.event_notice_status(text) FROM PUBLIC")
         op.execute("REVOKE ALL ON FUNCTION koma_internal.event_funnel_stats(text) FROM PUBLIC")
