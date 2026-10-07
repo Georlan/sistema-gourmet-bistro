@@ -24,7 +24,10 @@ from ..services.cearatech_promo_printer import (
 from .super_admin import get_current_admin
 
 router = APIRouter(prefix="/api/leads", tags=["Leads Institucionais & Eventos"])
-_lead_submission_limiter = IPRateLimiter(requests_per_minute=15)
+# Evento presencial pode concentrar dezenas de participantes atrás do mesmo NAT/Wi-Fi.
+# O telefone+evento continua deduplicado no banco; este limite protege abuso bruto sem
+# bloquear uma turma inteira que envie o formulário no mesmo minuto.
+_lead_submission_limiter = IPRateLimiter(requests_per_minute=120)
 
 _ALLOWED_BATCH_COPIES = {1, 20, 30, 50}
 LEAD_STATUSES = (
