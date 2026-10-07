@@ -161,7 +161,7 @@ export function MesaTransferMergePanel({
                         !hasSelected
                           ? 'bg-koma-panel/40 border-koma-border/40 text-gray-600 cursor-not-allowed'
                           : isConfirming
-                            ? 'bg-amber-500/20 border border-amber-500/40 animate-pulse text-amber-300 cursor-pointer hover:scale-102 font-bold'
+                            ? 'bg-amber-500/20 border border-amber-500/40 animate-pulse text-amber-800 dark:text-amber-300 cursor-pointer hover:scale-102 font-bold'
                             : 'bg-koma-panel hover:bg-emerald-500/15 border border-koma-border hover:border-emerald-500/40 text-koma-foreground cursor-pointer hover:scale-102'
                       }`}
                     >

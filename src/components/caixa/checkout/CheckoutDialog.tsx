@@ -130,7 +130,7 @@ export function CheckoutDialog({
               {selectedOrder.mesaTransferidaDe &&
                 Number(selectedOrder.mesaTransferidaDe) !== Number(selectedOrder.mesaId) && (
                   <span
-                    className={"inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-300 border border-purple-500/25 rounded-full"}
+                    className={"inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-800 dark:text-purple-300 border border-purple-500/25 rounded-full"}
                   >
                     🔗 Transferido da Mesa {selectedOrder.mesaTransferidaDe}
                   </span>
@@ -642,17 +642,17 @@ export function CheckoutDialog({
                         </div>
                         {(Number(identifiedCustomer.saldoCashback || 0) > 0 ||
                           Number(identifiedCustomer.pontos || 0) > 0) && (
-                          <span className="text-[9px] font-bold text-emerald-300">
+                          <span className="text-[9px] font-bold text-emerald-800 dark:text-emerald-300">
                             Cashback: R$ {Number(identifiedCustomer.saldoCashback || 0).toFixed(2)}
                           </span>
                         )}
                       </div>
                       <div className="flex items-center justify-between text-xs font-bold pt-0.5">
-                        <span className="text-white flex items-center gap-1.5 min-w-0">
+                        <span className="text-koma-foreground flex items-center gap-1.5 min-w-0">
                           <User size={12} className="text-emerald-400 shrink-0" />
                           <span className="truncate">{identifiedCustomer.nome}</span>
                         </span>
-                        <span className="font-mono text-emerald-300 text-[11px] shrink-0 ml-2">
+                        <span className="font-mono text-emerald-800 dark:text-emerald-300 text-[11px] shrink-0 ml-2">
                           {aplicarMascaraTelefoneInput(identifiedCustomer.telefone)}
                         </span>
                       </div>
