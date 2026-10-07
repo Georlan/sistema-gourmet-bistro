@@ -23,6 +23,7 @@ _CONTRACT_PROTOCOL_RE = re.compile(r"^KOMA-CTR-\d{8}-[A-F0-9]{12}$")
 _SUPPORTED_OPERATION_PROFILES = {"generic", "pizzaria", "acai", "churrasco", "marmitaria"}
 
 class SignupInput(BaseModel):
+    event_ref: str | None = Field(default=None, max_length=2048)
     restaurant_name: str = Field(min_length=2, max_length=255)
     operation_profile: str = "generic"
     responsible_name: str = Field(min_length=2, max_length=100)
@@ -106,11 +107,13 @@ def create_signup(payload: SignupInput, request: Request, response: Response, db
     response.headers["Cache-Control"] = "no-store"
     token = secrets.token_urlsafe(32)
     now = dt.datetime.now(dt.timezone.utc)
-    values = dict(id=str(uuid.uuid4()), token_hash=token_hash(token), payload_encrypted=encrypt_field(json.dumps(payload.model_dump())), created_at=now, updated_at=now, expires_at=now + dt.timedelta(days=30))
+    values = dict(id=str(uuid.uuid4()), token_hash=token_hash(token), payload_encrypted=encrypt_field(json.dumps(payload.model_dump(exclude={"event_ref"}))), created_at=now, updated_at=now, expires_at=now + dt.timedelta(days=30))
     if db.get_bind().dialect.name == "postgresql":
         db.execute(text("SELECT koma_internal.create_signup(:id, :token_hash, :payload_encrypted)"), values)
     else:
         db.add(RestaurantSignup(**values))
+    from ..services.event_acquisition import attribute_signup
+    attribute_signup(db, values["id"], payload.event_ref)
     from ..services.signup_notifications import enqueue_signup_started
     enqueue_signup_started(
         db,
@@ -188,7 +191,7 @@ def update_signup(payload: SignupInput, response: Response, x_signup_token: str 
     row = require_signup(db, x_signup_token)
     if signup_receipt(db, row["id"]):
         raise HTTPException(409, "O contrato já foi aceito. Os dados desta contratação estão congelados.")
-    encrypted = encrypt_field(json.dumps(payload.model_dump()))
+    encrypted = encrypt_field(json.dumps(payload.model_dump(exclude={"event_ref"})))
     if db.get_bind().dialect.name == "postgresql":
         db.execute(text("SELECT koma_internal.update_signup(:token,:payload)"), {"token":token_hash(x_signup_token),"payload":encrypted})
     else:

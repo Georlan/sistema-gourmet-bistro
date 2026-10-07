@@ -327,6 +327,7 @@ class Settings:
     KOMA_SAAS_MANUAL_RELEASE_REQUIRED: bool = (
         os.getenv("KOMA_SAAS_MANUAL_RELEASE_REQUIRED", "false").lower() == "true"
     )
+    EVENT_LEADS_OWNER_EMAIL: str = os.getenv("EVENT_LEADS_OWNER_EMAIL", "").strip().lower()
     KOMA_OWNER_EMAIL: str = os.getenv("KOMA_OWNER_EMAIL", "").strip().lower()
 
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "production").strip().lower()
