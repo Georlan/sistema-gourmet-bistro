@@ -153,7 +153,23 @@ export function SuperAdminLeadsTab() {
 
   const markContacted = async () => {
     if (!selected) return;
-    setForm(prev => ({ ...prev, status: "contacted", contacted_at: new Date().toISOString() }));
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await superAdminFetch(`/api/leads/admin/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "contacted" }),
+      });
+      const updated = await response.json() as Lead;
+      setSelected(updated);
+      setForm(updated);
+      await load();
+    } catch (err) {
+      setError(superAdminErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
