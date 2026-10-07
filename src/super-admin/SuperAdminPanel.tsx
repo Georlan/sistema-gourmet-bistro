@@ -31,8 +31,9 @@ import {
 } from "./SuperAdminPlatformHub";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import type { AuditLogItem } from "./SuperAdminAuditTab";
+import { SuperAdminLeadsTab } from "./SuperAdminLeadsTab";
 
-type TabId = "overview" | "clients" | "incidents" | "platform";
+type TabId = "overview" | "clients" | "leads" | "incidents" | "platform";
 
 export default function SuperAdminPanel() {
   const frontendBuildSha = import.meta.env.VITE_BUILD_SHA || "desconhecido";
@@ -206,6 +207,7 @@ export default function SuperAdminPanel() {
   const navItems = [
     { id: "overview" as TabId, label: "Início", icon: LayoutDashboard, badge: 0 },
     { id: "clients" as TabId, label: "Clientes", icon: Store, badge: pendingContractsCount },
+    { id: "leads" as TabId, label: "Leads", icon: UsersRound, badge: 0 },
     { id: "incidents" as TabId, label: "Incidentes", icon: AlertOctagon, badge: 0 },
     { id: "platform" as TabId, label: "Plataforma", icon: Settings, badge: 0 },
   ];
@@ -276,7 +278,7 @@ export default function SuperAdminPanel() {
         <div className="flex-1 max-w-md hidden md:block">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-koma-subtle" />
-            <input type="text" placeholder="Buscar por restaurante, ID ou slug..." value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} className="w-full bg-koma-page border border-zinc-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-koma-foreground placeholder:text-koma-subtle focus:outline-none focus:border-[#00b894]" />
+            <input type="text" placeholder={activeTab === "leads" ? "A busca de leads fica dentro do CRM" : "Buscar por restaurante, ID ou slug..."} value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} className="w-full bg-koma-page border border-zinc-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-koma-foreground placeholder:text-koma-subtle focus:outline-none focus:border-[#00b894]" />
           </div>
         </div>
 
@@ -349,6 +351,7 @@ export default function SuperAdminPanel() {
               runtimeHealth={runtimeHealth}
             />
           )}
+          {activeTab === "leads" && <SuperAdminLeadsTab />}
           {activeTab === "incidents" && (
             <SuperAdminIncidentCenterTab
               tenants={tenants}
