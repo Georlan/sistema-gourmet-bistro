@@ -18,10 +18,11 @@ async function setup(page: Page) {
   await mockCashierBackend(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
   await page.addInitScript(() => {
-    localStorage.setItem('koma_waiter_token', 'layout-fixture-token');
-    localStorage.setItem('koma_waiter_id', 'layout-waiter');
-    localStorage.setItem('koma_waiter_name', 'Garçom Layout');
-    localStorage.setItem('koma_user_role', 'garcom');
+    sessionStorage.setItem('koma_waiter_token', 'layout-fixture-token');
+    sessionStorage.setItem('koma_waiter_id', 'layout-waiter');
+    sessionStorage.setItem('koma_waiter_name', 'Garçom Layout');
+    sessionStorage.setItem('koma_user_role', 'garcom');
+    sessionStorage.setItem('koma_active_operational_portal', 'garcom');
     localStorage.removeItem('koma_drafts_vFinal_v3');
   });
   await page.route('**/produtos/catalogo', route => route.fulfill({ json: {
