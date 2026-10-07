@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import text
 from sqlalchemy.exc import MultipleResultsFound
+from starlette.concurrency import run_in_threadpool
 
 from ..config import settings
 from ..database import SessionLocal, tenant_session_scope
@@ -366,7 +367,7 @@ async def receive_meta_webhook(request: Request):
         ) from None
 
     values = _validate_event_payload(payload, expected_phone_number_id)
-    _update_known_statuses(values)
+    await run_in_threadpool(_update_known_statuses, values)
 
     # Mensagens inbound são reconhecidas, mas não há fluxo de negócio autorizado
     # para armazenar ou processar seu conteúdo nesta fase.
