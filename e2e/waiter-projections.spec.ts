@@ -1,4 +1,4 @@
-import { expect, Page, test } from '@playwright/test';
+import { expect, Page, test, type WebSocketRoute } from '@playwright/test';
 
 // Characterization of the existing waiter consumers before the shared
 // projections are introduced. One financial check contains two real launches;
@@ -34,6 +34,8 @@ type WaiterScenario = {
   printingEntitled?: boolean;
   deferPrinting?: boolean;
   printFails?: boolean;
+  identity?: { id: string; name: string };
+  socketHandler?: (socket: WebSocketRoute) => void;
 };
 
 async function openWaiterScenario(
@@ -94,18 +96,19 @@ async function openWaiterScenario(
     : Promise.resolve();
 
   await page.clock.setFixedTime(NOW);
-  await page.addInitScript(() => {
+  await page.addInitScript((identity) => {
     sessionStorage.setItem('koma_waiter_token', 'waiter-phase7-fixture-token');
     sessionStorage.setItem('koma_active_operational_portal', 'garcom');
-    sessionStorage.setItem('koma_waiter_id', 'waiter-phase7');
-    sessionStorage.setItem('koma_waiter_name', 'Garçom Fase 7');
+    sessionStorage.setItem('koma_waiter_id', identity.id);
+    sessionStorage.setItem('koma_waiter_name', identity.name);
     sessionStorage.setItem('koma_user_role', 'garcom');
-  });
+  }, scenario.identity ?? { id: 'waiter-phase7', name: 'Garçom Fase 7' });
 
   // The operational socket is fully mocked, never connected to a backend.
   // Keeping it open also avoids timing-dependent fallback polling in this UI fixture.
   await page.routeWebSocket(/\/ws\//, socket => {
-    socket.onMessage(() => {});
+    if (scenario.socketHandler) scenario.socketHandler(socket);
+    else socket.onMessage(() => {});
   });
 
   await page.route('**/*', async route => {
@@ -560,4 +563,49 @@ test('confirmação de fechamento permanece no owner ao alternar painéis sem fe
   expect(state.check.fechada).toBe(false);
   expect(state.writes).toEqual([]);
   expect(state.unexpectedApiRequests).toEqual([]);
+});
+
+
+test('dois garçons recebem presença na mesma mesa sem bloquear ações, inclusive entrada tardia', async ({ page, context }) => {
+  const sockets = new Map<string, WebSocketRoute>();
+  const register = (id: string, name: string) => (socket: WebSocketRoute) => {
+    sockets.set(id, socket);
+    socket.onMessage(raw => {
+      const data = JSON.parse(String(raw));
+      if (data.action === 'draft_status') {
+        for (const peer of sockets.values()) peer.send(JSON.stringify({ ...data, event: 'draft_status', garcom_id: id, garcom_nome: name }));
+      }
+    });
+    for (const peer of sockets.values()) peer.send(JSON.stringify({ event: 'waiter_connected', garcom_id: id }));
+  };
+  const first = await openWaiterScenario(page, ['preparando', 'pronto'], {
+    identity: { id: 'gloria', name: 'Glória' }, socketHandler: register('gloria', 'Glória'),
+  });
+  await page.locator('#mesa-card-7').getByRole('button').click();
+  const secondPage = await context.newPage();
+  const second = await openWaiterScenario(secondPage, ['preparando', 'pronto'], {
+    identity: { id: 'georlan', name: 'Georlan' }, socketHandler: register('georlan', 'Georlan'),
+  });
+  await expect(secondPage.locator('#mesa-card-7')).toContainText('Glória também está nesta mesa');
+  if (process.env.PRESENCE_SCREENSHOTS) await secondPage.screenshot({ path: `${process.env.PRESENCE_SCREENSHOTS}/mapa-${test.info().project.name}.png` });
+  await secondPage.locator('#mesa-card-7').getByRole('button').click();
+  await expect(secondPage.getByRole('status').filter({ hasText: 'Glória também' }).last()).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Georlan também' }).last()).toBeVisible();
+  for (const current of [page, secondPage]) {
+    await current.getByRole('tab', { name: /Pedido/ }).click();
+    await expect(current.getByRole('button', { name: /Adicionar/ }).first()).toBeEnabled();
+    const notice = current.getByRole('status').filter({ hasText: 'combinem os lançamentos' });
+    const tabs = current.getByRole('tablist', { name: 'Ações da mesa' });
+    const [noticeBox, tabsBox] = await Promise.all([notice.boundingBox(), tabs.boundingBox()]);
+    expect(noticeBox!.y + noticeBox!.height).toBeLessThanOrEqual(tabsBox!.y);
+    expect(await current.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  if (process.env.PRESENCE_SCREENSHOTS) await secondPage.screenshot({ path: `${process.env.PRESENCE_SCREENSHOTS}/mesa-${test.info().project.name}.png` });
+  // Closing an empty draft releases presence in the other session immediately.
+  await secondPage.getByRole('button', { name: /Fechar/i }).first().click();
+  await expect(page.getByRole('status').filter({ hasText: 'Georlan também' })).toHaveCount(0);
+  expect(first.unexpectedApiRequests).toEqual([]);
+  expect(second.unexpectedApiRequests).toEqual([]);
+  expect(first.writes).toEqual([]);
+  expect(second.writes).toEqual([]);
 });
