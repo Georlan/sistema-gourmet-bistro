@@ -404,7 +404,9 @@ def obter_cardapio_publico(
         # Categorias vazias (sem produtos ativos) não aparecem no cardápio online
         active_category_ids = {product.categoria_id for product in produtos}
         categorias_com_produtos = [category for category in categorias if category.id in active_category_ids]
-        niche = resolve_restaurant_niche(db, rest_id)
+        # O snapshot público já carregou ConfiguracaoRestaurante acima; reutilizar
+        # o nicho evita uma segunda leitura da mesma configuração no hot path.
+        niche = (getattr(configuracao, "nicho", None) or "geral").strip().lower()
         categorias_ordenadas = _ordered_categories(categorias_com_produtos, niche=niche)
 
         return {
