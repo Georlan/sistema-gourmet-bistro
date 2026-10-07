@@ -65,6 +65,8 @@ interface CardapioDigitalSettingsPanelProps {
   publicMenuUrl: string | null;
   activeSection: CardapioDigitalSettingsSection;
   onSectionChange: (section: CardapioDigitalSettingsSection) => void;
+  onSetupComplete?: () => Promise<void>;
+  onSetupDirtyChange?: (dirty: boolean) => void;
 }
 
 const KOMA_MENU_PRIMARY = '#00b894';
@@ -374,9 +376,11 @@ export function CardapioDigitalSettingsPanel({
   publicMenuUrl,
   activeSection,
   onSectionChange,
+  onSetupComplete,
+  onSetupDirtyChange,
 }: CardapioDigitalSettingsPanelProps) {
   const activeTab = activeSection;
-  const setupMode = isInitialSetup();
+  const setupMode = Boolean(onSetupComplete) || isInitialSetup();
   const [config, setConfig] = useState<RestaurantConfig>(emptyConfig);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -432,6 +436,7 @@ export function CardapioDigitalSettingsPanel({
   const hasUnsavedChanges = hasLoadedConfig && JSON.stringify(currentPayload) !== savedSnapshot;
 
   const markSaved = useUnsavedSetupChanges(setupMode && hasUnsavedChanges);
+  useEffect(() => { onSetupDirtyChange?.(hasLoadedConfig && hasUnsavedChanges); }, [hasLoadedConfig, hasUnsavedChanges, onSetupDirtyChange]);
 
   const readiness = useMemo(() => {
     const checks = setupMode && activeTab === 'perfil' ? [
@@ -481,6 +486,11 @@ export function CardapioDigitalSettingsPanel({
       setSavedSnapshot(JSON.stringify(buildPersistedPayload(next)));
       setFeedback({ type: 'success', text: 'Cardápio atualizado e publicado.' });
       if (setupMode) {
+        if (onSetupComplete) {
+          await onSetupComplete();
+          markSaved();
+          return;
+        }
         const statusResponse = await fetch(`${apiBaseUrl}/api/onboarding/status`, { headers: authHeaders, cache: 'no-store' });
         const status = await statusResponse.json().catch(() => null);
         if (!statusResponse.ok || typeof status?.steps?.profile !== 'boolean') {
@@ -570,7 +580,7 @@ export function CardapioDigitalSettingsPanel({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px] xl:items-start">
+      <div className={clsx("grid grid-cols-1 gap-4", !onSetupComplete && "xl:grid-cols-[minmax(0,1fr)_330px] xl:items-start")}>
         <div className="min-w-0 space-y-4">
           {activeTab === 'perfil' && !readiness.ready && (
             <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3 text-[10px] text-amber-700 dark:text-amber-300">
@@ -601,6 +611,7 @@ export function CardapioDigitalSettingsPanel({
                       placeholder="Ex.: Pizzeria Bella Italia"
                     />
                   </label>
+                  {!onSetupComplete && (
                   <label className="sm:col-span-2">
                     <FieldLabel>Slogan / frase curta</FieldLabel>
                     <input
@@ -611,6 +622,7 @@ export function CardapioDigitalSettingsPanel({
                       placeholder="Ex.: Pizza artesanal no forno a lenha"
                     />
                   </label>
+                  )}
                   <label>
                     <FieldLabel>WhatsApp</FieldLabel>
                     <div className="relative">
@@ -949,7 +961,7 @@ export function CardapioDigitalSettingsPanel({
             </section>
           )}
 
-          {(feedback || hasUnsavedChanges) && (
+          {(feedback || hasUnsavedChanges || onSetupComplete) && (
             <div className="online-menu-editor__publish flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
               {feedback ? (
                 <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
@@ -957,10 +969,10 @@ export function CardapioDigitalSettingsPanel({
                 </span>
               ) : (
                 <span className="mr-auto text-[10px] font-semibold text-amber-700 dark:text-amber-300">
-                  Alterações ainda não publicadas.
+                  {hasUnsavedChanges ? 'Alterações ainda não publicadas.' : 'Confira os dados e continue.'}
                 </span>
               )}
-              {hasUnsavedChanges && (
+              {(hasUnsavedChanges || onSetupComplete) && (
                 <button
                   type="button"
                   disabled={isSaving || !hasLoadedConfig || Boolean(loadError)}
@@ -968,14 +980,14 @@ export function CardapioDigitalSettingsPanel({
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-70"
                 >
                   {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                  {isSaving ? 'Salvando…' : setupMode ? 'Salvar e voltar para implantação' : 'Salvar e publicar'}
+                  {isSaving ? 'Salvando…' : onSetupComplete ? 'Salvar e continuar' : setupMode ? 'Salvar e voltar para implantação' : 'Salvar e publicar'}
                 </button>
               )}
             </div>
           )}
         </div>
 
-        <PhonePreview config={config} />
+        {!onSetupComplete && <PhonePreview config={config} />}
       </div>
     </div>
   );

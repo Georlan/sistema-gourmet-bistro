@@ -1,4 +1,4 @@
-import { useUnsavedSetupChanges } from '../../onboarding/setupNavigation';
+import { ONBOARDING_SETUP_MODE_KEY, useUnsavedSetupChanges } from '../../onboarding/setupNavigation';
 import clsx from 'clsx';
 import {
   AlertCircle,
@@ -13,7 +13,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
 
 type HourRow = {
   id: string;
@@ -30,6 +29,8 @@ interface Props {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
   publicMenuUrl: string | null;
+  onSetupComplete?: () => Promise<void>;
+  onSetupDirtyChange?: (dirty: boolean) => void;
 }
 
 const keyToDays: Record<string, string> = {
@@ -123,29 +124,32 @@ function openInitialSetup() {
   window.location.href = '/ativar?resume=1';
 }
 
-export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUrl }: Props) {
+export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUrl, onSetupComplete, onSetupDirtyChange }: Props) {
   const [config, setConfig] = useState<OrdersConfig>({ status_override: 'Automático', horarios_funcionamento: [] });
   const [scheduledOrdersEnabled, setScheduledOrdersEnabled] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState('');
+  const [hasLoadedConfig, setHasLoadedConfig] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingScheduledOrders, setIsSavingScheduledOrders] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const setupMode = readSetupMode();
+  const guidedMode = Boolean(onSetupComplete);
+  const setupMode = guidedMode || readSetupMode();
 
   const loadConfig = useCallback(async () => {
     setIsLoading(true);
     try {
       const [response, scheduledOrdersResponse] = await Promise.all([
         fetch(`${apiBaseUrl}/api/cardapio-digital/config`, { headers: authHeaders, cache: 'no-store' }),
-        fetch(`${apiBaseUrl}/api/restaurant-features/scheduled-orders`, { headers: authHeaders, cache: 'no-store' }),
+        guidedMode ? Promise.resolve(null) : fetch(`${apiBaseUrl}/api/restaurant-features/scheduled-orders`, { headers: authHeaders, cache: 'no-store' }),
       ]);
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'Não foi possível carregar o funcionamento.');
-      const scheduledOrdersData = await scheduledOrdersResponse.json().catch(() => ({}));
-      if (!scheduledOrdersResponse.ok) throw new Error(scheduledOrdersData.detail || 'Não foi possível carregar a configuração de agendamento.');
+      const scheduledOrdersData = await scheduledOrdersResponse?.json().catch(() => ({})) || {};
+      if (scheduledOrdersResponse && !scheduledOrdersResponse.ok) throw new Error(scheduledOrdersData.detail || 'Não foi possível carregar a configuração de agendamento.');
       const next = normalizeConfig(data as Record<string, unknown>);
       setConfig(next);
+      setHasLoadedConfig(true);
       setScheduledOrdersEnabled(Boolean(scheduledOrdersData.enabled));
       setSavedSnapshot(JSON.stringify(persistedPayload(next)));
     } catch (error) {
@@ -153,7 +157,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
     } finally {
       setIsLoading(false);
     }
-  }, [apiBaseUrl, authHeaders]);
+  }, [apiBaseUrl, authHeaders, guidedMode]);
 
   useEffect(() => {
     void loadConfig();
@@ -170,9 +174,11 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
   const automaticWithoutHours = config.status_override === 'Automático' && config.horarios_funcionamento.length === 0;
   const incompleteHours = config.horarios_funcionamento.some(row => !row.days.trim() || !row.hours.trim());
   const markSaved = useUnsavedSetupChanges(setupMode && (hasUnsavedChanges || incompleteHours));
+  useEffect(() => { onSetupDirtyChange?.(!isLoading && (hasUnsavedChanges || incompleteHours)); }, [isLoading, hasUnsavedChanges, incompleteHours, onSetupDirtyChange]);
   const legacyOverrideActive = config.status_override !== 'Automático';
 
   const save = async () => {
+    if (guidedMode && !hasLoadedConfig) return;
     if (incompleteHours) {
       setFeedback({ type: 'error', text: 'Preencha os dias e o horário de cada linha ou remova a linha incompleta.' });
       return;
@@ -190,7 +196,11 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
       setConfig(next);
       setSavedSnapshot(JSON.stringify(persistedPayload(next)));
       setFeedback({ type: 'success', text: 'Funcionamento atualizado.' });
-      if (setupMode && next.horarios_funcionamento.length > 0) { markSaved(); openInitialSetup(); }
+      if (setupMode && next.horarios_funcionamento.length > 0) {
+        if (onSetupComplete) await onSetupComplete();
+        else openInitialSetup();
+        markSaved();
+      }
     } catch (error) {
       setFeedback({ type: 'error', text: error instanceof Error ? error.message : 'Erro ao salvar o funcionamento.' });
     } finally {
@@ -386,6 +396,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
         )}
       </section>
 
+      {!onSetupComplete && (
       <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
         <div className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
@@ -424,8 +435,9 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
           </button>
         </div>
       </section>
+      )}
 
-      {(feedback || hasUnsavedChanges || incompleteHours) && (
+      {(feedback || hasUnsavedChanges || incompleteHours || onSetupComplete) && (
         <div className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
           {feedback ? (
             <span className={clsx(
@@ -438,17 +450,17 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
               {feedback.text}
             </span>
           ) : (
-            <span className="mr-auto text-[10px] font-semibold text-amber-700 dark:text-amber-300">Alterações ainda não publicadas.</span>
+            <span className="mr-auto text-[10px] font-semibold text-amber-700 dark:text-amber-300">{hasUnsavedChanges ? 'Alterações ainda não publicadas.' : 'Confira os horários e continue.'}</span>
           )}
-          {(hasUnsavedChanges || incompleteHours) && (
+          {(hasUnsavedChanges || incompleteHours || Boolean(onSetupComplete)) && (
             <button
               type="button"
-              disabled={isSaving}
+              disabled={isSaving || (guidedMode && !hasLoadedConfig)}
               onClick={() => void save()}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-70"
             >
               {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-              {isSaving ? 'Salvando…' : setupMode ? 'Salvar e voltar para implantação' : 'Salvar automático'}
+              {isSaving ? 'Salvando…' : onSetupComplete ? 'Salvar e continuar' : setupMode ? 'Salvar e voltar para implantação' : 'Salvar automático'}
             </button>
           )}
         </div>

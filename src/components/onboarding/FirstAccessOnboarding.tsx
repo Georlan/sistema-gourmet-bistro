@@ -1,3 +1,6 @@
+import { ONBOARDING_SETUP_MODE_KEY } from './setupNavigation';
+import { CardapioDigitalSettingsPanel } from '../cardapio/CardapioDigitalSettingsPanel';
+import { OnlineMenuOrdersSettings } from '../caixa/online-menu/OnlineMenuOrdersSettings';
 import { SubscriptionControl } from '../assinatura/SubscriptionControl';
 import { CatalogAssistanceUpload, type CatalogAssistanceSnapshot } from './CatalogAssistanceUpload';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -30,7 +33,7 @@ import {
   type SubscriptionPlanId,
 } from '../../config/subscriptionPlans';
 
-export const ONBOARDING_SETUP_MODE_KEY = 'koma_onboarding_setup_mode';
+export { ONBOARDING_SETUP_MODE_KEY } from './setupNavigation';
 const ONBOARDING_TEST_ORDER_KEY = 'koma_onboarding_test_order';
 
 type OrderType = 'consumo_local' | 'retirada' | 'delivery';
@@ -196,6 +199,16 @@ function SetupDisclosure({ id, title, summary, complete, error, children }: {
 }
 
 export function FirstAccessOnboarding({ accessToken, user }: Props) {
+  const [guidedFocusTarget, setGuidedFocusTarget] = useState<string | null>(null);
+  useEffect(() => {
+    if (!guidedFocusTarget) return;
+    const target = document.getElementById(guidedFocusTarget);
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'start' });
+    setGuidedFocusTarget(null);
+  }, [guidedFocusTarget]);
+  const [guidedDirty, setGuidedDirty] = useState(false);
+  const [editingEssential, setEditingEssential] = useState<'profile' | 'hours' | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const [snapshot, setSnapshot] = useState<OnboardingStatus | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
@@ -227,6 +240,31 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     }
     setState('ready');
   }, []);
+
+  const finishGuidedStep = async (step: 'profile' | 'hours') => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), ONBOARDING_LOAD_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}/api/onboarding/status`, {
+        headers, cache: 'no-store', signal: controller.signal,
+      });
+    } catch {
+      throw new Error('Etapa salva. Não foi possível confirmar o próximo passo; tente novamente.');
+    } finally {
+      window.clearTimeout(timer);
+    }
+    if (!response.ok) throw new Error('Etapa salva. Não foi possível confirmar o próximo passo; tente novamente.');
+    const next = await response.json() as OnboardingStatus;
+    if (next.steps?.[step] !== true) {
+      throw new Error('Etapa salva, mas ainda há informações necessárias para concluir. Revise os campos.');
+    }
+    applySnapshot(next);
+    setGuidedDirty(false);
+    setEditingEssential(null);
+    setGuidedFocusTarget(!next.steps.profile || !next.steps.hours ? 'setup-guided-current'
+      : !next.steps.catalog ? 'setup-guided-catalog' : !next.steps.operations ? 'setup-modalities' : 'setup-guided-review');
+  };
 
   const returnToLogin = useCallback(() => {
     const current = getOperatorSession('caixa');
@@ -278,17 +316,23 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     const shouldWatchRelease = snapshot?.onboarding
       ? snapshot.onboarding.mode === 'commercial' && snapshot.onboarding.releaseState === 'awaiting_koma'
       : Boolean(snapshot?.readyForRelease);
-    if (!shouldWatchRelease) return;
+    const awaitingCatalog = snapshot?.onboarding?.mode === 'commercial'
+      && !snapshot.steps.catalog
+      && ['pending', 'processing'].includes(snapshot.catalogAssistance?.status || '');
+    if ((!shouldWatchRelease && !awaitingCatalog) || guidedDirty) return;
 
     const timer = window.setInterval(() => {
       if (!document.hidden) void loadSnapshot();
-    }, 8000);
+    }, shouldWatchRelease ? 8000 : 30000);
     return () => window.clearInterval(timer);
   }, [
     loadSnapshot,
     snapshot?.onboarding?.mode,
     snapshot?.onboarding?.releaseState,
     snapshot?.readyForRelease,
+    snapshot?.steps.catalog,
+    snapshot?.catalogAssistance?.status,
+    guidedDirty,
   ]);
 
   const openCashierAt = (tab: string, subTab: string, setupMode = true) => {
@@ -541,7 +585,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
         <section className="w-full max-w-lg rounded-3xl border border-koma-border bg-koma-card p-7 text-center shadow-2xl">
           <h1 className="text-xl font-black">Não foi possível validar a implantação inicial.</h1>
           <p className="mt-2 text-sm text-koma-muted">{errorMessage || 'A implantação não pôde ser carregada agora.'}</p>
-          <button type="button" onClick={() => void loadSnapshot()} className="mt-6 rounded-xl border border-koma-border px-4 py-3 text-xs font-black text-koma-foreground hover:border-emerald-500/40">
+          <button type="button" onClick={() => { if (!guidedDirty || window.confirm('Há alterações não salvas. Descartar e atualizar a implantação?')) void loadSnapshot(); }} className="mt-6 rounded-xl border border-koma-border px-4 py-3 text-xs font-black text-koma-foreground hover:border-emerald-500/40">
             Tentar novamente
           </button>
           <button type="button" onClick={returnToLogin} className="mt-3 block w-full text-xs font-bold text-koma-muted">Ir para o login</button>
@@ -569,7 +613,10 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const isAdministrative = onboardingMode === 'administrative';
   const isAwaitingKoma = releaseState === 'awaiting_koma';
   const nextStep = steps.find(step => !step.done);
+  const guidedMode = isCommercial && !operationReleased;
+  const guidedStep = guidedMode ? editingEssential || (nextStep?.id === 'profile' || nextStep?.id === 'hours' ? nextStep.id : null) : null;
   const remainingEssentials = snapshot.progress.total - snapshot.progress.completed;
+  const catalogUpload = <CatalogAssistanceUpload accessToken={accessToken} assistance={snapshot.catalogAssistance} onSubmitted={() => void loadSnapshot()} />;
 
   return (
     <main className="min-h-screen bg-koma-page px-4 py-6 text-koma-foreground sm:px-6 lg:px-8">
@@ -625,19 +672,35 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                     : `Falta pouco — ${snapshot.progress.completed} de ${snapshot.progress.total} concluídos`}
                 </p>
               </div>
-              <button type="button" onClick={() => void loadSnapshot()} className="inline-flex items-center gap-2 self-start rounded-xl border border-koma-border px-3 py-2 text-[10px] font-black text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-400">
+              <button type="button" onClick={() => { if (!guidedDirty || window.confirm('Há alterações não salvas. Descartar e atualizar a implantação?')) void loadSnapshot(); }} className="inline-flex items-center gap-2 self-start rounded-xl border border-koma-border px-3 py-2 text-[10px] font-black text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-400">
                 <RefreshCw size={12} /> Atualizar
               </button>
             </div>
 
 
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-koma-raised" aria-label="Progresso dos essenciais">
+            <div id="setup-guided-review" tabIndex={-1} className="mt-4 h-2 overflow-hidden rounded-full bg-koma-raised" aria-label="Progresso dos essenciais">
               <div className="h-full rounded-full bg-emerald-500" style={{ width: `${snapshot.progress.percent}%` }} />
             </div>
             <h2 className="mt-5 text-sm font-black">{configurationComplete ? 'Essenciais concluídos · pronto para revisão' : `${remainingEssentials === 1 ? 'Falta 1 essencial' : `Faltam ${remainingEssentials} essenciais`} para revisão`}</h2>
-            <p className="mt-1 text-xs text-koma-muted">Você pode configurar os itens em qualquer ordem. O primeiro pendente está destacado.</p>
+            <p className="mt-1 text-xs text-koma-muted">{guidedMode ? 'Salve uma etapa para seguir automaticamente. Você também pode revisar etapas concluídas ou preparar outros itens em paralelo.' : 'Você pode configurar os itens em qualquer ordem. O primeiro pendente está destacado.'}</p>
+            {guidedStep && (
+              <section id="setup-guided-current" tabIndex={-1} className="mt-4" aria-label="Etapa atual do cadastro">
+                <p role="status" className="mb-3 text-sm font-bold">{guidedStep === 'profile' ? 'Vamos começar pelos dados do restaurante' : 'Agora informe os horários'} · salve para continuar</p>
+                {guidedStep === 'profile' ? (
+                  <CardapioDigitalSettingsPanel apiBaseUrl={API_BASE_URL} authHeaders={headers} publicMenuUrl={null} activeSection="perfil" onSectionChange={() => {}} onSetupDirtyChange={setGuidedDirty} onSetupComplete={() => finishGuidedStep('profile')} />
+                ) : (
+                  <OnlineMenuOrdersSettings apiBaseUrl={API_BASE_URL} authHeaders={headers} publicMenuUrl={null} onSetupDirtyChange={setGuidedDirty} onSetupComplete={() => finishGuidedStep('hours')} />
+                )}
+              </section>
+            )}
+            {guidedMode && !guidedStep && !snapshot.steps.catalog && (
+              <section id="setup-guided-catalog" tabIndex={-1} className="mt-4" aria-label="Cardápio do cadastro">
+                {catalogUpload}
+                <p className="mt-3 text-xs text-koma-muted">Enquanto a equipe prepara o cardápio, você pode escolher as modalidades abaixo. Se preferir cadastrar produtos, use o atalho.</p>
+              </section>
+            )}
             <div className="mt-5 space-y-3">
-              {[...steps].sort((a, b) => Number(a.done) - Number(b.done)).map((step) => {
+              {[...steps].filter(step => !guidedMode || (step.id !== 'profile' && step.id !== 'hours') || step.done).sort((a, b) => Number(a.done) - Number(b.done)).map((step) => {
                 const Icon = step.icon;
                 return (
                   <article key={step.id} className={`flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${step === nextStep ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-page'}`}>
@@ -657,7 +720,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                       {step.done ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
                       <button
                         type="button"
-                        onClick={() => step.id === 'operations'
+                        onClick={() => guidedMode && (step.id === 'profile' || step.id === 'hours')
+                          ? (!guidedDirty || window.confirm('Há alterações não salvas. Descartar e abrir outra etapa?')) && setEditingEssential(step.id)
+                          : step.id === 'operations'
                           ? document.getElementById('setup-modalities')?.scrollIntoView({ block: 'start' })
                           : openCashierAt(step.tab, step.subTab, true)}
                         className="inline-flex items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3 py-2 text-[10px] font-black transition hover:border-emerald-500/35 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-45"
@@ -705,11 +770,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               snapshot.counts.tables > 0 && `${snapshot.counts.tables} mesas`,
               snapshot.catalogAssistance && !['cancelled', 'superseded'].includes(snapshot.catalogAssistance.status) && 'cardápio recebido',
             ].filter(Boolean).join(' · ') || 'Comece pelos essenciais acima.'}</p>
-            <CatalogAssistanceUpload
-              accessToken={accessToken}
-              assistance={snapshot.catalogAssistance}
-              onSubmitted={() => void loadSnapshot()}
-            />
+            {(!guidedMode || guidedStep || snapshot.steps.catalog) && catalogUpload}
 
 
             <SetupDisclosure title="Tipo de operação" summary={OPERATION_PROFILE_OPTIONS.find(option => option.value === snapshot.restaurant.operationProfile)?.label || 'Escolha o tipo'} complete={Boolean(snapshot.restaurant.operationProfile && snapshot.restaurant.operationProfile !== 'generic')} error={operationProfileError}>
