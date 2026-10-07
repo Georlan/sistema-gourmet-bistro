@@ -43,7 +43,7 @@ com pisos correspondentes no requirements. Todas as demais versões são mantida
 [release urllib3](https://github.com/urllib3/urllib3/releases/tag/2.8.0).
 Regressões de autenticação devem passar com essas versões antes da publicação.
 
-## Exceções verificadas e gaps restantes
+## Exceções verificadas e diagnóstico inicial
 
 - `notificacoes_whatsapp`: gap confirmado, tenant-owned com DML direto e sem RLS.
   A migração `47a6b7c8d9e0` aplica ENABLE/FORCE e política com USING/WITH CHECK.
@@ -67,8 +67,10 @@ Regressões de autenticação devem passar com essas versões antes da publicaç
 - Storage `cardapio-assets`: público para servir imagens; limite 5 MiB, MIME de
   imagem restrito, nenhuma policy de objetos. Isso não libera upload/listagem
   browser. Upload/otimização seguem pelo backend. Não executar GC destrutivo.
-- PR #999 contém endurecimento de upload XML e scans de dependências/segredos;
-  ainda aberta, com falha de dependências. Não contar como proteção publicada.
+- PR #999 publicou a etapa de RLS preparada em #1032 junto ao hardening de
+  importação XML e scans. A importação lê no máximo 10 MB + 1 byte, fecha o
+  arquivo e devolve erro sanitizado. Auditorias Python/npm e histórico de
+  segredos ficaram verdes; #1032 foi encerrada como incorporada.
 
 ## Eficiência preservada
 
@@ -127,3 +129,48 @@ existente. A segunda etapa mantém a resposta de sucesso/deduplicação, mas nã
 reescreve nome, empresa, telefone ou recibo de consentimento. Além da proteção
 contra alteração por quem apenas conhece o telefone, o retry dispensa commit.
 Correções cadastrais pertencem ao fluxo administrativo autenticado.
+
+## Publicação e verificação passiva concluídas
+
+- PR [#1031](https://github.com/Georlan/sistema-gourmet-bistro/pull/1031):
+  head final `f17b6ef3d25e`, todos os checks verdes e 2.209 testes aprovados.
+  Merge `4215087db42c`; versão servida e migração `34636096d350` verificadas
+  antes da ativação de RLS.
+- PR [#999](https://github.com/Georlan/sistema-gourmet-bistro/pull/999):
+  head final `16306f6c63e9`, 2.212 testes aprovados (46 skips declarados) e
+  todos os checks verdes. Contém a etapa #1032 sem diferenças, além dos quatro
+  arquivos de importação XML/scans. A suíte dedicada aprovou 43 testes,
+  incluindo PostgreSQL real; testes de navegador e corridas de estoque passaram.
+  Merge e backend servido `be7c39639867`, Railway SUCCESS em
+  `2026-10-07T06:21:31Z`. Checks pós-merge também passaram.
+- Supabase: Alembic `47a6b7c8d9e0`, notificações com ENABLE/FORCE RLS e policy
+  `tenant_isolation` exclusiva de `koma_app`, com USING e WITH CHECK. Nenhum
+  grant browser nas quatro tabelas verificadas; anon/authenticated sem DML
+  efetivo em notificações.
+- D6: fingerprint integral do cadastro preservado durante a publicação;
+  127 comandas e 507 notificações nas comparações passivas. Cardápio HTTP 200,
+  duas categorias e dez produtos. Nenhum reset, seed, pedido, cobrança,
+  envio de mensagem ou impressão de QA executado em produção.
+- Saúde: readiness HTTP 200, banco healthy (~100 ms na última leitura), zero
+  lock waiters e zero idle-in-transaction. Conexões totais variaram de 14 a 22
+  durante as trocas; leitura seguinte registrou 20, incluindo serviços
+  gerenciados, e 12 conexões idle `koma_runtime`/Supavisor. Não interpretar
+  o total como tamanho do pool da aplicação; nenhum pool/worker/réplica foi
+  ampliado. Na janela de uma hora posterior à publicação, 0 de 533 requisições
+  retornaram 5xx. São amostras de baixa carga, não prova de capacidade máxima.
+- Smoke público GET/OPTIONS concluído sem falhas. Backup validado e enviado ao
+  S3 em `2026-10-07T03:03:48.640Z`. Auditorias de dependências sem avisos
+  conhecidos e scan do histórico aprovado, sem afirmar ausência de todo risco.
+- Advisor: apenas INFO de `transaction_reset_backups` sem policy, negação
+  intencional. [Referência do aviso](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+
+## Próximas prioridades de manutenção
+
+1. Ensaiar restauração do backup em banco isolado; freshness do arquivo não
+   comprova recuperação. Não restaurar nem fazer reset no D6.
+2. Validar capacidade sob carga multitenant em ambiente distinto, incluindo
+   orçamento de conexões durante deploy, percentis e falhas. Esta rodada não
+   certifica 10/100/1.000 restaurantes.
+3. Manter os scans semanais, auditar o schema real após migrações e conferir
+   a versão servida. Evitar QA destrutivo e política permissiva para silenciar
+   advisors. Incidentes e prova física de impressão continuam em seu tracker.
