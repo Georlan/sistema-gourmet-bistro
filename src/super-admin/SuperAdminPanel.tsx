@@ -30,7 +30,8 @@ import {
   type PlatformView,
 } from "./SuperAdminPlatformHub";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
-import type { AuditLogItem } from "./SuperAdminAuditTab";\nimport { SuperAdminLeadsTab } from "./SuperAdminLeadsTab";
+import type { AuditLogItem } from "./SuperAdminAuditTab";
+import { SuperAdminLeadsTab } from "./SuperAdminLeadsTab";
 
 type TabId = "overview" | "clients" | "leads" | "incidents" | "platform";
 
@@ -205,7 +206,8 @@ export default function SuperAdminPanel() {
 
   const navItems = [
     { id: "overview" as TabId, label: "Início", icon: LayoutDashboard, badge: 0 },
-    { id: "clients" as TabId, label: "Clientes", icon: Store, badge: pendingContractsCount },\n    { id: "leads" as TabId, label: "Leads", icon: UsersRound, badge: 0 },
+    { id: "clients" as TabId, label: "Clientes", icon: Store, badge: pendingContractsCount },
+    { id: "leads" as TabId, label: "Leads", icon: UsersRound, badge: 0 },
     { id: "incidents" as TabId, label: "Incidentes", icon: AlertOctagon, badge: 0 },
     { id: "platform" as TabId, label: "Plataforma", icon: Settings, badge: 0 },
   ];
@@ -349,7 +351,8 @@ export default function SuperAdminPanel() {
               runtimeHealth={runtimeHealth}
             />
           )}
-          {activeTab === "leads" && <SuperAdminLeadsTab />}\n          {activeTab === "incidents" && (
+          {activeTab === "leads" && <SuperAdminLeadsTab />}
+          {activeTab === "incidents" && (
             <SuperAdminIncidentCenterTab
               tenants={tenants}
               globalSearch={globalSearch}
