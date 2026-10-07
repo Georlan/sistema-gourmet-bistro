@@ -155,10 +155,14 @@ export default function CearaTechLeadPage() {
 
             <div className="p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800/80 mb-7">
               <p className="text-xs text-zinc-400 leading-normal">
-                Enquanto isso, acompanhe novidades, bastidores e demonstrações da nossa plataforma em tempo real:
+                Se preferir, fale comigo agora pelo WhatsApp. Você também pode acompanhar novidades e demonstrações no Instagram:
               </p>
             </div>
 
+            <a href={KOMA_LANDING_CONFIG.whatsappUrl} target="_blank" rel="noopener noreferrer" className="mb-4 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-500 px-6 py-4 text-base font-bold text-black hover:bg-emerald-400">
+              <Phone className="w-5 h-5" />
+              Falar com Georlan no WhatsApp
+            </a>
             {signupUrl && <a href={signupUrl} className="mb-4 flex w-full justify-center rounded-xl bg-emerald-500 p-4 font-bold text-black">Ver planos do KÔMA</a>}
             <a
               href="https://instagram.com/georlanjunior"
@@ -365,6 +369,8 @@ export default function CearaTechLeadPage() {
           >
             @georlanjunior
           </a>
+          {' · '}
+          <a href={KOMA_LANDING_CONFIG.whatsappUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">Falar com Georlan no WhatsApp</a>
           {' · '}
           <span>Siará Tech Summit 2026</span>
         </p>
