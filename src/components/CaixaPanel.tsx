@@ -1071,6 +1071,7 @@ export function CaixaPanel({
             <CashierKitchen mode={hasDedicatedKds ? 'kds' : 'queue'} activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
 
             <CashierPickups
+              isWsConnected={isWsConnected}
               activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
               deliveryOrders={deliveryOrders}
               deliveryOrdersLoadState={deliveryOrdersLoadState}
@@ -1091,6 +1092,7 @@ export function CaixaPanel({
               label="Configurações"
               load={loadCashierSettings}
               sectionProps={{
+                isWsConnected,
                 apiBaseUrl,
                 authHeaders,
                 activeTab,
@@ -1250,6 +1252,7 @@ export function CaixaPanel({
             )}
 
             <CashierCouriers
+              isWsConnected={isWsConnected}
               activeSubTab={activeSubTab}
               deliveryOrders={deliveryOrders}
               deliveryOrdersLoadState={deliveryOrdersLoadState}

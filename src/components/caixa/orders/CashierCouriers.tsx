@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useIdleReconciliation } from '../realtime/useIdleReconciliation';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 
 import { localCalendarDate, parseBackendTimestamp } from '../../../utils/dateTime';
 import type { useCashierOrders } from './useCashierOrders';
@@ -28,6 +29,7 @@ type BoundaryProps = Pick<
   | 'openDeliveryOrderDetails'
 > & {
   activeSubTab: string;
+  isWsConnected?: boolean;
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
   now: number;
@@ -76,6 +78,7 @@ const completedTotal = (order: CompletedDeliveryApiOrder) => {
 /** Delivery workspace; state transitions remain owned by useCashierOrders/backend. */
 export function CashierCouriers({
   activeSubTab,
+  isWsConnected = false,
   deliveryOrders,
   deliveryOrdersLoadState,
   selectedMotoboys,
@@ -130,21 +133,12 @@ export function CashierCouriers({
     }
   }, [apiBaseUrl, authHeaders]);
 
-  useEffect(() => {
-    if (activeSubTab !== 'entregadores') return;
-    void refreshCompleted();
-
-    const onOrdersUpdated = () => void refreshCompleted();
-    window.addEventListener('koma_orders_updated', onOrdersUpdated);
-    const intervalId = window.setInterval(() => {
-      if (!document.hidden) void refreshCompleted();
-    }, 30_000);
-
-    return () => {
-      window.removeEventListener('koma_orders_updated', onOrdersUpdated);
-      window.clearInterval(intervalId);
-    };
-  }, [activeSubTab, refreshCompleted]);
+  useIdleReconciliation({
+    enabled: activeSubTab === 'entregadores',
+    isWsConnected,
+    eventName: 'koma_orders_updated',
+    refresh: refreshCompleted,
+  });
 
   const completedToday = useMemo(() => {
     const today = localCalendarDate(new Date(now));

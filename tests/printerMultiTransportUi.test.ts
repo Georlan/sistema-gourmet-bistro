@@ -62,7 +62,8 @@ test('monitor presents friendly non-technical UX for users and keeps technical d
 test('daily printing status refresh is automatic and websocket-driven', () => {
   assert.match(app, /eventName === "print_monitor_updated"/);
   assert.match(app, /new Event\('koma_print_monitor_refresh'\)/);
-  assert.match(monitor, /addEventListener\('koma_print_monitor_refresh', refreshFromRealtime\)/);
+  assert.match(monitor, /eventName: 'koma_print_monitor_refresh'/);
+  assert.match(monitor, /healthyIntervalMs: 30_000/);
   assert.match(monitor, /30_000/);
   assert.match(monitor, /Atualização automática/);
   assert.doesNotMatch(monitor, />\s*Atualizar status\s*</);

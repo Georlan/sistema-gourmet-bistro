@@ -1,0 +1,22 @@
+<!DOCTYPE html><html><head><title>Isolated history reconciliation</title></head><body><div id="root"></div><script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {CashierPickups} from '/src/components/caixa/orders/CashierPickups.tsx';
+import {CashierCouriers} from '/src/components/caixa/orders/CashierCouriers.tsx';
+import {PrintMonitorPanel} from '/src/components/printing/PrintMonitorPanel.tsx';
+const headers = {Authorization: 'Bearer isolated-test'};
+const noop = async () => {};
+function Harness() {
+  const [connected, setConnected] = React.useState(true);
+  const [mounted, setMounted] = React.useState(true);
+  const common = {apiBaseUrl: '/mock', authHeaders: headers, isWsConnected: connected, deliveryOrders: [], deliveryOrdersLoadState: 'loaded', now: Date.now(),
+    handleAcceptPendingDeliveryOrder: noop, handleRejectPendingDeliveryOrder: noop, handleAdvanceDigitalOrder: noop, handleFinalizeDigitalOrder: noop, openDeliveryOrderDetails: noop};
+  return React.createElement(React.Fragment, {},
+    React.createElement('button', {onClick: () => setConnected(v => !v)}, 'Toggle realtime'),
+    React.createElement('button', {onClick: () => setMounted(false)}, 'Unmount'),
+    mounted && React.createElement(CashierPickups, {...common, activeSubTab: 'retiradas'}),
+    mounted && React.createElement(CashierCouriers, {...common, activeSubTab: 'entregadores', motoboys: [], motoboysLoadState: 'loaded', selectedMotoboys: {}, novoMotoboyNome: '', novoMotoboyTelefone: '', hasCourierApp: false}),
+    mounted && React.createElement(PrintMonitorPanel, {apiBaseUrl: '/mock', authHeaders: headers, isWsConnected: connected}));
+}
+createRoot(document.getElementById('root')).render(React.createElement(Harness));
+</script></body></html>
