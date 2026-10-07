@@ -919,6 +919,13 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             });
           } else if (eventName === "waiter_connected" || eventName === "waiter_disconnected") {
             const { garcom_id } = data;
+            // Replay current presence to late arrivals without another HTTP request.
+            if (eventName === "waiter_connected") {
+              Object.entries(lastDraftStatusesRef.current).forEach(([mesaId, active]) => {
+                if (active) notifyDraftStatus(Number(mesaId), true);
+              });
+              return;
+            }
             setActiveDrafts(prev => {
               const updated = { ...prev };
               let changed = false;
