@@ -31,7 +31,7 @@ test('plataforma distingue acesso opcional e verifica Telegram somente por leitu
   });
   await page.route('**/health/live', route => route.fulfill({ json: { status: 'ok', commit: 'real-sha', version: '3.5' } }));
   await page.goto('/super-admin');
-  if (await page.getByRole('button', { name: 'Abrir menu lateral' }).isVisible()) await page.getByRole('button', { name: 'Abrir menu lateral' }).click();
+  if (page.viewportSize()!.width < 768) await page.getByRole('button', { name: 'Abrir menu lateral' }).click();
   await page.getByRole('button', { name: 'Plataforma', exact: true }).click();
   await expect(page.getByText('Runtime Railway identificado')).toBeVisible();
   await expect(page.getByText('Respondendo (live)')).toBeVisible();
@@ -74,7 +74,7 @@ test('integrações distingue não verificado e remove resultados antigos após 
   });
   await page.route('**/health/live', route => route.fulfill({ json: { status: 'ok' } }));
   await page.goto('/super-admin');
-  if (await page.getByRole('button', { name: 'Abrir menu lateral' }).isVisible()) await page.getByRole('button', { name: 'Abrir menu lateral' }).click();
+  if (page.viewportSize()!.width < 768) await page.getByRole('button', { name: 'Abrir menu lateral' }).click();
   await page.getByRole('button', { name: 'Plataforma', exact: true }).click();
   await page.getByRole('button', { name: 'Integrações', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Integrações da plataforma' })).toBeVisible();

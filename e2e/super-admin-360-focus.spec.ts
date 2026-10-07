@@ -25,7 +25,7 @@ test('360 administrativo mantém foco e agrupa resumo sem apagar evidências', a
   });
   await page.route('**/health/live', route => route.fulfill({ json: { status: 'ok' } }));
   await page.goto('/super-admin');
-  if (await page.getByRole('button', { name: 'Abrir menu lateral' }).isVisible()) await page.getByRole('button', { name: 'Abrir menu lateral' }).click();
+  if (page.viewportSize()!.width < 768) await page.getByRole('button', { name: 'Abrir menu lateral' }).click();
   await page.getByRole('button', { name: 'Clientes', exact: true }).click();
   await page.getByRole('button', { name: 'Abrir 360°', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'D8 QA', exact: true })).toBeVisible();

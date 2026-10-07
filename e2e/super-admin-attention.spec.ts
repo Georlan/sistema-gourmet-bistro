@@ -21,7 +21,7 @@ test('restaurantes prioriza atenção real e distingue diagnóstico indisponíve
   });
   await page.route('**/health/live', route => route.fulfill({ json: { status: 'ok' } }));
   await page.goto('/super-admin');
-  if (await page.getByRole('button', { name: 'Abrir menu lateral' }).isVisible()) await page.getByRole('button', { name: 'Abrir menu lateral' }).click();
+  if (page.viewportSize()!.width < 768) await page.getByRole('button', { name: 'Abrir menu lateral' }).click();
   await page.getByRole('button', { name: 'Clientes', exact: true }).click();
   const table = page.getByRole('table').first();
   await expect(table.getByRole('row').nth(1)).toContainText('Zulu crítico');
