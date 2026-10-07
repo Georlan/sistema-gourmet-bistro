@@ -358,7 +358,7 @@ test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos d
   await page.goto('/cardapio?restaurante_id=2');
 
   await expect(page.getByText('Pizzeria Bella Italia', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Pizza Margherita', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true })).toBeVisible();
   await expect(page.getByPlaceholder('O que você quer pedir?')).toBeVisible();
   await expect(page.getByText('Pizzas & Massas', { exact: true }).first()).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -561,7 +561,7 @@ test('loja pausada mantém catálogo consultável e bloqueia criação de pedido
 
   await page.goto('/cardapio?restaurante_id=2');
   await expect(page.getByText('Pedidos pausados.', { exact: false })).toBeVisible();
-  await expect(page.getByText('Pizza Margherita', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true })).toBeVisible();
   await page.locator('#btn-fast-add-101').click();
   await expect(page.getByRole('status')).toContainText('O restaurante pausou novos pedidos');
   expect(capturedOrders).toHaveLength(0);
@@ -581,7 +581,7 @@ test('caixa fechado mantém catálogo consultável e bloqueia pedidos', async ({
   await page.goto('/cardapio?restaurante_id=2');
   await expect(page.locator('#brand-banner-hero').getByText('Estabelecimento fechado · aguardando abertura do caixa', { exact: true })).toBeVisible();
   await expect(page.getByText('Estabelecimento fechado. Aguardando abertura do caixa.', { exact: false })).toBeVisible();
-  await expect(page.getByText('Pizza Margherita', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true })).toBeVisible();
   await page.locator('#btn-fast-add-101').click();
   await expect(page.getByRole('status')).toContainText('O estabelecimento está fechado até a abertura do caixa.');
   await expect(page.locator('#floating-cart-trigger')).toHaveCount(0);
