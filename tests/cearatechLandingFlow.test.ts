@@ -23,7 +23,7 @@ test('CearaTechLeadPage renders mobile-first lead capture form without requiring
   assert.ok(html.includes('O sistema operacional definitivo para restaurantes.'));
   assert.ok(html.includes('Seu Nome *'));
   assert.ok(html.includes('WhatsApp com DDD *'));
-  assert.ok(html.includes('Concordo em receber uma mensagem da equipe KÔMA via WhatsApp'));
+  assert.ok(html.includes('Aceito receber contato da equipe KÔMA pelo WhatsApp'));
   assert.ok(html.includes('QUERO CONHECER O KÔMA'));
   assert.ok(html.includes('https://instagram.com/komafood') || html.includes('@komafood'));
 });
