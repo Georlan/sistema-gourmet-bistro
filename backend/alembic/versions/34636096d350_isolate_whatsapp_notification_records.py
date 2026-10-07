@@ -1,7 +1,7 @@
 """prepare tenant resolution for signed WhatsApp callbacks
 
 Revision ID: 34636096d350
-Revises: f4a5b6c7d8e9
+Revises: a5b6c7d8e9f0
 Create Date: 2026-10-07 02:06:06.465103
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '34636096d350'
-down_revision: Union[str, Sequence[str], None] = 'f4a5b6c7d8e9'
+down_revision: Union[str, Sequence[str], None] = 'a5b6c7d8e9f0'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
