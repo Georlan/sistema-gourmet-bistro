@@ -109,7 +109,7 @@ export default function CearaTechLeadPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/leads/siaratech`, {
+      const captureOptions = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -126,10 +126,15 @@ export default function CearaTechLeadPage() {
           interesse: form.interesse.trim() || undefined,
           visit_id: visitId,
           consent_whatsapp: true,
-          event_slug: 'siara-tech-summit-2026',
+          event_slug: 'ceara-tech-summit-2026',
           source: resolveLeadSource(),
         }),
-      });
+      };
+      let response = await fetch(`${API_BASE_URL}/api/leads/siaratech`, captureOptions);
+      // Keep capture available while frontend/backend deployments roll out separately.
+      if (response.status === 404) {
+        response = await fetch(`${API_BASE_URL}/api/leads/cearatech`, captureOptions);
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
