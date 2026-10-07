@@ -50,6 +50,8 @@ def test_submit_lead_success_and_deduplication(client):
         assert lead.whatsapp_normalizado == "5585998765432"
         assert lead.consent_whatsapp is True
 
+        original_consent_at = lead.consent_at
+
         # 2. Reenvio com o mesmo WhatsApp (deduplicação graciosa sem erro 409)
         payload_update = {
             "nome": "Maria Empreendedora Atualizada",
@@ -69,6 +71,7 @@ def test_submit_lead_success_and_deduplication(client):
         # O registro deve ter sido atualizado sem criar duplicata
         db_session.expire_all()
         lead_updated = db_session.query(KomaEventLead).filter(KomaEventLead.id == lead_id).first()
+        assert lead_updated.consent_at == original_consent_at
         assert lead_updated.nome == "Maria Empreendedora Atualizada"
         assert lead_updated.empresa_nome == "Bistrô das Dunas Premium"
     finally:
@@ -230,3 +233,33 @@ def test_crm_search_filter_update_and_consent_immutability(admin_client):
         )
         db_session.commit()
         db_session.close()
+
+
+def test_crm_history_contact_timestamp_and_noop(admin_client):
+    created = admin_client.post('/api/leads/cearatech', json={
+        'nome': 'Histórico Teste', 'whatsapp': '85976543210',
+        'consent_whatsapp': True, 'event_slug': 'crm-history-test',
+    })
+    lead_id = created.json()['lead_id']
+    url = f'/api/leads/cearatech/{lead_id}'
+    original = admin_client.get(url).json()
+    updated = admin_client.patch(url, json={'status': 'contacted', 'last_contact_at': None, 'notes': 'Primeira conversa'})
+    assert updated.status_code == 200
+    data = updated.json()
+    assert data['last_contact_at']
+    assert len(data['history']) == 1
+    assert data['history'][0]['actor'] == 'crm-test-admin'
+    assert data['history'][0]['changes']['status'] == {'before': 'new', 'after': 'contacted'}
+    assert data['consent_at'] == original['consent_at']
+    repeated = admin_client.patch(url, json={'status': 'contacted', 'last_contact_at': data['last_contact_at'], 'notes': 'Primeira conversa'})
+    assert repeated.status_code == 200
+    assert len(repeated.json()['history']) == 1
+    assert repeated.json()['updated_at'] == data['updated_at']
+    assert admin_client.patch(url, json={'status': None}).status_code == 422
+    assert admin_client.patch(url, json={'status': 'unknown'}).status_code == 422
+    assert len(admin_client.get(url).json()['history']) == 1
+
+
+def test_crm_detail_and_patch_require_superadmin(client):
+    assert client.get('/api/leads/cearatech/1').status_code == 401
+    assert client.patch('/api/leads/cearatech/1', json={'status': 'converted'}).status_code == 401

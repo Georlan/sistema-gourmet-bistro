@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarClock,
   CheckCircle2,
@@ -38,6 +38,8 @@ type Lead = {
   consent_whatsapp?: boolean;
   consent_at?: string | null;
   consent_version?: string | null;
+  history?: Array<{ id: number; actor: string; created_at: string; changes: Record<string, { before: unknown; after: unknown }> }>;
+
 };
 
 type LeadStats = Record<LeadStatus, number> & {
@@ -113,6 +115,8 @@ function StatusBadge({ status }: { status: LeadStatus }) {
 }
 
 export function SuperAdminLeadsTab() {
+  const listRequest = useRef(0);
+  const detailRequest = useRef(0);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadStats>(EMPTY_STATS);
   const [events, setEvents] = useState<LeadsResponse["events"]>([]);
@@ -141,28 +145,33 @@ export function SuperAdminLeadsTab() {
   }, [eventFilter, searchQuery, statusFilter]);
 
   const loadLeads = useCallback(async () => {
+    const requestId = ++listRequest.current;
     setLoading(true);
     setError(null);
     try {
       const response = await superAdminFetch(`/api/leads/cearatech?${queryString}`);
       const payload = await response.json() as LeadsResponse;
+      if (requestId !== listRequest.current) return;
       setLeads(Array.isArray(payload.leads) ? payload.leads : []);
       setStats(payload.stats || EMPTY_STATS);
       setEvents(Array.isArray(payload.events) ? payload.events : []);
     } catch (err) {
+      if (requestId !== listRequest.current) return;
       setError(superAdminErrorMessage(err));
       setLeads([]);
       setStats(EMPTY_STATS);
     } finally {
-      setLoading(false);
+      if (requestId === listRequest.current) setLoading(false);
     }
   }, [queryString]);
 
   useEffect(() => {
     void loadLeads();
+    return () => { listRequest.current++; };
   }, [loadLeads]);
 
   const openLead = async (lead: Lead) => {
+    const requestId = ++detailRequest.current;
     setSelectedLead(lead);
     setDraft(lead);
     setWhatsappOpened(false);
@@ -170,16 +179,21 @@ export function SuperAdminLeadsTab() {
     try {
       const response = await superAdminFetch(`/api/leads/cearatech/${lead.id}`);
       const detail = await response.json() as Lead;
+      if (requestId !== detailRequest.current) return;
       setSelectedLead(detail);
       setDraft(detail);
     } catch (err) {
+      if (requestId !== detailRequest.current) return;
       setError(superAdminErrorMessage(err));
+      setSelectedLead(null);
+      setDraft(null);
     } finally {
-      setDetailBusy(false);
+      if (requestId === detailRequest.current) setDetailBusy(false);
     }
   };
 
   const closeLead = () => {
+    detailRequest.current++;
     setSelectedLead(null);
     setDraft(null);
     setWhatsappOpened(false);
@@ -412,6 +426,8 @@ export function SuperAdminLeadsTab() {
                 <label className="text-xs text-koma-muted">
                   Status
                   <select
+                    aria-label="Status"
+                    disabled={detailBusy}
                     value={draft.status}
                     onChange={event => setDraft({ ...draft, status: event.target.value as LeadStatus })}
                     className="mt-1 w-full rounded-lg border border-zinc-800 bg-koma-card px-3 py-2.5 text-koma-foreground outline-none focus:border-[#00b894]"
@@ -476,7 +492,7 @@ export function SuperAdminLeadsTab() {
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <button type="button" onClick={openWhatsapp} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#00b894] px-4 py-3 text-sm font-black text-black hover:bg-emerald-400">
+                <button type="button" onClick={openWhatsapp} disabled={detailBusy || !draft.consent_whatsapp} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#00b894] px-4 py-3 text-sm font-black text-black hover:bg-emerald-400">
                   <MessageCircle className="h-4 w-4" />
                   Chamar no WhatsApp
                   <ExternalLink className="h-3.5 w-3.5" />
@@ -493,6 +509,22 @@ export function SuperAdminLeadsTab() {
                   Marcar como contatado agora
                 </button>
               )}
+
+              <div className="rounded-xl border border-zinc-800 bg-koma-card p-4">
+                <h4 className="text-sm font-bold text-koma-foreground">Histórico de alterações</h4>
+                <p className="mt-1 text-xs text-koma-muted">Últimas 50 alterações, da mais recente para a mais antiga.</p>
+                {!draft.history?.length && <p className="mt-3 text-xs text-koma-muted">Nenhuma alteração comercial registrada.</p>}
+                <ol className="mt-3 space-y-3">
+                  {draft.history?.map(entry => (
+                    <li key={entry.id} className="border-t border-zinc-800 pt-3 text-xs text-koma-muted">
+                      <p>{formatDate(entry.created_at)} · {entry.actor}</p>
+                      {Object.entries(entry.changes).map(([field, change]) => (
+                        <p key={field} className="mt-1 break-words">{({ status: "Status", notes: "Notas", cidade: "Cidade", quantidade_unidades: "Unidades", sistema_atual: "Sistema atual", principal_dor: "Principal dor", interesse: "Interesse", melhor_horario_contato: "Melhor horário", last_contact_at: "Último contato" } as Record<string, string>)[field] || field}: {field === "status" ? STATUS_LABELS[change.before as LeadStatus] : String(change.before ?? "—")} → {field === "status" ? STATUS_LABELS[change.after as LeadStatus] : String(change.after ?? "—")}</p>
+                      ))}
+                    </li>
+                  ))}
+                </ol>
+              </div>
 
               <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-koma-card p-3 text-xs text-koma-muted">
                 <CalendarClock className="h-4 w-4 shrink-0 text-[#00b894]" />

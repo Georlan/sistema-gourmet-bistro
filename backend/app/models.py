@@ -2147,3 +2147,21 @@ class KomaEventLead(Base):
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class KomaEventLeadHistory(Base):
+    """Platform-only commercial audit, independent of restaurant customers."""
+    __tablename__ = "koma_event_lead_history"
+    __table_args__ = (Index("ix_event_lead_history_lead_id_id", "lead_id", "id"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    lead_id = Column(Integer, ForeignKey("koma_event_leads.id", ondelete="CASCADE"), nullable=False)
+    actor = Column(String(255), nullable=False)
+    changes = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+@event.listens_for(KomaEventLeadHistory, "before_update")
+@event.listens_for(KomaEventLeadHistory, "before_delete")
+def block_event_lead_history_mutation(mapper, connection, target):
+    raise PermissionError("Lead history is immutable.")

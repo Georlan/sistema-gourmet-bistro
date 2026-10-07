@@ -1,0 +1,38 @@
+import { expect, test } from '@playwright/test';
+
+test('QR de apresentação abre sem login e mostra o destino legível', async ({ page }) => {
+  await page.goto('/cearatech/qr');
+  await expect(page.getByRole('heading', { name: 'Quer conhecer o KÔMA no seu restaurante?' })).toBeVisible();
+  await expect(page.locator('svg').filter({ has: page.locator('title', { hasText: 'QR Code para conhecer o KÔMA' }) })).toBeVisible();
+  await expect(page.getByText('komafood.com.br/cearatech', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('CRM salva qualificação, mantém consentimento e apresenta histórico', async ({ page }) => {
+  let lead = { id: 1, nome: 'Ana Teste', whatsapp_raw: '(85) 99999-1234', whatsapp_normalizado: '5585999991234', empresa_nome: 'Bistrô Teste', event_slug: 'ceara-tech-summit-2026', source: 'qr_tela', status: 'new', consent_whatsapp: true, consent_at: '2026-10-07T01:00:00Z', consent_version: 'v1_cearatech_2026', history: [] as unknown[] };
+  await page.addInitScript(() => sessionStorage.setItem('koma_super_admin_token', 'local-test-admin'));
+  await page.route('**/api/super-admin/**', route => route.fulfill({ json: [] }));
+  await page.route('**/health/live', route => route.fulfill({ json: { status: 'ok' } }));
+  await page.route('**/api/leads/cearatech**', async route => {
+    const req = route.request();
+    if (req.method() === 'PATCH') {
+      const patch = req.postDataJSON();
+      expect(patch).not.toHaveProperty('consent_whatsapp');
+      lead = { ...lead, ...patch, history: [{ id: 1, actor: 'local-test-admin', created_at: '2026-10-07T02:00:00Z', changes: { status: { before: 'new', after: 'qualified' } } }] };
+    }
+    await route.fulfill({ json: new URL(req.url()).pathname.endsWith('/1') ? lead : { total: 1, stats: { total: 1, new: 1, contacted: 0, qualified: 0, converted: 0, conversion_rate: 0 }, events: [], leads: [lead] } });
+  });
+  await page.goto('/super-admin');
+  if (page.viewportSize()!.width < 1024) await page.getByRole('button', { name: 'Abrir menu lateral' }).click();
+  await page.getByRole('button', { name: 'Leads', exact: true }).click();
+  if (page.viewportSize()!.width < 768) await page.getByRole('button').filter({ hasText: 'Ana Teste' }).click();
+  else await page.getByRole('button', { name: 'Ver lead', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('v1_cearatech_2026', { exact: false })).toBeVisible();
+  await dialog.getByLabel('Status', { exact: true }).selectOption('qualified');
+  await dialog.getByLabel('Cidade', { exact: true }).fill('Fortaleza');
+  await dialog.getByRole('button', { name: 'Salvar lead', exact: true }).click();
+  await expect(dialog.getByText('Status: Novo → Qualificado', { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('Cidade', { exact: true })).toHaveValue('Fortaleza');
+  await expect(dialog.getByRole('button', { name: 'Chamar no WhatsApp' })).toBeVisible();
+});

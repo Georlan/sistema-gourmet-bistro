@@ -15,7 +15,7 @@ from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import KomaEventLead
+from ..models import KomaEventLead, KomaEventLeadHistory
 from ..security import IPRateLimiter
 from ..services.cearatech_promo_printer import (
     DEFAULT_CANONICAL_URL,
@@ -162,6 +162,26 @@ def _lead_payload(item: KomaEventLead, *, include_consent: bool = False) -> dict
     return payload
 
 
+def _lead_detail(db: Session, lead: KomaEventLead) -> dict[str, Any]:
+    payload = _lead_payload(lead, include_consent=True)
+    entries = (db.query(KomaEventLeadHistory)
+        .filter(KomaEventLeadHistory.lead_id == lead.id)
+        .order_by(KomaEventLeadHistory.id.desc()).limit(50).all())
+    payload["history"] = [{"id": entry.id, "actor": entry.actor,
+        "changes": entry.changes, "created_at": entry.created_at.isoformat()}
+        for entry in entries]
+    return payload
+
+
+def _audit_value(value):
+    if isinstance(value, datetime.datetime):
+        # SQLite returns naive UTC; compare it consistently with API UTC timestamps.
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=datetime.timezone.utc)
+        return value.astimezone(datetime.timezone.utc).isoformat()
+    return value
+
+
 def _apply_event_and_search_filters(query, *, event_slug: Optional[str], search: Optional[str]):
     if event_slug:
         query = query.filter(KomaEventLead.event_slug == event_slug.strip().lower())
@@ -228,9 +248,7 @@ def submit_cearatech_lead(
             existing.segmento = payload.segmento
         existing.whatsapp_raw = payload.whatsapp
         existing.source = payload.source
-        existing.consent_whatsapp = True
-        existing.consent_at = now_utc
-        existing.consent_version = "v1_cearatech_2026"
+        # Preserve the original consent receipt when a contact submits again.
         existing.updated_at = now_utc
         if ip_hash:
             existing.ip_hash = ip_hash
@@ -364,7 +382,7 @@ def get_cearatech_lead(
     lead = db.query(KomaEventLead).filter(KomaEventLead.id == lead_id).one_or_none()
     if lead is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lead não encontrado.")
-    return _lead_payload(lead, include_consent=True)
+    return _lead_detail(db, lead)
 
 
 @router.patch("/cearatech/{lead_id}", summary="Atualizar funil e qualificação do lead (Super Admin)")
@@ -374,7 +392,6 @@ def update_cearatech_lead(
     admin: dict = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    del admin
     lead = (
         db.query(KomaEventLead)
         .filter(KomaEventLead.id == lead_id)
@@ -385,6 +402,8 @@ def update_cearatech_lead(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lead não encontrado.")
 
     changes = payload.model_dump(exclude_unset=True)
+    if "status" in changes and changes["status"] is None:
+        raise HTTPException(status_code=422, detail="Status não pode ser nulo.")
     string_fields = {
         "notes",
         "cidade",
@@ -397,16 +416,25 @@ def update_cearatech_lead(
         if field_name in changes and isinstance(changes[field_name], str):
             changes[field_name] = changes[field_name].strip() or None
 
-    if changes.get("status") == "contacted" and "last_contact_at" not in changes and lead.last_contact_at is None:
+    if changes.get("status") == "contacted" and not changes.get("last_contact_at") and lead.last_contact_at is None:
         changes["last_contact_at"] = datetime.datetime.now(datetime.timezone.utc)
 
+    audited_changes = {}
     for field_name, value in changes.items():
-        setattr(lead, field_name, value)
+        before = _audit_value(getattr(lead, field_name))
+        after = _audit_value(value)
+        if before != after:
+            audited_changes[field_name] = {"before": before, "after": after}
+            setattr(lead, field_name, value)
 
+    if not audited_changes:
+        return _lead_detail(db, lead)
+    db.add(KomaEventLeadHistory(lead_id=lead.id,
+        actor=str(admin.get("user") or "admin"), changes=audited_changes))
     lead.updated_at = datetime.datetime.now(datetime.timezone.utc)
     db.commit()
     db.refresh(lead)
-    return _lead_payload(lead, include_consent=True)
+    return _lead_detail(db, lead)
 
 
 @router.post("/cearatech/print", summary="Disparar impressão da ficha promocional (1, 20, 30, 50 cópias)")
