@@ -61,6 +61,8 @@ Base inicial consultada: main `c7aa1888dd16`, PRs #970/#982/#983/#1021 já incor
 
 ### P1 — fechar integrações e trabalho paralelo com evidência
 
+- [ ] Incorporar falhas atuais de diagnóstico da impressora à fonte canônica de incidentes/atenção. No D8, o cartão de impressão mostrou estado degradado por erro local, enquanto a lista de incidentes retornou vazia; centralizar essa evidência no owner de incidentes, reutilizando a leitura existente de agentes e preservando a distinção entre fila e impressão física.
+
 - [x] Impressão no 360° já tem diagnóstico de agente/fila e links operacionais em #1021; não criar outro executor ou painel concorrente.
 - [x] Linear/PostHog já têm registry, links e rastreabilidade por restaurante em #1021; não reimplementar KOM-8/9/10.
 - [ ] Validar a utilidade do dashboard PostHog com eventos de negócio reais e janela explícita. Projeto conectado: KÔMA Production `648305`; consulta de erros ativos de sete dias retornou vazia em 07/10, sem provar ausência de falhas. Dados de teste do tenant #8 estão excluídos por padrão no projeto; respeitar esse filtro e explicitar quando comparar esse restaurante.
