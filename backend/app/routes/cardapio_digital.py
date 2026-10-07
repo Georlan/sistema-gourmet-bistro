@@ -215,6 +215,7 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
     return db.query(ConfiguracaoRestaurante).options(
         load_only(
             ConfiguracaoRestaurante.restaurante_id,
+            ConfiguracaoRestaurante.nicho,
             ConfiguracaoRestaurante.delivery_ativo,
             ConfiguracaoRestaurante.tipos_pedido_ativos,
             ConfiguracaoRestaurante.pedido_minimo,
@@ -404,9 +405,11 @@ def obter_cardapio_publico(
         # Categorias vazias (sem produtos ativos) não aparecem no cardápio online
         active_category_ids = {product.categoria_id for product in produtos}
         categorias_com_produtos = [category for category in categorias if category.id in active_category_ids]
-        # O snapshot público já carregou ConfiguracaoRestaurante acima; reutilizar
-        # o nicho evita uma segunda leitura da mesma configuração no hot path.
-        niche = (getattr(configuracao, "nicho", None) or "geral").strip().lower()
+        niche = resolve_restaurant_niche(
+            db,
+            rest_id,
+            fallback_niche=getattr(configuracao, "nicho", None) if configuracao else None,
+        )
         categorias_ordenadas = _ordered_categories(categorias_com_produtos, niche=niche)
 
         return {
