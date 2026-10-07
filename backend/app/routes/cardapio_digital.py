@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, load_only, raiseload
 
 from ..catalog_addons import effective_modifier_payloads_by_product
 from ..marmitaria_catalog import enabled as marmitaria_enabled
+from ..restaurant_profile_models import RestauranteOperationProfile
 from ..config import settings
 from ..database import (
     bind_session_to_tenant,
@@ -400,7 +401,11 @@ def obter_cardapio_publico(
         ).all()
         produtos = _ordered_products(produtos)
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
-        is_marmitaria = marmitaria_enabled(db, rest_id)
+        profile = db.query(RestauranteOperationProfile.profile_key).filter(
+            RestauranteOperationProfile.restaurante_id == rest_id,
+        ).first()
+        profile_key = profile[0] if profile else None
+        is_marmitaria = profile_key == "marmitaria"
 
         # Categorias vazias (sem produtos ativos) não aparecem no cardápio online
         active_category_ids = {product.categoria_id for product in produtos}
@@ -409,6 +414,7 @@ def obter_cardapio_publico(
             db,
             rest_id,
             fallback_niche=getattr(configuracao, "nicho", None) if configuracao else None,
+            stored_profile_key=profile_key,
         )
         categorias_ordenadas = _ordered_categories(categorias_com_produtos, niche=niche)
 
