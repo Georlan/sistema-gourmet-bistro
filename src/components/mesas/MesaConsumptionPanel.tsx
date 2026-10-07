@@ -102,12 +102,12 @@ export function MesaConsumptionPanel({
                   return (
                     <div className="flex flex-wrap gap-1.5 pb-0.5">
                       {transferOrigin && (
-                        <span className="px-2 py-0.5 text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/35 rounded-md font-sans font-bold uppercase tracking-wider">
+                        <span className="px-2 py-0.5 text-[9px] bg-purple-500/20 text-purple-800 dark:text-purple-300 border border-purple-500/35 rounded-md font-sans font-bold uppercase tracking-wider">
                           Transf. da Mesa {transferOrigin}
                         </span>
                       )}
                       {mergedOrigins.map(mId => (
-                        <span key={mId} className="px-2 py-0.5 text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/35 rounded-md font-sans font-bold uppercase tracking-wider">
+                        <span key={mId} className="px-2 py-0.5 text-[9px] bg-indigo-500/20 text-indigo-800 dark:text-indigo-300 border border-indigo-500/35 rounded-md font-sans font-bold uppercase tracking-wider">
                           Mesclada com Mesa {mId}
                         </span>
                       ))}
@@ -147,7 +147,7 @@ export function MesaConsumptionPanel({
 
               {/* Direct Print Feedback Toast */}
               {hasPrinting && directPrintToast && (
-                <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-xl text-center text-xs font-bold font-sans animate-fade-in">
+                <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 px-3 py-1.5 rounded-xl text-center text-xs font-bold font-sans animate-fade-in">
                   {directPrintToast}
                 </div>
               )}
@@ -199,7 +199,7 @@ export function MesaConsumptionPanel({
                         onClick={onCloseTable}
                         className={`py-2.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer font-sans transition-all border ${
                           confirmClear
-                            ? 'bg-rose-800/40 border-rose-700/50 text-rose-300 animate-pulse'
+                            ? 'bg-rose-50 dark:bg-rose-800/40 border-rose-300 dark:border-rose-700/50 text-rose-800 dark:text-rose-300 animate-pulse'
                             : 'bg-koma-raised hover:bg-rose-950/30 border-koma-border hover:border-rose-800/40 text-rose-400'
                         }`}
                       >
@@ -321,7 +321,7 @@ export function MesaConsumptionPanel({
                           className={`px-2 py-0.5 rounded-lg text-[10px] font-sans font-semibold transition-all flex items-center gap-1 shadow-sm ${
                             (activeRole === 'garcom' && !restauranteConfig?.perm_garcom_transferir_mesa)
                               ? 'bg-koma-panel/40 border border-koma-border/40 text-gray-600 cursor-not-allowed'
-                              : 'bg-purple-950/40 hover:bg-purple-900/30 text-purple-300 hover:text-koma-foreground border border-purple-900/40 cursor-pointer'
+                              : 'bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-purple-800 dark:text-purple-300 hover:text-koma-foreground border border-purple-300 dark:border-purple-900/40 cursor-pointer'
                           }`}
                           title="Desmembrar este pedido de volta para sua mesa de origem"
                         >

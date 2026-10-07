@@ -422,7 +422,7 @@ export function CashierPickups({
         </div>
 
         {historyError && (
-          <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[9px] text-amber-300">
+          <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[9px] text-amber-800 dark:text-amber-300">
             Não foi possível atualizar o histórico concluído agora. As retiradas ativas continuam disponíveis normalmente.
           </div>
         )}
