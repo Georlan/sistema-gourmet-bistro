@@ -47,15 +47,15 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 
 ## Super Admin — prioridades reconciliadas em 07/10/2026
 
-Base inicial consultada: main `c7aa1888dd16`, PRs #970/#982/#983/#1021 já incorporadas e interface autenticada de produção. As três correções de organização/diagnóstico acima integram a onda atual; merge e revisão servida devem ser confirmados na entrega. A onda paralela #1028 avançou main para `745ddb2d26e3` durante a validação, sem alterar o backend/Super Admin desta onda. Carregamentos nas imagens não são falhas persistentes: prioridades e GitHub concluíram normalmente na consulta ao vivo.
+Base inicial consultada: main `c7aa1888dd16`, PRs #970/#982/#983/#1021 já incorporadas e interface autenticada de produção. As três correções de organização/diagnóstico acima integram a onda atual; merge e revisão servida devem ser confirmados na entrega. A onda paralela #1028 avançou main para `745ddb2d26e3` durante a validação, sem alterar o backend/Super Admin desta onda. A atualização paralela #1030 (`d826d89c867a`) também foi incorporada, preservando o fluxo de implantação. Carregamentos nas imagens não são falhas persistentes: prioridades e GitHub concluíram normalmente na consulta ao vivo.
 
 - [x] Super Admin — horários operacionais: Início, lista e 360° reutilizam o conversor canônico de timestamps UTC legados, preservando offsets explícitos e sem transformar data inválida em horário atual.
 
 ### P0 — operação real antes de novos indicadores
 
 - [ ] Revisar fila de impressão e agente da Quentinha (#6), incluindo falha antiga de 03/10; decidir documento por documento o que ainda deve ser impresso. Não reenviar em lote nem apagar histórico. Papel e alerta sonoro continuam validação manual.
-- [x] Reconciliar a leitura do D8 (#8): os 14 documentos retidos vistos inicialmente deixaram de aparecer na consulta às 01:57; 360° informou zero pendentes/em processamento/falhas e nenhum incidente. Nenhuma ação de impressão ou encerramento foi executada nesta onda; a causa dessa mudança não foi determinada.
-- [ ] D8: há nenhum agente configurado na leitura às 01:57. Se o restaurante for usar impressão, configurar pelo fluxo existente e validar papel/alerta. Fila vazia não comprova impressão operacional.
+- [ ] Reconciliar os documentos de impressão do D8 (#8) na fonte corrigida. A interface chegou a mostrar fila zero/nenhum agente às 01:57, mas a investigação confirmou HTTP 404 por consulta fora do escopo do tenant. Essa leitura não prova fila vazia e não encerra os 14 alertas vistos inicialmente. Nenhuma ação de impressão foi executada nesta onda.
+- [x] Super Admin — acesso ao diagnóstico: consultas de impressão, links e tarefas aplicam o escopo do restaurante antes da primeira leitura. Erros e respostas inválidas mostram fonte não verificada e valores indisponíveis; sincronização de tarefas libera SQL antes de aguardar o Linear.
 - [ ] Revisar blockers canônicos e liberação da Espetaria (#7). Somente o responsável pode confirmar que a implantação está pronta; ausência de atividade não comprova falha.
 
 ### P1 — fechar integrações e trabalho paralelo com evidência

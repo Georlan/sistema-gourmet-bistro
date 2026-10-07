@@ -7,10 +7,10 @@ import datetime
 import logging
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 import httpx
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 
@@ -416,58 +416,61 @@ async def get_integration_registry(admin: dict = Depends(get_current_admin)):
 
 @router.get("/restaurantes/{restaurant_id}/issues")
 async def list_restaurant_issues(
-    restaurant_id: int,
+    restaurant_id: Annotated[int, Path(gt=0)],
     refresh_live: bool = Query(default=False, description="Tenta sincronizar o estado mais recente do Linear"),
     admin: dict = Depends(get_current_admin),
 ):
     """
     KOM-10: Retorna a lista de issues associadas a este restaurante específico.
     """
+    # Materialize inside the tenant scope; leaving it rolls back and expires ORM rows.
     with SessionLocal() as db:
-        restaurante = db.query(Restaurante).filter(Restaurante.id == restaurant_id).first()
-        if not restaurante:
-            raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
-
         with tenant_session_scope(db, restaurant_id):
+            restaurante = db.query(Restaurante).filter(Restaurante.id == restaurant_id).first()
+            if not restaurante:
+                raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
             links = (
                 db.query(ExternalIssueLink)
                 .filter(ExternalIssueLink.restaurante_id == restaurant_id)
                 .order_by(ExternalIssueLink.created_at.desc())
                 .all()
             )
-
-        results = []
-        for link in links:
-            current_status = link.status_snapshot
-            if refresh_live and linear_client.is_configured:
-                live = await linear_client.get_issue_status(link.external_identifier)
-                if live and live.get("status"):
-                    current_status = live["status"]
-                    link.status_snapshot = current_status
-                    db.add(link)
-
-            results.append({
+            results = [{
                 "id": link.id,
                 "provider": link.provider,
                 "external_issue_id": link.external_issue_id,
                 "external_identifier": link.external_identifier,
                 "external_url": link.external_url,
                 "title": link.title_snapshot,
-                "status": current_status or "Backlog",
+                "status": link.status_snapshot or "Backlog",
                 "priority": link.priority_snapshot or "Normal",
                 "actor": link.actor,
                 "created_at": link.created_at.isoformat() if link.created_at else None,
-            })
+            } for link in links]
 
-        if refresh_live:
-            db.commit()
-
-        return results
+    # Release SQL before network waits; persist only real changes in a new scoped session.
+    updates = {}
+    if refresh_live and linear_client.is_configured:
+        for item in results:
+            live = await linear_client.get_issue_status(item["external_identifier"])
+            if live and live.get("status") and live["status"] != item["status"]:
+                item["status"] = live["status"]
+                updates[item["id"]] = live["status"]
+    if updates:
+        with SessionLocal() as db:
+            with tenant_session_scope(db, restaurant_id):
+                for link_id, snapshot in updates.items():
+                    db.query(ExternalIssueLink).filter(
+                        ExternalIssueLink.id == link_id,
+                        ExternalIssueLink.restaurante_id == restaurant_id,
+                    ).update({"status_snapshot": snapshot}, synchronize_session=False)
+                db.commit()
+    return results
 
 
 @router.post("/restaurantes/{restaurant_id}/issues", status_code=status.HTTP_201_CREATED)
 async def create_restaurant_issue(
-    restaurant_id: int,
+    restaurant_id: Annotated[int, Path(gt=0)],
     payload: CreateIssueRequest,
     admin: dict = Depends(get_current_admin),
 ):
@@ -475,10 +478,11 @@ async def create_restaurant_issue(
     KOM-9: Criação de issue no Linear server-side com sanitização de PII e rastreabilidade bidirecional.
     """
     with SessionLocal() as db:
-        restaurante = db.query(Restaurante).filter(Restaurante.id == restaurant_id).first()
-        if not restaurante:
-            raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
-        restaurante_nome = restaurante.nome
+        with tenant_session_scope(db, restaurant_id):
+            restaurante = db.query(Restaurante).filter(Restaurante.id == restaurant_id).first()
+            if not restaurante:
+                raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+            restaurante_nome = restaurante.nome
 
     if not linear_client.is_configured:
         raise HTTPException(
@@ -589,7 +593,7 @@ async def create_restaurant_issue(
 
 @router.get("/restaurantes/{restaurant_id}/analytics")
 async def get_restaurant_analytics_links(
-    restaurant_id: int,
+    restaurant_id: Annotated[int, Path(gt=0)],
     admin: dict = Depends(get_current_admin),
 ):
     """
@@ -597,9 +601,10 @@ async def get_restaurant_analytics_links(
     Não utiliza Group Analytics para garantir conformidade com a política de custo zero.
     """
     with SessionLocal() as db:
-        restaurante = db.query(Restaurante).filter(Restaurante.id == restaurant_id).first()
-        if not restaurante:
-            raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+        with tenant_session_scope(db, restaurant_id):
+            restaurante = db.query(Restaurante).filter(Restaurante.id == restaurant_id).first()
+            if not restaurante:
+                raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
 
     return {
         "posthog": {
@@ -612,7 +617,7 @@ async def get_restaurant_analytics_links(
 
 @router.get("/restaurantes/{restaurant_id}/print-status")
 async def get_restaurant_print_status(
-    restaurant_id: int,
+    restaurant_id: Annotated[int, Path(gt=0)],
     admin: dict = Depends(get_current_admin),
 ):
     """
@@ -620,11 +625,11 @@ async def get_restaurant_print_status(
     Permite visualizar status, agente principal, heartbeat e filas sem necessidade de entrar em Modo Suporte.
     """
     with SessionLocal() as db:
-        restaurante = db.query(Restaurante).filter(Restaurante.id == restaurant_id).first()
-        if not restaurante:
-            raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
-
         with tenant_session_scope(db, restaurant_id):
+            restaurante = db.query(Restaurante).filter(Restaurante.id == restaurant_id).first()
+            if not restaurante:
+                raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+
             active_agents = (
                 db.query(PrintAgentToken)
                 .filter(

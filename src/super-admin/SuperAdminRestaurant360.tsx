@@ -1,7 +1,7 @@
 import { parseBackendTimestamp } from "../utils/dateTime";
 import { summarizeIncidents } from "./incidentSummary";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -342,49 +342,74 @@ export function SuperAdminRestaurant360({
   const [printStatus, setPrintStatus] = useState<TenantPrintStatus | null>(null);
   const [printStatusLoading, setPrintStatusLoading] = useState(false);
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
+  const [issuesError, setIssuesError] = useState<string | null>(null);
+  const [printStatusError, setPrintStatusError] = useState<string | null>(null);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const issueRequest = useRef(0);
+  const printRequest = useRef(0);
+  const analyticsRequest = useRef(0);
+  useEffect(() => () => {
+    issueRequest.current++;
+    printRequest.current++;
+    analyticsRequest.current++;
+  }, [tenant.id]);
 
   const loadIssues = useCallback(async (refreshLive = false) => {
-    if (refreshLive) setIssuesSyncing(true);
-    else setIssuesLoading(true);
+    const request = ++issueRequest.current;
+    setLinkedIssues([]);
+    setIssuesError(null);
+    setIssuesLoading(true);
+    setIssuesSyncing(refreshLive);
     try {
       const url = `/api/super-admin/restaurantes/${tenant.id}/issues${refreshLive ? "?refresh_live=true" : ""}`;
       const res = await superAdminFetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        setLinkedIssues(Array.isArray(data) ? data : []);
-      }
-    } catch {
-      // Ignora erro suavemente
+      if (!res.ok) throw new Error(`Consulta de issues indisponível (HTTP ${res.status}).`);
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error("Resposta de issues inválida.");
+      if (request === issueRequest.current) setLinkedIssues(data);
+    } catch (error) {
+      if (request === issueRequest.current) setIssuesError(superAdminErrorMessage(error));
     } finally {
-      setIssuesLoading(false);
-      setIssuesSyncing(false);
+      if (request === issueRequest.current) {
+        setIssuesLoading(false);
+        setIssuesSyncing(false);
+      }
     }
   }, [tenant.id]);
 
   const loadAnalytics = useCallback(async () => {
+    const request = ++analyticsRequest.current;
+    setAnalytics(null);
+    setAnalyticsError(null);
     try {
       const res = await superAdminFetch(`/api/super-admin/restaurantes/${tenant.id}/analytics`);
-      if (res.ok) {
-        const data = await res.json();
-        setAnalytics(data);
-      }
-    } catch {
-      // Ignora erro suavemente
+      if (!res.ok) throw new Error(`Links PostHog indisponíveis (HTTP ${res.status}).`);
+      const data = await res.json();
+      if (!data?.posthog?.operational_dashboard_url || !data?.posthog?.events_url) throw new Error("Resposta de links PostHog inválida.");
+      if (request === analyticsRequest.current) setAnalytics(data);
+    } catch (error) {
+      if (request === analyticsRequest.current) setAnalyticsError(superAdminErrorMessage(error));
     }
   }, [tenant.id]);
 
   const loadPrintStatus = useCallback(async () => {
+    const request = ++printRequest.current;
+    setPrintStatus(null);
+    setPrintStatusError(null);
     setPrintStatusLoading(true);
     try {
       const res = await superAdminFetch(`/api/super-admin/restaurantes/${tenant.id}/print-status`);
-      if (res.ok) {
-        const data = await res.json();
-        setPrintStatus(data);
+      if (!res.ok) throw new Error(`Diagnóstico de impressão indisponível (HTTP ${res.status}).`);
+      const data = await res.json();
+      if (!data || !["online", "offline", "degraded", "not_configured"].includes(data.status) ||
+        ![data.queue?.pending, data.queue?.claimed, data.queue?.failed].every(value => typeof value === "number" && Number.isFinite(value) && value >= 0)) {
+        throw new Error("Resposta de impressão inválida; fila não verificada.");
       }
-    } catch {
-      // Ignora erro suavemente
+      if (request === printRequest.current) setPrintStatus(data);
+    } catch (error) {
+      if (request === printRequest.current) setPrintStatusError(superAdminErrorMessage(error));
     } finally {
-      setPrintStatusLoading(false);
+      if (request === printRequest.current) setPrintStatusLoading(false);
     }
   }, [tenant.id]);
 
@@ -1396,11 +1421,8 @@ export function SuperAdminRestaurant360({
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-bold text-koma-foreground flex items-center gap-2">
-                    <Layers className="h-4 w-4 text-[#00b894]" /> Control Plane & Engenharia
+                    <Layers className="h-4 w-4 text-[#00b894]" /> Diagnóstico e tarefas
                   </h3>
-                  <span className="rounded-md border border-[#00b894]/30 bg-[#00b894]/10 px-2 py-0.5 text-[9px] font-black uppercase text-[#00b894]">
-                    KOM-10
-                  </span>
                 </div>
                 <p className="mt-1 text-[11px] text-koma-muted">
                   Diagnóstico cruzado no PostHog e gestão de tarefas no Linear vinculadas a este restaurante.
@@ -1441,14 +1463,15 @@ export function SuperAdminRestaurant360({
                       <BarChart2 className="h-4 w-4 text-[#00b894]" />
                       <h4 className="text-xs font-bold text-koma-foreground">PostHog Analytics</h4>
                     </div>
-                    <span className="text-[10px] font-medium text-koma-muted">Projeto 648305</span>
+                    <span className="text-[10px] font-medium text-koma-muted">Projeto {analytics?.posthog.project_id || "não consultado"}</span>
                   </div>
                   <p className="mt-2 text-[11px] text-koma-secondary">
-                    Acompanhe conversões do cardápio, funis, sessões e erros reais do restaurante.
+                    Abra o painel do projeto e selecione o restaurante nos filtros antes de interpretar seus dados.
                   </p>
-                  <div className="mt-3 grid gap-2">
+                  {analyticsError && <p role="alert" className="mt-3 text-[11px] text-amber-300">{analyticsError}</p>}
+                  {analytics && <div className="mt-3 grid gap-2">
                     <a
-                      href={analytics?.posthog?.operational_dashboard_url || "https://us.posthog.com/project/648305/dashboard/2178362"}
+                      href={analytics.posthog.operational_dashboard_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center justify-between rounded-lg border border-zinc-700/80 bg-zinc-900/60 px-3 py-2 text-xs font-semibold text-koma-foreground hover:border-[#00b894]/50 hover:text-emerald-300"
@@ -1457,7 +1480,7 @@ export function SuperAdminRestaurant360({
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                     <a
-                      href={analytics?.posthog?.events_url || "https://us.posthog.com/project/648305/events"}
+                      href={analytics.posthog.events_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center justify-between rounded-lg border border-zinc-700/80 bg-zinc-900/60 px-3 py-2 text-xs font-semibold text-koma-foreground hover:border-[#00b894]/50 hover:text-emerald-300"
@@ -1465,7 +1488,7 @@ export function SuperAdminRestaurant360({
                       <span>Histórico de Eventos Brutos</span>
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
-                  </div>
+                  </div>}
                 </div>
               </div>
 
@@ -1489,13 +1512,13 @@ export function SuperAdminRestaurant360({
                               : "border-zinc-700 bg-zinc-900 text-koma-muted")
                       }
                     >
-                      {printStatus?.status === "online"
-                        ? "Online"
+                      {printStatusLoading ? "Consultando…" : printStatus?.status === "online"
+                        ? "Agente online"
                         : printStatus?.status === "degraded"
                           ? "Degradado"
                           : printStatus?.status === "offline"
                             ? "Offline"
-                            : "Não configurado"}
+                            : printStatus?.status === "not_configured" ? "Não configurado" : "Não verificado"}
                     </span>
                   </div>
                   <p className="mt-2 text-[11px] text-koma-secondary">
@@ -1507,7 +1530,7 @@ export function SuperAdminRestaurant360({
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="text-koma-muted">Agente primário:</span>
                         <strong className="text-koma-foreground truncate max-w-[140px]" title={printStatus?.agent_id || "—"}>
-                          {printStatus?.agent_id || "Nenhum"}
+                          {printStatus ? printStatus.agent_id || "Nenhum" : "—"}
                         </strong>
                       </div>
                       <div className="mt-1 flex items-center justify-between text-[11px]">
@@ -1532,13 +1555,13 @@ export function SuperAdminRestaurant360({
                       <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-1.5">
                         <span className="text-koma-muted block">Pendentes</span>
                         <strong className="text-xs text-koma-foreground font-mono">
-                          {printStatus?.queue?.pending ?? 0}
+                          {printStatus?.queue?.pending ?? "—"}
                         </strong>
                       </div>
                       <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-1.5">
                         <span className="text-koma-muted block">Em proc.</span>
                         <strong className="text-xs text-koma-foreground font-mono">
-                          {printStatus?.queue?.claimed ?? 0}
+                          {printStatus?.queue?.claimed ?? "—"}
                         </strong>
                       </div>
                       <div
@@ -1551,11 +1574,12 @@ export function SuperAdminRestaurant360({
                       >
                         <span className="text-koma-muted block">Falhas</span>
                         <strong className="text-xs font-mono">
-                          {printStatus?.queue?.failed ?? 0}
+                          {printStatus?.queue?.failed ?? "—"}
                         </strong>
                       </div>
                     </div>
 
+                    {printStatusError && <p role="alert" className="text-[11px] text-amber-300">{printStatusError}</p>}
                     {printStatus?.last_error && (
                       <div className="rounded-lg border border-rose-900/60 bg-rose-950/20 p-2 text-[10px] text-rose-300 flex items-start gap-1.5">
                         <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-rose-400 mt-0.5" />
@@ -1592,7 +1616,7 @@ export function SuperAdminRestaurant360({
                     <Layers className="h-4 w-4 text-[#00b894]" />
                     <h4 className="text-xs font-bold text-koma-foreground">Issues no Linear</h4>
                   </div>
-                  <span className="text-[10px] font-mono text-koma-muted">{linkedIssues.length} vinculada(s)</span>
+                  <span className="text-[10px] font-mono text-koma-muted">{issuesLoading || issuesError ? "—" : linkedIssues.length} vinculada(s)</span>
                 </div>
                 <p className="mt-2 text-[11px] text-koma-secondary">
                   Tarefas e correções cadastradas e rastreadas no Control Plane.
@@ -1603,6 +1627,8 @@ export function SuperAdminRestaurant360({
                     <div className="rounded-lg border border-zinc-800 p-4 text-center text-[11px] text-koma-muted">
                       Carregando issues do restaurante...
                     </div>
+                  ) : issuesError ? (
+                    <p role="alert" className="text-[11px] text-amber-300">{issuesError}</p>
                   ) : linkedIssues.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-zinc-800 p-4 text-center text-[11px] text-koma-muted">
                       Nenhuma issue vinculada a este restaurante ainda.
