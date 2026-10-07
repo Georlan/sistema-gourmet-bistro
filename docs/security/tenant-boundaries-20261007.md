@@ -70,6 +70,14 @@ Regressões de autenticação devem passar com essas versões antes da publicaç
 - PR #999 contém endurecimento de upload XML e scans de dependências/segredos;
   ainda aberta, com falha de dependências. Não contar como proteção publicada.
 
+## Eficiência preservada
+
+A ordenação recente repetia a leitura de `restaurante_operation_profiles` no
+snapshot público. A mesma leitura agora decide o modo de marmitaria e fornece o
+perfil ao resolvedor canônico de ordenação. O fallback de nicho não habilita o
+modo de marmitaria sozinho. O orçamento do cardápio volta a 15 SELECTs, mantendo
+os testes de composição e prioridade de perfil explícito.
+
 ## Evidência e limites
 
 A primeira etapa tem regressões de autorização negativa/positiva, assinatura,

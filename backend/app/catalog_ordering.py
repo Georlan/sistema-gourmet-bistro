@@ -214,10 +214,15 @@ def ordered_products(products: Sequence[Any]) -> list[Any]:
     )
 
 
+_UNLOADED_OPERATION_PROFILE = object()
+
+
 def resolve_restaurant_niche(
     db: Any,
     restaurante_id: int,
     fallback_niche: Optional[str] = None,
+    *,
+    stored_profile_key: Any = _UNLOADED_OPERATION_PROFILE,
 ) -> str:
     """Detecta o nicho operacional sem reler configuração já carregada.
 
@@ -227,11 +232,14 @@ def resolve_restaurant_niche(
     """
     try:
         from .restaurant_profile_models import RestauranteOperationProfile
-        profile = (
-            db.query(RestauranteOperationProfile.profile_key)
-            .filter(RestauranteOperationProfile.restaurante_id == restaurante_id)
-            .first()
-        )
+        if stored_profile_key is _UNLOADED_OPERATION_PROFILE:
+            profile = (
+                db.query(RestauranteOperationProfile.profile_key)
+                .filter(RestauranteOperationProfile.restaurante_id == restaurante_id)
+                .first()
+            )
+        else:
+            profile = (stored_profile_key,) if stored_profile_key is not None else None
         if profile and profile[0] and profile[0].strip() and profile[0].strip().lower() != "generic":
             return profile[0].strip().lower()
     except Exception:
