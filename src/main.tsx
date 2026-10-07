@@ -218,7 +218,7 @@ const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isPrintSimulatorRoute = pathname.startsWith("/ferramentas/simulador-impressao");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
-const isCearaTechRoute = pathname.startsWith("/cearatech");
+const isCearaTechQrRoute = pathname === "/cearatech/qr";\nconst isCearaTechRoute = pathname.startsWith("/cearatech");
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
 const isOnboardingAwareManagementRoute = isHostedManagementEntryRoute();
 const isInternalSupportOperationalRoute =
