@@ -263,6 +263,25 @@ def list_event_leads(
     }
 
 
+@router.get("/cearatech", summary="Listar leads do Ceará Tech Summit (Super Admin)")
+def list_cearatech_leads_compat(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    admin: dict = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Compatibilidade do endpoint administrativo criado no fluxo inicial do evento."""
+    return list_event_leads(
+        event_slug="ceara-tech-summit-2026",
+        crm_status=None,
+        search=None,
+        limit=limit,
+        offset=offset,
+        admin=admin,
+        db=db,
+    )
+
+
 @router.get("/admin/{lead_id}", summary="Detalhar lead (Super Admin)")
 def get_event_lead(
     lead_id: int,
