@@ -6,6 +6,7 @@ export interface CategoryData {
   id: string;
   nome: string;
   destino_impressao: 'COZINHA' | 'BAR' | 'NENHUM' | string;
+  ordem_exibicao?: number | null;
 }
 
 interface CategoriaModalProps {

@@ -164,7 +164,18 @@ export function CardapioProdutosTab({
           || (mediaFilter === 'GALERIA' && mediaCount >= 2);
         return matchesSearch && matchesCategory && matchesAvailability && matchesMedia;
       })
-      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+      .sort((a, b) => {
+        const orderA = a.ordem_exibicao;
+        const orderB = b.ordem_exibicao;
+        if (orderA != null && orderB != null) {
+          if (orderA !== orderB) return orderA - orderB;
+        } else if (orderA != null) {
+          return -1;
+        } else if (orderB != null) {
+          return 1;
+        }
+        return a.nome.localeCompare(b.nome, 'pt-BR');
+      });
   }, [availabilityFilter, categorias, categoryFilter, mediaFilter, produtos, search]);
 
   const selectedCategory = categoryFilter === 'TODAS'

@@ -5,6 +5,7 @@ export interface CatalogCategory {
   marmitaria_tamanho?: boolean;
   nome: string;
   destino_impressao: 'COZINHA' | 'BAR' | 'NENHUM' | string;
+  ordem_exibicao?: number | null;
 }
 
 export interface CatalogModifierOption {

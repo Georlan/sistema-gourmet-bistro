@@ -49,6 +49,7 @@ export interface Product {
   modifiers?: ProductModifier[];
   modifierGroups?: ModifierGroup[];
   isAvailable?: boolean;
+  ordem_exibicao?: number | null;
 }
 
 export interface BairroTaxa {

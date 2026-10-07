@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Coffee, IceCreamBowl, PlusCircle, Sparkles } from 'lucide-react';
+import { Coffee, Flame, IceCreamBowl, PlusCircle, Sparkles } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -10,49 +10,116 @@ const normalize = (value: string) => value
   .toLowerCase()
   .trim();
 
-type RecommendationKind = 'bebida' | 'sobremesa' | 'adicional';
+export type RecommendationKind = 'destaque' | 'combo' | 'upsell' | 'bebida' | 'sobremesa';
 
-type Recommendation = {
+export type Recommendation = {
   kind: RecommendationKind;
   label: string;
   product: Product;
 };
 
-const CATEGORY_MATCHERS: Record<RecommendationKind, RegExp> = {
-  bebida: /(^|\b)(bebida|bebidas|drink|drinks|refrigerante|refrigerantes|suco|sucos|cerveja|cervejas)(\b|$)/,
-  sobremesa: /(^|\b)(sobremesa|sobremesas|doce|doces|dessert|desserts|sorvete|sorvetes)(\b|$)/,
-  adicional: /(^|\b)(adicional|adicionais|extra|extras|complemento|complementos|acompanhamento|acompanhamentos)(\b|$)/,
-};
-
-const LABELS: Record<RecommendationKind, string> = {
-  bebida: 'Bebida',
-  sobremesa: 'Sobremesa',
-  adicional: 'Adicional',
-};
-
-function firstAvailableForKind(products: Product[], kind: RecommendationKind) {
-  return products.find((product) => (
-    product.isAvailable !== false
-    && CATEGORY_MATCHERS[kind].test(normalize(product.category))
-  ));
-}
-
-export function buildCatalogRecommendations(products: Product[]): Recommendation[] {
-  const kinds: RecommendationKind[] = ['bebida', 'sobremesa', 'adicional'];
-  return kinds.flatMap((kind) => {
-    const product = firstAvailableForKind(products, kind);
-    return product ? [{ kind, label: LABELS[kind], product }] : [];
-  });
-}
+const MAIN_CATEGORY_MATCHER = /(^|\b)(burger|burgers|hamburguer|hamburgueres|lanche|lanches|smash|pizza|pizzas|quentinha|quentinhas|marmita|marmitas|prato|pratos|refeicao|refeicoes|principal|principais)(\b|$)/;
+const COMBO_MATCHER = /(^|\b)(combo|combos|promocional|promocionais|oferta|ofertas)(\b|$)/;
+const UPSELL_MATCHER = /(^|\b)(porcao|porcoes|petisco|petiscos|fritas|batata|batatas|onion|anel|aneis|nuggets|acompanhamento|acompanhamentos|entrada|entradas|adicional|adicionais|guarnicao|guarnicoes)(\b|$)/;
+const BEBIDA_MATCHER = /(^|\b)(bebida|bebidas|drink|drinks|refrigerante|refrigerantes|suco|sucos|cerveja|cervejas|chopp|agua|aguas)(\b|$)/;
+const SOBREMESA_MATCHER = /(^|\b)(sobremesa|sobremesas|doce|doces|dessert|desserts|sorvete|sorvetes|milkshake|milk-shake|acai|brownie)(\b|$)/;
 
 const iconByKind = {
+  destaque: Sparkles,
+  combo: Flame,
+  upsell: PlusCircle,
   bebida: Coffee,
   sobremesa: IceCreamBowl,
-  adicional: PlusCircle,
 } as const;
 
+export function buildCatalogRecommendations(
+  products: Product[],
+  categories?: string[],
+): Recommendation[] {
+  const available = products.filter((product) => product.isAvailable !== false);
+  if (available.length === 0) return [];
+
+  const chosenIds = new Set<string>();
+  const recommendations: Recommendation[] = [];
+
+  const addRecommendation = (product: Product, kind: RecommendationKind, label: string) => {
+    if (chosenIds.has(product.id) || recommendations.length >= 3) return;
+    chosenIds.add(product.id);
+    recommendations.push({ kind, label, product });
+  };
+
+  // 1. Destaque / Produto Principal: burger, pizza, prato ou primeiro item da categoria inicial de comida
+  const primaryProduct = available.find((product) => {
+    const cat = normalize(product.category || '');
+    return MAIN_CATEGORY_MATCHER.test(cat);
+  }) || available.find((product) => {
+    const cat = normalize(product.category || '');
+    return !BEBIDA_MATCHER.test(cat) && !SOBREMESA_MATCHER.test(cat);
+  });
+
+  if (primaryProduct) {
+    addRecommendation(primaryProduct, 'destaque', 'Destaque');
+  }
+
+  // 2. Combo
+  const comboProduct = available.find((product) => {
+    if (chosenIds.has(product.id)) return false;
+    const cat = normalize(product.category || '');
+    const name = normalize(product.name || '');
+    return COMBO_MATCHER.test(cat) || COMBO_MATCHER.test(name);
+  });
+
+  if (comboProduct) {
+    addRecommendation(comboProduct, 'combo', 'Combo');
+  }
+
+  // 3. Upsell relevante / Acompanhamento / Porção
+  const upsellProduct = available.find((product) => {
+    if (chosenIds.has(product.id)) return false;
+    const cat = normalize(product.category || '');
+    return UPSELL_MATCHER.test(cat);
+  });
+
+  if (upsellProduct) {
+    addRecommendation(upsellProduct, 'upsell', 'Acompanhamento');
+  }
+
+  // 4. Complemento para até 3 itens (priorizando itens de comida antes de bebidas/sobremesas)
+  if (recommendations.length < 3) {
+    for (const product of available) {
+      if (recommendations.length >= 3) break;
+      if (chosenIds.has(product.id)) continue;
+      const cat = normalize(product.category || '');
+      if (!BEBIDA_MATCHER.test(cat) && !SOBREMESA_MATCHER.test(cat)) {
+        addRecommendation(product, 'destaque', 'Sugestão');
+      }
+    }
+  }
+
+  // 5. Último recurso se o cardápio não possuir itens suficientes de comida
+  if (recommendations.length < 3) {
+    for (const product of available) {
+      if (recommendations.length >= 3) break;
+      if (chosenIds.has(product.id)) continue;
+      const cat = normalize(product.category || '');
+      if (BEBIDA_MATCHER.test(cat)) {
+        addRecommendation(product, 'bebida', 'Bebida');
+      } else if (SOBREMESA_MATCHER.test(cat)) {
+        addRecommendation(product, 'sobremesa', 'Sobremesa');
+      } else {
+        addRecommendation(product, 'destaque', 'Sugestão');
+      }
+    }
+  }
+
+  return recommendations;
+}
+
 export function CardapioRecommendations({ brand }: { brand: BrandConfig }) {
-  const recommendations = useMemo(() => buildCatalogRecommendations(brand.products), [brand.products]);
+  const recommendations = useMemo(
+    () => buildCatalogRecommendations(brand.products, brand.categories),
+    [brand.products, brand.categories],
+  );
 
   if (recommendations.length === 0) return null;
 
@@ -73,7 +140,7 @@ export function CardapioRecommendations({ brand }: { brand: BrandConfig }) {
           <Sparkles className="h-4 w-4" aria-hidden="true" />
         </span>
         <div>
-          <h2 id="cardapio-recommendations-title" className="text-sm font-black text-koma-foreground">Complete seu pedido</h2>
+          <h2 id="cardapio-recommendations-title" className="text-sm font-black text-koma-foreground">Destaques do cardápio</h2>
           <p className="text-[10px] text-koma-muted">Sugestões disponíveis agora no cardápio.</p>
         </div>
       </div>
