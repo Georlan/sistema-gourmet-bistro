@@ -106,6 +106,7 @@ class CategoriaResponse(BaseModel):
     id: str
     nome: str
     destino_impressao: str
+    ordem_exibicao: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -127,6 +128,7 @@ class ProdutoBase(BaseModel):
     imagem: Optional[str] = ""
     imagens_galeria: Optional[List[str]] = Field(default_factory=list)
     ativo: bool = True
+    ordem_exibicao: Optional[int] = None
 
     @field_validator("descricao", "imagem", mode="before")
     @classmethod
@@ -153,6 +155,7 @@ class ProdutoUpdate(BaseModel):
     imagem: Optional[str] = None
     imagens_galeria: Optional[List[str]] = None
     ativo: Optional[bool] = None
+    ordem_exibicao: Optional[int] = None
 
 class ProdutoResponse(ProdutoBase):
     marmitaria_tamanho: Optional[str] = None

@@ -48,7 +48,12 @@ from ..services.online_order_policy import (
     next_schedule_opening_label,
 )
 from ..services.delivery_fee_policy import resolve_distance_delivery_fee
-from .products import notify_catalog_update, ordered_categories as _ordered_categories
+from ..catalog_ordering import (
+    ordered_categories as _ordered_categories,
+    ordered_products as _ordered_products,
+    resolve_restaurant_niche,
+)
+from .products import notify_catalog_update
 
 logger = logging.getLogger("koma.cardapio_digital")
 router = APIRouter(prefix="/api/cardapio-digital", tags=["Cardapio Digital Assets"])
@@ -210,6 +215,7 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
     return db.query(ConfiguracaoRestaurante).options(
         load_only(
             ConfiguracaoRestaurante.restaurante_id,
+            ConfiguracaoRestaurante.nicho,
             ConfiguracaoRestaurante.delivery_ativo,
             ConfiguracaoRestaurante.tipos_pedido_ativos,
             ConfiguracaoRestaurante.pedido_minimo,
@@ -280,7 +286,11 @@ def _public_restaurant_payload(
 
 
 def _public_category_payload(category: Categoria) -> dict:
-    return {"id": category.id, "nome": category.nome}
+    return {
+        "id": category.id,
+        "nome": category.nome,
+        "ordem_exibicao": category.ordem_exibicao,
+    }
 
 
 def _public_product_payload(product: Produto, modifier_groups: Optional[list[dict]] = None, *, marmitaria: bool = False) -> dict:
@@ -294,6 +304,7 @@ def _public_product_payload(product: Produto, modifier_groups: Optional[list[dic
         "categoria_id": product.categoria_id,
         "grupos_modificadores": modifier_groups or [],
         "marmitaria": marmitaria,
+        "ordem_exibicao": product.ordem_exibicao,
     }
 
 
@@ -324,10 +335,19 @@ def obter_categorias_cardapio_digital(
     slug: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Retorna as categorias do tenant para o cardápio digital."""
+    """Retorna as categorias ativas do tenant para o cardápio digital."""
     with public_tenant_scope(restaurante_id, slug, db) as rest_id:
+        active_category_ids = {
+            row[0]
+            for row in db.query(Produto.categoria_id)
+            .filter(Produto.restaurante_id == rest_id, Produto.ativo.is_(True))
+            .distinct()
+            .all()
+        }
         categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
-        return [_public_category_payload(category) for category in _ordered_categories(categorias)]
+        categorias_com_produtos = [category for category in categorias if category.id in active_category_ids]
+        niche = resolve_restaurant_niche(db, rest_id)
+        return [_public_category_payload(category) for category in _ordered_categories(categorias_com_produtos, niche=niche)]
 
 
 @router.get("/produtos")
@@ -342,6 +362,7 @@ def obter_produtos_cardapio_digital(
             Produto.restaurante_id == rest_id,
             Produto.ativo.is_(True),
         ).all()
+        produtos = _ordered_products(produtos)
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
         is_marmitaria = marmitaria_enabled(db, rest_id)
         return [
@@ -377,8 +398,19 @@ def obter_cardapio_publico(
             Produto.restaurante_id == rest_id,
             Produto.ativo.is_(True),
         ).all()
+        produtos = _ordered_products(produtos)
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
         is_marmitaria = marmitaria_enabled(db, rest_id)
+
+        # Categorias vazias (sem produtos ativos) não aparecem no cardápio online
+        active_category_ids = {product.categoria_id for product in produtos}
+        categorias_com_produtos = [category for category in categorias if category.id in active_category_ids]
+        niche = resolve_restaurant_niche(
+            db,
+            rest_id,
+            fallback_niche=getattr(configuracao, "nicho", None) if configuracao else None,
+        )
+        categorias_ordenadas = _ordered_categories(categorias_com_produtos, niche=niche)
 
         return {
             "restaurante": _public_restaurant_payload(
@@ -389,7 +421,7 @@ def obter_cardapio_publico(
             ),
             "categorias": [
                 _public_category_payload(category)
-                for category in _ordered_categories(categorias)
+                for category in categorias_ordenadas
             ],
             "produtos": [
                 _public_product_payload(
