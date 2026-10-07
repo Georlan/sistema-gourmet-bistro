@@ -34,6 +34,15 @@ filtro; não protege contra comprometimento completo da credencial do runtime.
    ignora callbacks porque perdeu acesso à consulta global. Nenhuma migração
    desta rodada deve excluir ou reescrever notificações, pedidos ou restaurantes.
 
+## Dependências vulneráveis
+
+O lock fixava PyJWT 2.13.0 e urllib3 2.7.0, com 16 avisos conhecidos na auditoria
+anterior. Esta etapa atualiza somente PyJWT para 2.15.1 e urllib3 para 2.8.0,
+com pisos correspondentes no requirements. Todas as demais versões são mantidas.
+[Changelog PyJWT](https://pyjwt.readthedocs.io/en/latest/changelog.html) e
+[release urllib3](https://github.com/urllib3/urllib3/releases/tag/2.8.0).
+Regressões de autenticação devem passar com essas versões antes da publicação.
+
 ## Exceções verificadas e gaps restantes
 
 - `notificacoes_whatsapp`: gap confirmado, tenant-owned com DML direto e sem RLS.

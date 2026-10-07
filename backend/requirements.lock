@@ -137,7 +137,7 @@ pydantic-core==2.46.5
     # via
     #   -c backend/requirements.lock
     #   pydantic
-pyjwt==2.13.0
+pyjwt==2.15.1
     # via
     #   -c backend/requirements.lock
     #   -r backend/requirements.txt
@@ -197,7 +197,7 @@ typing-inspection==0.4.4
     #   -c backend/requirements.lock
     #   fastapi
     #   pydantic
-urllib3==2.7.0
+urllib3==2.8.0
     # via
     #   -c backend/requirements.lock
     #   requests
