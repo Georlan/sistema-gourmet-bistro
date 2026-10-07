@@ -1,3 +1,4 @@
+import { KOMA_LANDING_CONFIG } from "./config/landingConfig";
 import React, { useState, useEffect } from 'react';
 import { CheckCircle2, Instagram, Send, Store, UtensilsCrossed, Phone, User, Building2 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
