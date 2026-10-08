@@ -260,6 +260,8 @@ def list_tenants(admin: dict = Depends(get_current_admin)):
                 )
 
                 saas_status = str(getattr(restaurante, "saas_status", "active") or "active").upper()
+                from ..services.direct_pix_billing import billing_summary
+                billing = billing_summary(db, restaurante.id)
                 result.append(
                     {
                         "id": str(restaurante.id),
@@ -276,6 +278,7 @@ def list_tenants(admin: dict = Depends(get_current_admin)):
                             else None
                         ),
                         "onlinePaymentStatus": _payment_status(payment_account),
+                        "billing": billing,
                     }
                 )
 
@@ -573,6 +576,24 @@ def update_tenant(
         )
     finally:
         db.close()
+
+
+@router.get('/restaurantes/{restaurant_id}/billing')
+def restaurant_billing_history(restaurant_id: int, admin=Depends(get_current_admin)):
+    from ..models import DirectPixFeeInvoice
+    from ..services.direct_pix_billing import billing_summary
+    with SessionLocal() as db:
+        with tenant_session_scope(db, restaurant_id):
+            if db.query(Restaurante.id).filter(Restaurante.id == restaurant_id).scalar() is None:
+                raise HTTPException(404, 'Restaurante não encontrado.')
+            rows = db.query(DirectPixFeeInvoice).filter(DirectPixFeeInvoice.restaurante_id == restaurant_id).order_by(
+                DirectPixFeeInvoice.period.desc()).limit(24).all()
+            return {'billing': billing_summary(db, restaurant_id), 'invoices': [
+                {'id': row.id, 'period': row.period, 'fees': str(row.fees),
+                 'subscription_amount': str(row.subscription_amount),
+                 'total': str(row.fees + row.subscription_amount), 'status': row.status,
+                 'due_at': row.due_at.isoformat() if row.due_at else None,
+                 'paid_at': row.paid_at.isoformat() if row.paid_at else None} for row in rows]}
 
 
 @router.get("/audit")

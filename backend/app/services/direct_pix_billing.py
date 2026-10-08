@@ -1,12 +1,74 @@
 """Freeze accrued fees once per tenant/month. No implicit external charge."""
 from __future__ import annotations
 import datetime as dt
+import calendar
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 from ..models import DirectPixFeeInvoice, DirectPixReceipt, OnlinePaymentIntent, Restaurante
 from ..saas_billing_models import SaaSSubscription
 from .billing_service import tenant_commercial_terms
+
+
+def utc(value):
+    return value.replace(tzinfo=dt.timezone.utc) if value is not None and value.tzinfo is None else value
+
+
+def invoice_due(sub, next_month):
+    # The trial's original anniversary avoids drifting after a short February.
+    anchor = utc(sub.trial_ends_at) or utc(sub.current_period_end)
+    if anchor is None:
+        return None  # No fabricated due date before the trial has actually started.
+    local = anchor.astimezone(ZoneInfo('America/Sao_Paulo'))
+    return next_month.replace(day=min(local.day, calendar.monthrange(next_month.year, next_month.month)[1]),
+        hour=local.hour, minute=local.minute, second=local.second).astimezone(dt.timezone.utc)
+
+
+def billing_summary(db: Session, restaurant_id: int, *, now=None):
+    now = now or dt.datetime.now(dt.timezone.utc)
+    subscription_row = db.query(SaaSSubscription, Restaurante.billing_mode).join(
+        Restaurante, Restaurante.id == SaaSSubscription.restaurante_id).filter(
+        SaaSSubscription.restaurante_id == restaurant_id).one_or_none()
+    sub = subscription_row[0] if subscription_row else None
+    rows = db.query(DirectPixFeeInvoice).filter(DirectPixFeeInvoice.restaurante_id == restaurant_id,
+        DirectPixFeeInvoice.status == 'open').order_by(
+        DirectPixFeeInvoice.due_at, DirectPixFeeInvoice.id).all()
+    total = sum((row.fees + row.subscription_amount for row in rows), Decimal('0.00'))
+    oldest = next((row for row in rows if row.due_at is not None), rows[0] if rows else None)
+    due = utc(oldest.due_at) if oldest else None
+    payable_invoice = oldest
+    sub_due = utc(sub.current_period_end) or utc(sub.trial_ends_at) if sub else None
+    subscription_owed = bool(sub and subscription_row[1] == 'subscription' and sub.trial_started_at
+        and sub.status in {'active','trialing','past_due'} and sub_due)
+    if subscription_owed and (due is None or sub_due < due):
+        due = sub_due
+        payable_invoice = None
+    grace = due + dt.timedelta(days=3) if due else None
+    state = ('restricted' if grace and now > grace else 'overdue' if due and now > due
+        else 'due_soon' if due and now >= due - dt.timedelta(days=3) else 'open' if oldest else 'current')
+    return {'status': state, 'new_sales_allowed': state != 'restricted',
+        'open_total': str(total), 'open_count': len(rows), 'invoice_id': payable_invoice.id if payable_invoice else None,
+        'due_at': due.isoformat() if due else None, 'grace_until': grace.isoformat() if grace else None,
+        'subscription_status': sub.status if sub else 'unconfigured',
+        'subscription_owed': subscription_owed,
+        'subscription_due_at': (utc(sub.current_period_end) or utc(sub.trial_ends_at)).isoformat()
+            if sub and (sub.current_period_end or sub.trial_ends_at) else None}
+
+
+def new_sales_allowed(db: Session, restaurant_id: int, *, now=None):
+    cutoff = (now or dt.datetime.now(dt.timezone.utc)) - dt.timedelta(days=3)
+    fee_overdue = db.query(db.query(DirectPixFeeInvoice.id).filter(
+        DirectPixFeeInvoice.restaurante_id == restaurant_id, DirectPixFeeInvoice.status == 'open',
+        DirectPixFeeInvoice.due_at < cutoff).exists()).scalar()
+    if fee_overdue:
+        return False
+    from sqlalchemy import func
+    subscription_overdue = db.query(db.query(SaaSSubscription.restaurante_id).join(
+        Restaurante, Restaurante.id == SaaSSubscription.restaurante_id).filter(
+        SaaSSubscription.restaurante_id == restaurant_id, Restaurante.billing_mode == 'subscription',
+        SaaSSubscription.trial_started_at.isnot(None), SaaSSubscription.status.in_(['active','trialing','past_due']),
+        func.coalesce(SaaSSubscription.current_period_end, SaaSSubscription.trial_ends_at) < cutoff).exists()).scalar()
+    return not subscription_overdue
 
 
 def close_month(db: Session, *, restaurant_id: int, period: str) -> DirectPixFeeInvoice:
@@ -53,17 +115,22 @@ def close_month(db: Session, *, restaurant_id: int, period: str) -> DirectPixFee
             # An already-issued fixed invoice keeps ownership of its installment.
             fixed = Decimal('0.00')
     invoice = DirectPixFeeInvoice(restaurante_id=restaurant_id, period=period, fees=fees,
-        subscription_amount=fixed, subscription_due_at=due if fixed else None, status='open' if fees+fixed > 0 else 'paid')
+        subscription_amount=fixed, subscription_due_at=due if fixed else None,
+        due_at=due if fixed else invoice_due(sub, end_local), status='open' if fees+fixed > 0 else 'paid')
     db.add(invoice)
     db.flush()
     for receipt in receipts:
         receipt.invoice_id = invoice.id
+    if fees + fixed > 0:
+        from .signup_notifications import enqueue_billing_owner
+        enqueue_billing_owner(db, tenant_id=restaurant_id, invoice_id=invoice.id,
+            period=period, event='issued', amount=fees + fixed)
     return invoice
 
 
 def reconcile_invoice_payment(db: Session, *, restaurant_id: int, invoice_id: str, payment: dict) -> bool:
     row = db.query(DirectPixFeeInvoice).filter(DirectPixFeeInvoice.restaurante_id == restaurant_id,
-        DirectPixFeeInvoice.id == invoice_id).with_for_update().one_or_none()
+        DirectPixFeeInvoice.id == invoice_id).with_for_update().populate_existing().one_or_none()
     if row is None:
         return False
     expected_reference = f"KOMA-FEE-{restaurant_id}-{row.id}"
@@ -92,6 +159,9 @@ def reconcile_invoice_payment(db: Session, *, restaurant_id: int, invoice_id: st
         _advance_paid_period(sub,due or dt.datetime.now(dt.timezone.utc))
     row.status = 'paid'
     row.paid_at = dt.datetime.now(dt.timezone.utc)
+    from .signup_notifications import enqueue_billing_owner
+    enqueue_billing_owner(db, tenant_id=restaurant_id, invoice_id=row.id,
+        period=row.period, event='paid', amount=row.fees + row.subscription_amount)
     return True
 
 
@@ -107,6 +177,12 @@ def create_invoice_pix(db: Session, *, restaurant_id: int, invoice_id: str, paye
     amount = row.fees+row.subscription_amount
     if amount <= 0 or row.status == 'paid':
         return {'invoiceId':row.id,'status':'approved','amount':str(amount),'paymentMethodType':'pix'}
+    if row.subscription_amount > 0:
+        sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == restaurant_id).one_or_none()
+        trial_end = utc(sub.trial_ends_at) if sub else None
+        if sub and (sub.status == 'onboarding' or trial_end and dt.datetime.now(dt.timezone.utc) < trial_end):
+            return {'invoiceId': row.id, 'status': 'not_due', 'amount': str(amount),
+                'paymentMethodType': 'pix', 'message': 'O Pix da mensalidade só será gerado depois dos 7 dias grátis.'}
     reference = f"KOMA-FEE-{restaurant_id}-{row.id}"
     if row.provider_payment_id:
         payment = provider.get_payment(row.provider_payment_id)
@@ -158,6 +234,7 @@ def create_invoice_pix(db: Session, *, restaurant_id: int, invoice_id: str, paye
         'amount':str(amount),'fees':str(row.fees),'subscriptionAmount':str(row.subscription_amount),
         'qrCode':qr.get('qr_code'),'qrCodeBase64':qr.get('qr_code_base64'),'ticketUrl':qr.get('ticket_url'),
         'expiresAt':payment.get('date_of_expiration'),'paymentMethodType':'pix','automaticRenewal':False}
+    db.flush()
     reconcile_invoice_payment(db,restaurant_id=restaurant_id,invoice_id=row.id,payment=payment)
     db.commit()
     return row.payment_payload

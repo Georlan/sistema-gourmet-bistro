@@ -12,6 +12,7 @@ export interface Tenant {
   failedWebhooksCount24h?: number | null;
   healthStatus?: "green" | "yellow" | "red" | null;
   onlinePaymentStatus?: "connected" | "disconnected" | "pending" | string | null;
+  billing?: {status:string; open_total:string; open_count:number; due_at:string|null; subscription_status:string; subscription_due_at:string|null};
 }
 
 export interface ActiveDevice {

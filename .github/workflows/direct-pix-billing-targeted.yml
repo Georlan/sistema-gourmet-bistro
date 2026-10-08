@@ -1,0 +1,54 @@
+name: Direct Pix Billing
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/direct-pix-billing-targeted.yml'
+      - 'backend/app/services/direct_pix*'
+      - 'backend/app/services/signup_notifications.py'
+      - 'backend/app/routes/direct_pix.py'
+      - 'backend/app/routes/saas_pix.py'
+      - 'backend/app/application/orders/service.py'
+      - 'backend/alembic/versions/ba8d7c6e5f41_direct_pix_invoice_due.py'
+      - 'backend/tests/test_direct_pix.py'
+      - 'src/components/caixa/settings/*Pix*'
+      - 'src/components/caixa/settings/Koma*'
+      - 'src/components/CaixaPanel.tsx'
+      - 'src/super-admin/SuperAdminBillingHistory.tsx'
+      - 'e2e/direct-pix.spec.ts'
+permissions:
+  contents: read
+jobs:
+  billing:
+    name: Direct Pix billing and PostgreSQL isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: koma_direct_pix_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d koma_direct_pix_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.15'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: python -m pip install -r backend/requirements-dev.txt
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Verify frozen invoices, paid release, notifications and tenant isolation
+        env:
+          PYTHONPATH: backend
+          DIRECT_PIX_TEST_POSTGRES_URL: postgresql+psycopg2://postgres:local-test-only@127.0.0.1:5432/koma_direct_pix_test
+        run: python -m pytest backend/tests/test_direct_pix.py -q -ra
+      - name: Verify mobile and desktop payment flow
+        run: KOMA_E2E_PORT=4283 npm run test:e2e -- e2e/direct-pix.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2

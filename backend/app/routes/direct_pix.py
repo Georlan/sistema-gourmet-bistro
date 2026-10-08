@@ -2,7 +2,8 @@ from __future__ import annotations
 import datetime as dt
 import re
 from decimal import Decimal
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -10,6 +11,7 @@ from ..config import settings
 from ..database import get_db, require_tenant_id
 from ..models import Comanda, DirectPixReceipt, DirectPixFeeInvoice, OnlinePaymentIntent, RestaurantDirectPixConfig, Usuario
 from ..security import require_permission
+from ..security import get_current_user
 from ..services.online_payments.direct_pix import normalize_key, merchant_text
 from ..services.online_payments.base import ProviderPayment
 from ..services.online_payments.service import OnlinePaymentService, OnlinePaymentConfigurationError, OnlinePaymentValidationError
@@ -54,7 +56,16 @@ def config_payload(config):
 @router.get('/settings')
 def read_settings(db: Session = Depends(get_db), user: Usuario = Depends(require_permission('configuracoes:administrar'))):
     config = db.query(RestaurantDirectPixConfig).filter(RestaurantDirectPixConfig.restaurante_id == require_tenant_id()).one_or_none()
-    return config_payload(config)
+    from ..services.billing_service import tenant_commercial_terms
+    payload = config_payload(config)
+    try:
+        terms = tenant_commercial_terms(db, require_tenant_id())
+    except RuntimeError:
+        terms = None
+    payload['commercial'] = ({'plan': terms.plan, 'billing_cycle': terms.billing_cycle,
+        'billing_amount': str(terms.billing_amount), 'marketplace_rate': str(terms.marketplace_rate),
+        'legal_version': terms.legal_version} if terms else None)
+    return payload
 
 
 @router.put('/settings')
@@ -181,7 +192,10 @@ def close_invoice(period: str, db: Session = Depends(get_db), user: Usuario = De
 def list_invoices(db: Session = Depends(get_db), user: Usuario = Depends(require_permission('configuracoes:administrar'))):
     rows = db.query(DirectPixFeeInvoice).filter(DirectPixFeeInvoice.restaurante_id == require_tenant_id()).order_by(DirectPixFeeInvoice.period.desc()).limit(24).all()
     return [{'id':r.id,'period':r.period,'fees':str(r.fees),'subscription_amount':str(r.subscription_amount),
-        'total':str(r.fees+r.subscription_amount),'status':r.status} for r in rows]
+        'total':str(r.fees+r.subscription_amount),'status':r.status,
+        'paid_at': r.paid_at.isoformat() if r.paid_at else None,
+        'due_at': r.due_at.isoformat() if r.due_at else None,
+        'subscription_due_at': r.subscription_due_at.isoformat() if r.subscription_due_at else None} for r in rows]
 
 
 @router.post('/invoices/{invoice_id}/pix')
@@ -193,3 +207,59 @@ def invoice_pix(invoice_id: str, db: Session = Depends(get_db), user: Usuario = 
     except (ValueError,SaasMercadoPagoError) as exc:
         db.rollback()
         raise HTTPException(409,str(exc)) from exc
+
+
+@router.get('/invoices/{invoice_id}')
+def invoice_statement(invoice_id: str, db: Session = Depends(get_db), user: Usuario = Depends(require_permission('configuracoes:administrar')),
+    offset: Annotated[int, Query(ge=0, le=1000000)] = 0):
+    tenant = require_tenant_id()
+    invoice = db.query(DirectPixFeeInvoice).filter(DirectPixFeeInvoice.id == invoice_id,
+        DirectPixFeeInvoice.restaurante_id == tenant).one_or_none()
+    if invoice is None:
+        raise HTTPException(404, 'Fatura não encontrada.')
+    rows = db.query(DirectPixReceipt, OnlinePaymentIntent, Comanda).join(
+        OnlinePaymentIntent, OnlinePaymentIntent.id == DirectPixReceipt.intent_id).join(
+        Comanda, Comanda.id == OnlinePaymentIntent.comanda_id).filter(
+        DirectPixReceipt.invoice_id == invoice.id, DirectPixReceipt.restaurante_id == tenant,
+        OnlinePaymentIntent.restaurante_id == tenant, Comanda.restaurante_id == tenant).order_by(
+        DirectPixReceipt.confirmed_at, DirectPixReceipt.intent_id).offset(offset).limit(201).all()
+    return {'id': invoice.id, 'period': invoice.period, 'fees': str(invoice.fees),
+        'subscription_amount': str(invoice.subscription_amount),
+        'total': str(invoice.fees + invoice.subscription_amount), 'status': invoice.status,
+        'due_at': invoice.due_at.isoformat() if invoice.due_at else None,
+        'items': [{'order_number': str(order.numero_pedido), 'amount': str(intent.amount),
+            'fee': str(receipt.fee), 'method': intent.method,
+            'confirmed_at': receipt.confirmed_at.isoformat()} for receipt, intent, order in rows[:200]],
+        'has_more': len(rows) > 200}
+
+
+@router.get('/billing-status')
+def read_billing_status(db: Session = Depends(get_db), user: Usuario = Depends(get_current_user)):
+    from ..services.direct_pix_billing import billing_summary
+    return billing_summary(db, require_tenant_id())
+
+
+@router.get('/invoices/{invoice_id}/payment-status')
+def invoice_payment_status(invoice_id: str, db: Session = Depends(get_db), user: Usuario = Depends(require_permission('configuracoes:administrar'))):
+    from ..services.direct_pix_billing import reconcile_invoice_payment
+    from ..services.saas_mercadopago import default_saas_mp_service as provider, SaasMercadoPagoError
+    tenant = require_tenant_id()
+    row = db.query(DirectPixFeeInvoice.status, DirectPixFeeInvoice.provider_payment_id).filter(
+        DirectPixFeeInvoice.restaurante_id == tenant, DirectPixFeeInvoice.id == invoice_id).one_or_none()
+    if row is None:
+        raise HTTPException(404, 'Fatura não encontrada.')
+    if row.status == 'paid':
+        return {'status': 'approved'}
+    if not row.provider_payment_id:
+        return {'status': 'not_generated'}
+    payment_id = row.provider_payment_id
+    # Release the read transaction before waiting for the provider.
+    db.commit()
+    try:
+        payment = provider.get_payment(payment_id)
+        paid = reconcile_invoice_payment(db, restaurant_id=tenant, invoice_id=invoice_id, payment=payment)
+        db.commit()
+        return {'status': 'approved' if paid else str(payment.get('status') or 'pending')}
+    except (ValueError, SaasMercadoPagoError) as exc:
+        db.rollback()
+        raise HTTPException(409, str(exc)) from exc

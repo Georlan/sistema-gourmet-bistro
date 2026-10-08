@@ -40,9 +40,8 @@ test('Sistema > Configurações owns KÔMA Pagamentos and the Mercado Pago conne
   assert.match(komaPayments, /MercadoPagoConnectionCard/);
   assert.match(komaPayments, /KÔMA Pagamentos/);
   assert.match(komaPayments, /DirectPixSettings/);
-  assert.match(komaPayments, /0,99%/);
-  assert.match(komaPayments, /0,49%/);
-  assert.match(komaPayments, /apenas sobre pagamentos online/);
+  assert.doesNotMatch(komaPayments, /0,99%|0,49%/);
+  assert.match(komaPayments, /sobre pagamentos online confirmados/);
   assert.match(settings, /activeSubTab === 'integracoes'/);
   assert.match(settings, /CashierIntegrationsSettings/);
   assert.match(navigation, /config_integracoes/);
