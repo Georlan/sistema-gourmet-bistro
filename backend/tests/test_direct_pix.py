@@ -33,14 +33,14 @@ def db():
     disposable.dispose()
 
 
-def order(db, monkeypatch):
+def order(db, monkeypatch, *, test_mode=False):
     monkeypatch.setattr(settings,'DIRECT_PIX_ENABLED',True)
     monkeypatch.setattr(settings,'ONLINE_PAYMENT_PLAN_FEES_ENABLED',False)
     db.add(Categoria(id='direct-category',restaurante_id=99420,nome='Teste'))
     db.flush()
     db.add(Produto(id='direct-product',restaurante_id=99420,categoria_id='direct-category',nome='Produto',preco=100,ativo=True))
     shift=CaixaTurno(restaurante_id=99420,aberto_por_id='direct-pix-user',saldo_inicial=0,status='aberto')
-    config=RestaurantDirectPixConfig(restaurante_id=99420,enabled=True,key_type='email',holder_name='RESTAURANTE',city='FORTALEZA',accepted_by='direct-pix-user',accepted_at=dt.datetime.now(dt.timezone.utc),terms_version='direct-pix-v1')
+    config=RestaurantDirectPixConfig(restaurante_id=99420,enabled=True,key_type='email',holder_name='RESTAURANTE',city='FORTALEZA',accepted_by='direct-pix-user',accepted_at=dt.datetime.now(dt.timezone.utc),terms_version='direct-pix-test-v1' if test_mode else 'direct-pix-v1')
     config.pix_key='pix@example.com'
     db.add_all([shift,config]);db.commit()
     command=CreateOrderCommand(restaurant_id=99420,channel=OrderChannel.WEB_CARDAPIO,fulfillment=FulfillmentType.PICKUP,
@@ -483,3 +483,71 @@ def test_consolidated_invoice_cannot_charge_monthly_installment_during_trial(db,
     monkeypatch.setattr(default_saas_mp_service,'_ensure_provider_ready',lambda:None)
     result=create_invoice_pix(db,restaurant_id=99420,invoice_id=row.id,payer_email='admin@example.com')
     assert result['status']=='not_due' and row.provider_payment_id is None
+
+
+def test_explicit_test_release_without_subscription_is_scoped_and_revocable(db, monkeypatch):
+    from app.routes.direct_pix import read_settings, save_settings, PixConfiguration
+    from app.models import SuperAdminAuditLog
+    monkeypatch.setattr(settings, 'DIRECT_PIX_ENABLED', True)
+    monkeypatch.setattr('app.services.billing_service.tenant_commercial_terms', lambda *_: None)
+    monkeypatch.setenv('DIRECT_PIX_TEST_TENANT_IDS', '8')
+    user = db.get(Usuario, 'direct-pix-user')
+    payload = PixConfiguration(enabled=True, key_type='email', pix_key='pix@example.test',
+        holder_name='Restaurante', city='Fortaleza', accept_manual_confirmation_and_monthly_fees=True)
+    assert read_settings(db, user)['test_mode'] is False
+    with pytest.raises(HTTPException) as failure:
+        save_settings(payload, db, user)
+    assert failure.value.status_code == 409
+    monkeypatch.setenv('DIRECT_PIX_TEST_TENANT_IDS', '99420')
+    assert read_settings(db, user)['test_mode'] is True
+    assert read_settings(db, user)['commercial'] is None
+    save_settings(payload, db, user)
+    row = db.query(RestaurantDirectPixConfig).one()
+    assert row.enabled and row.terms_version == 'direct-pix-test-v1'
+    assert db.query(SaaSSubscription).count() == 0
+    assert db.query(SuperAdminAuditLog).filter_by(action='DIRECT_PIX_TEST_ACTIVATED').count() == 1
+    assert OnlinePaymentService.has_active_account(db, 99420)
+    assert OnlinePaymentService.active_account(db, 99420).provider == 'direct_pix'
+    monkeypatch.delenv('DIRECT_PIX_TEST_TENANT_IDS')
+    assert not OnlinePaymentService.has_active_account(db, 99420)
+    with pytest.raises(OnlinePaymentConfigurationError):
+        OnlinePaymentService.active_account(db, 99420)
+
+
+def test_test_release_never_bypasses_existing_subscription_or_invalid_contract(db, monkeypatch):
+    from app.routes.direct_pix import read_settings, save_settings, PixConfiguration
+    monkeypatch.setattr(settings, 'DIRECT_PIX_ENABLED', True)
+    monkeypatch.setenv('DIRECT_PIX_TEST_TENANT_IDS', '99420')
+    monkeypatch.setattr('app.services.billing_service.tenant_commercial_terms', lambda *_: None)
+    db.add(SaaSSubscription(restaurante_id=99420, status='onboarding', payment_method_type='pix'))
+    db.commit()
+    user = db.get(Usuario, 'direct-pix-user')
+    assert read_settings(db, user)['test_mode'] is False
+    payload = PixConfiguration(enabled=True, key_type='email', pix_key='pix@example.test',
+        holder_name='Restaurante', city='Fortaleza', accept_manual_confirmation_and_monthly_fees=True)
+    with pytest.raises(HTTPException):
+        save_settings(payload, db, user)
+    def invalid(*_):
+        raise RuntimeError('Invalid stored terms')
+    monkeypatch.setattr('app.services.billing_service.tenant_commercial_terms', invalid)
+    assert read_settings(db, user)['test_mode'] is False
+    with pytest.raises(HTTPException):
+        save_settings(payload, db, user)
+
+
+def test_test_payment_fees_are_never_invoiced_after_later_subscription(db, monkeypatch):
+    monkeypatch.setenv('DIRECT_PIX_TEST_TENANT_IDS', '99420')
+    intent, _ = order(db, monkeypatch, test_mode=True)
+    assert intent.fee_settlement == 'test'
+    confirm_receipt(intent.id, ReceiptConfirmation(received_amount='100.00',
+        bank_reference='E'+'9'*31, checked_bank_statement=True), db,
+        SimpleNamespace(id='direct-pix-user'))
+    receipt = db.query(DirectPixReceipt).one()
+    receipt.confirmed_at = dt.datetime(2025, 1, 15, tzinfo=dt.timezone.utc)
+    db.add(SaaSSubscription(restaurante_id=99420, billing_cycle='annual', payment_method_type='pix'))
+    db.commit()
+    monkeypatch.setattr('app.services.direct_pix_billing.tenant_commercial_terms',
+        lambda *_: SimpleNamespace(billing_amount=Decimal('1200')))
+    invoice = close_month(db, restaurant_id=99420, period='2025-01')
+    assert invoice.fees == 0 and invoice.subscription_amount == 0
+    assert receipt.invoice_id is None

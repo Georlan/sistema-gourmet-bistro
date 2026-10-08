@@ -16,6 +16,7 @@ from ..services.online_payments.direct_pix import normalize_key, merchant_text
 from ..services.online_payments.base import ProviderPayment
 from ..services.online_payments.service import OnlinePaymentService, OnlinePaymentConfigurationError, OnlinePaymentValidationError
 from ..services.direct_pix_billing import close_month
+from ..services.direct_pix_test_release import TEST_TERMS_VERSION, test_registration_allowed
 from ..websocket_manager import manager
 
 router = APIRouter(prefix='/payments/direct-pix', tags=['Pix direto'])
@@ -58,13 +59,17 @@ def read_settings(db: Session = Depends(get_db), user: Usuario = Depends(require
     config = db.query(RestaurantDirectPixConfig).filter(RestaurantDirectPixConfig.restaurante_id == require_tenant_id()).one_or_none()
     from ..services.billing_service import tenant_commercial_terms
     payload = config_payload(config)
+    invalid_terms = False
     try:
         terms = tenant_commercial_terms(db, require_tenant_id())
     except RuntimeError:
         terms = None
+        invalid_terms = True
     payload['commercial'] = ({'plan': terms.plan, 'billing_cycle': terms.billing_cycle,
         'billing_amount': str(terms.billing_amount), 'marketplace_rate': str(terms.marketplace_rate),
         'legal_version': terms.legal_version} if terms else None)
+    payload['test_mode'] = bool(not invalid_terms and terms is None
+        and test_registration_allowed(db, require_tenant_id()))
     return payload
 
 
@@ -80,19 +85,23 @@ def save_settings(payload: PixConfiguration, db: Session = Depends(get_db), user
     except ValueError as exc:
         raise HTTPException(422,str(exc)) from exc
     rest_id = require_tenant_id()
+    test_mode = False
     if payload.enabled:
         from ..saas_billing_models import SaaSSubscription
         from ..services.billing_service import tenant_commercial_terms
-        sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == rest_id).one_or_none()
-        if sub is None:
-            raise HTTPException(409,"Configure a assinatura antes de ativar Pix direto.")
-        if sub.billing_cycle in {'monthly','mensal'} and sub.payment_method_type != 'pix':
-            raise HTTPException(409,"A mensalidade atual tem cobrança recorrente. Migre o billing para Pix antes de ativar a fatura consolidada.")
         try:
-            if tenant_commercial_terms(db,rest_id) is None:
-                raise HTTPException(409,"Termos comerciais da assinatura indisponíveis.")
+            terms = tenant_commercial_terms(db, rest_id)
         except RuntimeError as exc:
             raise HTTPException(409,"Termos comerciais da assinatura indisponíveis.") from exc
+        test_mode = terms is None and test_registration_allowed(db, rest_id)
+        if not test_mode:
+            sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == rest_id).one_or_none()
+            if sub is None:
+                raise HTTPException(409,"Configure a assinatura antes de ativar Pix direto.")
+            if sub.billing_cycle in {'monthly','mensal'} and sub.payment_method_type != 'pix':
+                raise HTTPException(409,"A mensalidade atual tem cobrança recorrente. Migre o billing para Pix antes de ativar a fatura consolidada.")
+            if terms is None:
+                raise HTTPException(409,"Termos comerciais da assinatura indisponíveis.")
     from ..models import Restaurante
     db.query(Restaurante).filter(Restaurante.id == rest_id).with_for_update().one()
     config = db.query(RestaurantDirectPixConfig).filter(RestaurantDirectPixConfig.restaurante_id == rest_id).one_or_none()
@@ -106,7 +115,13 @@ def save_settings(payload: PixConfiguration, db: Session = Depends(get_db), user
     config.city = city
     config.accepted_by = user.id
     config.accepted_at = dt.datetime.now(dt.timezone.utc)
-    config.terms_version = TERMS_VERSION
+    config.terms_version = TEST_TERMS_VERSION if test_mode else TERMS_VERSION
+    if test_mode:
+        from ..models import SuperAdminAuditLog
+        db.add(SuperAdminAuditLog(restaurante_id=rest_id, actor=str(user.id),
+            action='DIRECT_PIX_TEST_ACTIVATED',
+            reason='Loja autorizada explicitamente na allowlist de teste; sem contrato ou assinatura.',
+            after_data={'enabled': True, 'mode': 'test', 'terms_version': TEST_TERMS_VERSION}))
     db.commit()
     return config_payload(config)
 

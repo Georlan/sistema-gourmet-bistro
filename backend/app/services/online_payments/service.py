@@ -5,7 +5,7 @@ import logging
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
 
-from sqlalchemy import case
+from sqlalchemy import case, or_
 from sqlalchemy.orm import Session
 
 from ...config import settings
@@ -182,10 +182,12 @@ class OnlinePaymentService:
 
     @staticmethod
     def has_active_account(db: Session, restaurant_id: int) -> bool:
+        from ..direct_pix_test_release import TEST_TERMS_VERSION, test_tenant_allowed
         # One roundtrip: keep the public catalog's existing read budget.
         direct = db.query(RestaurantDirectPixConfig.restaurante_id).filter(
             RestaurantDirectPixConfig.restaurante_id == restaurant_id,
             RestaurantDirectPixConfig.enabled.is_(True),
+            or_(RestaurantDirectPixConfig.terms_version.is_(None), RestaurantDirectPixConfig.terms_version != TEST_TERMS_VERSION) if not test_tenant_allowed(restaurant_id) else True,
         ).exists()
         mercado_pago = db.query(RestaurantPaymentAccount.id).filter(
             RestaurantPaymentAccount.restaurante_id == restaurant_id,
@@ -201,7 +203,9 @@ class OnlinePaymentService:
             RestaurantDirectPixConfig.enabled.is_(True),
         ).first()
         if config is not None:
-            if not settings.DIRECT_PIX_ENABLED:
+            from ..direct_pix_test_release import TEST_TERMS_VERSION, test_tenant_allowed
+            if (not settings.DIRECT_PIX_ENABLED or
+                config.terms_version == TEST_TERMS_VERSION and not test_tenant_allowed(restaurant_id)):
                 raise OnlinePaymentConfigurationError("Pix direto temporariamente indisponível. Escolha pagamento na entrega.")
             return RestaurantPaymentAccount(restaurante_id=restaurant_id, provider="direct_pix", status="active")
         accounts = (
@@ -315,6 +319,13 @@ class OnlinePaymentService:
             raise OnlinePaymentConfigurationError("Restaurante não encontrado para calcular o pagamento online.")
 
         normalized_amount = _money(amount)
+        settlement = "invoiced" if provider == "direct_pix" else "split"
+        if provider == "direct_pix":
+            from ..direct_pix_test_release import TEST_TERMS_VERSION
+            direct_config = db.query(RestaurantDirectPixConfig).filter(
+                RestaurantDirectPixConfig.restaurante_id == comanda.restaurante_id).one_or_none()
+            if direct_config and direct_config.terms_version == TEST_TERMS_VERSION:
+                settlement = "test"
         intent = OnlinePaymentIntent(
             restaurante_id=comanda.restaurante_id,
             comanda_id=comanda.id,
@@ -324,7 +335,7 @@ class OnlinePaymentService:
             status="created",
             amount=float(normalized_amount),
             marketplace_fee=float(cls.marketplace_fee_for_tenant(db, normalized_amount, restaurant)),
-            fee_settlement="invoiced" if provider == "direct_pix" else "split",
+            fee_settlement=settlement,
             idempotency_key=idempotency_key,
         )
         comanda.online_payment_status = "pending"
@@ -554,7 +565,9 @@ class OnlinePaymentService:
                 RestaurantDirectPixConfig.restaurante_id == intent.restaurante_id,
                 RestaurantDirectPixConfig.enabled.is_(True),
             ).one_or_none()
-            if not settings.DIRECT_PIX_ENABLED or config is None:
+            from ..direct_pix_test_release import TEST_TERMS_VERSION, test_tenant_allowed
+            if (not settings.DIRECT_PIX_ENABLED or config is None or
+                config.terms_version == TEST_TERMS_VERSION and not test_tenant_allowed(intent.restaurante_id)):
                 raise OnlinePaymentConfigurationError("Pix direto indisponível.")
             locked = db.query(OnlinePaymentIntent).filter(
                 OnlinePaymentIntent.restaurante_id == intent.restaurante_id,

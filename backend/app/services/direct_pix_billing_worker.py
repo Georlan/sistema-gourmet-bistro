@@ -4,13 +4,13 @@ import datetime as dt
 import logging
 import os
 from zoneinfo import ZoneInfo
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 logger = logging.getLogger('koma.direct_pix_billing')
 
 
 def maintain_tenant(db, tenant, *, now=None):
-    from ..models import DirectPixFeeInvoice, DirectPixReceipt, RestaurantDirectPixConfig
+    from ..models import DirectPixFeeInvoice, DirectPixReceipt, OnlinePaymentIntent, RestaurantDirectPixConfig
     from ..saas_billing_models import SaaSSubscription
     from .direct_pix_billing import close_month, utc
     from .signup_notifications import enqueue_billing_owner
@@ -24,8 +24,11 @@ def maintain_tenant(db, tenant, *, now=None):
         remind_subscription(db, tenant, sub, now)
         return
     local_now = now.astimezone(ZoneInfo('America/Sao_Paulo'))
-    first = db.query(func.min(DirectPixReceipt.confirmed_at)).filter(
-        DirectPixReceipt.restaurante_id == tenant, DirectPixReceipt.invoice_id.is_(None)).scalar()
+    first = db.query(func.min(DirectPixReceipt.confirmed_at)).join(
+        OnlinePaymentIntent, OnlinePaymentIntent.id == DirectPixReceipt.intent_id).filter(
+        DirectPixReceipt.restaurante_id == tenant, DirectPixReceipt.invoice_id.is_(None),
+        OnlinePaymentIntent.restaurante_id == tenant,
+        or_(OnlinePaymentIntent.fee_settlement.is_(None), OnlinePaymentIntent.fee_settlement != 'test')).scalar()
     latest = db.query(func.max(DirectPixFeeInvoice.period)).filter(DirectPixFeeInvoice.restaurante_id == tenant).scalar()
     if first:
         start = utc(first).astimezone(ZoneInfo('America/Sao_Paulo')).replace(day=1)

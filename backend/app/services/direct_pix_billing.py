@@ -5,6 +5,7 @@ import calendar
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from ..models import DirectPixFeeInvoice, DirectPixReceipt, OnlinePaymentIntent, Restaurante
 from ..saas_billing_models import SaaSSubscription
 from .billing_service import tenant_commercial_terms
@@ -93,6 +94,7 @@ def close_month(db: Session, *, restaurant_id: int, period: str) -> DirectPixFee
         DirectPixReceipt.restaurante_id == restaurant_id,
         OnlinePaymentIntent.restaurante_id == restaurant_id,
         OnlinePaymentIntent.status == 'approved',
+        or_(OnlinePaymentIntent.fee_settlement.is_(None), OnlinePaymentIntent.fee_settlement != 'test'),
         DirectPixReceipt.confirmed_at >= start_local.astimezone(dt.timezone.utc),
         DirectPixReceipt.confirmed_at < end_local.astimezone(dt.timezone.utc),
         DirectPixReceipt.invoice_id.is_(None),
