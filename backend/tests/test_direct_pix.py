@@ -33,14 +33,14 @@ def db():
     disposable.dispose()
 
 
-def order(db, monkeypatch):
+def order(db, monkeypatch, *, test_mode=False):
     monkeypatch.setattr(settings,'DIRECT_PIX_ENABLED',True)
     monkeypatch.setattr(settings,'ONLINE_PAYMENT_PLAN_FEES_ENABLED',False)
     db.add(Categoria(id='direct-category',restaurante_id=99420,nome='Teste'))
     db.flush()
     db.add(Produto(id='direct-product',restaurante_id=99420,categoria_id='direct-category',nome='Produto',preco=100,ativo=True))
     shift=CaixaTurno(restaurante_id=99420,aberto_por_id='direct-pix-user',saldo_inicial=0,status='aberto')
-    config=RestaurantDirectPixConfig(restaurante_id=99420,enabled=True,key_type='email',holder_name='RESTAURANTE',city='FORTALEZA',accepted_by='direct-pix-user',accepted_at=dt.datetime.now(dt.timezone.utc),terms_version='direct-pix-v1')
+    config=RestaurantDirectPixConfig(restaurante_id=99420,enabled=True,key_type='email',holder_name='RESTAURANTE',city='FORTALEZA',accepted_by='direct-pix-user',accepted_at=dt.datetime.now(dt.timezone.utc),terms_version='direct-pix-test-v1' if test_mode else 'direct-pix-v1')
     config.pix_key='pix@example.com'
     db.add_all([shift,config]);db.commit()
     command=CreateOrderCommand(restaurant_id=99420,channel=OrderChannel.WEB_CARDAPIO,fulfillment=FulfillmentType.PICKUP,
@@ -533,3 +533,21 @@ def test_test_release_never_bypasses_existing_subscription_or_invalid_contract(d
     assert read_settings(db, user)['test_mode'] is False
     with pytest.raises(HTTPException):
         save_settings(payload, db, user)
+
+
+def test_test_payment_fees_are_never_invoiced_after_later_subscription(db, monkeypatch):
+    monkeypatch.setenv('DIRECT_PIX_TEST_TENANT_IDS', '99420')
+    intent, _ = order(db, monkeypatch, test_mode=True)
+    assert intent.fee_settlement == 'test'
+    confirm_receipt(intent.id, ReceiptConfirmation(received_amount='100.00',
+        bank_reference='E'+'9'*31, checked_bank_statement=True), db,
+        SimpleNamespace(id='direct-pix-user'))
+    receipt = db.query(DirectPixReceipt).one()
+    receipt.confirmed_at = dt.datetime(2025, 1, 15, tzinfo=dt.timezone.utc)
+    db.add(SaaSSubscription(restaurante_id=99420, billing_cycle='annual', payment_method_type='pix'))
+    db.commit()
+    monkeypatch.setattr('app.services.direct_pix_billing.tenant_commercial_terms',
+        lambda *_: SimpleNamespace(billing_amount=Decimal('1200')))
+    invoice = close_month(db, restaurant_id=99420, period='2025-01')
+    assert invoice.fees == 0 and invoice.subscription_amount == 0
+    assert receipt.invoice_id is None

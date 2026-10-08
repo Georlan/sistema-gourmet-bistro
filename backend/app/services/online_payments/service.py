@@ -319,6 +319,13 @@ class OnlinePaymentService:
             raise OnlinePaymentConfigurationError("Restaurante não encontrado para calcular o pagamento online.")
 
         normalized_amount = _money(amount)
+        settlement = "invoiced" if provider == "direct_pix" else "split"
+        if provider == "direct_pix":
+            from ..direct_pix_test_release import TEST_TERMS_VERSION
+            direct_config = db.query(RestaurantDirectPixConfig).filter(
+                RestaurantDirectPixConfig.restaurante_id == comanda.restaurante_id).one_or_none()
+            if direct_config and direct_config.terms_version == TEST_TERMS_VERSION:
+                settlement = "test"
         intent = OnlinePaymentIntent(
             restaurante_id=comanda.restaurante_id,
             comanda_id=comanda.id,
@@ -328,7 +335,7 @@ class OnlinePaymentService:
             status="created",
             amount=float(normalized_amount),
             marketplace_fee=float(cls.marketplace_fee_for_tenant(db, normalized_amount, restaurant)),
-            fee_settlement="invoiced" if provider == "direct_pix" else "split",
+            fee_settlement=settlement,
             idempotency_key=idempotency_key,
         )
         comanda.online_payment_status = "pending"
