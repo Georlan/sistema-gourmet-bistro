@@ -447,3 +447,35 @@ test('digital detail shows the payment method and requested cash change', () => 
   assert.match(markup, /dinheiro/i);
   assert.match(markup, /Troco para R\$\s*100,00/);
 });
+
+
+test('hamburgueria Pocket sem consumo local inicia no preparo e preserva salão ativo', () => {
+  for (const active of [false, true]) {
+    const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
+      ...workspace([]), hasPrinting: false, hasLocalServiceWork: active,
+      restaurantConfig: { operation_profile: 'hamburgueria', tipos_pedido_ativos: ['delivery', 'retirada'] },
+    }));
+    if (active) assert.match(html, /orders-column--salon/);
+    else {
+      assert.doesNotMatch(html, /orders-column--salon/);
+      assert.match(html, /orders-column--digital[^"<]*is-mobile-active/);
+    }
+  }
+});
+
+
+test('fila sem impressão mostra todos os itens e observações sem botão de recolher', () => {
+  const base = workspace([]);
+  const order = digital({ detailItems: [
+    { nome: 'Hambúrguer', observacao: 'Sem cebola' },
+    { nome: 'Batata', observacao: 'Bem passada' },
+    { nome: 'Suco', observacao: 'Sem gelo' },
+    { nome: 'Sobremesa', observacao: 'Separar embalagem' },
+  ] });
+  const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
+    ...base, hasPrinting: false, columns: { ...base.columns, digitalProduction: [order] },
+  }));
+  assert.match(html, /Sobremesa/);
+  assert.match(html, /Separar embalagem/);
+  assert.doesNotMatch(html, /mais itens \(expandir\)|Recolher itens/);
+});

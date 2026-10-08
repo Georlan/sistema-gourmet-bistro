@@ -128,6 +128,8 @@ def _publish_created_event(db: Session, comanda: Comanda) -> None:
     )
     from .tenant_order_whatsapp import enqueue_order_alert
     enqueue_order_alert(db, event)
+    from .staff_push import enqueue_staff_order_alert
+    enqueue_staff_order_alert(db, event)
 
 
 def release_due_scheduled_orders_in_session(
