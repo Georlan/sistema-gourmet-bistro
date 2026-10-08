@@ -32,6 +32,7 @@ import { SuperAdminTrialModal } from "./SuperAdminTrialModal";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 import type { SupportNavigationTarget } from "./SuperAdminSupportModal";
+import { SuperAdminMultistore } from './SuperAdminMultistore';
 import { SuperAdminAuditTab } from "./SuperAdminAuditTab";
 import type { Tenant } from "./superAdminTypes";
 
@@ -1304,6 +1305,7 @@ export function SuperAdminRestaurant360({
 
       {section === "team" && (
         <div className="space-y-5">
+          <SuperAdminMultistore key={tenant.id} tenantId={Number(tenant.id)} users={access?.users || []} />
           <div className="grid gap-3 sm:grid-cols-4">
             {[
               ["Total", access?.totalUsers],

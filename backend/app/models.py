@@ -65,6 +65,7 @@ class Restaurante(Base):
 class Usuario(Base):
     __tablename__ = "usuarios"
     __table_args__ = (
+        UniqueConstraint('restaurante_id', 'id', name='uq_usuarios_restaurante_id_id'),
         CheckConstraint(
             "cargo IN ('admin', 'superadmin', 'caixa', 'garcom', 'atendente', 'gerente', 'cozinha', 'motoboy')",
             name="ck_usuarios_cargo",
@@ -142,6 +143,41 @@ class Usuario(Base):
     comandas_abertas = relationship("Comanda", back_populates="criada_por")
     lancamentos_feitos = relationship("Lancamento", back_populates="garcom")
     motoboy_perfil = relationship("Motoboy", back_populates="usuario", uselist=False)
+
+
+class RestaurantNetwork(Base):
+    __tablename__ = 'restaurant_networks'
+    __table_args__ = (UniqueConstraint('restaurante_id', 'id', name='uq_network_owner_id'),)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(Integer, ForeignKey('restaurantes.id', ondelete='RESTRICT'), nullable=False)
+    nome = Column(String(120), nullable=False)
+
+
+class RestaurantNetworkUnit(Base):
+    __tablename__ = 'restaurant_network_units'
+    __table_args__ = (
+        ForeignKeyConstraint(['network_owner_id', 'network_id'], ['restaurant_networks.restaurante_id', 'restaurant_networks.id'], ondelete='RESTRICT'),
+    )
+    restaurante_id = Column(Integer, ForeignKey('restaurantes.id', ondelete='CASCADE'), primary_key=True)
+    network_id = Column(String(36), nullable=False, index=True)
+    network_owner_id = Column(Integer, nullable=False)
+
+
+class RestaurantNetworkAccess(Base):
+    __tablename__ = 'restaurant_network_access'
+    __table_args__ = (
+        ForeignKeyConstraint(['restaurante_id', 'usuario_id'], ['usuarios.restaurante_id', 'usuarios.id'], ondelete='CASCADE'),
+        ForeignKeyConstraint(['destino_restaurante_id', 'destino_usuario_id'], ['usuarios.restaurante_id', 'usuarios.id'], ondelete='CASCADE'),
+        UniqueConstraint('restaurante_id', 'usuario_id', 'destino_restaurante_id', name='uq_network_operator_destination'),
+        CheckConstraint('restaurante_id != destino_restaurante_id', name='ck_network_access_different_unit'),
+        Index('ix_network_access_operator', 'restaurante_id', 'usuario_id'),
+    )
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(Integer, nullable=False)
+    usuario_id = Column(String, nullable=False)
+    destino_restaurante_id = Column(Integer, nullable=False)
+    destino_usuario_id = Column(String, nullable=False)
+    network_id = Column(String(36), ForeignKey('restaurant_networks.id', ondelete='RESTRICT'), nullable=False)
 
 
 class Categoria(Base):
