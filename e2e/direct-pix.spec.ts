@@ -150,3 +150,94 @@ test('liberação de teste permite cadastrar chave sem inventar contrato ou mens
   await expect(card).toContainText('Pix direto ativado para novos pedidos.');
   await expect(card).toContainText('sem contrato ou mensalidade habilitada');
 });
+
+test('cadastro da chave chega ao checkout, QR reaberto e confirmação manual única',async({page,context})=>{
+  await open(page);
+  let enabled=false;
+  let paid=false;
+  let created=false;
+  let confirmations=0;
+  const submitted: Record<string,unknown>[]=[];
+  const configuration={available:true,key_type:'email',pix_key:'recebimento@example.com',holder_name:'RESTAURANTE',city:'FORTALEZA',commercial:null,test_mode:true};
+  const payment=()=>({status:paid?'approved':'pending',cobranca_online:true,confirmacao_manual:true,metodo:'pix',qr_code:'test-only-journey-do-not-pay',qr_code_base64:null});
+  await page.route('**/payments/direct-pix/settings',async route=>{
+    if(route.request().method()==='PUT') enabled=route.request().postDataJSON().enabled;
+    await route.fulfill({json:{...configuration,enabled}});
+  });
+  await page.route('**/payments/direct-pix/pending',route=>route.fulfill({json:created&&!paid?[{id:'journey-intent',order_number:'47',customer:'Cliente teste',amount:'10.50'}]:[]}));
+  await page.route('**/payments/direct-pix/journey-intent/confirm',route=>{
+    const body=route.request().postDataJSON();
+    expect(body).toMatchObject({received_amount:'10.50',checked_bank_statement:true,bank_reference:'E'+'8'.repeat(31)});
+    confirmations++;paid=true;
+    return route.fulfill({json:{status:'approved',already_confirmed:false}});
+  });
+  await settings(page);
+  const card=page.getByRole('region',{name:'Pix direto na conta'});
+  await card.getByRole('checkbox').check();
+  await card.getByRole('button',{name:'Usar chave Pix própria'}).click();
+  await expect(card).toContainText('Pix direto ativado');
+  const consumer=await context.newPage();
+  await consumer.route('http://127.0.0.1:8000/**',async route=>{
+    const request=route.request();
+    const {pathname}=new URL(request.url());
+    if(pathname==='/api/cardapio-digital/public') return route.fulfill({json:{
+      restaurante:{id:2,nome:'Burger teste',slug:'burger-teste',aceitando_pedidos:true,status_override:'Forçado Aberto',delivery_ativo:true,taxa_entrega_fixa:6,formas_pagamento_aceitas:['Dinheiro','Pix'],pagamento_online_ativo:enabled},
+      categorias:[{id:10,nome:'Bebidas'}],produtos:[{id:101,nome:'Água',preco:4.5,categoria_id:10,grupos_modificadores:[]}]}});
+    if(pathname==='/cardapio/pedidos'&&request.method()==='POST') {
+      submitted.push(request.postDataJSON());created=true;
+      return route.fulfill({status:201,json:{comanda_id:'journey-order',numero_pedido:47,total:10.5,pagamento:payment()}});
+    }
+    if(pathname.includes('/cardapio/pedidos/')&&pathname.endsWith('/status')) return route.fulfill({json:{
+      id:'journey-order',numero_pedido:47,status:paid?'pendente':'aguardando_pagamento',tipo:'Delivery',fechado:false,total:10.5,pagamento:payment()}});
+    return route.fulfill({json:{}});
+  });
+  await consumer.goto('/cardapio?restaurante_id=2');
+  await consumer.locator('#btn-fast-add-101').click();
+  const cartButton=(consumer.viewportSize()?.width||0)<=640 ? '#mobile-nav-cart' : '#btn-cart-header';
+  await consumer.locator(cartButton).click();
+  const cart=consumer.locator('#cart-drawer-container');
+  await cart.getByRole('button',{name:'Receber',exact:true}).click();
+  await consumer.getByRole('button',{name:/^Entrega\b/}).click();
+  await consumer.locator('#delivery-address-logradouro').fill('Rua de teste');
+  await consumer.locator('#delivery-address-numero').fill('10');
+  await cart.getByRole('button',{name:'Pagamento',exact:true}).click();
+  await consumer.getByRole('button',{name:'Pix',exact:true}).click();
+  await cart.getByRole('button',{name:'Contato',exact:true}).click();
+  await consumer.locator('#input-guest-name').fill('Cliente teste');
+  await consumer.locator('#input-guest-phone').fill('85999999999');
+  await consumer.locator('#input-customer-email').fill('cliente@example.test');
+  await consumer.getByRole('button',{name:'Revisar pedido',exact:true}).click();
+  await consumer.getByRole('button',{name:'Fazer pedido',exact:true}).click();
+  await expect(consumer.getByText('Aguardando pagamento',{exact:true}).first()).toBeVisible();
+  await expect(consumer.getByText('O restaurante conferirá o recebimento',{exact:false})).toBeVisible();
+  await consumer.getByRole('button',{name:'Acompanhar pedido',exact:true}).click();
+  await consumer.getByRole('button',{name:'Pagar Pix',exact:true}).click();
+  const pix=consumer.getByRole('dialog',{name:'Pagamento Pix do Pedido #47'});
+  await expect(pix.locator('svg[role="img"]')).toBeVisible();
+  await expect(pix).toContainText('O restaurante conferirá o recebimento');
+  await expect(pix).not.toContainText('A confirmação do pagamento é automática');
+  await consumer.getByRole('button',{name:'Fechar modal Pix',exact:true}).click();
+  await consumer.locator((consumer.viewportSize()?.width||0)<=640 ? '#mobile-nav-orders' : '#floating-order-chat-trigger').click();
+  await consumer.locator('#orders-drawer-panel').getByRole('button',{name:'Pagar Pix',exact:true}).first().click();
+  const reopened=consumer.locator('#pix-payment-modal-backdrop');
+  await expect(reopened.locator('svg[role="img"]')).toBeVisible();
+  await expect(reopened).toContainText('O restaurante conferirá o recebimento');
+  await expect(reopened).not.toContainText('A confirmação do pagamento é automática');
+  await test.info().attach('pix-reaberto-manual',{body:await consumer.screenshot(),contentType:'image/png'});
+  await page.reload();
+  await expect(page.locator('.orders-board')).toBeVisible();
+  const pending=page.getByRole('region',{name:'Pix aguardando conferência'});
+  await pending.getByRole('button',{name:/Pedido #47/}).click();
+  await pending.getByRole('textbox').fill('E'+'8'.repeat(31));
+  await pending.getByRole('checkbox',{name:'Conferi o valor integral recebido na conta correta.'}).check();
+  await pending.getByRole('button',{name:'Confirmar Pagamento Pix'}).click();
+  await expect(pending).toHaveCount(0);
+  await consumer.reload();
+  const ordersButton=(consumer.viewportSize()?.width||0)<=640 ? '#mobile-nav-orders' : '#floating-order-chat-trigger';
+  await consumer.locator(ordersButton).click();
+  await expect(consumer.getByText('Aguardando aceite',{exact:true}).first()).toBeVisible();
+  await expect(consumer.getByRole('button',{name:'Pagar Pix',exact:true})).toHaveCount(0);
+  expect(confirmations).toBe(1);
+  expect(submitted).toHaveLength(1);
+  expect(submitted[0]).toMatchObject({forma_pagamento:'online',forma_pagamento_detalhe:'pix',tipo_pedido:'delivery',taxa_entrega:6});
+});

@@ -4,6 +4,7 @@
  */
 
 import React from "react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   CheckCircle2,
   Clock3,
@@ -949,6 +950,10 @@ export default function CardapioOrdersDrawer({
               </span>
             </div>
 
+            {!pixModalOrder.pagamento.qr_code_base64 && pixModalOrder.pagamento.qr_code && (
+              <QRCodeSVG value={pixModalOrder.pagamento.qr_code} size={208} level="M" marginSize={4}
+                role="img" aria-label="QR Code Pix do pedido" className="mx-auto my-3" />
+            )}
             {pixModalOrder.pagamento.qr_code_base64 && (
               <div className="mx-auto my-3 flex justify-center">
                 <img
@@ -995,7 +1000,9 @@ export default function CardapioOrdersDrawer({
             )}
 
             <p className="mt-3 text-[10px] leading-relaxed text-koma-muted">
-              A confirmação do pagamento é automática. Assim que confirmado, o restaurante iniciará o preparo do seu pedido.
+              {pixModalOrder.pagamento.confirmacao_manual
+                ? 'O restaurante conferirá o recebimento na conta bancária antes de liberar seu pedido.'
+                : 'A confirmação do pagamento é automática. Assim que confirmado, o restaurante poderá liberar seu pedido.'}
             </p>
           </div>
         </div>
