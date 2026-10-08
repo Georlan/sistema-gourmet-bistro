@@ -9,33 +9,15 @@ import { LeadCaptureProvider } from '../src/landing/components/LeadCaptureProvid
 import { Plans } from '../src/landing/sections/Plans';
 import { FAQ } from '../src/landing/sections/FAQ';
 
-test('demo message needs only two fields and preserves plan and billing selection', () => {
-  const lead = { responsavel: '  Ana & João  ', estabelecimento: '  Café São José  ' };
-  const selection = { plan: 'Kôma Pro', billing: 'anual' as const };
-  const message = KOMA_LANDING_CONFIG.getLeadMessage(lead, selection);
-  assert.match(message, /demonstração.*sem compromisso/);
-  assert.ok(message.includes('Responsável: Ana & João'));
-  assert.ok(message.includes('Estabelecimento: Café São José'));
-  assert.ok(message.includes('Kôma Pro · cobrança anual'));
-  assert.equal(message.includes('undefined'), false);
-  assert.equal(message.includes('WhatsApp:'), false);
-  const url = new URL(KOMA_LANDING_CONFIG.getLeadWhatsappUrl(lead, selection));
-  assert.equal(url.hostname, 'wa.me');
-  assert.equal(url.searchParams.get('text'), message);
-  assert.equal(KOMA_LANDING_CONFIG.getLeadMessage(lead).includes('Plano de interesse'), false);
-});
-
-test('demo uses a native dialog and only two required inputs, not a signup form', () => {
+test('demo captures contact and consent without a WhatsApp redirect', () => {
   const html = renderToStaticMarkup(createElement(LeadCaptureModal, { open: true, onClose() {}, selection: { plan: 'Kôma Pocket', billing: 'mensal' } }));
   assert.ok(html.startsWith('<dialog'));
-  assert.equal((html.match(/<input/g) ?? []).length, 2);
-  assert.equal((html.match(/required=""/g) ?? []).length, 2);
-  assert.ok(html.includes('pattern=".*\\S.*"'));
+  assert.equal((html.match(/<input/g) ?? []).length, 4);
+  assert.ok(html.includes('WHATSAPP COM DDD'));
+  assert.ok(html.includes('SOLICITAR DEMONSTRAÇÃO'));
   assert.ok(html.includes('Isso não é uma contratação.'));
-  assert.ok(html.includes('Nenhum dado é enviado automaticamente.'));
-  assert.ok(html.includes('aria-describedby='));
-  assert.ok(html.includes('role="status"'));
-  assert.equal(renderToStaticMarkup(createElement(LeadCaptureModal, { open: false, onClose() {} })), '');
+  assert.equal(html.includes('PEDIR DEMO NO WHATSAPP'), false);
+  assert.equal(new URL(KOMA_LANDING_CONFIG.whatsappUrl).search, '');
 });
 
 test('Pocket, Pro e Premium mensais seguem direto para suas telas de contratação', () => {

@@ -231,3 +231,6 @@
 @media (prefers-reduced-motion: reduce) {
   .koma-landing *, .koma-landing *::before, .koma-landing *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+.koma-demo-dialog .koma-lead-form .koma-demo-consent { display: flex; flex-direction: row; align-items: flex-start; gap: 0.65rem; font-size: 0.8rem; line-height: 1.5; }
+.koma-demo-dialog .koma-lead-form .koma-demo-consent input { width: 20px; height: 20px; min-height: 20px; flex: 0 0 20px; margin-top: 2px; accent-color: #00b894; }

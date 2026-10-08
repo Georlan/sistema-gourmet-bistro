@@ -24,11 +24,11 @@ export function ValueStrip() {
         </p>
       </header>
 
-      <div className="koma-value-comparison" aria-label="Exemplo de uma operação fragmentada comparada ao fluxo do Kôma">
+      <div className="koma-value-comparison" aria-label="Comparação: sem KÔMA versus com KÔMA">
         <article className="koma-value-lane koma-value-lane--fragmented">
           <div className="koma-value-lane-head">
             <div>
-              <strong>OPERAÇÃO FRAGMENTADA</strong>
+              <strong>SEM KÔMA</strong>
             </div>
             <span>EXEMPLO: 4 REPASSES</span>
           </div>
