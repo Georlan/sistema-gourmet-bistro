@@ -351,3 +351,29 @@ def test_signed_attribution_does_not_accept_auth_token_or_tampering(admin_client
         db.commit()
         assert db.get(KomaEventAttribution, good).lead_id == lead.id
         assert db.get(KomaEventAttribution, bad) is None
+
+
+def test_landing_lead_queues_email_and_telegram_once(client, monkeypatch):
+    from app.config import settings
+    from app.signup_models import SignupNotification
+    from app.crypt import decrypt_field
+    monkeypatch.setattr(settings, "EVENT_LEADS_OWNER_EMAIL", "owner@example.test")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "test-chat")
+    payload = {"nome": "Landing Test", "empresa_nome": "Demo Test", "whatsapp": "85911112222", "consent_whatsapp": True,
+               "event_slug": "spoofed-event", "source": "qr_tela"}
+    response = client.post('/api/leads/landing', json=payload)
+    assert response.status_code == 201
+    with SessionLocal() as db:
+        lead = db.get(KomaEventLead, response.json()['lead_id'])
+        assert lead.event_slug == 'koma-landing'
+        assert lead.source == 'landing'
+        notices = db.query(SignupNotification).filter(SignupNotification.id.like(f'event-lead-{lead.id}:%')).all()
+        assert len(notices) == 2
+        assert {n.id.rsplit(':', 1)[1] for n in notices} == {'email', 'telegram'}
+        assert all('Demo Test' in decrypt_field(n.payload_encrypted) for n in notices)
+    retry = client.post('/api/leads/landing', json=payload)
+    assert retry.json()['deduplicated'] is True
+    assert retry.json()['lead_id'] == response.json()['lead_id']
+    rejected = client.post('/api/leads/landing', json={**payload, 'consent_whatsapp': False})
+    assert rejected.status_code == 422

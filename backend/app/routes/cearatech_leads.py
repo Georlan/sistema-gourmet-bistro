@@ -41,7 +41,7 @@ LEAD_STATUSES = (
     "converted",
     "lost",
 )
-LEAD_SOURCES = {"qr_tela", "qr_impresso", "link_direto"}
+LEAD_SOURCES = {"qr_tela", "qr_impresso", "link_direto", "landing"}
 
 
 class CearaTechLeadInput(BaseModel):
@@ -218,6 +218,7 @@ def _apply_event_and_search_filters(query, *, event_slug: Optional[str], search:
     return query
 
 
+@router.post("/landing", status_code=status.HTTP_201_CREATED, summary="Solicitar demonstração do KÔMA")
 @router.post("/siaratech", status_code=status.HTTP_201_CREATED, summary="Registrar lead do Siará Tech Summit")
 @router.post("/cearatech", status_code=status.HTTP_201_CREATED, include_in_schema=False, summary="Registrar lead do Siará Tech Summit")
 def submit_cearatech_lead(
@@ -238,7 +239,8 @@ def submit_cearatech_lead(
         )
 
     norm_phone = _normalize_phone(payload.whatsapp)
-    event_slug = _event_storage_slug(payload.event_slug)
+    is_landing = request.url.path.endswith("/landing")
+    event_slug = "koma-landing" if is_landing else _event_storage_slug(payload.event_slug)
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     ip_header = (
@@ -280,10 +282,10 @@ def submit_cearatech_lead(
         principal_dor=payload.principal_dor,
         interesse=payload.interesse,
         event_slug=event_slug,
-        source=payload.source,
+        source="landing" if is_landing else payload.source,
         consent_whatsapp=True,
         consent_at=now_utc,
-        consent_version="v1_siaratech_2026",
+        consent_version="v1_landing_demo" if is_landing else "v1_siaratech_2026",
         status="new",
         ip_hash=ip_hash,
         user_agent=user_agent,
