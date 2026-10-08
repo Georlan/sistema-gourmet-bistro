@@ -268,6 +268,20 @@ def enqueue_onboarding_ready_owner(
     )
 
 
+def enqueue_billing_owner(db, *, tenant_id, invoice_id, period, event, amount):
+    """A durable event per invoice/channel, using the established owner destinations."""
+    if event not in {'issued', 'paid', 'due_soon', 'overdue'}:
+        raise ValueError('Evento de cobrança inválido.')
+    labels = {'issued': 'Fatura emitida', 'paid': 'Fatura paga',
+              'due_soon': 'Fatura próxima do vencimento', 'overdue': 'Fatura em atraso'}
+    return enqueue(db, protocol=f'tenant-{tenant_id}:invoice-{invoice_id}',
+        kind=f'billing-{event}', email=settings.KOMA_OWNER_EMAIL, phone=None,
+        telegram_chat=_owner_telegram_chat(), subject=f'{labels[event]} — KÔMA',
+        message=f'{labels[event]}: restaurante #{tenant_id}. Período: {period}. '
+                f'Valor: R$ {amount}. Fatura: {invoice_id}. '
+                f'Acompanhe o histórico no SuperAdmin: {settings.KOMA_PUBLIC_APP_URL}/super-admin')
+
+
 def _deliver(payload, delivery_id):
     if payload["channel"] == "email":
         if not settings.RESEND_API_KEY or not settings.EMAIL_FROM:

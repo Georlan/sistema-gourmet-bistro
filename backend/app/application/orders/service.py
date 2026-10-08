@@ -372,6 +372,10 @@ class OrderApplicationService:
                 )
                 return cls._to_order_dto(db=db, comanda=existing_comanda, lancamento=lanc)
 
+        from ...services.direct_pix_billing import new_sales_allowed
+        if not new_sales_allowed(db, cmd.restaurant_id):
+            raise OrderValidationError('Novas vendas indisponíveis: regularize a fatura KÔMA em atraso. Faturas e histórico continuam acessíveis.')
+
         if cmd.coupon_code and not has_plan_entitlement(
             db,
             cmd.restaurant_id,

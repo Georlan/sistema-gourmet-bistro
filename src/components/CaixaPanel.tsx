@@ -1,4 +1,5 @@
 import { DirectPixPendingPanel } from './caixa/orders/DirectPixPendingPanel';
+import { KomaBillingNotice } from './caixa/settings/KomaBillingNotice';
 import clsx from 'clsx';
 import { Loader2, Lock, Maximize2, Menu, MessageSquare, Minimize2 } from 'lucide-react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -822,6 +823,8 @@ export function CaixaPanel({
               </button>
             </div>
           </header>
+
+          <KomaBillingNotice apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onOpenBilling={(consolidated)=>{setActiveTab(consolidated ? 'configuracoes' : 'assinatura_pix');setActiveSubTab(consolidated ? 'integracoes' : 'contrato_documentos');}} />
 
           <div className="cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none">
             {activeTab === 'operacao' && operationSubnavItems.map((sub) => {

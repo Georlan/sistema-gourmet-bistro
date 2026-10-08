@@ -2101,6 +2101,7 @@ class DirectPixFeeInvoice(Base):
     previous_payment_ids = Column(JSON, nullable=True)
     paid_at = Column(DateTime(timezone=True), nullable=True)
     subscription_due_at = Column(DateTime(timezone=True), nullable=True)
+    due_at = Column(DateTime(timezone=True), nullable=True)
     fees = Column(Numeric(14,2), nullable=False)
     subscription_amount = Column(Numeric(14,2), nullable=False)
     status = Column(String(16), nullable=False, default="open")

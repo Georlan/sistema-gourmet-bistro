@@ -24,6 +24,7 @@ import { SuperAdminCapabilitiesModal } from "./SuperAdminCapabilitiesModal";
 import { attentionLabels, compareAttention, matchesAttention, type OperationalAttention } from "./operationalAttention";
 import { SuperAdminRestaurant360, READINESS_BLOCKER_LABELS } from "./SuperAdminRestaurant360";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
+import { SuperAdminBillingHistory } from "./SuperAdminBillingHistory";
 import type { Tenant } from "./superAdminTypes";
 
 interface SuperAdminTenantsTabProps {
@@ -89,6 +90,7 @@ export function SuperAdminTenantsTab({
 
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [editName, setEditName] = useState("");
+  const [billingTenant,setBillingTenant] = useState<Tenant | null>(null);
   const [editSlug, setEditSlug] = useState("");
   const [editOperationProfile, setEditOperationProfile] = useState<string | null>(null);
   const [isLoadingOperationProfile, setIsLoadingOperationProfile] = useState(false);
@@ -347,14 +349,14 @@ export function SuperAdminTenantsTab({
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-zinc-800 bg-koma-page/30 font-medium text-koma-muted">
-                <th className="px-4 py-3">Estabelecimento</th><th className="px-4 py-3">Status SaaS</th><th className="px-4 py-3">Plano</th><th className="px-4 py-3">Pagamento online</th><th className="px-4 py-3">Situação operacional</th><th className="px-4 py-3">Principal atenção / próximo passo</th><th className="px-4 py-3">Última atividade</th><th className="px-4 py-3 text-right">Ações</th>
+                <th className="px-4 py-3">Estabelecimento</th><th className="px-4 py-3">Status SaaS</th><th className="px-4 py-3">Plano</th><th className="px-4 py-3">Pagamento online</th><th className="px-4 py-3">Cobrança KÔMA</th><th className="px-4 py-3">Situação operacional</th><th className="px-4 py-3">Principal atenção / próximo passo</th><th className="px-4 py-3">Última atividade</th><th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/40">
               {!tenantsAvailable ? (
-                <tr><td colSpan={8} className="py-12 text-center text-koma-muted"><Store className="mx-auto mb-2 h-8 w-8 text-zinc-600" /><div className="text-sm font-semibold text-koma-foreground">Dados dos restaurantes indisponíveis</div><p className="mt-1 text-xs text-koma-subtle">A API cross-tenant não retornou uma fonte utilizável.</p></td></tr>
+                <tr><td colSpan={9} className="py-12 text-center text-koma-muted"><Store className="mx-auto mb-2 h-8 w-8 text-zinc-600" /><div className="text-sm font-semibold text-koma-foreground">Dados dos restaurantes indisponíveis</div><p className="mt-1 text-xs text-koma-subtle">A API cross-tenant não retornou uma fonte utilizável.</p></td></tr>
               ) : filteredTenants.length === 0 ? (
-                <tr><td colSpan={8} className="py-12 text-center text-koma-muted">Nenhum restaurante localizado.</td></tr>
+                <tr><td colSpan={9} className="py-12 text-center text-koma-muted">Nenhum restaurante localizado.</td></tr>
               ) : filteredTenants.map(tenant => {
                 const operational = attentionByTenant.get(tenant.id);
                 const plan = officialPlan(tenant.plan);
@@ -384,6 +386,7 @@ export function SuperAdminTenantsTab({
                     <td className="px-4 py-3.5"><span className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-bold ${isSuspended ? "border-rose-800/40 bg-rose-950/60 text-rose-400" : "border-emerald-800/30 bg-emerald-950/60 text-emerald-400"}`}><span className={`h-1.5 w-1.5 rounded-full ${isSuspended ? "bg-rose-400" : "bg-emerald-400"}`} />{isSuspended ? "Suspenso" : tenant.status === "ACTIVE" ? "Ativo" : tenant.status === "PENDING" ? "Pendente" : tenant.status || "Não verificado"}</span></td>
                     <td className="px-4 py-3.5"><span className="inline-flex rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] font-semibold text-koma-secondary">{plan?.name || tenant.plan || "Não disponível"}</span></td>
                     <td className="px-4 py-3.5"><span className={tenant.onlinePaymentStatus === "connected" ? "text-emerald-400" : tenant.onlinePaymentStatus === "disconnected" ? "text-amber-400" : "text-koma-muted"}>{paymentStatusLabel(tenant.onlinePaymentStatus)}</span></td>
+                    <td className="px-4 py-3.5 text-koma-secondary">{tenant.billing ? <><strong>{({restricted:'Novas vendas restritas',overdue:'Em atraso',due_soon:'Próxima do vencimento',open:'Fatura aberta',current:'Sem fatura de taxas aberta'} as Record<string,string>)[tenant.billing.status] || tenant.billing.status}</strong><p className="mt-1 text-[10px] text-koma-muted">Assinatura: {tenant.billing.subscription_status}{tenant.billing.subscription_due_at ? ` · ${new Date(tenant.billing.subscription_due_at).toLocaleDateString('pt-BR')}` : ''}</p>{tenant.billing.open_count>0 && <p className="mt-1 text-xs">{Number(tenant.billing.open_total).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})} · {tenant.billing.due_at ? new Date(tenant.billing.due_at).toLocaleDateString('pt-BR') : 'Vencimento não definido'}</p>}</> : 'Não verificado'}<button type="button" className="mt-2 block min-h-9 text-xs underline" onClick={()=>setBillingTenant(tenant)}>Histórico de faturas</button></td>
                     <td className="px-4 py-3.5"><strong className={operational?.priority === "critical" ? "text-rose-300" : operational?.priority === "incident" || operational?.priority === "blocked" ? "text-amber-300" : "text-koma-secondary"}>{attentionLabels[operational?.priority || "unverified"]}</strong>
                       {!!operational?.unavailable_sources.length && <p className="mt-1 text-[10px] text-amber-300">Fonte indisponível: {operational.unavailable_sources.join(", ")}</p>}
                     </td>
@@ -472,6 +475,7 @@ export function SuperAdminTenantsTab({
         </div>
       )}
 
+      {billingTenant && <SuperAdminBillingHistory tenant={billingTenant} onClose={()=>setBillingTenant(null)}/>}
       {showNewTenantModal && (
         <SuperAdminNewTenantModal
           onClose={() => setShowNewTenantModal(false)}
