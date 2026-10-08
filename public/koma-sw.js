@@ -148,6 +148,23 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const data = event.notification.data || {};
+  if (data.kind === "staff-order") {
+    event.waitUntil((async () => {
+      const target = "/?view=caixa&koma-open=orders";
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const existing = windows.find(client => {
+        const url = new URL(client.url);
+        return url.origin === self.location.origin && !url.pathname.startsWith("/cardapio") && !url.pathname.startsWith("/acompanhar");
+      });
+      if (existing) {
+        await existing.navigate(target);
+        await existing.focus();
+      } else {
+        await self.clients.openWindow(target);
+      }
+    })());
+    return;
+  }
   const restaurantId = Number(data.restaurantId || 0);
   const pedidoId = String(data.pedidoId || "");
   if (!restaurantId || !pedidoId) return;

@@ -91,7 +91,8 @@ const renderCompactItemsList = (
   items: string | readonly (CompositionSource & { nome?: string; produto?: { nome?: string }; status?: string })[],
   cardId: string,
   isExpanded: boolean,
-  onToggle: (cardId: string, e: React.MouseEvent) => void
+  onToggle: (cardId: string, e: React.MouseEvent) => void,
+  showAll = false
 ) => {
   let itemList: { name: string; qty: number; source?: CompositionSource }[] = [];
 
@@ -122,7 +123,7 @@ const renderCompactItemsList = (
     return <p className={"orders-card__items font-medium text-[11px] text-koma-subtle italic p-2 rounded-lg"}>Nenhum item adicionado</p>;
   }
 
-  const visibleItems = isExpanded ? itemList : itemList.slice(0, 3);
+  const visibleItems = isExpanded || showAll ? itemList : itemList.slice(0, 3);
   const hiddenCount = itemList.length - visibleItems.length;
 
   return (
@@ -137,7 +138,7 @@ const renderCompactItemsList = (
             : it.source.observacao && <span className="block whitespace-pre-wrap break-words text-[11px] text-emerald-700 dark:text-emerald-400">{it.source.observacao}</span>)}
         </div>
       ))}
-      {itemList.length > 3 && (
+      {itemList.length > 3 && !showAll && (
         <button
           type="button"
           onClick={(e) => onToggle(cardId, e)}
@@ -212,7 +213,7 @@ export function CaixaOrdersWorkspace({
   const totalResultadosBusca = filteredCol1.length + filteredDigitalProduction.length + filteredCol2Table.length + filteredDeliveryFinalization.length;
 
   const activeOrderTypes = restaurantConfig?.tipos_pedido_ativos;
-  const compactMarmitaria = restaurantConfig?.operation_profile === "marmitaria"
+  const compactMarmitaria = (restaurantConfig?.operation_profile === "marmitaria" || hasPrinting === false)
     && Array.isArray(activeOrderTypes) && !activeOrderTypes.includes("consumo_local")
     && !hasLocalServiceWork && filteredCol1.length === 0 && filteredCol2Table.length === 0 && pagamentosPendentes.length === 0;
 
@@ -581,7 +582,7 @@ export function CaixaOrdersWorkspace({
                           )}
                         </div>
                       </div>
-                      {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
+                      {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
                       <button
                         type="button"
                         disabled={isPendingConfirmation}
@@ -717,7 +718,7 @@ export function CaixaOrdersWorkspace({
                           </div>
                         </div>
                       </div>
-                      {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, cardId, isExpanded, toggleCardExpansion)}
+                      {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
                       {isDeliveryOrder && order.endereco && (
                         <span className={"font-normal text-xs text-koma-subtle flex items-center gap-1 truncate"}>
                           <MapPin size={11} className={"shrink-0 text-emerald-600 dark:text-emerald-300/80"} />
@@ -871,7 +872,7 @@ export function CaixaOrdersWorkspace({
                           </span>
                         </div>
                       )}
-                      {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
+                      {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
                       <button
                         type="button"
                         disabled={isLoading}
@@ -979,7 +980,7 @@ export function CaixaOrdersWorkspace({
                           </div>
                         </div>
                       </div>
-                      {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, cardId, isExpanded, toggleCardExpansion)}
+                      {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
                       {isDeliveryOrder && order.endereco && (
                         <span className={"font-normal text-xs text-koma-subtle flex items-center gap-1 truncate"}>
                           <MapPin size={11} className={"shrink-0 text-emerald-600 dark:text-emerald-300/80"} />

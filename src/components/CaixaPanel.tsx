@@ -1,3 +1,4 @@
+import { StaffPushNotifications } from './caixa/realtime/StaffPushNotifications';
 import { DirectPixPendingPanel } from './caixa/orders/DirectPixPendingPanel';
 import { KomaBillingNotice } from './caixa/settings/KomaBillingNotice';
 import clsx from 'clsx';
@@ -823,6 +824,8 @@ export function CaixaPanel({
               </button>
             </div>
           </header>
+
+          <StaffPushNotifications key={authHeaders.Authorization} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onOpenOrders={() => handleSidebarNavigation('vendas_pedidos')} />
 
           <KomaBillingNotice apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onOpenBilling={(consolidated)=>{setActiveTab(consolidated ? 'configuracoes' : 'assinatura_pix');setActiveSubTab(consolidated ? 'integracoes' : 'contrato_documentos');}} />
 

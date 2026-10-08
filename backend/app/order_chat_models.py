@@ -7,6 +7,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -228,3 +229,22 @@ class OrderPushSubscription(Base):
     conversation = relationship("OrderConversation", foreign_keys=[conversation_id])
     comanda = relationship("Comanda", foreign_keys=[pedido_id])
     restaurante = relationship("Restaurante", foreign_keys=[restaurante_id])
+
+
+class StaffPushSubscription(Base):
+    """An authenticated operator's opt-in on one device; tenant scoped."""
+    __tablename__ = "staff_push_subscriptions"
+    __table_args__ = (
+        UniqueConstraint("restaurante_id", "endpoint_hash", name="uq_staff_push_tenant_endpoint"),
+        ForeignKeyConstraint(["restaurante_id", "usuario_id"], ["usuarios.restaurante_id", "usuarios.id"], ondelete="CASCADE"),
+    )
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    usuario_id = Column(String, nullable=False)
+    endpoint_hash = Column(String(64), nullable=False)
+    endpoint_ciphertext = Column(Text, nullable=False)
+    p256dh_ciphertext = Column(Text, nullable=False)
+    auth_ciphertext = Column(Text, nullable=False)
+    enabled = Column(Boolean, nullable=False, default=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    last_sent_at = Column(DateTime(timezone=True), nullable=True)

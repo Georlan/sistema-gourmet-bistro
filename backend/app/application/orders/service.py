@@ -815,6 +815,8 @@ class OrderApplicationService:
                 )
                 from ...services.tenant_order_whatsapp import enqueue_order_alert
                 enqueue_order_alert(db, event)
+                from ...services.staff_push import enqueue_staff_order_alert
+                enqueue_staff_order_alert(db, event)
 
             if commit:
                 db.commit()
