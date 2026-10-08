@@ -44,10 +44,13 @@ def upgrade() -> None:
     op.create_index('ix_network_access_operator', 'restaurant_network_access', ['restaurante_id', 'usuario_id'])
     if op.get_bind().dialect.name != 'postgresql':
         return
+    browser_roles = op.get_bind().execute(sa.text("SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated')")).scalars().all()
     for table in ('restaurant_networks', 'restaurant_network_units', 'restaurant_network_access'):
         op.execute(f'ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY')
         op.execute(f'ALTER TABLE public.{table} FORCE ROW LEVEL SECURITY')
-        op.execute(f'REVOKE ALL ON TABLE public.{table} FROM PUBLIC, anon, authenticated')
+        op.execute(f'REVOKE ALL ON TABLE public.{table} FROM PUBLIC')
+        for role in browser_roles:
+            op.execute(f'REVOKE ALL ON TABLE public.{table} FROM {role}')
         op.execute(f"CREATE POLICY tenant_isolation ON public.{table} TO koma_app USING (restaurante_id = NULLIF(current_setting('app.current_restaurante_id', true), '')::integer) WITH CHECK (restaurante_id = NULLIF(current_setting('app.current_restaurante_id', true), '')::integer)")
         op.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.{table} TO koma_app')
 

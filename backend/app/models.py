@@ -149,7 +149,7 @@ class RestaurantNetwork(Base):
     __tablename__ = 'restaurant_networks'
     __table_args__ = (UniqueConstraint('restaurante_id', 'id', name='uq_network_owner_id'),)
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    restaurante_id = Column(Integer, ForeignKey('restaurantes.id', ondelete='RESTRICT'), nullable=False)
+    restaurante_id = Column(Integer, ForeignKey('restaurantes.id', ondelete='RESTRICT'), default=lambda: current_restaurante_id.get(), nullable=False)
     nome = Column(String(120), nullable=False)
 
 
@@ -158,7 +158,7 @@ class RestaurantNetworkUnit(Base):
     __table_args__ = (
         ForeignKeyConstraint(['network_owner_id', 'network_id'], ['restaurant_networks.restaurante_id', 'restaurant_networks.id'], ondelete='RESTRICT'),
     )
-    restaurante_id = Column(Integer, ForeignKey('restaurantes.id', ondelete='CASCADE'), primary_key=True)
+    restaurante_id = Column(Integer, ForeignKey('restaurantes.id', ondelete='CASCADE'), primary_key=True, default=lambda: current_restaurante_id.get(), nullable=False)
     network_id = Column(String(36), nullable=False, index=True)
     network_owner_id = Column(Integer, nullable=False)
 
@@ -173,7 +173,7 @@ class RestaurantNetworkAccess(Base):
         Index('ix_network_access_operator', 'restaurante_id', 'usuario_id'),
     )
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    restaurante_id = Column(Integer, nullable=False)
+    restaurante_id = Column(Integer, default=lambda: current_restaurante_id.get(), nullable=False)
     usuario_id = Column(String, nullable=False)
     destino_restaurante_id = Column(Integer, nullable=False)
     destino_usuario_id = Column(String, nullable=False)
