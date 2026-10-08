@@ -42,6 +42,7 @@ from .routes import (
     super_admin_onboarding,
     tables,
     tenant_whatsapp,
+    staff_push,
     websocket,
     whatsapp_webhook,
 )
@@ -482,6 +483,7 @@ app.include_router(websocket.router)
 app.include_router(cardapio_config_bridge.router)
 app.include_router(caixa.router)
 app.include_router(tenant_whatsapp.router)
+app.include_router(staff_push.router)
 app.include_router(optimization.router)
 app.include_router(customer_satisfaction.router)
 app.include_router(online_payments.router)

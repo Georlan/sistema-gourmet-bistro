@@ -1,0 +1,58 @@
+name: Pocket Android Gate
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/staff_push.py'
+      - 'backend/app/routes/staff_push.py'
+      - 'backend/alembic/versions/*staff_push*'
+      - 'backend/tests/test_staff_push*.py'
+      - 'src/components/caixa/realtime/StaffPushNotifications.tsx'
+      - 'src/components/caixa/orders/CaixaOrdersWorkspace.tsx'
+      - 'public/koma-sw.js'
+      - 'e2e/pocket-android-alerts.spec.ts'
+      - '.github/workflows/pocket-android-targeted.yml'
+permissions:
+  contents: read
+jobs:
+  postgres-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pocket_test
+          POSTGRES_PASSWORD: pocket_test
+          POSTGRES_DB: pocket_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: pocket-ci-test-only
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      DATABASE_URL: postgresql://pocket_test:pocket_test@127.0.0.1:5432/pocket_test
+      STAFF_PUSH_TEST_DATABASE_URL: postgresql://pocket_test:pocket_test@127.0.0.1:5432/pocket_test
+      PYTHONPATH: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.15'
+      - run: python -m pip install -r backend/requirements-dev.txt
+      - run: python -m alembic -c backend/alembic.ini upgrade head
+      - run: python -m pytest backend/tests/test_staff_push_postgres.py -q -ra
+  android-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: KOMA_E2E_PORT=4283 npm run test:e2e -- e2e/pocket-android-alerts.spec.ts e2e/cashier-mobile-sticky-chrome.spec.ts --project=mobile-390 --workers=2

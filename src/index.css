@@ -3428,3 +3428,19 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Pocket: preparation on a phone must remain readable without printed tickets. */
+@media (max-width: 768px) {
+  .cashier-shell[data-koma-plan="pocket"] .orders-card__items {
+    font-size: 0.875rem;
+    line-height: 1.45;
+  }
+  .cashier-shell[data-koma-plan="pocket"] .orders-card__items .text-xs,
+  .cashier-shell[data-koma-plan="pocket"] .orders-card__items .text-\[11px\] {
+    font-size: 0.875rem;
+  }
+  .cashier-shell[data-koma-plan="pocket"] .orders-card__action,
+  .cashier-shell[data-koma-plan="pocket"] .orders-card__icon {
+    min-height: 44px;
+  }
+}
