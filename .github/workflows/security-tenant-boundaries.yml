@@ -51,7 +51,7 @@ jobs:
           DATABASE_URL="$KOMA_SECURITY_TEST_DATABASE_URL" MIGRATION_DATABASE_URL="$KOMA_SECURITY_TEST_DATABASE_URL" python -m alembic -c backend/alembic.ini upgrade head
       - name: Validate authorization, signatures, replay and real tenant boundaries
         run: |
-          python -m pytest -q -ra backend/tests/test_cearatech_lead_authorization.py backend/tests/test_whatsapp_webhook_replay_security.py backend/tests/test_meta_webhook_and_otp.py backend/tests/test_whatsapp_notification_postgres_security.py
+          python -m pytest -q -ra backend/tests/test_cearatech_lead_authorization.py backend/tests/test_whatsapp_webhook_replay_security.py backend/tests/test_meta_webhook_and_otp.py backend/tests/test_whatsapp_notification_postgres_security.py backend/tests/test_multistore_postgres.py
 
   frontend-dependency-security:
     runs-on: ubuntu-24.04

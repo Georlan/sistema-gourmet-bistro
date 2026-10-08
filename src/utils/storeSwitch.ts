@@ -3,62 +3,48 @@ import { getOperatorSession, saveOperatorSession } from './authSession';
 import type { OperatorIdentitySnapshot } from './authSession';
 
 export interface StoreOption { id: number; nome: string }
+export interface StoreIndex {
+  current: StoreOption;
+  network: { id: string; nome: string } | null;
+  units: StoreOption[];
+}
 export interface StoreSwitchSession {
   token: string;
   user: OperatorIdentitySnapshot & { id: string; nome: string; restaurante_id: number };
 }
-export type StoreSwitchResult =
-  | { kind: 'selection'; stores: StoreOption[] }
-  | { kind: 'authenticated'; session: StoreSwitchSession };
-
 const MANAGEMENT_ROLES = new Set(['admin', 'gerente']);
 export function canSwitchStore(role: unknown): boolean {
   return MANAGEMENT_ROLES.has(String(role || '').trim().toLowerCase());
 }
 
-/** Reauthenticate with the existing login contract; never infer access from an email. */
-export async function authenticateStoreSwitch(
-  loginUrl: string,
-  credentials: { username: string; password: string; restaurantId?: number },
-  signal?: AbortSignal,
-): Promise<StoreSwitchResult> {
-  const response = await authFetch(loginUrl, {
-    method: 'POST', signal,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      username: credentials.username.trim().toLowerCase(),
-      password: credentials.password,
-      ...(credentials.restaurantId ? { restaurante_id: credentials.restaurantId } : {}),
-    }),
-  });
+async function storeResponse(response: Response): Promise<any> {
   const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    const detail = data?.detail;
-    if (response.status === 409 && detail?.code === 'restaurant_selection_required') {
-      const stores: StoreOption[] = Array.isArray(detail.restaurantes)
-        ? detail.restaurantes.filter((store: StoreOption) => Number.isInteger(store?.id) && store.id > 0)
-          .map((store: StoreOption) => ({ id: store.id, nome: String(store.nome || `Loja ${store.id}`) }))
-        : [];
-      if (stores.length) return { kind: 'selection', stores };
-    }
-    throw new Error(typeof detail === 'string' ? detail : detail?.message || 'Não foi possível confirmar o acesso à loja.');
+  if (!response.ok) throw new Error(typeof data?.detail === 'string' ? data.detail : 'Não foi possível consultar as unidades autorizadas.');
+  return data;
+}
+
+export async function getStoreIndex(apiBase: string, token: string, signal?: AbortSignal): Promise<StoreIndex> {
+  const data = await storeResponse(await authFetch(`${apiBase}/auth/lojas`, { headers: { Authorization: `Bearer ${token}` }, signal }));
+  const validStore = (store: any) => Number.isInteger(store?.id) && store.id > 0 && typeof store.nome === 'string' && store.nome.trim();
+  if (!validStore(data?.current) || !Array.isArray(data?.units) || !data.units.every(validStore)
+    || (data.network !== null && (typeof data.network?.id !== 'string' || !data.network.id || typeof data.network?.nome !== 'string'))
+    || (!data.network && data.units.length)) {
+    throw new Error('A lista de unidades está incompleta. Tente novamente.');
   }
+  return data;
+}
+
+export async function requestStoreSwitch(apiBase: string, token: string, targetId: number, signal?: AbortSignal): Promise<StoreSwitchSession> {
+  if (!Number.isInteger(targetId) || targetId <= 0) throw new Error('Unidade inválida.');
+  const data = await storeResponse(await authFetch(`${apiBase}/auth/lojas/${targetId}/entrar`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, signal }));
   const user = data?.usuario;
-  if (!data?.access_token || typeof data.access_token !== 'string'
-    || typeof user?.id !== 'string' || !user.id || typeof user?.nome !== 'string' || !user.nome.trim()
-    || !Number.isInteger(user?.restaurante_id) || user.restaurante_id <= 0) {
-    throw new Error('A resposta de autenticação está incompleta. Tente novamente.');
+  if (typeof data?.access_token !== 'string' || !data.access_token || typeof user?.id !== 'string' || !user.id
+    || typeof user?.nome !== 'string' || !user.nome.trim() || user?.restaurante_id !== targetId
+    || !canSwitchStore(user.role || user.cargo)) {
+    throw new Error('O acesso recebido não corresponde à unidade selecionada.');
   }
-  const role = String(user.role || user.cargo || '').trim().toLowerCase();
-  if (!canSwitchStore(role)) throw new Error('Use uma conta de administrador ou gerente da loja de destino.');
-  if (credentials.restaurantId && credentials.restaurantId !== user.restaurante_id) {
-    throw new Error('O acesso recebido não corresponde à loja selecionada.');
-  }
-  // Keep only the identity needed to replace the operational session. No credentials or PII.
-  return { kind: 'authenticated', session: {
-    token: data.access_token,
-    user: { id: user.id, nome: user.nome, role, cargo: role, restaurante_id: user.restaurante_id },
-  } };
+  const role = String(user.role || user.cargo).trim().toLowerCase();
+  return { token: data.access_token, user: { id: user.id, nome: user.nome, role, cargo: role, restaurante_id: targetId } };
 }
 
 /** Commit only after confirmation; an expired/replaced source session cannot be overwritten. */

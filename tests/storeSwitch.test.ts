@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
-import { authenticateStoreSwitch, canSwitchStore, commitStoreSwitch, type StoreSwitchSession } from '../src/utils/storeSwitch';
+import { getStoreIndex, requestStoreSwitch, canSwitchStore, commitStoreSwitch, type StoreSwitchSession } from '../src/utils/storeSwitch';
 import { getOperatorSession, saveOperatorSession } from '../src/utils/authSession';
 
 function storage() {
@@ -13,60 +13,10 @@ beforeEach(() => {
   (globalThis as any).localStorage = storage();
   saveOperatorSession('unit-a-token', { id: 'admin-a', nome: 'Admin A', role: 'admin', restaurante_id: 1 });
 });
-async function withReply(status: number, data: unknown, run: (body: () => any) => Promise<void>) {
-  const original = globalThis.fetch;
-  let sent: any;
-  globalThis.fetch = (async (_url, init) => {
-    sent = JSON.parse(String(init?.body));
-    assert.equal(new Headers(init?.headers).get('Authorization'), null);
-    return new Response(JSON.stringify(data), { status });
-  }) as typeof fetch;
-  try { await run(() => sent); } finally { globalThis.fetch = original; }
-}
-const credentials = { username: ' ADMIN@KOMA.TEST ', password: 'senha', restaurantId: 2 };
-
 test('somente administradores e gerentes possuem o seletor', () => {
   assert.equal(canSwitchStore('admin'), true);
   assert.equal(canSwitchStore('gerente'), true);
   for (const role of ['caixa', 'garcom', 'superadmin', 'cozinha', undefined]) assert.equal(canSwitchStore(role), false);
-});
-test('autentica a unidade exata sem substituir a sessão antes de confirmar', async () => {
-  await withReply(200, { access_token: next.token, usuario: { ...next.user, email: 'private', telefone: 'private' } }, async sent => {
-    const result = await authenticateStoreSwitch('https://example.test/auth/login', credentials);
-    assert.equal(result.kind, 'authenticated');
-    assert.deepEqual(sent(), { username: 'admin@koma.test', password: 'senha', restaurante_id: 2 });
-    assert.equal(getOperatorSession()?.token, 'unit-a-token');
-    assert.doesNotMatch(JSON.stringify(result), /private|senha/);
-  });
-});
-test('seleção retornada pelo login não concede acesso nem muda a sessão', async () => {
-  await withReply(409, { detail: { code: 'restaurant_selection_required', restaurantes: [{ id: 1, nome: 'Matriz' }, { id: 2, nome: 'Filial' }, { id: -1 }] } }, async () => {
-    assert.deepEqual(await authenticateStoreSwitch('https://example.test/auth/login', { username: 'a', password: 'b' }), {
-      kind: 'selection', stores: [{ id: 1, nome: 'Matriz' }, { id: 2, nome: 'Filial' }],
-    });
-    assert.equal(getOperatorSession()?.token, 'unit-a-token');
-  });
-});
-for (const status of [401, 403, 429, 503]) test(`falha ${status} preserva a loja atual`, async () => {
-  await withReply(status, { detail: 'Acesso recusado' }, async () => {
-    await assert.rejects(authenticateStoreSwitch('https://example.test/auth/login', credentials), /Acesso recusado/);
-    assert.equal(getOperatorSession()?.user.restaurante_id, 1);
-  });
-});
-test('resposta com outra unidade ou perfil não pode ser confirmada', async () => {
-  await withReply(200, { access_token: next.token, usuario: { ...next.user, restaurante_id: 3 } }, async () => {
-    await assert.rejects(authenticateStoreSwitch('https://example.test/auth/login', credentials), /não corresponde/);
-  });
-  await withReply(200, { access_token: next.token, usuario: { ...next.user, role: 'caixa' } }, async () => {
-    await assert.rejects(authenticateStoreSwitch('https://example.test/auth/login', credentials), /administrador ou gerente/);
-  });
-  assert.equal(getOperatorSession()?.token, 'unit-a-token');
-});
-test('resposta incompleta preserva a sessão válida', async () => {
-  await withReply(200, { access_token: next.token, usuario: { id: 'b', role: 'admin', restaurante_id: 2 } }, async () => {
-    await assert.rejects(authenticateStoreSwitch('https://example.test/auth/login', credentials), /incompleta/);
-    assert.equal(getOperatorSession()?.token, 'unit-a-token');
-  });
 });
 test('troca limpa contexto antigo e preserva outra aba e preferências', () => {
   const otherTab = storage();
@@ -97,4 +47,48 @@ test('sessão de suporte não pode herdar a identidade de outra unidade', () => 
   sessionStorage.removeItem('koma_support_session');
   saveOperatorSession('support-token', { id: 'support:operator', nome: 'Suporte', role: 'admin', restaurante_id: 1 });
   assert.throws(() => commitStoreSwitch(next, 'support-token'), /sessão de suporte/);
+});
+
+async function storeReply(status: number, data: unknown, run: (request: () => { url: string; init: RequestInit }) => Promise<void>) {
+  const original = globalThis.fetch;
+  let sent: any;
+  globalThis.fetch = (async (url, init) => { sent = { url, init }; return new Response(JSON.stringify(data), { status }); }) as typeof fetch;
+  try { await run(() => sent); } finally { globalThis.fetch = original; }
+}
+test('índice independente vem do servidor, sem inferir rede por e-mail', async () => {
+  const index = { current: { id: 1, nome: 'Matriz' }, network: null, units: [] };
+  await storeReply(200, index, async request => {
+    assert.deepEqual(await getStoreIndex('https://example.test', 'unit-a-token'), index);
+    assert.equal(request().url, 'https://example.test/auth/lojas');
+    assert.equal(new Headers(request().init.headers).get('Authorization'), 'Bearer unit-a-token');
+    assert.equal(getOperatorSession()?.token, 'unit-a-token');
+  });
+});
+test('falha do índice não é apresentada como loja independente', async () => {
+  await storeReply(503, { detail: 'Índice indisponível' }, async () => {
+    await assert.rejects(getStoreIndex('https://example.test', 'unit-a-token'), /indisponível/);
+  });
+  await storeReply(200, { current: { id: 1, nome: 'Matriz' }, units: [] }, async () => {
+    await assert.rejects(getStoreIndex('https://example.test', 'unit-a-token'), /incompleta/);
+  });
+});
+test('troca usa sessão atual e ID exato sem enviar credenciais', async () => {
+  await storeReply(200, { access_token: next.token, usuario: next.user }, async request => {
+    const result = await requestStoreSwitch('https://example.test', 'unit-a-token', 2);
+    assert.equal(result.user.restaurante_id, 2);
+    assert.equal(request().url, 'https://example.test/auth/lojas/2/entrar');
+    assert.equal(request().init.method, 'POST');
+    assert.equal(request().init.body, undefined);
+    assert.equal(new Headers(request().init.headers).get('Authorization'), 'Bearer unit-a-token');
+    assert.equal(getOperatorSession()?.token, 'unit-a-token');
+  });
+});
+test('destino não autorizado ou resposta com outro tenant preserva a origem', async () => {
+  await storeReply(403, { detail: 'Unidade não autorizada' }, async () => {
+    await assert.rejects(requestStoreSwitch('https://example.test', 'unit-a-token', 2), /não autorizada/);
+  });
+  await storeReply(200, { access_token: next.token, usuario: { ...next.user, restaurante_id: 3 } }, async () => {
+    await assert.rejects(requestStoreSwitch('https://example.test', 'unit-a-token', 2), /não corresponde/);
+  });
+  assert.equal(getOperatorSession()?.token, 'unit-a-token');
 });

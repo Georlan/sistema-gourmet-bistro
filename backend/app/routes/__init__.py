@@ -12,6 +12,11 @@ from .. import print_job_invariants as _print_job_invariants  # noqa: F401,E402
 # compostas como sub-routers para manter os poderes em um único control plane
 # sem duplicar o registro do prefixo /super-admin.
 from . import super_admin as _super_admin  # noqa: E402,F401
+from .multistore import admin_router as _multistore_admin_router
+from .multistore import router as _multistore_router
+from . import auth as _auth
+_super_admin.router.include_router(_multistore_admin_router)
+_auth.router.include_router(_multistore_router)
 from .super_admin_access import router as _super_admin_access_router  # noqa: E402
 from .super_admin_support import router as _super_admin_support_router  # noqa: E402
 from .super_admin_incidents import router as _super_admin_incidents_router  # noqa: E402

@@ -22,7 +22,8 @@ async function openStore(page: Page, storeId = 1) {
     reads.push({ path, token });
     const id = token.includes('store-2-token') ? 2 : storeId;
     let body: unknown = [];
-    if (path === '/caixa/configuracoes') body = { restaurante_id: id, nome: `Loja ${id}`, taxa_servico_ativa: false, taxa_servico_padrao: 0 };
+    if (path === '/auth/lojas') body = { current: { id, nome: `Loja ${id}` }, network: { id: 'rede-demo', nome: 'Rede Demo' }, units: [{ id: id === 2 ? 1 : 2, nome: id === 2 ? 'Matriz' : 'Filial Centro' }] };
+    else if (path === '/caixa/configuracoes') body = { restaurante_id: id, nome: `Loja ${id}`, taxa_servico_ativa: false, taxa_servico_padrao: 0 };
     else if (path === '/api/onboarding/status') body = { onboarding: { releaseState: 'released' } };
     else if (path === '/produtos/catalogo') body = { categorias: [], produtos: [] };
     else if (path === '/caixa/turno/atual' || path === '/caixa/turno-atual') body = null;
@@ -37,74 +38,73 @@ async function openSwitch(page: Page) {
   await expect(page.locator('.cashier-main')).toBeVisible();
   const mobileMenu = page.getByRole('button', { name: 'Abrir menu principal', exact: true });
   if (await mobileMenu.isVisible()) await mobileMenu.click();
-  await page.getByRole('button', { name: 'Trocar loja', exact: true }).click();
-  return page.getByRole('dialog', { name: 'Trocar loja', exact: true });
+  await page.getByRole('button', { name: 'Minhas lojas', exact: true }).click();
+  return page.getByRole('dialog', { name: 'Minhas lojas', exact: true });
 }
 
-test('troca confirmada usa o token da filial e preserva a loja em outra aba', async ({ page, context }) => {
+test('rede lista unidades autorizadas e troca sem outro login, preservando outra aba', async ({ page, context }) => {
   const reads = await openStore(page);
   const other = await context.newPage();
   await openStore(other, 3);
-  let rejectLogin = true;
-  const bodies: Record<string, unknown>[] = [];
-  await page.route(`${API_ORIGIN}/auth/login`, async route => {
-    const body = route.request().postDataJSON();
-    bodies.push(body);
-    if (rejectLogin) {
-      rejectLogin = false;
-      return route.fulfill({ status: 401, json: { detail: 'Usuário ou senha incorretos' } });
-    }
-    if (!body.restaurante_id) return route.fulfill({ status: 409, json: { detail: {
-      code: 'restaurant_selection_required', restaurantes: [{ id: 1, nome: 'Matriz' }, { id: 2, nome: 'Filial Centro' }],
-    } } });
-    expect(body.restaurante_id).toBe(2);
+  let denied = true;
+  const requests: string[] = [];
+  await page.route(`${API_ORIGIN}/auth/lojas/2/entrar`, async route => {
+    requests.push(route.request().headers().authorization);
+    expect(route.request().postData()).toBeNull();
+    if (denied) { denied = false; return route.fulfill({ status: 403, json: { detail: 'Acesso revogado' } }); }
     await route.fulfill({ json: { access_token: 'store-2-token', usuario: { id: 'manager-2', nome: 'Gerente Centro', role: 'gerente', restaurante_id: 2 } } });
   });
-  let dialog = await openSwitch(page);
-  await dialog.getByLabel('E-mail', { exact: true }).fill('admin@koma.test');
-  await dialog.getByLabel('Senha', { exact: true }).fill('senha-teste');
-  await dialog.getByRole('button', { name: 'Confirmar acesso', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toHaveText('Usuário ou senha incorretos');
+  await page.route(`${API_ORIGIN}/auth/login`, () => { throw new Error('A troca entre unidades não deve pedir outro login'); });
+  const dialog = await openSwitch(page);
+  await expect(dialog.getByText('Rede Rede Demo', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('textbox')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Filial Centro', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toHaveText('Acesso revogado');
   expect(await page.evaluate(() => sessionStorage.getItem('koma_caixa_token'))).toBe('store-1-token');
-  await dialog.getByRole('button', { name: 'Confirmar acesso', exact: true }).click();
-  await dialog.getByLabel('Loja de destino', { exact: true }).selectOption('2');
-  await dialog.getByRole('button', { name: 'Acessar loja selecionada', exact: true }).click();
-  await expect(dialog.getByText('Entrar em Filial Centro como Gerente Centro?')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Tentar novamente' }).click();
+  await dialog.getByRole('button', { name: 'Filial Centro', exact: true }).click();
+  await expect(dialog.getByText('Entrar em Filial Centro?')).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem('koma_caixa_token'))).toBe('store-1-token');
-  // Cancelling after valid authentication still leaves the original store intact.
-  await dialog.getByRole('button', { name: 'Fechar troca de loja' }).click();
-  expect(await page.evaluate(() => sessionStorage.getItem('koma_caixa_token'))).toBe('store-1-token');
-  const mobileMenu = page.getByRole('dialog', { name: 'Menu principal', exact: true });
-  if (await mobileMenu.isVisible()) await mobileMenu.getByRole('button', { name: 'Fechar menu', exact: true }).click();
-  dialog = await openSwitch(page);
-  await dialog.getByLabel('E-mail', { exact: true }).fill('admin@koma.test');
-  await dialog.getByLabel('Senha', { exact: true }).fill('senha-teste');
-  await dialog.getByRole('button', { name: 'Confirmar acesso', exact: true }).click();
-  await dialog.getByLabel('Loja de destino', { exact: true }).selectOption('2');
-  await dialog.getByRole('button', { name: 'Acessar loja selecionada', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Voltar às unidades' }).click();
+  await dialog.getByRole('button', { name: 'Filial Centro', exact: true }).click();
   await dialog.getByRole('button', { name: 'Confirmar troca', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('koma_caixa_token'))).toBe('store-2-token');
   await expect.poll(() => reads.some(read => read.path === '/caixa/configuracoes' && read.token === 'Bearer store-2-token')).toBe(true);
   expect(await other.evaluate(() => sessionStorage.getItem('koma_caixa_token'))).toBe('store-3-token');
-  expect(bodies.at(-1)).toEqual({ username: 'admin@koma.test', password: 'senha-teste', restaurante_id: 2 });
+  expect(requests).toEqual(['Bearer store-1-token', 'Bearer store-1-token', 'Bearer store-1-token']);
 });
 
-test('fechar durante autenticação impede a troca tardia', async ({ page }) => {
+test('loja independente explica o vínculo e não oferece login livre', async ({ page }) => {
+  await openStore(page);
+  await page.route(`${API_ORIGIN}/auth/lojas`, route => route.fulfill({ json: { current: { id: 1, nome: 'Loja independente' }, network: null, units: [] } }));
+  const dialog = await openSwitch(page);
+  await expect(dialog.getByText('Esta loja ainda não está vinculada a uma rede.', { exact: false })).toBeVisible();
+  await expect(dialog.getByRole('textbox')).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Confirmar troca' })).toHaveCount(0);
+});
+
+test('rede sem permissão não confunde a loja com uma unidade independente', async ({ page }) => {
+  await openStore(page);
+  await page.route(`${API_ORIGIN}/auth/lojas`, route => route.fulfill({ json: { current: { id: 1, nome: 'Matriz' }, network: { id: 'rede-demo', nome: 'Rede Demo' }, units: [] } }));
+  const dialog = await openSwitch(page);
+  await expect(dialog.getByText('Você ainda não tem acesso autorizado a outra unidade desta rede.', { exact: false })).toBeVisible();
+  await expect(dialog.getByText('Loja independente', { exact: true })).toHaveCount(0);
+});
+
+test('fechar durante a consulta cancela a troca tardia', async ({ page }) => {
   await openStore(page);
   let release: () => void = () => {};
   const pending = new Promise<void>(resolve => { release = resolve; });
-  await page.route(`${API_ORIGIN}/auth/login`, async route => {
+  await page.route(`${API_ORIGIN}/auth/lojas/2/entrar`, async route => {
     await pending;
     await route.fulfill({ json: { access_token: 'store-2-token', usuario: { id: 'manager-2', nome: 'Gerente', role: 'gerente', restaurante_id: 2 } } }).catch(() => {});
   });
   const dialog = await openSwitch(page);
-  await dialog.getByLabel('E-mail', { exact: true }).fill('admin@koma.test');
-  await dialog.getByLabel('Senha', { exact: true }).fill('senha-teste');
-  const sent = page.waitForRequest(`${API_ORIGIN}/auth/login`);
-  await dialog.getByRole('button', { name: 'Confirmar acesso', exact: true }).click();
+  const sent = page.waitForRequest(`${API_ORIGIN}/auth/lojas/2/entrar`);
+  await dialog.getByRole('button', { name: 'Filial Centro', exact: true }).click();
   await sent;
-  await dialog.getByRole('button', { name: 'Fechar troca de loja' }).click();
+  await dialog.getByRole('button', { name: 'Fechar minhas lojas' }).click();
   release();
   await expect(dialog).toHaveCount(0);
   expect(await page.evaluate(() => sessionStorage.getItem('koma_caixa_token'))).toBe('store-1-token');
