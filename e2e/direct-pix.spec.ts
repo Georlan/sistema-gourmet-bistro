@@ -129,3 +129,24 @@ test('SuperAdmin distingue atraso e mantém o histórico das faturas pagas',asyn
   await history.getByRole('button',{name:'Fechar',exact:true}).click();
   await expect(history).toBeHidden();
 });
+
+test('liberação de teste permite cadastrar chave sem inventar contrato ou mensalidade',async({page})=>{
+  await open(page);
+  const config={available:true,enabled:false,key_type:'email',pix_key:'recebimento@example.com',holder_name:'RESTAURANTE',city:'FORTALEZA',commercial:null,test_mode:true};
+  await page.route('**/payments/direct-pix/settings',async route=>{
+    if(route.request().method()==='PUT') {
+      expect(route.request().postDataJSON()).toMatchObject({enabled:true});
+      return route.fulfill({json:{...config,enabled:true}});
+    }
+    return route.fulfill({json:config});
+  });
+  await settings(page);
+  const card=page.getByRole('region',{name:'Pix direto na conta'});
+  await expect(card).toContainText('sem contrato ou mensalidade habilitada');
+  await expect(card).toContainText('O QR movimenta dinheiro real');
+  await expect(card).not.toContainText('Seu contrato');
+  await card.getByRole('checkbox').check();
+  await card.getByRole('button',{name:'Usar chave Pix própria'}).click();
+  await expect(card).toContainText('Pix direto ativado para novos pedidos.');
+  await expect(card).toContainText('sem contrato ou mensalidade habilitada');
+});

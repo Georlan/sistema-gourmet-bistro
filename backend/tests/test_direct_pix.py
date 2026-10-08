@@ -483,3 +483,53 @@ def test_consolidated_invoice_cannot_charge_monthly_installment_during_trial(db,
     monkeypatch.setattr(default_saas_mp_service,'_ensure_provider_ready',lambda:None)
     result=create_invoice_pix(db,restaurant_id=99420,invoice_id=row.id,payer_email='admin@example.com')
     assert result['status']=='not_due' and row.provider_payment_id is None
+
+
+def test_explicit_test_release_without_subscription_is_scoped_and_revocable(db, monkeypatch):
+    from app.routes.direct_pix import read_settings, save_settings, PixConfiguration
+    from app.models import SuperAdminAuditLog
+    monkeypatch.setattr(settings, 'DIRECT_PIX_ENABLED', True)
+    monkeypatch.setattr('app.services.billing_service.tenant_commercial_terms', lambda *_: None)
+    monkeypatch.setenv('DIRECT_PIX_TEST_TENANT_IDS', '8')
+    user = db.get(Usuario, 'direct-pix-user')
+    payload = PixConfiguration(enabled=True, key_type='email', pix_key='pix@example.test',
+        holder_name='Restaurante', city='Fortaleza', accept_manual_confirmation_and_monthly_fees=True)
+    assert read_settings(db, user)['test_mode'] is False
+    with pytest.raises(HTTPException) as failure:
+        save_settings(payload, db, user)
+    assert failure.value.status_code == 409
+    monkeypatch.setenv('DIRECT_PIX_TEST_TENANT_IDS', '99420')
+    assert read_settings(db, user)['test_mode'] is True
+    assert read_settings(db, user)['commercial'] is None
+    save_settings(payload, db, user)
+    row = db.query(RestaurantDirectPixConfig).one()
+    assert row.enabled and row.terms_version == 'direct-pix-test-v1'
+    assert db.query(SaaSSubscription).count() == 0
+    assert db.query(SuperAdminAuditLog).filter_by(action='DIRECT_PIX_TEST_ACTIVATED').count() == 1
+    assert OnlinePaymentService.has_active_account(db, 99420)
+    assert OnlinePaymentService.active_account(db, 99420).provider == 'direct_pix'
+    monkeypatch.delenv('DIRECT_PIX_TEST_TENANT_IDS')
+    assert not OnlinePaymentService.has_active_account(db, 99420)
+    with pytest.raises(OnlinePaymentConfigurationError):
+        OnlinePaymentService.active_account(db, 99420)
+
+
+def test_test_release_never_bypasses_existing_subscription_or_invalid_contract(db, monkeypatch):
+    from app.routes.direct_pix import read_settings, save_settings, PixConfiguration
+    monkeypatch.setattr(settings, 'DIRECT_PIX_ENABLED', True)
+    monkeypatch.setenv('DIRECT_PIX_TEST_TENANT_IDS', '99420')
+    monkeypatch.setattr('app.services.billing_service.tenant_commercial_terms', lambda *_: None)
+    db.add(SaaSSubscription(restaurante_id=99420, status='onboarding', payment_method_type='pix'))
+    db.commit()
+    user = db.get(Usuario, 'direct-pix-user')
+    assert read_settings(db, user)['test_mode'] is False
+    payload = PixConfiguration(enabled=True, key_type='email', pix_key='pix@example.test',
+        holder_name='Restaurante', city='Fortaleza', accept_manual_confirmation_and_monthly_fees=True)
+    with pytest.raises(HTTPException):
+        save_settings(payload, db, user)
+    def invalid(*_):
+        raise RuntimeError('Invalid stored terms')
+    monkeypatch.setattr('app.services.billing_service.tenant_commercial_terms', invalid)
+    assert read_settings(db, user)['test_mode'] is False
+    with pytest.raises(HTTPException):
+        save_settings(payload, db, user)

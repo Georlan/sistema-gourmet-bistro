@@ -110,3 +110,15 @@ liquidado. A chave própria continua manual: confirmação automática do consum
 exige integração validada com banco/provedor e credenciais elegíveis. Conta CPF,
 por si só, não comprova disponibilidade de API. Devolução bancária e crédito de
 comissão do Pix direto continuam como evolução separada.
+
+### Liberação administrativa de teste sem contrato
+
+`DIRECT_PIX_TEST_TENANT_IDS` é uma allowlist explícita e vazia por padrão. Ela permite
+apenas registrar Pix próprio em lojas sem assinatura e sem contrato vinculado.
+Não cria aceite, mensalidade ou assinatura; não substitui termos inválidos nem
+contorna assinatura já existente. A tela identifica o teste e alerta que o QR
+movimenta dinheiro real, com conferência manual. A ativação gera auditoria
+`DIRECT_PIX_TEST_ACTIVATED`. Configurações usam `direct-pix-test-v1`; remover o ID
+da allowlist impede novos pagamentos nessa configuração. Intenções anteriores
+continuam podendo ser conciliadas manualmente. Sem assinatura, o fechamento
+mensal automático permanece inativo; os valores de taxa registrados são de teste.
