@@ -4,11 +4,13 @@ import jwt
 from sqlalchemy import text
 from ..config import settings
 from ..models import KomaEventLead, KomaEventAttribution, KomaEventVisit
-from .signup_notifications import enqueue
+from .signup_notifications import enqueue, _owner_telegram_chat
 
 EVENT = "ceara-tech-summit-2026"
 
 def signup_url(lead):
+    if lead.event_slug == "koma-landing":
+        return "/contratar"
     token = jwt.encode({"lead_id": lead.id, "aud": "event-acquisition",
         "exp": dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=30)},
         settings.SECRET_KEY, algorithm=settings.ALGORITHM)
@@ -28,10 +30,11 @@ def attribute_signup(db, signup_id, token):
     if lead:
         db.add(KomaEventAttribution(signup_id=signup_id, lead_id=lead.id))
 
-def enqueue_owner(db, lead):
+def enqueue_owner(db, lead, *, include_telegram=True):
     return enqueue(db, protocol=f"event-lead-{lead.id}", kind="event-lead-owner",
         email=settings.EVENT_LEADS_OWNER_EMAIL or settings.KOMA_OWNER_EMAIL, phone=None,
-        subject="Novo lead — Siará Tech Summit — KÔMA",
+        telegram_chat=_owner_telegram_chat() if include_telegram else None,
+        subject="Novo lead — Demonstração KÔMA" if lead.event_slug == "koma-landing" else "Novo lead — Siará Tech Summit — KÔMA",
         message=f"Nome: {lead.nome}\nWhatsApp: {lead.whatsapp_raw}\nEstabelecimento: {lead.empresa_nome or '-'}\nSistema atual: {lead.sistema_atual or '-'}\nPrincipal dor: {lead.principal_dor or '-'}\nAcompanhe em {settings.KOMA_PUBLIC_APP_URL}/super-admin (Leads).")
 
 def backfill_owner_notices():
@@ -39,7 +42,7 @@ def backfill_owner_notices():
     with SessionLocal() as db:
         leads = db.query(KomaEventLead).filter(KomaEventLead.event_slug == EVENT).order_by(KomaEventLead.id.desc()).limit(500).all()
         for lead in leads:
-            enqueue_owner(db, lead)
+            enqueue_owner(db, lead, include_telegram=False)
         db.commit()
 
 def record_visit(db, visit_id, source):
