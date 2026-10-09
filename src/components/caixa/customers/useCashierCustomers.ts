@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LoyaltyCustomer } from '../cashierContracts';
 

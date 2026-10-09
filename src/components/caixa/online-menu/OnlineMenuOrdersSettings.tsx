@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { ONBOARDING_SETUP_MODE_KEY, useUnsavedSetupChanges } from '../../onboarding/setupNavigation';
 import clsx from 'clsx';
 import {

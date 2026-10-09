@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import clsx from 'clsx';
 import { AlertCircle, CheckCircle2, ExternalLink, Loader2, MapPin, Plus, Save, Trash2, Truck } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';

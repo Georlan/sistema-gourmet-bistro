@@ -100,6 +100,7 @@ const formatDuration = (minutes: number) => {
 };
 
 export function CaixaPanel({
+  initialDigitalSnapshot,
   orders = [],
   onRefreshOrders,
   apiBaseUrl,
@@ -285,6 +286,7 @@ export function CaixaPanel({
     deliveryOrders,
     pendingAcceptanceOrders,
     deliveryOrdersLoadState,
+    hasDeliverySnapshot,
     pendingDeliveryOrderIds,
     motoboys,
     motoboysLoadState,
@@ -324,6 +326,7 @@ export function CaixaPanel({
     handleCancelSelectedKanbanConsumption,
     handleCancelSelectedKanbanOrder,
   } = useCashierOrders({
+    initialDigitalSnapshot,
     orders,
     apiBaseUrl,
     authHeaders,
@@ -677,8 +680,10 @@ export function CaixaPanel({
     setActiveSubTab('balcao');
   };
   useCashierRealtime({
+    hasInitialDigitalSnapshot: Boolean(initialDigitalSnapshot),
     isWsConnected,
     activeTab,
+    needsCouriers: activeTab === 'operacao' && (activeSubTab === 'motoboys' || deliveryOrders.some(order => order.modalidade === 'delivery')),
     fetchTurno,
     fetchDeliveryOrders,
     fetchMotoboys,
@@ -990,7 +995,8 @@ export function CaixaPanel({
             )}
 
             {activeTab === 'operacao' && activeSubTab === 'pedidos' && (
-              <>
+              !hasDeliverySnapshot && deliveryOrdersLoadState === 'loading' ? <div role="status" data-testid="cashier-orders-loading" className="p-5 text-koma-muted">Carregando pedidos…</div> : !hasDeliverySnapshot && deliveryOrdersLoadState === 'error' ? <div role="alert" className="p-5">Não foi possível atualizar os pedidos digitais. <button onClick={() => void fetchDeliveryOrders()}>Tentar novamente</button></div> : <>
+              {deliveryOrdersLoadState === 'error' && <div role="alert" className="p-3 text-koma-muted">A atualização dos pedidos digitais falhou. Mantendo os últimos dados. <button onClick={() => void fetchDeliveryOrders()}>Tentar novamente</button></div>}
               <DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />
               <CaixaOrdersWorkspace
                 hasLocalServiceWork={tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0}

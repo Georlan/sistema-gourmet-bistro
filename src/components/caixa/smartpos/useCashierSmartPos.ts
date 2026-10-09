@@ -1,3 +1,5 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
+import { orderUpdateAffects } from '../../../utils/orderUpdate';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Order } from '../../../types';
 import { operationalFetch } from '../../../utils/operationalRequest';
@@ -88,14 +90,17 @@ export function useCashierSmartPos({
     refresh.invalidate();
     const timer = window.setInterval(refresh.tick, smartPosFallbackInterval(isWsConnected));
     window.addEventListener('focus', refresh.resume);
-    window.addEventListener('koma_orders_updated', refresh.invalidate);
+    const onOrdersUpdated = (event: Event) => {
+      if (orderUpdateAffects(event, 'payments')) refresh.invalidate();
+    };
+    window.addEventListener('koma_orders_updated', onOrdersUpdated);
     window.addEventListener('koma_smartpos_updated', refresh.invalidate);
     document.addEventListener('visibilitychange', refresh.resume);
     return () => {
       refresh.stop();
       window.clearInterval(timer);
       window.removeEventListener('focus', refresh.resume);
-      window.removeEventListener('koma_orders_updated', refresh.invalidate);
+      window.removeEventListener('koma_orders_updated', onOrdersUpdated);
       window.removeEventListener('koma_smartpos_updated', refresh.invalidate);
       document.removeEventListener('visibilitychange', refresh.resume);
     };

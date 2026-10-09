@@ -324,6 +324,7 @@ async function mockCashierBackend(page: Page) {
     } else if (
       pathname === '/caixa/pagamentos/pendentes'
       || pathname === '/comandas/delivery/ativos'
+      || pathname === '/comandas/delivery/pendentes'
       || pathname === '/comandas/motoboys/lista'
       || pathname === '/auth/smartpos/caixa/operacao'
       || pathname === '/auth/usuarios'

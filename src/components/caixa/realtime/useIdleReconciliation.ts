@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { orderUpdateAffects } from '../../../utils/orderUpdate';
 import { createIdleReconciliation } from './idleReconciliation';
 
 /** Histories/diagnostics only; never owns financial mutations or print claiming. */
@@ -24,13 +25,16 @@ export function useIdleReconciliation({ enabled = true, isWsConnected, eventName
     });
     controllerRef.current = controller;
     const resume = () => { if (!document.hidden) controller.resume(); };
-    window.addEventListener(eventName, controller.invalidate);
+    const onUpdate = (event: Event) => {
+      if (eventName !== 'koma_orders_updated' || orderUpdateAffects(event, 'digital')) controller.invalidate();
+    };
+    window.addEventListener(eventName, onUpdate);
     window.addEventListener('focus', resume);
     document.addEventListener('visibilitychange', resume);
     return () => {
       controller.dispose();
       controllerRef.current = null;
-      window.removeEventListener(eventName, controller.invalidate);
+      window.removeEventListener(eventName, onUpdate);
       window.removeEventListener('focus', resume);
       document.removeEventListener('visibilitychange', resume);
     };

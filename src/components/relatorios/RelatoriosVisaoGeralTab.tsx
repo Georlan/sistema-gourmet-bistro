@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../utils/snapshotFetch';
 import { ReportPeriodButton } from './ReportPeriodButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';

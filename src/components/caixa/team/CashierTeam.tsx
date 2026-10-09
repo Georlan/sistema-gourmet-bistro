@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { useEffect, useRef, useState } from 'react';
 import { API } from '../../../config/caixaService';
 import { SystemUser } from '../../../types';

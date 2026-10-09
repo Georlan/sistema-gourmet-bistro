@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../config/api';
 import { Order, Product } from '../../../types';
@@ -37,6 +38,8 @@ export function useOperationalOrders({
 }: BoundaryProps) {
   const fetchOrdersAbortControllerRef = useRef<AbortController | null>(null);
   const fetchOrdersDirtyRef = useRef(false);
+  const timeoutRetriesRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Protocol IDs are data, never property names on a prototype-bearing object.
   const targetedOrderRequestRef = useRef(new Map<string, number>());
@@ -57,10 +60,17 @@ export function useOperationalOrders({
     fetchOrdersAbortControllerRef.current?.abort();
     fetchOrdersAbortControllerRef.current = null;
     fetchOrdersDirtyRef.current = false;
+    timeoutRetriesRef.current = 0;
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = null;
     targetedOrderRequestRef.current.clear();
     optimisticItemStatusRef.current.clear();
     setOrders([]);
     setLoadedScopeKey('');
+    return () => {
+      fetchOrdersAbortControllerRef.current?.abort();
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
   }, [scopeKey]);
 
   useEffect(() => {
@@ -133,6 +143,8 @@ export function useOperationalOrders({
     const requestScopeKey = scopeKey;
     const requestHeaders = getAuthHeaders();
     fetchOrdersAbortControllerRef.current = controller;
+    let timedOut = false;
+    const timeout = globalThis.setTimeout(() => { timedOut = true; controller.abort(); }, 6000);
 
     try {
       const response = await fetch(`${API_BASE_URL}/comandas/detalhes/todos?fechada=false`, {
@@ -164,13 +176,28 @@ export function useOperationalOrders({
       setOrders((prevOrders) =>
         mergeOperationalSnapshotPreservingOptimisticOrders(mappedOrders, prevOrders)
       );
+      timeoutRetriesRef.current = 0;
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+      setFetchError(current => current?.includes('comandas') || current?.startsWith('A leitura dos pedidos') ? null : current);
       setLoadedScopeKey(requestScopeKey);
     } catch (err: any) {
-      if (err.name !== 'AbortError') {
+      if (timedOut && requestScopeKey === scopeKeyRef.current) {
+        const retry = timeoutRetriesRef.current < 2;
+        setFetchError(retry ? 'A leitura dos pedidos demorou demais. O KÔMA tentará novamente automaticamente.' : 'A leitura dos pedidos demorou demais. Tente atualizar novamente.');
+        if (retry && !retryTimerRef.current) {
+          timeoutRetriesRef.current += 1;
+          retryTimerRef.current = setTimeout(() => {
+            retryTimerRef.current = null;
+            if (requestScopeKey === scopeKeyRef.current && requestHeaders.Authorization === getAuthHeaders().Authorization) void fetchOrdersFromAPI();
+          }, 2000);
+        }
+      } else if (err.name !== 'AbortError') {
         console.error('Connection error to backend:', err);
         setFetchError(`Erro de conexão comandas: ${err.message || String(err)}`);
       }
     } finally {
+      globalThis.clearTimeout(timeout);
       if (fetchOrdersAbortControllerRef.current === controller) {
         fetchOrdersAbortControllerRef.current = null;
       }
@@ -202,6 +229,7 @@ export function useOperationalOrders({
       const response = await fetch(`${API_BASE_URL}/comandas/${encodeURIComponent(normalizedId)}`, {
         headers: requestHeaders,
         cache: 'no-store',
+        signal: new AbortController().signal,
       });
       if (requestScopeKey !== scopeKeyRef.current
         || requestHeaders.Authorization !== getAuthHeaders().Authorization) return;

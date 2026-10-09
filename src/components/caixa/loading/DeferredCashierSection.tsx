@@ -19,6 +19,25 @@ export function DeferredCashierSection<P extends object>({ active, label, load, 
   useEffect(() => {
     if (active) setVisited(true);
   }, [active]);
+  useEffect(() => {
+    if (visited) return;
+    let prefetched = false;
+    const onIntent = (event: Event) => {
+      const target = event.target instanceof Element ? event.target.closest('button') : null;
+      if (!target || prefetched) return;
+      const text = target.textContent?.trim().replace(/\s+\d+$/, '');
+      const aliases: Record<string, string[]> = { Estoque: ['Estoque & compras'], 'Novo pedido': ['Novo pedido'] };
+      if (text !== label && !aliases[label]?.includes(text || '')) return;
+      prefetched = true;
+      void load().catch(() => { prefetched = false; });
+    };
+    document.addEventListener('pointerdown', onIntent, { passive: true });
+    document.addEventListener('focusin', onIntent);
+    return () => {
+      document.removeEventListener('pointerdown', onIntent);
+      document.removeEventListener('focusin', onIntent);
+    };
+  }, [visited, label, load]);
   if (!active && !visited) return null;
 
   return (
@@ -31,7 +50,7 @@ export function DeferredCashierSection<P extends object>({ active, label, load, 
             </div>
           }
         >
-          <Section {...sectionProps} />
+          <Section {...sectionProps} {...(!active && 'activeSubTab' in sectionProps ? { activeSubTab: '' } : {})} />
         </Suspense>
       </FeatureErrorBoundary>
     </div>

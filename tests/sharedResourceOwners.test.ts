@@ -70,7 +70,7 @@ test('cashier reads digital orders from dedicated server projection', () => {
 
   assert.doesNotMatch(owner, /projectDeliveryOrdersFromSharedSnapshot\(orders\)/);
   assert.doesNotMatch(owner, /useEffect\(\(\) => \{\s*fetchDeliveryOrders\(\);\s*fetchMotoboys\(\);/);
-  assert.match(realtime, /useEffect\(\(\) => \{\s*fetchTurno\(\);\s*fetchDeliveryOrders\(\);\s*fetchMotoboys\(\);/);
+  assert.match(realtime, /if \(needsCouriers\) void fetchMotoboys\(\)/);
 });
 
 test('inventory resource plans load what each screen and its dialogs use', () => {

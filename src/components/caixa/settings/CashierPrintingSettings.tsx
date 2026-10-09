@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { useState } from 'react';
 import { Activity, ChevronDown, ChevronRight, Lock, Printer, Receipt, RefreshCw, Truck } from 'lucide-react';
 import { PrintMonitorPanel } from '../../printing/PrintMonitorPanel';
