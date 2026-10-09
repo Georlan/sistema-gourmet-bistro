@@ -9,6 +9,8 @@ export interface PublicMenuViewedProps {
   categories_count: number;
   products_count: number;
   store_status?: string;
+  /** Catalog HTTP retrieval + decoding/projection, not page paint or Web Vitals. */
+  catalog_load_ms?: number;
 }
 
 export interface PublicProductViewedProps {
