@@ -549,8 +549,8 @@ export function CardapioDigitalSettingsPanel({
   }
 
   return (
-    <div className="online-menu-editor space-y-4 text-left animate-fade-in">
-      <header className="online-menu-editor__header flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+    <div className="online-menu-editor space-y-4 text-left animate-fade-in" style={onSetupComplete ? { paddingBottom: 0 } : undefined}>
+      {!onSetupComplete && <header className="online-menu-editor__header flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
           <h2 className="text-base font-black text-koma-foreground">
             {activeTab === 'marca' ? 'Marca' : setupMode ? 'Dados do restaurante' : 'Perfil do cardápio'}
@@ -571,7 +571,7 @@ export function CardapioDigitalSettingsPanel({
             <ExternalLink size={13} /> Ver como cliente
           </a>
         )}
-      </header>
+      </header>}
 
       {loadError && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-rose-500/25 bg-rose-500/[0.08] px-4 py-3 text-xs text-rose-700 dark:text-rose-300" role="alert">
@@ -968,7 +968,7 @@ export function CardapioDigitalSettingsPanel({
           )}
 
           {(feedback || hasUnsavedChanges || onSetupComplete) && (
-            <div className="online-menu-editor__publish flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
+            <div style={onSetupComplete ? { position: 'static' } : undefined} className="online-menu-editor__publish flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
               {feedback ? (
                 <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
                   {feedback.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}{feedback.text}
