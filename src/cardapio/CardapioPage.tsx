@@ -1,3 +1,4 @@
+import PixCopyCode from "./components/PixCopyCode";
 import { QRCodeSVG } from 'qrcode.react';
 /**
  * @license
@@ -9,7 +10,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   CheckCircle2,
   Clock3,
-  Copy,
   Gift,
   House,
   MessageCircle,
@@ -142,7 +142,6 @@ export default function CardapioPage() {
   const [storedOrders, setStoredOrders] = useState<StoredOrder[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [pixModalOrder, setPixModalOrder] = useState<StoredOrder | null>(null);
-  const [copiedPix, setCopiedPix] = useState(false);
   const [user, setUser] = useState<CustomerProfile | null>(null);
   const [customerToken, setCustomerToken] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -1392,12 +1391,11 @@ export default function CardapioPage() {
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setPixModalOrder(null);
-              setCopiedPix(false);
             }
           }}
         >
           <div
-            className="w-full max-w-sm rounded-3xl border border-koma-border bg-koma-card p-5 text-center shadow-2xl"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-3xl border border-koma-border bg-koma-card p-5 text-center shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-label={`Pagamento Pix do Pedido #${pixModalOrder.numero_pedido}`}
@@ -1418,7 +1416,6 @@ export default function CardapioPage() {
                 type="button"
                 onClick={() => {
                   setPixModalOrder(null);
-                  setCopiedPix(false);
                 }}
                 className="grid h-8 w-8 place-items-center rounded-xl border border-koma-border text-koma-secondary hover:text-white"
                 aria-label="Fechar modal Pix"
@@ -1445,29 +1442,7 @@ export default function CardapioPage() {
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => {
-                if (pixModalOrder?.pagamento?.qr_code) {
-                  void navigator.clipboard.writeText(pixModalOrder.pagamento.qr_code);
-                  setCopiedPix(true);
-                  setTimeout(() => setCopiedPix(false), 3000);
-                }
-              }}
-              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 text-xs font-black text-white shadow-lg transition"
-            >
-              {copiedPix ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4" />
-                  Código Copiado!
-                </>
-              ) : (
-                <>
-                  <Copy className="h-4 w-4" />
-                  Copiar código Pix
-                </>
-              )}
-            </button>
+            {pixModalOrder.pagamento.qr_code && <PixCopyCode code={pixModalOrder.pagamento.qr_code} />}
 
             {pixModalOrder.pagamento.ticket_url && (
               <a
