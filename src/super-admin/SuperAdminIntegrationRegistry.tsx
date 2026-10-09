@@ -74,7 +74,7 @@ export function SuperAdminIntegrationRegistry() {
     fetchRegistry();
   }, [fetchRegistry]);
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, serviceId?: string) => {
     switch (status) {
       case "connected":
         return (
@@ -98,7 +98,7 @@ export function SuperAdminIntegrationRegistry() {
       case "not_configured":
         return (
           <span className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/80 px-2.5 py-0.5 text-[11px] font-bold text-zinc-400">
-            <HelpCircle className="h-3 w-3" /> Não configurado
+            <HelpCircle className="h-3 w-3" /> {["railway", "cloudflare", "linear"].includes(serviceId || "") ? "Acesso opcional não habilitado" : "Não configurado"}
           </span>
         );
       default:
@@ -130,7 +130,7 @@ export function SuperAdminIntegrationRegistry() {
               <h2 className="text-lg font-bold text-koma-foreground">Integrações da plataforma</h2>
             </div>
             <p className="mt-1 text-xs text-koma-muted">
-              Cockpit unificado de saúde, probes em tempo real e links operacionais dos subsistemas do KÔMA.
+              Consultas verificadas e acessos opcionais. Cada serviço informa o que foi testado e o que ainda falta.
             </p>
           </div>
 
@@ -180,11 +180,11 @@ export function SuperAdminIntegrationRegistry() {
                     <div>
                       <h3 className="text-sm font-bold text-koma-foreground">{item.name}</h3>
                       <span className="text-[10px] uppercase tracking-wider text-koma-muted">
-                        {item.category.replace("_", " ")}
+                        {({control_plane: "Engenharia", product_analytics: "Análise de produto", code_ci: "Código e publicação", runtime_infra: "Hospedagem", edge_dns: "Domínios", transactional_email: "E-mails"} as Record<string, string>)[item.category] || item.category}
                       </span>
                     </div>
                   </div>
-                  {getStatusBadge(item.status)}
+                  {getStatusBadge(item.status, item.id)}
                 </div>
 
                 <p className="mt-3 text-xs leading-relaxed text-koma-secondary">{item.purpose}</p>
