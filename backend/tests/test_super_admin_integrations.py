@@ -21,6 +21,33 @@ SUPERADMIN_USERNAME = "integrations-admin@example.test"
 SUPERADMIN_PASSWORD = "integrations-password-test"
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize('response_status', [200, 401, 403])
+async def test_resend_read_permission_does_not_claim_email_delivery(monkeypatch, response_status):
+    import httpx
+    from app.routes import super_admin_integrations
+    monkeypatch.setenv('RESEND_API_KEY', 're_test_only')
+    get = AsyncMock(return_value=httpx.Response(response_status))
+    with patch.object(super_admin_integrations.httpx.AsyncClient, 'get', get):
+        result = await super_admin_integrations._probe_resend()
+    assert result['status'] == ('connected' if response_status == 200 else 'unverified')
+    assert result['configured'] is True
+    assert 'não testada' in result['detail']
+    assert 're_test_only' not in str(result)
+    assert get.call_args.args[0] == 'https://api.resend.com/domains'
+
+
+@pytest.mark.anyio
+async def test_resend_probe_exception_does_not_expose_credentials(monkeypatch):
+    from app.routes import super_admin_integrations
+    monkeypatch.setenv('RESEND_API_KEY', 're_test_only')
+    with patch.object(super_admin_integrations.httpx.AsyncClient, 'get', AsyncMock(side_effect=RuntimeError('secret re_test_only'))):
+        result = await super_admin_integrations._probe_resend()
+    assert result['status'] == 'unverified'
+    assert 're_test_only' not in str(result)
+    assert 'secret' not in str(result)
+
+
 @pytest.fixture(autouse=True)
 def superadmin_env(monkeypatch):
     super_admin.superadmin_login_rate_limiter.history.clear()

@@ -1,9 +1,7 @@
 import React from "react";
+import { SuperAdminFinance } from "./SuperAdminFinance";
 import {
   ReceiptText,
-  TrendingUp,
-  Store,
-  ShieldCheck,
   CheckCircle2,
   Tag,
 } from "lucide-react";
@@ -13,7 +11,6 @@ import {
   ANNUAL_DISCOUNT_RATE,
   formatCurrency,
   formatPercentage,
-  getSubscriptionPlan,
   getSubscriptionPricing,
 } from "../config/subscriptionPlans";
 
@@ -26,67 +23,12 @@ export function SuperAdminBillingTab({
   tenants,
   tenantsAvailable = false,
 }: SuperAdminBillingTabProps) {
-  const activeTenants = tenantsAvailable ? tenants.filter(t => t.status === "ACTIVE") : [];
-
-  const catalogMonthlyReference = tenantsAvailable
-    ? activeTenants.reduce((acc, t) => {
-        return acc + getSubscriptionPlan(t.plan).price;
-      }, 0)
-    : null;
-
   return (
     <div className="space-y-6">
-      {/* Financial Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-koma-card border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-koma-muted">Referência mensal do catálogo</span>
-            <div className="p-2 rounded-lg bg-emerald-950/60 text-[#00b894] border border-emerald-800/30">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-koma-foreground tracking-tight">
-            {catalogMonthlyReference !== null ? formatCurrency(catalogMonthlyReference) : "—"}
-          </div>
-          <p className="text-[11px] text-koma-subtle">
-            {tenantsAvailable
-              ? "Soma dos preços do catálogo atual pelos perfis de recursos ativos; não é receita recebida e não representa os contratos dos tenants"
-              : "Fonte de restaurantes indisponível"}
-          </p>
-        </div>
-
-        <div className="bg-koma-card border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-koma-muted">Restaurantes ativos</span>
-            <div className="p-2 rounded-lg bg-purple-950/60 text-purple-300 border border-purple-800/30">
-              <Store className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-koma-foreground tracking-tight">
-            {tenantsAvailable ? activeTenants.length : "—"}
-          </div>
-          <p className="text-[11px] text-koma-subtle">
-            {tenantsAvailable ? `${tenants.length} restaurante(s) retornado(s) pela API` : "Fonte de restaurantes indisponível"}
-          </p>
-        </div>
-
-        <div className="bg-koma-card border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-koma-muted">Cobrança recorrente SaaS</span>
-            <div className="p-2 rounded-lg bg-blue-950/60 text-blue-300 border border-blue-800/30">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-emerald-400 tracking-tight">
-            Não integrada
-          </div>
-          <p className="text-[11px] text-koma-subtle">
-            Valores cobrados, vencidos ou recebidos não são exibidos sem uma fonte financeira
-          </p>
-        </div>
-      </div>
-
-      {/* Commercial Plans Matrix */}
+      <SuperAdminFinance tenants={tenants} />
+      <details>
+        <summary className="cursor-pointer text-sm font-bold text-koma-muted">Catálogo vigente para novas contratações</summary>
+        <p className="my-2 text-xs text-koma-muted">Referência mensal do catálogo: não é receita recebida e não representa os contratos dos tenants.</p>
       <div className="bg-koma-card border border-[#1e293b] rounded-xl p-6 shadow-sm space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
@@ -163,6 +105,7 @@ export function SuperAdminBillingTab({
           })}
         </div>
       </div>
+      </details>
     </div>
   );
 }
