@@ -1,3 +1,4 @@
+import { readAdminShortcut } from "./adminShortcut";
 import React, { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard,
@@ -38,8 +39,8 @@ type TabId = "overview" | "clients" | "leads" | "incidents" | "platform";
 
 export default function SuperAdminPanel() {
   const frontendBuildSha = import.meta.env.VITE_BUILD_SHA || "desconhecido";
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
-  const [clientsView, setClientsView] = useState<ClientsView>("restaurants");
+  const [activeTab, setActiveTab] = useState<TabId>(() => { const shortcut = readAdminShortcut(window.location.search); return shortcut.finance || shortcut.tenantId ? "clients" : "overview"; });
+  const [clientsView, setClientsView] = useState<ClientsView>(() => readAdminShortcut(window.location.search).finance ? "billing" : "restaurants");
   const [newClientsView, setNewClientsView] = useState<NewClientsView>("signups");
   const [platformView, setPlatformView] = useState<PlatformView>("health");
   const [globalSearch, setGlobalSearch] = useState("");

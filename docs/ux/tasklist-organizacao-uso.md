@@ -45,6 +45,42 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 - [x] Configurações: unificar Aparência, Impressão, Mesas, App do Garçom, Taxa de Serviço, Implantação inicial e Integrações na mesma árvore canônica, espelhada no menu vertical e na barra horizontal, sem cards internos de navegação.
 - [ ] Configurações: consolidar owners existentes e impedir novas telas paralelas para a mesma regra.
 
+## Super Admin — controle do proprietário, revisão de 09/10/2026
+
+Esta onda parte da main `c6c030a2` e incorpora as atualizações paralelas até `af303a2d` sem conflito. Os itens abaixo descrevem implementação e verificações desta branch; merge e publicação exigem checks verdes e revisão servida. A reconciliação de 08/10 permanece abaixo como histórico.
+
+### Entregue nesta onda
+
+- [x] Expor **Recursos e exceções** na ficha 360°: liberar, bloquear ou seguir o plano para uma loja, mostrando antes/depois e exigindo motivo. Reutiliza o executor canônico e a auditoria; não muda plano nem cobrança. Proteção contra clique duplicado e teste de concessão/revogação/restauração.
+- [x] Abrir diretamente os controles autenticados por `?tenant=ID&panel=resources`, a ficha por `?tenant=ID` e o financeiro por `?panel=finance`. O atalho de recursos evita carregar as demais consultas da ficha. O link não realiza alterações nem dispensa autenticação.
+- [x] Unificar os atalhos de suporte do cockpit com a árvore canônica do Caixa; preservar aliases válidos e o fluxo auditado de suporte, sem encaminhar a sessão para outro domínio.
+- [x] Substituir a referência de catálogo no Início por acesso ao **Financeiro KÔMA**. Catálogo continua disponível, recolhido e identificado como referência comercial.
+- [x] Apurar faturas consolidadas KÔMA recebidas no mês por `paid_at`, com corte de Fortaleza, e valores em aberto da competência. Não somar vendas dos restaurantes ou preços do catálogo como receita.
+- [x] Registrar custos mensais em reais (ChatGPT, banco, Railway, ferramentas/domínio, impostos/tarifas e outros), com responsável, motivo e evidência antes/depois. Campo vazio é desconhecido; zero precisa ser confirmado. O resultado permanece incompleto enquanto houver custos desconhecidos e explicita recebimentos externos não cobertos.
+- [x] Proteger os custos em tabelas privadas: ENABLE/FORCE RLS, sem acesso `anon`/`authenticated`, acesso mínimo do backend e auditoria sem UPDATE/DELETE para a role da aplicação. Migração e permissões exercitadas em PostgreSQL isolado, sem dados de produção.
+- [x] Remover o segundo inventário de credenciais em Integrações e sua consulta redundante. Manter diagnóstico Telegram; mover consultas opcionais de hospedagem/DNS para seção recolhida da Saúde.
+- [x] Corrigir a classificação do Resend: uma leitura administrativa rejeitada fica não verificada, não prova falha de envio; resposta administrativa positiva também não prova entrega de e-mail. Nenhum e-mail de teste enviado.
+- [x] Conferir PostHog pelo plugin no projeto KÔMA Production `648305`, janela de sete dias e exclusão padrão de contas internas/testes: há eventos recentes de cardápio e envio de pedido. Isso não habilita uma credencial de consulta no backend.
+- [x] Reconsultar Telegram por leitura em produção em 09/10 às 09:42 (Fortaleza): bot, destino e participação verificados. Entrega continua não testada.
+
+- [x] Reconciliar novas entregas paralelas de impressão: #1052 reduz reconexões da wake stream e #1054 limita retries de heartbeat/claim; incorporadas na main em 09/10. São mudanças do agente local e não encerram incidentes sem atualização do aparelho e prova física.
+- [x] Incorporar as entregas #1053 (inscrição com uma etapa aberta por vez) e #1055 (erros de imports preservados e identificados pela versão servida); não reimplementar esses fluxos no Super Admin. A versão combinada passa novamente pelos gates e pela navegação administrativa.
+
+- [x] Incorporar #1057: diagnóstico HTTP separa latência normal, streams, falhas de autenticação e erros de disponibilidade. Não usar duração de SSE/WebSocket como evidência de endpoint lento.
+
+- [x] Incorporar #1058: relatório de backups explicita a cobertura e registra restore isolado. Não confundir backup do volume Railway com restauração do banco Supabase ou prova de recuperação total da produção.
+
+### Prioridades que continuam abertas
+
+- [ ] **P0 — impressão:** em 09/10 a central mostrou três incidentes altos: falha antiga de documento da Quentinha #6 e agentes sem heartbeat nas lojas #6/#8. A redução de 16 para 3 alertas não prova impressão física. Reconsultar fonte, corrigir o agente local e decidir cada documento; não reenviar nem encerrar em lote.
+- [ ] **P0 — implantação:** revisar os blockers e a liberação comercial da Espetaria #7 com o responsável. Não liberar por ausência de incidentes.
+- [ ] **P1 — resultado financeiro completo:** informar os valores reais dos custos e reconciliar recebimentos recorrentes/avulsos externos à fatura consolidada. A busca no histórico acessível não localizou os valores de ChatGPT/banco/Railway; não preencher preços presumidos. O painel entregue calcula resultado registrado, sem afirmar lucro total.
+- [ ] **P1 — integrações necessárias:** habilitar credencial mínima do backend para Linear/PostHog somente se as consultas/ações dentro do painel forem usadas. Railway e DNS Cloudflare são consultas administrativas opcionais, não requisitos de disponibilidade. Não reutilizar credenciais OAuth do plugin como segredo do produto.
+- [ ] **P1 — canais:** diagnosticar a instância Evolution/WhatsApp que continua em `close`, preservando a instância pessoal; confirmar entrega dos avisos existentes de leads/cobrança por recibos, sem novos envios para testar. Resend com leitura não verificada não deve provocar troca de chave de envio funcional.
+- [ ] **P2 — simplicidade:** agrupar incidentes na central sem esconder evidências/executores por documento e medir consultas antes de cache/polling. Os atalhos financeiros e de recursos não criam serviços pagos adicionais.
+
+Guia de operação e limites: [controle do proprietário](../operations/super-admin-owner-controls.md).
+
 ## Super Admin — prioridades reconciliadas em 08/10/2026
 
 Base desta reconciliação: main `8a7dd7c22e76`, comparada à entrega #1033 (`366b6f39696f`). Código, contratos/documentação e PRs incorporadas foram conferidos. Leitura pública em 08/10: frontend `8a7dd7c22e76`; backend `/health/ready` respondeu 200, banco saudável e revisão `ce90157fc2e8` (#1048). A diferença corresponde à #1049, que altera apenas frontend/teste. Esta revisão da tasklist não repetiu diagnóstico autenticado dos tenants, pagamentos, mensagens ou testes físicos: observações operacionais de 07/10 abaixo são históricas e precisam de nova leitura antes de execução.
@@ -117,7 +153,7 @@ Backend servido `be7c39639867`, após publicação compatível em duas etapas.
 - [x] Manter SQL do callback fora do event loop; testar resposta concorrente, replay, contexto e estado monotônico.
 - [x] Corrigir dependências vulneráveis, limitar importação XML e publicar scans de dependências/segredos. PRs #1031/#999 incorporadas; #1032 encerrada como incluída em #999.
 - [x] Confirmar versão servida, migração/policy reais e saúde passiva, sem QA destrutivo no D6. Cadastro e contagens preservados; cardápio HTTP 200.
-- [ ] Ensaiar restauração do backup em banco isolado.
+- [x] Ensaiar restauração do backup Supabase em PostgreSQL 17 isolado, escopo `public` + `koma_internal` (#1058): 117 tabelas conferidas, 154 policies/ACL restauradas e isolamento do runtime exercitado. Não cobre schemas gerenciados, mídias, configuração ou banco Evolution; recuperar toda a produção continua pendente.
 - [ ] Medir capacidade sob carga multitenant fora do D6; preservar orçamento de conexões e validar overlap de deploy antes de aumentar workers/réplicas.
 
 As pendências de impressão física, incidentes e integrações acima não são encerradas por esta rodada de segurança.

@@ -10,10 +10,14 @@ test('super admin does not present inferred catalog values as received revenue',
 
   for (const source of [billing, overview]) {
     assert.doesNotMatch(source, /\bMRR\b|Faturamento Total Estimado|Receita Variável Split/);
-    assert.match(source, /Referência mensal do catálogo/);
-    assert.match(source, /não (?:é receita recebida|confirma recebimento)/);
+
   }
-  assert.match(billing, /Valores cobrados, vencidos ou recebidos não são exibidos sem uma fonte financeira/);
+  assert.match(billing, /SuperAdminFinance/);
+  assert.match(overview, /Recebimentos e custos/);
+  assert.doesNotMatch(overview, /catalogMonthlyReference|Catálogo de split/);
+  const finance = read('src/super-admin/SuperAdminFinance.tsx');
+  assert.match(finance, /Custos incompletos/);
+  assert.match(finance, /Vendas dos restaurantes ficam fora desta conta/);
 });
 
 test('active admin and integration screens contain no future-phase placeholders or fake webhook feed', () => {

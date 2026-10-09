@@ -33,6 +33,8 @@ test('plataforma distingue acesso opcional e verifica Telegram somente por leitu
   await page.goto('/super-admin');
   if (page.viewportSize()!.width < 768) await page.getByRole('button', { name: 'Abrir menu lateral' }).click();
   await page.getByRole('button', { name: 'Plataforma', exact: true }).click();
+  await expect(page.getByText('Runtime Railway identificado')).not.toBeVisible();
+  await page.getByText('Hospedagem e DNS · consultas administrativas opcionais', { exact: true }).click();
   await expect(page.getByText('Runtime Railway identificado')).toBeVisible();
   await expect(page.getByText('Respondendo (live)')).toBeVisible();
   await expect(page.getByText('Merge verdict', { exact: true })).toBeVisible();
@@ -42,7 +44,7 @@ test('plataforma distingue acesso opcional e verifica Telegram somente por leitu
   expect(dnsReads).toBe(0);
   expect(githubReads).toBe(1);
   await page.getByRole('button', { name: 'Integrações', exact: true }).click();
-  await expect(page.getByText('Acesso opcional não habilitado')).toHaveCount(3);
+  await expect(page.getByRole('heading', {name: 'Integrações Centrais'})).toHaveCount(0);
   expect(telegramReads).toBe(0);
   await page.getByRole('button', { name: 'Verificar Telegram', exact: true }).click();
   await expect(page.getByText('Bot e destino verificados', { exact: true })).toBeVisible();

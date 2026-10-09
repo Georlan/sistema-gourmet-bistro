@@ -94,8 +94,5 @@ test('Modo Suporte pode abrir diretamente a tela canônica indicada pelo cockpit
   assert.match(supportModal, /target\?\.subTab \|\| "pedidos"/);
   assert.match(supportModal, /Destino após entrar:/);
   assert.match(restaurant360, /supportTargetForCockpit/);
-  assert.match(restaurant360, /cardapio_perfil/);
-  assert.match(restaurant360, /cardapio_entrega/);
-  assert.match(restaurant360, /cardapio_pagamentos/);
   assert.match(restaurant360, /Abrir tela canônica em suporte/);
 });
