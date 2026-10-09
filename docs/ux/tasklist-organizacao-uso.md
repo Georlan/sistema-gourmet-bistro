@@ -47,7 +47,7 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 
 ## Super Admin — controle do proprietário, revisão de 09/10/2026
 
-Esta onda parte da main `c6c030a2` e preserva as atualizações paralelas. Os itens abaixo descrevem implementação e verificações desta branch; merge e publicação exigem checks verdes e revisão servida. A reconciliação de 08/10 permanece abaixo como histórico.
+Esta onda parte da main `c6c030a2` e incorpora as atualizações paralelas até `2136d572` sem conflito. Os itens abaixo descrevem implementação e verificações desta branch; merge e publicação exigem checks verdes e revisão servida. A reconciliação de 08/10 permanece abaixo como histórico.
 
 ### Entregue nesta onda
 
@@ -64,6 +64,7 @@ Esta onda parte da main `c6c030a2` e preserva as atualizações paralelas. Os it
 - [x] Reconsultar Telegram por leitura em produção em 09/10 às 09:42 (Fortaleza): bot, destino e participação verificados. Entrega continua não testada.
 
 - [x] Reconciliar novas entregas paralelas de impressão: #1052 reduz reconexões da wake stream e #1054 limita retries de heartbeat/claim; incorporadas na main em 09/10. São mudanças do agente local e não encerram incidentes sem atualização do aparelho e prova física.
+- [x] Incorporar as entregas #1053 (inscrição com uma etapa aberta por vez) e #1055 (erros de imports preservados e identificados pela versão servida); não reimplementar esses fluxos no Super Admin. A versão combinada passa novamente pelos gates e pela navegação administrativa.
 
 ### Prioridades que continuam abertas
 
