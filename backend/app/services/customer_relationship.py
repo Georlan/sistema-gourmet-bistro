@@ -27,10 +27,14 @@ class CustomerRelationshipMetrics:
     dias_sem_comprar: Optional[int]
     segmento_relacionamento: str
     produtos_favoritos: list[dict[str, Any]] = field(default_factory=list)
+    primeira_compra_em: Optional[str] = None
+    intervalo_medio_dias: Optional[float] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "produtos_favoritos": self.produtos_favoritos,
+            "primeira_compra_em": self.primeira_compra_em,
+            "intervalo_medio_dias": self.intervalo_medio_dias,
             "pedidos_concluidos": self.pedidos_concluidos,
             "valor_pago_total": self.valor_pago_total,
             "ticket_medio_pago": self.ticket_medio_pago,
@@ -103,6 +107,7 @@ def load_customer_relationship_metrics(
             func.count(Comanda.id).label("pedidos_concluidos"),
             func.sum(Comanda.valor_pago).label("valor_pago_total"),
             func.max(data_efetiva).label("ultima_compra_em"),
+            func.min(data_efetiva).label("primeira_compra_em"),
         )
         .filter(*purchase_filters)
         .group_by(Comanda.cliente_id)
@@ -129,17 +134,17 @@ def load_customer_relationship_metrics(
         if len(entries) < 3:
             entries.append({"produto_id": product_id, "nome": name, "unidades": int(units)})
 
-    agg_map: dict[str, tuple[int, Decimal, Optional[datetime.datetime]]] = {}
-    for r_cid, r_count, r_sum, r_max_dt in rows:
+    agg_map: dict[str, tuple[int, Decimal, Optional[datetime.datetime], Optional[datetime.datetime]]] = {}
+    for r_cid, r_count, r_sum, r_max_dt, r_min_dt in rows:
         if r_cid is not None:
             count = int(r_count or 0)
             total = Decimal(str(r_sum or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            agg_map[str(r_cid)] = (count, total, r_max_dt)
+            agg_map[str(r_cid)] = (count, total, r_max_dt, r_min_dt)
 
     metrics_map: dict[str, CustomerRelationshipMetrics] = {}
     for cid in normalized_ids:
         if cid in agg_map:
-            count, total_dec, max_dt = agg_map[cid]
+            count, total_dec, max_dt, min_dt = agg_map[cid]
             total_float = float(total_dec)
             ticket_medio = round(total_float / count, 2) if count > 0 else 0.0
 
@@ -154,6 +159,8 @@ def load_customer_relationship_metrics(
             segmento = classify_customer_relationship(dias)
             metrics_map[cid] = CustomerRelationshipMetrics(
                 produtos_favoritos=favorites.get(cid, []),
+                primeira_compra_em=to_utc(min_dt).isoformat() if min_dt else None,
+                intervalo_medio_dias=round(max(0, (to_utc(max_dt) - to_utc(min_dt)).total_seconds()) / 86400 / (count - 1), 1) if count > 1 and min_dt and max_dt else None,
                 pedidos_concluidos=count,
                 valor_pago_total=total_float,
                 ticket_medio_pago=ticket_medio,

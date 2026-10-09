@@ -3,13 +3,14 @@ import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { Plus, Search, Users, X } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
-import { customerSegmentLabel, selectCrmCustomers, type CustomerSort, type CustomerSegment } from '../../../domain/customerCrm';
+import { customerOpportunityRules, matchesCustomerSegment, customerSegmentLabel, selectCrmCustomers, type CustomerSort, type CustomerSegment } from '../../../domain/customerCrm';
 import CuponsTab from '../../clientes/CuponsTab';
 import GrowthEconomicsCalculator, { type GrowthEconomicsOption } from '../../clientes/GrowthEconomicsCalculator';
 import MoneyInput from '../../MoneyInput';
 import { KomaEmptyState } from '../../shared/KomaEmptyState';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import type { CashierNotice, LoyaltyCustomer } from '../cashierContracts';
+import { CustomerHabits } from './CustomerHabits';
 import { CustomerRelationshipPanel } from './CustomerRelationshipPanel';
 import { CustomerSatisfactionPanel } from './CustomerSatisfactionPanel';
 import { useCustomerSatisfaction } from './useCustomerSatisfaction';
@@ -67,6 +68,12 @@ export default function CashierCustomers({
   const [customerSegment, setCustomerSegment] = useState<CustomerSegment>('ALL');
   const filteredLoyaltyUsers = useMemo(() => selectCrmCustomers(loyaltyUsers, clientesSearch, customerSegment, customerSort),
     [clientesSearch, loyaltyUsers, customerSegment, customerSort]);
+  const [customerPage, setCustomerPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  useEffect(() => { setCustomerPage(1); }, [clientesSearch, customerSegment, customerSort, pageSize, authHeaders.Authorization]);
+  const pageCount = Math.max(1, Math.ceil(filteredLoyaltyUsers.length / pageSize));
+  const currentPage = Math.min(customerPage, pageCount);
+  const pageCustomers = filteredLoyaltyUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const money = (value?: number) => (value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const relationshipSummary = useMemo(() => {
@@ -542,10 +549,22 @@ export default function CashierCustomers({
           </section>
 
           <div className="flex flex-wrap gap-2" aria-label="Filtrar clientes">
-            {([['ALL', 'Todos'], ['REPEAT', 'Recorrentes (2+ compras)'], ['ATENCAO', 'Atenção (31–60 dias)'], ['REATIVAR', 'Reativar (+60 dias)'], ['SEM_COMPRA', 'Sem compra']] as const).map(([value, label]) => (
+            {([['ALL', 'Todos'], ['ATIVO', 'Ativos (até 30 dias)'], ['REPEAT', 'Recorrentes (2+ compras)'], ['ATENCAO', 'Atenção (31–60 dias)'], ['REATIVAR', 'Reativar (+60 dias)'], ['SEM_COMPRA', 'Sem compra']] as const).map(([value, label]) => (
               <button key={value} type="button" aria-pressed={customerSegment === value} onClick={() => setCustomerSegment(value)} className={`min-h-11 rounded-lg border px-3 text-xs ${customerSegment === value ? 'border-emerald-600 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-koma-border text-koma-muted'}`}>{label}</button>
             ))}
           </div>
+          <details className="rounded-xl border border-koma-border p-3">
+            <summary className="min-h-11 cursor-pointer text-sm font-bold text-koma-foreground">Oportunidades de relacionamento</summary>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              {customerOpportunityRules.filter(rule => hasLoyalty || rule.segment !== 'BALANCE').map(rule => (
+                <button type="button" key={rule.segment} aria-pressed={customerSegment === rule.segment} onClick={() => setCustomerSegment(rule.segment)} className="rounded-xl border border-koma-border bg-koma-panel p-4 text-left">
+                  <strong className="block text-sm text-koma-foreground">{rule.label} · {loyaltyUsers.filter(customer => matchesCustomerSegment(customer, rule.segment)).length}</strong>
+                  <span className="mt-2 block text-xs text-koma-muted">{rule.explanation}</span>
+                  <span className="mt-3 block text-xs text-emerald-700 dark:text-emerald-300">Ver clientes</span>
+                </button>
+              ))}
+            </div>
+          </details>
           <p className="text-xs text-koma-muted">{filteredLoyaltyUsers.length} de {loyaltyUsers.length} clientes · Todo o histórico · Pedidos concluídos e valores pagos · Preferências sem itens cancelados.</p>
           <div
             className={"bg-koma-panel border border-koma-border rounded-2xl p-3 space-y-4 shadow-xs"}
@@ -553,12 +572,13 @@ export default function CashierCustomers({
             {filteredLoyaltyUsers.length > 0 ? (
               <>
               <div className="grid gap-2 md:hidden">
-                {filteredLoyaltyUsers.map((user) => (
+                {pageCustomers.map((user) => (
                   <article key={user.id} className="min-w-0 rounded-xl border border-koma-border bg-koma-raised p-3">
                     <div className="flex min-w-0 items-start justify-between gap-3">
                       <div className="min-w-0">
                         <strong className="block break-words text-sm text-koma-foreground">{user.cliente}</strong>
                         <span className="block font-mono text-xs text-koma-muted">{formatarTelefoneTabela(user.telefone)}</span>
+                        <CustomerHabits customer={user} />
                       </div>
                       <button type="button" onClick={() => startEditingCustomer(user)} className="koma-btn-secondary min-h-11 shrink-0 rounded-lg px-3 py-2 text-xs font-bold">
                         Editar
@@ -608,9 +628,9 @@ export default function CashierCustomers({
                     </tr>
                   </thead>
                   <tbody className={"divide-y divide-koma-border"}>
-                    {filteredLoyaltyUsers.map((user) => (
+                    {pageCustomers.map((user) => (
                       <tr key={user.id} className={"hover:bg-koma-raised/50 transition-colors"}>
-                        <td className={"p-3.5 font-bold text-koma-foreground"}>{user.cliente}</td>
+                        <td className={"p-3.5 font-bold text-koma-foreground"}><strong>{user.cliente}</strong><CustomerHabits customer={user} /></td>
                         <td className={"p-3.5 font-mono text-koma-muted text-xs"}>
                           {formatarTelefoneTabela(user.telefone)}
                         </td>
@@ -670,6 +690,11 @@ export default function CashierCustomers({
               />
             )}
           </div>
+          <nav aria-label="Páginas de clientes" className="flex flex-wrap items-center justify-between gap-3 text-xs text-koma-muted">
+            <label className="flex items-center gap-2">Clientes por página <select aria-label="Clientes por página" value={pageSize} onChange={event => setPageSize(Number(event.target.value))} className="min-h-11 rounded-lg border border-koma-border bg-koma-panel px-3 text-koma-foreground"><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label>
+            <span>{filteredLoyaltyUsers.length ? (currentPage - 1) * pageSize + 1 : 0}–{Math.min(currentPage * pageSize, filteredLoyaltyUsers.length)} de {filteredLoyaltyUsers.length} clientes</span>
+            <div className="flex items-center gap-2"><button type="button" disabled={currentPage === 1} onClick={() => setCustomerPage(currentPage - 1)} className="koma-btn-secondary min-h-11 rounded-lg px-3 disabled:opacity-40">Anterior</button><span>{currentPage} / {pageCount}</span><button type="button" disabled={currentPage === pageCount} onClick={() => setCustomerPage(currentPage + 1)} className="koma-btn-secondary min-h-11 rounded-lg px-3 disabled:opacity-40">Próxima</button></div>
+          </nav>
           <details className="rounded-xl border border-koma-border p-3">
             <summary className="min-h-11 cursor-pointer text-sm font-bold text-koma-foreground">Relacionamento e satisfação</summary>
             <div className="mt-3 space-y-3">

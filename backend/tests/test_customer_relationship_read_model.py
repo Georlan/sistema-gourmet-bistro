@@ -394,6 +394,8 @@ def test_calculation_total_and_average_ticket():
     assert m.ticket_medio_pago == 50.00
     assert m.dias_sem_comprar == 35
     assert m.segmento_relacionamento == "ATENCAO"
+    assert m.primeira_compra_em == (now_fixed - datetime.timedelta(days=40)).isoformat()
+    assert m.intervalo_medio_dias == 5.0
 
     db.close()
 
@@ -553,4 +555,6 @@ def test_favorite_products_use_valid_units_and_tenant_identity():
         {"produto_id": "extra-B", "nome": "B", "unidades": 1},
     ]
     assert metrics["no-purchases"].produtos_favoritos == []
+    assert metrics["no-purchases"].primeira_compra_em is None
+    assert metrics["no-purchases"].intervalo_medio_dias is None
     db.close()
