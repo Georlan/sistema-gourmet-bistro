@@ -184,6 +184,22 @@ async function mockPublicMenuBackend(
   return { getOtpRequests: () => otpRequests };
 }
 
+test('tempo do catálogo mede a requisição real sem duplicar abertura nem criar pedido', async ({ page }) => {
+  const orders: CapturedOrder[] = [];
+  await mockPublicMenuBackend(page, orders);
+  await page.route(`${API_ORIGIN}/api/cardapio-digital/public?*`, async route => {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    await route.fallback();
+  });
+  await page.goto('/?view=cardapio&restaurante_id=2');
+  await expect(page.getByText('Pizza Margherita', { exact: true }).first()).toBeVisible();
+  const events = await page.evaluate(() => window.__KOMA_ANALYTICS_EVENTS__?.filter(event => event.event === 'public_menu_viewed') || []);
+  expect(events).toHaveLength(1);
+  expect(events[0].properties.catalog_load_ms).toBeGreaterThanOrEqual(200);
+  expect(Number.isFinite(events[0].properties.catalog_load_ms)).toBe(true);
+  expect(orders).toEqual([]);
+});
+
 test('bloqueio autoritativo encerra o checkout sem reenviar o pedido', async ({ page }) => {
   const capturedOrders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, capturedOrders, { orderConflictDetail: ORDERING_BLOCK_CONFLICT_DETAIL });
