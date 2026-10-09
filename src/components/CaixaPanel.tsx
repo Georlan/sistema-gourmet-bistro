@@ -999,8 +999,8 @@ export function CaixaPanel({
             {activeTab === 'operacao' && activeSubTab === 'pedidos' && (
               !hasDeliverySnapshot && deliveryOrdersLoadState === 'loading' ? <div role="status" data-testid="cashier-orders-loading" className="p-5 text-koma-muted">Carregando pedidos…</div> : !hasDeliverySnapshot && deliveryOrdersLoadState === 'error' ? <div role="alert" className="p-5">Não foi possível atualizar os pedidos digitais. <button onClick={() => void fetchDeliveryOrders()}>Tentar novamente</button></div> : <>
               {deliveryOrdersLoadState === 'error' && <div role="alert" className="p-3 text-koma-muted">A atualização dos pedidos digitais falhou. Mantendo os últimos dados. <button onClick={() => void fetchDeliveryOrders()}>Tentar novamente</button></div>}
-              <DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />
               <CaixaOrdersWorkspace
+                pixConferenceTrigger={<DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />}
                 hasLocalServiceWork={tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0}
                 columns={{
                   tableProduction: filteredCol1.map(buildCashierTableCard),
