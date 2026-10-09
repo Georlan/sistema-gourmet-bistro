@@ -101,6 +101,7 @@ const formatDuration = (minutes: number) => {
 
 export function CaixaPanel({
   initialDigitalSnapshot,
+  onInitialDigitalSnapshotConsumed,
   orders = [],
   onRefreshOrders,
   apiBaseUrl,
@@ -680,6 +681,7 @@ export function CaixaPanel({
     setActiveSubTab('balcao');
   };
   useCashierRealtime({
+    onInitialDigitalSnapshotConsumed,
     hasInitialDigitalSnapshot: Boolean(initialDigitalSnapshot),
     isWsConnected,
     activeTab,
@@ -1296,6 +1298,7 @@ export function CaixaPanel({
             <DeferredCashierSection
               active={activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital'}
               label="Cardápio online"
+              retainInactiveProps
               load={loadCashierOnlineMenu}
               sectionProps={{ apiBaseUrl, authHeaders, activeSubTab, setActiveSubTab, setActiveTab, hasOnlineMenu, hasLoyalty, hasCoupons }}
             />

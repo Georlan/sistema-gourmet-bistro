@@ -617,7 +617,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     scopeKey: operationalScopeKey,
   });
 
-  const digitalBootstrap = useCashierBootstrap(operationalScopeKey, portal === 'caixa' && isManagementRole(activeRole), getAuthHeaders, isTablesLoaded && isOrdersLoaded && pendingPaymentsLoadedScopeKey === operationalScopeKey);
+  const digitalBootstrap = useCashierBootstrap(operationalScopeKey, portal === 'caixa' && isManagementRole(activeRole), getAuthHeaders);
   const isOperationalSnapshotReady = Boolean(operationalScopeKey) && digitalBootstrap.ready
     && isTablesLoaded
     && isOrdersLoaded
@@ -1681,6 +1681,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         <React.Suspense fallback={<CashierLoading />}>
           <MemoizedCaixaPanel
             initialDigitalSnapshot={digitalBootstrap.data}
+            onInitialDigitalSnapshotConsumed={digitalBootstrap.consume}
             orders={orders}
             onRefreshOrders={fetchOrdersFromAPI}
             apiBaseUrl={API_BASE_URL}
@@ -1788,6 +1789,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           <React.Suspense fallback={<CashierLoading />}>
             <MemoizedCaixaPanel
               initialDigitalSnapshot={digitalBootstrap.data}
+            onInitialDigitalSnapshotConsumed={digitalBootstrap.consume}
               orders={orders}
               onRefreshOrders={fetchOrdersFromAPI}
               apiBaseUrl={API_BASE_URL}

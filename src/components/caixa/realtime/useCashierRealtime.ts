@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { CaixaPanelProps } from '../cashierContracts';
 
-type Props = Pick<CaixaPanelProps, 'isWsConnected'> & {
+type Props = Pick<CaixaPanelProps, 'isWsConnected' | 'onInitialDigitalSnapshotConsumed'> & {
   hasInitialDigitalSnapshot: boolean;
   activeTab: string;
   needsCouriers: boolean;
@@ -14,6 +14,7 @@ type Props = Pick<CaixaPanelProps, 'isWsConnected'> & {
 /** Owns realtime state, effects and actions; composition supplies only cross-feature dependencies. */
 export function useCashierRealtime({
   isWsConnected,
+  onInitialDigitalSnapshotConsumed,
   hasInitialDigitalSnapshot,
   activeTab,
   needsCouriers,
@@ -26,6 +27,7 @@ export function useCashierRealtime({
     fetchTurno();
     if (!hasInitialDigitalSnapshot) fetchDeliveryOrders();
     fetchConfiguracoes();
+    onInitialDigitalSnapshotConsumed?.();
   }, []);
 
   useEffect(() => {

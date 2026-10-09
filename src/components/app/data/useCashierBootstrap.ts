@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../config/api';
 import { snapshotFetch } from '../../../utils/snapshotFetch';
 import { orderUpdateAffects } from '../../../utils/orderUpdate';
@@ -6,14 +6,19 @@ export type DigitalBootstrap = { active: unknown[]; pending: unknown[] };
 
 /** Read dedicated digital projections alongside salon bootstrap, then hand
  * ownership to the mounted cashier. Retain hints received before that handoff. */
-export function useCashierBootstrap(scope: string, enabled: boolean, getHeaders: () => Record<string, string>, salonReady: boolean) {
+export function useCashierBootstrap(scope: string, enabled: boolean, getHeaders: () => Record<string, string>) {
   const [snapshot, setSnapshot] = useState<{ scope: string; data?: DigitalBootstrap } | null>(null);
   const handoffReady = useRef(false);
-  handoffReady.current = salonReady && snapshot?.scope === scope;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const consume = useCallback(() => {
+    if (scopeRef.current === scope) handoffReady.current = true;
+  }, [scope]);
   const headersRef = useRef(getHeaders);
   headersRef.current = getHeaders;
   useEffect(() => {
     if (!enabled || !scope) return;
+    handoffReady.current = false;
     const controller = new AbortController();
     let reading = false;
     let dirty = false;
@@ -45,9 +50,10 @@ export function useCashierBootstrap(scope: string, enabled: boolean, getHeaders:
     window.addEventListener('koma_orders_updated', onUpdate);
     void read();
     return () => {
+      handoffReady.current = false;
       controller.abort();
       window.removeEventListener('koma_orders_updated', onUpdate);
     };
   }, [scope, enabled]);
-  return { ready: !enabled || snapshot?.scope === scope, data: snapshot?.scope === scope ? snapshot.data : undefined };
+  return { consume, ready: !enabled || snapshot?.scope === scope, data: snapshot?.scope === scope ? snapshot.data : undefined };
 }

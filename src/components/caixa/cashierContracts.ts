@@ -2,6 +2,7 @@ import type { Order, Table, Product, CaixaTurnoResumo } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
 
 export interface CaixaPanelProps {
+  onInitialDigitalSnapshotConsumed?: () => void;
   initialDigitalSnapshot?: import('../app/data/useCashierBootstrap').DigitalBootstrap;
   orders: Order[];
   onRefreshOrders: () => Promise<void>;

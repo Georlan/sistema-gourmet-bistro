@@ -69,3 +69,55 @@ test('a waiter digital launch keeps the dedicated digital queue live', async ({ 
   socket.send(JSON.stringify({ event: 'tables_updated', detail: { type: 'lancamento_criado', comanda_id: 'digital-check', resource: 'digital' } }));
   await expect.poll(() => reads).toBeGreaterThan(before);
 });
+
+test('digital hints remain owned during a slow cashier module download', async ({ page }) => {
+  await mockCashierBackend(page); await seedCashierSession(page);
+  let socket!: WebSocketRoute;
+  await page.routeWebSocket(/\/ws\//, ws => { socket = ws; ws.onMessage(() => {}); });
+  let reads = 0;
+  await page.route('**/comandas/delivery/ativos', route => { reads++; return route.fulfill({ json: [] }); });
+  let moduleRequested = false;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/*CaixaPanel.tsx*', async route => { moduleRequested = true; await gate; await route.continue(); });
+  try {
+    await page.goto('/?view=caixa');
+    await expect.poll(() => moduleRequested).toBe(true);
+    const before = reads;
+    socket.send(JSON.stringify({ event: 'new_delivery_order' }));
+    await expect.poll(() => reads).toBeGreaterThan(before);
+    await expect(page.locator('.orders-board')).toHaveCount(0);
+    release();
+    await expect(page.locator('.orders-board')).toBeVisible();
+  } finally { release(); }
+});
+
+test('online delivery retains unsaved fields across sidebars without replaying reads', async ({ page }) => {
+  await mockCashierBackend(page); await seedCashierSession(page);
+  await page.routeWebSocket(/\/ws\//, ws => ws.onMessage(() => {}));
+  let configReads = 0;
+  page.on('request', request => {
+    if (request.method() === 'GET' && new URL(request.url()).pathname === '/caixa/configuracoes') configReads++;
+  });
+  const navigate = async (label: string) => {
+    const sidebar = page.locator('.cashier-sidebar:visible');
+    if (!await sidebar.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+    await sidebar.getByRole('button', { name: new RegExp(`^${label}(?: [0-9]+)?$`) }).click();
+  };
+  const openDelivery = async () => {
+    await navigate('Cardápio online');
+    await page.locator('.cashier-subnav').getByRole('button', { name: 'Entrega', exact: true }).click();
+  };
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  await openDelivery();
+  const minimum = page.getByRole('spinbutton', { name: /Pedido mínimo \(R\$\)/ });
+  await expect(minimum).toBeVisible();
+  await minimum.fill('42');
+  const before = configReads;
+  await navigate('Vendas');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  await openDelivery();
+  await expect(minimum).toHaveValue('42');
+  expect(configReads).toBe(before);
+});

@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { FeatureErrorBoundary } from '../../shared/FeatureErrorBoundary';
 
 interface Props<P extends object> {
@@ -6,14 +6,19 @@ interface Props<P extends object> {
   label: string;
   load: () => Promise<{ default: React.ComponentType<P> }>;
   sectionProps: P;
+  /** Pure mount-read sections retain their selected editable subtree while hidden. */
+  retainInactiveProps?: boolean;
 }
 
 /** Downloads on first use, retains drafts on navigation, isolates loading/errors
  * from the operational shell. Inactive owners must pause their own subscriptions.
  * Tenant/session changes are handled by the authenticated parent lifecycle.
  */
-export function DeferredCashierSection<P extends object>({ active, label, load, sectionProps }: Props<P>) {
+export function DeferredCashierSection<P extends object>({ active, label, load, sectionProps, retainInactiveProps = false }: Props<P>) {
   const [visited, setVisited] = useState(active);
+  const lastActiveProps = useRef(sectionProps);
+  if (active) lastActiveProps.current = sectionProps;
+  const effectiveProps = !active && retainInactiveProps ? lastActiveProps.current : sectionProps;
   const Section = useMemo(() => lazy(load), [load]);
 
   useEffect(() => {
@@ -50,7 +55,7 @@ export function DeferredCashierSection<P extends object>({ active, label, load, 
             </div>
           }
         >
-          <Section {...sectionProps} {...(!active && 'activeSubTab' in sectionProps ? { activeSubTab: '' } : {})} />
+          <Section {...effectiveProps} {...(!active && !retainInactiveProps && 'activeSubTab' in sectionProps ? { activeSubTab: '' } : {})} />
         </Suspense>
       </FeatureErrorBoundary>
     </div>
