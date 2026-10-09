@@ -80,9 +80,8 @@ def schedule_order_in_session(
         Comanda.restaurante_id == restaurante_id,
         Comanda.id == comanda_id,
     ).with_for_update().one()
-    # Reutiliza a barreira operacional já aplicada por Caixa/KDS/SmartPOS.
-    # Não existe OnlinePaymentIntent para este caso; na liberação voltamos a NULL.
-    comanda.online_payment_status = "pending"
+    # Agendamento não é pagamento: o restaurante recebe o pedido agora.
+    comanda.online_payment_status = None
 
     record = ScheduledOrder(
         restaurante_id=restaurante_id,
@@ -91,7 +90,32 @@ def schedule_order_in_session(
     )
     db.add(record)
     db.flush()
+    _publish_created_event(db, comanda)
+    print_scheduled_order_in_session(db, comanda)
+    from .online_order_control import auto_accept_online_order_if_enabled
+    auto_accept_online_order_if_enabled(
+        db, restaurante_id=restaurante_id, comanda=comanda,
+        operator_user_id=getattr(comanda, "garcom_id", None),
+    )
     return record
+
+
+def print_scheduled_order_in_session(db: Session, comanda: Comanda) -> None:
+    """Imprime na chegada; aceite posterior reutiliza a mesma chave por setor."""
+    from ..application.printing import (
+        PrintAction, PrintIntent, PrintSourceType, PrintTrigger,
+        PrintingApplicationService,
+    )
+
+    PrintingApplicationService.request_print(db, PrintIntent(
+        restaurant_id=comanda.restaurante_id,
+        source_type=PrintSourceType.ORDER,
+        source_id=comanda.id,
+        action=PrintAction.PRINT,
+        trigger=PrintTrigger.AUTOMATIC,
+        requested_by="Pedido agendado recebido",
+        idempotency_key=f"aceite:pedido:{comanda.id}:producao",
+    ))
 
 
 def _order_total(comanda: Comanda) -> Decimal:
@@ -155,8 +179,11 @@ def release_due_scheduled_orders_in_session(
             record.released_at = now
             continue
 
-        comanda.online_payment_status = None
-        _publish_created_event(db, comanda)
+        # Compatibilidade com agendados criados antes da separação do pagamento.
+        if comanda.online_payment_status == "pending":
+            comanda.online_payment_status = None
+            _publish_created_event(db, comanda)
+            print_scheduled_order_in_session(db, comanda)
         record.released_at = now
         # autoflush está desativado globalmente; publique a liberação antes de
         # consultar a política para que o helper não enxergue o próprio agendamento

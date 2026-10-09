@@ -202,6 +202,61 @@ def test_transfer_ignores_orphan_open_family_on_visually_free_destination():
         db.close()
 
 
+def test_duplicate_transfer_preserves_identity_and_does_not_duplicate_audit():
+    db = SessionLocal()
+    try:
+        source = _command(db, "c-transfer-repeat", 1, 46)
+        _launch(db, source, "l-transfer-repeat", "i-transfer-repeat")
+        account = ensure_atendimento_for_comanda(db, source, actor_id=USER)
+        account_id = account.id
+        transfer_group_by_comanda(db, TENANT, source.id, 2, actor_id=USER)
+        before = db.query(MovimentoAtendimento).filter(MovimentoAtendimento.restaurante_id == TENANT).count()
+        repeated = transfer_group_by_comanda(db, TENANT, source.id, 2, actor_id=USER)
+        assert repeated.id == source.id
+        assert repeated.mesa_id == 2
+        assert ensure_atendimento_for_comanda(db, repeated, actor_id=USER).id == account_id
+        assert db.query(MovimentoAtendimento).filter(MovimentoAtendimento.restaurante_id == TENANT).count() == before
+        db.rollback()
+    finally:
+        db.close()
+
+
+def test_occupied_destination_rejects_without_moving_source_or_recording_transfer():
+    db = SessionLocal()
+    try:
+        source = _command(db, "c-transfer-conflict-source", 1, 46)
+        destination = _command(db, "c-transfer-conflict-destination", 2, 47)
+        _launch(db, source, "l-transfer-conflict-source", "i-transfer-conflict-source")
+        _launch(db, destination, "l-transfer-conflict-destination", "i-transfer-conflict-destination")
+        ensure_atendimento_for_comanda(db, source, actor_id=USER)
+        ensure_atendimento_for_comanda(db, destination, actor_id=USER)
+        before = db.query(MovimentoAtendimento).filter(MovimentoAtendimento.restaurante_id == TENANT).count()
+        with pytest.raises(AtendimentoError) as conflict:
+            transfer_group_by_comanda(db, TENANT, source.id, 2, actor_id=USER)
+        assert conflict.value.status_code == 409
+        assert "Mesclar" in str(conflict.value)
+        assert source.mesa_id == 1
+        assert destination.mesa_id == 2
+        assert db.query(MovimentoAtendimento).filter(MovimentoAtendimento.restaurante_id == TENANT).count() == before
+        db.rollback()
+    finally:
+        db.close()
+
+
+def test_transfer_cannot_address_a_command_under_another_tenant():
+    db = SessionLocal()
+    try:
+        source = _command(db, "c-transfer-tenant-isolation", 1, 46)
+        _launch(db, source, "l-transfer-tenant-isolation", "i-transfer-tenant-isolation")
+        with pytest.raises(AtendimentoError) as denied:
+            transfer_group_by_comanda(db, TENANT + 1, source.id, 2, actor_id=USER)
+        assert denied.value.status_code == 404
+        assert source.mesa_id == 1
+        db.rollback()
+    finally:
+        db.close()
+
+
 def test_reopen_is_blocked_if_original_table_was_reused():
     db = SessionLocal()
     try:

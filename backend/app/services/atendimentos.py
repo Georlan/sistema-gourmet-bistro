@@ -280,6 +280,34 @@ def lock_table_for_service(
     return mesa
 
 
+def lock_tables_for_command_transfer(
+    db: Session, restaurante_id: int, comanda_id: str, destination_id: int,
+) -> None:
+    """Trava origem/destino em ordem comum e rejeita uma origem já alterada."""
+    def source_table():
+        return db.query(Comanda.mesa_id).filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.id == comanda_id,
+            Comanda.fechada == False,
+        ).first()
+
+    source = source_table()
+    if source is None:
+        raise AtendimentoError("Comanda não encontrada", status_code=404)
+    if source[0] is None:
+        raise AtendimentoError("Somente consumo no local pode ser transferido entre mesas", status_code=400)
+    source_id = int(source[0])
+    for table_id in sorted({source_id, destination_id}):
+        lock_table_for_service(db, restaurante_id, table_id)
+    current = source_table()
+    if current is None:
+        raise AtendimentoError("Comanda não encontrada", status_code=404)
+    # A mesma transferência já confirmada é idempotente. Uma terceira mesa
+    # requer nova seleção, pois não está no conjunto de locks adquirido.
+    if current[0] not in {source_id, destination_id}:
+        raise AtendimentoError("A comanda mudou de mesa. Atualize e selecione novamente.", status_code=409)
+
+
 def materialize_table_accounts_for_write(
     db: Session,
     restaurante_id: int,
