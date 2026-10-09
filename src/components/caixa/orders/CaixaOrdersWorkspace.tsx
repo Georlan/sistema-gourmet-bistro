@@ -12,6 +12,7 @@ import {
   getCashierHumanOrderNumber as humanOrderNumber,
   getCashierOrderSlaData as getOrderSlaData,
   getDigitalOrderActionCapability,
+  getLatestCashierCardKey,
 } from '../../../domain/cashierOrderProjection';
 import { formatCompactCurrency, formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import type { CashierTableCard, DeliveryOrderView, OrdersStage, PendingCashPayment, PendingCashPaymentCard } from './cashierWorkspaceTypes';
@@ -210,6 +211,18 @@ export function CaixaOrdersWorkspace({
       </div>
     );
   };
+
+  const latestCardKey = getLatestCashierCardKey([
+    ...filteredCol1.map(({ order }) => ({ key: `salon:${order.id}`, timestamps: order.itens.map(item => item.timestamp) })),
+    ...filteredDigitalProduction.map(order => ({ key: `digital:${order.id}`, timestamps: [order.created_at] })),
+    ...filteredCol2Table.map(({ order }) => ({ key: `closing:${order.id}`, timestamps: order.itens.map(item => item.timestamp) })),
+    ...filteredDeliveryFinalization.map(order => ({ key: `finalization:${order.id}`, timestamps: [order.created_at] })),
+  ]);
+  const renderLatestTag = (key: string) => latestCardKey === key ? (
+    <div className="flex flex-wrap" data-order-recency="latest">
+      <span className="orders-card__chip is-primary">Mais recente</span>
+    </div>
+  ) : null;
 
   const totalResultadosBusca = filteredCol1.length + filteredDigitalProduction.length + filteredCol2Table.length + filteredDeliveryFinalization.length;
 
@@ -523,6 +536,7 @@ export function CaixaOrdersWorkspace({
                         sla.borderTopClass
                       )}
                     >
+                      {renderLatestTag(`salon:${order.id}`)}
                       <div className="orders-card__identity">
                         <div className="orders-card__number is-table">
                           <Users size={15} />
@@ -673,6 +687,7 @@ export function CaixaOrdersWorkspace({
                         sla.borderTopClass
                       )}
                     >
+                      {renderLatestTag(`digital:${order.id}`)}
                       <div className="orders-card__identity">
                         <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale', tableBlockLabel && 'is-table')}>
                           {tableBlockLabel ? <Users size={15} /> : digitalOrderIcon(order)}
@@ -807,6 +822,7 @@ export function CaixaOrdersWorkspace({
                         sla.borderTopClass
                       )}
                     >
+                      {renderLatestTag(`closing:${order.id}`)}
                       <div className="orders-card__identity">
                         <div className="orders-card__number is-table">
                           <Users size={15} />
@@ -940,6 +956,7 @@ export function CaixaOrdersWorkspace({
                         sla.borderTopClass
                       )}
                     >
+                      {renderLatestTag(`finalization:${order.id}`)}
                       <div className="orders-card__identity">
                         <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale', tableBlockLabel && 'is-table')}>
                           {tableBlockLabel ? <Users size={15} /> : digitalOrderIcon(order)}

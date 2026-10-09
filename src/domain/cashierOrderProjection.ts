@@ -488,3 +488,22 @@ export function getDigitalOrderActionCapability(
   };
 }
 
+
+/** Uses persisted launch times, never the age of the table or the render clock. */
+export function getLatestCashierCardKey(
+  cards: readonly { key: string; timestamps: readonly unknown[] }[],
+): string | null {
+  let latest: { key: string; timestamp: number } | null = null;
+  for (const card of cards) {
+    for (const raw of card.timestamps) {
+      if (raw == null || raw === '') continue;
+      const timestamp = normalizeOperationalTimestamp(raw);
+      if (timestamp === null || !Number.isFinite(timestamp)) continue;
+      if (!latest || timestamp > latest.timestamp
+        || (timestamp === latest.timestamp && card.key < latest.key)) {
+        latest = { key: card.key, timestamp };
+      }
+    }
+  }
+  return latest?.key ?? null;
+}
