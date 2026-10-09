@@ -121,3 +121,18 @@ test('online delivery retains unsaved fields across sidebars without replaying r
   await expect(minimum).toHaveValue('42');
   expect(configReads).toBe(before);
 });
+
+
+test('couriers load when opening Deliveries even before the first delivery arrives', async ({ page }) => {
+  await mockCashierBackend(page); await seedCashierSession(page);
+  await page.routeWebSocket(/\/ws\//, ws => ws.onMessage(() => {}));
+  let reads = 0;
+  page.on('request', request => {
+    if (request.method() === 'GET' && new URL(request.url()).pathname === '/comandas/motoboys/lista') reads++;
+  });
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  expect(reads).toBe(0);
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Entregas', exact: true }).click();
+  await expect.poll(() => reads).toBeGreaterThan(0);
+});

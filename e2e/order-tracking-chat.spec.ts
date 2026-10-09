@@ -242,6 +242,10 @@ async function setupChatRoutes(page: Page) {
       });
     }
 
+    if (pathname === '/comandas/delivery/pendentes') {
+      return route.fulfill({ json: [] });
+    }
+
     if (pathname === '/comandas/delivery/ativos' || pathname === '/comandas/detalhes/todos') {
       return route.fulfill({
         status: 200,

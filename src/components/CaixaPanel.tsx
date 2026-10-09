@@ -685,7 +685,7 @@ export function CaixaPanel({
     hasInitialDigitalSnapshot: Boolean(initialDigitalSnapshot),
     isWsConnected,
     activeTab,
-    needsCouriers: activeTab === 'operacao' && (activeSubTab === 'motoboys' || deliveryOrders.some(order => order.modalidade === 'delivery')),
+    needsCouriers: activeTab === 'operacao' && (['motoboys', 'entregadores'].includes(activeSubTab) || deliveryOrders.some(order => order.modalidade === 'delivery')),
     fetchTurno,
     fetchDeliveryOrders,
     fetchMotoboys,
