@@ -63,7 +63,9 @@ test('resposta curta de aceite preserva itens e total até a reconciliação com
     }),
   ]);
 
+  previous.scheduledFor = '2026-10-09T14:30:00Z';
   const reconciled = reconcileDeliveryOrderAfterStatus(previous, compact);
+  assert.equal(reconciled.scheduledFor, previous.scheduledFor);
 
   assert.equal(reconciled.status, 'producao');
   assert.equal(reconciled.itens, '1x Refrigerante 600mL');

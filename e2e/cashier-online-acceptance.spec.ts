@@ -1,7 +1,7 @@
 import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
 import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
-async function setup(page: Page, options: { count?: number; payment?: string; change?: number | null; fail?: boolean; hold?: boolean; pickup?: boolean } = {}) {
+async function setup(page: Page, options: { count?: number; payment?: string; change?: number | null; fail?: boolean; hold?: boolean; pickup?: boolean; scheduledFor?: string } = {}) {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   let socket: WebSocketRoute;
@@ -14,6 +14,7 @@ async function setup(page: Page, options: { count?: number; payment?: string; ch
     delivery_taxa: 5, delivery_endereco: 'Rua de teste, 123', delivery_telefone: '85999999999',
     delivery_forma_pagamento: options.payment ?? 'dinheiro', delivery_troco_para: options.change === undefined ? 50 : options.change,
     criado_em: new Date().toISOString(),
+    scheduled_for: options.scheduledFor || null,
     lancamentos: [{ id: `launch-${id}`, origem: 'cardapio', status: statuses.get(id) }],
     itens: [{ id: `item-${id}`, produto_id: '101', produto: { nome: 'Prato de teste' },
       preco_unit: 42, pago: false, status: 'preparando', lancamento_id: `launch-${id}` }],
@@ -101,4 +102,19 @@ test('última retirada exibe troco e volta ao Kanban somente depois do aceite co
   state.release();
   await expect(page.getByRole('heading', { name: 'Pedidos aguardando aceite' })).toHaveCount(0);
   await expect(page.locator('.orders-card--digital')).toContainText('Cliente online-1');
+});
+
+
+test.describe('horário do pedido agendado', () => {
+  test.use({ timezoneId: 'America/Fortaleza' });
+
+test('pedido agendado chega no painel online com data e horário antes do preparo', async ({ page }) => {
+  await setup(page, { scheduledFor: '2026-10-10T14:30:00Z' });
+  const card = page.locator('.orders-pending-card');
+  await expect(card).toContainText('Agendado para');
+  await expect(card).toContainText('10/10/2026');
+  await expect(card).toContainText('11:30');
+  await expect(card.getByRole('button', { name: '✓ Aceitar' })).toBeEnabled();
+});
+
 });

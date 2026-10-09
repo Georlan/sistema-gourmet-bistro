@@ -406,6 +406,7 @@ class LancamentoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class ComandaDetail(ComandaResponse):
+    scheduled_for: Optional[datetime] = None
     itens: List[ItemResponse] = []
     lancamentos: List[LancamentoResponse] = []
     # Nested: garcom name (populated via SQLAlchemy relationship)

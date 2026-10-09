@@ -706,7 +706,7 @@ class CardapioWebAdapter:
         finally:
             current_restaurante_id.reset(token_context)
 
-        if not online_payment and not is_scheduled:
+        if not online_payment:
             background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
             background_tasks.add_task(
                 manager.broadcast,
@@ -730,7 +730,7 @@ class CardapioWebAdapter:
         return {
             "status": "success",
             "message": (
-                "Pedido agendado com sucesso. Ele será liberado no horário escolhido."
+                "Pedido agendado enviado ao restaurante com o horário escolhido."
                 if is_scheduled
                 else (
                     "Pix gerado. O pedido será enviado ao restaurante após a confirmação do pagamento."

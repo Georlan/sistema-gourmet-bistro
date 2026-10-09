@@ -652,6 +652,16 @@ def test_13_mesma_chave_scheduled_for_diferente_retorna_409():
 
     r1 = client.post("/cardapio/pedidos", json=p1, headers={"X-Idempotency-Key": key})
     assert r1.status_code == 201, r1.text
+    from app.models import PrintJob
+    from app.services.order_read_projection import project_check_details
+    from app.routes.orders_core import _operational_online_payment_filter
+    with SessionLocal(restaurante_id=RESTAURANTE_ID) as db:
+        check = db.query(Comanda).filter(Comanda.id == r1.json()["comanda_id"]).one()
+        assert check.online_payment_status is None
+        assert db.query(Comanda).filter(Comanda.id == check.id, _operational_online_payment_filter()).count() == 1
+        assert project_check_details(db, [check], RESTAURANTE_ID)[0].scheduled_for is not None
+        jobs = db.query(PrintJob).filter(PrintJob.restaurante_id == RESTAURANTE_ID, PrintJob.source_id == check.id).all()
+        assert jobs and all("PEDIDO AGENDADO" in job.payload_text for job in jobs)
 
     r2 = client.post("/cardapio/pedidos", json=p2, headers={"X-Idempotency-Key": key})
     assert r2.status_code == 409, r2.text
