@@ -166,10 +166,12 @@ export function reconcileDeliveryOrderAfterStatus(
   previous: DeliveryOrderView,
   incoming: DeliveryOrderView,
 ): DeliveryOrderView {
-  const identityAwareIncoming =
-    isPlaceholderCustomerName(incoming.cliente) && !isPlaceholderCustomerName(previous.cliente)
-      ? { ...incoming, cliente: previous.cliente }
-      : incoming;
+  const identityAwareIncoming = {
+    ...incoming,
+    scheduledFor: incoming.scheduledFor ?? previous.scheduledFor,
+    cliente: isPlaceholderCustomerName(incoming.cliente) && !isPlaceholderCustomerName(previous.cliente)
+      ? previous.cliente : incoming.cliente,
+  };
 
   if (identityAwareIncoming.quantidadeItens > 0 || previous.quantidadeItens <= 0) {
     return identityAwareIncoming;
