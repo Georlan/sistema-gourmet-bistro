@@ -153,7 +153,7 @@ Backend servido `be7c39639867`, após publicação compatível em duas etapas.
 - [x] Manter SQL do callback fora do event loop; testar resposta concorrente, replay, contexto e estado monotônico.
 - [x] Corrigir dependências vulneráveis, limitar importação XML e publicar scans de dependências/segredos. PRs #1031/#999 incorporadas; #1032 encerrada como incluída em #999.
 - [x] Confirmar versão servida, migração/policy reais e saúde passiva, sem QA destrutivo no D6. Cadastro e contagens preservados; cardápio HTTP 200.
-- [ ] Ensaiar restauração do backup em banco isolado.
+- [x] Ensaiar restauração do backup Supabase em PostgreSQL 17 isolado, escopo `public` + `koma_internal` (#1058): 117 tabelas conferidas, 154 policies/ACL restauradas e isolamento do runtime exercitado. Não cobre schemas gerenciados, mídias, configuração ou banco Evolution; recuperar toda a produção continua pendente.
 - [ ] Medir capacidade sob carga multitenant fora do D6; preservar orçamento de conexões e validar overlap de deploy antes de aumentar workers/réplicas.
 
 As pendências de impressão física, incidentes e integrações acima não são encerradas por esta rodada de segurança.
