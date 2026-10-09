@@ -796,9 +796,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                           {(step.id === 'profile' || step.id === 'hours') && (
                             <section aria-label="Etapa atual do cadastro">
                               {step.id === 'profile' ? (
-                                <CardapioDigitalSettingsPanel apiBaseUrl={API_BASE_URL} authHeaders={headers} publicMenuUrl={null} activeSection="perfil" onSectionChange={() => {}} onSetupSavingChange={setGuidedSaving} onSetupDirtyChange={setGuidedDirty} onSetupComplete={() => finishGuidedStep('profile')} />
+                                <CardapioDigitalSettingsPanel apiBaseUrl={API_BASE_URL} authHeaders={headers} publicMenuUrl={null} activeSection="perfil" onSectionChange={() => {}} onSetupSavingChange={setGuidedSaving} onSetupDirtyChange={setGuidedDirty} onSetupComplete={async () => { await finishGuidedStep('profile'); }} />
                               ) : (
-                                <OnlineMenuOrdersSettings apiBaseUrl={API_BASE_URL} authHeaders={headers} publicMenuUrl={null} onSetupSavingChange={setGuidedSaving} onSetupDirtyChange={setGuidedDirty} onSetupComplete={() => finishGuidedStep('hours')} />
+                                <OnlineMenuOrdersSettings apiBaseUrl={API_BASE_URL} authHeaders={headers} publicMenuUrl={null} onSetupSavingChange={setGuidedSaving} onSetupDirtyChange={setGuidedDirty} onSetupComplete={async () => { await finishGuidedStep('hours'); }} />
                               )}
                             </section>
                           )}
