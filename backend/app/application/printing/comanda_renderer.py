@@ -23,6 +23,7 @@ from ...timezone_utils import to_operational_local_time
 class ComandaVariant:
     """Contexto que varia sem criar outro layout de comanda operacional."""
 
+    scheduled_for: Optional[datetime.datetime] = None
     origin_label: Optional[str] = None
     location_label: Optional[str] = "BALCÃO"
     operator_label: Optional[str] = "OPERADOR"
@@ -336,6 +337,14 @@ def _insert_variant_header(
         return
 
     extras: list[str] = []
+    if variant.scheduled_for:
+        scheduled_local = to_operational_local_time(variant.scheduled_for)
+        extras.extend([
+            ESC_BOLD_ON + align_center("PEDIDO AGENDADO", width) + ESC_BOLD_OFF,
+            ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON
+            + align_center(scheduled_local.strftime("PARA %d/%m/%Y AS %H:%M"), width)
+            + ESC_BOLD_OFF + ESC_NORMAL_SIZE,
+        ])
     if variant.origin_label:
         extras.append(align_center(f"ORIGEM: {variant.origin_label.upper()}", width))
     if variant.via_label:

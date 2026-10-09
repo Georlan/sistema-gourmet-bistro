@@ -409,6 +409,10 @@ class PrintingApplicationService:
             if relationship is not None:
                 loyalty_previous_orders = relationship.pedidos_concluidos
 
+        from ...services.scheduled_orders import scheduled_for_order
+        schedule = scheduled_for_order(
+            db, restaurante_id=intent.restaurant_id, comanda_id=comanda.id,
+        )
         jobs: list[PrintJob] = []
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d%H%M%S%f"
@@ -418,6 +422,7 @@ class PrintingApplicationService:
             is_primary = destination_key == str(primary_destination).strip().upper()
             payment_required = bool(is_primary and (is_delivery or is_pickup))
             variant = ComandaVariant(
+                scheduled_for=schedule.scheduled_for if schedule else None,
                 origin_label=origin_label,
                 location_label=location_label,
                 operator_label=(None if is_online_order else "OPERADOR"),

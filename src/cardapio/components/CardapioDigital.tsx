@@ -706,7 +706,7 @@ export default function CardapioDigital({
         {!createdOrder && !orderingBlocked && (
           <footer className="shrink-0 border-t border-koma-border bg-koma-panel p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-5">
             <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || Boolean(paymentError || schedulePaymentError)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : paymentError || schedulePaymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : scheduleMode === "scheduled" ? "Agendar pedido" : "Fazer pedido"}</span></button>
-            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados entram na operação somente no horário escolhido." : "Pix só entra no painel após o pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente."}</p>
+            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados são enviados agora ao restaurante com a data e o horário escolhidos." : "Pix só entra no painel após o pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente."}</p>
           </footer>
         )}
       </div>
