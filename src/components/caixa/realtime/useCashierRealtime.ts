@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import type { CaixaPanelProps } from '../cashierContracts';
 
-type Props = Pick<CaixaPanelProps, 'isWsConnected'> & {
+type Props = Pick<CaixaPanelProps, 'isWsConnected' | 'onInitialDigitalSnapshotConsumed'> & {
+  hasInitialDigitalSnapshot: boolean;
   activeTab: string;
+  needsCouriers: boolean;
   fetchTurno: () => Promise<void>;
   fetchDeliveryOrders: () => Promise<void>;
   fetchMotoboys: () => Promise<void>;
@@ -12,7 +14,10 @@ type Props = Pick<CaixaPanelProps, 'isWsConnected'> & {
 /** Owns realtime state, effects and actions; composition supplies only cross-feature dependencies. */
 export function useCashierRealtime({
   isWsConnected,
+  onInitialDigitalSnapshotConsumed,
+  hasInitialDigitalSnapshot,
   activeTab,
+  needsCouriers,
   fetchTurno,
   fetchDeliveryOrders,
   fetchMotoboys,
@@ -20,10 +25,14 @@ export function useCashierRealtime({
 }: Props) {
   useEffect(() => {
     fetchTurno();
-    fetchDeliveryOrders();
-    fetchMotoboys();
+    if (!hasInitialDigitalSnapshot) fetchDeliveryOrders();
     fetchConfiguracoes();
+    onInitialDigitalSnapshotConsumed?.();
   }, []);
+
+  useEffect(() => {
+    if (needsCouriers) void fetchMotoboys();
+  }, [needsCouriers]);
 
   // Browsers can suspend timers and socket delivery while the cashier tab is in
   // the background without immediately marking the WebSocket as disconnected.

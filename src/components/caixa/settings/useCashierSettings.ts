@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import React, { useRef, useState } from 'react';
 import { DEFAULT_WAITER_PERMISSIONS, patchWaiterPermissions, readWaiterPermissions, type WaiterPermissions } from './waiterPermissions';
 import type { CashierNotice } from '../cashierContracts';

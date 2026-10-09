@@ -4,15 +4,16 @@
  */
 
 
+import { snapshotFetch } from './utils/snapshotFetch';
 import { SlidersHorizontal } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOperationalCatalog } from './components/app/data/useOperationalCatalog';
 import { closeOperationalComandas } from './components/app/data/operationalOrderCommands';
+import { useCashierBootstrap } from './components/app/data/useCashierBootstrap';
 import { useOperationalOrders } from './components/app/data/useOperationalOrders';
 import { useOperationalTables } from './components/app/data/useOperationalTables';
 import { useOperationalDrafts } from './components/app/drafts/useOperationalDrafts';
 import { OperationalSnapshotLoading } from './components/app/OperationalSnapshotLoading';
-import { AttendantQuickOrderPanel } from './components/AttendantQuickOrderPanel';
 import { KitchenPanel } from './components/KitchenPanel';
 import { KomaLogo } from './components/KomaLogo';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
@@ -44,6 +45,7 @@ const CaixaAtivarPage = React.lazy(() => import('./components/CaixaAtivarPage').
 const MotoboyPwaPage = React.lazy(() => import('./components/MotoboyPwaPage').then(module => ({ default: module.MotoboyPwaPage })));
 const OrderTrackingPage = React.lazy(() => import('./cardapio/OrderTrackingPage').then(module => ({ default: module.OrderTrackingPage })));
 
+const AttendantQuickOrderPanel = React.lazy(() => import('./components/AttendantQuickOrderPanel').then(module => ({ default: module.AttendantQuickOrderPanel })));
 const MemoizedCaixaPanel = React.lazy(() =>
   import('./components/CaixaPanel').then(module => ({
     default: module.MemoizedCaixaPanel
@@ -334,7 +336,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       if (!token) return;
 
       const requestRestaurantId = activeRestaurantId;
-      const res = await fetch(`${API_BASE_URL}/caixa/configuracoes`, {
+      const res = await snapshotFetch(`${API_BASE_URL}/caixa/configuracoes`, {
         headers: getAuthHeaders()
       });
       if (res.ok) {
@@ -615,7 +617,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     scopeKey: operationalScopeKey,
   });
 
-  const isOperationalSnapshotReady = Boolean(operationalScopeKey)
+  const digitalBootstrap = useCashierBootstrap(operationalScopeKey, portal === 'caixa' && isManagementRole(activeRole), getAuthHeaders);
+  const isOperationalSnapshotReady = Boolean(operationalScopeKey) && digitalBootstrap.ready
     && isTablesLoaded
     && isOrdersLoaded
     && (!isManagementRole(activeRole) || pendingPaymentsLoadedScopeKey === operationalScopeKey);
@@ -722,6 +725,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       config?: boolean;
       summary?: boolean;
       payments?: boolean;
+      salonOnly?: boolean;
     };
 
     let pendingRefresh: RealtimeRefreshFlags = {};
@@ -729,11 +733,15 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     // Vários endpoints publicam eventos próximos entre si. Consolida a rajada
     // e busca somente os recursos realmente afetados pela mudança.
     const scheduleRealtimeRefresh = (flags: RealtimeRefreshFlags, delayMs = 90) => {
-      pendingRefresh = { ...pendingRefresh, ...flags };
+      const salonOnly = (!pendingRefresh.orders && !pendingRefresh.tables || pendingRefresh.salonOnly === true) && flags.salonOnly === true;
+      pendingRefresh = { ...pendingRefresh, ...flags, salonOnly };
+      // Bound the wait from the first hint even under a continuous event stream.
+      if (wsUpdateTimeout && delayMs !== 0) return;
       if (wsUpdateTimeout) clearTimeout(wsUpdateTimeout);
       wsUpdateTimeout = setTimeout(() => {
         const refresh = pendingRefresh;
         pendingRefresh = {};
+        wsUpdateTimeout = null;
 
         if (refresh.orders) fetchOrdersFromAPI();
         if (refresh.tables) fetchTables();
@@ -744,7 +752,9 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           fetchPagamentosPendentes();
         }
         if (refresh.orders || refresh.tables) {
-          window.dispatchEvent(new Event('koma_orders_updated'));
+          window.dispatchEvent(new CustomEvent('koma_orders_updated', {
+            detail: refresh.salonOnly ? { resources: ['salon'] } : undefined,
+          }));
         }
       }, delayMs);
     };
@@ -848,21 +858,22 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             const isLayoutChange = detailType === 'layout_mesa_atualizado';
             const isComandaOpened = detailType === 'comanda_aberta';
             const isLaunchCreated = detailType === 'lancamento_criado';
+            const isSalonLaunch = data.detail?.resource === 'salon';
 
             if (isLayoutChange || isComandaOpened) {
               // Abrir a comanda ocupa a mesa, mas ainda não existe pedido para o Kanban.
               // Atualizar orders aqui causava um estado intermediário vazio e alerta duplicado.
-              scheduleRealtimeRefresh({ tables: true });
+              scheduleRealtimeRefresh({ tables: true, salonOnly: true });
             } else if (isLaunchCreated) {
               // O evento já informa qual comanda mudou. Evita reconstruir todo o salão
               // no caminho crítico de um novo pedido.
               const comandaId = String(data.detail?.comanda_id || '').trim();
               if (comandaId) {
                 void fetchOrderByIdFromAPI(comandaId);
-                scheduleRealtimeRefresh({ tables: true, summary: true }, 0);
+                scheduleRealtimeRefresh({ tables: true, summary: true, salonOnly: isSalonLaunch }, 0);
               } else {
                 // Compatibilidade defensiva com produtores antigos sem comanda_id.
-                scheduleRealtimeRefresh({ orders: true, tables: true, summary: true }, 0);
+                scheduleRealtimeRefresh({ orders: true, tables: true, summary: true, salonOnly: isSalonLaunch }, 0);
               }
             } else {
               // Compatibilidade com eventos legados e demais mutações de mesa.
@@ -880,13 +891,15 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
               window.dispatchEvent(new Event('koma_reports_updated'));
             }
           } else if (eventName === "MESA_ATUALIZADA" || eventName === "MESA_UPDATED") {
-            scheduleRealtimeRefresh({ orders: true });
+            // Occupying a table precedes its launch; the launch hint owns order refresh.
+            scheduleRealtimeRefresh({ tables: true, salonOnly: true });
             const mesaUpdate = data.data || data;
             const mesaId = Number(mesaUpdate.mesa_id);
             const status = String(mesaUpdate.status || '').toLowerCase();
             const comandaId = mesaUpdate.comanda_id ?? null;
             if (!Number.isFinite(mesaId) || mesaId <= 0) return;
             if (status === 'livre') {
+              scheduleRealtimeRefresh({ orders: true, tables: true, salonOnly: true });
               setOrders(prevOrders => prevOrders.filter(o => o.mesaId !== mesaId));
             }
             setSalonTables(prevTables =>
@@ -1644,6 +1657,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     return (
       <div className={`w-full min-h-dvh bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
         <SupportSessionBanner />
+        <React.Suspense fallback={<CashierLoading />}>
         <AttendantQuickOrderPanel
           apiBaseUrl={API_BASE_URL}
           authHeaders={managementAuthHeaders}
@@ -1655,6 +1669,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           onOptimisticAddOrder={handleOptimisticAddOrder}
           onLogout={handleLogout}
         />
+        </React.Suspense>
       </div>
     );
   }
@@ -1665,6 +1680,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         <SupportSessionBanner />
         <React.Suspense fallback={<CashierLoading />}>
           <MemoizedCaixaPanel
+            initialDigitalSnapshot={digitalBootstrap.data}
+            onInitialDigitalSnapshotConsumed={digitalBootstrap.consume}
             orders={orders}
             onRefreshOrders={fetchOrdersFromAPI}
             apiBaseUrl={API_BASE_URL}
@@ -1771,6 +1788,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         ) : isManagementRole(activeRole) ? (
           <React.Suspense fallback={<CashierLoading />}>
             <MemoizedCaixaPanel
+              initialDigitalSnapshot={digitalBootstrap.data}
+            onInitialDigitalSnapshotConsumed={digitalBootstrap.consume}
               orders={orders}
               onRefreshOrders={fetchOrdersFromAPI}
               apiBaseUrl={API_BASE_URL}

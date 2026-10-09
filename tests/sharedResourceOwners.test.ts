@@ -41,7 +41,7 @@ test('role presentation preserves aliases and leaves unknown server roles alone'
 test('online settings mounts the canonical panel directly; uploader cannot replace the page', () => {
   const view = source('src/components/caixa/online-menu/CashierOnlineMenu.tsx');
   assert.match(view, /<CardapioDigitalSettingsPanel/);
-  assert.doesNotMatch(view, /useState|fetch\(|config-cardapio|CardapioAssetUploader/);
+  assert.doesNotMatch(view, /fetch\(|config-cardapio|CardapioAssetUploader/);
   const upload = source('src/components/CardapioAssetUploader.tsx');
   assert.doesNotMatch(upload, /createPortal|closest\(|parentElement|CardapioDigitalSettingsPanel/);
   assert.match(upload, /onChange/);
@@ -70,7 +70,7 @@ test('cashier reads digital orders from dedicated server projection', () => {
 
   assert.doesNotMatch(owner, /projectDeliveryOrdersFromSharedSnapshot\(orders\)/);
   assert.doesNotMatch(owner, /useEffect\(\(\) => \{\s*fetchDeliveryOrders\(\);\s*fetchMotoboys\(\);/);
-  assert.match(realtime, /useEffect\(\(\) => \{\s*fetchTurno\(\);\s*fetchDeliveryOrders\(\);\s*fetchMotoboys\(\);/);
+  assert.match(realtime, /if \(needsCouriers\) void fetchMotoboys\(\)/);
 });
 
 test('inventory resource plans load what each screen and its dialogs use', () => {

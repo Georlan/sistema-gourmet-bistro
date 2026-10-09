@@ -8,7 +8,7 @@ test('Pedidos online expõe gestão e histórico de clientes bloqueados sem fica
   const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
   assert.match(onlineMenu, /OnlineOrderCustomerBlocks/);
   assert.match(onlineMenu, /cardapio_bloqueios: 'bloqueios'/);
-  assert.match(onlineMenu, /activeSection === 'bloqueios'/);
+  assert.match(onlineMenu, /contents\.bloqueios/);
   assert.match(onlineMenu, /<OnlineOrderCustomerBlocks apiBaseUrl=\{apiBaseUrl\} authHeaders=\{authHeaders\} \/>/);
 });
 

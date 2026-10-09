@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 
 import { MAX_IMAGE_UPLOAD_SOURCE_BYTES, prepareImageUpload } from '../../../utils/imageUpload';
 import { Image as ImageIcon, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';

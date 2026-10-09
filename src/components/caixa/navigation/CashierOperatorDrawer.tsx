@@ -13,7 +13,7 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import React from 'react';
+import React, { useState } from 'react';
 import type { Order, Table } from '../../../types';
 import { LoginButton } from '../../auth/LoginButton';
 
@@ -48,6 +48,7 @@ export function CashierOperatorDrawer({
   audioReady,
   activateAudio,
 }: BoundaryProps) {
+  const [syncing, setSyncing] = useState(false);
   return (
     <>
       {isOperatorDrawerOpen && (
@@ -223,9 +224,16 @@ export function CashierOperatorDrawer({
                 </span>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (onRefreshOrders) onRefreshOrders();
-                    showToast('Salão e pedidos sincronizados em tempo real!', 'success');
+                  disabled={syncing}
+                  onClick={async () => {
+                    if (syncing) return;
+                    setSyncing(true);
+                    try {
+                      await onRefreshOrders();
+                      showToast('Consulta de atualização concluída.', 'info');
+                    } catch {
+                      showToast('Não foi possível atualizar os pedidos. Tente novamente.', 'error');
+                    } finally { setSyncing(false); }
                   }}
                   className={"w-full py-2.5 px-3 bg-koma-card hover:bg-koma-raised/50 border border-koma-border text-koma-secondary hover:text-koma-foreground rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between group"}
                 >
@@ -234,7 +242,7 @@ export function CashierOperatorDrawer({
                       size={14}
                       className={"text-emerald-400 group-hover:rotate-180 transition-transform duration-500"}
                     />
-                    <span>Sincronizar Salão e Pedidos</span>
+                    <span>{syncing ? 'Atualizando pedidos…' : 'Sincronizar Salão e Pedidos'}</span>
                   </div>
                   <ChevronRight
                     size={14}

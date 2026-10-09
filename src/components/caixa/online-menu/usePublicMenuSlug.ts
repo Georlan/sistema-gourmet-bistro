@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { useEffect, useState } from 'react';
 
 export function usePublicMenuSlug(apiBaseUrl: string, authorization: string | undefined, restaurantId: number | null, enabled: boolean): string | null {

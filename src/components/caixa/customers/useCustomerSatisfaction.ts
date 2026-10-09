@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { useCallback, useEffect, useState } from 'react';
 
 export type CustomerSatisfactionSummary = {

@@ -1,3 +1,5 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
+import { orderUpdateAffects } from '../../../utils/orderUpdate';
 import clsx from 'clsx';
 import { AlertTriangle, Loader2, PauseCircle, PlayCircle, RefreshCw, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -110,13 +112,16 @@ export function OnlineOrderEmergencyControl({ mobile = false, isWsConnected = fa
         else void loadStatus();
       }, 100);
     };
-    window.addEventListener('koma_orders_updated', refresh);
+    const onOrdersUpdated = (event: Event) => {
+      if (orderUpdateAffects(event, 'digital')) refresh();
+    };
+    window.addEventListener('koma_orders_updated', onOrdersUpdated);
     window.addEventListener('koma_online_order_control_updated', refresh);
     document.addEventListener('visibilitychange', refresh);
     return () => {
       mountedRef.current = false;
       if (hintTimer !== null) window.clearTimeout(hintTimer);
-      window.removeEventListener('koma_orders_updated', refresh);
+      window.removeEventListener('koma_orders_updated', onOrdersUpdated);
       window.removeEventListener('koma_online_order_control_updated', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };

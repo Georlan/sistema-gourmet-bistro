@@ -8,6 +8,7 @@ async function navigate(page: Page, label: string) {
 }
 
 function cashierSubnavButton(page: Page, name: string) {
+  if (name === 'Novo pedido' && (page.viewportSize()?.width || 0) < 769) return page.getByRole('button', { name: '+ Pedido', exact: true });
   return page.locator('.cashier-subnav').getByRole('button', { name, exact: true });
 }
 
@@ -57,8 +58,9 @@ test('abertura não baixa módulos administrativos e atraso de módulo não bloq
 test('rascunho administrativo e carrinho sobrevivem à navegação entre módulos', async ({ page }) => {
   await open(page);
   await cashierSubnavButton(page, 'Novo pedido').click();
-  await page.getByTitle('Adicionar Risoto da casa', { exact: true }).click();
+  await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
   await showCart(page);
+  await page.locator('summary').filter({ hasText: 'Identificação do cliente' }).click();
   await page.locator('#pdv-customer-name-input').fill('Cliente do rascunho');
   await navigate(page, 'Cardápio');
   await page.getByRole('button', { name: 'Novo produto', exact: true }).click();
@@ -67,7 +69,7 @@ test('rascunho administrativo e carrinho sobrevivem à navegação entre módulo
   // Existing operator shortcut can change the page while a form is open.
   await page.evaluate(() => window.dispatchEvent(new Event('koma-open-impressoras')));
   await expect(dialog).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Mesas', exact: true })).toBeVisible();
+  await expect(cashierSubnavButton(page, 'Mesas')).toBeVisible();
   await navigate(page, 'Cardápio');
   await expect(dialog.getByLabel('Nome do produto')).toHaveValue('Produto ainda não salvo');
   await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
@@ -82,7 +84,7 @@ test('falha ao carregar relatórios fica isolada e preserva o carrinho', async (
   await page.route('**/*CashierReports*', route => route.abort('failed'), { times: 1 });
   await open(page);
   await cashierSubnavButton(page, 'Novo pedido').click();
-  await page.getByTitle('Adicionar Risoto da casa', { exact: true }).click();
+  await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
   await navigate(page, 'Relatórios');
   await expect(page.getByRole('alert').filter({ hasText: 'Não foi possível abrir Relatórios' })).toBeVisible();
   await navigate(page, 'Vendas');
@@ -104,22 +106,22 @@ test('falha ao carregar relatórios fica isolada e preserva o carrinho', async (
   await page.getByRole('button', { name: 'Recarregar página' }).click();
   await expect(page.locator('.orders-board')).toBeVisible();
   await navigate(page, 'Relatórios');
-  await expect(page.getByText('Pagamentos aprovados menos estornos', { exact: true })).toBeVisible();
+  await expect(page.getByText('Recebido no dia do pagamento, menos estornos do período', { exact: true })).toBeVisible();
 });
 
 test('PDV preserva tentativa e carrinho após falha mesmo fora da tela', async ({ page }) => {
   const sales: { body: unknown; key: unknown }[] = [];
   await open(page);
-  await page.route('**/comandas/venda-direta', async route => {
+  await page.route('**/cardapio/modificadores/venda-direta', async route => {
     const body = route.request().postDataJSON();
     sales.push({ body, key: body.idempotency_key });
     await route.fulfill({ status: sales.length === 1 ? 503 : 200, contentType: 'application/json',
       body: JSON.stringify(sales.length === 1 ? { detail: 'Falha controlada' } : { id: 'sale-confirmed' }) });
   });
   await cashierSubnavButton(page, 'Novo pedido').click();
-  await page.getByTitle('Adicionar Risoto da casa', { exact: true }).click();
+  await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
   await showCart(page);
-  await page.getByRole('button', { name: 'Mesa', exact: true }).click();
+  await page.getByRole('button', { name: 'Consumo local', exact: true }).click();
   await page.locator('#pdv-target-table').selectOption('10');
   await page.locator('#pdv-submit-btn').click();
   await expect(page.locator('.orders-board')).toBeVisible();

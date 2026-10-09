@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { CaixaMovimentacao, CaixaTurno, FechamentoCaixaResult } from '../../../types';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';

@@ -1,3 +1,4 @@
+import { invalidateSnapshotReads } from './snapshotFetch';
 import { createSecureIdempotencyKey } from './secureIdempotency';
 
 export const OPERATION_TIMEOUT_MS = 20_000;
@@ -14,6 +15,8 @@ export async function operationalFetch(
   init: RequestInit = {},
   timeoutMs = OPERATION_TIMEOUT_MS,
 ): Promise<Response> {
+  const mutation = (init.method || 'GET').toUpperCase() !== 'GET';
+  if (mutation) invalidateSnapshotReads();
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -25,6 +28,7 @@ export async function operationalFetch(
     throw error;
   } finally {
     globalThis.clearTimeout(timeout);
+    if (mutation) invalidateSnapshotReads();
   }
 }
 

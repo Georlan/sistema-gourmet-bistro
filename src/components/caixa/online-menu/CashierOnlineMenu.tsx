@@ -1,3 +1,4 @@
+import { useEffect, useState, type ReactNode } from 'react';
 import { usePublicMenuSlug } from './usePublicMenuSlug';
 import { ChevronDown, Gift, Lock } from 'lucide-react';
 import { CardapioDigitalSettingsPanel } from '../../cardapio/CardapioDigitalSettingsPanel';
@@ -59,6 +60,13 @@ export default function CashierOnlineMenu({
   const restaurantId = readRestaurantIdFromAuthorization(authorization);
   const configuredSlug = usePublicMenuSlug(apiBaseUrl, authorization, restaurantId, hasOnlineMenu);
 
+  const activeSection = sectionBySubTab[activeSubTab as keyof typeof sectionBySubTab] ?? 'perfil';
+  const activeKey = activeSection === 'marca' ? 'perfil' : activeSection;
+  const [visitedSections, setVisitedSections] = useState<OnlineMenuSection[]>([activeKey]);
+  useEffect(() => {
+    setVisitedSections(previous => previous.includes(activeKey) ? previous : [...previous, activeKey]);
+  }, [activeKey]);
+
   if (!hasOnlineMenu) return (
         <div
           className={"bg-koma-card border border-amber-500/20 rounded-3xl p-8 text-center max-w-xl mx-auto space-y-3"}
@@ -90,12 +98,9 @@ export default function CashierOnlineMenu({
     : restaurantId
       ? `/cardapio?restaurante_id=${restaurantId}`
       : null;
-  const activeSection = sectionBySubTab[activeSubTab as keyof typeof sectionBySubTab] ?? 'perfil';
+  const contents: Partial<Record<OnlineMenuSection, ReactNode>> = {};
 
-  let content;
-
-  if (activeSection === 'pedidos') {
-    content = (
+  contents.pedidos = (
       <div className="space-y-4">
         <OnlineMenuOrdersSettings
           apiBaseUrl={apiBaseUrl}
@@ -121,13 +126,12 @@ export default function CashierOnlineMenu({
           </div>
         </details>
       </div>
-    );
-  } else if (activeSection === 'bloqueios') {
-    content = <OnlineOrderCustomerBlocks apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />;
-  } else if (activeSection === 'entrega') {
-    content = <OnlineMenuDeliverySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} publicMenuUrl={publicMenuUrl} />;
-  } else if (activeSection === 'pagamentos') {
-    content = (
+  );
+  contents.bloqueios = <OnlineOrderCustomerBlocks apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />;
+
+  contents.entrega = <OnlineMenuDeliverySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} publicMenuUrl={publicMenuUrl} />;
+
+  contents.pagamentos = (
       <OnlineMenuPaymentSettings
         apiBaseUrl={apiBaseUrl}
         authHeaders={authHeaders}
@@ -137,18 +141,17 @@ export default function CashierOnlineMenu({
           setActiveSubTab('integracoes');
         }}
       />
-    );
-  } else if (activeSection === 'qr_links') {
-    content = <OnlineMenuQrLinks publicMenuUrl={publicMenuUrl} />;
-  } else {
-    content = (
+  );
+  contents.qr_links = <OnlineMenuQrLinks publicMenuUrl={publicMenuUrl} />;
+
+  contents.perfil = (
       <>
         <CardapioDigitalSettingsPanel
           key={authHeaders.Authorization || authHeaders.authorization}
           apiBaseUrl={apiBaseUrl}
           authHeaders={authHeaders}
           publicMenuUrl={publicMenuUrl}
-          activeSection={activeSection}
+          activeSection={activeSection === 'marca' ? 'marca' : 'perfil'}
           onSectionChange={(section) => {
             setActiveSubTab(
               section === 'pedidos'
@@ -175,8 +178,11 @@ export default function CashierOnlineMenu({
           </section>
         )}
       </>
-    );
-  }
+  );
 
-  return <div className="space-y-4">{content}</div>;
+  return <div className="space-y-4">{Object.entries(contents).map(([section, content]) => (
+    (section === activeKey || visitedSections.includes(section as OnlineMenuSection)) && (
+      <div key={section} hidden={section !== activeKey} data-online-menu-section={section}>{content}</div>
+    )
+  ))}</div>;
 }

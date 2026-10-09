@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Distribuidor,
