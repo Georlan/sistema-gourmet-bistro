@@ -171,11 +171,10 @@ if (typeof window !== "undefined") {
       lastAttempt = 0;
     }
 
-    // Vite documenta que preventDefault() impede que o erro de import seja
-    // relançado. Fazemos isso somente quando realmente iniciaremos o reload;
-    // uma segunda falha dentro do throttle continua disponível ao ErrorBoundary.
+    // Preserve the rejected import while navigation is pending. Cancelling
+    // this event makes Vite resolve undefined, which React.lazy then reads
+    // as module.default and replaces the original error with a TypeError.
     if (now - lastAttempt > 15000) {
-      event.preventDefault();
       try {
         window.sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
       } catch {
