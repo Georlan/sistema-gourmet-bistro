@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
-test('Caixa compartilha clientes entre checkout e tela Clientes', async ({ page }) => {
+test('Caixa compartilha clientes entre checkout e tela Clientes', async ({ page }, testInfo) => {
   await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
   await mockCashierBackend(page);
   await seedCashierSession(page);
@@ -15,9 +15,10 @@ test('Caixa compartilha clientes entre checkout e tela Clientes', async ({ page 
   await expect.poll(() => requests.length).toBeGreaterThanOrEqual(1);
   const before = requests.length;
   expect(before).toBe(1);
+  if (testInfo.project.name.startsWith('mobile')) await page.getByRole('button', { name: 'Abrir menu completo' }).click();
   const sidebar = page.locator('.cashier-sidebar:visible');
   await sidebar.getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
-  await expect(page.getByText('Cliente E2E', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Cliente E2E', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   expect(requests).toHaveLength(1);
 });
 
@@ -45,7 +46,7 @@ test('SuperAdmin compartilha tenants entre quatro abas', async ({ page }) => {
   expect(requests).toHaveLength(1);
 });
 
-test('hints próximos de clientes geram uma reconciliação e preservam o snapshot durante refresh', async ({ page }) => {
+test('hints próximos de clientes geram uma reconciliação e preservam o snapshot durante refresh', async ({ page }, testInfo) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
@@ -60,19 +61,20 @@ test('hints próximos de clientes geram uma reconciliação e preservam o snapsh
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
   await expect.poll(() => reads).toBe(1);
+  if (testInfo.project.name.startsWith('mobile')) await page.getByRole('button', { name: 'Abrir menu completo' }).click();
   await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
-  await expect(page.getByText('Cliente E2E', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Cliente E2E', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   await page.evaluate(() => {
     for (let index = 0; index < 4; index++) window.dispatchEvent(new Event('koma_customers_updated'));
   });
   await expect.poll(() => reads).toBe(2);
-  await expect(page.getByText('Cliente E2E', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Cliente E2E', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   release();
-  await expect(page.getByText('Cliente atualizado', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Cliente atualizado', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   expect(reads).toBe(2);
 });
 
-test('falha inicial de clientes não aparece como lista vazia e permite tentar novamente', async ({ page }) => {
+test('falha inicial de clientes não aparece como lista vazia e permite tentar novamente', async ({ page }, testInfo) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
@@ -83,11 +85,12 @@ test('falha inicial de clientes não aparece como lista vazia e permite tentar n
   });
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
+  if (testInfo.project.name.startsWith('mobile')) await page.getByRole('button', { name: 'Abrir menu completo' }).click();
   await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
   await expect(page.getByText('Não foi possível carregar os clientes')).toBeVisible();
   await expect(page.getByText('Nenhum cliente cadastrado ainda')).toHaveCount(0);
   await page.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
-  await expect(page.getByText('Cliente E2E', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Cliente E2E', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   expect(reads).toBe(2);
 });
 
@@ -118,7 +121,7 @@ test('SuperAdmin distingue falha inicial de zero tenants e conserva snapshot ap�
   expect(reads).toBe(3);
 });
 
-test('nova sessão de Caixa não reaproveita clientes da sessão anterior', async ({ page }) => {
+test('nova sessão de Caixa não reaproveita clientes da sessão anterior', async ({ page }, testInfo) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
@@ -130,8 +133,9 @@ test('nova sessão de Caixa não reaproveita clientes da sessão anterior', asyn
   });
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
+  if (testInfo.project.name.startsWith('mobile')) await page.getByRole('button', { name: 'Abrir menu completo' }).click();
   await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
-  await expect(page.getByText('Cliente da sessão antiga', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Cliente da sessão antiga', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   await page.evaluate(() => {
     sessionStorage.setItem('koma_caixa_token', 'session-new-fixture');
     sessionStorage.setItem('koma_active_operational_portal', 'caixa');
@@ -142,7 +146,7 @@ test('nova sessão de Caixa não reaproveita clientes da sessão anterior', asyn
     }));
     window.dispatchEvent(new Event('popstate'));
   });
-  await expect(page.getByText('Cliente da nova sessão', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Cliente da nova sessão', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   await expect(page.getByText('Cliente da sessão antiga', { exact: true })).toHaveCount(0);
   expect(tokens.some(token => token.includes('playwright-e2e-token'))).toBe(true);
   expect(tokens.some(token => token.includes('session-new-fixture'))).toBe(true);

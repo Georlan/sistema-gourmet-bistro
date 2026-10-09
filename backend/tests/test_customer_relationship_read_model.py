@@ -394,6 +394,8 @@ def test_calculation_total_and_average_ticket():
     assert m.ticket_medio_pago == 50.00
     assert m.dias_sem_comprar == 35
     assert m.segmento_relacionamento == "ATENCAO"
+    assert m.primeira_compra_em == (now_fixed - datetime.timedelta(days=40)).isoformat()
+    assert m.intervalo_medio_dias == 5.0
 
     db.close()
 
@@ -513,3 +515,60 @@ def test_endpoint_get_loyalty_clients_additive_contract():
     assert item["dias_sem_comprar"] == 2
     assert item["segmento_relacionamento"] == "ATIVO"
     assert item["ultima_compra_em"] is not None
+
+
+def test_favorite_products_use_valid_units_and_tenant_identity():
+    from app.models import Categoria, Produto, Item, Lancamento
+    from sqlalchemy import event
+    db = TestingSessionLocal()
+    db.add(Cliente(id="fav-client", restaurante_id=1, nome="Favoritos", telefone="85911112222"))
+    for tenant in (1, 2):
+        db.add(Categoria(id="fav-cat", restaurante_id=tenant, nome="Lanches"))
+        db.add(Produto(id="same-product", restaurante_id=tenant, categoria_id="fav-cat", nome=f"Burger {tenant}", preco=20))
+    db.commit()
+    for cid, tenant, closed, payment in [("valid", 1, True, None), ("open", 1, False, None), ("pending", 1, True, "pending"), ("other", 2, True, None)]:
+        db.add(Comanda(id=cid, numero_pedido={"valid": 301, "open": 302, "pending": 303, "other": 304}[cid], restaurante_id=tenant, cliente_id="fav-client", garcom_id=f"user-caixa-{tenant}", fechada=closed, valor_pago=20, online_payment_status=payment))
+        db.add(Lancamento(id=f"l-{cid}", restaurante_id=tenant, comanda_id=cid, garcom_id=f"user-caixa-{tenant}", status="finalizado"))
+    db.commit()
+    for index, (cid, status) in enumerate([("valid", "entregue"), ("valid", "entregue"), ("valid", "cancelado"), ("open", "entregue"), ("pending", "entregue"), ("other", "entregue")]):
+        db.add(Item(id=f"i-{index}", restaurante_id=2 if cid == "other" else 1, comanda_id=cid, lancamento_id=f"l-{cid}", produto_id="same-product", preco_unit=20, status=status))
+    db.add(Lancamento(id="l-cancelled", restaurante_id=1, comanda_id="valid", garcom_id="user-caixa-1", status="cancelado"))
+    db.commit()
+    for extra in ("A", "B", "C"):
+        db.add(Produto(id=f"extra-{extra}", restaurante_id=1, categoria_id="fav-cat", nome=extra, preco=5))
+        db.add(Item(id=f"i-extra-{extra}", restaurante_id=1, comanda_id="valid", lancamento_id="l-valid", produto_id=f"extra-{extra}", preco_unit=5, status="entregue"))
+    db.add(Item(id="i-cancelled-order", restaurante_id=1, comanda_id="valid", lancamento_id="l-cancelled", produto_id="same-product", preco_unit=20, status="entregue"))
+    db.commit()
+    queries = []
+    def track(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT"):
+            queries.append(statement)
+    event.listen(engine, "before_cursor_execute", track)
+    try:
+        metrics = load_customer_relationship_metrics(db, restaurante_id=1, cliente_ids=["fav-client", "no-purchases"], include_products=True)
+    finally:
+        event.remove(engine, "before_cursor_execute", track)
+    assert len(queries) == 2
+    assert metrics["fav-client"].produtos_favoritos == [
+        {"produto_id": "same-product", "nome": "Burger 1", "unidades": 2},
+        {"produto_id": "extra-A", "nome": "A", "unidades": 1},
+        {"produto_id": "extra-B", "nome": "B", "unidades": 1},
+    ]
+    assert metrics["no-purchases"].produtos_favoritos == []
+    assert metrics["no-purchases"].primeira_compra_em is None
+    assert metrics["no-purchases"].intervalo_medio_dias is None
+    queries.clear()
+    event.listen(engine, "before_cursor_execute", track)
+    try:
+        history_only = load_customer_relationship_metrics(db, restaurante_id=1, cliente_ids=["fav-client"])
+    finally:
+        event.remove(engine, "before_cursor_execute", track)
+    assert len(queries) == 1
+    assert history_only["fav-client"].produtos_favoritos == []
+    assert history_only["fav-client"].pedidos_concluidos == metrics["fav-client"].pedidos_concluidos
+    api = TestClient(app)
+    response = api.get("/fidelidade/clientes", headers=get_auth_headers(api, "caixa_r1"))
+    assert response.status_code == 200
+    payload = next(customer for customer in response.json() if customer["id"] == "fav-client")
+    assert payload["produtos_favoritos"] == metrics["fav-client"].produtos_favoritos
+    db.close()
