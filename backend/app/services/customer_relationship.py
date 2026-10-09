@@ -67,6 +67,7 @@ def load_customer_relationship_metrics(
     restaurante_id: int,
     cliente_ids: Sequence[str],
     now: Optional[datetime.datetime] = None,
+    include_products: bool = False,
 ) -> dict[str, CustomerRelationshipMetrics]:
     """Deriva métricas de relacionamento agrupadas por Comanda.cliente_id.
 
@@ -75,7 +76,7 @@ def load_customer_relationship_metrics(
     - Exclusivamente por Comanda.cliente_id (nunca por telefone, nome ou CPF)
     - Apenas compras fechadas válidas; recusadas/canceladas não contam
     - Pedidos com barreira financeira online só contam quando aprovados
-    - Duas consultas agregadas (sem N+1); favoritos por unidades consumidas
+    - Uma consulta de histórico; CRM pode optar por outra para favoritos (sem N+1)
     - Tratamento de timestamp SQLite/Postgres naive como UTC
     """
     normalized_ids = [str(cid) for cid in cliente_ids if cid]
@@ -114,25 +115,27 @@ def load_customer_relationship_metrics(
         .all()
     )
 
-    # Um Item representa uma unidade. Evitar N+1 e excluir cancelamentos.
-    favorite_rows = (
-        db.query(Comanda.cliente_id, Produto.id, Produto.nome, func.count(Item.id))
-        .join(Item, Item.comanda_id == Comanda.id)
-        .join(Produto, (Produto.id == Item.produto_id) & (Produto.restaurante_id == Item.restaurante_id))
-        .join(Lancamento, (Lancamento.id == Item.lancamento_id) & (Lancamento.comanda_id == Comanda.id))
-        .filter(*purchase_filters, Item.restaurante_id == restaurante_id,
-                Lancamento.restaurante_id == restaurante_id,
-                or_(Item.status.is_(None), Item.status != "cancelado"),
-                Lancamento.status.notin_(["cancelado", "recusado"]))
-        .group_by(Comanda.cliente_id, Produto.id, Produto.nome)
-        .order_by(func.count(Item.id).desc(), Produto.nome.asc(), Produto.id.asc())
-        .all()
-    )
     favorites: dict[str, list[dict[str, Any]]] = {}
-    for client_id, product_id, name, units in favorite_rows:
-        entries = favorites.setdefault(str(client_id), [])
-        if len(entries) < 3:
-            entries.append({"produto_id": product_id, "nome": name, "unidades": int(units)})
+    # Impressão também usa o histórico: não consultar produtos nesse caminho.
+    if include_products:
+        # Um Item representa uma unidade. Evitar N+1 e excluir cancelamentos.
+        favorite_rows = (
+            db.query(Comanda.cliente_id, Produto.id, Produto.nome, func.count(Item.id))
+            .join(Item, Item.comanda_id == Comanda.id)
+            .join(Produto, (Produto.id == Item.produto_id) & (Produto.restaurante_id == Item.restaurante_id))
+            .join(Lancamento, (Lancamento.id == Item.lancamento_id) & (Lancamento.comanda_id == Comanda.id))
+            .filter(*purchase_filters, Item.restaurante_id == restaurante_id,
+                    Lancamento.restaurante_id == restaurante_id,
+                    or_(Item.status.is_(None), Item.status != "cancelado"),
+                    Lancamento.status.notin_(["cancelado", "recusado"]))
+            .group_by(Comanda.cliente_id, Produto.id, Produto.nome)
+            .order_by(func.count(Item.id).desc(), Produto.nome.asc(), Produto.id.asc())
+            .all()
+        )
+        for client_id, product_id, name, units in favorite_rows:
+            entries = favorites.setdefault(str(client_id), [])
+            if len(entries) < 3:
+                entries.append({"produto_id": product_id, "nome": name, "unidades": int(units)})
 
     agg_map: dict[str, tuple[int, Decimal, Optional[datetime.datetime], Optional[datetime.datetime]]] = {}
     for r_cid, r_count, r_sum, r_max_dt, r_min_dt in rows:

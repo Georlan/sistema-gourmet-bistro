@@ -545,7 +545,7 @@ def test_favorite_products_use_valid_units_and_tenant_identity():
             queries.append(statement)
     event.listen(engine, "before_cursor_execute", track)
     try:
-        metrics = load_customer_relationship_metrics(db, restaurante_id=1, cliente_ids=["fav-client", "no-purchases"])
+        metrics = load_customer_relationship_metrics(db, restaurante_id=1, cliente_ids=["fav-client", "no-purchases"], include_products=True)
     finally:
         event.remove(engine, "before_cursor_execute", track)
     assert len(queries) == 2
@@ -557,4 +557,18 @@ def test_favorite_products_use_valid_units_and_tenant_identity():
     assert metrics["no-purchases"].produtos_favoritos == []
     assert metrics["no-purchases"].primeira_compra_em is None
     assert metrics["no-purchases"].intervalo_medio_dias is None
+    queries.clear()
+    event.listen(engine, "before_cursor_execute", track)
+    try:
+        history_only = load_customer_relationship_metrics(db, restaurante_id=1, cliente_ids=["fav-client"])
+    finally:
+        event.remove(engine, "before_cursor_execute", track)
+    assert len(queries) == 1
+    assert history_only["fav-client"].produtos_favoritos == []
+    assert history_only["fav-client"].pedidos_concluidos == metrics["fav-client"].pedidos_concluidos
+    api = TestClient(app)
+    response = api.get("/fidelidade/clientes", headers=get_auth_headers(api, "caixa_r1"))
+    assert response.status_code == 200
+    payload = next(customer for customer in response.json() if customer["id"] == "fav-client")
+    assert payload["produtos_favoritos"] == metrics["fav-client"].produtos_favoritos
     db.close()
