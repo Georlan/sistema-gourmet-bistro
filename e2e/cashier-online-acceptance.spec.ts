@@ -105,6 +105,9 @@ test('última retirada exibe troco e volta ao Kanban somente depois do aceite co
 });
 
 
+test.describe('horário do pedido agendado', () => {
+  test.use({ timezoneId: 'America/Fortaleza' });
+
 test('pedido agendado chega no painel online com data e horário antes do preparo', async ({ page }) => {
   await setup(page, { scheduledFor: '2026-10-10T14:30:00Z' });
   const card = page.locator('.orders-pending-card');
@@ -112,4 +115,6 @@ test('pedido agendado chega no painel online com data e horário antes do prepar
   await expect(card).toContainText('10/10/2026');
   await expect(card).toContainText('11:30');
   await expect(card.getByRole('button', { name: '✓ Aceitar' })).toBeEnabled();
+});
+
 });
