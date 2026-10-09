@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 from threading import Event, Lock, Thread
 from typing import Iterable, Iterator, Tuple
 
@@ -138,6 +139,7 @@ class PrintWakeupListener:
             "User-Agent": f"KomaPrintAgent/{AGENT_VERSION}",
         }
         url = f"{self.api_url}/api/print-agents/events"
+        retry_ceiling = 1.0
 
         try:
             while not self._stop.is_set():
@@ -168,6 +170,9 @@ class PrintWakeupListener:
                     ):
                         if self._stop.is_set():
                             break
+                        # Only an actual event proves that the stream recovered;
+                        # an HTTP 200 followed by immediate EOF must back off too.
+                        retry_ceiling = 1.0
                         self._consume_event(event_name, data)
                 except requests.RequestException as exc:
                     if not self._stop.is_set():
@@ -183,6 +188,7 @@ class PrintWakeupListener:
                         except Exception:
                             pass
                 if not self._stop.is_set():
-                    self._stop.wait(1.0)
+                    self._stop.wait(random.uniform(retry_ceiling / 2, retry_ceiling))
+                    retry_ceiling = min(30.0, retry_ceiling * 2)
         finally:
             session.close()
