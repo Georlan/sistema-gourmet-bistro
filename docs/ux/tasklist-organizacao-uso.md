@@ -82,10 +82,10 @@ A entrega #1029 continua incorporada: diagnóstico sob escopo do tenant, estados
 
 - [x] Impressão no 360° já tem diagnóstico de agente/fila e links operacionais em #1021; não criar outro executor ou painel concorrente.
 - [x] Linear/PostHog já têm registry, links e rastreabilidade por restaurante em #1021; não reimplementar KOM-8/9/10.
-- [ ] Validar a utilidade do dashboard PostHog com eventos de negócio reais e janela explícita. Projeto conectado: KÔMA Production `648305`; consulta de erros ativos de sete dias retornou vazia em 07/10, sem provar ausência de falhas. Dados de teste do tenant #8 estão excluídos por padrão no projeto; respeitar esse filtro e explicitar quando comparar esse restaurante.
+- [ ] Validar a utilidade do dashboard PostHog com eventos de negócio reais e janela explícita. Projeto conectado: KÔMA Production `648305`; consulta de erros ativos de sete dias retornou vazia em 07/10, sem provar ausência de falhas. Na consulta de 07/10, dados de teste do tenant #8 estavam excluídos por padrão no projeto; respeitar esse filtro e explicitar quando comparar esse restaurante.
 - [ ] Reconciliar a PR #1027 com a implementação de CRM #1026 já incorporada em `2fd88b38875d` e preservada na rodada de segurança. #1027 segue aberta; revisar diferenças úteis sem duplicar painel, rotas ou schema.
 - [x] Telegram: bot, destino e participação verificados por leitura em produção em 07/10 às 01:51 (Fortaleza). Nenhuma mensagem enviada; entrega continua não testada.
-- [ ] Habilitar acesso do backend ao Linear se a criação de issues dentro do KÔMA for usada: registry atual informa `LINEAR_API_KEY` ausente. Plugin conectado no Codex não configura o runtime do produto.
+- [ ] Habilitar acesso do backend ao Linear se a criação de issues dentro do KÔMA for usada: a última leitura autenticada de 07/10 informou `LINEAR_API_KEY` ausente; reconsultar antes de configurar. Plugin conectado no Codex não configura o runtime do produto.
 - [ ] Reavaliar a consulta administrativa do Resend que retornou HTTP 401 em 07/10, separando permissão de consulta e permissão de envio. Não trocar uma chave de envio funcional para corrigir leitura administrativa sem necessidade; os novos avisos exigem prova de entrega própria.
 
 ### P2 — eficiência e redução de ruído
