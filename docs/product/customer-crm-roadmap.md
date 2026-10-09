@@ -11,6 +11,9 @@ Pesquisa: 9 de outubro de 2026. Fontes públicas oficiais; recurso não descrito
 - Linx: fidelidade personalizada para restaurantes; Reshop fornece inteligência promocional, cashback e CRM no varejo. Não presumir que todo recurso do Reshop está no Menew. https://mkt.linx.com.br/food-sistema-para-restaurantes e https://www.linx.com.br/linx-reshop/
 - Anota AI: apresenta CRM e marketing, além de integração com RD Station; a página não detalha todas as métricas. https://anota.ai/home/ e https://anota.ai/home/integracoes/
 
+- Square: diretório com histórico entre canais, favoritos, feedback e grupos de recorrentes/inativos. https://squareup.com/us/en/point-of-sale/features/customer-directory
+- Toast: perfil que centraliza PDV, pedidos online, reservas e feedback; fidelidade permite prêmio em item ou cashback. https://pos.toasttab.com/products/guest-crm e https://pos.toasttab.com/products/loyalty
+
 ## Primeira entrega implementada
 
 Lista como conteúdo principal, sem precisar atravessar os painéis de satisfação. Ordenação inicial por compras concluídas, desempate por valor pago, nome e ID. Ordens alternativas por valor, recência, ausência e nome. Filtros de recorrentes (2+), atenção, reativar e sem compra; busca por telefone com ou sem máscara.
@@ -23,7 +26,7 @@ Painéis anteriores seguem disponíveis em “Relacionamento e satisfação”. 
 
 1. Ficha do cliente: linha do tempo paginada de compras, valor, canal, itens e benefícios; períodos 30/90 dias e total; intervalo entre compras, primeiro pedido e comparação do ticket. Consultar por ID e tenant, nunca adivinhar a identidade pelo nome/telefone.
 2. Qualidade da base: identificar telefone inválido, cliente genérico de retirada e possíveis duplicatas. A lista deve explicar “sem compra identificada”, pois isso não prova que a pessoa nunca comprou. Eventual união de cadastros exige revisão e trilha de auditoria.
-3. Fidelidade: aproveitar pontos/cashback atuais. Acrescentar extrato auditável de aquisição, resgate, ajuste e estorno; crédito idempotente após elegibilidade financeira, reversão de cancelamento; mostrar saldo e regra ao cliente. Definir prêmio, limite por compra, produtos elegíveis, acúmulo com cupom e custo máximo antes de ativar. Pontos atuais não serão convertidos automaticamente.
+3. Fidelidade: aproveitar pontos/cashback atuais. Acrescentar extrato auditável de aquisição, resgate, ajuste e estorno; crédito idempotente após elegibilidade financeira, reversão de cancelamento; mostrar saldo e regra ao cliente. Comparar cashback/pontos com prêmio em produto e benefício de conveniência, medindo custo e retorno. Definir prêmio, limite por compra, produtos elegíveis, acúmulo com cupom e custo máximo antes de ativar. Pontos atuais não serão convertidos automaticamente.
 4. Ações: incentivar segunda compra, aniversário opcional, marcos de recorrência e reativação. Guardar preferência de contato e autorização para campanhas, respeitar descadastro e limitar frequência. Uma sugestão de contato não dispara mensagem.
 5. Resultados: clientes recorrentes, taxa de segunda compra, reativação, custo dos benefícios e receita/margem incremental. Distinguir compra após mensagem de efeito comprovado; usar grupo de controle para avaliar incremento.
 
@@ -37,7 +40,6 @@ Estas ideias não foram identificadas nas páginas consultadas; não há evidên
 - Explicar cada oportunidade: “comprou 8 vezes, costuma voltar em 7 dias, está há 21 dias sem pedir”. Mostrar a amostra e incerteza, sem um score opaco.
 - Separar pedidos coletivos de preferência individual: uma comanda familiar não prova que o titular consumiu todos os itens; apresentar como produtos mais pedidos pela conta.
 - Planejamento operacional: cruzar provável demanda de recorrentes com produção e capacidade. Não enviar promoções durante sobrecarga ou com favorito indisponível.
-- Fidelidade por experiência: benefícios de conveniência, mimo escolhido ou acesso a novidade, além de desconto; medir custo e retorno.
 
 ## Proteção da operação id 6
 
