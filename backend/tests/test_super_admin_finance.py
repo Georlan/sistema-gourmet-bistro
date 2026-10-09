@@ -12,6 +12,16 @@ from app.super_admin_finance_models import FinanceBase, OwnerFinanceAudit, Owner
 client = TestClient(app)
 
 
+def test_finance_migration_keeps_one_deployment_head():
+    from pathlib import Path
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    scripts = ScriptDirectory.from_config(Config(str(Path(__file__).resolve().parents[1] / 'alembic.ini')))
+    heads = scripts.get_heads()
+    assert len(heads) == 1
+    assert '5f6a7b8c9d01' in {revision.revision for revision in scripts.iterate_revisions(heads[0], 'c7d8e9f0a123')}
+
+
 @pytest.fixture(autouse=True)
 def clear_finance_admin_override():
     previous = app.dependency_overrides.pop(get_current_admin, None)
