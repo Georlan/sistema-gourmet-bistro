@@ -1,0 +1,30 @@
+name: Cashier transfer conflicts
+on:
+  pull_request:
+    paths:
+      - 'src/components/caixa/orders/useCashierOrders.ts'
+      - 'backend/app/routes/atendimentos.py'
+      - 'backend/app/services/atendimentos.py'
+      - 'backend/tests/test_atendimento_edge_cases.py'
+      - 'e2e/cashier-transfer-conflict.spec.ts'
+      - '.github/workflows/cashier-transfer.yml'
+permissions:
+  contents: read
+jobs:
+  browser:
+    name: Cashier transfer conflict browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:e2e -- e2e/cashier-transfer-conflict.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2
+        env:
+          KOMA_E2E_PORT: '4298'
+          KOMA_E2E_PREVIEW: 'true'
