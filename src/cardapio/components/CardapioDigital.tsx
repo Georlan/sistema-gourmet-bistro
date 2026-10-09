@@ -1,3 +1,4 @@
+import PixCopyCode from "./PixCopyCode";
 import { OrderItemComposition } from "../../components/shared/OrderItemComposition";
 import { cardapioCompositionSource } from "../orderItems";
 import { QRCodeSVG } from 'qrcode.react';
@@ -600,7 +601,7 @@ export default function CardapioDigital({
                 <div className="mt-5 w-full max-w-md rounded-2xl border border-emerald-500/25 bg-koma-card p-4">
                   {!createdOrder.pagamento.qr_code_base64 && createdOrder.pagamento.qr_code && <QRCodeSVG value={createdOrder.pagamento.qr_code} size={208} level="M" marginSize={4} className="mx-auto" />}
                   {createdOrder.pagamento.qr_code_base64 && <img className="mx-auto h-52 w-52 rounded-xl bg-white p-2" src={`data:image/png;base64,${createdOrder.pagamento.qr_code_base64}`} alt="QR Code Pix do pedido" />}
-                  {createdOrder.pagamento.qr_code && <button type="button" onClick={() => void navigator.clipboard.writeText(createdOrder.pagamento?.qr_code || "")} className="mt-3 h-11 w-full rounded-xl bg-emerald-500 px-4 text-xs font-black text-white">Copiar código Pix</button>}
+                  {createdOrder.pagamento.qr_code && <PixCopyCode code={createdOrder.pagamento.qr_code} />}
                   {createdOrder.pagamento.ticket_url && <a href={createdOrder.pagamento.ticket_url} target="_blank" rel="noreferrer" className="mt-2 flex h-11 w-full items-center justify-center rounded-xl border border-koma-border text-xs font-bold text-koma-foreground">Abrir pagamento</a>}
                   <p className="mt-2 text-[10px] leading-relaxed text-koma-muted">{createdOrder.pagamento.confirmacao_manual ? "O restaurante confirmará o recebimento. Você pode acompanhar o pedido neste cardápio." : "A confirmação é automática. Você pode acompanhar o pedido neste cardápio."}</p>
                 </div>

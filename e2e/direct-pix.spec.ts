@@ -210,10 +210,25 @@ test('cadastro da chave chega ao checkout, QR reaberto e confirmação manual ú
   await consumer.getByRole('button',{name:'Fazer pedido',exact:true}).click();
   await expect(consumer.getByText('Aguardando pagamento',{exact:true}).first()).toBeVisible();
   await expect(consumer.getByText('O restaurante conferirá o recebimento',{exact:false})).toBeVisible();
+  await expect(consumer.getByText('Pague com Pix Copia e Cola no Mercado Pago ou em outro banco que aceite Pix.')).toBeVisible();
+  await consumer.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { (window as any).__copiedPix = value; } } });
+  });
+  await consumer.getByRole('button',{name:'Copiar código Pix',exact:true}).click();
+  await expect(consumer.getByRole('button',{name:'Código Pix copiado',exact:true})).toBeVisible();
+  expect(await consumer.evaluate(() => (window as any).__copiedPix)).toBe('test-only-journey-do-not-pay');
   await consumer.getByRole('button',{name:'Acompanhar pedido',exact:true}).click();
   await consumer.getByRole('button',{name:'Pagar Pix',exact:true}).click();
   const pix=consumer.getByRole('dialog',{name:'Pagamento Pix do Pedido #47'});
   await expect(pix.locator('svg[role="img"]')).toBeVisible();
+  await consumer.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('blocked'); } } });
+  });
+  await pix.getByRole('button',{name:'Copiar código Pix',exact:true}).click();
+  await expect(pix.getByRole('status')).toContainText('A cópia automática não funcionou');
+  await expect(pix.getByRole('button',{name:'Código Pix copiado',exact:true})).toHaveCount(0);
+  await expect(pix.getByLabel('Código Pix Copia e Cola')).toHaveValue('test-only-journey-do-not-pay');
+
   await expect(pix).toContainText('O restaurante conferirá o recebimento');
   await expect(pix).not.toContainText('A confirmação do pagamento é automática');
   await consumer.getByRole('button',{name:'Fechar modal Pix',exact:true}).click();
