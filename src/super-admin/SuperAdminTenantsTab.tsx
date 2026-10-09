@@ -1,3 +1,4 @@
+import { readAdminShortcut } from "./adminShortcut";
 import { parseBackendTimestamp } from "../utils/dateTime";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -83,7 +84,18 @@ export function SuperAdminTenantsTab({
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [selectedPayment, setSelectedPayment] = useState("ALL");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const shortcutOpened = useRef(false);
   const [benefitsTenant, setBenefitsTenant] = useState<Tenant | null>(null);
+  useEffect(() => {
+    if (shortcutOpened.current || !tenantsAvailable) return;
+    const shortcut = readAdminShortcut(window.location.search);
+    const tenant = tenants.find(item => item.id === shortcut.tenantId);
+    shortcutOpened.current = true;
+    if (!tenant) return;
+    if (shortcut.resources) setBenefitsTenant(tenant);
+    else setSelectedTenant(tenant);
+  }, [tenants, tenantsAvailable]);
+
   const [supportTenant, setSupportTenant] = useState<Tenant | null>(null);
   const [supportTarget, setSupportTarget] = useState<SupportNavigationTarget | null>(null);
   const [showNewTenantModal, setShowNewTenantModal] = useState(false);
