@@ -35,8 +35,9 @@ const BANNED_PII_KEYS = new Set([
   'secret',
 ]);
 
-function sanitizeProperties<T extends Record<string, any>>(props?: T): Record<string, any> {
+function sanitizeProperties<T extends Record<string, any>>(props?: T, depth = 0): Record<string, any> {
   if (!props || typeof props !== 'object') return {};
+  if (depth > 8) return {};
   const clean: Record<string, any> = {};
   for (const [key, val] of Object.entries(props)) {
     const lowerKey = key.toLowerCase();
@@ -44,10 +45,31 @@ function sanitizeProperties<T extends Record<string, any>>(props?: T): Record<st
       continue;
     }
     if (val !== undefined && typeof val !== 'function') {
-      clean[key] = val;
+      if (Array.isArray(val)) {
+        clean[key] = val.map(item => item && typeof item === 'object'
+          ? sanitizeProperties(item, depth + 1) : cleanUrl(item));
+      } else if (val && typeof val === 'object') {
+        clean[key] = sanitizeProperties(val, depth + 1);
+      } else {
+        clean[key] = cleanUrl(val);
+      }
     }
   }
   return clean;
+}
+
+function cleanUrl(value: unknown): unknown {
+  if (typeof value !== 'string' || !/^https?:\/\//i.test(value)) return value;
+  try {
+    const url = new URL(value);
+    url.search = '';
+    url.hash = '';
+    url.username = '';
+    url.password = '';
+    return url.toString();
+  } catch {
+    return '[invalid URL]';
+  }
 }
 
 let posthogInstance: any = null;
@@ -136,11 +158,24 @@ export function initAnalytics(): Promise<boolean> {
         autocapture: false,
         // Não cria visualizações de página sintéticas em rotas SPA internas
         capture_pageview: false,
+        capture_exceptions: {
+          capture_unhandled_errors: true,
+          capture_unhandled_rejections: true,
+          capture_console_errors: false,
+        },
+        before_send: event => {
+          if (event?.properties) event.properties = sanitizeProperties(event.properties);
+          return event;
+        },
         // Desabilita endpoint /decide e injeção remota de scripts (toolbar/surveys/flags) em conformidade com CSP
         advanced_disable_decide: true,
         // Permite ingestão de sessões automatizadas e testes de navegador (Headless/WebDriver)
         opt_out_useragent_filter: true,
         persistence: 'localStorage+cookie',
+      });
+      posthog.register({
+        frontend_build_sha: import.meta.env.VITE_BUILD_SHA || 'unknown',
+        frontend_build_time: import.meta.env.VITE_BUILD_TIME || 'unknown',
       });
 
       posthogInstance = posthog;

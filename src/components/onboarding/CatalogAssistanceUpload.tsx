@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { CheckCircle2, FileUp, Loader2 } from 'lucide-react';
 import { API_BASE_URL } from '../../config/api';
 
@@ -32,10 +32,14 @@ export function CatalogAssistanceUpload({
   accessToken,
   assistance,
   onSubmitted,
+  onSavingChange,
+  onDirtyChange,
 }: {
   accessToken: string;
   assistance: CatalogAssistanceSnapshot;
   onSubmitted: () => void;
+  onSavingChange?: (busy: boolean) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const inputId = useId();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -43,6 +47,10 @@ export function CatalogAssistanceUpload({
   const [replacing, setReplacing] = useState(false);
   const [notice, setNotice] = useState('');
   const [noticeKind, setNoticeKind] = useState<'success' | 'error' | ''>('');
+
+  useEffect(() => { onSavingChange?.(busy); }, [busy, onSavingChange]);
+  useEffect(() => { onDirtyChange?.(Boolean(selectedFile)); }, [selectedFile, onDirtyChange]);
+  useEffect(() => () => { onSavingChange?.(false); onDirtyChange?.(false); }, [onSavingChange, onDirtyChange]);
 
   const chooseFile = (file?: File) => {
     setNotice('');
