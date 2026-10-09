@@ -302,7 +302,7 @@ async def _probe_resend() -> Dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=4.0) as client:
             resp = await client.get(
-                "https://api.resend.com/api-keys",
+                "https://api.resend.com/domains",
                 headers={"Authorization": f"Bearer {api_key}"},
             )
         elapsed = round((time.perf_counter() - start_time) * 1000, 2)
@@ -317,32 +317,32 @@ async def _probe_resend() -> Dict[str, Any]:
                 "latency_ms": elapsed,
                 "last_checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "console_url": console_url,
-                "detail": "Serviço de e-mails transacionais operacional.",
+                "detail": "Consulta administrativa de domínios verificada. Entrega de e-mails não testada.",
             }
         return {
             "id": "resend",
             "name": "Resend",
             "category": "transactional_email",
             "purpose": "Envio transacional de convites de equipe e recibos de pagamento",
-            "status": "warning",
+            "status": "unverified",
             "configured": True,
             "latency_ms": elapsed,
             "last_checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "console_url": console_url,
-            "detail": f"Resend retornou HTTP {resp.status_code}.",
+            "detail": f"Consulta administrativa Resend não confirmada (HTTP {resp.status_code}); uma chave de envio pode não permitir esta leitura. Entrega de e-mails não testada.",
         }
-    except Exception as exc:
+    except Exception:
         return {
             "id": "resend",
             "name": "Resend",
             "category": "transactional_email",
             "purpose": "Envio transacional de convites de equipe e recibos de pagamento",
-            "status": "disconnected",
+            "status": "unverified",
             "configured": True,
             "latency_ms": round((time.perf_counter() - start_time) * 1000, 2),
             "last_checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "console_url": console_url,
-            "detail": f"Falha de conexão com Resend: {exc}",
+            "detail": "Consulta administrativa Resend indisponível; entrega de e-mails não testada.",
         }
 
 

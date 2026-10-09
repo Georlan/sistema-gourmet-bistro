@@ -19,23 +19,18 @@ test('Pocket mantém plano ao conceder, revogar e restaurar benefício com motiv
     await route.fulfill({ json: body });
   });
   await page.route('**/health/live', route => route.fulfill({ json: { status: 'ok', commit: 'e2e' } }));
-  await page.goto('/super-admin');
-  const mobileMenu = page.getByRole('button', { name: 'Abrir menu lateral' });
-  if (await mobileMenu.isVisible()) await mobileMenu.click();
-  await page.getByRole('button', { name: 'Restaurantes', exact: true }).click();
-  await page.getByRole('button', { name: 'Recursos/Benefícios', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: /Recursos\/Benefícios/ });
+  await page.goto('/super-admin?tenant=961301&panel=resources');
+  const dialog = page.getByRole('dialog', { name: /Recursos e exceções/ });
   await expect(dialog).toContainText('Plano comercial: pocket');
-  await expect(dialog.getByRole('row').nth(1)).toContainText('Sem override');
+  await expect(dialog.getByRole('row').nth(1)).toContainText('Segue o plano');
   await dialog.getByLabel('Motivo obrigatório').fill('   ');
-  await dialog.getByRole('button', { name: 'Salvar benefício' }).click();
+  await expect(dialog.getByRole('button', { name: 'Salvar benefício' })).toBeDisabled();
   expect(mutations).toHaveLength(0);
-  await expect(dialog.getByRole('alert')).toContainText('Informe um motivo');
-  for (const [mode, display] of [['grant', 'Liberado (manual)'], ['revoke', 'Revogado (manual)'], ['baseline', 'Sem override']]) {
+  for (const [mode, display] of [['grant', 'Liberado manualmente'], ['revoke', 'Bloqueado manualmente'], ['baseline', 'Segue o plano']]) {
     await dialog.getByLabel('Ação', { exact: true }).selectOption(mode);
     await dialog.getByLabel('Motivo obrigatório').fill(`Primeiro cliente KÔMA; extra R$ 0; ação ${mode}`);
     await dialog.getByRole('button', { name: 'Salvar benefício' }).click();
-    await expect(dialog.getByRole('status')).toContainText('Alteração salva');
+    await expect(dialog.getByRole('status').filter({hasText: 'Alteração salva'})).toContainText('Alteração salva');
     await expect(dialog.getByRole('row').nth(1)).toContainText(display);
     await expect(dialog).toContainText('Plano comercial: pocket');
   }

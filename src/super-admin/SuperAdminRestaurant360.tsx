@@ -1,4 +1,5 @@
 import { parseBackendTimestamp } from "../utils/dateTime";
+import { supportTargetForCockpit } from "./supportNavigation";
 import { summarizeIncidents } from "./incidentSummary";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -261,16 +262,6 @@ function formatContractRate(value?: string | null) {
     : "—";
 }
 
-function supportTargetForCockpit(key: string): SupportNavigationTarget | null {
-  if (key === "profile") return { tab: "cardapio_digital", subTab: "cardapio_perfil", label: "Dados do restaurante" };
-  if (key === "hours") return { tab: "cardapio_digital", subTab: "cardapio_pedidos", label: "Horários e pedidos online" };
-  if (key === "catalog") return { tab: "cardapio", subTab: "produtos", label: "Cardápio / produtos" };
-  if (key === "dine-in") return { tab: "impressao_salao", subTab: "mesas", label: "Salão / mesas" };
-  if (key === "delivery") return { tab: "cardapio_digital", subTab: "cardapio_entrega", label: "Configuração de entrega" };
-  if (key === "payment") return { tab: "cardapio_digital", subTab: "cardapio_pagamentos", label: "Formas de pagamento" };
-  if (key === "printing") return { tab: "impressao_salao", subTab: "impressao", label: "Impressão" };
-  return null;
-}
 
 export const READINESS_BLOCKER_LABELS: Record<string, string> = {
   profile: "Dados do restaurante pendentes",
@@ -438,12 +429,12 @@ export function SuperAdminRestaurant360({
       }),
       superAdminFetch("/api/super-admin/onboarding/restaurantes/" + tenant.id + "/release").then(async response => {
         const body = await response.json();
-        if (!response.ok) throw new Error(body?.detail || "Implantação indisponível.");
+        if (!response.ok || !body?.steps || typeof body.steps !== "object") throw new Error(body?.detail || "Implantação indisponível.");
         return body as ReleasePreview;
       }),
       superAdminFetch("/api/super-admin/access/restaurantes/" + tenant.id).then(async response => {
         const body = await response.json();
-        if (!response.ok) throw new Error(body?.detail || "Equipe indisponível.");
+        if (!response.ok || !Array.isArray(body?.users)) throw new Error(body?.detail || "Equipe indisponível.");
         return body as AccessDetail;
       }),
       superAdminFetch("/api/super-admin/incidents?tenant_id=" + encodeURIComponent(tenant.id)).then(async response => {
@@ -934,6 +925,7 @@ export function SuperAdminRestaurant360({
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => onBenefits(tenant)} className="rounded-lg bg-[#00b894] px-3 py-2 text-xs font-bold text-black">Recursos e exceções</button>
             <button type="button" onClick={() => onSupport(tenant)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs font-bold text-amber-300">
               <Headphones className="h-3.5 w-3.5" /> Modo suporte
             </button>
@@ -1278,7 +1270,7 @@ export function SuperAdminRestaurant360({
               <strong className="mt-1 block text-base text-koma-foreground">{formatCurrency(plan.price)}/mês</strong>
               <p className="mt-1 text-[11px] text-koma-subtle">Referência atual; não substitui o aceite congelado.</p>
             </div>
-            <button type="button" onClick={() => onBenefits(tenant)} className="mt-4 rounded-lg bg-[#00b894] px-3 py-2 text-xs font-black text-black">Ver baseline, overrides e efetivo</button>
+            <button type="button" onClick={() => onBenefits(tenant)} className="mt-4 rounded-lg bg-[#00b894] px-3 py-2 text-xs font-black text-black">Gerenciar recursos fora do plano</button>
           </div>
 
           <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
