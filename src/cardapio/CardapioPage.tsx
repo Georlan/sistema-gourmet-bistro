@@ -201,6 +201,7 @@ export default function CardapioPage() {
   }, []);
 
   const loadRestaurantData = useCallback(async (background = false) => {
+    const loadStartedAt = performance.now();
     if (!background) {
       setIsLoading(true);
       setErrorMsg("");
@@ -390,6 +391,7 @@ export default function CardapioPage() {
           categories_count: brand.categories.length,
           products_count: brand.products.length,
           store_status: brand.storeStatus,
+          catalog_load_ms: Math.round(performance.now() - loadStartedAt),
         });
       }
       setActiveCategory((current) => current && brand.categories.includes(current) ? current : brand.categories[0] || "");

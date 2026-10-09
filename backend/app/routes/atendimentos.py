@@ -6,6 +6,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, joinedload
 
 from ..application.printing import (
@@ -33,6 +34,7 @@ from ..services.atendimentos import (
     AtendimentoError,
     associate_order_to_table,
     ensure_atendimento_for_comanda,
+    lock_tables_for_command_transfer,
     materialize_table_accounts_for_write,
     merge_tables,
     principal_command_for_comanda,
@@ -331,6 +333,7 @@ def transferir_atendimento_compativel(
     require_waiter_permission(db, current_user, "perm_garcom_transferir_mesa")
     rid = require_tenant_id()
     try:
+        lock_tables_for_command_transfer(db, rid, comanda_id, nova_mesa_id)
         materialize_table_accounts_for_write(db, rid, nova_mesa_id, actor_id=current_user.id)
         command = transfer_group_by_comanda(db, rid, comanda_id, nova_mesa_id, actor_id=current_user.id)
         db.commit()
@@ -338,6 +341,12 @@ def transferir_atendimento_compativel(
     except AtendimentoError as exc:
         db.rollback()
         _raise_domain(exc)
+    except DBAPIError as exc:
+        db.rollback()
+        sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
+        if sqlstate in {"40P01", "40001"}:
+            raise HTTPException(status_code=409, detail="Outra operação alterou as mesas. Atualize e selecione novamente.") from None
+        raise
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rid)
     return command
 

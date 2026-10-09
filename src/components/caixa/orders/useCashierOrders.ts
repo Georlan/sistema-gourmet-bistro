@@ -237,7 +237,15 @@ export function useCashierOrders({
         headers: authHeaders,
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.detail || 'Não foi possível transferir a mesa.');
+      if (!response.ok) {
+        if (response.status === 409) {
+          setTableTransferTargetId('');
+          // A concorrência pode ter alterado as mesas desde a seleção.
+          // Preserve a explicação do conflito mesmo se a atualização falhar.
+          try { await onRefreshOrders(); } catch { /* a próxima atualização pode recuperar */ }
+        }
+        throw new Error(data?.detail || 'Não foi possível transferir a mesa.');
+      }
       setSelectedKanbanOrder(null);
       setTableTransferTargetId('');
       await onRefreshOrders();
