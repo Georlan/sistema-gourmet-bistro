@@ -4,6 +4,7 @@ import type { Order, OrderItem, Table } from '../src/types';
 import { deriveFinancialState, deriveProductionState } from '../src/domain/operationalState';
 import {
   formatCashierOldestAge,
+  getLatestCashierCardKey,
   getCashierHumanOrderNumber,
   getCashierOrderSlaData,
   getCashierTableOrderPresentation,
@@ -330,4 +331,26 @@ test('aceite de delivery preserva etapa explícita para iniciar preparo', () => 
   assert.equal(start.targetStatus, 'producao');
   assert.equal(start.label, 'Iniciar preparo');
   assert.equal(projectCashierDeliveryState('aceito', 'delivery').inProduction, true);
+});
+
+test('latest card follows launch time across old tables and digital orders, with stable ties', () => {
+  const cards = [
+    { key: 'salon:old-launch', timestamps: [NOW - 60_000] },
+    { key: 'salon:new-launch-same-check', timestamps: [NOW] },
+    { key: 'digital:order', timestamps: [new Date(NOW - 1000).toISOString()] },
+    { key: 'closing:missing', timestamps: [undefined, 'invalid'] },
+  ];
+  assert.equal(getLatestCashierCardKey(cards), 'salon:new-launch-same-check');
+  assert.equal(getLatestCashierCardKey([...cards].reverse()), 'salon:new-launch-same-check');
+  assert.equal(getLatestCashierCardKey([{ key: 'closing:ready', timestamps: [NOW + 1000, NOW - 5000] }, ...cards]), 'closing:ready');
+  assert.equal(getLatestCashierCardKey([{ key: 'b', timestamps: [NOW] }, { key: 'a', timestamps: [NOW] }]), 'a');
+  assert.equal(getLatestCashierCardKey([{ key: 'missing', timestamps: [null, undefined, ''] }]), null);
+});
+
+test('latest card preserves the calendar date and seconds of digital orders', () => {
+  assert.equal(getLatestCashierCardKey([
+    { key: 'digital:yesterday', timestamps: ['2026-10-08T23:59:00-03:00'] },
+    { key: 'digital:today-a', timestamps: ['2026-10-09T10:00:01-03:00'] },
+    { key: 'digital:today-z', timestamps: ['2026-10-09T10:00:59-03:00'] },
+  ]), 'digital:today-z');
 });
