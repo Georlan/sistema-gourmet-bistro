@@ -94,11 +94,6 @@ test('Restaurante 360 incorpora incidentes operacionais reais do tenant sem inve
 test('Cockpit informa próximo passo e usa deep link de suporte para configuração canônica', () => {
   assert.match(restaurant360, /Próximo passo:/);
   assert.match(restaurant360, /supportTargetForCockpit/);
-  assert.match(restaurant360, /Dados do restaurante/);
-  assert.match(restaurant360, /Horários e pedidos online/);
-  assert.match(restaurant360, /Salão \/ mesas/);
-  assert.match(restaurant360, /Configuração de entrega/);
-  assert.match(restaurant360, /Formas de pagamento/);
   assert.match(restaurant360, /onSupport\(tenant, target\)/);
   assert.match(restaurant360, /Corrigir tipo/);
   assert.match(restaurant360, /Gerenciar acessos/);

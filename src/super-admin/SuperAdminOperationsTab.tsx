@@ -130,7 +130,7 @@ export function SuperAdminOperationsTab() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
           <div className="flex items-center justify-between"><span className="text-xs font-medium text-koma-muted">Backend API</span><Server className="w-4 h-4 text-[#00b894]" /></div>
           <div className="flex items-center gap-2">
@@ -145,20 +145,6 @@ export function SuperAdminOperationsTab() {
             {integrationsHealth?.database?.status === "available" ? <><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span className="font-bold text-sm text-koma-foreground">Disponível</span></> : integrationsHealth?.database?.status === "unavailable" ? <><AlertTriangle className="w-4 h-4 text-rose-400" /><span className="font-bold text-sm text-rose-300">Indisponível</span></> : <><HelpCircle className="w-4 h-4 text-zinc-500" /><span className="font-bold text-sm text-koma-muted">Não verificado</span></>}
           </div>
           <p className="text-[11px] text-koma-subtle">{integrationsHealth?.database?.latency_ms != null ? `SELECT 1 • ${integrationsHealth.database.latency_ms}ms` : "Sem medição"}</p>
-        </div>
-
-        <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
-          <div className="flex items-center justify-between"><span className="text-xs font-medium text-koma-muted">Railway</span><Server className="w-4 h-4 text-koma-subtle" /></div>
-          <div className="flex items-center gap-2"><HelpCircle className="w-4 h-4 text-zinc-500" /><span className="font-bold text-sm text-koma-muted">{integrationsHealth?.railway?.hosting_detected ? "Runtime Railway identificado" : "Hospedagem não verificada"}</span></div>
-          <p className="text-[11px] text-koma-subtle">{configuredLabel(integrationsHealth?.railway?.status)}. Acesso à API administrativa é opcional e não determina saúde da hospedagem.</p>
-        </div>
-
-        <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
-          <div className="flex items-center justify-between"><span className="text-xs font-medium text-koma-muted">Cloudflare</span><Globe className="w-4 h-4 text-koma-subtle" /></div>
-          <div className="flex items-center gap-2">
-            {dnsStatus === "API respondeu" ? <><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span className="font-bold text-sm text-koma-foreground">API respondeu</span></> : <><HelpCircle className="w-4 h-4 text-zinc-500" /><span className="font-bold text-sm text-koma-muted">{cloudflareConfigured ? dnsStatus : configuredLabel(integrationsHealth?.cloudflare?.status)}</span></>}
-          </div>
-          <p className="text-[11px] text-koma-subtle">{dnsStatus === "API respondeu" ? `${dnsRecords.length} registro(s) retornado(s)` : "Consulta DNS opcional; não mede a disponibilidade do frontend."}</p>
         </div>
 
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
@@ -181,6 +167,27 @@ export function SuperAdminOperationsTab() {
           </p>
         </div>
       </div>
+
+      <details className="rounded-xl border border-zinc-800 bg-koma-card p-4">
+        <summary className="cursor-pointer text-sm font-bold">Hospedagem e DNS · consultas administrativas opcionais</summary>
+        <p className="mt-2 text-xs text-koma-muted">A configuração dessas consultas não mede a disponibilidade do sistema. A saúde operacional aparece acima.</p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between"><span className="text-xs font-medium text-koma-muted">Railway</span><Server className="w-4 h-4 text-koma-subtle" /></div>
+          <div className="flex items-center gap-2"><HelpCircle className="w-4 h-4 text-zinc-500" /><span className="font-bold text-sm text-koma-muted">{integrationsHealth?.railway?.hosting_detected ? "Runtime Railway identificado" : "Hospedagem não verificada"}</span></div>
+          <p className="text-[11px] text-koma-subtle">{configuredLabel(integrationsHealth?.railway?.status)}. Acesso à API administrativa é opcional e não determina saúde da hospedagem.</p>
+        </div>
+
+        <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between"><span className="text-xs font-medium text-koma-muted">Cloudflare</span><Globe className="w-4 h-4 text-koma-subtle" /></div>
+          <div className="flex items-center gap-2">
+            {dnsStatus === "API respondeu" ? <><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span className="font-bold text-sm text-koma-foreground">API respondeu</span></> : <><HelpCircle className="w-4 h-4 text-zinc-500" /><span className="font-bold text-sm text-koma-muted">{cloudflareConfigured ? dnsStatus : configuredLabel(integrationsHealth?.cloudflare?.status)}</span></>}
+          </div>
+          <p className="text-[11px] text-koma-subtle">{dnsStatus === "API respondeu" ? `${dnsRecords.length} registro(s) retornado(s)` : "Consulta DNS opcional; não mede a disponibilidade do frontend."}</p>
+        </div>
+
+        </div>
+      </details>
 
       <div className={`grid grid-cols-1 gap-6 ${cloudflareConfigured ? "lg:grid-cols-2" : ""}`}>
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-4">

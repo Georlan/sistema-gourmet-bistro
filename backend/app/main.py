@@ -84,6 +84,8 @@ async def lifespan(app: FastAPI):
         SignupBase.metadata.create_all(bind=engine)
         from .contract_models import ContractEvidenceBase
         ContractEvidenceBase.metadata.create_all(bind=engine)
+        from .super_admin_finance_models import FinanceBase
+        FinanceBase.metadata.create_all(bind=engine)
     else:
         print(
             "[DATABASE] create_all desativado; Alembic é a fonte do esquema.",
@@ -503,6 +505,8 @@ app.include_router(printing.router)
 app.include_router(cardapio_digital.router)
 app.include_router(relatorios.router)
 app.include_router(restaurant_features.router)
+from .routes import super_admin_finance
+app.include_router(super_admin_finance.router)
 app.include_router(super_admin.router, prefix="/api")
 app.include_router(super_admin_onboarding.router, prefix="/api")
 from .routes import cearatech_leads

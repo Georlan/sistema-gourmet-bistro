@@ -35,6 +35,13 @@ def setup_universal_printing_http():
     tenant_token = current_restaurante_id.set(None)
     db = SessionLocal(restaurante_id=None)
     try:
+        from app.scheduled_models import ScheduledOrder
+        from app.online_order_control_models import OnlineOrderControl, OnlineOrderOperationalAudit
+        from app.models import CaixaTurno
+        db.query(OnlineOrderOperationalAudit).filter(OnlineOrderOperationalAudit.restaurante_id == TENANT_ID).delete(synchronize_session=False)
+        db.query(OnlineOrderControl).filter(OnlineOrderControl.restaurante_id == TENANT_ID).delete(synchronize_session=False)
+        db.query(CaixaTurno).filter(CaixaTurno.restaurante_id == TENANT_ID).delete(synchronize_session=False)
+        db.query(ScheduledOrder).filter(ScheduledOrder.restaurante_id == TENANT_ID).delete(synchronize_session=False)
         db.query(PrintJob).filter(PrintJob.restaurante_id == TENANT_ID).delete(
             synchronize_session=False
         )
@@ -260,3 +267,49 @@ def test_pocket_admin_grant_printing_through_audit_then_print_and_revoke():
             db.query(RestauranteCapability).filter_by(restaurante_id=TENANT_ID).delete()
             db.commit()
         db.close()
+
+
+@pytest.mark.parametrize("automatic", [False, True])
+def test_scheduled_order_prints_on_arrival_with_local_time_and_no_duplicate_at_acceptance(monkeypatch, automatic):
+    import datetime
+    from app.scheduled_models import ScheduledOrder
+    from app.services.scheduled_orders import schedule_order_in_session, release_due_scheduled_orders_in_session
+    from app.services.order_read_projection import project_check_details
+    from app.routes.orders_core import _operational_online_payment_filter
+    from app.application.printing import PrintIntent, PrintSourceType, PrintingApplicationService
+
+    target = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1)
+    target = target.replace(hour=14, minute=30, second=0, microsecond=0)
+    monkeypatch.setattr("app.services.scheduled_orders.validate_schedule_request", lambda *a, **kw: target)
+    with SessionLocal(restaurante_id=TENANT_ID) as db:
+        check = db.query(Comanda).filter(Comanda.restaurante_id == TENANT_ID, Comanda.id == COMMAND_ID).one()
+        from app.online_order_control_models import OnlineOrderControl
+        from app.models import CaixaTurno
+        db.add(OnlineOrderControl(restaurante_id=TENANT_ID, auto_accept=automatic))
+        db.add(CaixaTurno(restaurante_id=TENANT_ID, aberto_por_id=USER_ID, saldo_inicial=0, status="aberto"))
+        check.online_payment_status = "pending"
+        check.delivery_status = "pendente"
+        check.lancamentos[0].status = "pendente"
+        db.flush()
+        schedule_order_in_session(db, restaurante_id=TENANT_ID, comanda_id=check.id, scheduled_for=target)
+        db.commit()
+        assert check.online_payment_status is None
+        assert check.delivery_status == ("producao" if automatic else "pendente")
+        assert db.query(Comanda).filter(Comanda.id == COMMAND_ID, _operational_online_payment_filter()).count() == 1
+        dto = project_check_details(db, [check], TENANT_ID)[0]
+        assert dto.scheduled_for is not None
+        jobs = db.query(PrintJob).filter(PrintJob.restaurante_id == TENANT_ID).all()
+        assert len(jobs) == 1
+        assert "PEDIDO AGENDADO" in jobs[0].payload_text
+        assert target.strftime("PARA %d/%m/%Y") in jobs[0].payload_text
+        assert "AS 11:30" in jobs[0].payload_text
+        PrintingApplicationService.request_print(db, PrintIntent(
+            restaurant_id=TENANT_ID, source_type=PrintSourceType.ORDER, source_id=COMMAND_ID,
+            idempotency_key=f"aceite:pedido:{COMMAND_ID}:producao",
+        ))
+        record = db.query(ScheduledOrder).filter(ScheduledOrder.restaurante_id == TENANT_ID).one()
+        record.scheduled_for = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1)
+        db.flush()
+        assert release_due_scheduled_orders_in_session(db, restaurante_id=TENANT_ID) == 1
+        db.commit()
+        assert db.query(PrintJob).filter(PrintJob.restaurante_id == TENANT_ID).count() == 1

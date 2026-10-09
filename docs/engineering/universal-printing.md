@@ -12,7 +12,9 @@ snapshot, documento, destino e `PrintJob` pertencem ao Core de Impressão.
    "o pedido inteiro pode desaparecer".
 3. Consumo local pode continuar silencioso quando todos os itens são `NENHUM`.
 4. Retirada/delivery sempre produzem ao menos uma via operacional quando o pedido
-   entra em produção, inclusive pedidos somente de bebidas.
+   entra em produção, inclusive pedidos somente de bebidas. Agendados imprimem
+   na chegada, com data e horário locais destacados em cada via; o aceite posterior
+   reutiliza a mesma chave de impressão para evitar uma segunda via automática.
 5. Reimpressão usa o mesmo modelo lógico da primeira via e acrescenta apenas
    metadado explícito de reimpressão.
 6. Alteração/adição de item usa uma via delta: somente o item afetado é renderizado,

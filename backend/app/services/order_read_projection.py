@@ -45,6 +45,16 @@ def project_check_details(
 ) -> list[ComandaDetail]:
     details = [ComandaDetail.model_validate(check) for check in checks]
     _attach_item_modifiers(db, details, restaurante_id)
+    from ..scheduled_models import ScheduledOrder
+    schedules = {
+        row.comanda_id: row.scheduled_for
+        for row in db.query(ScheduledOrder).filter(
+            ScheduledOrder.restaurante_id == restaurante_id,
+            ScheduledOrder.comanda_id.in_([check.id for check in checks]),
+        ).all()
+    } if checks else {}
+    for detail in details:
+        detail.scheduled_for = schedules.get(detail.id)
 
     launch_ids = {
         launch.id for detail in details for launch in detail.lancamentos
