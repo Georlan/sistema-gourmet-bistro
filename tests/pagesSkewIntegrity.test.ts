@@ -29,10 +29,11 @@ test('build metadata is uncached and emitted by Vite', () => {
   assert.match(viteConfig, /VITE_BUILD_TIME/);
 });
 
-test('Vite chunk preload recovery prevents throw only when a reload is actually scheduled', () => {
+test('Vite chunk preload recovery preserves the rejected lazy import during reload', () => {
   const main = source('../src/main.tsx');
   assert.match(main, /window\.addEventListener\(["']vite:preloadError["']/);
-  assert.match(main, /event\.preventDefault\(\)/);
+  const handler = main.slice(main.indexOf('window.addEventListener("vite:preloadError"'), main.indexOf('// O service worker'));
+  assert.doesNotMatch(handler, /event\.preventDefault\(\)/);
   assert.match(main, /now - lastAttempt > 15000/);
   assert.match(main, /__koma_refresh/);
   assert.match(main, /__KOMA_BUILD__/);

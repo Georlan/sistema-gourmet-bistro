@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
+import { summarizeHttp } from './http-observability.mjs';
 
 const PROJECT = '19ab597e-8aad-458f-bea2-57f793e0a53f';
 const ENVIRONMENT = '3399896f-98b3-47c8-aec4-bfa0f3afa755';
@@ -76,7 +77,7 @@ async function main() {
       const metrics = railway(['metrics', '--project', PROJECT, '--environment', ENVIRONMENT, '--service', SERVICE, '--since', '1h', '--json']);
       if (metrics.status === 0) {
         const data = JSON.parse(metrics.stdout);
-        console.log(`Railway 1h: CPU ${data.cpu?.current ?? '?'} vCPU; RAM ${data.memory?.current_mb ?? '?'} MB; HTTP ${data.http?.total ?? '?'} requests; 5xx ${data.http?.['5xx'] ?? '?'}; p95 ${data.http?.p95_ms ?? '?'} ms`);
+        console.log(`Railway 1h: CPU ${data.cpu?.current ?? '?'} vCPU; RAM ${data.memory?.current_mb ?? '?'} MB; HTTP ${data.http?.total ?? '?'} requests; 5xx ${data.http?.['5xx'] ?? '?'}`);
       } else console.log('Railway métricas: indisponível');
       const http = railway(['logs', '--project', PROJECT, '--environment', ENVIRONMENT, '--service', SERVICE, '--since', '1h', '--lines', '1000', '--json']);
       if (http.status === 0) {
@@ -87,8 +88,8 @@ async function main() {
           } catch { return []; }
         }).filter(item => item.event === 'http_request');
         const errors = entries.filter(item => item.status_code >= 500);
-        const times = entries.map(item => item.duration_ms).filter(Number.isFinite).sort((a, b) => a - b);
-        console.log(`HTTP 1h: ${entries.length} requests; ${errors.length} 5xx; p95 ${times.length ? times[Math.min(times.length - 1, Math.ceil(times.length * .95) - 1)] : 'indisponível'} ms`);
+        console.log(`HTTP amostrado na última hora: ${entries.length} requests; ${errors.length} 5xx`);
+        console.log(`HTTP por operação (latência somente de HTTP bem-sucedido): ${JSON.stringify(summarizeHttp(entries))}`);
         console.log(`5xx por rota/instância: ${JSON.stringify(errors.reduce((acc, item) => { const key = `${item.path} @${item.instance}`; acc[key] = (acc[key] || 0) + 1; return acc; }, {}))}`);
       } else console.log('HTTP logs: indisponível');
     }
