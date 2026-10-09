@@ -1,3 +1,4 @@
+import { formatBackendDateTime } from "../../../utils/dateTime";
 import { OrderItemComposition } from '../../shared/OrderItemComposition';
 import { itemCompositionSignature, type CompositionSource } from '../../../domain/orderItemComposition';
 import React from 'react';
@@ -410,6 +411,11 @@ export function CaixaOrdersWorkspace({
                         {order.numeroPedido && <span className={"text-[8px] text-gray-600 font-mono block"}>#{order.numeroPedido}</span>}
                       </div>
                     </div>
+                    {order.scheduledFor && (
+                      <p className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                        Agendado para {formatBackendDateTime(order.scheduledFor)}
+                      </p>
+                    )}
                     {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, `pending-${order.id}`, true, toggleCardExpansion)}
                     {order.endereco && (
                       <span className={"text-[10px] text-koma-subtle flex items-start gap-1"}>
@@ -718,6 +724,11 @@ export function CaixaOrdersWorkspace({
                           </div>
                         </div>
                       </div>
+                      {order.scheduledFor && (
+                        <p className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                          Agendado para {formatBackendDateTime(order.scheduledFor)}
+                        </p>
+                      )}
                       {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
                       {isDeliveryOrder && order.endereco && (
                         <span className={"font-normal text-xs text-koma-subtle flex items-center gap-1 truncate"}>
@@ -980,6 +991,11 @@ export function CaixaOrdersWorkspace({
                           </div>
                         </div>
                       </div>
+                      {order.scheduledFor && (
+                        <p className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                          Agendado para {formatBackendDateTime(order.scheduledFor)}
+                        </p>
+                      )}
                       {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
                       {isDeliveryOrder && order.endereco && (
                         <span className={"font-normal text-xs text-koma-subtle flex items-center gap-1 truncate"}>

@@ -20,6 +20,7 @@ export interface DeliveryOrderView {
   endereco?: string;
   paymentMethod?: string | null;
   onlinePaymentStatus?: string | null;
+  scheduledFor?: string | null;
   changeFor?: number | null;
   motoboyId?: number | null;
   criadoEm: string;

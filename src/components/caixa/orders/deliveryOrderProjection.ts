@@ -121,6 +121,7 @@ export function projectApiComandaToDeliveryView(c: any): DeliveryOrderView | nul
     endereco: modalidade === 'delivery' ? rawAddress : '',
     paymentMethod: c?.delivery_forma_pagamento || null,
     onlinePaymentStatus: c?.online_payment_status || null,
+    scheduledFor: c?.scheduled_for || null,
     changeFor: c?.delivery_troco_para == null ? null : Number(c.delivery_troco_para),
     motoboyId: c?.motoboy_id ?? null,
     criadoEm: parsedTime === '—' ? '12:00' : parsedTime,
