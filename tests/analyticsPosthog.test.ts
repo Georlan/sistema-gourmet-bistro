@@ -14,6 +14,19 @@ import {
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
+test('analytics removes nested secrets and URL query/hash before recording', () => {
+  const target: any = globalThis;
+  target.__KOMA_ANALYTICS_EVENTS__ = [];
+  trackAnalyticsEvent('public_menu_viewed', {
+    restaurant_id: 6,
+    nested: { token: 'secret', useful: 1, items: [{ email: 'private@example.test', code: 'ok' }] },
+    url: 'https://app.example.test/cardapio?token=secret#private',
+  } as any);
+  const properties = target.__KOMA_ANALYTICS_EVENTS__.at(-1).properties;
+  assert.deepEqual(properties.nested, { useful: 1, items: [{ code: 'ok' }] });
+  assert.equal(properties.url, 'https://app.example.test/cardapio');
+});
+
 test('analytics abstraction initializes safely as no-op when VITE_POSTHOG_PROJECT_TOKEN is absent', async () => {
   const active = await initAnalytics();
   assert.equal(active, false);
