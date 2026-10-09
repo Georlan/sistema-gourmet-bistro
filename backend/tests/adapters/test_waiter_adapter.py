@@ -315,3 +315,79 @@ class TestWaiterAdapter:
         finally:
             db.close()
 
+
+
+def test_waiter_launch_serializes_without_post_commit_database_reads(char_client, char_setup):
+    """The committed response and notification must use the materialized snapshot."""
+    from sqlalchemy import event
+    from sqlalchemy.orm import Session
+    from app.database import engine
+    headers = char_setup["headers"]
+    created = char_client.post(
+        "/comandas/venda-direta", headers=headers,
+        json={"tipo": "balcao", "itens": [{"produto_id": "prod-char-refri"}]},
+    )
+    assert created.status_code == 201
+    committed = False
+    reads = []
+
+    def after_commit(session):
+        nonlocal committed
+        committed = True
+
+    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        if committed and statement.lstrip().upper().startswith("SELECT"):
+            reads.append(statement)
+
+    event.listen(Session, "after_commit", after_commit)
+    event.listen(engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        response = char_client.post(
+            f"/cardapio/modificadores/lancamentos/{created.json()['id']}",
+            headers=headers,
+            json={"garcom_id": "usr-char-garcom", "itens": [
+                {"produto_id": "prod-char-simples", "modificador_ids": [], "observacao": "snapshot"},
+            ]},
+        )
+    finally:
+        event.remove(Session, "after_commit", after_commit)
+        event.remove(engine, "before_cursor_execute", before_cursor_execute)
+    assert response.status_code == 200, response.text
+    assert committed
+    assert response.json()["itens"][0]["produto"]["nome"]
+    assert reads == [], reads
+
+
+@pytest.mark.parametrize("item_count", [1, 12])
+def test_waiter_replay_batches_modifier_lookup(char_client, char_setup, item_count):
+    from sqlalchemy import event
+    from app.database import engine
+    headers = char_setup["headers"]
+    created = char_client.post(
+        "/comandas/venda-direta", headers=headers,
+        json={"tipo": "balcao", "itens": [{"produto_id": "prod-char-refri"}]},
+    )
+    assert created.status_code == 201
+    payload = {"garcom_id": "usr-char-garcom", "idempotency_key": f"waiter-query-budget-{item_count}",
+               "itens": [{"produto_id": "prod-char-simples", "modificador_ids": [],
+                          "observacao": f"item {index}"} for index in range(item_count)]}
+    url = f"/cardapio/modificadores/lancamentos/{created.json()['id']}"
+    first = char_client.post(url, headers=headers, json=payload)
+    assert first.status_code == 200, first.text
+    reads = []
+
+    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("SELECT") and "item_modificadores" in statement:
+            reads.append(statement)
+
+    event.listen(engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        replay = char_client.post(url, headers=headers, json=payload)
+    finally:
+        event.remove(engine, "before_cursor_execute", before_cursor_execute)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["id"] == first.json()["id"]
+    assert len(replay.json()["itens"]) == item_count
+    assert len(reads) == 1, reads
+    payload["itens"][0]["observacao"] = "different request"
+    assert char_client.post(url, headers=headers, json=payload).status_code == 409
