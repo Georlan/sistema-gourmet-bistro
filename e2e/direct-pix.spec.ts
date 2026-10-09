@@ -287,7 +287,7 @@ test('muitas pendências rolam dentro da lateral e não deslocam a página',asyn
   const trigger=page.getByRole('button',{name:/Conferir Pix/});
   await expect(trigger).toContainText('40');
   if(test.info().project.name==='mobile-390' || test.info().project.name==='desktop-1366')
-    await page.screenshot({path:`/home/testuser/Documents/Codex/2026-10-09/es/outputs/pix-botao-${test.info().project.name}.png`});
+    await page.screenshot({path:test.info().outputPath('pix-botao.png')});
   const pageY=await page.evaluate(()=>window.scrollY);
   await trigger.click();
   const dialog=page.getByRole('dialog',{name:/Pix aguardando conferência/});
@@ -298,5 +298,5 @@ test('muitas pendências rolam dentro da lateral e não deslocam a página',asyn
   expect(await page.evaluate(()=>window.scrollY)).toBe(pageY);
   expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
   if(test.info().project.name==='mobile-390' || test.info().project.name==='desktop-1366')
-    await page.screenshot({path:`/home/testuser/Documents/Codex/2026-10-09/es/outputs/pix-lateral-${test.info().project.name}.png`});
+    await page.screenshot({path:test.info().outputPath('pix-lateral.png')});
 });
