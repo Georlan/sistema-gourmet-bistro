@@ -321,10 +321,15 @@ class OnlinePaymentService:
         normalized_amount = _money(amount)
         settlement = "invoiced" if provider == "direct_pix" else "split"
         if provider == "direct_pix":
-            from ..direct_pix_test_release import TEST_TERMS_VERSION
+            from ..direct_pix_test_release import TEST_TERMS_VERSION, test_registration_allowed
             direct_config = db.query(RestaurantDirectPixConfig).filter(
                 RestaurantDirectPixConfig.restaurante_id == comanda.restaurante_id).one_or_none()
             if direct_config and direct_config.terms_version == TEST_TERMS_VERSION:
+                if not direct_config.enabled or not test_registration_allowed(db, int(restaurant.id)):
+                    raise OnlinePaymentConfigurationError("O teste do Pix Direto não está autorizado para este restaurante.")
+                from ..billing_service import tenant_commercial_terms
+                if tenant_commercial_terms(db, int(restaurant.id)) is not None:
+                    raise OnlinePaymentConfigurationError("Restaurante contratado precisa reconfigurar o Pix Direto comercial.")
                 settlement = "test"
         intent = OnlinePaymentIntent(
             restaurante_id=comanda.restaurante_id,
@@ -334,7 +339,9 @@ class OnlinePaymentService:
             method="pix",
             status="created",
             amount=float(normalized_amount),
-            marketplace_fee=float(cls.marketplace_fee_for_tenant(db, normalized_amount, restaurant)),
+            marketplace_fee=0.0 if settlement == "test" else float(
+                cls.marketplace_fee_for_tenant(db, normalized_amount, restaurant)
+            ),
             fee_settlement=settlement,
             idempotency_key=idempotency_key,
         )

@@ -33,9 +33,9 @@ def db():
     disposable.dispose()
 
 
-def order(db, monkeypatch, *, test_mode=False):
+def order(db, monkeypatch, *, test_mode=False, plan_fees_enabled=False):
     monkeypatch.setattr(settings,'DIRECT_PIX_ENABLED',True)
-    monkeypatch.setattr(settings,'ONLINE_PAYMENT_PLAN_FEES_ENABLED',False)
+    monkeypatch.setattr(settings,'ONLINE_PAYMENT_PLAN_FEES_ENABLED',plan_fees_enabled)
     db.add(Categoria(id='direct-category',restaurante_id=99420,nome='Teste'))
     db.flush()
     db.add(Produto(id='direct-product',restaurante_id=99420,categoria_id='direct-category',nome='Produto',preco=100,ativo=True))
@@ -48,7 +48,8 @@ def order(db, monkeypatch, *, test_mode=False):
     dto=OrderApplicationService.create_order(db,command,commit=False)
     comanda=db.query(Comanda).filter(Comanda.id==dto.comanda_id).one()
     intent=OnlinePaymentService.create_intent_in_session(db,comanda=comanda,turno=shift,amount=Decimal('100'),idempotency_key='direct-test',provider='direct_pix')
-    intent.marketplace_fee=1.79
+    if not test_mode:
+        intent.marketplace_fee=1.79
     db.commit()
     return OnlinePaymentService.ensure_pix_created(db,intent=intent,payer_email=''),shift
 
@@ -551,3 +552,22 @@ def test_test_payment_fees_are_never_invoiced_after_later_subscription(db, monke
     invoice = close_month(db, restaurant_id=99420, period='2025-01')
     assert invoice.fees == 0 and invoice.subscription_amount == 0
     assert receipt.invoice_id is None
+
+
+def test_test_pix_generates_qr_with_plan_fees_enabled_without_contract(db, monkeypatch):
+    monkeypatch.setenv('DIRECT_PIX_TEST_TENANT_IDS', '99420')
+    intent, _ = order(db, monkeypatch, test_mode=True, plan_fees_enabled=True)
+    assert intent.fee_settlement == 'test'
+    assert intent.marketplace_fee == 0
+    assert intent.qr_code
+    assert db.query(SaaSSubscription).count() == 0
+
+
+@pytest.mark.parametrize('allowlisted,subscribed', [(False, False), (True, True)])
+def test_test_pix_intent_requires_current_authorization(db, monkeypatch, allowlisted, subscribed):
+    monkeypatch.setenv('DIRECT_PIX_TEST_TENANT_IDS', '99420' if allowlisted else '8')
+    if subscribed:
+        db.add(SaaSSubscription(restaurante_id=99420, status='onboarding', payment_method_type='pix'))
+        db.commit()
+    with pytest.raises(OnlinePaymentConfigurationError, match='não está autorizado'):
+        order(db, monkeypatch, test_mode=True, plan_fees_enabled=True)
