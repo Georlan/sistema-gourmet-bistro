@@ -53,4 +53,6 @@ if (entries.some(entry => entry.timestamp > completed.timestamp && /\b(error|fai
   fail('falha posterior ao último backup concluído');
 }
 
-console.log(`✓ Backup válido e enviado ao S3 em ${new Date(completed.timestamp).toISOString()}; ${sizeEntry.message}; idade ${ageHours.toFixed(1)}h`);
+console.log(`✓ Backup do banco KÔMA (Supabase) válido e enviado ao S3 em ${new Date(completed.timestamp).toISOString()}; ${sizeEntry.message}; idade ${ageHours.toFixed(1)}h`);
+console.log('Escopo: este serviço não comprova backup do Postgres Railway/Evolution, Redis, arquivos Storage ou configuração do agente.');
+console.log('Integridade do arquivo e upload não comprovam restauração; conferir o registro do último ensaio isolado.');
