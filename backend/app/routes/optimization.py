@@ -241,6 +241,7 @@ def get_loyalty_clients(
         db,
         restaurante_id=restaurante_id,
         cliente_ids=[c.id for c in clientes],
+        include_products=True,
     )
     payloads = build_customer_relationship_payloads(clientes, metrics)
     if not has_plan_entitlement(db, restaurante_id, ENTITLEMENT_LOYALTY):
