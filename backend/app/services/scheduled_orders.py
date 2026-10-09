@@ -92,6 +92,11 @@ def schedule_order_in_session(
     db.flush()
     _publish_created_event(db, comanda)
     print_scheduled_order_in_session(db, comanda)
+    from .online_order_control import auto_accept_online_order_if_enabled
+    auto_accept_online_order_if_enabled(
+        db, restaurante_id=restaurante_id, comanda=comanda,
+        operator_user_id=getattr(comanda, "garcom_id", None),
+    )
     return record
 
 

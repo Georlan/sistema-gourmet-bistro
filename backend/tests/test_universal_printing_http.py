@@ -36,6 +36,11 @@ def setup_universal_printing_http():
     db = SessionLocal(restaurante_id=None)
     try:
         from app.scheduled_models import ScheduledOrder
+        from app.online_order_control_models import OnlineOrderControl, OnlineOrderOperationalAudit
+        from app.models import CaixaTurno
+        db.query(OnlineOrderOperationalAudit).filter(OnlineOrderOperationalAudit.restaurante_id == TENANT_ID).delete(synchronize_session=False)
+        db.query(OnlineOrderControl).filter(OnlineOrderControl.restaurante_id == TENANT_ID).delete(synchronize_session=False)
+        db.query(CaixaTurno).filter(CaixaTurno.restaurante_id == TENANT_ID).delete(synchronize_session=False)
         db.query(ScheduledOrder).filter(ScheduledOrder.restaurante_id == TENANT_ID).delete(synchronize_session=False)
         db.query(PrintJob).filter(PrintJob.restaurante_id == TENANT_ID).delete(
             synchronize_session=False
@@ -264,7 +269,8 @@ def test_pocket_admin_grant_printing_through_audit_then_print_and_revoke():
         db.close()
 
 
-def test_scheduled_order_prints_on_arrival_with_local_time_and_no_duplicate_at_acceptance(monkeypatch):
+@pytest.mark.parametrize("automatic", [False, True])
+def test_scheduled_order_prints_on_arrival_with_local_time_and_no_duplicate_at_acceptance(monkeypatch, automatic):
     import datetime
     from app.scheduled_models import ScheduledOrder
     from app.services.scheduled_orders import schedule_order_in_session, release_due_scheduled_orders_in_session
@@ -277,10 +283,18 @@ def test_scheduled_order_prints_on_arrival_with_local_time_and_no_duplicate_at_a
     monkeypatch.setattr("app.services.scheduled_orders.validate_schedule_request", lambda *a, **kw: target)
     with SessionLocal(restaurante_id=TENANT_ID) as db:
         check = db.query(Comanda).filter(Comanda.restaurante_id == TENANT_ID, Comanda.id == COMMAND_ID).one()
+        from app.online_order_control_models import OnlineOrderControl
+        from app.models import CaixaTurno
+        db.add(OnlineOrderControl(restaurante_id=TENANT_ID, auto_accept=automatic))
+        db.add(CaixaTurno(restaurante_id=TENANT_ID, aberto_por_id=USER_ID, saldo_inicial=0, status="aberto"))
         check.online_payment_status = "pending"
+        check.delivery_status = "pendente"
+        check.lancamentos[0].status = "pendente"
+        db.flush()
         schedule_order_in_session(db, restaurante_id=TENANT_ID, comanda_id=check.id, scheduled_for=target)
         db.commit()
         assert check.online_payment_status is None
+        assert check.delivery_status == ("producao" if automatic else "pendente")
         assert db.query(Comanda).filter(Comanda.id == COMMAND_ID, _operational_online_payment_filter()).count() == 1
         dto = project_check_details(db, [check], TENANT_ID)[0]
         assert dto.scheduled_for is not None
