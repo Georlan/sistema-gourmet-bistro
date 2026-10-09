@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional, Sequence
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from ..models import Cliente, Comanda
+from ..models import Cliente, Comanda, Item, Produto, Lancamento
 from ..timezone_utils import get_utc_now, to_utc
 from .clientes import cliente_payload
 
@@ -26,9 +26,11 @@ class CustomerRelationshipMetrics:
     ultima_compra_em: Optional[str]
     dias_sem_comprar: Optional[int]
     segmento_relacionamento: str
+    produtos_favoritos: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "produtos_favoritos": self.produtos_favoritos,
             "pedidos_concluidos": self.pedidos_concluidos,
             "valor_pago_total": self.valor_pago_total,
             "ticket_medio_pago": self.ticket_medio_pago,
@@ -69,7 +71,7 @@ def load_customer_relationship_metrics(
     - Exclusivamente por Comanda.cliente_id (nunca por telefone, nome ou CPF)
     - Apenas compras fechadas válidas; recusadas/canceladas não contam
     - Pedidos com barreira financeira online só contam quando aprovados
-    - Consulta agregada única (sem N+1)
+    - Duas consultas agregadas (sem N+1); favoritos por unidades consumidas
     - Tratamento de timestamp SQLite/Postgres naive como UTC
     """
     normalized_ids = [str(cid) for cid in cliente_ids if cid]
@@ -81,6 +83,20 @@ def load_customer_relationship_metrics(
     # Data efetiva da compra: prefere fechado_em; aceita criado_em como fallback legado
     data_efetiva = func.coalesce(Comanda.fechado_em, Comanda.criado_em)
 
+    purchase_filters = (
+        Comanda.restaurante_id == restaurante_id,
+        Comanda.fechada == True,
+        Comanda.cliente_id.in_(normalized_ids),
+        or_(
+            Comanda.delivery_status.is_(None),
+            Comanda.delivery_status != "recusado",
+        ),
+        or_(
+            Comanda.online_payment_status.is_(None),
+            Comanda.online_payment_status == "approved",
+        ),
+    )
+
     rows = (
         db.query(
             Comanda.cliente_id,
@@ -88,22 +104,30 @@ def load_customer_relationship_metrics(
             func.sum(Comanda.valor_pago).label("valor_pago_total"),
             func.max(data_efetiva).label("ultima_compra_em"),
         )
-        .filter(
-            Comanda.restaurante_id == restaurante_id,
-            Comanda.fechada == True,
-            Comanda.cliente_id.in_(normalized_ids),
-            or_(
-                Comanda.delivery_status.is_(None),
-                Comanda.delivery_status != "recusado",
-            ),
-            or_(
-                Comanda.online_payment_status.is_(None),
-                Comanda.online_payment_status == "approved",
-            ),
-        )
+        .filter(*purchase_filters)
         .group_by(Comanda.cliente_id)
         .all()
     )
+
+    # Um Item representa uma unidade. Evitar N+1 e excluir cancelamentos.
+    favorite_rows = (
+        db.query(Comanda.cliente_id, Produto.id, Produto.nome, func.count(Item.id))
+        .join(Item, Item.comanda_id == Comanda.id)
+        .join(Produto, (Produto.id == Item.produto_id) & (Produto.restaurante_id == Item.restaurante_id))
+        .join(Lancamento, (Lancamento.id == Item.lancamento_id) & (Lancamento.comanda_id == Comanda.id))
+        .filter(*purchase_filters, Item.restaurante_id == restaurante_id,
+                Lancamento.restaurante_id == restaurante_id,
+                or_(Item.status.is_(None), Item.status != "cancelado"),
+                Lancamento.status.notin_(["cancelado", "recusado"]))
+        .group_by(Comanda.cliente_id, Produto.id, Produto.nome)
+        .order_by(func.count(Item.id).desc(), Produto.nome.asc(), Produto.id.asc())
+        .all()
+    )
+    favorites: dict[str, list[dict[str, Any]]] = {}
+    for client_id, product_id, name, units in favorite_rows:
+        entries = favorites.setdefault(str(client_id), [])
+        if len(entries) < 3:
+            entries.append({"produto_id": product_id, "nome": name, "unidades": int(units)})
 
     agg_map: dict[str, tuple[int, Decimal, Optional[datetime.datetime]]] = {}
     for r_cid, r_count, r_sum, r_max_dt in rows:
@@ -129,6 +153,7 @@ def load_customer_relationship_metrics(
 
             segmento = classify_customer_relationship(dias)
             metrics_map[cid] = CustomerRelationshipMetrics(
+                produtos_favoritos=favorites.get(cid, []),
                 pedidos_concluidos=count,
                 valor_pago_total=total_float,
                 ticket_medio_pago=ticket_medio,

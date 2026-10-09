@@ -41,6 +41,7 @@ export interface LoyaltyCustomer {
   saldo_pontos?: number;
   saldo_cashback?: number;
   historico?: any[];
+  produtos_favoritos?: { produto_id: string; nome: string; unidades: number }[];
   pedidos_concluidos?: number;
   valor_pago_total?: number;
   ticket_medio_pago?: number;

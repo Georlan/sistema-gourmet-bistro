@@ -63,6 +63,7 @@ export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
             saldoCashback: Number(c.saldo_cashback || 0),
             saldo_cashback: Number(c.saldo_cashback || 0),
             historico: c.historico || [],
+            produtos_favoritos: Array.isArray(c.produtos_favoritos) ? c.produtos_favoritos : [],
             pedidos_concluidos: typeof c.pedidos_concluidos === 'number' ? c.pedidos_concluidos : 0,
             valor_pago_total: typeof c.valor_pago_total === 'number' ? c.valor_pago_total : 0,
             ticket_medio_pago: typeof c.ticket_medio_pago === 'number' ? c.ticket_medio_pago : 0,

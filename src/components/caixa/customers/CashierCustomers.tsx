@@ -3,6 +3,7 @@ import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { Plus, Search, Users, X } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
+import { customerSegmentLabel, selectCrmCustomers, type CustomerSort, type CustomerSegment } from '../../../domain/customerCrm';
 import CuponsTab from '../../clientes/CuponsTab';
 import GrowthEconomicsCalculator, { type GrowthEconomicsOption } from '../../clientes/GrowthEconomicsCalculator';
 import MoneyInput from '../../MoneyInput';
@@ -25,7 +26,7 @@ const formatarTelefoneTabela = (tel?: string) => {
 };
 
 const ultimaCompraLabel = (dias?: number | null) => {
-  if (dias === null || dias === undefined) return 'Nunca';
+  if (dias === null || dias === undefined) return 'Sem compra identificada';
   if (dias === 0) return 'Hoje';
   if (dias === 1) return 'Ontem';
   return `há ${dias} dias`;
@@ -62,11 +63,11 @@ export default function CashierCustomers({
 }: Props) {
   const [clientesSearch, setClientesSearch] = useState('');
 
-  const filteredLoyaltyUsers = useMemo(() => {
-    const term = clientesSearch.trim().toLocaleLowerCase('pt-BR');
-    if (!term) return loyaltyUsers;
-    return loyaltyUsers.filter((user) => `${user.cliente} ${user.telefone}`.toLocaleLowerCase('pt-BR').includes(term));
-  }, [clientesSearch, loyaltyUsers]);
+  const [customerSort, setCustomerSort] = useState<CustomerSort>('orders');
+  const [customerSegment, setCustomerSegment] = useState<CustomerSegment>('ALL');
+  const filteredLoyaltyUsers = useMemo(() => selectCrmCustomers(loyaltyUsers, clientesSearch, customerSegment, customerSort),
+    [clientesSearch, loyaltyUsers, customerSegment, customerSort]);
+  const money = (value?: number) => (value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const relationshipSummary = useMemo(() => {
     let ativos = 0;
@@ -474,8 +475,8 @@ export default function CashierCustomers({
             id="customers-heading"
             eyebrow="RELACIONAMENTO"
             title="Clientes"
-            accent="em uma única lista"
-            description={hasLoyalty ? 'Encontre contatos rapidamente e acompanhe os benefícios sem repetir cadastros.' : 'Encontre contatos rapidamente e acompanhe o histórico sem repetir cadastros.'}
+            accent="e hábitos de compra"
+            description="Veja quem mais compra, o que prefere e há quanto tempo não volta. Compras identificadas em todo o histórico; cada compra concluída conta uma vez."
             metrics={[
               { label: loyaltyUsers.length === 1 ? 'total' : 'totais', value: loyaltyUsers.length },
               {
@@ -494,15 +495,6 @@ export default function CashierCustomers({
                 valueClassName: 'text-rose-600 dark:text-rose-400',
               },
             ]}
-          />
-
-          <CustomerRelationshipPanel customers={loyaltyUsers} />
-
-          <CustomerSatisfactionPanel
-            resumo={satisfactionData.resumo}
-            recentes={satisfactionData.recentes}
-            isLoading={isSatisfactionLoading}
-            onOpenRegisterModal={handleOpenSatisfactionModal}
           />
 
           <section className="koma-toolbar">
@@ -526,6 +518,13 @@ export default function CashierCustomers({
                 {loyaltyUsers.length} {loyaltyUsers.length === 1 ? 'cliente' : 'clientes'}
               </p>
             )}
+            <label className="flex flex-col gap-1 text-xs text-koma-muted">
+              Ordenar clientes
+              <select aria-label="Ordenar clientes" value={customerSort} onChange={event => setCustomerSort(event.target.value as CustomerSort)} className="min-h-11 rounded-lg border border-koma-border bg-koma-panel px-3 text-koma-foreground">
+                <option value="orders">Quem mais pede</option><option value="spent">Maior total pago</option>
+                <option value="recent">Compra mais recente</option><option value="absent">Mais tempo sem comprar</option><option value="name">Nome A–Z</option>
+              </select>
+            </label>
             <div className="koma-toolbar__actions">
               <button
                 type="button"
@@ -542,6 +541,12 @@ export default function CashierCustomers({
             </div>
           </section>
 
+          <div className="flex flex-wrap gap-2" aria-label="Filtrar clientes">
+            {([['ALL', 'Todos'], ['REPEAT', 'Recorrentes (2+ compras)'], ['ATENCAO', 'Atenção (31–60 dias)'], ['REATIVAR', 'Reativar (+60 dias)'], ['SEM_COMPRA', 'Sem compra']] as const).map(([value, label]) => (
+              <button key={value} type="button" aria-pressed={customerSegment === value} onClick={() => setCustomerSegment(value)} className={`min-h-11 rounded-lg border px-3 text-xs ${customerSegment === value ? 'border-emerald-600 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-koma-border text-koma-muted'}`}>{label}</button>
+            ))}
+          </div>
+          <p className="text-xs text-koma-muted">{filteredLoyaltyUsers.length} de {loyaltyUsers.length} clientes · Todo o histórico · Pedidos concluídos e valores pagos · Preferências sem itens cancelados.</p>
           <div
             className={"bg-koma-panel border border-koma-border rounded-2xl p-3 space-y-4 shadow-xs"}
           >
@@ -555,7 +560,7 @@ export default function CashierCustomers({
                         <strong className="block break-words text-sm text-koma-foreground">{user.cliente}</strong>
                         <span className="block font-mono text-xs text-koma-muted">{formatarTelefoneTabela(user.telefone)}</span>
                       </div>
-                      <button type="button" onClick={() => startEditingCustomer(user)} className="koma-btn-secondary shrink-0 rounded-lg px-3 py-2 text-xs font-bold">
+                      <button type="button" onClick={() => startEditingCustomer(user)} className="koma-btn-secondary min-h-11 shrink-0 rounded-lg px-3 py-2 text-xs font-bold">
                         Editar
                       </button>
                     </div>
@@ -563,11 +568,15 @@ export default function CashierCustomers({
                       <div className="min-w-0">
                         <dt className="text-[10px] text-koma-muted">Última compra</dt>
                         <dd className="mt-1 font-mono text-koma-foreground">{ultimaCompraLabel(user.dias_sem_comprar)}</dd>
+                        <dd className="mt-1 text-koma-muted">{customerSegmentLabel(user)}</dd>
                       </div>
                       <div className="min-w-0">
                         <dt className="text-[10px] text-koma-muted">Pedidos</dt>
                         <dd className="mt-1 font-mono text-koma-foreground">{user.pedidos_concluidos ?? 0}</dd>
                       </div>
+                      <div><dt className="text-[10px] text-koma-muted">Total pago</dt><dd className="mt-1 text-koma-foreground">{money(user.valor_pago_total)}</dd></div>
+                      <div><dt className="text-[10px] text-koma-muted">Ticket médio</dt><dd className="mt-1 text-koma-foreground">{money(user.ticket_medio_pago)}</dd></div>
+                      <div className="col-span-full"><dt className="text-[10px] text-koma-muted">Mais pede</dt><dd className="mt-1 break-words text-koma-foreground">{user.produtos_favoritos?.length ? user.produtos_favoritos.map(product => `${product.nome} (${product.unidades} un.)`).join(' · ') : 'Sem itens identificados'}</dd></div>
                       {hasLoyalty && (
                         <div className="min-w-0">
                           <dt className="text-[10px] text-koma-muted">Benefício</dt>
@@ -592,6 +601,8 @@ export default function CashierCustomers({
                       <th className="p-3.5">WhatsApp</th>
                       <th className="p-3.5">Última compra</th>
                       <th className="p-3.5">Pedidos</th>
+                      <th className="p-3.5">Total pago / ticket médio</th>
+                      <th className="p-3.5">Mais pede</th>
                       {hasLoyalty && <th className={"p-3.5 font-mono"}>Benefício atual</th>}
                       <th className={"p-3.5 text-right"}>Ações</th>
                     </tr>
@@ -605,10 +616,13 @@ export default function CashierCustomers({
                         </td>
                         <td className={"p-3.5 font-mono text-xs text-koma-muted"}>
                           {ultimaCompraLabel(user.dias_sem_comprar)}
+                          <span className="mt-1 block text-koma-muted">{customerSegmentLabel(user)}</span>
                         </td>
                         <td className={"p-3.5 font-mono text-xs text-koma-foreground"}>
                           {user.pedidos_concluidos ?? 0}
                         </td>
+                        <td className="p-3.5 text-koma-foreground">{money(user.valor_pago_total)}<span className="mt-1 block text-koma-muted">Média {money(user.ticket_medio_pago)}</span></td>
+                        <td className="max-w-56 p-3.5 text-koma-foreground">{user.produtos_favoritos?.length ? user.produtos_favoritos.map(product => <span className="block" key={product.produto_id}>{product.nome} <span className="text-koma-muted">{product.unidades} un.</span></span>) : <span className="text-koma-muted">Sem itens identificados</span>}</td>
                         {hasLoyalty && (
                           <td className={"p-3.5 font-mono text-emerald-700 dark:text-emerald-400 font-extrabold text-xs"}>
                             {fidelidadeConfig.tipo_recompensa === 'PONTOS'
@@ -650,12 +664,24 @@ export default function CashierCustomers({
                           setShowNewCrmModal(true);
                         },
                       }
-                    : { label: 'Limpar busca', onClick: () => setClientesSearch(''), variant: 'secondary' }
+                    : { label: 'Limpar filtros', onClick: () => { setClientesSearch(''); setCustomerSegment('ALL'); }, variant: 'secondary' }
                 }
                 variant="panel"
               />
             )}
           </div>
+          <details className="rounded-xl border border-koma-border p-3">
+            <summary className="min-h-11 cursor-pointer text-sm font-bold text-koma-foreground">Relacionamento e satisfação</summary>
+            <div className="mt-3 space-y-3">
+              <CustomerRelationshipPanel customers={loyaltyUsers} />
+              <CustomerSatisfactionPanel
+                resumo={satisfactionData.resumo}
+                recentes={satisfactionData.recentes}
+                isLoading={isSatisfactionLoading}
+                onOpenRegisterModal={handleOpenSatisfactionModal}
+              />
+            </div>
+          </details>
         </div>
       )}
       {editingCrmUser && (
