@@ -21,7 +21,7 @@ POSTGRES_URL = os.getenv("KOMA_CONCURRENCY_DATABASE_URL", "").strip()
 pytestmark = pytest.mark.skipif(not POSTGRES_URL, reason="Requires disposable local PostgreSQL")
 
 
-@pytest.mark.parametrize("scenario", ["same_destination", "duplicate", "reciprocal"])
+@pytest.mark.parametrize("scenario", ["same_destination", "duplicate", "reciprocal", "diverging_duplicate"])
 def test_simultaneous_transfers_preserve_accounts_and_audit(scenario, monkeypatch):
     assert make_url(POSTGRES_URL).host in {"localhost", "127.0.0.1"}, "Only disposable local PostgreSQL is allowed"
     engine = create_engine(POSTGRES_URL, pool_size=4, max_overflow=0)
@@ -82,6 +82,8 @@ def test_simultaneous_transfers_preserve_accounts_and_audit(scenario, monkeypatc
         pairs = [(command_ids[0], 3), (command_ids[0], 3)]
     elif scenario == "reciprocal":
         pairs = [(command_ids[0], 2), (command_ids[1], 1)]
+    elif scenario == "diverging_duplicate":
+        pairs = [(command_ids[0], 3), (command_ids[0], 2)]
     ready = threading.Barrier(2)
 
     def move(index):
@@ -103,7 +105,8 @@ def test_simultaneous_transfers_preserve_accounts_and_audit(scenario, monkeypatc
     try:
         with ThreadPoolExecutor(max_workers=2) as pool:
             outcomes = sorted(pool.map(move, (0, 1)))
-        expected = {"same_destination": [200, 409], "duplicate": [200, 200], "reciprocal": [409, 409]}
+        expected = {"same_destination": [200, 409], "duplicate": [200, 200],
+                    "reciprocal": [409, 409], "diverging_duplicate": [200, 409]}
         assert outcomes == expected[scenario]
         assert not database_conflicts, "Ordered locks must prevent, not merely translate, reciprocal deadlocks"
         with Session(restaurante_id=tenant) as db:
