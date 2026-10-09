@@ -40,7 +40,8 @@ test('chave própria exige aceite e preserva a conexão Mercado Pago',async({pag
 
 test('conferência mantém referência após falha e confirmação exige extrato',async({page})=>{
   await open(page,true);
-  const panel=page.getByRole('region',{name:'Pix aguardando conferência'});
+  await page.getByRole('button',{name:/Conferir Pix/}).click();
+  const panel=page.getByRole('dialog',{name:/Pix aguardando conferência/});
   await panel.getByRole('button',{name:/Pedido #47/}).click();
   const confirm=panel.getByRole('button',{name:'Confirmar Pagamento Pix'});
   await expect(confirm).toBeDisabled();
@@ -58,6 +59,8 @@ test('conferência mantém referência após falha e confirmação exige extrato
   await test.info().attach('direct-pix-manual-confirmation',{body:await page.screenshot({fullPage:true}),contentType:'image/png'});
   await page.route('**/payments/direct-pix/pending',route=>route.fulfill({json:[]}));
   await confirm.click();
+  await expect(panel).toContainText('Nenhum Pix aguardando conferência.');
+  await panel.getByRole('button',{name:'Fechar conferência Pix'}).click();
   await expect(panel).toBeHidden();
   expect(bodies).toHaveLength(2);
   expect(bodies[1]).toEqual(bodies[0]);
@@ -241,12 +244,15 @@ test('cadastro da chave chega ao checkout, QR reaberto e confirmação manual ú
   await test.info().attach('pix-reaberto-manual',{body:await consumer.screenshot(),contentType:'image/png'});
   await page.reload();
   await expect(page.locator('.orders-board')).toBeVisible();
-  const pending=page.getByRole('region',{name:'Pix aguardando conferência'});
+  await page.getByRole('button',{name:/Conferir Pix/}).click();
+  const pending=page.getByRole('dialog',{name:/Pix aguardando conferência/});
   await pending.getByRole('button',{name:/Pedido #47/}).click();
   await pending.getByRole('textbox').fill('E'+'8'.repeat(31));
   await pending.getByRole('checkbox',{name:'Conferi o valor integral recebido na conta correta.'}).check();
   await pending.getByRole('button',{name:'Confirmar Pagamento Pix'}).click();
-  await expect(pending).toHaveCount(0);
+  await expect(pending).toContainText('Nenhum Pix aguardando conferência.');
+  await pending.getByRole('button',{name:'Fechar conferência Pix'}).click();
+  await expect(pending).toBeHidden();
   await consumer.reload();
   const ordersButton=(consumer.viewportSize()?.width||0)<=640 ? '#mobile-nav-orders' : '#floating-order-chat-trigger';
   await consumer.locator(ordersButton).click();
@@ -255,4 +261,57 @@ test('cadastro da chave chega ao checkout, QR reaberto e confirmação manual ú
   expect(confirmations).toBe(1);
   expect(submitted).toHaveLength(1);
   expect(submitted[0]).toMatchObject({forma_pagamento:'online',forma_pagamento_detalhe:'pix',tipo_pedido:'delivery',taxa_entrega:6});
+});
+
+
+test('Pix usa botão compacto, lateral com rolagem própria e mantém rascunho ao reabrir',async({page})=>{
+  await open(page,true);
+  const trigger=page.getByRole('button',{name:/Conferir Pix/});
+  const dialog=page.getByRole('dialog',{name:/Pix aguardando conferência/});
+  await expect(trigger).toBeVisible();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('Confira o recebimento no extrato bancário.',{exact:false})).toBeHidden();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+  const before=await page.locator('.orders-board').boundingBox();
+  await trigger.click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'Fechar conferência Pix'})).toBeFocused();
+  await dialog.getByRole('button',{name:/Pedido #47/}).click();
+  const input=dialog.getByLabel('Identificador do Pix no extrato (EndToEndId)');
+  await input.fill('E'+'2'.repeat(31));
+  await input.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await expect(input).toHaveValue('E'+'2'.repeat(31));
+  await expect(dialog.getByRole('button',{name:'Confirmar Pagamento Pix'})).toBeDisabled();
+  const box=await dialog.boundingBox();
+  const viewport=page.viewportSize()!;
+  expect(box!.width).toBeLessThanOrEqual(viewport.width);
+  expect(box!.height).toBeLessThanOrEqual(viewport.height);
+  expect(await page.locator('.orders-board').boundingBox()).toEqual(before);
+  await test.info().attach('pix-conference-drawer',{body:await page.screenshot(),contentType:'image/png'});
+  await dialog.getByRole('button',{name:'Fechar conferência Pix'}).click();
+});
+
+
+test('muitas pendências rolam dentro da lateral e não deslocam a página',async({page})=>{
+  await open(page,true);
+  await page.route('**/payments/direct-pix/pending',route=>route.fulfill({json:Array.from({length:40},(_,index)=>({id:`pix-${index}`,order_number:String(100+index),customer:'Cliente teste',amount:'4.50'}))}));
+  await page.reload();
+  const trigger=page.getByRole('button',{name:/Conferir Pix/});
+  await expect(trigger).toContainText('40');
+  if(test.info().project.name==='mobile-390' || test.info().project.name==='desktop-1366')
+    await page.screenshot({path:test.info().outputPath('pix-botao.png')});
+  const pageY=await page.evaluate(()=>window.scrollY);
+  await trigger.click();
+  const dialog=page.getByRole('dialog',{name:/Pix aguardando conferência/});
+  await dialog.getByRole('button',{name:/Pedido #139/}).click();
+  await dialog.getByRole('button',{name:'Confirmar Pagamento Pix'}).scrollIntoViewIfNeeded();
+  await expect(dialog.getByRole('button',{name:'Fechar conferência Pix'})).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'Confirmar Pagamento Pix'})).toBeVisible();
+  expect(await page.evaluate(()=>window.scrollY)).toBe(pageY);
+  expect(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+  if(test.info().project.name==='mobile-390' || test.info().project.name==='desktop-1366')
+    await page.screenshot({path:test.info().outputPath('pix-lateral.png')});
 });

@@ -20,6 +20,7 @@ import { DigitalReceiptAction } from '../digital-receipt/DigitalReceiptAction';
 import { getDigitalOrderAssociation, getDigitalOrderCustomerLabel, getDigitalOrderFulfillmentLabel, getDigitalOrderSourceLabel, getDigitalOrderTableBlockLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
 
 export interface CaixaOrdersWorkspaceProps {
+  readonly pixConferenceTrigger?: React.ReactNode;
   readonly columns: {
     readonly tableProduction: readonly CashierTableCard[];
     readonly digitalProduction: readonly DeliveryOrderView[];
@@ -156,7 +157,7 @@ const renderCompactItemsList = (
 
 /** Controlled order workspace. Selection, effects and complete business actions stay in CaixaPanel. */
 export function CaixaOrdersWorkspace({
-  columns, pendingCashPayments: pagamentosPendentes, insights: operationalOrderInsights,
+  pixConferenceTrigger, columns, pendingCashPayments: pagamentosPendentes, insights: operationalOrderInsights,
   search, acceptance, navigation, couriers, actions, isLoading, now: nowTimestamp,
   hasPrinting = true, hasLocalServiceWork, restaurantConfig, onToast,
 }: CaixaOrdersWorkspaceProps) {
@@ -351,6 +352,7 @@ export function CaixaOrdersWorkspace({
             <span>Pedidos digitais</span>
             <strong>{formatCurrency(deliveryOrders.reduce((s, o) => s + o.total, 0))}</strong>
           </div>
+          {pixConferenceTrigger}
           {/* Bell button — opens floating drawer */}
           <button
             type="button"
