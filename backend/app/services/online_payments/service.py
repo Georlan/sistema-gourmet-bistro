@@ -22,8 +22,6 @@ from ...models import (
     RestaurantPaymentAccount,
     RestaurantDirectPixConfig,
 )
-from ...subscription import subscription_marketplace_rate
-from ..billing_service import tenant_marketplace_rate
 from ..outbox import enqueue_outbox_event_in_session
 from .base import ProviderPayment
 from .mercado_pago import MercadoPagoError, MercadoPagoProvider
@@ -307,30 +305,12 @@ class OnlinePaymentService:
 
     @staticmethod
     def marketplace_fee(amount: Decimal, stored_plan: str | None) -> Decimal:
-        if not settings.ONLINE_PAYMENT_PLAN_FEES_ENABLED:
-            return Decimal("0.00")
-        rate = subscription_marketplace_rate(stored_plan)
-        return (amount * rate).quantize(MONEY, rounding=ROUND_HALF_UP)
+        return Decimal("0.00")
 
     @classmethod
-    def marketplace_fee_for_tenant(
-        cls,
-        db: Session,
-        amount: Decimal,
-        restaurant: Restaurante,
-    ) -> Decimal:
-        if not settings.ONLINE_PAYMENT_PLAN_FEES_ENABLED:
-            return Decimal("0.00")
-        try:
-            rate = tenant_marketplace_rate(db, restaurant)
-        except RuntimeError as exc:
-            detail = str(exc)
-            if "sem aceite comercial" in detail:
-                raise OnlinePaymentConfigurationError(detail) from exc
-            raise OnlinePaymentConfigurationError(
-                "Termos comerciais indisponíveis para calcular a taxa do pagamento."
-            ) from exc
-        return (amount * rate).quantize(MONEY, rounding=ROUND_HALF_UP)
+    def marketplace_fee_for_tenant(cls, db: Session, amount: Decimal, restaurant: Restaurante) -> Decimal:
+        # No platform transaction fee on new payments; historical intents stay intact.
+        return Decimal("0.00")
 
     @classmethod
     def create_intent_in_session(
