@@ -21,6 +21,8 @@ def test_linux_installer_has_persistence_update_and_uninstall():
     assert "RestartPreventExitStatus=2" in installer
     assert "SuccessExitStatus=2" in installer
     assert "flock" in installer
+    assert "Pacote local do KOMA Print Agent" in installer
+    assert "github.com/Georlan/sistema-gourmet-bistro" not in installer
 
     # Silent background & non-interactive behavior
     assert "systemctl --user enable --now koma-print-agent.service" in installer
@@ -55,10 +57,11 @@ def test_windows_installer_has_persistence_update_and_uninstall():
     assert "[switch]$Update" in installer
     assert "[switch]$Uninstall" in installer
 
-    # Execução remota por comando único e silenciosa em background (sem janela)
+    # Instalacao por pacote distribuido, sem depender de checkout publico
     assert "$scriptPath = $MyInvocation.MyCommand.Path" in installer
     assert "$hasLocalSource = $scriptDir -and" in installer
-    assert "sistema-gourmet-bistro-main\\print-agent" in installer
+    assert "Pacote local do KOMA Print Agent" in installer
+    assert "github.com/Georlan/sistema-gourmet-bistro" not in installer
     assert "pythonw.exe" in installer
     assert 'Set shell = CreateObject("WScript.Shell")' in installer
 

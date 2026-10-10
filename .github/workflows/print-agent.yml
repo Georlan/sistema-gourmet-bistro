@@ -12,6 +12,8 @@ on:
       - 'DESINSTALAR-KOMA-WINDOWS.cmd'
       - 'VERIFICAR-KOMA-WINDOWS.cmd'
       - '.github/workflows/print-agent.yml'
+      - 'scripts/package_print_agent.py'
+      - 'scripts/tests/test_print_agent_distribution.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -66,3 +68,25 @@ jobs:
         env:
           PYTHONPATH: backend
           PRINT_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/koma_print_test
+
+  distribution-bundle:
+    name: Print distribution ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install "pytest>=8,<9"
+      - name: Verify distribution allowlist
+        run: python -m pytest scripts/tests/test_print_agent_distribution.py -q -ra
+      - name: Package offline agent without backend or credentials
+        run: python scripts/package_print_agent.py --output dist/KOMA-print-agent.zip
+      - name: Record SHA256 for support delivery
+        run: sha256sum dist/KOMA-print-agent.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KOMA-print-agent
+          path: dist/KOMA-print-agent.zip
+          if-no-files-found: error
+          retention-days: 30

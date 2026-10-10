@@ -3,43 +3,49 @@
 Serviço local que recebe da fila do Kôma e envia cupons ESC/POS para a
 impressora térmica. Ele funciona sem depender do navegador permanecer aberto.
 
+## Distribuição pelo suporte (repositório privado)
+
+O agente de impressão é distribuído como **pacote ZIP versionado** pelo suporte
+KÔMA, sem conceder acesso ao repositório nem solicitar tokens GitHub ao
+restaurante. A equipe gera o ZIP em GitHub Actions → **Print agent** →
+**Run workflow** (branch `main`) e baixa o artefato `KOMA-print-agent`.
+A equipe deve conferir o SHA-256 informado pelo job antes de entregar o ZIP
+por um canal controlado. O ZIP contém somente o agente e os instaladores;
+não inclui backend, variáveis de ambiente nem credenciais. Não distribuir
+pastas locais de instalação, `config.json` ou `credentials.json`.
+
+A instalação e a atualização usam o conteúdo do ZIP **extraído por inteiro**.
+Os comandos antigos de `raw.githubusercontent.com` ou `main.zip` não
+funcionam depois da privatização e não devem ser enviados a restaurantes.
+Uma cópia antiga não substitui o pacote atual validado.
+
 ## Instalação no Linux
 
 O agente roda silenciosamente em segundo plano como serviço `systemd --user`.
-A instalação normal não exige que o cliente mantenha terminal aberto e o
-transporte da impressora pode ser USB, Bluetooth SPP/RFCOMM ou uma fila/rede
-suportada pelo sistema.
+USB, Bluetooth SPP/RFCOMM e impressoras de rede seguem suportados.
 
-Na raiz do repositório:
+Extraia o ZIP e execute a partir da pasta que contém `print-agent/`:
 
 ```bash
 bash print-agent/install-linux.sh
 ```
 
-Também é possível instalar sem clonar o projeto:
+Para atualizar com um **novo ZIP** extraído:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-linux.sh | bash
+bash print-agent/install-linux.sh --update
 ```
 
-O instalador baixa os arquivos quando necessário, prepara um virtualenv
-dedicado em `~/.local/share/koma-print-agent`, abre o KÔMA uma única vez para
-autorizar o computador, registra `koma-print-agent.service`, habilita restart
-automático e preserva credenciais/configuração em atualizações.
-
-Atualização:
+Para desinstalar preservando dados de pareamento:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-linux.sh | bash -s -- --update
+bash print-agent/install-linux.sh --uninstall
 ```
 
-Desinstalação preservando configuração:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-linux.sh | bash -s -- --uninstall
-```
-
-Use `--purge` somente quando também quiser apagar credenciais e dados locais.
+O instalador cria um virtualenv dedicado em
+`~/.local/share/koma-print-agent`, registra o serviço e preserva
+credenciais/configuração durante atualizações. `--purge` apaga esses dados
+locais e só deve ser usado quando isso for realmente solicitado.
 
 ### Bluetooth no Linux
 
@@ -56,39 +62,24 @@ caminho.
 
 ## Instalação no Windows
 
-O agente roda em segundo plano por uma tarefa agendada do Windows usando
-`pythonw.exe`, sem janela permanente. A tarefa inicia no logon do usuário,
-é recriada em atualizações e preserva credenciais e configuração.
+O agente roda em segundo plano por tarefa agendada do Windows com
+`pythonw.exe`, iniciada no logon do usuário. A atualização preserva
+configuração e credenciais.
 
-Com o projeto extraído, clique duas vezes em:
+Extraia o ZIP oficial completo no computador e execute:
 
 ```text
 INSTALAR-KOMA-WINDOWS.cmd
 ```
 
-Ou instale diretamente pelo PowerShell, sem clonar o repositório:
-
-```powershell
-irm https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-windows.ps1 | iex
-```
+Para atualizar, obtenha o **ZIP da versão nova**, extraia todo o conteúdo
+em pasta própria e execute `ATUALIZAR-KOMA-WINDOWS.cmd`.
+Para desinstalar preservando o pareamento, execute
+`DESINSTALAR-KOMA-WINDOWS.cmd`. Não faça `irm ... | iex` nem baixe
+arquivos da branch `main` por URL pública.
 
 Se Python 3.10+ não estiver disponível, o instalador tenta instalar Python
 3.12 para o usuário via `winget`.
-
-Atualização remota:
-
-```powershell
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-windows.ps1'))) -Update
-```
-
-Desinstalação preservando credenciais/configuração:
-
-```powershell
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-windows.ps1'))) -Uninstall
-```
-
-Quando o repositório estiver extraído, `ATUALIZAR-KOMA-WINDOWS.cmd` e
-`DESINSTALAR-KOMA-WINDOWS.cmd` oferecem os mesmos fluxos com duplo clique.
 
 O cliente não precisa escolher CUPS, RFCOMM, Spooler ou URI. Essas informações
 ficam restritas ao diagnóstico técnico; para operação, o KÔMA apresenta a
@@ -131,7 +122,7 @@ CUPS/USB; portanto não falsifica uma impressão física.
 
 ### Verificação no Windows
 
-Guia de campo com instalação/atualização remotas pela main, pareamento,
+Guia de campo com instalação/atualização pelo ZIP do suporte, pareamento,
 preflight, teste físico, reinício/logon e diagnóstico:
 [`docs/operations/onboarding/windows-printing.md`](../docs/operations/onboarding/windows-printing.md).
 

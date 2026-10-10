@@ -1,9 +1,11 @@
 # Impressão no Windows — roteiro de campo
 
-Fonte canônica: [Print Agent na main](https://github.com/Georlan/sistema-gourmet-bistro/blob/main/print-agent/README.md)
-e [install-windows.ps1 atual](https://github.com/Georlan/sistema-gourmet-bistro/blob/main/print-agent/install-windows.ps1).
-Os comandos abaixo buscam a **main atual**; não salvar instalador em anexo nem
-usar ZIP antigo como versão de implantação.
+Fonte canônica interna: [Print Agent](../../../print-agent/README.md)
+e [install-windows.ps1](../../../print-agent/install-windows.ps1).
+Use o ZIP oficial de distribuição **gerado na main aprovada** pelo workflow
+`Print agent` do GitHub Actions, fornecido pelo suporte. Nunca forneça tokens
+GitHub a clientes nem compartilhe checkout completo do backend. Confira
+a integridade do ZIP com o SHA-256 registrado na execução que o gerou.
 
 ## Pré-requisitos
 
@@ -19,13 +21,13 @@ USB. O KÔMA memoriza o nome da fila e não altera a impressora padrão.
 
 ## Instalar e parear
 
-Abra **PowerShell** como o usuário que operará o computador, com internet, e execute:
+Receba o ZIP oficial do suporte, extraia todos os arquivos e dê dois
+cliques em `INSTALAR-KOMA-WINDOWS.cmd` na pasta extraída, usando o
+usuário que operará o computador. O instalador deve encontrar a pasta
+`print-agent` ao lado do arquivo `.cmd`. Não use o antigo instalador
+`raw.githubusercontent.com`, que exige repositório público.
 
-```powershell
-irm https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-windows.ps1 | iex
-```
-
-1. Aguarde download, preparação e abertura do navegador. Não fechar a janela antes do diagnóstico final.
+1. Aguarde preparação e abertura do navegador. Não fechar a janela antes do diagnóstico final.
 2. No pareamento, confira nome/ID do restaurante e autorize o computador; não autorizar se estiver no tenant errado.
 3. Resultado esperado: agente em segundo plano com `pythonw.exe`, tarefa `KomaPrintAgent` e atalho `koma-print://`, sem terminal permanente.
 4. No KÔMA, abra **Configurações → Impressão** (painel também chamado Salão e impressão). Confirme agente online e impressora física pelo **nome exato**.
@@ -69,10 +71,13 @@ status de fila não substitui confirmação física.
 
 ## Atualizar futuramente
 
-Faça fora do turno, com fila conferida e cliente avisado. Use o mesmo usuário Windows:
+Faça fora do turno, com fila conferida e cliente avisado. Baixe pelo
+suporte a **nova versão** do ZIP, valide o SHA-256 da execução do
+GitHub Actions, extraia todo o conteúdo e use o mesmo usuário Windows.
+Execute `ATUALIZAR-KOMA-WINDOWS.cmd` a partir da nova pasta extraída.
+Depois execute:
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/Georlan/sistema-gourmet-bistro/main/print-agent/install-windows.ps1'))) -Update
 & "$env:LOCALAPPDATA\KomaPrintAgent\check-windows.ps1"
 ```
 
@@ -92,6 +97,6 @@ falhar, guardar erro e corrigir a causa antes de repetir; não apagar credenciai
    ```
 
 3. Confira rede, pareamento, nome da fila memorizada e destino do job no monitor de impressão do KÔMA.
-4. Agente antigo/erro de dependências: atualizar pela main e repetir diagnóstico/teste.
+4. Agente antigo/erro de dependências: atualizar pelo ZIP novo validado e repetir diagnóstico/teste.
 5. Job pendente/falho: guardar ID, hora, estado e erro. Confira se houve papel antes de reimprimir pela ação do painel; não apagar jobs, journal ou credenciais.
 6. Sem recuperação: seguir [incidentes](../first-client-incident-response.md); registrar bloqueio, responsável e prazo. Logs compartilhados devem ter segredos/dados pessoais removidos.
