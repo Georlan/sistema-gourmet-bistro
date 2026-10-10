@@ -75,4 +75,4 @@ jobs:
         working-directory: backend
         run: >-
           python -m pytest -q -x
-          tests/test_first_client_payment_simulation.py::test_dine_in_pix_split_approval_and_full_lifecycle_simulation
+          tests/test_first_client_payment_simulation.py::test_dine_in_fee_free_pix_approval_and_full_lifecycle_simulation
