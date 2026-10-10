@@ -32,17 +32,11 @@ if ($Uninstall) {
     return
 }
 
-# Se executado diretamente via download remoto (PowerShell one-liner), baixa os arquivos necessarios
+# O instalador usa somente o pacote distribuido pela equipe KOMA.
+# Nao buscar o ZIP da main publica: depois da privatizacao o download anonimo falha.
 $hasLocalSource = $scriptDir -and (Test-Path (Join-Path $scriptDir "main.py"))
 if (-not $hasLocalSource) {
-    Write-Host "[KOMA] Baixando a versao correta do Koma Print Agent..."
-    $zipUrl = "https://github.com/Georlan/sistema-gourmet-bistro/archive/refs/heads/main.zip"
-    $tempZip = Join-Path $env:TEMP "koma-print-agent.zip"
-    $tempExtract = Join-Path $env:TEMP "koma-print-agent-src"
-    Remove-Item -Path $tempExtract -Recurse -Force -ErrorAction SilentlyContinue
-    Invoke-WebRequest -Uri $zipUrl -OutFile $tempZip -UseBasicParsing
-    Expand-Archive -Path $tempZip -DestinationPath $tempExtract -Force
-    $scriptDir = Join-Path $tempExtract "sistema-gourmet-bistro-main\print-agent"
+    throw "Pacote local do KOMA Print Agent nao encontrado. Solicite o ZIP oficial ao suporte, extraia-o inteiro e execute INSTALAR-KOMA-WINDOWS.cmd ou ATUALIZAR-KOMA-WINDOWS.cmd da pasta extraida."
 }
 
 function Get-KomaPythonPath($command) {
