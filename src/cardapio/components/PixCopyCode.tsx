@@ -25,10 +25,10 @@ export default function PixCopyCode({ code }: { code: string }) {
         {copied ? "Código Pix copiado" : "Copiar código Pix"}
       </button>
       <p role="status" className="mt-2 text-xs leading-relaxed text-koma-muted">
-        {copyFailed ? "A cópia automática não funcionou. Selecione e copie o código abaixo." : copied ? "Código copiado. Abra o Mercado Pago ou seu banco, mesmo que ele não apareça nas sugestões do celular." : "Pague com Pix Copia e Cola no Mercado Pago ou em outro banco que aceite Pix."}
+        {copyFailed ? "A cópia automática não funcionou. Selecione e copie o código abaixo." : copied ? "Código copiado. Abra o aplicativo do seu banco, escolha Pix Copia e Cola e confirme o pagamento." : "Abra o aplicativo do seu banco, escolha Pix Copia e Cola e confirme o pagamento."}
       </p>
       <p className="mt-2 text-xs leading-relaxed text-koma-muted">
-        No aplicativo, escolha Pix → Copia e Cola e cole o código. Confira o destinatário e o valor antes de confirmar.
+        Confira o destinatário e o valor antes de confirmar o pagamento no seu banco.
       </p>
       <button type="button" onClick={() => setShowCode(value => !value)} aria-expanded={showCode} aria-controls={fieldId}
         className="mt-2 min-h-11 w-full rounded-xl border border-koma-border px-3 py-2 text-xs font-bold text-koma-foreground">
