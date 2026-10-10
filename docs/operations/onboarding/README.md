@@ -59,6 +59,6 @@ Este playbook orienta o operador; regras e critérios detalhados permanecem em:
 
 - [Inscrição e cobrança](../signup-automation.md).
 - [Gate de aceite](../first-client-acceptance.md) e [relatório](../first-client-acceptance-report-template.md).
-- [Print Agent atual na main](https://github.com/Georlan/sistema-gourmet-bistro/blob/main/print-agent/README.md).
+- [Print Agent interno e distribuição via ZIP](../../../print-agent/README.md).
 - [Incidentes](../first-client-incident-response.md) e [backup/restore](../backup-restore-drill.md).
 - [Roadmap do piloto](../../../ROADMAP_PRIMEIRO_CLIENTE.md), histórico de planejamento; regras comerciais atuais prevalecem.
