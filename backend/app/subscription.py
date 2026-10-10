@@ -1,4 +1,6 @@
+import json
 import logging
+from pathlib import Path
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
@@ -10,7 +12,13 @@ logger = logging.getLogger("koma.subscription")
 VALID_SUBSCRIPTION_PLANS = {"pocket", "pro", "premium"}
 LEGACY_PREMIUM_PLANS = {"bistro", "delivery", "gold", "platinum"}
 ANNUAL_DISCOUNT_RATE = Decimal("0.10")
-COMMERCIAL_PRICING_VERSION = "2026-09-pocket-annual"
+_PRODUCT_CONTRACT = json.loads(
+    (Path(__file__).resolve().parents[2] / "product-contract.json").read_text(encoding="utf-8")
+)
+_CONTRACT_PLANS = _PRODUCT_CONTRACT["plans"]
+COMMERCIAL_PRICING_VERSION = _PRODUCT_CONTRACT["version"]
+# Isenção operacional: não reescreve os valores dos snapshots assinados.
+ONLINE_ORDER_COMMISSION_ENABLED = _PRODUCT_CONTRACT.get("online_order_commission_enabled", False) is True
 
 # Catálogo comercial vigente para NOVAS contratações.
 #
@@ -18,15 +26,13 @@ COMMERCIAL_PRICING_VERSION = "2026-09-pocket-annual"
 # em vigor. Elas nunca devem ser usadas, isoladamente, para recalcular os termos de
 # um tenant que já aceitou um contrato.
 SUBSCRIPTION_MONTHLY_PRICES: dict[str, Decimal] = {
-    "pocket": Decimal("39.00"),
-    "pro": Decimal("129.00"),
-    "premium": Decimal("249.00"),
+    plan_id: Decimal(str(plan["price"])).quantize(Decimal("0.01"))
+    for plan_id, plan in _CONTRACT_PLANS.items()
 }
 
 SUBSCRIPTION_MARKETPLACE_RATES: dict[str, Decimal] = {
-    "pocket": Decimal("0.0179"),
-    "pro": Decimal("0.0050"),
-    "premium": Decimal("0.0020"),
+    plan_id: Decimal(str(plan["split_fee_rate"]))
+    for plan_id, plan in _CONTRACT_PLANS.items()
 }
 
 # Fallback congelado para tenants legados que ainda não possuem um

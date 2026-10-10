@@ -1,14 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": "2026-09-block6",
+  "version": "2026-10-zero-commission",
+  "online_order_commission_enabled": false,
   "description": "Contrato canônico de produto, planos comerciais e capabilities do KÔMA.",
   "plans": {
     "pocket": {
       "id": "pocket",
       "name": "Kôma Pocket",
-      "price": 39.0,
-      "split_fee_rate": 0.0179,
-      "tagline": "Comece com o essencial por R$ 39/mês.",
+      "price": 79.9,
+      "split_fee_rate": 0.0,
+      "tagline": "O essencial para começar, com 0% de comissão KÔMA.",
       "capabilities": [
         "waiter_app"
       ],
@@ -31,9 +32,9 @@
     "pro": {
       "id": "pro",
       "name": "Kôma Pro",
-      "price": 129.0,
-      "split_fee_rate": 0.005,
-      "tagline": "Seu restaurante cresceu. Sua taxa diminui.",
+      "price": 179.9,
+      "split_fee_rate": 0.0,
+      "tagline": "Gestão profissional, com 0% de comissão KÔMA.",
       "recommended": true,
       "capabilities": [
         "advanced_reports",
@@ -55,9 +56,9 @@
     "premium": {
       "id": "premium",
       "name": "Kôma Premium",
-      "price": 249.0,
-      "split_fee_rate": 0.002,
-      "tagline": "Mais volume, menor taxa.",
+      "price": 329.9,
+      "split_fee_rate": 0.0,
+      "tagline": "Gestão completa, entregadores e fidelização, com 0% de comissão KÔMA.",
       "capabilities": [
         "advanced_reports",
         "coupons",
@@ -184,7 +185,7 @@
     { "category": "Gestão & Equipe", "feature": "Estoque e Fichas Técnicas", "pocket": false, "pro": true, "premium": true },
     { "category": "Cardápio Digital", "feature": "Cardápio Online & Pedidos via QR Code", "pocket": true, "pro": true, "premium": true },
     { "category": "Cardápio Digital", "feature": "Aceite de Pedidos Digitais no PDV", "pocket": true, "pro": true, "premium": true },
-    { "category": "Pagamento Online", "feature": "Taxa KÔMA por pedido online pago", "pocket": "1,79%", "pro": "0,50%", "premium": "0,20%" },
+    { "category": "Pagamento Online", "feature": "Taxa KÔMA por pedido online pago", "pocket": "0%", "pro": "0%", "premium": "0%" },
     { "category": "Entrega", "feature": "App do Entregador", "pocket": false, "pro": false, "premium": true },
     { "category": "Clientes", "feature": "Cadastro e Histórico de Clientes", "pocket": true, "pro": true, "premium": true },
     { "category": "Clientes", "feature": "Pontos, Cashback e Cupons", "pocket": false, "pro": false, "premium": true },

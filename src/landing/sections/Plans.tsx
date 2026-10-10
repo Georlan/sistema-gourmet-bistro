@@ -27,12 +27,12 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
     stage: 'MAIS RECOMENDADO',
     action: 'ORGANIZAR',
     fit: 'Para quem quer adicionar cozinha dedicada, estoque, financeiro e relatórios a uma operação mais profissional.',
-    note: 'É o melhor equilíbrio entre recursos de gestão e uma taxa menor nos pedidos pagos online.',
+    note: 'Gestão de cozinha, estoque e financeiro com 0% de comissão KÔMA nos pedidos online.',
   },
   premium: {
-    stage: 'MENOR TAXA',
+    stage: 'GESTÃO COMPLETA',
     action: 'ESCALAR',
-    fit: 'Para quem quer gestão completa, entregadores e fidelização com a menor taxa KÔMA.',
+    fit: 'Para quem quer gestão completa, entregadores e fidelização com 0% de comissão KÔMA.',
     note: 'App do entregador, pontos, cashback e cupons já fazem parte do plano. Não existem módulos pagos à parte.',
   },
 };
@@ -61,7 +61,7 @@ export function Plans() {
         </div>
         <div>
           <p><strong>SEM TAXA DE IMPLANTAÇÃO.</strong> Sem add-ons. Você escolhe o plano e já sabe o que está incluído.</p>
-          <small>Quanto mais completo o plano, menor a taxa KÔMA nos pedidos online pagos. Cardápio digital, mesas, equipe, App do Garçom e delivery já começam no Pocket.</small>
+          <small>0% de comissão KÔMA por pedido online nos três planos. Cardápio digital, mesas, equipe, App do Garçom e delivery já começam no Pocket.</small>
         </div>
       </div>
 
@@ -93,7 +93,7 @@ export function Plans() {
 
       <div className="koma-plan-trial-note" role="note" aria-label="Condição do período de teste">
         <strong>7 DIAS GRÁTIS NO COMPONENTE FIXO</strong>
-        <span>Nos planos Pocket, Pro e Premium elegíveis, o teste começa após a implantação essencial e isenta somente o componente fixo; a taxa KÔMA continua aplicável quando houver pagamento online elegível.</span>
+        <span>Nos planos Pocket, Pro e Premium elegíveis, o teste começa após a implantação essencial e isenta somente o componente fixo; a comissão KÔMA é 0% nos três planos e as tarifas de terceiros permanecem separadas.</span>
       </div>
 
       <div className="koma-plans-grid koma-plans-grid--simple">
@@ -120,7 +120,7 @@ export function Plans() {
                 <span>R$</span>
                 <strong>
                   {displayPrice.toLocaleString('pt-BR', {
-                    minimumFractionDigits: isYearly ? 2 : 0,
+                    minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
                 </strong>
@@ -161,13 +161,11 @@ export function Plans() {
                 <dl>
                   <div className="is-included">
                     <dt>Taxa KÔMA por pedido online pago</dt>
-                    <dd>{formatPercentage(plan.splitFeeRate)}</dd>
+                    <dd>{plan.splitFeeRate === 0 ? '0%' : formatPercentage(plan.splitFeeRate)}</dd>
                   </div>
                 </dl>
                 <p>
-                  {plan.id === 'premium'
-                    ? 'A menor taxa KÔMA entre os planos. Você só paga essa taxa quando recebe um pedido online pago pelo sistema.'
-                    : 'Você só paga essa taxa quando recebe um pedido online pago pelo sistema.'}
+                  0% de comissão KÔMA. Tarifas de gateways, adquirentes e Mercado Pago são pagas diretamente ao provedor conectado.
                 </p>
               </div>
 
@@ -227,7 +225,7 @@ export function Plans() {
         </div>
       </details>
 
-      <p className="koma-plans-note">Sem taxa de implantação e sem add-ons. A taxa KÔMA incide somente sobre pedidos online pagos pelo sistema; custos do provedor de pagamento são separados e seguem as condições do provedor. No anual, o desconto de 10% vale apenas para a assinatura fixa e a taxa por pedido permanece igual. As formas e condições de pagamento são apresentadas na etapa de contratação. App do entregador sem GPS ao vivo; suporte prioritário não significa plantão 24 horas. Emissão fiscal e integração com marketplaces não fazem parte desta oferta.</p>
+      <p className="koma-plans-note">Sem taxa de implantação e sem add-ons. A comissão KÔMA é 0% por pedido online nos três planos; custos do provedor de pagamento são separados e pagos diretamente ao provedor conectado. No anual, o desconto de 10% vale apenas para a assinatura fixa e a taxa por pedido permanece igual. As formas e condições de pagamento são apresentadas na etapa de contratação. App do entregador sem GPS ao vivo; suporte prioritário não significa plantão 24 horas. Emissão fiscal e integração com marketplaces não fazem parte desta oferta.</p>
     </section>
   );
 }

@@ -166,11 +166,11 @@ def test_marketplace_fee_uses_exact_commercial_rate_for_stored_plan(monkeypatch)
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     amount = Decimal("100.00")
 
-    assert OnlinePaymentService.marketplace_fee(amount, "pocket") == Decimal("1.79")
-    assert OnlinePaymentService.marketplace_fee(amount, "pro") == Decimal("0.50")
-    assert OnlinePaymentService.marketplace_fee(amount, "premium") == Decimal("0.20")
-    assert OnlinePaymentService.marketplace_fee(amount, "gold") == Decimal("0.20")
-    assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("1.79")
+    assert OnlinePaymentService.marketplace_fee(amount, "pocket") == Decimal("0.00")
+    assert OnlinePaymentService.marketplace_fee(amount, "pro") == Decimal("0.00")
+    assert OnlinePaymentService.marketplace_fee(amount, "premium") == Decimal("0.00")
+    assert OnlinePaymentService.marketplace_fee(amount, "gold") == Decimal("0.00")
+    assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("0.00")
 
 
 def test_new_pocket_tenant_uses_signed_vnext_marketplace_rate(monkeypatch):
@@ -178,7 +178,7 @@ def test_new_pocket_tenant_uses_signed_vnext_marketplace_rate(monkeypatch):
     monkeypatch.setattr(
         "app.services.billing_service.tenant_commercial_terms",
         lambda _db, _restaurante_id: SimpleNamespace(
-            marketplace_rate=Decimal("0.0179")
+            marketplace_rate=Decimal("0.000000")
         ),
     )
 
@@ -187,10 +187,10 @@ def test_new_pocket_tenant_uses_signed_vnext_marketplace_rate(monkeypatch):
         None,
         Decimal("100.00"),
         restaurant,
-    ) == Decimal("1.79")
+    ) == Decimal("0.00")
 
 
-def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_and_plan_slug_change(monkeypatch):
+def test_commission_waiver_applies_to_signed_old_rate_without_mutating_snapshot(monkeypatch):
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     monkeypatch.setitem(
         SUBSCRIPTION_MARKETPLACE_RATES,
@@ -211,10 +211,10 @@ def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_and_plan_slu
         None,
         Decimal("100.00"),
         restaurant,
-    ) == Decimal("1.49")
+    ) == Decimal("0.00")
 
 
-def test_tenant_without_acceptance_uses_frozen_legacy_rate_after_catalog_change(monkeypatch):
+def test_tenant_without_acceptance_has_zero_fee_even_if_catalog_rate_changes(monkeypatch):
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     monkeypatch.setitem(
         SUBSCRIPTION_MARKETPLACE_RATES,
@@ -231,30 +231,20 @@ def test_tenant_without_acceptance_uses_frozen_legacy_rate_after_catalog_change(
         None,
         Decimal("100.00"),
         restaurant,
-    ) == Decimal("1.49")
+    ) == Decimal("0.00")
 
 
-def test_subscription_tenant_without_acceptance_fails_closed_instead_of_using_legacy_rate(monkeypatch):
+@pytest.mark.parametrize("restaurant_id", [6, 8, 125])
+def test_manually_provisioned_subscription_without_acceptance_has_zero_commission(monkeypatch, restaurant_id):
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     monkeypatch.setattr(
         "app.services.billing_service.tenant_commercial_terms",
         lambda _db, _restaurante_id: None,
     )
-
-    restaurant = SimpleNamespace(
-        id=127,
-        plano="pocket",
-        billing_mode="subscription",
-    )
-    with pytest.raises(
-        OnlinePaymentConfigurationError,
-        match="sem aceite comercial",
-    ):
-        OnlinePaymentService.marketplace_fee_for_tenant(
-            None,
-            Decimal("100.00"),
-            restaurant,
-        )
+    restaurant = SimpleNamespace(id=restaurant_id, plano="pocket", billing_mode="subscription")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None, Decimal("100.00"), restaurant,
+    ) == Decimal("0.00")
 
 
 def test_tenant_marketplace_fee_flag_disabled_does_not_resolve_contract(monkeypatch):
@@ -656,7 +646,7 @@ def test_mercado_pago_webhook_approved_integration_and_idempotency(monkeypatch):
             amount=dto.total,
             idempotency_key="webhook-order-key-9919",
         )
-        assert Decimal(str(intent.marketplace_fee)) == Decimal("0.14")
+        assert Decimal(str(intent.marketplace_fee)) == Decimal("0.00")
         intent.external_payment_id = "mp-payment-9919"
         intent.status = "pending"
         db.commit()

@@ -15,6 +15,7 @@ import {
 import { API_BASE_URL } from '../../config/api';
 import {
   SubscriptionPlanId,
+  ONLINE_ORDER_COMMISSION_ENABLED,
   getSubscriptionPlan,
 } from '../../config/subscriptionPlans';
 import { getOperatorAccessToken } from '../../utils/authSession';
@@ -478,6 +479,9 @@ export const ContractDocumentsPanel: React.FC = () => {
             <ShieldCheck size={17} className="text-emerald-600 dark:text-emerald-400" />
             <h4 className="font-serif text-sm font-bold text-koma-foreground">Condições congeladas</h4>
           </div>
+          {!ONLINE_ORDER_COMMISSION_ENABLED && (
+            <p className="mt-3 text-xs text-koma-muted">Comissão KÔMA efetiva: 0% nos próximos pagamentos online, sem split para o KÔMA. A taxa original abaixo permanece registrada no comprovante; tarifas do provedor são separadas.</p>
+          )}
           <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 text-xs">
             <div>
               <dt className="text-[9px] font-bold uppercase tracking-wider text-koma-muted">Plano</dt>
@@ -492,7 +496,7 @@ export const ContractDocumentsPanel: React.FC = () => {
               <dd className="mt-1 font-mono font-bold text-koma-foreground">{formatMoney(receipt.commercial.billingAmount)}</dd>
             </div>
             <div>
-              <dt className="text-[9px] font-bold uppercase tracking-wider text-koma-muted">Taxa KÔMA online</dt>
+              <dt className="text-[9px] font-bold uppercase tracking-wider text-koma-muted">Taxa KÔMA online no aceite</dt>
               <dd className="mt-1 font-mono font-bold text-emerald-700 dark:text-emerald-400">{formatRate(receipt.commercial.marketplaceRate)}</dd>
             </div>
             <div>

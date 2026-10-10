@@ -24,6 +24,7 @@ import { KOMA_WORDMARK_ON_DARK_SRC } from '../brand/komaBrand';
 import { API_BASE_URL } from '../config/api';
 import {
   SUBSCRIPTION_PLANS,
+  ONLINE_ORDER_COMMISSION_ENABLED,
   formatCurrency,
   formatPercentage,
   getSubscriptionPricing,
@@ -683,7 +684,7 @@ export default function PlanContractPageV2() {
 
           {step === 1 ? (
             <>
-              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">01 · PLANO E COBRANÇA</span><h1>Escolha o KÔMA certo para sua operação.</h1><p>O Pocket custa R$ 39 por mês. Os três planos têm 7 dias de teste no componente fixo após a implantação essencial.</p></div>
+              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">01 · PLANO E COBRANÇA</span><h1>Escolha o KÔMA certo para sua operação.</h1><p>Os três planos têm 7 dias de teste no componente fixo após a implantação essencial e a liberação pelo SuperAdmin KÔMA.</p></div>
               <div className="koma-sub-plan-grid" role="radiogroup" aria-label="Escolha um plano KÔMA">
                 {SUBSCRIPTION_PLANS.map(candidate => {
                   const candidatePricing = getSubscriptionPricing(candidate.price);
@@ -697,7 +698,7 @@ export default function PlanContractPageV2() {
                       }}>
                       <div className="koma-sub-plan-top"><span>{candidate.name.replace('Kôma ', '')}</span>{candidate.recommended && <em>Recomendado</em>}</div>
                       <strong>{formatCurrency(displayedPrice)}<small>/mês{billingCycle === 'anual' ? ' equiv.' : ''}</small></strong>
-                      <p>{candidate.tagline}</p><span className="koma-sub-fee">{formatPercentage(candidate.splitFeeRate)} por pedido online pago</span>
+                      <p>{candidate.tagline}</p><span className="koma-sub-fee">{candidate.splitFeeRate === 0 ? '0% de comissão KÔMA por pedido online' : `${formatPercentage(candidate.splitFeeRate)} por pedido online pago`}</span>
                       <ul>{candidate.features.slice(0, 3).map(feature => <li key={feature}><Check size={14} /> {feature}</li>)}</ul>
                     </button>
                   );
@@ -795,7 +796,9 @@ export default function PlanContractPageV2() {
                 ) : (
                   <section className="koma-sub-section-card">
                     <div className="koma-sub-section-title"><span><CheckCircle2 size={18} /></span><div><h2>Condição Contratual Histórica</h2><p>Contrato anterior mantido: o Pocket deste contrato possui condição histórica de mensalidade fixa de R$ 0. Nenhuma assinatura recorrente de R$ 0 será criada no Mercado Pago.</p></div></div>
-                    <div className="koma-sub-locked-note"><Info size={17} /> Pagamentos online dos seus clientes continuam separados: quando você conectar a conta Mercado Pago do restaurante, aplica-se a taxa KÔMA contratada de {formatPercentage(marketplaceRate)} nos pagamentos elegíveis, além das tarifas do provedor.</div>
+                    <div className="koma-sub-locked-note"><Info size={17} /> {ONLINE_ORDER_COMMISSION_ENABLED
+                      ? <>Pagamentos online dos seus clientes continuam separados: aplica-se a taxa KÔMA contratada de {formatPercentage(marketplaceRate)} nos pagamentos elegíveis, além das tarifas do provedor.</>
+                      : <>Comissão KÔMA efetiva: 0% nos próximos pagamentos online, sem split para o KÔMA. Comprovantes anteriores preservam a taxa registrada no aceite. Tarifas do provedor continuam separadas.</>}</div>
                   </section>
                 )}
 
@@ -823,7 +826,7 @@ export default function PlanContractPageV2() {
             <div className="koma-sub-summary-plan"><div><strong>{plan.name.replace('Kôma ', '')}</strong><span>{activeBillingCycle === 'anual' ? 'Plano anual' : 'Plano mensal'}</span></div><span className="koma-sub-summary-price">{activeBillingCycle === 'anual' ? `${formatCurrency(pricing.annualMonthlyEquivalent)}/mês equiv.` : `${formatCurrency(pricing.monthly)}/mês`}</span></div>
             <dl className="koma-sub-summary-list">
               {fixedBillingRequired && activeBillingCycle === 'anual' && <div><dt>Total anual após o trial</dt><dd>{formatCurrency(pricing.annualTotal)}</dd></div>}
-              <div><dt>Taxa KÔMA online</dt><dd>{formatPercentage(marketplaceRate)}</dd></div><div><dt>Implantação</dt><dd>R$ 0</dd></div><div><dt>Prestador</dt><dd>{LEGAL_PROVIDER_NAME}</dd></div>
+              <div><dt>Taxa KÔMA online no aceite</dt><dd>{formatPercentage(marketplaceRate)}</dd></div><div><dt>Implantação</dt><dd>R$ 0</dd></div><div><dt>Prestador</dt><dd>{LEGAL_PROVIDER_NAME}</dd></div>
             </dl>
           </section>
           <section className="koma-sub-summary-card">
@@ -831,7 +834,7 @@ export default function PlanContractPageV2() {
               {!fixedBillingRequired ? (
                 <>
                   <div><span className="is-active"><CheckCircle2 size={16} /></span><div><strong>Hoje</strong><p>Condição histórica do contrato anterior: R$ 0.</p></div></div>
-                  <div><span><Info size={16} /></span><div><strong>Pagamentos online</strong><p>Taxa KÔMA contratada: {formatPercentage(marketplaceRate)} nos pagamentos elegíveis.</p></div></div>
+                  <div><span><Info size={16} /></span><div><strong>Pagamentos online</strong><p>{ONLINE_ORDER_COMMISSION_ENABLED ? `Taxa KÔMA contratada: ${formatPercentage(marketplaceRate)} nos pagamentos elegíveis.` : 'Comissão KÔMA efetiva: 0%. Tarifas do provedor são separadas.'}</p></div></div>
                 </>
               ) : (
                 <>

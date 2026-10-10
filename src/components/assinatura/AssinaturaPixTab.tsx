@@ -260,7 +260,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               customVariants={revealVariants}
               className="text-xs text-koma-subtle"
             >
-              Sem taxa de implantação e sem add-ons. Quanto mais completo o plano, menor a taxa KÔMA nos pedidos online pagos.
+              Sem taxa de implantação e sem add-ons. 0% de comissão KÔMA nos pedidos online dos três planos.
             </TimelineContent>
 
             {/* CHAVEADOR ANIMADO DE PERÍODO (MENSAL / ANUAL) */}
@@ -417,12 +417,12 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                 <p className="text-xs text-koma-muted mt-1">Recursos avançados são liberados ao subir de plano, sem módulos avulsos.</p>
               </div>
               <div>
-                <strong className="text-koma-foreground font-serif text-sm block">Taxa só quando vende online</strong>
-                <p className="text-xs text-koma-muted mt-1">A taxa KÔMA é aplicada somente ao pedido online efetivamente pago.</p>
+                <strong className="text-koma-foreground font-serif text-sm block">0% de comissão KÔMA</strong>
+                <p className="text-xs text-koma-muted mt-1">O KÔMA não cobra comissão por pedido online.</p>
               </div>
             </div>
             <p className="text-[10px] text-koma-muted leading-relaxed border-t border-koma-border pt-3">
-              O desconto anual reduz somente a assinatura fixa; a taxa por pedido permanece a mesma. Custos do provedor de pagamento seguem as condições do provedor e não estão incluídos na taxa KÔMA.
+              O desconto anual reduz somente a assinatura fixa; a taxa por pedido permanece a mesma. Tarifas de gateways, adquirentes e Mercado Pago são separadas e pagas diretamente ao provedor conectado.
             </p>
           </div>
 

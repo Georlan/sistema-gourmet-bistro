@@ -29,9 +29,9 @@ test("Super Admin Phase 2 usa o endpoint canônico de onboarding", () => {
 test("Super Admin Phase 2 usa o catálogo comercial oficial", () => {
   assert.match(onboardingModal, /SUBSCRIPTION_PLANS/);
   assert.match(tenantsTab, /SUBSCRIPTION_PLANS/);
-  assert.equal(SUBSCRIPTION_PLANS.find(p => p.id === "pocket")?.price, 39);
-  assert.equal(SUBSCRIPTION_PLANS.find(p => p.id === "pro")?.price, 129);
-  assert.equal(SUBSCRIPTION_PLANS.find(p => p.id === "premium")?.price, 249);
+  assert.equal(SUBSCRIPTION_PLANS.find(p => p.id === "pocket")?.price, 79.90);
+  assert.equal(SUBSCRIPTION_PLANS.find(p => p.id === "pro")?.price, 179.90);
+  assert.equal(SUBSCRIPTION_PLANS.find(p => p.id === "premium")?.price, 329.90);
 
   assert.doesNotMatch(onboardingModal, /formatCurrency\(item\.price\)/);
   assert.doesNotMatch(onboardingModal, /formatPercentage\(item\.splitFeeRate\)/);

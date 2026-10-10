@@ -1,16 +1,16 @@
 import { expect, test } from '@playwright/test';
 
-test('Pocket anual publica total de R$ 421,20 e mantém 1,79% por pedido online', async ({ page }) => {
+test('Pocket anual publica total de R$ 862,92 e confirma 0% de comissão KÔMA', async ({ page }) => {
   await page.route('**/api/contracts/payment-methods-v2', route => route.fulfill({
     json: { credit_card: true, pix: true, account_money: true, publicKey: 'TEST-public' },
   }));
   await page.goto('/contratar/pocket?cobranca=anual');
   await expect(page).toHaveURL(/\/contratar\/pocket\?cobranca=anual/);
-  await expect(page.getByRole('radio', { name: /^Pocket\b/ })).toContainText('R$ 35,10');
-  await expect(page.getByRole('radio', { name: /^Pocket\b/ })).toContainText('1,79%');
+  await expect(page.getByRole('radio', { name: /^Pocket\b/ })).toContainText('R$ 71,91');
+  await expect(page.getByRole('radio', { name: /^Pocket\b/ })).toContainText('0% de comissão KÔMA');
   await expect(page.getByText('7 dias grátis no componente fixo.')).toBeVisible();
-  await expect(page.getByRole('radio', { name: /^Anual/ })).toContainText('R$ 421,20');
-  await expect(page.locator('.koma-sub-summary-card').first()).toContainText('R$ 421,20');
+  await expect(page.getByRole('radio', { name: /^Anual/ })).toContainText('R$ 862,92');
+  await expect(page.locator('.koma-sub-summary-card').first()).toContainText('R$ 862,92');
 });
 
 test('Pocket novo exige meio de pagamento para a mensalidade', async ({ page }) => {
@@ -25,7 +25,8 @@ test('Pocket novo exige meio de pagamento para a mensalidade', async ({ page }) 
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByLabel('Nome do restaurante', { exact: true }).fill('Bistrô Teste');
   await page.getByLabel('Seu nome', { exact: true }).fill('Ana Silva');
-  await page.getByLabel('E-mail', { exact: true }).fill('ana@example.com');
+  await page.getByLabel('Tipo de operação').selectOption({ label: 'Outro tipo de operação' });
+  await page.getByLabel('E-mail de acesso do administrador').fill('ana@example.com');
   await page.getByLabel('WhatsApp', { exact: true }).fill('85999999999');
   await page.getByRole('button', { name: 'Salvar e continuar' }).click();
   await expect(page.getByText(/meios de pagamento estão temporariamente indisponíveis/)).toBeVisible();
@@ -53,8 +54,9 @@ test('aceite Pocket antigo preserva R$ 0 ao retomar a inscrição', async ({ pag
   }));
   await page.goto('/contratar/pocket?cobranca=mensal');
   await page.getByRole('button', { name: 'Retomar inscrição' }).click();
-  await expect(page.getByText('Seu contrato anterior mantém mensalidade fixa de R$ 0 e dispensa meio de pagamento.')).toBeVisible();
-  await expect(page.getByText('Sem cobrança fixa')).toBeVisible();
+  await expect(page.getByText(/Seu contrato anterior mantém mensalidade fixa de R\$ 0 e dispensa meio de pagamento\./)).toBeVisible();
+  await expect(page.getByText(/Condição contratual histórica:/)).toBeVisible();
+  await expect(page.getByText('Comissão KÔMA efetiva: 0%. Tarifas do provedor são separadas.')).toBeVisible();
   await expect(page.getByRole('radio', { name: /Forma de pagamento/ })).toHaveCount(0);
   await expect(page.locator('.koma-sub-summary-price')).toContainText('R$ 0,00/mês');
 });
