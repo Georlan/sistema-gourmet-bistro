@@ -135,7 +135,7 @@ export function Hero() {
             </button>
             <div className="koma-hero-entry-price" aria-label={`Planos a partir de ${formatCurrency(ENTRY_PRICE)} por mês`}>
               <span>PLANOS A PARTIR DE</span>
-              <strong><small>R$</small> {ENTRY_PRICE} <em>/mês</em></strong>
+              <strong><small>R$</small> {ENTRY_PRICE.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <em>/mês</em></strong>
             </div>
           </motion.div>
 

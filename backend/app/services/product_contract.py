@@ -12,6 +12,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from ..product_catalog import load_product_catalog
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONTRACT_PATH = REPO_ROOT / "product-contract.json"
@@ -35,7 +37,9 @@ class ContractPlan(NamedTuple):
 
 
 def load_product_contract(path: Path | None = None) -> dict[str, Any]:
-    target = path or CONTRACT_PATH
+    if path is None:
+        return load_product_catalog()
+    target = path
     if not target.exists():
         raise FileNotFoundError(f"Arquivo de contrato de produto não encontrado em {target}")
     with open(target, "r", encoding="utf-8") as f:

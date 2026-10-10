@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 
-const frontendLegal = readFileSync('src/legal/legalContentV33.ts', 'utf8');
+const frontendLegal = readFileSync('src/legal/legalContentV34.ts', 'utf8');
 const frontendEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const backendLegal = readFileSync('backend/app/legal_config.py', 'utf8');
 
@@ -23,4 +25,14 @@ test('frontend e backend publicam a mesma versão e evidência jurídica', () =>
   assert.equal(backendVersion, frontendVersion);
   assert.equal(backendCommit, frontendCommit);
   assert.equal(backendBlob, frontendBlob);
+});
+
+test('proveniência aponta para o snapshot 3.4 real e congelado no commit informado', () => {
+  const commit = capture(frontendEvidence, /LEGAL_SOURCE_COMMIT = '([0-9a-f]{40})'/, 'commit');
+  const blob = capture(frontendEvidence, /LEGAL_SOURCE_BLOB_SHA = '([0-9a-f]{40})'/, 'blob');
+  const bytes = readFileSync('src/legal/legalContentV34.ts');
+  const actualBlob = createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
+  assert.equal(blob, actualBlob);
+  const frozen = execFileSync('git', ['show', `${commit}:src/legal/legalContentV34.ts`]);
+  assert.deepEqual(frozen, bytes);
 });

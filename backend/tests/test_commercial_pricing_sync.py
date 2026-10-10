@@ -7,6 +7,7 @@ from app.subscription import (
     LEGACY_V25_MONTHLY_PRICES,
     SUBSCRIPTION_MARKETPLACE_RATES,
     SUBSCRIPTION_MONTHLY_PRICES,
+    ONLINE_ORDER_COMMISSION_ENABLED,
 )
 
 
@@ -15,15 +16,15 @@ CONTRACT_PATH = REPO_ROOT / "product-contract.json"
 FRONTEND_CATALOG = REPO_ROOT / "src" / "config" / "subscriptionPlans.ts"
 
 EXPECTED_PRICES = {
-    "pocket": Decimal("39.00"),
-    "pro": Decimal("129.00"),
-    "premium": Decimal("249.00"),
+    "pocket": Decimal("79.90"),
+    "pro": Decimal("179.90"),
+    "premium": Decimal("329.90"),
 }
 
 EXPECTED_RATES = {
-    "pocket": Decimal("0.0179"),
-    "pro": Decimal("0.0050"),
-    "premium": Decimal("0.0020"),
+    "pocket": Decimal("0.000000"),
+    "pro": Decimal("0.000000"),
+    "premium": Decimal("0.000000"),
 }
 
 LEGACY_RATES = {
@@ -59,9 +60,9 @@ def test_frontend_comparison_labels_match_financial_rates():
 
     matrix = contract.get("comparison_matrix", [])
     taxa_row = next(r for r in matrix if "Taxa KÔMA" in r["feature"])
-    assert taxa_row["pocket"] == "1,79%"
-    assert taxa_row["pro"] == "0,50%"
-    assert taxa_row["premium"] == "0,20%"
+    assert taxa_row["pocket"] == "0%"
+    assert taxa_row["pro"] == "0%"
+    assert taxa_row["premium"] == "0%"
 
 
 def test_legacy_v25_fallback_stays_frozen_when_current_catalog_changes():
@@ -72,3 +73,9 @@ def test_legacy_v25_fallback_stays_frozen_when_current_catalog_changes():
     }
     assert LEGACY_V25_MARKETPLACE_RATES == LEGACY_RATES
     assert LEGACY_V25_MARKETPLACE_RATES is not SUBSCRIPTION_MARKETPLACE_RATES
+
+
+def test_commission_retirement_is_explicit_and_cannot_be_reenabled_by_environment_flag():
+    contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    assert contract["online_order_commission_enabled"] is False
+    assert ONLINE_ORDER_COMMISSION_ENABLED is False

@@ -59,7 +59,7 @@ def upsert_mercado_pago_account(
     if is_marketplace_owner_account(tokens.provider_user_id):
         raise MercadoPagoAccountConnectionError(
             "A conta proprietária da aplicação KÔMA não pode ser conectada como restaurante. "
-            "Conecte a conta Mercado Pago que pertence ao estabelecimento para manter o split."
+            "Conecte a conta Mercado Pago que pertence ao estabelecimento para receber os pagamentos dos clientes."
         )
 
     secret = (webhook_secret or configured_webhook_secret()).strip()

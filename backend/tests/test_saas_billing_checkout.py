@@ -318,18 +318,18 @@ def test_pocket_zero_rejects_paid_billing_setup_before_provider_call(client_and_
 @pytest.mark.parametrize(
     ("plan", "cycle", "method", "expected_amount", "expected_frequency"),
     [
-        ("pocket", "mensal", "credit_card", 39.0, 1),
-        ("pocket", "mensal", "account_money", 39.0, 1),
-        ("pocket", "anual", "credit_card", 421.20, 12),
-        ("pocket", "anual", "account_money", 421.20, 12),
-        ("pro", "mensal", "credit_card", 129.0, 1),
-        ("pro", "mensal", "account_money", 129.0, 1),
-        ("pro", "anual", "credit_card", 1393.20, 12),
-        ("pro", "anual", "account_money", 1393.20, 12),
-        ("premium", "mensal", "credit_card", 249.0, 1),
-        ("premium", "mensal", "account_money", 249.0, 1),
-        ("premium", "anual", "credit_card", 2689.20, 12),
-        ("premium", "anual", "account_money", 2689.20, 12),
+        ("pocket", "mensal", "credit_card", 79.90, 1),
+        ("pocket", "mensal", "account_money", 79.90, 1),
+        ("pocket", "anual", "credit_card", 862.92, 12),
+        ("pocket", "anual", "account_money", 862.92, 12),
+        ("pro", "mensal", "credit_card", 179.90, 1),
+        ("pro", "mensal", "account_money", 179.90, 1),
+        ("pro", "anual", "credit_card", 1942.92, 12),
+        ("pro", "anual", "account_money", 1942.92, 12),
+        ("premium", "mensal", "credit_card", 329.90, 1),
+        ("premium", "mensal", "account_money", 329.90, 1),
+        ("premium", "anual", "credit_card", 3562.92, 12),
+        ("premium", "anual", "account_money", 3562.92, 12),
     ],
 )
 def test_paid_plan_billing_uses_signed_amount_and_cycle(
@@ -366,12 +366,12 @@ def test_paid_plan_billing_uses_signed_amount_and_cycle(
 @pytest.mark.parametrize(
     ("plan", "cycle", "expected_amount", "expected_cycle"),
     [
-        ("pocket", "mensal", 39.0, "monthly"),
-        ("pocket", "anual", 421.20, "annual"),
-        ("pro", "mensal", 129.0, "monthly"),
-        ("pro", "anual", 1393.20, "annual"),
-        ("premium", "mensal", 249.0, "monthly"),
-        ("premium", "anual", 2689.20, "annual"),
+        ("pocket", "mensal", 79.90, "monthly"),
+        ("pocket", "anual", 862.92, "annual"),
+        ("pro", "mensal", 179.90, "monthly"),
+        ("pro", "anual", 1942.92, "annual"),
+        ("premium", "mensal", 329.90, "monthly"),
+        ("premium", "anual", 3562.92, "annual"),
     ],
 )
 def test_pix_selection_preserves_signed_amount_without_creating_payment(
@@ -633,7 +633,7 @@ def test_account_money_rejects_mismatched_payment_method(client_and_session, mon
             "auto_recurring": {
                 "frequency": 1,
                 "frequency_type": "months",
-                "transaction_amount": 129.0,
+                "transaction_amount": 179.90,
                 "currency_id": "BRL",
                 "free_trial": {"frequency": 7, "frequency_type": "days"},
             },

@@ -201,7 +201,7 @@ def _fee(Session) -> Decimal:
         db.close()
 
 
-def test_legacy_pro_to_premium_changes_split_only_after_provider_sync_and_atomic_apply(
+def test_legacy_pro_to_premium_preserves_waiver_and_changes_terms_after_atomic_apply(
     plan_change_env,
     monkeypatch,
 ):
@@ -247,10 +247,10 @@ def test_legacy_pro_to_premium_changes_split_only_after_provider_sync_and_atomic
     assert body["targetPlan"] == "premium"
     assert body["providerAction"] == "update_amount"
     assert body["receipt"]["commercial"]["trialDays"] == 0
-    assert body["receipt"]["commercial"]["marketplaceRate"] == "0.002000"
+    assert body["receipt"]["commercial"]["marketplaceRate"] == "0.000000"
     assert body["receipt"]["change"]["fromMarketplaceRate"] == "0.006900"
 
-    # Aceitar novos termos ainda não troca nem recursos nem split.
+    # Aceitar novos termos ainda não troca recursos nem termos; a isenção já é efetiva.
     assert _fee(Session) == Decimal("0.00")
     db = Session()
     try:
@@ -268,8 +268,8 @@ def test_legacy_pro_to_premium_changes_split_only_after_provider_sync_and_atomic
     )
     assert applied.status_code == 200, applied.text
     assert applied.json()["status"] == "applied"
-    assert applied.json()["marketplaceRate"] == "0.002000"
-    assert provider_updates == [("mock-pro-v25", Decimal("249.00"), "premium")]
+    assert applied.json()["marketplaceRate"] == "0.000000"
+    assert provider_updates == [("mock-pro-v25", Decimal("329.90"), "premium")]
 
     assert _fee(Session) == Decimal("0.00")
     db = Session()
@@ -279,7 +279,7 @@ def test_legacy_pro_to_premium_changes_split_only_after_provider_sync_and_atomic
         terms = tenant_commercial_terms(db, TENANT_ID)
         assert terms is not None
         assert terms.plan == "premium"
-        assert terms.marketplace_rate == Decimal("0.002000")
+        assert terms.marketplace_rate == Decimal("0.000000")
 
         old = (
             db.query(ContractAcceptance)
@@ -332,11 +332,11 @@ def test_same_plan_legacy_pro_can_migrate_to_current_pro_terms(plan_change_env, 
 
     applied = client.post(f"/api/subscription/plan-change/{change['id']}/apply")
     assert applied.status_code == 200, applied.text
-    assert updated == [Decimal("129.00")]
+    assert updated == [Decimal("179.90")]
     assert _fee(Session) == Decimal("0.00")
 
 
-def test_paid_to_pocket_updates_recurrence_before_new_split_becomes_authority(
+def test_paid_to_pocket_updates_recurrence_and_preserves_zero_commission(
     plan_change_env,
     monkeypatch,
 ):
@@ -365,13 +365,13 @@ def test_paid_to_pocket_updates_recurrence_before_new_split_becomes_authority(
     assert accepted.status_code == 201, accepted.text
     change = accepted.json()
     assert change["providerAction"] == "update_amount"
-    assert change["receipt"]["commercial"]["billingAmount"] == "39.00"
+    assert change["receipt"]["commercial"]["billingAmount"] == "79.90"
     assert change["receipt"]["commercial"]["trialDays"] == 0
     assert _fee(Session) == Decimal("0.00")
 
     applied = client.post(f"/api/subscription/plan-change/{change['id']}/apply")
     assert applied.status_code == 200, applied.text
-    assert updated == [("mock-pro-v25", Decimal("39.00"), "pocket")]
+    assert updated == [("mock-pro-v25", Decimal("79.90"), "pocket")]
     assert _fee(Session) == Decimal("0.00")
 
     db = Session()

@@ -22,29 +22,28 @@ test('operational feature gates require an explicit backend entitlement', () => 
 
 test('plan prices and split fees match the commercial catalog', () => {
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => [plan.id, plan.price, plan.splitFeeRate]), [
-    ['pocket', 39, 0.0179],
-    ['pro', 129, 0.005],
-    ['premium', 249, 0.002],
+    ['pocket', 79.9, 0],
+    ['pro', 179.9, 0],
+    ['premium', 329.9, 0],
   ]);
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => formatPercentage(plan.splitFeeRate)), [
-    '1,79%', '0,50%', '0,20%',
+    '0,00%', '0,00%', '0,00%',
   ]);
 });
 
-test('Pocket has fixed revenue without online payments and crosses Pro near R$ 6.977 online', () => {
-  const [pocket, pro] = SUBSCRIPTION_PLANS;
-  const total = (price: number, rate: number, volume: number) => price + rate * volume;
-  assert.equal(total(pocket.price, pocket.splitFeeRate, 0), 39);
-  assert.ok(total(pocket.price, pocket.splitFeeRate, 5_000) < total(pro.price, pro.splitFeeRate, 5_000));
-  assert.ok(total(pocket.price, pocket.splitFeeRate, 10_000) > total(pro.price, pro.splitFeeRate, 10_000));
-  assert.equal(Number(((pro.price - pocket.price) / (pocket.splitFeeRate - pro.splitFeeRate)).toFixed(2)), 6976.74);
+test('online order volume never adds KOMA commission to current plans', () => {
+  for (const plan of SUBSCRIPTION_PLANS) {
+    for (const volume of [0, 5_000, 10_000, 1_000_000]) {
+      assert.equal(plan.price + plan.splitFeeRate * volume, plan.price);
+    }
+  }
 });
 
 test('annual totals and savings apply ten percent only to the fixed subscription', () => {
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => getSubscriptionPricing(plan.price)), [
-    { monthly: 39, annualMonthlyEquivalent: 35.1, annualTotal: 421.2, annualSavings: 46.8 },
-    { monthly: 129, annualMonthlyEquivalent: 116.1, annualTotal: 1393.2, annualSavings: 154.8 },
-    { monthly: 249, annualMonthlyEquivalent: 224.1, annualTotal: 2689.2, annualSavings: 298.8 },
+    { monthly: 79.9, annualMonthlyEquivalent: 71.91, annualTotal: 862.92, annualSavings: 95.88 },
+    { monthly: 179.9, annualMonthlyEquivalent: 161.91, annualTotal: 1942.92, annualSavings: 215.88 },
+    { monthly: 329.9, annualMonthlyEquivalent: 296.91, annualTotal: 3562.92, annualSavings: 395.88 },
   ]);
 });
 
@@ -73,7 +72,7 @@ test('delivery, waiter app and team management stay in every plan while advanced
 test('comparison matrix publishes the exact KOMA online-payment fee by plan', () => {
   const fee = PLAN_COMPARISON_MATRIX.find(row => row.feature === 'Taxa KÔMA por pedido online pago');
   assert.ok(fee);
-  assert.deepEqual([fee.pocket, fee.pro, fee.premium], ['1,79%', '0,50%', '0,20%']);
+  assert.deepEqual([fee.pocket, fee.pro, fee.premium], ['0%', '0%', '0%']);
 });
 
 test('landing starts monthly, has no setup fee or addons, and shows all current prices and split fees', () => {
@@ -86,21 +85,21 @@ test('landing starts monthly, has no setup fee or addons, and shows all current 
   assert.ok(html.includes('SEM TAXA DE IMPLANTAÇÃO'));
   assert.ok(html.includes('Sem add-ons'));
   assert.ok(html.includes('MAIS RECOMENDADO'));
-  assert.ok(html.includes('MENOR TAXA'));
+  assert.ok(html.includes('GESTÃO COMPLETA'));
   assert.ok(html.includes('Cardápio digital, mesas, equipe, App do Garçom e delivery já começam no Pocket.'));
   assert.ok(SUBSCRIPTION_PLANS.find(plan => plan.id === 'pocket')?.features.includes('App do Garçom para salão e comandas'));
   assert.ok(SUBSCRIPTION_PLANS.find(plan => plan.id === 'pocket')?.features.includes('Equipe, funções e permissões por cargo'));
 
   for (const plan of SUBSCRIPTION_PLANS) {
-    assert.ok(html.includes(`${plan.price},00 por mês`));
-    assert.ok(html.includes(formatPercentage(plan.splitFeeRate)));
+    assert.ok(html.includes(`${plan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} por mês`));
+    assert.ok(html.includes('0%'));
     for (const feature of plan.features) assert.ok(html.includes(feature));
   }
 });
 
 test('landing explains that the variable fee only applies to paid online orders', () => {
   const html = renderToStaticMarkup(createElement(Plans));
-  assert.ok(html.includes('Você só paga essa taxa quando recebe um pedido online pago pelo sistema.'));
+  assert.ok(html.includes('0% de comissão KÔMA.'));
   assert.ok(html.includes('custos do provedor de pagamento são separados'));
   assert.ok(html.includes('a taxa por pedido permanece igual'));
 });
@@ -123,21 +122,21 @@ test('landing does not promise unrelated modules as part of the commercial offer
 
 
 test('annual discount applies to fixed price in Pocket, Pro and Premium', () => {
-  const pocket = getSubscriptionPricing(39);
-  const pro = getSubscriptionPricing(129);
-  const premium = getSubscriptionPricing(249);
-  assert.equal(pocket.monthly, 39);
-  assert.equal(pocket.annualTotal, 421.2);
-  assert.equal(pocket.annualMonthlyEquivalent, 35.1);
-  assert.equal(pocket.annualSavings, 46.8);
-  assert.equal(pro.annualTotal, 1393.2);
-  assert.equal(pro.annualMonthlyEquivalent, 116.1);
-  assert.equal(premium.annualTotal, 2689.2);
-  assert.equal(premium.annualMonthlyEquivalent, 224.1);
+  const pocket = getSubscriptionPricing(79.9);
+  const pro = getSubscriptionPricing(179.9);
+  const premium = getSubscriptionPricing(329.9);
+  assert.equal(pocket.monthly, 79.9);
+  assert.equal(pocket.annualTotal, 862.92);
+  assert.equal(pocket.annualMonthlyEquivalent, 71.91);
+  assert.equal(pocket.annualSavings, 95.88);
+  assert.equal(pro.annualTotal, 1942.92);
+  assert.equal(pro.annualMonthlyEquivalent, 161.91);
+  assert.equal(premium.annualTotal, 3562.92);
+  assert.equal(premium.annualMonthlyEquivalent, 296.91);
 
   const html = renderToStaticMarkup(createElement(Plans));
   assert.ok(html.includes('Sem taxa de implantação'));
-  assert.ok(html.includes('1,79%'));
-  assert.ok(html.includes('Seu restaurante cresceu. Sua taxa diminui.'));
-  assert.ok(html.includes('Mais volume, menor taxa.'));
+  assert.ok(html.includes('0%'));
+  assert.ok(html.includes('Gestão profissional, com 0% de comissão KÔMA.'));
+  assert.ok(html.includes('Gestão completa, entregadores e fidelização, com 0% de comissão KÔMA.'));
 });

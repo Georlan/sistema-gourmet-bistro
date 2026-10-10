@@ -250,7 +250,7 @@ class OnlinePaymentService:
         if account.provider == "mercado_pago":
             if is_marketplace_owner_account(account.provider_user_id):
                 raise OnlinePaymentConfigurationError(
-                    "A conta Mercado Pago conectada é a proprietária da aplicação KÔMA e não pode receber com split. "
+                    "A conta Mercado Pago conectada é a proprietária da aplicação KÔMA. "
                     "O restaurante precisa conectar uma conta Mercado Pago própria."
                 )
             if not account.access_token or not account.webhook_secret:
@@ -342,6 +342,11 @@ class OnlinePaymentService:
                 if tenant_commercial_terms(db, int(restaurant.id)) is not None:
                     raise OnlinePaymentConfigurationError("Restaurante contratado precisa reconfigurar o Pix Direto comercial.")
                 settlement = "test"
+        fee = Decimal("0.00") if settlement == "test" else cls.marketplace_fee_for_tenant(
+            db, normalized_amount, restaurant,
+        )
+        if fee == 0 and settlement != "test":
+            settlement = "none"
         intent = OnlinePaymentIntent(
             restaurante_id=comanda.restaurante_id,
             comanda_id=comanda.id,
@@ -350,9 +355,7 @@ class OnlinePaymentService:
             method="pix",
             status="created",
             amount=float(normalized_amount),
-            marketplace_fee=0.0 if settlement == "test" else float(
-                cls.marketplace_fee_for_tenant(db, normalized_amount, restaurant)
-            ),
+            marketplace_fee=float(fee),
             fee_settlement=settlement,
             idempotency_key=idempotency_key,
         )

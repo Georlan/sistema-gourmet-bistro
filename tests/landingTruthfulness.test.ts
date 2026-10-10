@@ -52,7 +52,7 @@ test('plan cards expose limitations and a canonical feature comparison without d
   assert.match(plans, /7 DIAS GRÁTIS NO COMPONENTE FIXO/);
   assert.match(plans, /Nos planos Pocket, Pro e Premium elegíveis/);
   assert.match(plans, /isenta somente o componente fixo/);
-  assert.match(plans, /taxa KÔMA continua aplicável quando houver pagamento online elegível/);
+  assert.match(plans, /comissão KÔMA é 0% nos três planos e as tarifas de terceiros permanecem separadas/);
   assert.ok(pocket?.limitations.includes('Sem KDS e impressão automática'));
   assert.ok(pocket?.limitations.includes('Sem app do entregador e fidelidade'));
 });
