@@ -303,3 +303,23 @@ def test_pix_creation_never_waives_fee_when_provider_rejects_application_fee(mon
     assert intent.status == "error"
     assert "cause=2059" in intent.last_error
     assert db.commits == 1
+
+
+@pytest.mark.parametrize('environment', ['sandbox', 'production'])
+def test_pagbank_refresh_keeps_original_account_environment(monkeypatch, environment):
+    monkeypatch.setenv('PAGBANK_ENV', 'sandbox')
+    monkeypatch.setenv('PAGBANK_PRODUCTION_RESTAURANT_IDS', '8')
+    account = _account(provider='pagbank', restaurante_id=8, provider_environment=environment)
+    refresh_session = _RefreshSession(account)
+    request_session = _RequestSession(account)
+    monkeypatch.setattr(service, 'SessionLocal', lambda **kwargs: refresh_session)
+    seen = []
+    def refresh(token, **kwargs):
+        seen.append((token, kwargs['environment']))
+        return _tokens()
+    monkeypatch.setattr(service, 'refresh_pagbank', refresh)
+    service.OnlinePaymentService._refresh_account_credentials(request_session, account)
+    assert seen == [('old-refresh', environment)]
+    assert account.access_token == 'new-access'
+    assert account.webhook_secret == 'old-access'
+    assert refresh_session.commits == 1 and refresh_session.closed

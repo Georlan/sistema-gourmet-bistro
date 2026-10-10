@@ -39,9 +39,10 @@ def _account(db, rid):
 
 @router.get('/pagbank/status')
 def connection_status(db: Session = Depends(get_db), user: Usuario = Depends(require_permission('configuracoes:administrar'))):
+    environment = oauth.environment_for_restaurant(require_tenant_id())
     account = _account(db, require_tenant_id())
-    return {'provider': 'pagbank', 'configured': oauth.configured(), 'environment': oauth.env('PAGBANK_ENV') or 'sandbox',
-            'connected': bool(account and account.access_token and account.status == 'active' and account.provider_environment == (oauth.env('PAGBANK_ENV') or 'sandbox')), 'status': account.status if account else 'disconnected',
+    return {'provider': 'pagbank', 'configured': oauth.configured(environment), 'environment': environment,
+            'connected': bool(account and account.access_token and account.status == 'active' and account.provider_environment == environment), 'status': account.status if account else 'disconnected',
             'provider_user_id': account.provider_user_id if account else None}
 
 
@@ -88,7 +89,7 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
             if initiator is None:
                 raise HTTPException(403, 'Usuário indisponível.')
             ensure_permission(initiator, 'configuracoes:administrar')
-            tokens = oauth.exchange(code)
+            tokens = oauth.exchange(code, environment=oauth.environment_for_restaurant(rid))
             db.query(Restaurante).filter(Restaurante.id == rid).with_for_update().one()
             # Switching receiver must never strand payments in flight.
             pending = db.query(OnlinePaymentIntent.id).filter(OnlinePaymentIntent.restaurante_id == rid,
@@ -96,7 +97,7 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
             account = _account(db, rid)
             if pending and (not account or account.provider_user_id != tokens.provider_user_id
                             or account.status != 'active'
-                            or account.provider_environment != (oauth.env('PAGBANK_ENV') or 'sandbox')
+                            or account.provider_environment != oauth.environment_for_restaurant(rid)
                             or db.query(RestaurantPaymentAccount.id).filter(
                                 RestaurantPaymentAccount.restaurante_id == rid,
                                 RestaurantPaymentAccount.provider != 'pagbank',
@@ -105,7 +106,7 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
             if account is None:
                 account = RestaurantPaymentAccount(id=str(uuid.uuid4()), restaurante_id=rid, provider='pagbank')
                 db.add(account)
-            account.provider_environment = oauth.env('PAGBANK_ENV') or 'sandbox'
+            account.provider_environment = oauth.environment_for_restaurant(rid)
             account.provider_user_id = tokens.provider_user_id
             account.access_token = tokens.access_token
             account.refresh_token = tokens.refresh_token
@@ -186,7 +187,7 @@ def disconnect(db: Session = Depends(get_db), user: Usuario = Depends(require_pe
             OnlinePaymentIntent.provider == 'pagbank', OnlinePaymentIntent.status.in_(('created', 'pending', 'error'))).first():
             raise HTTPException(409, 'Resolva os Pix pendentes antes de desconectar.')
         try:
-            oauth.revoke(account.access_token)
+            oauth.revoke(account.access_token, environment=account.provider_environment)
         except oauth.PagBankOAuthError as exc:
             raise HTTPException(502, 'PagBank não confirmou a desconexão.') from exc
         account.status = 'disconnected'
@@ -216,7 +217,7 @@ def _process_webhook(account_id: str, payment_id: str, raw: bytes, signature: st
         raise HTTPException(404, 'Conta não encontrada.')
     with tenant_session_scope(db, int(rid)):
         account = _account(db, rid)
-        if not account or account.id != account_id or account.status != 'active' or account.provider_environment != (oauth.env('PAGBANK_ENV') or 'sandbox'):
+        if not account or account.id != account_id or account.status != 'active' or account.provider_environment not in {'sandbox', 'production'}:
             raise HTTPException(404, 'Conta não encontrada.')
 
         candidate_tokens = [t for t in (account.access_token, account.webhook_secret) if t]

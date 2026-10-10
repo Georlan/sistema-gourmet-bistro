@@ -90,7 +90,8 @@ def test_rejects_currency_multiple_charges_non_pix_and_url_injection():
     with pytest.raises(PagBankError): cents(Decimal('1.001'))
 
 
-def test_callback_connects_seller_in_state_tenant_and_revokes_before_disconnect(monkeypatch):
+@pytest.mark.parametrize('environment', ['sandbox', 'production'])
+def test_callback_connects_seller_in_state_tenant_and_revokes_before_disconnect(monkeypatch, environment):
     from fastapi.testclient import TestClient
     from app.main import app
     from app.database import SessionLocal, current_restaurante_id
@@ -99,6 +100,10 @@ def test_callback_connects_seller_in_state_tenant_and_revokes_before_disconnect(
     from app.services.online_payments.oauth import MercadoPagoOAuthTokens
 
     rid = 9940
+    if environment == 'production':
+        monkeypatch.setenv('PAGBANK_PRODUCTION_RESTAURANT_IDS', str(rid))
+        for name in ('CLIENT_ID', 'CLIENT_SECRET', 'APP_TOKEN'):
+            monkeypatch.setenv('PAGBANK_PRODUCTION_' + name, 'production-' + name)
     context = current_restaurante_id.set(rid)
     db = SessionLocal()
     try:
@@ -109,7 +114,11 @@ def test_callback_connects_seller_in_state_tenant_and_revokes_before_disconnect(
         db.add(user)
         db.commit()
         tokens = MercadoPagoOAuthTokens('seller-token', 'seller-refresh', None, 'ACCO_seller', 3600)
-        monkeypatch.setattr(oauth, 'exchange', lambda code: tokens)
+        exchanged = []
+        def exchange(code, **kwargs):
+            exchanged.append(kwargs['environment'])
+            return tokens
+        monkeypatch.setattr(oauth, 'exchange', exchange)
         _, state = oauth.authorization(rid, user.id)
         client = TestClient(app, base_url='https://testserver')
         response = client.get('/payments/pagbank/oauth/callback', params={'code': 'authorized', 'state': state}, follow_redirects=False)
@@ -119,14 +128,18 @@ def test_callback_connects_seller_in_state_tenant_and_revokes_before_disconnect(
         result = pagbank_payments.complete(pagbank_payments.AuthorizationCompletion(code='authorized', state=state), db=db, user=user)
         assert result['status'] == 'connected'
         account = db.query(RestaurantPaymentAccount).filter_by(restaurante_id=rid, provider='pagbank').one()
+        assert exchanged == [environment]
+        assert account.provider_environment == environment
+        status = pagbank_payments.connection_status(db=db, user=user)
+        assert status['connected'] and status['environment'] == environment
         assert account.access_token == 'seller-token'
         assert account._access_token != account.access_token
         assert account.provider_user_id == 'ACCO_seller'
         assert account.status == 'active'
         revoked = []
-        monkeypatch.setattr(oauth, 'revoke', lambda token: revoked.append(token))
+        monkeypatch.setattr(oauth, 'revoke', lambda token, **kwargs: revoked.append((token, kwargs['environment'])))
         result = pagbank_payments.disconnect(db=db, user=user)
-        assert result['status'] == 'disconnected' and revoked == ['seller-token']
+        assert result['status'] == 'disconnected' and revoked == [('seller-token', environment)]
         assert account.access_token == ''
         from fastapi import HTTPException
         other_user = Usuario(id='another-admin', restaurante_id=rid, nome='Other', cargo='admin', role='admin')
@@ -584,3 +597,58 @@ def test_reconciliation_migration_roundtrip():
             assert connection.exec_driver_sql('SELECT id, reconciliation_attempted_at FROM online_payment_intents').one() == ('historic', None)
             migration.downgrade()
             assert connection.exec_driver_sql('SELECT id FROM online_payment_intents').scalar() == 'historic'
+
+
+def test_production_pilot_is_tenant_scoped_and_never_reuses_sandbox_credentials(monkeypatch):
+    monkeypatch.setenv('PAGBANK_PRODUCTION_RESTAURANT_IDS', '8')
+    assert oauth.environment_for_restaurant(8) == 'production'
+    assert oauth.environment_for_restaurant(6) == 'sandbox'
+    assert not oauth.configured('production')
+    with pytest.raises(oauth.PagBankOAuthError):
+        oauth.authorization(8, 'admin')
+    for name in ('CLIENT_ID', 'CLIENT_SECRET', 'APP_TOKEN'):
+        monkeypatch.setenv('PAGBANK_PRODUCTION_' + name, 'production-' + name)
+    prod, state = oauth.authorization(8, 'admin')
+    sandbox, other_state = oauth.authorization(6, 'admin')
+    assert urlparse(prod).hostname == 'connect.pagbank.com.br'
+    assert parse_qs(urlparse(prod).query)['client_id'] == ['production-CLIENT_ID']
+    assert urlparse(sandbox).hostname == 'connect.sandbox.pagbank.com.br'
+    assert parse_qs(urlparse(sandbox).query)['client_id'] == ['test-CLIENT_ID']
+    assert oauth.decode_state(state, state) == (8, 'admin')
+    assert oauth.decode_state(other_state, other_state) == (6, 'admin')
+    monkeypatch.delenv('PAGBANK_PRODUCTION_RESTAURANT_IDS')
+    with pytest.raises(oauth.PagBankOAuthError):
+        oauth.decode_state(state, state)
+    assert oauth.decode_state(other_state, other_state) == (6, 'admin')
+
+
+def test_production_oauth_uses_only_production_application_credentials(monkeypatch):
+    for name in ('CLIENT_ID', 'CLIENT_SECRET', 'APP_TOKEN'):
+        monkeypatch.setenv('PAGBANK_PRODUCTION_' + name, 'production-' + name)
+    captured = []
+    def handle(request):
+        captured.append(request)
+        return httpx.Response(201, json={'access_token':'seller-production', 'account_id':'ACCO_prod', 'expires_in':3600})
+    with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+        oauth._post('/oauth2/refresh', {'refresh_token':'seller-refresh'}, environment='production', client=client)
+        oauth._post('/oauth2/refresh', {'refresh_token':'sandbox-refresh'}, environment='sandbox', client=client)
+    assert captured[0].url.host == 'api.pagseguro.com'
+    assert captured[0].headers['Authorization'] == 'Bearer production-APP_TOKEN'
+    assert captured[0].headers['X_CLIENT_SECRET'] == 'production-CLIENT_SECRET'
+    assert captured[1].url.host == 'sandbox.api.pagseguro.com'
+    assert captured[1].headers['Authorization'] == 'Bearer test-APP_TOKEN'
+
+
+def test_payment_adapter_uses_account_environment_when_pilot_policy_changes(monkeypatch):
+    from app.models import RestaurantPaymentAccount
+    from app.services.online_payments.provider_registry import provider_for_account
+    monkeypatch.setenv('PAGBANK_PRODUCTION_RESTAURANT_IDS', '8')
+    for environment, host in [('sandbox','sandbox.api.pagseguro.com'),('production','api.pagseguro.com')]:
+        account = RestaurantPaymentAccount(restaurante_id=8, provider='pagbank', access_token='seller', provider_environment=environment)
+        adapter = provider_for_account(account)
+        try:
+            assert adapter._client.base_url.host == host
+        finally:
+            adapter._client.close()
+    with pytest.raises(oauth.PagBankOAuthError):
+        PagBankProvider('seller', environment='untrusted-host')
