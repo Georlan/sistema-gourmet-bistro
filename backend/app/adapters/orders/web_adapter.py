@@ -380,6 +380,8 @@ class CardapioWebAdapter:
                         db,
                         intent=existing_intent,
                         payer_email=payload.cliente_email or "",
+                        payer_name=payload.cliente_nome,
+                        payer_tax_id=payload.cliente_documento,
                     )
                 return _existing_order_response(db, existing_comanda)
 
@@ -480,6 +482,10 @@ class CardapioWebAdapter:
             payment_shift = None
             if online_payment:
                 payment_account = OnlinePaymentService.active_account(db, rest_id)
+                if payment_account.provider == "pagbank":
+                    from ...tax_ids import is_valid_cpf, is_valid_cnpj
+                    if not (is_valid_cpf(payload.cliente_documento) or is_valid_cnpj(payload.cliente_documento)):
+                        raise HTTPException(422, "Informe um CPF/CNPJ válido do comprador para gerar o Pix PagBank.")
                 payment_shift = OnlinePaymentService.open_shift(db, rest_id)
 
             fulfillment = {
@@ -606,6 +612,8 @@ class CardapioWebAdapter:
                     db,
                     intent=payment_intent,
                     payer_email=payload.cliente_email or "",
+                    payer_name=payload.cliente_nome,
+                    payer_tax_id=payload.cliente_documento,
                     account=payment_account,
                 )
 

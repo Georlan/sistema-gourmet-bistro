@@ -237,6 +237,7 @@ def _public_restaurant_payload(
     configuracao: Optional[ConfiguracaoRestaurante] = None,
     pagamento_online_ativo: bool = False,
     beneficios: Optional[dict[str, bool]] = None,
+    documento_pix_obrigatorio: bool = False,
 ) -> dict:
     policy = evaluate_online_order_policy(restaurante, configuracao)
     next_opening = (
@@ -269,6 +270,7 @@ def _public_restaurant_payload(
         "horarios_funcionamento": restaurante.horarios_funcionamento,
         "formas_pagamento_aceitas": restaurante.formas_pagamento_aceitas,
         "pagamento_online_ativo": pagamento_online_ativo,
+        "documento_pix_obrigatorio": documento_pix_obrigatorio,
         "beneficios": beneficios or {"coupons": False, "loyalty": False, "cashback": False},
         "conta_cliente_obrigatoria": bool(settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS),
         "tipos_pedido_ativos": configuracao.tipos_pedido_ativos if configuracao else None,
@@ -323,10 +325,11 @@ def obter_config_cardapio_digital(
         if not restaurante:
             raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
         configuracao = _public_configuration(db, rest_id)
-        pagamento_online_ativo = OnlinePaymentService.has_active_account(db, rest_id)
+        pagamento_online_ativo, documento_pix_obrigatorio = OnlinePaymentService.public_payment_capabilities(db, rest_id)
         return _public_restaurant_payload(
             restaurante, configuracao, pagamento_online_ativo,
             _public_benefit_capabilities(db, rest_id, restaurante.plano),
+            documento_pix_obrigatorio=documento_pix_obrigatorio,
         )
 
 
@@ -393,7 +396,7 @@ def obter_cardapio_publico(
             raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
 
         configuracao = _public_configuration(db, rest_id)
-        pagamento_online_ativo = OnlinePaymentService.has_active_account(db, rest_id)
+        pagamento_online_ativo, documento_pix_obrigatorio = OnlinePaymentService.public_payment_capabilities(db, rest_id)
         categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
         produtos = db.query(Produto).filter(
             Produto.restaurante_id == rest_id,
@@ -423,6 +426,7 @@ def obter_cardapio_publico(
                 configuracao,
                 pagamento_online_ativo,
                 _public_benefit_capabilities(db, rest_id, restaurante.plano),
+                documento_pix_obrigatorio=documento_pix_obrigatorio,
             ),
             "categorias": [
                 _public_category_payload(category)

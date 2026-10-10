@@ -179,6 +179,17 @@ def create_refund_guarded(
             alocacoes=alocacoes,
         )
 
+    pagbank_intent = db.query(OnlinePaymentIntent).filter(
+        OnlinePaymentIntent.restaurante_id == restaurante_id,
+        OnlinePaymentIntent.pagamento_id == payment_id,
+        OnlinePaymentIntent.provider == "pagbank",
+    ).first()
+    if pagbank_intent is not None:
+        raise RefundDomainError(
+            "Devolva este Pix pela conta PagBank e solicite a conciliação. O KÔMA não registra devolução sem confirmação bancária.",
+            status_code=409,
+        )
+
     direct_intent = db.query(OnlinePaymentIntent).filter(
         OnlinePaymentIntent.restaurante_id == restaurante_id,
         OnlinePaymentIntent.pagamento_id == payment_id,

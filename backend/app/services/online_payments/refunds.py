@@ -65,7 +65,7 @@ def _provider_account(db: Session, restaurante_id: int) -> RestaurantPaymentAcco
     account = db.query(RestaurantPaymentAccount).filter(
         RestaurantPaymentAccount.restaurante_id == restaurante_id,
         RestaurantPaymentAccount.provider == "mercado_pago",
-        RestaurantPaymentAccount.status == "active",
+        RestaurantPaymentAccount.status.in_(("active", "disconnected")),
     ).first()
     if account is None or not account.access_token:
         raise RefundDomainError(

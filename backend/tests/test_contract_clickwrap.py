@@ -402,8 +402,7 @@ def test_latest_linked_acceptance_switches_future_split_without_rewriting_histor
         db.commit()
         frozen_old_ciphertext = old_acceptance.receipt_snapshot_encrypted
 
-        # O slug de recursos já pode até dizer Premium: dinheiro continua Pro 2.5
-        # enquanto o novo aceite ainda não virou autoridade.
+        # O contrato antigo continua íntegro; novos pagamentos têm taxa dispensada.
         restaurant = SimpleNamespace(
             id=991,
             plano="premium",
@@ -415,7 +414,7 @@ def test_latest_linked_acceptance_switches_future_split_without_rewriting_histor
             restaurant,
         ) == Decimal("0.00")
 
-        # A mudança financeira só acontece quando o novo aceite é vinculado.
+        # A vinculação troca os termos, preservando a dispensa de taxa das novas vendas.
         db.add(
             RestaurantContractAcceptance(
                 id="00000000-0000-0000-0000-000000000002",

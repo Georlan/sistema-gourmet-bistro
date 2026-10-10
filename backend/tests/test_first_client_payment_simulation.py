@@ -465,7 +465,7 @@ def test_first_client_zero_commission_payment_and_full_refund_simulation(monkeyp
 
 
 
-def test_dine_in_pix_split_approval_and_full_lifecycle_simulation(monkeypatch):
+def test_dine_in_fee_free_pix_approval_and_full_lifecycle_simulation(monkeypatch):
     """Simula Pix Split de DINE_IN sem mesa até a conclusão, sem dinheiro real."""
     restaurante_id = DINE_IN_RESTAURANT_ID
     tenant_token = current_restaurante_id.set(restaurante_id)

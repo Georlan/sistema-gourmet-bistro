@@ -76,6 +76,7 @@ export interface CardapioCheckoutRequest {
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
+  customerDocument?: string;
   paymentMethodDetail?: "dinheiro" | "pix" | "cartao_credito" | "cartao_debito";
   trocoPara?: number;
   bairro?: string;
@@ -160,6 +161,7 @@ export default function CardapioCartDrawer({
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
+  const [guestDocument, setGuestDocument] = useState("");
   const [customerRecognition, setCustomerRecognition] = useState<CustomerRecognitionStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [invalidField, setInvalidField] = useState("");
@@ -550,6 +552,10 @@ export default function CardapioCartDrawer({
       ? deliveryAddressDraftToSnapshot(deliveryAddressDraft)
       : null;
 
+    if (paymentDetail === "pix" && brandConfig?.pixPayerDocumentRequired && !/^(\d{11}|\d{14})$/.test(guestDocument)) {
+      reportValidationError("Informe o CPF ou CNPJ do comprador para gerar o Pix PagBank.", "input-customer-document");
+      return;
+    }
     if (paymentDetail === "pix" && !/^\S+@\S+\.\S+$/.test(guestEmail.trim())) {
       reportValidationError("Informe um e-mail válido para gerar o pagamento Pix.", "input-customer-email");
       return;
@@ -567,6 +573,7 @@ export default function CardapioCartDrawer({
       addressSnapshot: addressSnapshot || undefined,
       customerName: customerName.trim(),
       customerPhone: normalizeBrazilianPhone(customerPhone),
+      customerDocument: paymentDetail === "pix" && brandConfig?.pixPayerDocumentRequired ? guestDocument : undefined,
       customerEmail: paymentDetail === "pix" ? guestEmail.trim().toLowerCase() : undefined,
       paymentMethodDetail: paymentDetail,
       trocoPara: paymentDetail === "dinheiro" && precisaTroco && trocoValorNum > 0 ? trocoValorNum : undefined,
@@ -1131,6 +1138,15 @@ export default function CardapioCartDrawer({
                     )}
                     {onAuthClick && <button type="button" onClick={onAuthClick} className="text-left text-xs font-semibold leading-relaxed text-koma-muted transition hover:text-emerald-400">{brandConfig?.benefits?.loyalty ? "Quer acompanhar seus benefícios? " : "Já tem cadastro? "}<strong className="text-emerald-400">Entrar na conta.</strong></button>}
                   </div>
+                )}
+                {paymentDetail === "pix" && brandConfig?.pixPayerDocumentRequired && (
+                  <label className="mt-3 block text-xs text-koma-muted">CPF ou CNPJ do comprador
+                    <input id="input-customer-document" inputMode="numeric" autoComplete="off" maxLength={14}
+                      value={guestDocument} onChange={event => { setGuestDocument(event.target.value.replace(/\D/g, '')); clearValidation("input-customer-document"); }}
+                      aria-invalid={invalidField === "input-customer-document"}
+                      className="mt-1 h-12 w-full rounded-xl border border-koma-border bg-koma-card px-4 text-sm text-koma-foreground" />
+                    <span className="mt-1 block">O PagBank exige o documento para emitir o Pix deste pedido.</span>
+                  </label>
                 )}
                 {paymentDetail === "pix" && (
                   <label className="mt-3 block">

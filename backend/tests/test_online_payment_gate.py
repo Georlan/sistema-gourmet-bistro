@@ -162,7 +162,7 @@ def test_marketplace_fee_is_zero_until_plan_fees_are_explicitly_enabled(monkeypa
         assert OnlinePaymentService.marketplace_fee(Decimal("100.00"), plan) == Decimal("0.00")
 
 
-def test_marketplace_fee_uses_exact_commercial_rate_for_stored_plan(monkeypatch):
+def test_new_payments_have_zero_platform_fee_even_with_old_fee_flag(monkeypatch):
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     amount = Decimal("100.00")
 
@@ -266,7 +266,7 @@ def test_tenant_marketplace_fee_flag_disabled_does_not_resolve_contract(monkeypa
     ) == Decimal("0.00")
 
 
-def test_tenant_marketplace_fee_fails_closed_for_broken_linked_contract(monkeypatch):
+def test_zero_fee_does_not_depend_on_old_linked_rate_contract(monkeypatch):
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
 
     def _broken_contract(_db, _restaurante_id):
@@ -278,18 +278,11 @@ def test_tenant_marketplace_fee_fails_closed_for_broken_linked_contract(monkeypa
     )
 
     restaurant = SimpleNamespace(id=126, plano="pocket")
-    with pytest.raises(
-        OnlinePaymentConfigurationError,
-        match="Termos comerciais indisponíveis",
-    ):
-        OnlinePaymentService.marketplace_fee_for_tenant(
-            None,
-            Decimal("100.00"),
-            restaurant,
-        )
+    assert OnlinePaymentService.marketplace_fee_for_tenant(None, Decimal("100.00"), restaurant) == Decimal("0.00")
 
 
-def test_online_order_is_published_and_settled_only_after_provider_approval(monkeypatch):
+@pytest.mark.parametrize("provider_name", ["mercado_pago", "pagbank"])
+def test_online_order_is_published_and_settled_only_after_provider_approval(monkeypatch, provider_name):
     Base.metadata.create_all(bind=engine)
     token = current_restaurante_id.set(RESTAURANT_ID)
     db = SessionLocal()
@@ -326,7 +319,8 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
         account = RestaurantPaymentAccount(
             id="payment-gate-account",
             restaurante_id=RESTAURANT_ID,
-            provider="mercado_pago",
+            provider=provider_name,
+            provider_environment="sandbox" if provider_name == "pagbank" else None,
             provider_user_id="seller-9917",
             status="active",
         )
@@ -354,6 +348,7 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
             turno=shift,
             amount=dto.total,
             idempotency_key="payment-gate-order-key",
+            provider=provider_name,
         )
         assert Decimal(str(intent.marketplace_fee)) == Decimal("0.0")
         assert intent.fee_settlement == "none"
@@ -381,16 +376,30 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
                 )
 
         monkeypatch.setattr(
-            "app.services.online_payments.service.MercadoPagoProvider",
+            "app.services.online_payments.service.MercadoPagoProvider" if provider_name == "mercado_pago" else "app.services.online_payments.provider_registry.PagBankProvider",
             ApprovedProvider,
         )
+        if provider_name == "pagbank":
+            import json
+            from fastapi.testclient import TestClient
+            from app.main import app
+            from app.models import OnlinePaymentWebhookEvent
+            client = TestClient(app)
+            raw = json.dumps({"id": "mp-payment-9917"}).encode()
+            headers = {"content-type": "application/json", "x-authenticity-token": hashlib.sha256(b"seller-access-token-" + raw).hexdigest()}
+            path = "/payments/webhooks/pagbank/payment-gate-account"
+            assert client.post(path, content=raw, headers={"content-type": "application/json"}).status_code == 401
+            assert client.post(path, content=raw, headers=headers).status_code == 200
+            assert client.post(path, content=raw, headers=headers).status_code == 200
+            assert db.query(OnlinePaymentWebhookEvent).filter_by(restaurante_id=RESTAURANT_ID, provider="pagbank").count() == 1
+
         settled, became_approved = OnlinePaymentService.reconcile_provider_payment(
             db,
             account=account,
             external_payment_id="mp-payment-9917",
         )
 
-        assert became_approved is True
+        assert became_approved is (provider_name != "pagbank")
         assert settled is not None and settled.status == "approved"
         db.refresh(comanda)
         assert comanda.online_payment_status == "approved"
@@ -411,7 +420,8 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
         assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANT_ID).count() == 1
     finally:
         db.rollback()
-        for model in (OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
+        from app.models import OnlinePaymentWebhookEvent
+        for model in (OnlinePaymentWebhookEvent, OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
             db.query(model).filter(model.restaurante_id == RESTAURANT_ID).delete(synchronize_session=False)
         db.query(Restaurante).filter(Restaurante.id == RESTAURANT_ID).delete(synchronize_session=False)
         db.commit()
