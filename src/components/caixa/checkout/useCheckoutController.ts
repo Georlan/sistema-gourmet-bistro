@@ -233,6 +233,16 @@ export function useCheckoutController({
   >('');
 
   const [paymentValor, setPaymentValor] = useState<number | ''>('');
+  const [mixedPayment, setMixedPayment] = useState(false);
+
+  const toggleMixedPayment = (enabled: boolean) => {
+    if (isProcessingPaymentRef.current) return;
+    setMixedPayment(enabled);
+    setSelectedItemIds([]);
+    setSplitPeople('1');
+    setPaymentValor(enabled ? '' : selectedOrder ? getCheckoutBalance(selectedOrder) : '');
+    setErrorMsg('');
+  };
 
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
 
@@ -300,7 +310,7 @@ export function useCheckoutController({
 
   useEffect(() => {
     if (showCheckoutModal && selectedOrder) {
-      if (!paymentValor || Number(paymentValor || 0) <= 0) {
+      if (!mixedPayment && (!paymentValor || Number(paymentValor || 0) <= 0)) {
         const balance = isTableCheckoutOrder(selectedOrder)
           ? selectedItemIds.length > 0
             ? getSelectedItemsTotal(selectedOrder, selectedItemIds)
@@ -311,10 +321,11 @@ export function useCheckoutController({
         }
       }
     } else if (!showCheckoutModal) {
+      setMixedPayment(false);
       setPaymentValor('');
       setPaymentMetodo('');
     }
-  }, [showCheckoutModal, selectedOrder, selectedItemIds]);
+  }, [showCheckoutModal, selectedOrder, selectedItemIds, mixedPayment]);
 
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -335,6 +346,12 @@ export function useCheckoutController({
 
     try {
       let valorPagamento = Number(paymentValor || 0);
+      const balanceBeforePayment = getCheckoutBalance(selectedOrder);
+      if (mixedPayment && (!Number.isFinite(valorPagamento) || valorPagamento <= 0 || valorPagamento > balanceBeforePayment)) {
+        throw new Error('Informe o valor desta parte, maior que zero e até o saldo restante.');
+      }
+      let confirmedAmount = 0;
+      let confirmedApproved = true;
       if (!Number.isFinite(valorPagamento) || valorPagamento <= 0) {
         const autoBalance = getCheckoutBalance(selectedOrder);
         if (autoBalance > 0) {
@@ -392,6 +409,11 @@ export function useCheckoutController({
             throw new Error(await refreshAfterItemSelectionConflict());
           }
           throw new Error(errData.detail || 'Erro ao registrar pagamento da mesa');
+        }
+        if (mixedPayment) {
+          const payment = await res.json();
+          confirmedAmount = Number(payment.valor);
+          confirmedApproved = payment.status === 'aprovado';
         }
       } else if (selectedItemIds.length > 0) {
         const itemsByComanda: Record<string, { itemIds: string[]; subtotal: number }> = {};
@@ -485,6 +507,11 @@ export function useCheckoutController({
             const errData = await res.json();
             throw new Error(errData.detail || `Erro ao registrar pagamento na comanda ${cid}`);
           }
+          if (mixedPayment) {
+            const payment = await res.json();
+            confirmedAmount += Number(payment.valor);
+            confirmedApproved = confirmedApproved && payment.status === 'aprovado';
+          }
           remainingVal -= valToPay;
         }
       }
@@ -505,8 +532,15 @@ export function useCheckoutController({
       setPaymentMetodo('');
       setIdempotencyKey('');
 
-      setSelectedOrder(null);
-      setShowCheckoutModal(false);
+      const remainingBalance = Math.round((balanceBeforePayment - confirmedAmount) * 100) / 100;
+      if (mixedPayment && confirmedApproved && Number.isFinite(confirmedAmount) && confirmedAmount > 0 && remainingBalance > 0.01) {
+        setSelectedOrder({ ...selectedOrder, valorPago: Number(selectedOrder.valorPago || 0) + confirmedAmount });
+        setPaymentValor(remainingBalance);
+        showToast('Parte recebida. Escolha a próxima forma de pagamento.', 'success');
+      } else {
+        setSelectedOrder(null);
+        setShowCheckoutModal(false);
+      }
       await Promise.all([onRefreshOrders(), fetchTurno()]);
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro de conexão ao servidor.');
@@ -768,6 +802,8 @@ export function useCheckoutController({
     setPaymentMetodo: selectPaymentMetodo,
     paymentValor,
     setPaymentValor,
+    mixedPayment,
+    setMixedPayment: toggleMixedPayment,
     selectedItemIds,
     setSelectedItemIds,
     paymentCPF,
