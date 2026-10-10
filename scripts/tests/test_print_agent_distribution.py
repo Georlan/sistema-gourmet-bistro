@@ -61,3 +61,39 @@ def test_installers_do_not_require_public_repository():
         assert "github.com/Georlan/sistema-gourmet-bistro" not in text
         assert "raw.githubusercontent.com" not in text
         assert "Pacote local do KOMA Print Agent" in text
+
+
+def test_manifest_is_explicit_and_zip_deterministic(tmp_path):
+    """Novos .py, .sh ou .ps1 nunca podem entrar automaticamente numa release."""
+    import runpy
+
+    manifest = runpy.run_path(str(ROOT / "scripts/package_print_agent.py"))
+    approved = {
+        *manifest["ROOT_FILES"],
+        *(f"print-agent/{name}" for name in manifest["AGENT_FILES"]),
+        *(f"print-agent/adapters/{name}" for name in manifest["ADAPTER_FILES"]),
+    }
+    files = manifest["package_files"]()
+    assert {path.relative_to(ROOT).as_posix() for path in files} == approved
+
+    outputs = [tmp_path / "a.zip", tmp_path / "b.zip"]
+    for path in outputs:
+        manifest["build_bundle"](path)
+    assert outputs[0].read_bytes() == outputs[1].read_bytes()
+    with ZipFile(outputs[0]) as archive:
+        assert set(archive.namelist()) == approved
+
+
+def test_public_publisher_is_manual_and_never_pushes_private_source():
+    publish = (ROOT / ".github/workflows/print-agent-public-release.yml").read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in publish
+    assert "if: github.ref == 'refs/heads/main'" in publish
+    assert "environment: print-agent-public-release" in publish
+    assert "KOMA_PRINT_AGENT_DISTRIBUTION_TOKEN" in publish
+    assert "KOMA_PRINT_AGENT_DISTRIBUTION_REPO" in publish
+    assert "gh release create" in publish
+    assert "dist/KOMA-print-agent.zip" in publish
+    assert "dist/KOMA-print-agent.zip.sha256" in publish
+    assert "gh api" in publish
+    assert "github.com/Georlan/sistema-gourmet-bistro" not in publish
+    assert "git push" not in publish
