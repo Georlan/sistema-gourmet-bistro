@@ -97,7 +97,7 @@ async function openOnlineMenu(page: Page, theme: 'dark' | 'light') {
   await page.goto('/?view=caixa');
   await expect(page.locator('html')).toHaveAttribute('data-koma-theme', theme);
   await navigate(page, 'Cardápio online');
-  await expect(page.locator('.cashier-topbar h2')).toHaveText(/Configurações do cardápio online/i);
+  await expect(page.locator('.cashier-topbar h2')).toHaveText(/^Cardápio online$/i);
 }
 
 const mobileViewports = [
@@ -138,12 +138,9 @@ for (const theme of ['dark', 'light'] as const) {
 
       await navigateHorizontal(page, 'Entrega');
       await expect(page.getByRole('heading', { name: 'Entrega', exact: true })).toBeVisible();
-      await expect(page.getByText('Taxa de entrega automática', { exact: true })).toBeVisible();
-      await expect(page.getByText('Sugestão do KÔMA', { exact: true })).toBeVisible();
-      const perKm = page.getByLabel('Valor por km da entrega');
-      await expect(perKm).toBeVisible();
-      await perKm.fill('0,50');
-      await expect(perKm).toHaveValue('0,50');
+      await expect(page.getByRole('heading', { name: 'Taxas de Entrega por Bairro', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Adicionar bairro', exact: true })).toBeVisible();
+      await expect(page.getByLabel('Valor por km da entrega')).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
 
       await navigateHorizontal(page, 'Pagamentos');
@@ -170,7 +167,7 @@ test('cardápio online mantém abas verticais e horizontais no notebook', async 
   const sidebar = page.locator('.cashier-sidebar:visible');
   await expect(sidebar).toBeVisible();
   await sidebar.getByRole('button', { name: 'Cardápio online', exact: true }).click();
-  await expect(page.locator('.cashier-topbar h2')).toHaveText(/Configurações do cardápio online/i);
+  await expect(page.locator('.cashier-topbar h2')).toHaveText(/^Cardápio online$/i);
 
   const subnav = page.locator('.cashier-subnav');
   await expect(subnav).toBeVisible();

@@ -140,7 +140,7 @@ test('PDV reconciles or rolls back the temporary order instead of leaving duplic
   assert.match(pdv, /koma_optimistic_order_remove/);
   assert.match(operational, /koma_optimistic_order_reconcile/);
   assert.match(operational, /String\(order\.id\) !== tempId/);
-  assert.match(cashierOrders, /const \[deliveryOrders, setDeliveryOrders\] = useState<DeliveryOrderView\[\]>\(\[\]\)/);
+  assert.match(cashierOrders, /initialDigitalSnapshot\?\.active \|\| \[\]/);
   assert.doesNotMatch(cashierOrders, /projectDeliveryOrdersFromSharedSnapshot\(orders\)/);
 });
 

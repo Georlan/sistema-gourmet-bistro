@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 
 // Navigation context only; readiness always comes from the onboarding API.
-const SETUP_MODE_KEY = 'koma_onboarding_setup_mode';
+export const ONBOARDING_SETUP_MODE_KEY = 'koma_onboarding_setup_mode';
+const SETUP_MODE_KEY = ONBOARDING_SETUP_MODE_KEY;
 
 export function isInitialSetup(): boolean {
   try { return sessionStorage.getItem(SETUP_MODE_KEY) === '1'; } catch { return false; }

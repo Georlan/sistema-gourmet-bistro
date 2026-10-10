@@ -23,12 +23,12 @@ test('landing management qualifies advanced features by plan', () => {
   assert.match(management, /Fidelidade e cupons no Premium/);
 });
 
-test('landing comparison is framed as an example instead of a universal claim', () => {
+test('landing comparison uses Sem KÔMA versus Com KÔMA and preserves example qualification', () => {
   const comparison = source('src/landing/sections/ValueStrip.tsx');
 
-  assert.match(comparison, /OPERAÇÃO FRAGMENTADA/);
+  assert.match(comparison, /SEM KÔMA/);
   assert.match(comparison, /EXEMPLO: 4 REPASSES/);
-  assert.doesNotMatch(comparison, /<strong>SEM KÔMA<\/strong>/);
+  assert.match(comparison, /<strong>COM KÔMA<\/strong>/);
 });
 
 test('landing SEO uses the public root and qualifies advanced features', () => {

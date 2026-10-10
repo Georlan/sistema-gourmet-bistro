@@ -1,3 +1,6 @@
+import { createCoalescedRefresh } from '../../../utils/coalescedRefresh';
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
+import { orderUpdateAffects } from '../../../utils/orderUpdate';
 import React, { useEffect, useRef, useState } from 'react';
 import { deriveProductionState } from '../../../domain/operationalState';
 import { describeTableOrders } from '../../../domain/tableReadModel';
@@ -13,7 +16,7 @@ import { getDigitalOrderActionCapability } from '../../../domain/cashierOrderPro
 
 type Props = Pick<
   CaixaPanelProps,
-  'orders' | 'apiBaseUrl' | 'authHeaders' | 'onRefreshOrders' | 'onOptimisticUpdateItemStatus'
+  'initialDigitalSnapshot' | 'orders' | 'apiBaseUrl' | 'authHeaders' | 'onRefreshOrders' | 'onOptimisticUpdateItemStatus'
 > & {
   showToast: CashierNotice;
   isLoading: boolean;
@@ -33,6 +36,7 @@ type PendingCourierAssignment = {
 
 /** Owns orders state, effects and actions; composition supplies only cross-feature dependencies. */
 export function useCashierOrders({
+  initialDigitalSnapshot,
   orders,
   apiBaseUrl,
   authHeaders,
@@ -233,7 +237,15 @@ export function useCashierOrders({
         headers: authHeaders,
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.detail || 'Não foi possível transferir a mesa.');
+      if (!response.ok) {
+        if (response.status === 409) {
+          setTableTransferTargetId('');
+          // A concorrência pode ter alterado as mesas desde a seleção.
+          // Preserve a explicação do conflito mesmo se a atualização falhar.
+          try { await onRefreshOrders(); } catch { /* a próxima atualização pode recuperar */ }
+        }
+        throw new Error(data?.detail || 'Não foi possível transferir a mesa.');
+      }
       setSelectedKanbanOrder(null);
       setTableTransferTargetId('');
       await onRefreshOrders();
@@ -281,9 +293,17 @@ export function useCashierOrders({
     return { mergedMesaIds, transferredFromMesaIds };
   };
 
-  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>([]);
-  const [pendingAcceptanceOrders, setPendingAcceptanceOrders] = useState<DeliveryOrderView[]>([]);
-  const [deliveryOrdersLoadState, setDeliveryOrdersLoadState] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>(() => (initialDigitalSnapshot?.active || []).map(projectApiComandaToDeliveryView).filter((row): row is DeliveryOrderView => row !== null));
+  const [pendingAcceptanceOrders, setPendingAcceptanceOrdersState] = useState<DeliveryOrderView[]>(() => (initialDigitalSnapshot?.pending || []).map(projectApiComandaToDeliveryView).filter((row): row is DeliveryOrderView => row !== null));
+  const pendingAcceptanceOrdersRef = useRef<DeliveryOrderView[]>(pendingAcceptanceOrders);
+  const setPendingAcceptanceOrders: React.Dispatch<React.SetStateAction<DeliveryOrderView[]>> = (update) => {
+    const current = pendingAcceptanceOrdersRef.current;
+    const next = typeof update === 'function' ? update(current) : update;
+    pendingAcceptanceOrdersRef.current = next;
+    setPendingAcceptanceOrdersState(next);
+  };
+  const [hasDeliverySnapshot, setHasDeliverySnapshot] = useState(Boolean(initialDigitalSnapshot));
+  const [deliveryOrdersLoadState, setDeliveryOrdersLoadState] = useState<'loading' | 'loaded' | 'error'>(initialDigitalSnapshot ? 'loaded' : 'loading');
   const [pendingDeliveryOrderIds, setPendingDeliveryOrderIds] = useState<ReadonlySet<string>>(new Set());
   const deliveryOrdersRequestRef = useRef(0);
   const pendingDeliveryMutationRef = useRef<Record<string, PendingDeliveryMutation>>({});
@@ -296,8 +316,8 @@ export function useCashierOrders({
   const [motoboysLoadState, setMotoboysLoadState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const motoboysRequestRef = useRef(0);
 
-  const [selectedMotoboys, setSelectedMotoboysState] = useState<Record<string, string>>({});
-  const selectedMotoboysRef = useRef<Record<string, string>>({});
+  const [selectedMotoboys, setSelectedMotoboysState] = useState<Record<string, string>>(() => Object.fromEntries(deliveryOrders.map(order => [String(order.id), order.motoboyId ? String(order.motoboyId) : ''])));
+  const selectedMotoboysRef = useRef<Record<string, string>>(selectedMotoboys);
   const pendingCourierAssignmentRef = useRef<Record<string, PendingCourierAssignment>>({});
   const pendingCourierReassignmentRef = useRef<Set<string>>(new Set());
   const pendingFulfillmentConversionRef = useRef<Set<string>>(new Set());
@@ -404,7 +424,7 @@ export function useCashierOrders({
     applySelectedMotoboysState(next);
   };
 
-  const fetchDeliveryOrders = async () => {
+  const readDeliveryOrders = async () => {
     const requestId = ++deliveryOrdersRequestRef.current;
     setDeliveryOrdersLoadState((current) => current === 'loaded' ? current : 'loading');
     try {
@@ -442,6 +462,7 @@ export function useCashierOrders({
           pendingMapped.map((order: DeliveryOrderView) => [String(order.id), order] as const)
         ).values()));
         syncSelectedMotoboysFromServer(mapped);
+        setHasDeliverySnapshot(true);
         setDeliveryOrdersLoadState('loaded');
       } else if (requestId === deliveryOrdersRequestRef.current) {
         setDeliveryOrdersLoadState('error');
@@ -453,6 +474,12 @@ export function useCashierOrders({
       }
     }
   };
+
+  const deliveryReadRef = useRef(readDeliveryOrders);
+  deliveryReadRef.current = readDeliveryOrders;
+  const deliveryRefreshRef = useRef<ReturnType<typeof createCoalescedRefresh> | null>(null);
+  if (!deliveryRefreshRef.current) deliveryRefreshRef.current = createCoalescedRefresh(() => deliveryReadRef.current());
+  const fetchDeliveryOrders = deliveryRefreshRef.current;
 
   const handleAssociateTableToOrder = async (order: any) => {
     const targetMesaId = Number(tableTransferTargetId || 0);
@@ -521,11 +548,8 @@ export function useCashierOrders({
   };
 
   useEffect(() => {
-    void fetchMotoboys();
-  }, [apiBaseUrl]);
-
-  useEffect(() => {
-    const handleDeliveryUpdate = () => {
+    const handleDeliveryUpdate = (event: Event) => {
+      if (!orderUpdateAffects(event, 'digital')) return;
       void fetchDeliveryOrders();
     };
     const handleTeamUpdate = () => {
@@ -833,6 +857,7 @@ export function useCashierOrders({
     const orderKey = String(orderId);
     if (pendingDeliveryMutationRef.current[orderKey]) return false;
 
+    const previousPendingOrder = pendingAcceptanceOrdersRef.current.find((order) => String(order.id) === orderKey);
     const previousIndex = deliveryOrders.findIndex((order) => String(order.id) === orderKey);
     const previousOrder = previousIndex >= 0 ? deliveryOrders[previousIndex] : undefined;
     const optimisticStatus = readActiveDeliveryStatus(statusNovo) || undefined;
@@ -867,6 +892,10 @@ export function useCashierOrders({
 
     const rollbackCurrentMutation = () => {
       if (!finishCurrentMutation()) return false;
+      if (previousPendingOrder) {
+        setPendingAcceptanceOrders((current) => current.some((order) => String(order.id) === orderKey)
+          ? current : [...current, previousPendingOrder]);
+      }
       if (previousOrder && (optimisticStatus === 'producao' || optimisticStatus === 'aceito')) {
         setDeliveryOrders((current) => {
           const existingIndex = current.findIndex((order) => String(order.id) === orderKey);
@@ -1112,7 +1141,9 @@ export function useCashierOrders({
 
   const handleAcceptPendingDeliveryOrder = async (order: DeliveryOrderView) => {
     const accepted = await handleUpdateDeliveryStatus(order.id, order.modalidade === 'delivery' ? 'aceito' : 'producao');
-    if (accepted && pendingAcceptanceOrders.length <= 1) setIsDrawerOpen(false);
+    // Read the live queue after confirmation, including arrivals while the request ran.
+    if (accepted && pendingAcceptanceOrdersRef.current.length === 0
+      && Object.keys(pendingDeliveryMutationRef.current).length === 0) setIsDrawerOpen(false);
   };
 
   const handleRejectPendingDeliveryOrder = (order: DeliveryOrderView) => {
@@ -1282,6 +1313,7 @@ export function useCashierOrders({
     getTableMovementContext,
     deliveryOrders,
     deliveryOrdersLoadState,
+    hasDeliverySnapshot,
     motoboys,
     motoboysLoadState,
     selectedMotoboys,

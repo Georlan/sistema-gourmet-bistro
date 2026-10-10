@@ -1,3 +1,4 @@
+import { TablePresenceNotice } from './TablePresenceNotice';
 import React from 'react';
 import { Clock3, FileText, GitMerge, UsersRound } from 'lucide-react';
 import type { Order, Table } from '../../types';
@@ -139,7 +140,7 @@ export function SharedTableCard({
         {occupied && showOperationalStatus && operational.financial === 'AWAITING_PAYMENT' && operational.production.hasPreparingItems && <p className="text-[9px] text-koma-secondary">{operational.production.preparingItemCount} em preparo</p>}
         {operational.mergedIntoMesaId && <span className="flex items-center gap-1 text-[9px]"><GitMerge size={11} />Atendimento junto · M{operational.mergedIntoMesaId}</span>}
         {note && <p className="text-[9px] text-koma-muted">{note}</p>}
-        {otherWaitersServing.length > 0 && <p className="truncate text-[9px] text-koma-secondary" title={`Em atendimento por ${otherWaitersServing.join(', ')}`}>Atendida por {otherWaitersServing.join(', ')}</p>}
+        <TablePresenceNotice names={otherWaitersServing} compact />
       </div>
       {children}
     </Container>

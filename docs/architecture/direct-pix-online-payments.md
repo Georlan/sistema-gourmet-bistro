@@ -59,3 +59,66 @@ Não confundir fatura comercial com emissão de nota fiscal. Não foram implemen
 5. Ativar apenas no restaurante que escolheu esse modo. Não selecionar chave, criar pedido ou modificar configuração do tenant 6 como QA.
 
 Testes locais não comprovam homologação bancária, webhook em produção ou ausência absoluta de latência em uma migração real.
+
+## Evolução de cobrança e apresentação — 08/10/2026
+
+Regra escolhida: taxas por mês civil, cobradas no próximo vencimento do restaurante.
+O vencimento acompanha o fim do trial e o aniversário da assinatura, com ajuste
+para o último dia dos meses curtos sem deslocar o aniversário nos meses seguintes.
+O Pix da fatura usa a conta Mercado Pago da plataforma, com confirmação financeira.
+A tela distingue recebimento das vendas, conferência manual da chave própria e
+pagamento da fatura KÔMA. Não apresenta cartão online como disponível.
+
+Novas faturas recebem `due_at` congelado; a migração nullable não modifica faturas
+anteriores nem inventa vencimentos históricos. O demonstrativo mostra mensalidade,
+taxas persistidas, total, vencimento e pagamentos por pedido, com páginas de 200
+linhas. As taxas não são recalculadas pelo catálogo ou plano atual. A tela mostra
+os termos comerciais aceitos e exige sua disponibilidade para ativar a chave.
+Consultar o pagamento da fatura usa um GET que não gera nova cobrança e libera a
+transação de leitura antes de consultar o gateway. Enquanto o QR está visível,
+a consulta automática ocorre a cada 15s, por até 20 tentativas; para em aba oculta
+e é desmontada ao sair. O webhook continua sendo o canal durável de confirmação.
+
+Após 3 dias de tolerância, o Order Core recusa novas vendas, inclusive lançamentos
+novos em contas existentes. Replays idempotentes, pagamento da fatura, histórico e
+resolução de pedidos já criados permanecem disponíveis. A restrição financeira não
+modifica `saas_status` nem remove a precedência da suspensão administrativa.
+A confirmação da fatura libera essa restrição somente se não houver outra cobrança
+vencida. Para mensalidade Pix, a renovação usa o vencimento contratual após o trial;
+pagar atrasado não troca automaticamente o dia de vencimento.
+
+A manutenção de cobrança fica conectada ao lifespan existente, com execução horária
+e allowlist explícita `DIRECT_PIX_BILLING_TENANT_IDS`. A lista vazia não descobre nem
+modifica restaurantes. Recupera até 24 competências por passagem, sem varrer todos
+os tenants. Não criar faturas na implantação antes do início real do trial.
+Emissão, proximidade (3 dias), atraso e pagamento enfileiram avisos para o proprietário
+nos destinos existentes de email e Telegram. IDs por fatura/evento/canal evitam avisos
+duplicados; um aviso de mensalidade avulsa não é repetido se houver fatura consolidada
+para o mesmo vencimento. A entrega utiliza `signup_notifications`, sem fila nova.
+
+A lista do SuperAdmin mostra cobranças abertas, vencimento, situação da assinatura
+e restrição de vendas; o histórico consulta as últimas 24 competências sob o escopo
+RLS do restaurante. Ausência de fatura não equivale a pagamento comprovado.
+
+### Pendências de implantação externa
+
+Aplicar a migração e validar o head publicado; configurar a allowlist somente para
+os restaurantes autorizados; verificar entrega real dos avisos e homologar um
+pagamento de fatura com o gateway. Não foi alterado nenhum tenant de produção nesta
+implementação. Testes locais/CI não comprovam entrega por email/Telegram ou dinheiro
+liquidado. A chave própria continua manual: confirmação automática do consumidor
+exige integração validada com banco/provedor e credenciais elegíveis. Conta CPF,
+por si só, não comprova disponibilidade de API. Devolução bancária e crédito de
+comissão do Pix direto continuam como evolução separada.
+
+### Liberação administrativa de teste sem contrato
+
+`DIRECT_PIX_TEST_TENANT_IDS` é uma allowlist explícita e vazia por padrão. Ela permite
+apenas registrar Pix próprio em lojas sem assinatura e sem contrato vinculado.
+Não cria aceite, mensalidade ou assinatura; não substitui termos inválidos nem
+contorna assinatura já existente. A tela identifica o teste e alerta que o QR
+movimenta dinheiro real, com conferência manual. A ativação gera auditoria
+`DIRECT_PIX_TEST_ACTIVATED`. Configurações usam `direct-pix-test-v1`; remover o ID
+da allowlist impede novos pagamentos nessa configuração. Intenções anteriores
+continuam podendo ser conciliadas manualmente. Sem assinatura, o fechamento
+mensal automático permanece inativo; os valores de taxa registrados são de teste.

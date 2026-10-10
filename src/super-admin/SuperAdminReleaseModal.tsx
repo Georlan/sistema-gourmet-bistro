@@ -45,6 +45,7 @@ export function SuperAdminReleaseModal({ restaurantId, onClose, onReleased }: {
       .then(async response => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Não foi possível carregar a implantação.');
+        if (!data.subscription) throw new Error('Este restaurante usa implantação administrativa. Consulte o cockpit 360°; liberação comercial não se aplica.');
         setPreview(data as ReleasePreview);
         setTableCount((current) => current || (Number(data?.counts?.tables || 0) > 0 ? String(data.counts.tables) : ''));
       })

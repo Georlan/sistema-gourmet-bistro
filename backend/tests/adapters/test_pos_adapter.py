@@ -11,7 +11,7 @@ from app.application.orders.commands import CreateOrderCommand
 from app.application.orders.service import OrderApplicationService
 from app.database import SessionLocal
 from app.domain.orders.types import FulfillmentType, OrderChannel
-from app.models import CaixaTurno, Comanda, Item, Lancamento
+from app.models import CaixaTurno, Comanda, ConfiguracaoRestaurante, Item, Lancamento
 from tests.characterization.orders.fixtures import (
     CHAR_RESTAURANT_ID,
     char_client,
@@ -187,3 +187,96 @@ class TestPosAdapter:
         res = char_client.post("/comandas/venda-direta", json=payload, headers=headers)
         assert res.status_code == 422
         assert res.json()["detail"] == "Pedidos de delivery não podem ser vinculados a uma mesa."
+
+    def test_pos_adapter_allows_all_modes_when_canonical_policy_active(self, char_client, char_setup):
+        """[REGRESSÃO CTM-409] Tenant com consumo_local, retirada e delivery permite os 4 canais."""
+        db = SessionLocal()
+        config = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == CHAR_RESTAURANT_ID,
+        ).first()
+        old_modes = config.tipos_pedido_ativos
+        config.tipos_pedido_ativos = ["consumo_local", "retirada", "delivery"]
+        db.commit()
+        db.close()
+
+        headers = char_setup["headers"]
+        try:
+            # A. Venda rápida / Balcão
+            res_balcao = char_client.post("/comandas/venda-direta", headers=headers, json={
+                "tipo": "balcao",
+                "itens": [{"produto_id": "prod-char-simples"}],
+            })
+            assert res_balcao.status_code == 201
+            assert res_balcao.json()["tipo"] == "Retirada"
+
+            # B. Retirada com cliente e telefone
+            res_retirada = char_client.post("/comandas/venda-direta", headers=headers, json={
+                "tipo": "retirada",
+                "identificador": "Cliente Retirada",
+                "delivery_telefone": "85999991111",
+                "itens": [{"produto_id": "prod-char-simples"}],
+            })
+            assert res_retirada.status_code == 201
+
+            # C. Consumo no Local
+            res_dine_in = char_client.post("/comandas/venda-direta", headers=headers, json={
+                "tipo": "consumo no local",
+                "itens": [{"produto_id": "prod-char-simples"}],
+            })
+            assert res_dine_in.status_code == 201
+            assert res_dine_in.json()["tipo"] == "Consumo no Local"
+
+            # D. Delivery
+            res_delivery = char_client.post("/comandas/venda-direta", headers=headers, json={
+                "tipo": "delivery",
+                "identificador": "Cliente Entrega",
+                "delivery_telefone": "85999992222",
+                "delivery_endereco": "Av. Beira Mar, 500",
+                "itens": [{"produto_id": "prod-char-simples"}],
+            })
+            assert res_delivery.status_code == 201
+            assert res_delivery.json()["tipo"] == "Entrega"
+        finally:
+            db = SessionLocal()
+            config = db.query(ConfiguracaoRestaurante).filter(
+                ConfiguracaoRestaurante.restaurante_id == CHAR_RESTAURANT_ID,
+            ).first()
+            config.tipos_pedido_ativos = old_modes
+            db.commit()
+            db.close()
+
+    def test_pos_adapter_rejects_disabled_mode_with_409(self, char_client, char_setup):
+        """[REGRESSÃO CTM-409] Modalidade verdadeiramente desativada retorna 409 sem enfraquecer o gate."""
+        db = SessionLocal()
+        config = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == CHAR_RESTAURANT_ID,
+        ).first()
+        old_modes = config.tipos_pedido_ativos
+        config.tipos_pedido_ativos = ["retirada", "delivery"]  # consumo_local desativado
+        db.commit()
+        db.close()
+
+        headers = char_setup["headers"]
+        try:
+            # Consumo local deve falhar com 409
+            res_disabled = char_client.post("/comandas/venda-direta", headers=headers, json={
+                "tipo": "consumo no local",
+                "itens": [{"produto_id": "prod-char-simples"}],
+            })
+            assert res_disabled.status_code == 409
+            assert "Esta modalidade de pedido está desativada para o restaurante." in res_disabled.json()["detail"]
+
+            # Retirada/balcão continua permitido normalmente
+            res_allowed = char_client.post("/comandas/venda-direta", headers=headers, json={
+                "tipo": "balcao",
+                "itens": [{"produto_id": "prod-char-simples"}],
+            })
+            assert res_allowed.status_code == 201
+        finally:
+            db = SessionLocal()
+            config = db.query(ConfiguracaoRestaurante).filter(
+                ConfiguracaoRestaurante.restaurante_id == CHAR_RESTAURANT_ID,
+            ).first()
+            config.tipos_pedido_ativos = old_modes
+            db.commit()
+            db.close()

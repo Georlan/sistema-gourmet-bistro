@@ -1,5 +1,6 @@
+import { useIdleReconciliation } from '../realtime/useIdleReconciliation';
 import { AlertTriangle, CheckCircle2, Clock3, PackageCheck, Search, Store } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { getCashierOrderSlaData } from '../../../domain/cashierOrderProjection';
 import { localCalendarDate, parseBackendTimestamp } from '../../../utils/dateTime';
@@ -31,6 +32,7 @@ type CompletedPickupApiOrder = {
 
 type Props = {
   activeSubTab: string;
+  isWsConnected?: boolean;
   deliveryOrders: DeliveryOrderView[];
   deliveryOrdersLoadState: 'loading' | 'loaded' | 'error';
   apiBaseUrl: string;
@@ -84,6 +86,7 @@ const matchesQuery = (order: DeliveryOrderView, query: string) => {
 
 export function CashierPickups({
   activeSubTab,
+  isWsConnected = false,
   deliveryOrders,
   deliveryOrdersLoadState,
   apiBaseUrl,
@@ -115,21 +118,12 @@ export function CashierPickups({
     }
   }, [apiBaseUrl, authHeaders]);
 
-  useEffect(() => {
-    if (activeSubTab !== 'retiradas') return;
-    void refreshCompleted();
-
-    const onOrdersUpdated = () => void refreshCompleted();
-    window.addEventListener('koma_orders_updated', onOrdersUpdated);
-    const intervalId = window.setInterval(() => {
-      if (!document.hidden) void refreshCompleted();
-    }, 30_000);
-
-    return () => {
-      window.removeEventListener('koma_orders_updated', onOrdersUpdated);
-      window.clearInterval(intervalId);
-    };
-  }, [activeSubTab, deliveryOrders.length, refreshCompleted]);
+  useIdleReconciliation({
+    enabled: activeSubTab === 'retiradas',
+    isWsConnected,
+    eventName: 'koma_orders_updated',
+    refresh: refreshCompleted,
+  });
 
   const buckets = useMemo(
     () => bucketPickupOrders(deliveryOrders, now),
@@ -428,7 +422,7 @@ export function CashierPickups({
         </div>
 
         {historyError && (
-          <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[9px] text-amber-300">
+          <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[9px] text-amber-800 dark:text-amber-300">
             Não foi possível atualizar o histórico concluído agora. As retiradas ativas continuam disponíveis normalmente.
           </div>
         )}

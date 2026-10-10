@@ -1,0 +1,413 @@
+.siara-page {
+  --siara-green:#00bea0;
+  background:#060b09;
+  color:#fff;
+  font-family:Inter,Arial,sans-serif;
+  position:relative;
+  isolation:isolate
+}
+
+.siara-page:before {
+  content:'';
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  background:#06261d;
+  clip-path:polygon(68% 0,100% 0,100% 100%,42% 100%)
+}
+
+.siara-header {
+  width:min(1280px,100%);
+  margin:0 auto;
+  padding:36px 40px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:24px
+}
+
+.siara-koma-logo {
+  width:150px;
+  height:auto
+}
+
+.siara-event-logo {
+  width:225px;
+  height:auto
+}
+
+.siara-eyebrow {
+  font-size:11px;
+  letter-spacing:.15em;
+  font-weight:800;
+  color:var(--siara-green);
+  margin-bottom:22px
+}
+
+.siara-capture-main {
+  width:min(1280px,100%);
+  padding:28px 40px 48px;
+  margin:auto;
+  flex:1
+}
+
+.siara-capture-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:80px;
+  align-items:start
+}
+
+.siara-pitch {
+  position:sticky;
+  top:40px;
+  padding-top:30px
+}
+
+.siara-pitch h1,.siara-screen h1 {
+  font-family:Montserrat,Inter,Arial,sans-serif;
+  font-weight:950;
+  letter-spacing:-.065em;
+  line-height:.98;
+  font-size:clamp(50px,5.8vw,86px);
+  margin:0
+}
+
+.siara-pitch h1 span,.siara-screen h1 span {
+  color:var(--siara-green)
+}
+
+.siara-pitch-description {
+  font-size:19px;
+  line-height:1.6;
+  color:#c0cec7;
+  max-width:360px;
+  margin-top:30px
+}
+
+.siara-pitch-note {
+  border-left:3px solid #ee008c;
+  padding-left:20px;
+  margin-top:64px
+}
+
+.siara-pitch-note span {
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.12em;
+  color:#ee008c
+}
+
+.siara-pitch-note p {
+  font-size:18px;
+  line-height:1.5;
+  margin-top:10px
+}
+
+.siara-form-panel {
+  background:#101a15;
+  padding:34px;
+  border-top:4px solid var(--siara-green);
+  box-shadow:0 20px 60px #0003
+}
+
+.siara-form-heading {
+  font-size:32px;
+  line-height:1.15;
+  font-weight:800;
+  letter-spacing:-.04em;
+  margin-bottom:14px
+}
+
+.siara-form-description {
+  font-size:14px;
+  line-height:1.6;
+  color:#a8b9af
+}
+
+.siara-form-panel input:not([type=checkbox]) {
+  border-radius:4px;
+  background:#080f0b;
+  font-size:16px;
+  min-height:48px
+}
+
+.siara-form-panel button {
+  border-radius:4px;
+  box-shadow:none
+}
+
+.siara-form-panel button[type=submit] {
+  background:var(--siara-green);
+  min-height:56px
+}
+
+.siara-form-panel details {
+  border-radius:4px
+}
+
+.siara-form-panel input[type=checkbox] {
+  accent-color:var(--siara-green);
+  width:20px;
+  height:20px;
+  flex-shrink:0
+}
+
+.siara-success {
+  max-width:600px;
+  margin:30px auto;
+  background:#101a15;
+  border-top:4px solid var(--siara-green);
+  padding:48px 36px
+}
+
+.siara-success a {
+  border-radius:4px
+}
+
+.siara-screen {
+  min-height:100dvh;
+  padding:0 4vw;
+  display:flex;
+  flex-direction:column
+}
+
+.siara-screen .siara-header {
+  width:100%;
+  max-width:none;
+  padding:4vh 0
+}
+
+.siara-screen .siara-koma-logo {
+  width:clamp(140px,12vw,225px)
+}
+
+.siara-screen .siara-event-logo {
+  width:clamp(220px,19vw,350px)
+}
+
+.siara-screen-grid {
+  display:grid;
+  grid-template-columns:1.1fr 1fr;
+  align-items:center;
+  gap:6vw;
+  flex:1;
+  padding:3vh 0 5vh
+}
+
+.siara-screen h1 {
+  font-size:clamp(56px,7.7vw,150px)
+}
+
+.siara-screen h1 span {
+  display:inline-block;
+  border-bottom:8px solid var(--siara-green);
+  padding-bottom:16px
+}
+
+.siara-screen-subtitle {
+  font-size:clamp(20px,1.8vw,34px);
+  line-height:1.5;
+  color:#bacbc2;
+  margin:30px 0
+}
+
+.siara-screen-instruction {
+  display:flex;
+  align-items:center;
+  gap:20px;
+  margin-top:40px
+}
+
+.siara-screen-instruction svg {
+  width:60px;
+  height:60px;
+  color:var(--siara-green)
+}
+
+.siara-screen-instruction p {
+  font-size:clamp(17px,1.4vw,27px);
+  line-height:1.5
+}
+
+.siara-screen-instruction strong {
+  font-weight:600
+}
+
+.siara-qr-panel {
+  background:#fff;
+  color:#07130d;
+  padding:24px;
+  width:100%;
+  max-width:min(680px,67vh);
+  justify-self:end;
+  border-bottom:8px solid #ee008c
+}
+
+.siara-qr-caption {
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.08em
+}
+
+.siara-qr-panel>svg {
+  width:100%;
+  height:auto;
+  display:block
+}
+
+.siara-qr-url {
+  text-align:center;
+  font-size:clamp(15px,1.4vw,24px);
+  font-weight:800;
+  letter-spacing:-.03em
+}
+
+.siara-qr-help {
+  text-align:center;
+  color:#58625d;
+  font-size:14px;
+  margin:8px 0 0
+}
+
+.siara-screen-footer {
+  border-top:1px solid #ffffff20;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:24px 0;
+  gap:20px;
+  font-size:13px;
+  letter-spacing:.08em
+}
+
+.siara-screen-footer a {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  letter-spacing:0
+}
+
+@media(max-width:767px) {
+  .siara-header {
+    padding:24px 20px;
+    gap:18px
+  }
+  .siara-koma-logo {
+    width:105px
+  }
+  .siara-event-logo {
+    width:155px
+  }
+  .siara-capture-main {
+    padding:12px 20px 24px
+  }
+  .siara-capture-grid {
+    grid-template-columns:1fr;
+    gap:28px
+  }
+  .siara-pitch {
+    position:static;
+    padding:8px 0 0
+  }
+  .siara-pitch h1 {
+    font-size:clamp(44px,12vw,72px)
+  }
+  .siara-pitch h1 br:nth-of-type(2) {
+    display:block
+  }
+  .siara-pitch h1 {
+    max-width:500px
+  }
+  .siara-pitch-description {
+    font-size:15px;
+    margin:20px 0 0;
+    max-width:320px
+  }
+  .siara-pitch-note {
+    display:none
+  }
+  .siara-eyebrow {
+    font-size:9px;
+    margin-bottom:16px
+  }
+  .siara-form-panel {
+    padding:24px 20px
+  }
+  .siara-form-heading {
+    font-size:27px
+  }
+  .siara-screen {
+    padding:0 20px
+  }
+  .siara-screen-grid {
+    grid-template-columns:1fr;
+    gap:28px;
+    padding-top:20px
+  }
+  .siara-screen h1 {
+    font-size:clamp(44px,11vw,78px)
+  }
+  .siara-screen h1 span {
+    border-bottom-width:4px;
+    padding-bottom:8px
+  }
+  .siara-screen-subtitle {
+    font-size:18px;
+    margin:20px 0
+  }
+  .siara-screen-instruction {
+    margin-top:20px;
+    gap:12px
+  }
+  .siara-screen-instruction svg {
+    width:38px;
+    height:38px
+  }
+  .siara-qr-panel {
+    justify-self:center;
+    max-width:430px;
+    padding:16px
+  }
+  .siara-screen .siara-event-logo {
+    width:155px
+  }
+  .siara-screen .siara-koma-logo {
+    width:105px
+  }
+  .siara-screen-footer {
+    font-size:9px;
+    letter-spacing:0;
+    flex-wrap:wrap
+  }
+  .siara-success {
+    padding:30px 20px;
+    margin:10px auto
+  }
+}
+
+@media(prefers-reduced-motion:reduce) {
+  .siara-page * {
+    scroll-behavior:auto;
+    transition:none!important
+  }
+}
+
+@media(min-width:768px) {
+  .siara-screen h1 {
+    font-size:clamp(54px,5.7vw,110px);
+    letter-spacing:-.06em
+  }
+  .siara-screen-grid {
+    min-height:0
+  }
+  .siara-screen .siara-header {
+    height:15vh
+  }
+  .siara-qr-panel {
+    max-width:min(620px,54vh)
+  }
+}

@@ -280,8 +280,8 @@ def auto_accept_online_order_if_enabled(
 ) -> bool:
     """Aceita no servidor um pedido online elegível quando a política está ativa.
 
-    Pagamentos online só entram após aprovação; pedidos agendados apenas depois
-    da liberação. A função não faz commit: o chamador mantém a atomicidade do
+    Pagamentos online só entram após aprovação; agendados já podem ser aceitos
+    na chegada, preservando o horário. A função não faz commit: o chamador mantém a atomicidade do
     fluxo que publicou o pedido.
     """
     control = db.query(OnlineOrderControl).filter(
@@ -310,14 +310,6 @@ def auto_accept_online_order_if_enabled(
         .first()
     )
     if launch is None or str(launch.origem or "").strip().casefold() != "cardapio":
-        return False
-
-    unreleased_schedule = db.query(ScheduledOrder.id).filter(
-        ScheduledOrder.restaurante_id == restaurante_id,
-        ScheduledOrder.comanda_id == comanda.id,
-        ScheduledOrder.released_at.is_(None),
-    ).first()
-    if unreleased_schedule is not None:
         return False
 
     # A política automática nunca contorna o gate operacional do caixa. Se o

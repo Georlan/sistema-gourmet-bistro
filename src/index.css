@@ -3428,3 +3428,38 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Pocket: preparation on a phone must remain readable without printed tickets. */
+@media (max-width: 768px) {
+  .cashier-shell[data-koma-plan="pocket"] .orders-card__items {
+    font-size: 0.875rem;
+    line-height: 1.45;
+  }
+  .cashier-shell[data-koma-plan="pocket"] .orders-card__items .text-xs,
+  .cashier-shell[data-koma-plan="pocket"] .orders-card__items .text-\[11px\] {
+    font-size: 0.875rem;
+  }
+  .cashier-shell[data-koma-plan="pocket"] .orders-card__action,
+  .cashier-shell[data-koma-plan="pocket"] .orders-card__icon {
+    min-height: 44px;
+  }
+}
+
+/* Keep both pending-work buttons together on narrow cashier screens. */
+@media (max-width: 768px) {
+  .orders-pix-conference {
+    grid-column: 1;
+    justify-self: stretch;
+    justify-content: center;
+    min-height: 44px;
+  }
+  .orders-toolbar__actions:has(.orders-pix-conference) .orders-delivery-total {
+    grid-column: 1 / -1;
+  }
+  .orders-toolbar__actions:has(.orders-pix-conference) .orders-new-orders:not(.orders-pix-conference) {
+    grid-column: 2;
+    justify-self: stretch;
+    justify-content: center;
+    min-height: 44px;
+  }
+}

@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import {
+  ArrowDown,
+  ArrowUp,
   Ban,
   Check,
   ChefHat,
@@ -80,6 +82,7 @@ export function CardapioCategoriasTab({
   const [search, setSearch] = useState('');
   const [destinationFilter, setDestinationFilter] = useState<DestinationFilter>('TODOS');
   const [pendingRouteCategoryId, setPendingRouteCategoryId] = useState<string | null>(null);
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (!onCreateRequest) return;
@@ -129,8 +132,47 @@ export function CardapioCategoriasTab({
     return apiCategorias.filter((category) => {
       if (destinationFilter !== 'TODOS' && normalizeDestination(category.destino_impressao) !== destinationFilter) return false;
       return !normalized || category.nome.toLocaleLowerCase('pt-BR').includes(normalized);
-    }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+    });
   }, [apiCategorias, destinationFilter, search]);
+
+  const handleMoveCategory = async (categoryId: string | number, direction: 'up' | 'down') => {
+    const idStr = String(categoryId);
+    const currentFilteredIndex = filteredCategories.findIndex((c) => String(c.id) === idStr);
+    if (currentFilteredIndex < 0) return;
+    const targetFilteredIndex = direction === 'up' ? currentFilteredIndex - 1 : currentFilteredIndex + 1;
+    if (targetFilteredIndex < 0 || targetFilteredIndex >= filteredCategories.length) return;
+
+    const targetCategory = filteredCategories[targetFilteredIndex];
+    const currentGlobalIndex = apiCategorias.findIndex((c) => String(c.id) === idStr);
+    const targetGlobalIndex = apiCategorias.findIndex((c) => String(c.id) === String(targetCategory.id));
+    if (currentGlobalIndex < 0 || targetGlobalIndex < 0) return;
+
+    const newCategories = [...apiCategorias];
+    const [moved] = newCategories.splice(currentGlobalIndex, 1);
+    newCategories.splice(targetGlobalIndex, 0, moved);
+
+    const categoria_ids = newCategories.map((c) => String(c.id));
+    setReorderingId(idStr);
+    try {
+      const response = await fetch(`${apiBaseUrl}/produtos/categorias/reordenar`, {
+        method: 'PUT',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoria_ids }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        showToast?.(payload.detail || 'Não foi possível reordenar categorias.', 'error');
+        return;
+      }
+      showToast?.('Ordem das categorias atualizada.', 'success');
+      await fetchCategorias();
+    } catch (error) {
+      console.error(error);
+      showToast?.('Erro de conexão ao reordenar categorias.', 'error');
+    } finally {
+      setReorderingId(null);
+    }
+  };
 
   const handleOpenCreate = () => {
     setEditingCategory(null);
@@ -292,7 +334,7 @@ export function CardapioCategoriasTab({
             <p className="text-xs text-slate-500">Troque a impressão diretamente em cada cartão.</p>
           </div>
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3" aria-label="Categorias e impressão">
-            {filteredCategories.map((category) => {
+            {filteredCategories.map((category, index) => {
               const destination = normalizeDestination(category.destino_impressao);
               const meta = destinationMeta[destination];
               const DestinationIcon = meta.icon;
@@ -305,7 +347,15 @@ export function CardapioCategoriasTab({
                       <DestinationIcon size={18} />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <h2 className="truncate text-sm font-black text-slate-950 dark:text-white">{category.nome}</h2>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className="inline-block rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-black text-slate-600 dark:bg-white/10 dark:text-slate-300"
+                          title={`Posição #${index + 1}${category.ordem_exibicao != null ? ` (ordem: ${category.ordem_exibicao})` : ''}`}
+                        >
+                          #{index + 1}
+                        </span>
+                        <h2 className="truncate text-sm font-black text-slate-950 dark:text-white">{category.nome}</h2>
+                      </div>
                       {productCount > 0 && onManageProducts ? (
                         <button type="button" onClick={() => onManageProducts(String(category.id))} className="mt-1 text-xs font-bold text-emerald-700 hover:underline dark:text-emerald-300">
                           Ver {productCount} {productCount === 1 ? 'produto' : 'produtos'}
@@ -313,6 +363,28 @@ export function CardapioCategoriasTab({
                       ) : (
                         <p className="mt-1 text-xs font-bold text-slate-500">Categoria vazia</p>
                       )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => void handleMoveCategory(category.id, 'up')}
+                        disabled={index === 0 || reorderingId !== null}
+                        aria-label={`Mover ${category.nome} para cima`}
+                        title="Mover para cima"
+                        className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-emerald-300 hover:text-emerald-700 disabled:pointer-events-none disabled:opacity-30 dark:border-white/10 dark:text-slate-400 dark:hover:border-emerald-500/40 dark:hover:text-emerald-300"
+                      >
+                        <ArrowUp size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleMoveCategory(category.id, 'down')}
+                        disabled={index === filteredCategories.length - 1 || reorderingId !== null}
+                        aria-label={`Mover ${category.nome} para baixo`}
+                        title="Mover para baixo"
+                        className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-emerald-300 hover:text-emerald-700 disabled:pointer-events-none disabled:opacity-30 dark:border-white/10 dark:text-slate-400 dark:hover:border-emerald-500/40 dark:hover:text-emerald-300"
+                      >
+                        <ArrowDown size={14} />
+                      </button>
                     </div>
                     <button
                       type="button"

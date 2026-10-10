@@ -1,3 +1,4 @@
+import { readAdminShortcut } from "./adminShortcut";
 import React, { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard,
@@ -9,6 +10,7 @@ import {
   Menu,
   X,
   AlertOctagon,
+  ContactRound,
 } from "lucide-react";
 import type { Tenant } from "./superAdminTypes";
 import {
@@ -31,13 +33,14 @@ import {
 } from "./SuperAdminPlatformHub";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import type { AuditLogItem } from "./SuperAdminAuditTab";
+import { SuperAdminLeadsTab } from "./SuperAdminLeadsTab";
 
-type TabId = "overview" | "clients" | "incidents" | "platform";
+type TabId = "overview" | "clients" | "leads" | "incidents" | "platform";
 
 export default function SuperAdminPanel() {
   const frontendBuildSha = import.meta.env.VITE_BUILD_SHA || "desconhecido";
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
-  const [clientsView, setClientsView] = useState<ClientsView>("restaurants");
+  const [activeTab, setActiveTab] = useState<TabId>(() => { const shortcut = readAdminShortcut(window.location.search); return shortcut.finance || shortcut.tenantId ? "clients" : "overview"; });
+  const [clientsView, setClientsView] = useState<ClientsView>(() => readAdminShortcut(window.location.search).finance ? "billing" : "restaurants");
   const [newClientsView, setNewClientsView] = useState<NewClientsView>("signups");
   const [platformView, setPlatformView] = useState<PlatformView>("health");
   const [globalSearch, setGlobalSearch] = useState("");
@@ -206,6 +209,7 @@ export default function SuperAdminPanel() {
   const navItems = [
     { id: "overview" as TabId, label: "Início", icon: LayoutDashboard, badge: 0 },
     { id: "clients" as TabId, label: "Clientes", icon: Store, badge: pendingContractsCount },
+    { id: "leads" as TabId, label: "Leads", icon: ContactRound, badge: 0 },
     { id: "incidents" as TabId, label: "Incidentes", icon: AlertOctagon, badge: 0 },
     { id: "platform" as TabId, label: "Plataforma", icon: Settings, badge: 0 },
   ];
@@ -374,6 +378,9 @@ export default function SuperAdminPanel() {
             />
           )}
           </>}
+          {activeTab === "leads" && (
+            <SuperAdminLeadsTab />
+          )}
           {activeTab === "platform" && (
             <SuperAdminPlatformHub
               activeView={platformView}

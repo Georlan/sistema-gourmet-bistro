@@ -1,21 +1,43 @@
-name: Backend dependency health
+name: Dependency security health
 
 on:
   pull_request:
     branches: [main]
     paths:
       - 'backend/requirements*.txt'
+      - 'backend/requirements.lock'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/backend-dependency-health.yml'
+  schedule:
+    - cron: '23 9 * * 1'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  npm-audit:
+    name: Frontend npm vulnerability check
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
+
   pip-check:
     name: Backend pip dependency check
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -29,3 +51,7 @@ jobs:
         run: python -m pip install -r backend/requirements-dev.txt
       - name: Verify installed dependency compatibility
         run: python -m pip check
+      - name: Install vulnerability auditor
+        run: python -m pip install pip-audit==2.10.1
+      - name: Audit production Python dependencies
+        run: pip-audit -r backend/requirements.txt

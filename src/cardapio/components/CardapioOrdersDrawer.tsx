@@ -1,13 +1,14 @@
+import PixCopyCode from "./PixCopyCode";
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
 
 import React from "react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   CheckCircle2,
   Clock3,
-  Copy,
   MessageCircle,
   Package,
   QrCode,
@@ -92,7 +93,6 @@ export default function CardapioOrdersDrawer({
 }: CardapioOrdersDrawerProps) {
   const [chatOrderId, setChatOrderId] = React.useState<string | null>(null);
   const [pixModalOrder, setPixModalOrder] = React.useState<StoredOrder | null>(null);
-  const [copiedPix, setCopiedPix] = React.useState(false);
   const [floatingOpen, setFloatingOpen] = React.useState(false);
   const [unreadByOrder, setUnreadByOrder] = React.useState<Record<string, number>>({});
   const [requestedPushOrder, setRequestedPushOrder] = React.useState<RequestedPushOrder | null>(
@@ -907,12 +907,11 @@ export default function CardapioOrdersDrawer({
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setPixModalOrder(null);
-              setCopiedPix(false);
             }
           }}
         >
           <div
-            className="w-full max-w-sm rounded-3xl border border-koma-border bg-koma-card p-5 text-center shadow-2xl"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-3xl border border-koma-border bg-koma-card p-5 text-center shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-label={`Pagamento Pix do Pedido #${pixModalOrder.numero_pedido}`}
@@ -933,7 +932,6 @@ export default function CardapioOrdersDrawer({
                 type="button"
                 onClick={() => {
                   setPixModalOrder(null);
-                  setCopiedPix(false);
                 }}
                 className="grid h-8 w-8 place-items-center rounded-xl border border-koma-border text-koma-secondary hover:text-white"
                 aria-label="Fechar modal Pix"
@@ -949,6 +947,10 @@ export default function CardapioOrdersDrawer({
               </span>
             </div>
 
+            {!pixModalOrder.pagamento.qr_code_base64 && pixModalOrder.pagamento.qr_code && (
+              <QRCodeSVG value={pixModalOrder.pagamento.qr_code} size={208} level="M" marginSize={4}
+                role="img" aria-label="QR Code Pix do pedido" className="mx-auto my-3" />
+            )}
             {pixModalOrder.pagamento.qr_code_base64 && (
               <div className="mx-auto my-3 flex justify-center">
                 <img
@@ -959,29 +961,7 @@ export default function CardapioOrdersDrawer({
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => {
-                if (pixModalOrder?.pagamento?.qr_code) {
-                  void navigator.clipboard.writeText(pixModalOrder.pagamento.qr_code);
-                  setCopiedPix(true);
-                  setTimeout(() => setCopiedPix(false), 3000);
-                }
-              }}
-              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 text-xs font-black text-white shadow-lg transition"
-            >
-              {copiedPix ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4" />
-                  Código Copiado!
-                </>
-              ) : (
-                <>
-                  <Copy className="h-4 w-4" />
-                  Copiar código Pix
-                </>
-              )}
-            </button>
+            {pixModalOrder.pagamento.qr_code && <PixCopyCode code={pixModalOrder.pagamento.qr_code} />}
 
             {pixModalOrder.pagamento.ticket_url && (
               <a
@@ -995,7 +975,9 @@ export default function CardapioOrdersDrawer({
             )}
 
             <p className="mt-3 text-[10px] leading-relaxed text-koma-muted">
-              A confirmação do pagamento é automática. Assim que confirmado, o restaurante iniciará o preparo do seu pedido.
+              {pixModalOrder.pagamento.confirmacao_manual
+                ? 'O restaurante conferirá o recebimento na conta bancária antes de liberar seu pedido.'
+                : 'A confirmação do pagamento é automática. Assim que confirmado, o restaurante poderá liberar seu pedido.'}
             </p>
           </div>
         </div>

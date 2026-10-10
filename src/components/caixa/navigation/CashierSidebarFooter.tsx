@@ -1,4 +1,5 @@
 import { CircleHelp } from 'lucide-react';
+import { StoreSwitchButton } from '../../auth/StoreSwitchButton';
 import { openCustomerSupport } from '../../app/customerSupportEvents';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
 import './cashierLowHeight.css';
@@ -19,6 +20,7 @@ type Props = Pick<
 export function CashierSidebarFooter({ activeWaiterNome }: Props) {
   return (
     <>
+      <StoreSwitchButton />
       <button
         type="button"
         onClick={openCustomerSupport}

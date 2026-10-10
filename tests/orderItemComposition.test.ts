@@ -15,9 +15,24 @@ test('marmitaria shows compact groups and repeated portions separately from cust
     modificadores: modifiers, composicao_agrupada: true,
     observacao: 'Sem salada - Opções: Frango, Arroz à grega, 2x Ovo',
   }), {
-    lines: ['PROTEÍNAS: Frango', 'GUARNIÇÕES: Arroz à grega', 'ADICIONAIS PAGOS: 2x Ovo'],
+    lines: ['GUARNIÇÕES: Arroz à grega', 'PROTEÍNAS: Frango', 'ADICIONAIS PAGOS: 2x Ovo'],
     observation: 'Sem salada',
   });
+});
+
+test('marmitaria composition follows garnish, protein, salad, then remaining groups', () => {
+  const mixed = [
+    { id: 'extra', nome: 'Ovo', preco: 2, grupo_id: 'extra', grupo_nome: 'Adicionais pagos' },
+    { id: 'salad', nome: 'Vinagrete', preco: 0, grupo_id: 'salad', grupo_nome: 'Saladas' },
+    { id: 'protein', nome: 'Frango', preco: 0, grupo_id: 'protein', grupo_nome: 'Proteínas' },
+    { id: 'side', nome: 'Arroz', preco: 0, grupo_id: 'side', grupo_nome: 'Guarnições' },
+  ];
+  assert.deepEqual(itemCompositionPresentation({ modificadores: mixed, composicao_agrupada: true }).lines, [
+    'GUARNIÇÕES: Arroz',
+    'PROTEÍNAS: Frango',
+    'SALADAS: Vinagrete',
+    'ADICIONAIS PAGOS: Ovo',
+  ]);
 });
 
 test('historical repeated-name suffix remains readable and missing structured data is preserved', () => {

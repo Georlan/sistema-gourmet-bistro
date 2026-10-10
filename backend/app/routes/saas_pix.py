@@ -338,6 +338,17 @@ def _advance_paid_period(subscription: SaaSSubscription, paid_at: dt.datetime) -
     year, month_zero = divmod(month_index, 12)
     month = month_zero + 1
     end = paid_at.replace(year=year, month=month, day=min(paid_at.day, calendar.monthrange(year, month)[1]))
+    anchor = _as_utc(getattr(subscription, 'trial_ends_at', None))
+    if anchor is not None:
+        from zoneinfo import ZoneInfo
+        zone = ZoneInfo('America/Sao_Paulo')
+        local_start = paid_at.astimezone(zone)
+        local_anchor = anchor.astimezone(zone)
+        local_index = local_start.year * 12 + local_start.month - 1 + months
+        local_year, local_month_zero = divmod(local_index, 12)
+        local_month = local_month_zero + 1
+        end = local_anchor.replace(year=local_year, month=local_month,
+            day=min(local_anchor.day, calendar.monthrange(local_year, local_month)[1])).astimezone(dt.timezone.utc)
     current_end = _as_utc(subscription.current_period_end)
     if current_end is None or end > current_end:
         subscription.current_period_start = paid_at
@@ -366,7 +377,10 @@ def _reconcile_pix_payment(db: Session, subscription: SaaSSubscription, payment:
     paid_at = _parse_provider_datetime(payment.get("date_approved"))
     if paid_at is None:
         return False
-    _advance_paid_period(subscription, paid_at)
+    _advance_paid_period(subscription, due_at if subscription.trial_ends_at else paid_at)
+    from ..services.signup_notifications import enqueue_billing_owner
+    enqueue_billing_owner(db, tenant_id=restaurante_id, invoice_id=f'subscription-{due_at:%Y%m%d}',
+        period=due_at.strftime('%Y-%m'), event='paid', amount=expected)
     db.commit()
     return True
 

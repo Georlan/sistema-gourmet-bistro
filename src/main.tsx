@@ -4,6 +4,7 @@ import "./components/auth/customerRegistrationToken";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
+import "./landing/siara-event.css";
 import "./components/shared/operationalHeader.css";
 import { CustomerSupportWidget } from "./components/app/CustomerSupportWidget";
 import { KomaLoading } from "./components/app/KomaLoading";
@@ -12,6 +13,7 @@ import { initializeKomaTheme } from "./config/theme";
 import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
 import { SupportCodeNotice } from "./components/app/SupportCodeNotice";
 import { installSupportCodeObserver } from "./utils/supportCode";
+import { AnalyticsProvider, initAnalytics } from "./analytics";
 
 import {
   KOMA_OPERATIONAL_APP_URL,
@@ -41,7 +43,8 @@ function isPublicCommercialRoute(): boolean {
   return resolved.surface === "landing"
     || pathname.startsWith("/landing")
     || pathname.startsWith("/legal")
-    || pathname.startsWith("/contratar");
+    || pathname.startsWith("/contratar")
+    || (pathname.startsWith("/siaratech") || pathname.startsWith("/cearatech"));
 }
 
 function isOperationalUtilityRoute(): boolean {
@@ -128,6 +131,7 @@ function bypassTenantSuspensionBoundary(): boolean {
     || pathname.startsWith("/ativar")
     || pathname.startsWith("/acompanhar")
     || pathname.startsWith("/entregador")
+    || (pathname.startsWith("/siaratech") || pathname.startsWith("/cearatech"))
     || resolved.surface === "public"
     || resolved.surface === "landing"
     || resolved.surface === "central"
@@ -167,11 +171,10 @@ if (typeof window !== "undefined") {
       lastAttempt = 0;
     }
 
-    // Vite documenta que preventDefault() impede que o erro de import seja
-    // relançado. Fazemos isso somente quando realmente iniciaremos o reload;
-    // uma segunda falha dentro do throttle continua disponível ao ErrorBoundary.
+    // Preserve the rejected import while navigation is pending. Cancelling
+    // this event makes Vite resolve undefined, which React.lazy then reads
+    // as module.default and replaces the original error with a TypeError.
     if (now - lastAttempt > 15000) {
-      event.preventDefault();
       try {
         window.sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
       } catch {
@@ -208,11 +211,15 @@ if (sentryDsn) {
   });
 }
 
+initAnalytics();
+
 const pathname = window.location.pathname;
 const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isPrintSimulatorRoute = pathname.startsWith("/ferramentas/simulador-impressao");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
+const isCearaTechQrRoute = ["/siaratech/qr", "/cearatech/qr"].includes(pathname.replace(/\/+$/, ""));
+const isCearaTechRoute = (pathname.startsWith("/siaratech") || pathname.startsWith("/cearatech"));
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
 const isOnboardingAwareManagementRoute = isHostedManagementEntryRoute();
 const isInternalSupportOperationalRoute =
@@ -268,11 +275,15 @@ const RootApp = React.lazy(
       ? () => import("./legal/LegalPage")
       : isPlanContractRoute
         ? () => import("./legal/PlanContractPageV2")
-        : isUnifiedOperationalRoute
-          ? () => import("./components/auth/UnifiedOperationalEntry")
-          : isOnboardingAwareManagementRoute
-            ? () => import("./components/onboarding/OnboardingAwareOperationalEntry")
-            : () => import("./App"),
+        : isCearaTechQrRoute
+          ? () => import("./landing/CearaTechQrPage")
+          : isCearaTechRoute
+            ? () => import("./landing/CearaTechLeadPage")
+            : isUnifiedOperationalRoute
+            ? () => import("./components/auth/UnifiedOperationalEntry")
+            : isOnboardingAwareManagementRoute
+              ? () => import("./components/onboarding/OnboardingAwareOperationalEntry")
+              : () => import("./App"),
 );
 
 const RouteLoading = () => (pathname === "/recuperar-senha" || pathname === "/confirmar-cadastro")
@@ -285,14 +296,16 @@ const RouteLoading = () => (pathname === "/recuperar-senha" || pathname === "/co
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <AppRecoveryBoundary>
-    <TenantSuspensionBoundary disabled={bypassTenantSuspensionBoundary()}>
-      <React.Suspense fallback={<RouteLoading />}>
-        <RootApp />
-      </React.Suspense>
-      {hasCustomerSupportSurface ? <CustomerSupportWidget /> : null}
-      <SupportCodeNotice />
-    </TenantSuspensionBoundary>
-    </AppRecoveryBoundary>
+    <AnalyticsProvider>
+      <AppRecoveryBoundary>
+      <TenantSuspensionBoundary disabled={bypassTenantSuspensionBoundary()}>
+        <React.Suspense fallback={<RouteLoading />}>
+          <RootApp />
+        </React.Suspense>
+        {hasCustomerSupportSurface ? <CustomerSupportWidget /> : null}
+        <SupportCodeNotice />
+      </TenantSuspensionBoundary>
+      </AppRecoveryBoundary>
+    </AnalyticsProvider>
   </React.StrictMode>,
 );

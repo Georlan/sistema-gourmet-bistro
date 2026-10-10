@@ -114,6 +114,11 @@ claros sem criar uma segunda implementação de negócio. Presets de modelos
 conhecidos apenas fornecem defaults; endpoints futuros podem informar suas
 capabilities sem alterar o renderer canônico.
 
+Na Marmitaria, a projeção `compact_58` preserva a disposição já homologada da
+KA-1445/KA7: Proteínas → Guarnições → Saladas → demais grupos, sem altura dupla
+e sem os respiros adicionais usados na comanda de 80 mm. A G250/80 mm mantém a
+hierarquia rica Guarnições → Proteínas → Saladas.
+
 A partir da versão `2026.09.20.1`, o agente também instala a ponte local do
 simulador térmico em `127.0.0.1:17654-17664`. Ela só é usada pela bancada
 interna de engenharia e nunca envia bytes ao CUPS/USB durante a simulação.

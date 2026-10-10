@@ -1,3 +1,4 @@
+import PixCopyCode from "./PixCopyCode";
 import { OrderItemComposition } from '../../components/shared/OrderItemComposition';
 /**
  * Account-backed order history. This is deliberately separate from anonymous
@@ -91,7 +92,6 @@ export default function CardapioCustomerOrderHistory({
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [error, setError] = React.useState("");
   const [expandedOrderId, setExpandedOrderId] = React.useState<string | null>(null);
-  const [copiedOrderId, setCopiedOrderId] = React.useState<string | null>(null);
 
   const load = React.useCallback(async (cursor?: string | null, append = false) => {
     if (!customerToken) return;
@@ -248,18 +248,7 @@ export default function CardapioCustomerOrderHistory({
                             className="mx-auto my-3 h-40 w-40 rounded-lg bg-white p-2"
                           />
                         )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void navigator.clipboard.writeText(order.pagamento!.qr_code!).then(() => {
-                              setCopiedOrderId(order.id);
-                              window.setTimeout(() => setCopiedOrderId((current) => current === order.id ? null : current), 2000);
-                            }).catch(() => setError("Não foi possível copiar o Pix. Toque e segure o código para copiar."));
-                          }}
-                          className="w-full rounded-lg bg-primary px-3 py-2.5 text-[10px] font-black text-white"
-                        >
-                          {copiedOrderId === order.id ? "Código Pix copiado" : "Copiar código Pix"}
-                        </button>
+                        <PixCopyCode code={order.pagamento.qr_code} />
                         {order.pagamento.ticket_url && (
                           <a
                             href={order.pagamento.ticket_url}

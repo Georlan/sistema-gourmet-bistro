@@ -5,10 +5,11 @@ Cliente HTTP para comunicação com a API de impressão do Kôma Bistrô (/api/p
 import logging
 from typing import Any, Dict, Iterable, List, Optional, Set
 import requests
+from retry_budget import RetryBudget
 
 log = logging.getLogger("print-agent.api")
 AGENT_CAPABILITIES = ["connect_usb", "test_bluetooth"]
-AGENT_VERSION = "2026.09.27.1"
+AGENT_VERSION = "2026.10.05.1"
 
 
 class AgentAuthenticationError(RuntimeError):
@@ -34,6 +35,8 @@ class KomaApiClient:
         # Mantém a conexão HTTP/TLS aberta entre os ciclos de polling. Além de
         # reduzir a latência, evita um novo handshake para cada job consultado.
         self.session = requests.Session()
+        self._claim_retry = RetryBudget()
+        self._heartbeat_retry = RetryBudget()
         self.headers = {
             "Content-Type": "application/json",
             "X-Agent-Token": agent_token,
@@ -76,7 +79,7 @@ class KomaApiClient:
         diagnostics: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Envia o heartbeat e recebe um eventual comando do painel."""
-        if not self.agent_token:
+        if not self.agent_token or not self._heartbeat_retry.ready():
             return None
         url = f"{self.api_url}/api/print-agents/heartbeat"
         try:
@@ -93,15 +96,18 @@ class KomaApiClient:
             self._check_auth(resp)
             if resp.status_code == 200:
                 payload = resp.json()
+                self._heartbeat_retry.recover()
                 return payload if isinstance(payload, dict) else {}
             if resp.status_code in (401, 403):
                 raise AgentAuthenticationError(
                     "A autorização deste computador expirou ou foi revogada."
                 )
+            self._heartbeat_retry.fail()
             return None
         except AgentAuthenticationError:
             raise
         except Exception as e:
+            self._heartbeat_retry.fail()
             log.debug(f"Erro ao enviar heartbeat: {e}")
             return None
 
@@ -196,10 +202,13 @@ class KomaApiClient:
             self._check_auth(resp)
             if resp.status_code == 200:
                 data = resp.json()
+                self._claim_retry.recover()
                 return data if data else None
+            self._claim_retry.fail()
         except AgentAuthenticationError:
             raise
         except Exception as e:
+            self._claim_retry.fail()
             log.debug(f"Erro ao consultar próximo job: {e}")
         return None
 
@@ -213,8 +222,10 @@ class KomaApiClient:
             self._check_auth(resp)
             if resp.status_code == 200:
                 data = resp.json()
+                self._claim_retry.recover()
                 return data if data else None
             if resp.status_code not in (404, 405):
+                self._claim_retry.fail()
                 log.warning(
                     "Falha ao buscar e reservar próximo job "
                     f"(HTTP {resp.status_code}): {resp.text}"
@@ -223,6 +234,7 @@ class KomaApiClient:
         except AgentAuthenticationError:
             raise
         except Exception as e:
+            self._claim_retry.fail()
             log.debug(f"Erro ao buscar e reservar próximo job: {e}")
             return None
 
@@ -242,7 +254,7 @@ class KomaApiClient:
         Durante a atualização gradual, volta automaticamente ao endpoint
         unitário sem interromper instalações com backend antigo.
         """
-        if not self.agent_token:
+        if not self.agent_token or not self._claim_retry.ready():
             return []
         safe_limit = max(1, min(int(limit), 10))
         url = (
@@ -258,16 +270,22 @@ class KomaApiClient:
             self._check_auth(resp)
             if resp.status_code == 200:
                 data = resp.json()
-                return data if isinstance(data, list) else []
+                if not isinstance(data, list):
+                    self._claim_retry.fail()
+                    return []
+                self._claim_retry.recover()
+                return data
             if resp.status_code not in (404, 405):
+                self._claim_retry.fail()
                 log.warning(
                     "Falha ao reservar lote de impressão "
-                    f"(HTTP {resp.status_code}): {resp.text}"
+                    f"(HTTP {resp.status_code})"
                 )
                 return []
         except AgentAuthenticationError:
             raise
         except Exception as exc:
+            self._claim_retry.fail()
             log.debug(f"Erro ao reservar lote de impressão: {exc}")
             return []
 

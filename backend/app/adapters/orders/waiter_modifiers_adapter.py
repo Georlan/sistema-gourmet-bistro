@@ -38,7 +38,7 @@ from ...domain.orders.errors import (
 )
 from ...domain.orders.types import FulfillmentType, OrderChannel, normalize_to_fulfillment
 from ...models import Comanda, Item, ItemModificador, Lancamento, Usuario
-from ...services.atendimentos import ensure_atendimento_for_comanda, ensure_launch_identity
+from ...schemas import LancamentoResponse
 from ...services.order_numbers import gerar_novo_numero_pedido_atomico
 from ...services.shifts import require_open_cash_shift
 from ...waiter_permissions import require_waiter_permission, waiter_permission_enabled
@@ -98,21 +98,21 @@ class WaiterModifiersAdapter:
                 tuple(sorted(str(mid) for mid in (getattr(item, "modificador_ids", None) or ()))),
             )
 
-        def _existing_signature(item):
-            modifier_ids = tuple(sorted(
-                str(row[0])
-                for row in db.query(ItemModificador.opcao_modificador_id).filter(
-                    ItemModificador.restaurante_id == rid,
-                    ItemModificador.item_id == item.id,
-                ).all()
-            ))
-            return (item.produto_id, (item.observacao or "").strip(), modifier_ids)
-
         def _ensure_replay_matches(existing_launch: Lancamento) -> Lancamento:
+            active_items = [item for item in existing_launch.itens if item.status != "cancelado"]
+            modifiers_by_item: dict[str, list[str]] = {}
+            if active_items:
+                for item_id, option_id in db.query(
+                    ItemModificador.item_id, ItemModificador.opcao_modificador_id,
+                ).filter(
+                    ItemModificador.restaurante_id == rid,
+                    ItemModificador.item_id.in_([item.id for item in active_items]),
+                ).all():
+                    modifiers_by_item.setdefault(item_id, []).append(str(option_id))
             existing_items = sorted(
-                _existing_signature(item)
-                for item in existing_launch.itens
-                if item.status != "cancelado"
+                (item.produto_id, (item.observacao or "").strip(),
+                 tuple(sorted(modifiers_by_item.get(item.id, []))))
+                for item in active_items
             )
             requested_items = sorted(_signature(item) for item in lancamento_in.itens)
             if (
@@ -212,10 +212,7 @@ class WaiterModifiersAdapter:
             if not novo_lancamento:
                 raise HTTPException(status_code=500, detail="Erro ao recuperar lançamento criado.")
 
-            if comanda.tipo == "Consumo no Local" and comanda.mesa_id is not None:
-                ensure_atendimento_for_comanda(db, comanda, actor_id=current_user.id)
-                ensure_launch_identity(db, novo_lancamento)
-
+            # The order core already persists the table session and launch identity.
             novo_lancamento.dispensado_impressao = True
             if waiter_permission_enabled(db, current_user, "perm_garcom_print"):
                 try:
@@ -237,8 +234,14 @@ class WaiterModifiersAdapter:
                     novo_lancamento.dispensado_impressao = True
                     logger.warning("Falha no Core Universal de Impressão do lançamento %s: %s", novo_lancamento.id, print_err)
 
+            # Materialize the HTTP/event snapshot while eager-loaded attributes are
+            # available. Commit still precedes delivery; no expired ORM reads are
+            # needed to serialize the successful response or notify the cashier.
+            response = LancamentoResponse.model_validate(novo_lancamento)
+            mesa_id = comanda.mesa_id
+            resource = "salon" if mesa_id is not None and comanda.tipo == "Consumo no Local" else "digital"
+            tenant_id = current_user.tenant_id
             db.commit()
-            db.refresh(novo_lancamento)
         except HTTPException:
             db.rollback()
             raise
@@ -269,18 +272,18 @@ class WaiterModifiersAdapter:
             logger.exception("Falha inesperada ao processar lançamento com complementos: %s", exc)
             raise HTTPException(status_code=500, detail="Erro ao processar lançamento do pedido.")
 
-        if comanda.mesa_id is not None:
+        if mesa_id is not None:
             background_tasks.add_task(
                 manager.broadcast,
-                {"type": "MESA_UPDATED", "mesa_id": comanda.mesa_id, "status": "OCUPADA"},
-                tenant_id=current_user.tenant_id,
+                {"type": "MESA_UPDATED", "mesa_id": mesa_id, "status": "OCUPADA"},
+                tenant_id=tenant_id,
             )
         background_tasks.add_task(
             manager.broadcast,
             {
                 "type": "LANCAMENTO_CRIADO",
-                "comanda_id": comanda.id,
-                "lancamento_id": novo_lancamento.id,
+                "comanda_id": response.comanda_id,
+                "lancamento_id": response.id,
                 "itens": [
                     {
                         "id": it.id,
@@ -289,10 +292,10 @@ class WaiterModifiersAdapter:
                         "observacao": it.observacao,
                         "preco_unit": it.preco_unit,
                     }
-                    for it in novo_lancamento.itens
+                    for it in response.itens
                 ],
             },
-            tenant_id=current_user.tenant_id,
+            tenant_id=tenant_id,
         )
-        background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-        return novo_lancamento
+        background_tasks.add_task(manager.broadcast, {"event": "tables_updated", "detail": {"type": "lancamento_criado", "comanda_id": response.comanda_id, "resource": resource}}, require_tenant_id())
+        return response

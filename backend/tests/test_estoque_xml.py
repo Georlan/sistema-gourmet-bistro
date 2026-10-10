@@ -230,3 +230,35 @@ def test_xml_import_duplicate_prevention():
     res2 = client.post("/estoque/importar-xml", files=files1, headers=headers)
     assert res2.status_code == 400
     assert "já foi importada anteriormente" in res2.json()["detail"]
+
+def test_xml_import_rejects_oversized_file(monkeypatch):
+    from app.routes import estoque as estoque_routes
+
+    monkeypatch.setattr(estoque_routes, "MAX_XML_IMPORT_SIZE", 128)
+    token = get_auth_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    oversized = b"<?xml version=\"1.0\"?><nfeProc>" + (b"x" * 256)
+
+    res = client.post(
+        "/estoque/importar-xml",
+        files={"file": ("nfe.xml", oversized, "text/xml")},
+        headers=headers,
+    )
+
+    assert res.status_code == 413
+    assert res.json()["detail"] == "O arquivo XML da NF-e deve ter no máximo 10 MB."
+
+
+def test_xml_import_does_not_echo_parser_details():
+    token = get_auth_token()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res = client.post(
+        "/estoque/importar-xml",
+        files={"file": ("nfe.xml", b"<nfeProc><NFe>", "text/xml")},
+        headers=headers,
+    )
+
+    assert res.status_code == 400
+    assert res.json()["detail"] == "XML da NF-e inválido ou corrompido."
+

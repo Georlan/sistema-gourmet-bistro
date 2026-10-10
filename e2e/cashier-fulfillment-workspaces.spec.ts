@@ -119,6 +119,11 @@ async function mockFulfillmentBackend(
     const url = new URL(request.url());
     const { pathname } = url;
 
+    if (pathname === '/comandas/delivery/pendentes') {
+      await route.fulfill({ json: activeOrders().filter(order => order.delivery_status === 'pendente') });
+      return;
+    }
+
     if (pathname === '/comandas/delivery/ativos') {
       if (failActiveReads) {
         await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'offline' }) });
@@ -518,6 +523,11 @@ async function mockThreeTerminalFulfillmentBackend(context: BrowserContext) {
     const url = new URL(request.url());
     const { pathname } = url;
 
+    if (pathname === '/comandas/delivery/pendentes') {
+      await route.fulfill({ json: [] });
+      return;
+    }
+
     if (pathname === '/comandas/delivery/ativos' || pathname === '/comandas/detalhes/todos') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([delivery]) });
       return;
@@ -763,6 +773,11 @@ async function mockTwoTerminalPickupBackend(context: BrowserContext) {
     const url = new URL(request.url());
     const { pathname } = url;
 
+    if (pathname === '/comandas/delivery/pendentes') {
+      await route.fulfill({ json: !pickup.fechada && pickup.delivery_status === 'pendente' ? [pickup] : [] });
+      return;
+    }
+
     if (pathname === '/comandas/delivery/ativos' || pathname === '/comandas/detalhes/todos') {
       const activeList = pickup.fechada ? [] : [pickup];
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(activeList) });
@@ -938,6 +953,11 @@ test('sessão recupera estado atualizado de pedidos após reconexão de WebSocke
     const request = route.request();
     const url = new URL(request.url());
     const { pathname } = url;
+
+    if (pathname === '/comandas/delivery/pendentes') {
+      await route.fulfill({ json: [] });
+      return;
+    }
 
     if (pathname === '/comandas/delivery/ativos' || pathname === '/comandas/detalhes/todos') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([delivery]) });

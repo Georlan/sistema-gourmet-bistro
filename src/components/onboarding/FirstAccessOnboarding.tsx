@@ -1,3 +1,6 @@
+import { ONBOARDING_SETUP_MODE_KEY, useUnsavedSetupChanges } from './setupNavigation';
+import { CardapioDigitalSettingsPanel } from '../cardapio/CardapioDigitalSettingsPanel';
+import { OnlineMenuOrdersSettings } from '../caixa/online-menu/OnlineMenuOrdersSettings';
 import { SubscriptionControl } from '../assinatura/SubscriptionControl';
 import { CatalogAssistanceUpload, type CatalogAssistanceSnapshot } from './CatalogAssistanceUpload';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -6,6 +9,8 @@ import {
   CalendarClock,
   CheckCircle2,
   Circle,
+  ChevronDown,
+  LockKeyhole,
   CreditCard,
   Percent,
   Printer,
@@ -30,7 +35,7 @@ import {
   type SubscriptionPlanId,
 } from '../../config/subscriptionPlans';
 
-export const ONBOARDING_SETUP_MODE_KEY = 'koma_onboarding_setup_mode';
+export { ONBOARDING_SETUP_MODE_KEY } from './setupNavigation';
 const ONBOARDING_TEST_ORDER_KEY = 'koma_onboarding_test_order';
 
 type OrderType = 'consumo_local' | 'retirada' | 'delivery';
@@ -107,6 +112,12 @@ type OnboardingStatus = {
 };
 
 type LoadState = 'loading' | 'ready' | 'error';
+type EssentialId = 'profile' | 'hours' | 'operations' | 'catalog';
+const ESSENTIAL_ORDER: EssentialId[] = ['profile', 'hours', 'operations', 'catalog'];
+const nextGuidedFocus = (snapshot: OnboardingStatus) => {
+  const next = ESSENTIAL_ORDER.find(id => !snapshot.steps[id]);
+  return next ? `setup-step-${next}` : 'setup-guided-result';
+};
 
 type SetupStep = {
   id: string;
@@ -196,6 +207,19 @@ function SetupDisclosure({ id, title, summary, complete, error, children }: {
 }
 
 export function FirstAccessOnboarding({ accessToken, user }: Props) {
+  const [guidedFocusTarget, setGuidedFocusTarget] = useState<string | null>(null);
+  useEffect(() => {
+    if (!guidedFocusTarget) return;
+    const target = document.getElementById(guidedFocusTarget);
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'start' });
+    setGuidedFocusTarget(null);
+  }, [guidedFocusTarget]);
+  const [guidedSaving, setGuidedSaving] = useState(false);
+  const [guidedDirty, setGuidedDirty] = useState(false);
+  useUnsavedSetupChanges(guidedDirty);
+  const [formRevision, setFormRevision] = useState(0);
+  const [editingEssential, setEditingEssential] = useState<EssentialId | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const [snapshot, setSnapshot] = useState<OnboardingStatus | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
@@ -227,6 +251,32 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     }
     setState('ready');
   }, []);
+
+  const finishGuidedStep = async (step: 'profile' | 'hours' | 'operations') => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), ONBOARDING_LOAD_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}/api/onboarding/status`, {
+        headers, cache: 'no-store', signal: controller.signal,
+      });
+    } catch {
+      throw new Error('Etapa salva. Não foi possível confirmar o próximo passo; tente novamente.');
+    } finally {
+      window.clearTimeout(timer);
+    }
+    if (!response.ok) throw new Error('Etapa salva. Não foi possível confirmar o próximo passo; tente novamente.');
+    const next = await response.json() as OnboardingStatus;
+    if (next.steps?.[step] !== true) {
+      throw new Error('Etapa salva, mas ainda há informações necessárias para concluir. Revise os campos.');
+    }
+    applySnapshot(next);
+    setGuidedDirty(false);
+    setGuidedSaving(false);
+    setEditingEssential(null);
+    setGuidedFocusTarget(nextGuidedFocus(next));
+    return next;
+  };
 
   const returnToLogin = useCallback(() => {
     const current = getOperatorSession('caixa');
@@ -278,17 +328,23 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     const shouldWatchRelease = snapshot?.onboarding
       ? snapshot.onboarding.mode === 'commercial' && snapshot.onboarding.releaseState === 'awaiting_koma'
       : Boolean(snapshot?.readyForRelease);
-    if (!shouldWatchRelease) return;
+    const awaitingCatalog = snapshot?.onboarding?.mode === 'commercial'
+      && !snapshot.steps.catalog
+      && ['pending', 'processing'].includes(snapshot.catalogAssistance?.status || '');
+    if ((!shouldWatchRelease && !awaitingCatalog) || guidedDirty) return;
 
     const timer = window.setInterval(() => {
       if (!document.hidden) void loadSnapshot();
-    }, 8000);
+    }, shouldWatchRelease ? 8000 : 30000);
     return () => window.clearInterval(timer);
   }, [
     loadSnapshot,
     snapshot?.onboarding?.mode,
     snapshot?.onboarding?.releaseState,
     snapshot?.readyForRelease,
+    snapshot?.steps.catalog,
+    snapshot?.catalogAssistance?.status,
+    guidedDirty,
   ]);
 
   const openCashierAt = (tab: string, subTab: string, setupMode = true) => {
@@ -305,11 +361,10 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
 
   const toggleOrderType = (value: OrderType) => {
     setOperationNotice('');
-    setOrderTypes((current) =>
-      current.includes(value)
-        ? current.filter((item) => item !== value)
-        : [...current, value],
-    );
+    const next = orderTypes.includes(value) ? orderTypes.filter(item => item !== value) : [...orderTypes, value];
+    setOrderTypes(next);
+    setGuidedDirty(next.length !== snapshot?.operations.orderTypes.length
+      || next.some(item => !snapshot?.operations.orderTypes.includes(item)));
   };
 
   const saveOperationProfile = async () => {
@@ -354,8 +409,14 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
         throw new Error(await responseDetail(response, 'Não foi possível salvar as modalidades.'));
       }
       const next = await response.json() as OnboardingStatus;
-      applySnapshot(next);
-      const selectedLabels = next.operations.orderTypes
+      if (next.steps?.operations !== true) throw new Error('Modalidades ainda não confirmadas. Revise e tente novamente.');
+      // The canonical GET also persists the owner alert if this was the fourth essential.
+      const confirmed = guidedMode ? await finishGuidedStep('operations') : next;
+      if (!guidedMode) {
+        applySnapshot(confirmed);
+        setGuidedDirty(false);
+      }
+      const selectedLabels = confirmed.operations.orderTypes
         .map((value) => ORDER_TYPE_OPTIONS.find((option) => option.value === value)?.label || value)
         .join(', ');
       setOperationNotice(`Modalidades salvas ✓${selectedLabels ? `: ${selectedLabels}` : ''}`);
@@ -541,7 +602,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
         <section className="w-full max-w-lg rounded-3xl border border-koma-border bg-koma-card p-7 text-center shadow-2xl">
           <h1 className="text-xl font-black">Não foi possível validar a implantação inicial.</h1>
           <p className="mt-2 text-sm text-koma-muted">{errorMessage || 'A implantação não pôde ser carregada agora.'}</p>
-          <button type="button" onClick={() => void loadSnapshot()} className="mt-6 rounded-xl border border-koma-border px-4 py-3 text-xs font-black text-koma-foreground hover:border-emerald-500/40">
+          <button type="button" disabled={guidedSaving} onClick={() => { if (!guidedDirty || window.confirm('Há alterações não salvas. Descartar e atualizar a implantação?')) void loadSnapshot(); }} className="mt-6 rounded-xl border border-koma-border px-4 py-3 text-xs font-black text-koma-foreground hover:border-emerald-500/40">
             Tentar novamente
           </button>
           <button type="button" onClick={returnToLogin} className="mt-3 block w-full text-xs font-bold text-koma-muted">Ir para o login</button>
@@ -568,8 +629,85 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const isCommercial = onboardingMode === 'commercial';
   const isAdministrative = onboardingMode === 'administrative';
   const isAwaitingKoma = releaseState === 'awaiting_koma';
-  const nextStep = steps.find(step => !step.done);
+  const guidedSteps = ESSENTIAL_ORDER.map(id => steps.find(step => step.id === id)!);
+  const nextStep = (isCommercial && !operationReleased ? guidedSteps : steps).find(step => !step.done);
+  const guidedMode = isCommercial && !operationReleased;
+  const guidedStep = guidedMode ? editingEssential || nextStep?.id : null;
+  const guidedBusy = guidedSaving || savingOperations;
+  const selectGuidedStep = (id: EssentialId) => {
+    if (id === guidedStep || guidedBusy || (guidedDirty && !window.confirm('Há alterações não salvas. Descartar e abrir outra etapa?'))) return;
+    setGuidedDirty(false);
+    setOrderTypes(snapshot.operations.orderTypes);
+    setEditingEssential(id);
+    setGuidedFocusTarget(`setup-step-${id}`);
+  };
+  const operationsForm = (<>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <div className="flex items-center gap-2">
+          {snapshot.steps.operations ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
+          <h2 className="text-sm font-black">Como o restaurante recebe pedidos?</h2>
+        </div>
+        <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted">
+          Escolha as modalidades ativas. Isso não altera silenciosamente mapa de mesas, taxa de serviço ou regras de entrega.
+        </p>
+      </div>
+
+    </div>
+
+    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      {ORDER_TYPE_OPTIONS.map((option) => {
+        const selected = orderTypes.includes(option.value);
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={selected}
+            disabled={savingOperations}
+            onClick={() => toggleOrderType(option.value)}
+            className={`rounded-xl border px-3 py-3 text-left transition ${selected ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-raised'}`}
+          >
+            <span className="block text-xs font-black">{option.label}</span>
+            <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">{option.description}</span>
+          </button>
+        );
+      })}
+    </div>
+
+    {snapshot.operations.blockers.length > 0 && (
+      <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3">
+        {snapshot.operations.blockers.map((blocker) => (
+          <p key={blocker} className="text-[10px] text-amber-700 dark:text-amber-300">• {blockerLabel(blocker)}</p>
+        ))}
+      </div>
+    )}
+    {operationNotice && (
+      <p role="status" className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-[10px] font-bold text-emerald-300">
+        {operationNotice}
+      </p>
+    )}
+    {operationError && <p role="alert" className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-[10px] font-bold text-rose-300">{operationError}</p>}
+
+    <div className="mt-4 flex justify-end">
+      <button
+        type="button"
+        disabled={savingOperations}
+        onClick={() => void saveOperations()}
+        className="rounded-xl bg-emerald-500 px-4 py-2.5 text-[10px] font-black text-zinc-950 disabled:opacity-60"
+      >
+        {savingOperations ? 'Salvando…' : guidedMode ? 'Salvar e continuar' : operationNotice ? 'Salvo ✓' : 'Salvar modalidades'}
+      </button>
+    </div>
+  </>);
   const remainingEssentials = snapshot.progress.total - snapshot.progress.completed;
+  const catalogUpload = <CatalogAssistanceUpload accessToken={accessToken} assistance={snapshot.catalogAssistance} onSubmitted={() => void loadSnapshot()} onSavingChange={guidedMode ? setGuidedSaving : undefined} onDirtyChange={guidedMode ? setGuidedDirty : undefined} />;
+  const refreshSetup = () => {
+    if (guidedBusy || (guidedDirty && !window.confirm('Há alterações não salvas. Descartar e atualizar a implantação?'))) return;
+    setGuidedDirty(false);
+    setEditingEssential(null);
+    setFormRevision(value => value + 1);
+    void loadSnapshot();
+  };
 
   return (
     <main className="min-h-screen bg-koma-page px-4 py-6 text-koma-foreground sm:px-6 lg:px-8">
@@ -625,18 +763,63 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                     : `Falta pouco — ${snapshot.progress.completed} de ${snapshot.progress.total} concluídos`}
                 </p>
               </div>
-              <button type="button" onClick={() => void loadSnapshot()} className="inline-flex items-center gap-2 self-start rounded-xl border border-koma-border px-3 py-2 text-[10px] font-black text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-400">
+              <button type="button" disabled={guidedBusy} onClick={refreshSetup} className="inline-flex items-center gap-2 self-start rounded-xl border border-koma-border px-3 py-2 text-[10px] font-black text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-400">
                 <RefreshCw size={12} /> Atualizar
               </button>
             </div>
 
 
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-koma-raised" aria-label="Progresso dos essenciais">
+            <div id="setup-guided-review" tabIndex={-1} className="mt-4 h-2 overflow-hidden rounded-full bg-koma-raised" aria-label="Progresso dos essenciais">
               <div className="h-full rounded-full bg-emerald-500" style={{ width: `${snapshot.progress.percent}%` }} />
             </div>
             <h2 className="mt-5 text-sm font-black">{configurationComplete ? 'Essenciais concluídos · pronto para revisão' : `${remainingEssentials === 1 ? 'Falta 1 essencial' : `Faltam ${remainingEssentials} essenciais`} para revisão`}</h2>
-            <p className="mt-1 text-xs text-koma-muted">Você pode configurar os itens em qualquer ordem. O primeiro pendente está destacado.</p>
-            <div className="mt-5 space-y-3">
+            <p className="mt-1 text-xs text-koma-muted">{guidedMode ? 'Uma etapa por vez. Salve para abrir a próxima; toque em uma etapa concluída para revisar.' : 'Você pode configurar os itens em qualquer ordem. O primeiro pendente está destacado.'}</p>
+            {guidedMode && (
+              <div id="setup-guided-steps" tabIndex={-1} className="mt-5 space-y-3" aria-label="Etapas da inscrição">
+                {guidedSteps.map((step, index) => {
+                  const active = guidedStep === step.id;
+                  const locked = !step.done && step !== nextStep;
+                  const Icon = step.icon;
+                  return (
+                    <section key={step.id} id={`setup-step-${step.id}`} tabIndex={-1} className={`scroll-mt-4 overflow-hidden rounded-2xl border ${active ? 'border-koma-accent ring-2 ring-koma-accent/25' : 'border-koma-border'}`}>
+                      <button type="button" disabled={locked || guidedBusy} aria-expanded={active} aria-controls={`setup-panel-${step.id}`} aria-current={active ? 'step' : undefined}
+                        onClick={() => selectGuidedStep(step.id as EssentialId)}
+                        className={`flex min-h-[72px] w-full items-center gap-3 p-4 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-koma-accent disabled:cursor-default ${active ? 'bg-koma-accent/10' : 'bg-koma-card hover:bg-koma-raised'}`}>
+                        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border ${active ? 'border-koma-accent text-koma-accent' : 'border-koma-border text-koma-muted'}`}><Icon size={18} /></span>
+                        <span className="min-w-0 flex-1"><strong className="block text-sm">{index + 1}. {step.id === 'profile' ? 'Dados do restaurante' : step.id === 'hours' ? 'Horários de funcionamento' : step.id === 'operations' ? 'Modalidades de pedido' : 'Cardápio'}</strong>
+                          <span className="mt-1 block text-xs text-koma-muted">{active ? 'Você está nesta etapa' : step.done ? 'Concluído · toque para revisar' : locked ? 'Disponível após concluir a etapa anterior' : 'Próxima etapa'}</span>
+                        </span>
+                        {locked ? <LockKeyhole size={17} className="shrink-0 text-koma-muted" /> : active ? <ChevronDown size={18} className="shrink-0 text-koma-accent" /> : step.done ? <CheckCircle2 size={18} className="shrink-0 text-koma-accent" /> : <ArrowRight size={18} className="shrink-0 text-koma-muted" />}
+                      </button>
+                      {active && (
+                        <div key={formRevision} id={`setup-panel-${step.id}`} className="border-t border-koma-accent/25 bg-koma-page p-3 sm:p-5">
+                          {(step.id === 'profile' || step.id === 'hours') && (
+                            <section aria-label="Etapa atual do cadastro">
+                              {step.id === 'profile' ? (
+                                <CardapioDigitalSettingsPanel apiBaseUrl={API_BASE_URL} authHeaders={headers} publicMenuUrl={null} activeSection="perfil" onSectionChange={() => {}} onSetupSavingChange={setGuidedSaving} onSetupDirtyChange={setGuidedDirty} onSetupComplete={async () => { await finishGuidedStep('profile'); }} />
+                              ) : (
+                                <OnlineMenuOrdersSettings apiBaseUrl={API_BASE_URL} authHeaders={headers} publicMenuUrl={null} onSetupSavingChange={setGuidedSaving} onSetupDirtyChange={setGuidedDirty} onSetupComplete={async () => { await finishGuidedStep('hours'); }} />
+                              )}
+                            </section>
+                          )}
+                          {step.id === 'operations' && operationsForm}
+                          {step.id === 'catalog' && (
+                            <section aria-label="Cardápio do cadastro">
+                              {catalogUpload}
+                              <p className="mt-3 text-xs text-koma-muted">Envie seu cardápio para a equipe preparar ou cadastre os produtos. Esta etapa conclui quando houver um produto ativo.</p>
+                              <button type="button" onClick={() => openCashierAt('cardapio', 'produtos', true)} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-4 py-2 text-sm font-bold">
+                                {step.done ? 'Conferir produtos' : 'Cadastrar produtos manualmente'} <ArrowRight size={16} />
+                              </button>
+                            </section>
+                          )}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+            {!guidedMode && <div className="mt-5 space-y-3">
               {[...steps].sort((a, b) => Number(a.done) - Number(b.done)).map((step) => {
                 const Icon = step.icon;
                 return (
@@ -657,6 +840,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                       {step.done ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
                       <button
                         type="button"
+                        disabled={guidedSaving}
                         onClick={() => step.id === 'operations'
                           ? document.getElementById('setup-modalities')?.scrollIntoView({ block: 'start' })
                           : openCashierAt(step.tab, step.subTab, true)}
@@ -668,8 +852,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                   </article>
                 );
               })}
-            </div>
-
+            </div>}
             {isCommercial && (
               <div className="mt-5 grid grid-cols-3 gap-2" aria-label="Etapas da liberação">
                 {[
@@ -699,17 +882,15 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               </div>
             )}
 
+            <details className="mt-5 rounded-2xl border border-koma-border p-4" open={guidedMode ? undefined : true}>
+              <summary className="cursor-pointer text-sm font-bold">Ajustes adicionais · opcionais nesta inscrição</summary>
             <p className="mt-5 text-xs font-bold text-koma-muted">Preparação já salva: {[
               Boolean(snapshot.restaurant.operationProfile && snapshot.restaurant.operationProfile !== 'generic') && 'tipo de operação',
               snapshot.steps.operations && 'modalidades',
               snapshot.counts.tables > 0 && `${snapshot.counts.tables} mesas`,
               snapshot.catalogAssistance && !['cancelled', 'superseded'].includes(snapshot.catalogAssistance.status) && 'cardápio recebido',
             ].filter(Boolean).join(' · ') || 'Comece pelos essenciais acima.'}</p>
-            <CatalogAssistanceUpload
-              accessToken={accessToken}
-              assistance={snapshot.catalogAssistance}
-              onSubmitted={() => void loadSnapshot()}
-            />
+            {!guidedMode && catalogUpload}
 
 
             <SetupDisclosure title="Tipo de operação" summary={OPERATION_PROFILE_OPTIONS.find(option => option.value === snapshot.restaurant.operationProfile)?.label || 'Escolha o tipo'} complete={Boolean(snapshot.restaurant.operationProfile && snapshot.restaurant.operationProfile !== 'generic')} error={operationProfileError}>
@@ -768,59 +949,11 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               )}
             </SetupDisclosure>
 
+            {!guidedMode && (
             <SetupDisclosure id="setup-modalities" title={snapshot.steps.operations ? 'Modalidades' : 'Pendente · escolha as modalidades'} summary={ORDER_TYPE_OPTIONS.filter(option => snapshot.operations.orderTypes.includes(option.value)).map(option => option.label).join(' · ') || 'Escolha como receber pedidos'} complete={snapshot.steps.operations} error={operationError || snapshot.operations.blockers.map(blockerLabel).join(' ')}>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    {snapshot.steps.operations ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
-                    <h2 className="text-sm font-black">Como o restaurante recebe pedidos?</h2>
-                  </div>
-                  <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted">
-                    Escolha as modalidades ativas. Isso não altera silenciosamente mapa de mesas, taxa de serviço ou regras de entrega.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  disabled={savingOperations}
-                  onClick={() => void saveOperations()}
-                  className="rounded-xl bg-emerald-500 px-4 py-2.5 text-[10px] font-black text-zinc-950 disabled:opacity-60"
-                >
-                  {savingOperations ? 'Salvando…' : operationNotice ? 'Salvo ✓' : 'Salvar modalidades'}
-                </button>
-              </div>
-
-              <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                {ORDER_TYPE_OPTIONS.map((option) => {
-                  const selected = orderTypes.includes(option.value);
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => toggleOrderType(option.value)}
-                      className={`rounded-xl border px-3 py-3 text-left transition ${selected ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-raised'}`}
-                    >
-                      <span className="block text-xs font-black">{option.label}</span>
-                      <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">{option.description}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {snapshot.operations.blockers.length > 0 && (
-                <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3">
-                  {snapshot.operations.blockers.map((blocker) => (
-                    <p key={blocker} className="text-[10px] text-amber-700 dark:text-amber-300">• {blockerLabel(blocker)}</p>
-                  ))}
-                </div>
-              )}
-              {operationNotice && (
-                <p role="status" className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-[10px] font-bold text-emerald-300">
-                  {operationNotice}
-                </p>
-              )}
-              {operationError && <p role="alert" className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-[10px] font-bold text-rose-300">{operationError}</p>}
+              {operationsForm}
             </SetupDisclosure>
+            )}
 
             {snapshot.operations.orderTypes.includes('consumo_local') && (
               <SetupDisclosure title="Salão" summary={`${snapshot.counts.tables} mesas cadastradas`} complete={snapshot.counts.tables > 0} error={tableSetupError}>
@@ -983,6 +1116,8 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               </div>
             </section>
 
+            </details>
+
             {configurationComplete && operationReleased && (
               <section className="mt-4 rounded-2xl border border-koma-border bg-koma-raised/20 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1020,7 +1155,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
 
             {errorMessage && <p className="mt-4 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-[10px] font-bold text-rose-600">{errorMessage}</p>}
 
-            <div className={`mt-6 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
+            <div id="setup-guided-result" tabIndex={-1} className={`mt-6 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
               isAwaitingKoma
                 ? 'border-amber-500/30 bg-amber-500/10'
                 : operationReleased

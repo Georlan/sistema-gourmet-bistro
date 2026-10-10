@@ -1,4 +1,6 @@
+import { StaffPushNotifications } from './caixa/realtime/StaffPushNotifications';
 import { DirectPixPendingPanel } from './caixa/orders/DirectPixPendingPanel';
+import { KomaBillingNotice } from './caixa/settings/KomaBillingNotice';
 import clsx from 'clsx';
 import { Loader2, Lock, Maximize2, Menu, MessageSquare, Minimize2 } from 'lucide-react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -98,6 +100,8 @@ const formatDuration = (minutes: number) => {
 };
 
 export function CaixaPanel({
+  initialDigitalSnapshot,
+  onInitialDigitalSnapshotConsumed,
   orders = [],
   onRefreshOrders,
   apiBaseUrl,
@@ -283,6 +287,7 @@ export function CaixaPanel({
     deliveryOrders,
     pendingAcceptanceOrders,
     deliveryOrdersLoadState,
+    hasDeliverySnapshot,
     pendingDeliveryOrderIds,
     motoboys,
     motoboysLoadState,
@@ -322,6 +327,7 @@ export function CaixaPanel({
     handleCancelSelectedKanbanConsumption,
     handleCancelSelectedKanbanOrder,
   } = useCashierOrders({
+    initialDigitalSnapshot,
     orders,
     apiBaseUrl,
     authHeaders,
@@ -675,8 +681,11 @@ export function CaixaPanel({
     setActiveSubTab('balcao');
   };
   useCashierRealtime({
+    onInitialDigitalSnapshotConsumed,
+    hasInitialDigitalSnapshot: Boolean(initialDigitalSnapshot),
     isWsConnected,
     activeTab,
+    needsCouriers: activeTab === 'operacao' && (['motoboys', 'entregadores'].includes(activeSubTab) || deliveryOrders.some(order => order.modalidade === 'delivery')),
     fetchTurno,
     fetchDeliveryOrders,
     fetchMotoboys,
@@ -823,6 +832,10 @@ export function CaixaPanel({
             </div>
           </header>
 
+          <StaffPushNotifications key={authHeaders.Authorization} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onOpenOrders={() => handleSidebarNavigation('vendas_pedidos')} />
+
+          <KomaBillingNotice apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onOpenBilling={(consolidated)=>{setActiveTab(consolidated ? 'configuracoes' : 'assinatura_pix');setActiveSubTab(consolidated ? 'integracoes' : 'contrato_documentos');}} />
+
           <div className="cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none">
             {activeTab === 'operacao' && operationSubnavItems.map((sub) => {
               const isPrimaryMobileBottomAction = ['vendas_novo_pedido', 'vendas_cozinha'].includes(sub.id);
@@ -950,23 +963,6 @@ export function CaixaPanel({
             ))}
           </div>
 
-      {pendingAcceptanceOrders.length > 0 && (
-        <button
-          type="button"
-          role="alert"
-          onClick={() => {
-            handleSidebarNavigation('vendas_pedidos');
-            setIsDrawerOpen(true);
-          }}
-          className="shrink-0 mx-5 mt-3 rounded-2xl border-2 border-amber-400 bg-amber-300 px-5 py-3 text-left text-amber-950"
-        >
-          <strong className="block text-sm font-black uppercase tracking-wide">
-            {pendingAcceptanceOrders.length === 1 ? 'Pedido aguardando aceite' : pendingAcceptanceOrders.length + ' pedidos aguardando aceite'}
-          </strong>
-          <span className="block text-[11px] font-bold">O alerta sonoro continua até todos serem aceitos ou recusados. Clique para abrir.</span>
-        </button>
-      )}
-
           <div ref={cashierContentRef} className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
             {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
               <div className={"absolute inset-0 bg-black/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-8 space-y-4"}>
@@ -1001,9 +997,10 @@ export function CaixaPanel({
             )}
 
             {activeTab === 'operacao' && activeSubTab === 'pedidos' && (
-              <>
-              <DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />
+              !hasDeliverySnapshot && deliveryOrdersLoadState === 'loading' ? <div role="status" data-testid="cashier-orders-loading" className="p-5 text-koma-muted">Carregando pedidos…</div> : !hasDeliverySnapshot && deliveryOrdersLoadState === 'error' ? <div role="alert" className="p-5">Não foi possível atualizar os pedidos digitais. <button onClick={() => void fetchDeliveryOrders()}>Tentar novamente</button></div> : <>
+              {deliveryOrdersLoadState === 'error' && <div role="alert" className="p-3 text-koma-muted">A atualização dos pedidos digitais falhou. Mantendo os últimos dados. <button onClick={() => void fetchDeliveryOrders()}>Tentar novamente</button></div>}
               <CaixaOrdersWorkspace
+                pixConferenceTrigger={<DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />}
                 hasLocalServiceWork={tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0}
                 columns={{
                   tableProduction: filteredCol1.map(buildCashierTableCard),
@@ -1088,6 +1085,7 @@ export function CaixaPanel({
             <CashierKitchen mode={hasDedicatedKds ? 'kds' : 'queue'} activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
 
             <CashierPickups
+              isWsConnected={isWsConnected}
               activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
               deliveryOrders={deliveryOrders}
               deliveryOrdersLoadState={deliveryOrdersLoadState}
@@ -1108,6 +1106,7 @@ export function CaixaPanel({
               label="Configurações"
               load={loadCashierSettings}
               sectionProps={{
+                isWsConnected,
                 apiBaseUrl,
                 authHeaders,
                 activeTab,
@@ -1267,6 +1266,7 @@ export function CaixaPanel({
             )}
 
             <CashierCouriers
+              isWsConnected={isWsConnected}
               activeSubTab={activeSubTab}
               deliveryOrders={deliveryOrders}
               deliveryOrdersLoadState={deliveryOrdersLoadState}
@@ -1298,6 +1298,7 @@ export function CaixaPanel({
             <DeferredCashierSection
               active={activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital'}
               label="Cardápio online"
+              retainInactiveProps
               load={loadCashierOnlineMenu}
               sectionProps={{ apiBaseUrl, authHeaders, activeSubTab, setActiveSubTab, setActiveTab, hasOnlineMenu, hasLoyalty, hasCoupons }}
             />

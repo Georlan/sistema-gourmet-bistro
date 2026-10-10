@@ -125,7 +125,7 @@ from .financial_read_routes import (
     get_vendas_detalhes_financeiro,
     get_equipe_desempenho_financeiro,
 )
-from .financial_product_routes import get_relatorio_produtos_operacional, get_inteligencia_cardapio
+from .financial_product_routes import get_relatorio_produtos_operacional, get_inteligencia_cardapio, get_consumo_complementos
 
 router.add_api_route("/visao-geral", get_relatorio_visao_geral_financeiro, methods=["GET"])
 router.add_api_route("/vendas-detalhes", get_vendas_detalhes_financeiro, methods=["GET"])
@@ -133,3 +133,4 @@ router.add_api_route("/equipe/desempenho", get_equipe_desempenho_financeiro, met
 router.add_api_route("/produtos", get_relatorio_produtos_operacional, methods=["GET"])
 
 router.add_api_route("/inteligencia-cardapio", get_inteligencia_cardapio, methods=["GET"])
+router.add_api_route("/complementos", get_consumo_complementos, methods=["GET"])

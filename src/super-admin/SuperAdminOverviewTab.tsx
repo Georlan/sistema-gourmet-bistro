@@ -1,8 +1,8 @@
+import { parseBackendTimestamp } from "../utils/dateTime";
 import React, { useState } from "react";
 import {
   Store,
   ShoppingBag,
-  TrendingUp,
   CreditCard,
   Search,
   ExternalLink,
@@ -14,9 +14,6 @@ import {
 import type { Tenant } from "./superAdminTypes";
 import {
   SUBSCRIPTION_PLANS,
-  formatCurrency,
-  formatPercentage,
-  getSubscriptionPlan,
 } from "../config/subscriptionPlans";
 
 interface SuperAdminOverviewTabProps {
@@ -38,8 +35,8 @@ function planLabel(planId?: string) {
 
 function formatActivity(value?: string | null) {
   if (!value) return "Não disponível";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("pt-BR");
+  const parsed = parseBackendTimestamp(value);
+  return parsed ? parsed.toLocaleString("pt-BR") : "Não disponível";
 }
 
 export function SuperAdminOverviewTab({
@@ -64,14 +61,6 @@ export function SuperAdminOverviewTab({
   );
 
   const activeCount = tenantsAvailable ? tenants.filter(t => t.status === "ACTIVE").length : null;
-  const catalogMonthlyReference = tenantsAvailable
-    ? tenants
-        .filter(t => t.status === "ACTIVE")
-        .reduce((sum, tenant) => {
-          return sum + getSubscriptionPlan(tenant.plan).price;
-        }, 0)
-    : null;
-
   const monthlyOrders = tenantsAvailable && tenants.every(t => t.monthlyOrders != null)
     ? tenants.reduce((sum, tenant) => sum + Number(tenant.monthlyOrders || 0), 0)
     : null;
@@ -109,16 +98,11 @@ export function SuperAdminOverviewTab({
           </p>
         </div>
 
-        <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-koma-muted">Referência mensal do catálogo</span>
-            <TrendingUp className="w-4 h-4 text-[#00b894]" />
-          </div>
-          <div className="mt-3 text-2xl font-bold text-koma-foreground">
-            {catalogMonthlyReference !== null ? formatCurrency(catalogMonthlyReference) : "—"}
-          </div>
-          <p className="text-[11px] text-koma-subtle mt-1">Planos ativos × catálogo; não confirma recebimento</p>
-        </div>
+        <button type="button" onClick={() => onNavigateToTab("billing")} className="rounded-xl border border-[#1e293b] bg-koma-card p-4 text-left hover:border-[#00b894]">
+          <span className="text-xs font-medium text-koma-muted">Financeiro KÔMA</span>
+          <strong className="mt-3 block text-xl text-koma-foreground">Recebimentos e custos</strong>
+          <span className="mt-1 block text-[11px] text-koma-subtle">Abrir apuração mensal e registrar despesas</span>
+        </button>
 
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4">
           <div className="flex items-center justify-between">
@@ -265,10 +249,7 @@ export function SuperAdminOverviewTab({
                   {runtimeHealth?.status === "ok" ? "Saudável" : "Não verificado"}
                 </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-koma-secondary">Catálogo de split</span>
-                <span className="text-koma-muted font-mono" title="Oferta vigente para novos aceites; consulte o contrato de cada tenant para a taxa efetiva">{SUBSCRIPTION_PLANS.map(p => formatPercentage(p.splitFeeRate)).join(" / ")}</span>
-              </div>
+
             </div>
             <button type="button" onClick={() => onNavigateToTab("operations")} className="w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-lg text-xs font-semibold text-koma-secondary flex items-center justify-center gap-1">
               Abrir Central de Operações <ChevronRight className="w-3.5 h-3.5" />

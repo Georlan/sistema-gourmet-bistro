@@ -12,6 +12,14 @@ export function itemCompositionSignature(item: CompositionSource): string {
     .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))));
 }
 
+function groupPresentationRank(label: string): number {
+  const normalized = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+  if (normalized.startsWith('guarnic')) return 0;
+  if (normalized.startsWith('protein')) return 1;
+  if (normalized.startsWith('salad')) return 2;
+  return 3;
+}
+
 function summarize(modifiers: readonly OrderItemModifier[]): string[] {
   const choices = new Map<string, { name: string; quantity: number }>();
   for (const modifier of modifiers) {
@@ -55,8 +63,11 @@ export function itemCompositionPresentation(item: CompositionSource): { lines: s
     if (group) group.options.push(modifier);
     else groups.set(key, { label: modifier.grupo_nome || 'Complementos', options: [modifier] });
   }
+  const orderedGroups = Array.from(groups.values())
+    .map((group, index) => ({ group, index }))
+    .sort((left, right) => groupPresentationRank(left.group.label) - groupPresentationRank(right.group.label) || left.index - right.index);
   return {
-    lines: Array.from(groups.values(), group => `${group.label.toLocaleUpperCase()}: ${summarize(group.options).join(', ')}`),
+    lines: orderedGroups.map(({ group }) => `${group.label.toLocaleUpperCase()}: ${summarize(group.options).join(', ')}`),
     observation,
   };
 }

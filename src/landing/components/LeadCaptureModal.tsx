@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { KOMA_LANDING_CONFIG, type LeadFormData, type LeadSelection } from '../config/landingConfig';
-import { WhatsAppIcon } from './WhatsAppIcon';
+import { API_BASE_URL } from '../../config/api';
 
 interface LeadCaptureModalProps {
   open: boolean;
@@ -10,7 +10,9 @@ interface LeadCaptureModalProps {
 
 export function LeadCaptureModal({ open, onClose, selection }: LeadCaptureModalProps) {
   const [form, setForm] = useState<LeadFormData>({ responsavel: '', estabelecimento: '' });
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [consent, setConsent] = useState(false);
+  const submitting = useRef(false);
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -21,7 +23,7 @@ export function LeadCaptureModal({ open, onClose, selection }: LeadCaptureModalP
     const dialog = dialogRef.current;
     const trigger = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
-    setCopyStatus('idle');
+    setSubmitStatus('idle');
     document.body.style.overflow = 'hidden';
     dialog?.showModal();
     // Don't open a mobile keyboard before the visitor is ready.
@@ -35,13 +37,27 @@ export function LeadCaptureModal({ open, onClose, selection }: LeadCaptureModalP
 
   if (!open) return null;
 
-  const handleCopy = async () => {
-    if (!formRef.current?.reportValidity()) return;
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (submitting.current || !consent) return;
+    submitting.current = true;
+    setSubmitStatus('sending');
     try {
-      await navigator.clipboard.writeText(KOMA_LANDING_CONFIG.getLeadMessage(form, selection));
-      setCopyStatus('copied');
+      const response = await fetch(`${API_BASE_URL}/api/leads/landing`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: form.responsavel, empresa_nome: form.estabelecimento,
+          whatsapp: form.whatsapp, consent_whatsapp: consent,
+          interesse: selection ? `Demonstração: ${selection.plan} · ${selection.billing}` : 'Demonstração do KÔMA' }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!response.ok) throw new Error('capture_failed');
+      const result = await response.json();
+      if (!result.success) throw new Error('capture_failed');
+      setSubmitStatus('sent');
     } catch {
-      setCopyStatus('error');
+      setSubmitStatus('error');
+    } finally {
+      submitting.current = false;
     }
   };
 
@@ -56,24 +72,25 @@ export function LeadCaptureModal({ open, onClose, selection }: LeadCaptureModalP
         <div><span>DEMONSTRAÇÃO SEM COMPROMISSO</span><h2 id={titleId} tabIndex={-1}>CONHEÇA O KÔMA.</h2></div>
         <button type="button" className="koma-lead-close" onClick={onClose} aria-label="Fechar demonstração">×</button>
       </div>
-      <p id={descriptionId} className="koma-lead-intro">Só precisamos de duas informações para começar a conversa.</p>
+      <p id={descriptionId} className="koma-lead-intro">Deixe seu contato para agendarmos uma demonstração sem compromisso.</p>
       {selection && <p className="koma-lead-selection">Seu interesse: <strong>{selection.plan}</strong> · {selection.billing}. Isso não é uma contratação.</p>}
-      <form ref={formRef} className="koma-lead-form" onSubmit={event => {
-        event.preventDefault();
-        window.open(KOMA_LANDING_CONFIG.getLeadWhatsappUrl(form, selection), '_blank', 'noopener,noreferrer');
-        onClose();
-      }}>
+      {submitStatus === 'sent' ? <div role="status"><p>Pedido de demonstração recebido! Vamos entrar em contato pelo número informado.</p><button type="button" className="koma-btn koma-btn--primary" onClick={onClose}>CONCLUIR</button></div> :
+      <form ref={formRef} className="koma-lead-form" onSubmit={handleSubmit}>
         <label><span>SEU NOME</span><input type="text" name="name" autoComplete="name" required maxLength={80}
           placeholder="Como podemos chamar você?" value={form.responsavel} pattern=".*\S.*"
-          onChange={event => { setCopyStatus('idle'); setForm({ ...form, responsavel: event.target.value }); }} /></label>
+          onChange={event => { setSubmitStatus('idle'); setForm({ ...form, responsavel: event.target.value }); }} /></label>
         <label><span>NOME DO ESTABELECIMENTO</span><input type="text" name="organization" autoComplete="organization" required maxLength={120}
           placeholder="Ex.: Restaurante Central" value={form.estabelecimento} pattern=".*\S.*"
-          onChange={event => { setCopyStatus('idle'); setForm({ ...form, estabelecimento: event.target.value }); }} /></label>
-        <button type="submit" className="koma-btn koma-btn--primary koma-lead-submit"><WhatsAppIcon /> PEDIR DEMO NO WHATSAPP</button>
-        <small>Você revisa e envia a mensagem no WhatsApp. Nenhum dado é enviado automaticamente.</small>
-        <button type="button" className="koma-copy-message" onClick={handleCopy}>Copiar mensagem</button>
-        <small role="status">{copyStatus === 'copied' ? 'Mensagem copiada.' : copyStatus === 'error' ? 'Não foi possível copiar. Use o botão do WhatsApp.' : ''}</small>
-      </form>
+          onChange={event => { setSubmitStatus('idle'); setForm({ ...form, estabelecimento: event.target.value }); }} /></label>
+        <label><span>WHATSAPP COM DDD</span><input type="tel" name="tel" autoComplete="tel" required minLength={10} maxLength={30}
+          placeholder="(88) 99999-9999" value={form.whatsapp || ''}
+          onChange={event => { setSubmitStatus('idle'); setForm({ ...form, whatsapp: event.target.value }); }} /></label>
+        <label className="koma-demo-consent"><input type="checkbox" required checked={consent} onChange={event => setConsent(event.target.checked)} /> Autorizo o KÔMA a entrar em contato por WhatsApp sobre esta demonstração.</label>
+        <button type="submit" disabled={submitStatus === 'sending'} className="koma-btn koma-btn--primary koma-lead-submit">{submitStatus === 'sending' ? 'ENVIANDO…' : 'SOLICITAR DEMONSTRAÇÃO'}</button>
+        <small>Este pedido não é uma contratação. O aceite dos termos acontece no cadastro.</small>
+        {submitStatus === 'error' && <p role="alert">Não foi possível enviar. Confira o WhatsApp com DDD e tente novamente.</p>}
+      </form>}
+
     </dialog>
   );
 }

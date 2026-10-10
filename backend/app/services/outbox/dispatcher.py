@@ -253,6 +253,18 @@ def dispatch_single_claimed_snapshot(
         )
         return False
 
+    if snapshot.get("event_name") == "koma.staff_push.order_created":
+        try:
+            from ..staff_push import dispatch_staff_push
+            with tenant_session_scope(db, int(rid)):
+                dispatch_staff_push(db, snapshot)
+            settle_outbox_event(db, outbox_id, status="delivered", response_status_code=204,
+                last_error=None, worker_id=worker_id)
+            return True
+        except Exception as exc:
+            _settle_dispatch_failure(db, snapshot, exc)
+            return False
+
     if snapshot.get("event_name") == "koma.whatsapp.order_created":
         from ..tenant_order_whatsapp import dispatch_alert
         with tenant_session_scope(db, int(rid)):

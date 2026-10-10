@@ -45,6 +45,16 @@ def project_check_details(
 ) -> list[ComandaDetail]:
     details = [ComandaDetail.model_validate(check) for check in checks]
     _attach_item_modifiers(db, details, restaurante_id)
+    from ..scheduled_models import ScheduledOrder
+    schedules = {
+        row.comanda_id: row.scheduled_for
+        for row in db.query(ScheduledOrder).filter(
+            ScheduledOrder.restaurante_id == restaurante_id,
+            ScheduledOrder.comanda_id.in_([check.id for check in checks]),
+        ).all()
+    } if checks else {}
+    for detail in details:
+        detail.scheduled_for = schedules.get(detail.id)
 
     launch_ids = {
         launch.id for detail in details for launch in detail.lancamentos
@@ -58,28 +68,25 @@ def project_check_details(
         row.id: row for row in db.query(
             Lancamento.id, Lancamento.timestamp, Lancamento.origem,
             Usuario.nome.label("responsavel_nome"),
+            LancamentoIdentidade.sequencia, AtendimentoMesa.numero_conta,
         ).outerjoin(Usuario, and_(
             Usuario.id == Lancamento.garcom_id,
             Usuario.restaurante_id == Lancamento.restaurante_id,
+        )).outerjoin(LancamentoIdentidade, and_(
+            LancamentoIdentidade.lancamento_id == Lancamento.id,
+            LancamentoIdentidade.restaurante_id == Lancamento.restaurante_id,
+        )).outerjoin(AtendimentoMesa, and_(
+            AtendimentoMesa.id == LancamentoIdentidade.atendimento_id,
+            AtendimentoMesa.restaurante_id == Lancamento.restaurante_id,
         )).filter(
             Lancamento.restaurante_id == restaurante_id,
             Lancamento.id.in_(launch_ids),
         ).all()
     }
-    rows = (
-        db.query(LancamentoIdentidade.lancamento_id,
-                 LancamentoIdentidade.sequencia, AtendimentoMesa.numero_conta)
-        .join(AtendimentoMesa, AtendimentoMesa.id == LancamentoIdentidade.atendimento_id)
-        .filter(
-            LancamentoIdentidade.restaurante_id == restaurante_id,
-            AtendimentoMesa.restaurante_id == restaurante_id,
-            LancamentoIdentidade.lancamento_id.in_(launch_ids),
-        )
-        .all()
-    )
     labels = {
-        launch_id: format_order_family_id(check_number, sequence)
-        for launch_id, sequence, check_number in rows
+        launch_id: format_order_family_id(context.numero_conta, context.sequencia)
+        for launch_id, context in launch_context.items()
+        if context.numero_conta is not None and context.sequencia is not None
     }
     for detail in details:
         for launch in detail.lancamentos:

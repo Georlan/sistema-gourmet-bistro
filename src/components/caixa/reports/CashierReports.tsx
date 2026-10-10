@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 
 import { ArrowUpRight } from 'lucide-react';
 import { useEffect, useState } from 'react';

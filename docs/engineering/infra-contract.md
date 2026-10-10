@@ -6,6 +6,8 @@
 - API: Railway projeto `passionate-truth`, serviço `Kôma`, branch `main`, root `/backend`, região `sfo`, **1 réplica**. Build Railpack; start `uvicorn app.main:app --host 0.0.0.0 --port $PORT`; pre-deploy `alembic upgrade head`; watch `backend/**`; healthcheck `/health/ready`; `/health/live` público. Volume `/app/data` preservado.
 - Banco autoritativo do KÔMA: PostgreSQL no Supabase. `DATABASE_URL`, `RUNTIME_DATABASE_URL` e `MIGRATION_DATABASE_URL` da API apontam para o mesmo destino; o serviço Railway `Postgres` é usado pela Evolution API, não pela API KÔMA. Redis Railway atende ao cache da Evolution API. Não mover bancos nem aumentar réplicas nesta missão.
 - Backup do banco KÔMA: Railway `Postgres S3 Backup` aponta para o mesmo destino da API, cron `0 3 * * *` UTC, upload S3. Rodar `node scripts/check-backup-freshness.mjs` em sessão Railway autenticada; o gate exige conclusão, validação do arquivo, tamanho positivo, upload e idade menor que 36 horas. Nenhum segredo é registrado.
+- Cobertura separada: o gate acima verifica o Supabase, não o Postgres Railway usado pela Evolution API. Em 09/10/2026, o S3 tinha dez cópias diárias; PITR Railway estava desativado e a interface exigia plano Pro para criar backups nativos. Não fazer upgrade, reiniciar bancos ou remover volumes para resolver esse limite. Registrar cópia independente e ensaio do banco Evolution antes de considerá-lo protegido.
+- Recuperação: ver o escopo e as limitações do ensaio pós-STS em `post-sts-reliability-tracker.md`. Arquivo válido e upload recente não equivalem a recuperação integral de banco, mídias, configuração e agentes.
 - Smoke público: `.github/workflows/production-smoke.yml`, diário e manual, somente GET/OPTIONS.
 
 ### Orçamento de conexões verificado em 2026-10-03

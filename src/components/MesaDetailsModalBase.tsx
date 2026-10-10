@@ -1,3 +1,4 @@
+import { TablePresenceNotice } from './shared/TablePresenceNotice';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -276,6 +277,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               <span className="uppercase tracking-wider text-koma-subtle">Garçom</span>
               <strong className="text-koma-foreground font-semibold">{activeWaiterNome}</strong>
             </span>
+            <TablePresenceNotice names={otherWaitersServing} />
             {orders.length > 0 && (
               <span
                 className="flex items-center gap-1.5"

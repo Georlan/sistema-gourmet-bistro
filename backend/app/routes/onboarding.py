@@ -39,6 +39,7 @@ from ..security import get_current_user
 from ..services.image_optimization import ImageOptimizerBusy, InvalidImage, optimize_image
 from ..services.onboarding_readiness import evaluate_operation_readiness
 from ..services.operational_modes import explicit_order_types
+from ..services.signup_notifications import enqueue_onboarding_ready_owner
 from ..services.table_bootstrap import bootstrap_standard_tables
 from .super_admin_onboarding import DEFAULT_TRIAL_DAYS, restaurant_trials
 
@@ -516,14 +517,42 @@ def _build_onboarding_status(
     }
 
 
+def _enqueue_release_ready_owner_notification(
+    db: Session,
+    snapshot: dict[str, Any],
+) -> bool:
+    """Persist one idempotent owner alert when commercial setup reaches 4/4."""
+    onboarding = snapshot.get("onboarding") or {}
+    readiness = snapshot.get("readiness") or {}
+    if onboarding.get("mode") != "commercial":
+        return False
+    if onboarding.get("releaseState") != "awaiting_koma":
+        return False
+    if readiness.get("configurationComplete") is not True:
+        return False
+
+    restaurant = snapshot.get("restaurant") or {}
+    return bool(
+        enqueue_onboarding_ready_owner(
+            db,
+            tenant_id=restaurant.get("id"),
+            restaurant_name=str(restaurant.get("name") or "Restaurante"),
+            plan=restaurant.get("plan"),
+        )
+    )
+
+
 @router.get("/status")
 def get_onboarding_status(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Read-only projection. Never starts trial or mutates onboarding state."""
+    """Project readiness and enqueue the durable owner alert after the 4th item."""
     _require_onboarding_role(current_user)
-    return _build_onboarding_status(db, current_user=current_user)
+    snapshot = _build_onboarding_status(db, current_user=current_user)
+    if _enqueue_release_ready_owner_notification(db, snapshot):
+        db.commit()
+    return snapshot
 
 
 @router.put("/operation-profile")

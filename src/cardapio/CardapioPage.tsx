@@ -1,3 +1,4 @@
+import PixCopyCode from "./components/PixCopyCode";
 import { QRCodeSVG } from 'qrcode.react';
 /**
  * @license
@@ -9,7 +10,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   CheckCircle2,
   Clock3,
-  Copy,
   Gift,
   House,
   MessageCircle,
@@ -73,6 +73,7 @@ import {
   updateStoredOrderStatus,
 } from "./orderTracking";
 import { rebuildOrderFromCurrentCatalog } from "./repeatOrder";
+import { trackAnalyticsEvent } from "../analytics";
 
 const KOMA_PRIMARY = "#00b894";
 const KOMA_BACKGROUND = "#090a0f";
@@ -141,13 +142,13 @@ export default function CardapioPage() {
   const [storedOrders, setStoredOrders] = useState<StoredOrder[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [pixModalOrder, setPixModalOrder] = useState<StoredOrder | null>(null);
-  const [copiedPix, setCopiedPix] = useState(false);
   const [user, setUser] = useState<CustomerProfile | null>(null);
   const [customerToken, setCustomerToken] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recentAddedCountRef = useRef(0);
   const isProgrammaticScroll = useRef(false);
+  const lastReportedMenuIdRef = useRef<string | number | null>(null);
 
   const showNotification = useCallback((message: string) => {
     setNotice(message);
@@ -199,6 +200,7 @@ export default function CardapioPage() {
   }, []);
 
   const loadRestaurantData = useCallback(async (background = false) => {
+    const loadStartedAt = performance.now();
     if (!background) {
       setIsLoading(true);
       setErrorMsg("");
@@ -265,6 +267,7 @@ export default function CardapioPage() {
             }))
           : [],
         isAvailable: true,
+        ordem_exibicao: product.ordem_exibicao != null ? Number(product.ordem_exibicao) : null,
       }));
 
       let socials: SocialNetwork[] = [];
@@ -379,6 +382,17 @@ export default function CardapioPage() {
       };
 
       setActiveBrand(brand);
+      if (!background && lastReportedMenuIdRef.current !== brand.id) {
+        lastReportedMenuIdRef.current = brand.id;
+        trackAnalyticsEvent('public_menu_viewed', {
+          restaurant_id: brand.id,
+          restaurant_name: brand.name,
+          categories_count: brand.categories.length,
+          products_count: brand.products.length,
+          store_status: brand.storeStatus,
+          catalog_load_ms: Math.round(performance.now() - loadStartedAt),
+        });
+      }
       setActiveCategory((current) => current && brand.categories.includes(current) ? current : brand.categories[0] || "");
       const rid = Number(brand.id);
       if (Number.isFinite(rid)) {
@@ -650,6 +664,25 @@ export default function CardapioPage() {
     } else {
       showNotification(`${product.name} adicionado à sacola`);
     }
+
+    const optionsCount = Object.values(selectedOptions).reduce((acc, list) => acc + list.length, 0);
+    let unitPrice = product.price;
+    Object.values(selectedOptions).forEach((list) => {
+      list.forEach((opt) => {
+        unitPrice += (opt.extraPrice || 0);
+      });
+    });
+    trackAnalyticsEvent('public_cart_item_added', {
+      restaurant_id: activeBrand?.id || '',
+      product_id: product.id,
+      product_name: product.name,
+      category: product.category,
+      price: product.price,
+      quantity,
+      total_price: unitPrice * quantity,
+      options_count: optionsCount,
+    });
+
     if (revealCart && window.innerWidth >= 1024) setIsCartOpen(true);
   };
 
@@ -1097,10 +1130,17 @@ export default function CardapioPage() {
               )}
             </div>
           ) : visibleCategories.map((category) => {
-            const products = activeBrand.products.filter((product) => (
-              product.category === category
-              && smartSearchMatch(`${product.name} ${product.description || ""}`, searchQuery)
-            ));
+            const products = activeBrand.products
+              .filter((product) => (
+                product.category === category
+                && smartSearchMatch(`${product.name} ${product.description || ""}`, searchQuery)
+              ))
+              .sort((a, b) => {
+                const orderA = a.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
+                const orderB = b.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
+                if (orderA !== orderB) return orderA - orderB;
+                return 0;
+              });
             return (
               <section key={category} id={categorySectionId(category)} className="scroll-mt-[10.5rem]">
                 <div className="mb-3 flex items-center justify-between border-b border-koma-border pb-2.5">
@@ -1170,7 +1210,13 @@ export default function CardapioPage() {
       )}
 
       {selectedProduct && (
-        <CardapioProductModal product={selectedProduct} initialItem={editingCartItem || undefined} onClose={() => { setSelectedProduct(null); setEditingCartItem(null); }} onAddToCart={handleAddToCart} />
+        <CardapioProductModal
+          product={selectedProduct}
+          restaurantId={activeBrand.id}
+          initialItem={editingCartItem || undefined}
+          onClose={() => { setSelectedProduct(null); setEditingCartItem(null); }}
+          onAddToCart={handleAddToCart}
+        />
       )}
 
       {(isCartOpen || cart.length > 0) && (
@@ -1202,6 +1248,18 @@ export default function CardapioPage() {
           }}
           onRemoveItem={(itemId) => setCart((current) => current.filter((item) => item.id !== itemId))}
           onPlaceOrder={(request) => {
+            trackAnalyticsEvent('public_checkout_initiated', {
+              restaurant_id: activeBrand.id,
+              delivery_method: request.deliveryMethod,
+              items_count: cart.reduce((tot, item) => tot + item.quantity, 0),
+              cart_total: cartTotal,
+              delivery_fee: request.deliveryFee,
+              has_coupon: Boolean(request.cupomCodigo),
+              coupon_discount: request.descontoCupom || 0,
+              has_cashback: Boolean(request.usarCashback),
+              cashback_discount: request.descontoCashback || 0,
+              payment_method: request.paymentMethodDetail || 'nao_definido',
+            });
             setCheckoutRequest(request);
             setIsCartOpen(false);
             setIsCheckoutOpen(true);
@@ -1333,12 +1391,11 @@ export default function CardapioPage() {
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setPixModalOrder(null);
-              setCopiedPix(false);
             }
           }}
         >
           <div
-            className="w-full max-w-sm rounded-3xl border border-koma-border bg-koma-card p-5 text-center shadow-2xl"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-3xl border border-koma-border bg-koma-card p-5 text-center shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-label={`Pagamento Pix do Pedido #${pixModalOrder.numero_pedido}`}
@@ -1359,7 +1416,6 @@ export default function CardapioPage() {
                 type="button"
                 onClick={() => {
                   setPixModalOrder(null);
-                  setCopiedPix(false);
                 }}
                 className="grid h-8 w-8 place-items-center rounded-xl border border-koma-border text-koma-secondary hover:text-white"
                 aria-label="Fechar modal Pix"
@@ -1386,29 +1442,7 @@ export default function CardapioPage() {
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => {
-                if (pixModalOrder?.pagamento?.qr_code) {
-                  void navigator.clipboard.writeText(pixModalOrder.pagamento.qr_code);
-                  setCopiedPix(true);
-                  setTimeout(() => setCopiedPix(false), 3000);
-                }
-              }}
-              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-4 text-xs font-black text-white shadow-lg transition"
-            >
-              {copiedPix ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4" />
-                  Código Copiado!
-                </>
-              ) : (
-                <>
-                  <Copy className="h-4 w-4" />
-                  Copiar código Pix
-                </>
-              )}
-            </button>
+            {pixModalOrder.pagamento.qr_code && <PixCopyCode code={pixModalOrder.pagamento.qr_code} />}
 
             {pixModalOrder.pagamento.ticket_url && (
               <a

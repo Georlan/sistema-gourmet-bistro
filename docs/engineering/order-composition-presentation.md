@@ -22,9 +22,13 @@ detalhes, cozinha, consumo da mesa e histórico do cliente.
 
 ## Apresentação
 
-Cada grupo ocupa uma linha lógica: `PROTEÍNAS: Frango, costela` ou
-`ADICIONAIS PAGOS: 2x Ovo`. A impressão quebra apenas conforme a largura do
-papel, sem linhas em branco entre grupos. O recado do cliente fica em `OBS:`.
+Na Marmitaria, os grupos seguem a ordem operacional de montagem: **Guarnições →
+Proteínas → Saladas**; os demais grupos vêm depois sem perder sua ordem relativa.
+Cada grupo continua sendo uma linha lógica, mas a impressão deixa um respiro antes
+da composição e entre grupos. Categoria e ingredientes usam altura ampliada no
+papel; somente o rótulo da categoria fica em negrito. Nas telas, a composição sobe
+de 11 px para 12 px, com rótulo mais forte e espaçamento vertical maior. O recado
+do cliente permanece secundário em `OBS:`.
 
 As telas usam `OrderItemComposition` e o helper puro `orderItemComposition`.
 A impressão usa o helper de domínio equivalente e o renderer universal; o

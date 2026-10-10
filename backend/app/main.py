@@ -42,6 +42,7 @@ from .routes import (
     super_admin_onboarding,
     tables,
     tenant_whatsapp,
+    staff_push,
     websocket,
     whatsapp_webhook,
 )
@@ -83,6 +84,8 @@ async def lifespan(app: FastAPI):
         SignupBase.metadata.create_all(bind=engine)
         from .contract_models import ContractEvidenceBase
         ContractEvidenceBase.metadata.create_all(bind=engine)
+        from .super_admin_finance_models import FinanceBase
+        FinanceBase.metadata.create_all(bind=engine)
     else:
         print(
             "[DATABASE] create_all desativado; Alembic é a fonte do esquema.",
@@ -94,6 +97,7 @@ async def lifespan(app: FastAPI):
     outbox_task = None
     signup_task = None
     image_gc_task = None
+    billing_task = None
     if worker_enabled:
         from .services.outbox import default_outbox_worker
         outbox_task = default_outbox_worker.start()
@@ -102,6 +106,8 @@ async def lifespan(app: FastAPI):
         signup_task = asyncio.create_task(run_worker())
         from .services.product_image_worker import run_worker as run_image_gc
         image_gc_task = asyncio.create_task(run_image_gc())
+        from .services.direct_pix_billing_worker import run_worker as run_billing
+        billing_task = asyncio.create_task(run_billing())
         print("[OUTBOX] Worker de integração assíncrona iniciado no lifespan.", flush=True)
 
     from .services.order_chat_hub import order_chat_hub
@@ -119,6 +125,11 @@ async def lifespan(app: FastAPI):
             image_gc_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await image_gc_task
+        if billing_task:
+            import contextlib
+            billing_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await billing_task
         if signup_task:
             import contextlib
             signup_task.cancel()
@@ -474,6 +485,7 @@ app.include_router(websocket.router)
 app.include_router(cardapio_config_bridge.router)
 app.include_router(caixa.router)
 app.include_router(tenant_whatsapp.router)
+app.include_router(staff_push.router)
 app.include_router(optimization.router)
 app.include_router(customer_satisfaction.router)
 app.include_router(online_payments.router)
@@ -493,8 +505,12 @@ app.include_router(printing.router)
 app.include_router(cardapio_digital.router)
 app.include_router(relatorios.router)
 app.include_router(restaurant_features.router)
+from .routes import super_admin_finance
+app.include_router(super_admin_finance.router)
 app.include_router(super_admin.router, prefix="/api")
 app.include_router(super_admin_onboarding.router, prefix="/api")
+from .routes import cearatech_leads
+app.include_router(cearatech_leads.router)
 
 if settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
     app.include_router(whatsapp_webhook.router)

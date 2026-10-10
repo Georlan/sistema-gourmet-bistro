@@ -2,6 +2,7 @@ import React from "react";
 import { Activity, History, Settings } from "lucide-react";
 import { SuperAdminAuditTab } from "./SuperAdminAuditTab";
 import { SuperAdminOperationsTab } from "./SuperAdminOperationsTab";
+import { SuperAdminIntegrationRegistry } from "./SuperAdminIntegrationRegistry";
 import { SuperAdminSettingsTab } from "./SuperAdminSettingsTab";
 
 export type PlatformView = "health" | "integrations" | "audit";
@@ -59,7 +60,10 @@ export function SuperAdminPlatformHub({
         <SuperAdminOperationsTab />
       )}
       {activeView === "integrations" && (
-        <SuperAdminSettingsTab />
+        <div className="space-y-6">
+          <SuperAdminIntegrationRegistry />
+          <SuperAdminSettingsTab />
+        </div>
       )}
       {activeView === "audit" && <SuperAdminAuditTab />}
     </div>

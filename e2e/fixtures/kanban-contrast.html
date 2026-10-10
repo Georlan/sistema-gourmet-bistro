@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Contraste de avisos operacionais</title></head><body><div id="root"></div><script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import '/src/index.css';
+import {KanbanOrderDetails} from '/src/components/caixa/orders/KanbanOrderDetails.tsx';
+const params = new URLSearchParams(location.search);
+const theme = params.get('theme') || 'light';
+document.documentElement.dataset.komaTheme = theme;
+document.documentElement.classList.toggle('dark', theme === 'dark');
+const noop = () => {};
+createRoot(document.getElementById('root')).render(React.createElement(KanbanOrderDetails, {
+ order: { id: 'launch-32', mesaId: 3, numeroPedido: 32, projectionScope: 'launch', tipo: 'Consumo no Local',
+  ...(params.get('movement') === 'merge' ? { mesaOrigemId: 1 } : { mesaTransferidaDe: 1 }),
+  criadoEm: '12:38', origemOperacional: 'garcom',
+  itens: [{ id: 'item', nome: 'D8 Bacon', preco: 29.9, status: 'pronto' }] },
+ transfer: { targetId: '', onTargetChange: noop, isTransferring: false, tables: [] },
+ actions: Object.fromEntries(['close','advanceDigitalOrder','reprintProduction','printFullTable','printTableValues','transferTable','associateTable','convertDeliveryToPickup','cancelConsumption','cancelOrder'].map(key => [key, noop]))
+}));
+</script></body></html>

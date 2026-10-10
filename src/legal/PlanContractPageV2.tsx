@@ -474,6 +474,7 @@ export default function PlanContractPageV2() {
           ...(signupToken ? { 'X-Signup-Token': signupToken } : {}),
         },
         body: JSON.stringify({
+          event_ref: new URLSearchParams(window.location.search).get("event_ref") || undefined,
           restaurant_name: form.restaurantName,
           operation_profile: form.operationProfile,
           responsible_name: form.responsibleName,
@@ -503,6 +504,7 @@ export default function PlanContractPageV2() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'X-Signup-Token': signupToken },
         body: JSON.stringify({
+          event_ref: new URLSearchParams(window.location.search).get("event_ref") || undefined,
           restaurant_name: form.restaurantName,
           operation_profile: form.operationProfile,
           responsible_name: representativeName,
@@ -522,6 +524,7 @@ export default function PlanContractPageV2() {
         signup_token: signupToken || undefined,
         contracting_party_name: form.contractingPartyName.trim(),
         contracting_party_tax_id: form.taxId.trim(),
+        event_ref: new URLSearchParams(window.location.search).get("event_ref") || undefined,
         restaurant_name: form.restaurantName.trim(),
         representative_name: representativeName,
         representative_tax_id: representativeTaxId,

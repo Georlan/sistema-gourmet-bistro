@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ClipboardList,
   Store,
+  ReceiptText,
 } from "lucide-react";
 import type { Tenant } from "./superAdminTypes";
 import {
@@ -46,6 +47,7 @@ interface SuperAdminClientsHubProps {
 const clientViews = [
   { id: "new" as const, label: "Novos clientes", icon: ClipboardList },
   { id: "restaurants" as const, label: "Restaurantes", icon: Store },
+  { id: "billing" as const, label: "Financeiro KÔMA", icon: ReceiptText },
 ];
 
 export function SuperAdminClientsHub({
@@ -82,7 +84,7 @@ export function SuperAdminClientsHub({
               const Icon = item.icon;
               const selected = item.id === "new"
                 ? activeView === "new"
-                : isRestaurantContext;
+                : item.id === "restaurants" ? isRestaurantContext && activeView !== "billing" : activeView === item.id;
               return (
                 <button
                   key={item.id}

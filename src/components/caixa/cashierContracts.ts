@@ -2,6 +2,8 @@ import type { Order, Table, Product, CaixaTurnoResumo } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
 
 export interface CaixaPanelProps {
+  onInitialDigitalSnapshotConsumed?: () => void;
+  initialDigitalSnapshot?: import('../app/data/useCashierBootstrap').DigitalBootstrap;
   orders: Order[];
   onRefreshOrders: () => Promise<void>;
   apiBaseUrl: string;
@@ -39,9 +41,12 @@ export interface LoyaltyCustomer {
   saldo_pontos?: number;
   saldo_cashback?: number;
   historico?: any[];
+  produtos_favoritos?: { produto_id: string; nome: string; unidades: number }[];
   pedidos_concluidos?: number;
   valor_pago_total?: number;
   ticket_medio_pago?: number;
+  primeira_compra_em?: string | null;
+  intervalo_medio_dias?: number | null;
   ultima_compra_em?: string | null;
   dias_sem_comprar?: number | null;
   segmento_relacionamento?:

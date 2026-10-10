@@ -1,3 +1,4 @@
+import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import clsx from 'clsx';
 import { AlertTriangle, Gauge, Loader2, Save } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';

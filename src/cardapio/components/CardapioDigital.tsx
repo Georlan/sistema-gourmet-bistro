@@ -1,3 +1,4 @@
+import PixCopyCode from "./PixCopyCode";
 import { OrderItemComposition } from "../../components/shared/OrderItemComposition";
 import { cardapioCompositionSource } from "../orderItems";
 import { QRCodeSVG } from 'qrcode.react';
@@ -39,6 +40,7 @@ import {
   resolveOrderSubmissionKey,
   upsertPendingOrderSubmission,
 } from "../orderSubmission";
+import { trackAnalyticsEvent } from "../../analytics";
 
 interface CreatedOrder {
   comanda_id: string;
@@ -463,6 +465,19 @@ export default function CardapioDigital({
       }
 
       clearPendingSubmission(idempotencyKey);
+      trackAnalyticsEvent('public_order_submitted', {
+        restaurant_id: targetRestauranteId,
+        comanda_id: comandaId,
+        numero_pedido: numeroPedido,
+        total: orderTotal,
+        fulfillment: deliveryMethod,
+        payment_method: orderRequest.forma_pagamento,
+        payment_method_detail: paymentMethodDetail || 'nao_definido',
+        items_count: cart.reduce((tot, item) => tot + item.quantity, 0),
+        is_scheduled: Boolean(confirmedSchedule),
+        has_coupon: Boolean(cupomCodigo),
+        has_cashback: Boolean(usarCashback),
+      });
       setCreatedOrder({
         comanda_id: comandaId,
         numero_pedido: numeroPedido,
@@ -586,7 +601,7 @@ export default function CardapioDigital({
                 <div className="mt-5 w-full max-w-md rounded-2xl border border-emerald-500/25 bg-koma-card p-4">
                   {!createdOrder.pagamento.qr_code_base64 && createdOrder.pagamento.qr_code && <QRCodeSVG value={createdOrder.pagamento.qr_code} size={208} level="M" marginSize={4} className="mx-auto" />}
                   {createdOrder.pagamento.qr_code_base64 && <img className="mx-auto h-52 w-52 rounded-xl bg-white p-2" src={`data:image/png;base64,${createdOrder.pagamento.qr_code_base64}`} alt="QR Code Pix do pedido" />}
-                  {createdOrder.pagamento.qr_code && <button type="button" onClick={() => void navigator.clipboard.writeText(createdOrder.pagamento?.qr_code || "")} className="mt-3 h-11 w-full rounded-xl bg-emerald-500 px-4 text-xs font-black text-white">Copiar código Pix</button>}
+                  {createdOrder.pagamento.qr_code && <PixCopyCode code={createdOrder.pagamento.qr_code} />}
                   {createdOrder.pagamento.ticket_url && <a href={createdOrder.pagamento.ticket_url} target="_blank" rel="noreferrer" className="mt-2 flex h-11 w-full items-center justify-center rounded-xl border border-koma-border text-xs font-bold text-koma-foreground">Abrir pagamento</a>}
                   <p className="mt-2 text-[10px] leading-relaxed text-koma-muted">{createdOrder.pagamento.confirmacao_manual ? "O restaurante confirmará o recebimento. Você pode acompanhar o pedido neste cardápio." : "A confirmação é automática. Você pode acompanhar o pedido neste cardápio."}</p>
                 </div>
@@ -692,7 +707,7 @@ export default function CardapioDigital({
         {!createdOrder && !orderingBlocked && (
           <footer className="shrink-0 border-t border-koma-border bg-koma-panel p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-5">
             <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || Boolean(paymentError || schedulePaymentError)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : paymentError || schedulePaymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : scheduleMode === "scheduled" ? "Agendar pedido" : "Fazer pedido"}</span></button>
-            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados entram na operação somente no horário escolhido." : "Pix só entra no painel após o pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente."}</p>
+            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados são enviados agora ao restaurante com a data e o horário escolhidos." : "Pix só entra no painel após o pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente."}</p>
           </footer>
         )}
       </div>
