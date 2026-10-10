@@ -122,6 +122,16 @@ test('consulta fica antes das categorias e usa a loja ativa', () => {
   assert.ok(page.indexOf('<CardapioConditionsSummary') < page.indexOf('<CardapioCategoryNav'));
 });
 
+test('checkout solicita e valida documento somente para Pix PagBank', () => {
+  const cart = readFileSync(new URL('../src/cardapio/components/CardapioCartDrawer.tsx', import.meta.url), 'utf8');
+  const page = readFileSync(new URL('../src/cardapio/CardapioPage.tsx', import.meta.url), 'utf8');
+  assert.match(page, /pixPayerDocumentRequired: restaurant\.documento_pix_obrigatorio === true/);
+  assert.match(cart, /paymentDetail === "pix" && brandConfig\?\.pixPayerDocumentRequired/);
+  assert.match(cart, /isValidCpf\(guestDocument\) \|\| isValidCnpj\(guestDocument\)/);
+  assert.match(cart, /id="input-customer-document"/);
+  assert.match(cart, /customerDocument: paymentDetail === "pix" && brandConfig\?\.pixPayerDocumentRequired \? guestDocument : undefined/);
+});
+
 test('controles de pagamento configurados mantêm seleção e troco acessíveis', () => {
   const cart = readFileSync(new URL('../src/cardapio/components/CardapioCartDrawer.tsx', import.meta.url), 'utf8');
   assert.match(cart, /<CardapioPaymentOptions available=\{availablePayments\} selected=\{paymentDetail\} onSelect=\{selectPayment\}/);

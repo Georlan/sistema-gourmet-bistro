@@ -268,6 +268,21 @@ def test_delete_asset_never_removes_object_from_another_tenant(
     assert response.json()["cardapio_logo_path"] is None
 
 
+@pytest.mark.parametrize("endpoint", ["config", "public"])
+@pytest.mark.parametrize("requires_document", [False, True])
+def test_public_menu_preserves_pagbank_payer_document_requirement(test_setup, endpoint, requires_document):
+    with patch(
+        "app.routes.cardapio_digital.OnlinePaymentService.public_payment_capabilities",
+        return_value=(True, requires_document),
+    ):
+        response = client.get(f"/api/cardapio-digital/{endpoint}?restaurante_id=999")
+
+    assert response.status_code == 200
+    restaurant = response.json()["restaurante"] if endpoint == "public" else response.json()
+    assert restaurant["pagamento_online_ativo"] is True
+    assert restaurant["documento_pix_obrigatorio"] is requires_document
+
+
 def test_get_whitelabel_config_success(test_setup):
     headers = {"Authorization": f"Bearer {test_setup['token']}"}
     response = client.get("/api/cardapio-digital/config", headers=headers)

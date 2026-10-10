@@ -37,6 +37,7 @@ import {
   X,
 } from "lucide-react";
 import { formatBrazilianPhone, normalizeBrazilianPhone } from "../customerSession";
+import { isValidCpf, isValidCnpj } from "../../legal/taxId";
 import { loadGuestCheckoutContact, saveGuestCheckoutContact } from "../guestCheckoutSession";
 import {
   type CustomerRecognitionStatus,
@@ -552,7 +553,7 @@ export default function CardapioCartDrawer({
       ? deliveryAddressDraftToSnapshot(deliveryAddressDraft)
       : null;
 
-    if (paymentDetail === "pix" && brandConfig?.pixPayerDocumentRequired && !/^(\d{11}|\d{14})$/.test(guestDocument)) {
+    if (paymentDetail === "pix" && brandConfig?.pixPayerDocumentRequired && !(isValidCpf(guestDocument) || isValidCnpj(guestDocument))) {
       reportValidationError("Informe o CPF ou CNPJ do comprador para gerar o Pix PagBank.", "input-customer-document");
       return;
     }
@@ -1142,7 +1143,7 @@ export default function CardapioCartDrawer({
                 {paymentDetail === "pix" && brandConfig?.pixPayerDocumentRequired && (
                   <label className="mt-3 block text-xs text-koma-muted">CPF ou CNPJ do comprador
                     <input id="input-customer-document" inputMode="numeric" autoComplete="off" maxLength={14}
-                      value={guestDocument} onChange={event => { setGuestDocument(event.target.value.replace(/\D/g, '')); clearValidation("input-customer-document"); }}
+                      value={guestDocument} onChange={event => { setGuestDocument(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')); clearValidation("input-customer-document"); }}
                       aria-invalid={invalidField === "input-customer-document"}
                       className="mt-1 h-12 w-full rounded-xl border border-koma-border bg-koma-card px-4 text-sm text-koma-foreground" />
                     <span className="mt-1 block">O PagBank exige o documento para emitir o Pix deste pedido.</span>
