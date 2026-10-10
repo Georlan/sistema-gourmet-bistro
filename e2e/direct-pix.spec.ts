@@ -10,34 +10,6 @@ async function open(page:Page,pending=false) {
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
 }
-async function settings(page:Page) {
-  const sidebar=page.locator('.cashier-sidebar:visible');
-  if(!await sidebar.isVisible()) await page.getByRole('button',{name:'Abrir menu principal'}).click();
-  await sidebar.getByRole('button',{name:/^Configurações/}).click();
-  await page.getByRole('button',{name:'Integrações',exact:true}).first().click();
-}
-
-test('chave própria exige aceite e preserva a conexão Mercado Pago',async({page})=>{
-  await open(page);
-  const bodies:unknown[]=[];
-  await page.route('**/payments/direct-pix/settings',async route=>{
-    if(route.request().method()!=='PUT') return route.fallback();
-    const body=route.request().postDataJSON();bodies.push(body);
-    await route.fulfill({json:{...body,available:true}});
-  });
-  await settings(page);
-  const card=page.getByRole('region',{name:'Pix direto na conta'});
-  const activate=card.getByRole('button',{name:'Usar chave Pix própria'});
-  await expect(activate).toBeDisabled();
-  await card.getByRole('checkbox').check();
-  await activate.click();
-  await expect(card).toContainText('Pix direto ativado para novos pedidos.');
-  await expect(page.getByText('Conta Mercado Pago vinculada')).toBeVisible();
-  expect(bodies).toHaveLength(1);
-  expect(bodies[0]).toMatchObject({enabled:true,accept_manual_confirmation_and_monthly_fees:true});
-  await test.info().attach('direct-pix-settings',{body:await page.screenshot({fullPage:true}),contentType:'image/png'});
-});
-
 test('conferência mantém referência após falha e confirmação exige extrato',async({page})=>{
   await open(page,true);
   await page.getByRole('button',{name:/Conferir Pix/}).click();
@@ -64,46 +36,6 @@ test('conferência mantém referência após falha e confirmação exige extrato
   await expect(panel).toBeHidden();
   expect(bodies).toHaveLength(2);
   expect(bodies[1]).toEqual(bodies[0]);
-});
-
-test('fatura mostra valores antes do QR e só reconhece pagamento confirmado',async({page})=>{
-  await open(page);
-  const invoice={id:'invoice-1',period:'2026-09',fees:'1.49',subscription_amount:'109.00',total:'110.49',status:'open',due_at:'2026-10-15T15:00:00Z'};
-  await page.route('**/payments/direct-pix/invoices',route=>route.fulfill({json:[invoice]}));
-  await page.route('**/payments/direct-pix/invoices/invoice-1',route=>route.fulfill({json:{...invoice,items:[{order_number:'47',amount:'100.00',fee:'1.49',method:'pix',confirmed_at:'2026-09-15T15:00:00Z'}],has_more:false}}));
-  let requests=0;
-  await page.route('**/payments/direct-pix/invoices/invoice-1/pix',route=>{requests++;return route.fulfill({json:requests===1?{status:'pending',amount:'110.49',qrCode:'test-invoice-code'}:{status:'approved',amount:'110.49'}});});
-  await settings(page);
-  await page.getByRole('button',{name:'Ver fatura',exact:true}).click();
-  const statement=page.getByRole('region',{name:'Detalhes da fatura KÔMA'});
-  await expect(statement).toContainText('R$ 110,49');
-  await expect(statement).toContainText('#47');
-  expect(requests).toBe(0);
-  await statement.getByRole('button',{name:'Gerar Pix desta fatura'}).click();
-  await expect(statement.getByRole('button',{name:'Conferir pagamento'})).toBeVisible();
-  await expect(page.getByText('Este QR paga o KÔMA.',{exact:false})).toBeVisible();
-  await test.info().attach('invoice-before-payment',{body:await page.screenshot({fullPage:true}),contentType:'image/png'});
-  await statement.getByRole('button',{name:'Conferir pagamento'}).click();
-  await expect(page.getByRole('status').filter({hasText:'Fatura paga.'})).toBeVisible();
-  expect(requests).toBe(2);
-});
-
-test('QR aberto reconhece aprovação automaticamente sem gerar outra cobrança',async({page})=>{
-  await page.clock.install();
-  await open(page);
-  const invoice={id:'auto-invoice',period:'2026-09',fees:'1.49',subscription_amount:'109.00',total:'110.49',status:'open'};
-  await page.route('**/payments/direct-pix/invoices',route=>route.fulfill({json:[invoice]}));
-  await page.route('**/payments/direct-pix/invoices/auto-invoice',route=>route.fulfill({json:{...invoice,items:[],has_more:false}}));
-  let charges=0;
-  await page.route('**/payments/direct-pix/invoices/auto-invoice/pix',route=>{charges++;return route.fulfill({json:{status:'pending',amount:'110.49',qrCode:'test-code'}});});
-  await page.route('**/payments/direct-pix/invoices/auto-invoice/payment-status',route=>route.fulfill({json:{status:'approved'}}));
-  await settings(page);
-  await page.getByRole('button',{name:'Ver fatura',exact:true}).click();
-  await page.getByRole('button',{name:'Gerar Pix desta fatura'}).click();
-  await expect(page.getByRole('button',{name:'Copiar Pix da fatura'})).toBeVisible();
-  await page.clock.fastForward(15001);
-  await expect(page.getByRole('status').filter({hasText:'Fatura paga.'})).toBeVisible();
-  expect(charges).toBe(1);
 });
 
 test('SuperAdmin distingue atraso e mantém o histórico das faturas pagas',async({page})=>{
@@ -133,40 +65,14 @@ test('SuperAdmin distingue atraso e mantém o histórico das faturas pagas',asyn
   await expect(history).toBeHidden();
 });
 
-test('liberação de teste permite cadastrar chave sem inventar contrato ou mensalidade',async({page})=>{
+test('Pix manual já existente mantém QR reaberto e confirmação única',async({page,context})=>{
   await open(page);
-  const config={available:true,enabled:false,key_type:'email',pix_key:'recebimento@example.com',holder_name:'RESTAURANTE',city:'FORTALEZA',commercial:null,test_mode:true};
-  await page.route('**/payments/direct-pix/settings',async route=>{
-    if(route.request().method()==='PUT') {
-      expect(route.request().postDataJSON()).toMatchObject({enabled:true});
-      return route.fulfill({json:{...config,enabled:true}});
-    }
-    return route.fulfill({json:config});
-  });
-  await settings(page);
-  const card=page.getByRole('region',{name:'Pix direto na conta'});
-  await expect(card).toContainText('sem contrato ou mensalidade habilitada');
-  await expect(card).toContainText('O QR movimenta dinheiro real');
-  await expect(card).not.toContainText('Seu contrato');
-  await card.getByRole('checkbox').check();
-  await card.getByRole('button',{name:'Usar chave Pix própria'}).click();
-  await expect(card).toContainText('Pix direto ativado para novos pedidos.');
-  await expect(card).toContainText('sem contrato ou mensalidade habilitada');
-});
-
-test('cadastro da chave chega ao checkout, QR reaberto e confirmação manual única',async({page,context})=>{
-  await open(page);
-  let enabled=false;
+  const enabled=true;
   let paid=false;
   let created=false;
   let confirmations=0;
   const submitted: Record<string,unknown>[]=[];
-  const configuration={available:true,key_type:'email',pix_key:'recebimento@example.com',holder_name:'RESTAURANTE',city:'FORTALEZA',commercial:null,test_mode:true};
   const payment=()=>({status:paid?'approved':'pending',cobranca_online:true,confirmacao_manual:true,metodo:'pix',qr_code:'test-only-journey-do-not-pay',qr_code_base64:null});
-  await page.route('**/payments/direct-pix/settings',async route=>{
-    if(route.request().method()==='PUT') enabled=route.request().postDataJSON().enabled;
-    await route.fulfill({json:{...configuration,enabled}});
-  });
   await page.route('**/payments/direct-pix/pending',route=>route.fulfill({json:created&&!paid?[{id:'journey-intent',order_number:'47',customer:'Cliente teste',amount:'10.50'}]:[]}));
   await page.route('**/payments/direct-pix/journey-intent/confirm',route=>{
     const body=route.request().postDataJSON();
@@ -174,11 +80,6 @@ test('cadastro da chave chega ao checkout, QR reaberto e confirmação manual ú
     confirmations++;paid=true;
     return route.fulfill({json:{status:'approved',already_confirmed:false}});
   });
-  await settings(page);
-  const card=page.getByRole('region',{name:'Pix direto na conta'});
-  await card.getByRole('checkbox').check();
-  await card.getByRole('button',{name:'Usar chave Pix própria'}).click();
-  await expect(card).toContainText('Pix direto ativado');
   const consumer=await context.newPage();
   await consumer.route('http://127.0.0.1:8000/**',async route=>{
     const request=route.request();

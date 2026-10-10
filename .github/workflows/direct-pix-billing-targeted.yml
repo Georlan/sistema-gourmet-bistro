@@ -51,4 +51,4 @@ jobs:
           DIRECT_PIX_TEST_POSTGRES_URL: postgresql+psycopg2://postgres:local-test-only@127.0.0.1:5432/koma_direct_pix_test
         run: python -m pytest backend/tests/test_direct_pix.py -q -ra
       - name: Verify mobile and desktop payment flow
-        run: KOMA_E2E_PORT=4283 npm run test:e2e -- e2e/direct-pix.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2
+        run: KOMA_E2E_PORT=4283 npm run test:e2e -- e2e/direct-pix.spec.ts e2e/pagbank-connect.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2

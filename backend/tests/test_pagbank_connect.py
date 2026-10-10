@@ -174,8 +174,9 @@ def test_migration_sqlite_upgrade_and_downgrade_preserves_constraints():
 
 
 def test_reconnecting_mercado_pago_selects_only_one_automatic_receiver():
+    import datetime
     from app.database import SessionLocal, current_restaurante_id
-    from app.models import Restaurante, RestaurantPaymentAccount
+    from app.models import Restaurante, RestaurantPaymentAccount, RestaurantDirectPixConfig
     from app.services.online_payments.account_connection import upsert_mercado_pago_account
     from app.services.online_payments.oauth import MercadoPagoOAuthTokens
 
@@ -190,16 +191,20 @@ def test_reconnecting_mercado_pago_selects_only_one_automatic_receiver():
         pagbank.access_token = 'historic-seller-token'
         pagbank.webhook_secret = 'historic-seller-token'
         db.add(pagbank)
+        manual = RestaurantDirectPixConfig(restaurante_id=rid, enabled=True, key_type='email', pix_key='seller@example.test', holder_name='SELLER', city='FORTALEZA', accepted_by='test-admin', accepted_at=datetime.datetime.now(datetime.timezone.utc), terms_version='direct-pix-v1')
+        db.add(manual)
         db.commit()
         account = upsert_mercado_pago_account(db, restaurant_id=rid,
             tokens=MercadoPagoOAuthTokens('mp-seller-token', 'mp-refresh', None, 'mp-switch', 3600), webhook_secret='mp-secret')
         db.commit()
+        assert manual.enabled is False
         assert account.status == 'active'
         assert pagbank.status == 'disconnected'
         assert pagbank.access_token == 'historic-seller-token'
         assert db.query(RestaurantPaymentAccount).filter_by(restaurante_id=rid, status='active').count() == 1
     finally:
         db.rollback()
+        db.query(RestaurantDirectPixConfig).filter_by(restaurante_id=rid).delete()
         db.query(RestaurantPaymentAccount).filter_by(restaurante_id=rid).delete()
         db.query(Restaurante).filter_by(id=rid).delete()
         db.commit()

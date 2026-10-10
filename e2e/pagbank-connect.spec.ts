@@ -10,7 +10,7 @@ test('PagBank informa preparação sem oferecer uma conexão falsa', async ({ pa
   await page.goto('/?view=caixa&pagbank=cancelled');
   await expect(page.getByRole('heading', { name: 'PagBank', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Conexão em preparação' })).toBeDisabled();
-  await expect(page.getByText('A KÔMA precisa concluir o cadastro da aplicação no PagBank')).toBeVisible();
+  await expect(page.getByText('A conexão estará disponível em breve.')).toBeVisible();
 });
 
 test('PagBank em sandbox comunica teste e rejeita redirecionamento estranho', async ({ page }) => {
@@ -60,4 +60,30 @@ test('retorno sem estado iniciado no navegador não troca a conta', async ({ pag
   await page.goto('/?view=caixa&pagbank=authorized&code=foreign-code&state=foreign-state');
   await expect(page.getByText('Autorização inválida. Inicie a conexão novamente neste navegador.')).toBeVisible();
   expect(completions).toBe(0);
+});
+
+
+test('integrações mostra apenas bancos e recolhe WhatsApp; 404 tem recuperação', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  let unavailable = true;
+  await page.route('**/payments/pagbank/status', route => unavailable
+    ? route.fulfill({ status: 404, json: { detail: 'Not Found' } })
+    : route.fulfill({ json: { configured: true, connected: false, environment: 'production' } }));
+  await page.goto('/?view=caixa&pagbank=cancelled');
+  await expect(page.getByRole('heading', { name: 'Pagamentos online' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Mercado Pago', exact: true })).toBeVisible();
+  await expect(page.getByText('A conexão PagBank está temporariamente indisponível. Tente atualizar mais tarde.')).toBeVisible();
+  await expect(page.getByText('Not Found', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Chave Pix', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Seu WhatsApp com DDD')).not.toBeVisible();
+  await page.getByText('WhatsApp · Avisos de pedidos', { exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'WhatsApp operacional' })).toBeVisible();
+  await page.getByText('WhatsApp · Avisos de pedidos', { exact: true }).click();
+  unavailable = false;
+  await page.getByRole('button', { name: 'Atualizar status do PagBank' }).click();
+  await expect(page.getByRole('button', { name: 'Conectar PagBank' })).toBeEnabled();
+  await expect(page.getByText('A conexão PagBank está temporariamente indisponível. Tente atualizar mais tarde.')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: test.info().outputPath('integracoes.png'), fullPage: true });
 });

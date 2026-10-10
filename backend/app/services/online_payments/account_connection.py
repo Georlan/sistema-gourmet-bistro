@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from ...config import settings
-from ...models import RestaurantPaymentAccount, OnlinePaymentIntent, Restaurante
+from ...models import RestaurantPaymentAccount, OnlinePaymentIntent, Restaurante, RestaurantDirectPixConfig
 from .oauth import MercadoPagoOAuthTokens
 
 
@@ -98,6 +98,13 @@ def upsert_mercado_pago_account(
             raise MercadoPagoAccountConnectionError("Resolva os Pix pendentes antes de trocar o provedor de recebimento.")
         # Keep tokens for reconciliation of historical intents; select only MP for new orders.
         pagbank.status = "disconnected"
+
+    # Selecting an automatic receiver also replaces the former manual-Pix mode.
+    direct_pix = db.query(RestaurantDirectPixConfig).filter(
+        RestaurantDirectPixConfig.restaurante_id == int(restaurant_id),
+    ).first()
+    if direct_pix is not None:
+        direct_pix.enabled = False
 
     account.provider_user_id = tokens.provider_user_id
     account.status = "active"

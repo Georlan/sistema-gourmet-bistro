@@ -38,8 +38,8 @@ test('Sistema > Configurações owns KÔMA Pagamentos and the Mercado Pago conne
   assert.doesNotMatch(onlineMenu, /MercadoPagoConnectionCard/);
   assert.match(integrations, /KomaPaymentsSettings/);
   assert.match(komaPayments, /MercadoPagoConnectionCard/);
-  assert.match(komaPayments, /KÔMA Pagamentos/);
-  assert.match(komaPayments, /DirectPixSettings/);
+  assert.match(komaPayments, /Pagamentos online/);
+  assert.doesNotMatch(komaPayments, /DirectPixSettings/);
   assert.doesNotMatch(komaPayments, /0,99%|0,49%/);
   assert.match(komaPayments, /não cobra taxa sobre suas vendas/);
   assert.match(settings, /activeSubTab === 'integracoes'/);
@@ -53,5 +53,5 @@ test('Sistema > Configurações owns KÔMA Pagamentos and the Mercado Pago conne
 test('first access sends provider setup to the canonical integrations screen', () => {
   assert.match(onboarding, /openCashierAt\('impressao_salao', 'integracoes', true\)/);
   assert.match(onboarding, /Escolher provedor quando quiser/);
-  assert.match(onboarding, /chave Pix própria/);
+  assert.doesNotMatch(onboarding, /chave Pix própria/);
 });
