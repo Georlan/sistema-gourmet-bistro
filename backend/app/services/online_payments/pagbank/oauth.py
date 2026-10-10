@@ -44,7 +44,7 @@ def authorization(restaurant_id: int, user_id: str) -> tuple[str, str]:
         raise PagBankOAuthError('A conexão PagBank ainda está sendo preparada pela KÔMA.')
     # Domain-separated MAC; compact state respects PagBank's 128 character limit.
     data = f'{int(restaurant_id)}:{user_id}:{int(time.time())}:{secrets.token_hex(8)}'.encode()
-    mac = hmac.digest(settings.SECRET_KEY.encode(), b'pagbank-connect:' + data, 'sha256')[:16]
+    mac = hmac.digest(settings.SECRET_KEY.encode(), b'pagbank-connect:' + api_url().encode() + b':' + data, 'sha256')[:16]
     state = base64.urlsafe_b64encode(data + mac).decode().rstrip('=')
     if len(state) > 128:
         raise PagBankOAuthError('Identificador OAuth excede o limite do PagBank.')
@@ -60,7 +60,7 @@ def decode_state(state: str, cookie: str) -> tuple[int, str]:
             raise ValueError()
         raw = base64.urlsafe_b64decode(state + '=' * (-len(state) % 4))
         data, mac = raw[:-16], raw[-16:]
-        expected = hmac.digest(settings.SECRET_KEY.encode(), b'pagbank-connect:' + data, 'sha256')[:16]
+        expected = hmac.digest(settings.SECRET_KEY.encode(), b'pagbank-connect:' + api_url().encode() + b':' + data, 'sha256')[:16]
         if not hmac.compare_digest(mac, expected):
             raise ValueError()
         rid, uid, issued, nonce = data.decode().split(':')
