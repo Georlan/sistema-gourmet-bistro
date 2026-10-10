@@ -14,6 +14,7 @@ const legalV30 = readFileSync('src/legal/legalContentV30.ts', 'utf8');
 const legalV31 = readFileSync('src/legal/legalContentV31.ts', 'utf8');
 const legalContent = readFileSync('src/legal/legalContentV32.ts', 'utf8');
 const legalV34 = readFileSync('src/legal/legalContentV34.ts', 'utf8');
+const legalV35 = readFileSync('src/legal/legalContentV35.ts', 'utf8');
 const legalV33 = readFileSync('src/legal/legalContentV33.ts', 'utf8');
 const legalEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const legalPage = readFileSync('src/legal/LegalPage.tsx', 'utf8');
@@ -31,7 +32,7 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal preserva snapshots anteriores e publica fachada vigente 3.4', () => {
+test('central legal preserva snapshots anteriores e publica fachada vigente 3.5', () => {
   for (const slug of ['termos','planos','privacidade','dpa','suboperadores','cookies','cardapio-termos','cardapio-privacidade']) {
     assert.match(legalV2, new RegExp(`slug: '${slug}'`));
   }
@@ -46,6 +47,8 @@ test('central legal preserva snapshots anteriores e publica fachada vigente 3.4'
   assert.match(legalV31, /LEGAL_VERSION = '3\.1'/);
   assert.match(legalContent, /LEGAL_VERSION = '3\.2'/);
   assert.match(legalV33, /LEGAL_VERSION = '3\.3'/);
+  assert.match(legalV34, /LEGAL_VERSION = '3\.4'/);
+  assert.match(legalV35, /LEGAL_VERSION = '3\.5'/);
   assert.match(legalV26, /18\/09\/2026/);
   assert.match(legalV29, /23\/09\/2026/);
   assert.match(legalContent, /24\/09\/2026/);
@@ -54,6 +57,8 @@ test('central legal preserva snapshots anteriores e publica fachada vigente 3.4'
   assert.match(legalV31, /from '\.\/legalContentV30'/);
   assert.match(legalContent, /from '\.\/legalContentV31'/);
   assert.match(legalV33, /from '\.\/legalContentV32'/);
+  assert.match(legalV34, /from '\.\/legalContentV33'/);
+  assert.match(legalV35, /from '\.\/legalContentV34'/);
   assert.match(legacyLegalContent, /LEGAL_VERSION = '1\.2'/);
   assert.match(legalPage, /from '\.\/legalContent'/);
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
@@ -122,8 +127,8 @@ test('checkout reconhece cartão Pix universal e Saldo Mercado Pago', () => {
   assert.match(planContract, /payment-methods-v2/);
 });
 
-test('proveniência jurídica fixa commit e blob da Legal 3.4 sem documento fiscal pessoal', () => {
-  assert.match(legalEvidence, /legalContentV34/);
+test('proveniência jurídica fixa commit e blob da Legal 3.5 sem documento fiscal pessoal', () => {
+  assert.match(legalEvidence, /legalContentV35/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /requireDocument\('termos'\)/);
@@ -199,11 +204,10 @@ test('pacote jurídico cobre LGPD, transferências, incidentes e dados sensívei
 });
 
 // Preserva as asserções históricas acima e verifica os documentos renderizados atuais.
-test('Legal 3.4 publica novos preços, anual e comissão zero', async () => {
+test('Legal 3.4 preserva snapshot histórico com preços oficiais e comissão zero', async () => {
   const { LEGAL_DOCUMENTS, LEGAL_VERSION } = await import('../src/legal/legalContentV34');
   assert.equal(LEGAL_VERSION, '3.4');
   assert.match(legalV34, /from '\.\/legalContentV33'/);
-  assert.match(readFileSync('src/legal/legalContent.ts', 'utf8'), /export \* from '\.\/legalContentV34'/);
   const serialized = JSON.stringify(LEGAL_DOCUMENTS);
   for (const amount of ['79,90', '179,90', '329,90', '862,92', '1.942,92', '3.562,92', '71,91', '161,91', '296,91']) {
     assert.ok(serialized.includes(`R$ ${amount}`), `Preço ausente: ${amount}`);
@@ -211,4 +215,125 @@ test('Legal 3.4 publica novos preços, anual e comissão zero', async () => {
   assert.match(serialized, /0% de comissão KÔMA/);
   assert.doesNotMatch(serialized, /R\$ (?:39,00|129 por mês|249 por mês|421,20|1\.393,20|2\.689,20)/);
   assert.ok(LEGAL_DOCUMENTS.every(document => document.version === '3.4'));
+});
+
+test('Legal 3.5 publica modernização jurídica com CRM, PagBank e Pix Direto', async () => {
+  const { LEGAL_DOCUMENTS, LEGAL_VERSION } = await import('../src/legal/legalContentV35');
+  assert.equal(LEGAL_VERSION, '3.5');
+  assert.match(legalV35, /from '\.\/legalContentV34'/);
+  assert.match(readFileSync('src/legal/legalContent.ts', 'utf8'), /export \* from '\.\/legalContentV35'/);
+  const serialized = JSON.stringify(LEGAL_DOCUMENTS);
+  for (const amount of ['79,90', '179,90', '329,90', '862,92', '1.942,92', '3.562,92']) {
+    assert.ok(serialized.includes(`R$ ${amount}`), `Preço ausente: ${amount}`);
+  }
+  assert.match(serialized, /0% de comissão KÔMA/);
+  assert.match(serialized, /PagBank/);
+  assert.match(serialized, /Pix Direto/);
+  assert.match(serialized, /Web Push/);
+  assert.match(serialized, /CRM/);
+  assert.ok(LEGAL_DOCUMENTS.every(document => document.version === '3.5'));
+});
+
+test('Legal 3.5 compõe exatamente 8 documentos com seções sequenciais e sem duplicidade', async () => {
+  const { LEGAL_DOCUMENTS } = await import('../src/legal/legalContentV35');
+  assert.equal(LEGAL_DOCUMENTS.length, 8);
+  const expectedSlugs = [
+    'termos', 'planos', 'privacidade', 'dpa',
+    'suboperadores', 'cookies', 'cardapio-termos', 'cardapio-privacidade'
+  ];
+  for (const slug of expectedSlugs) {
+    const doc = LEGAL_DOCUMENTS.find(d => d.slug === slug);
+    assert.ok(doc, `Documento ${slug} não encontrado`);
+    const sectionNumbers = doc.sections.map(s => {
+      const match = s.title.match(/^(\d+)\./);
+      assert.ok(match, `Seção "${s.title}" no documento ${slug} não começa com número`);
+      return parseInt(match[1], 10);
+    });
+    // Verifica que não há duplicação de números
+    const uniqueNumbers = new Set(sectionNumbers);
+    assert.equal(uniqueNumbers.size, sectionNumbers.length, `Duplicidade de numeração encontrada em ${slug}: ${sectionNumbers}`);
+    // Verifica que a sequência começa em 1 e é contígua
+    for (let i = 0; i < sectionNumbers.length; i++) {
+      assert.equal(sectionNumbers[i], i + 1, `Sequência quebrada em ${slug}: esperado ${i + 1}, recebido ${sectionNumbers[i]}`);
+    }
+  }
+});
+
+test('Legal 3.5 suboperadores possui exatamente 13 seções na ordem estrita com PagBank e Pix Direto', async () => {
+  const { LEGAL_DOCUMENTS } = await import('../src/legal/legalContentV35');
+  const subops = LEGAL_DOCUMENTS.find(d => d.slug === 'suboperadores');
+  assert.ok(subops);
+  assert.equal(subops.sections.length, 13);
+  const titles = subops.sections.map(s => s.title);
+  assert.match(titles[0], /^1\. Como interpretar esta lista/);
+  assert.match(titles[1], /^2\. Railway/);
+  assert.match(titles[2], /^3\. Supabase/);
+  assert.match(titles[3], /^4\. Cloudflare/);
+  assert.match(titles[4], /^5\. Mercado Pago/);
+  assert.match(titles[5], /^6\. PagBank/);
+  assert.match(titles[6], /^7\. Instituições Bancárias e Pix Direto/);
+  assert.match(titles[7], /^8\. Resend/);
+  assert.match(titles[8], /^9\. WhatsApp/);
+  assert.match(titles[9], /^10\. Google Fonts/);
+  assert.match(titles[10], /^11\. Sentry/);
+  assert.match(titles[11], /^12\. Transferência internacional/);
+  assert.match(titles[12], /^13\. Atualizações/);
+});
+
+test('Legal 3.5 cardápio substitui seções 4 preservando itens operacionais essenciais', async () => {
+  const { LEGAL_DOCUMENTS } = await import('../src/legal/legalContentV35');
+  const cardapioTermos = LEGAL_DOCUMENTS.find(d => d.slug === 'cardapio-termos');
+  assert.ok(cardapioTermos);
+  const sec4Termos = cardapioTermos.sections.find(s => s.title.startsWith('4.'));
+  assert.ok(sec4Termos);
+  assert.equal(sec4Termos.title, '4. Pagamentos online e Pix');
+  const sec4TermosText = JSON.stringify(sec4Termos);
+  assert.match(sec4TermosText, /Mercado Pago|PagBank/);
+  assert.match(sec4TermosText, /Pix Direto/);
+  assert.match(sec4TermosText, /devolução de valores|estorno/i);
+
+  const cardapioPriv = LEGAL_DOCUMENTS.find(d => d.slug === 'cardapio-privacidade');
+  assert.ok(cardapioPriv);
+  const sec4Priv = cardapioPriv.sections.find(s => s.title.startsWith('4.'));
+  assert.ok(sec4Priv);
+  assert.equal(sec4Priv.title, '4. Finalidades e CRM do Restaurante');
+  const sec4PrivText = JSON.stringify(sec4Priv);
+  assert.match(sec4PrivText, /Registrar, confirmar, preparar, cobrar, entregar e acompanhar o pedido/);
+  assert.match(sec4PrivText, /Prevenir duplicidade de pedidos, fraude e abuso na plataforma/);
+  assert.match(sec4PrivText, /Prestar atendimento ao cliente e resolver cancelamentos, contestações ou reembolsos/);
+  assert.match(sec4PrivText, /Cumprir obrigação legal, fiscal ou regulatória/);
+  assert.match(sec4PrivText, /Gerar histórico e indicadores de relacionamento para o restaurante controlador/);
+});
+
+test('Legal 3.5 preserva garantias do WhatsApp, estorno de Pix e notificação DPA em até 24h', async () => {
+  const { LEGAL_DOCUMENTS } = await import('../src/legal/legalContentV35');
+  const termos = LEGAL_DOCUMENTS.find(d => d.slug === 'termos');
+  assert.ok(termos);
+  const sec6Termos = termos.sections.find(s => s.title.startsWith('6.'));
+  assert.ok(sec6Termos);
+  const sec6TermosText = JSON.stringify(sec6Termos);
+  assert.match(sec6TermosText, /O WhatsApp não é requisito para o consumidor realizar uma compra quando o checkout próprio do cardápio estiver disponível/);
+  assert.match(sec6TermosText, /idempotência/i);
+  assert.match(sec6TermosText, /confirmação e aceite prévio do restaurante antes do início do preparo/);
+
+  const sec8Termos = termos.sections.find(s => s.title.startsWith('8.'));
+  assert.ok(sec8Termos);
+  const sec8TermosText = JSON.stringify(sec8Termos);
+  assert.match(sec8TermosText, /compete ao estabelecimento recebedor realizar os procedimentos de devolução de valores ao consumidor por meio da instituição financeira responsável/);
+  assert.match(sec8TermosText, /O KÔMA não realiza a liquidação nem a devolução financeira de valores que não tenha recebido/);
+
+  const dpa = LEGAL_DOCUMENTS.find(d => d.slug === 'dpa');
+  assert.ok(dpa);
+  const sec10Dpa = dpa.sections.find(s => s.title.startsWith('10.'));
+  assert.ok(sec10Dpa);
+  const sec10DpaText = JSON.stringify(sec10Dpa);
+  assert.match(sec10DpaText, /até 24 \(vinte e quatro\) horas a partir da ciência qualificada/);
+  assert.match(sec10DpaText, /complementação progressiva/);
+  assert.match(sec10DpaText, /Resolução CD\/ANPD nº 15\/2024/);
+
+  const planos = LEGAL_DOCUMENTS.find(d => d.slug === 'planos');
+  assert.ok(planos);
+  const planosStr = JSON.stringify(planos);
+  assert.doesNotMatch(planosStr, /enquanto vigente a política de comissão zero/);
+  assert.doesNotMatch(planosStr, /caso a política de comissão zero seja alterada/);
 });
