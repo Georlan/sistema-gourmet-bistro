@@ -413,7 +413,7 @@ class OnlinePaymentService:
             OnlinePaymentIntent.restaurante_id == account.restaurante_id,
             OnlinePaymentIntent.id == intent.id,
             OnlinePaymentIntent.provider == account.provider,
-        ).with_for_update().one()
+        ).populate_existing().with_for_update().one()
 
         if not (payment.external_id or "").strip():
             raise OnlinePaymentValidationError("Resposta inválida do provedor de pagamento.")
@@ -459,8 +459,9 @@ class OnlinePaymentService:
         comanda = db.query(Comanda).filter(
             Comanda.restaurante_id == account.restaurante_id,
             Comanda.id == locked_intent.comanda_id,
-        ).with_for_update().one()
+        ).populate_existing().with_for_update().one()
         locked_intent.status = mapped
+        locked_intent.last_error = None
         comanda.online_payment_status = mapped
 
         if mapped != "approved":
@@ -753,6 +754,23 @@ class OnlinePaymentService:
             "ticket_url": intent.ticket_url,
             "expira_em": intent.expires_at.isoformat() if intent.expires_at else None,
         }
+
+    @classmethod
+    def claim_poll_reconciliation(cls, db: Session, intent: OnlinePaymentIntent) -> bool:
+        """Atomic cross-worker rate limit, retained on failure; webhooks bypass it."""
+        now = datetime.datetime.now(datetime.timezone.utc)
+        expired = intent.expires_at is not None and _as_utc(intent.expires_at) <= now
+        cutoff = now - datetime.timedelta(seconds=60 if expired else 3)
+        claimed = db.query(OnlinePaymentIntent).filter(
+            OnlinePaymentIntent.restaurante_id == intent.restaurante_id,
+            OnlinePaymentIntent.id == intent.id,
+            OnlinePaymentIntent.status.in_(("created", "pending", "error")),
+            or_(OnlinePaymentIntent.reconciliation_attempted_at.is_(None),
+                OnlinePaymentIntent.reconciliation_attempted_at <= cutoff),
+        ).update({OnlinePaymentIntent.reconciliation_attempted_at: now}, synchronize_session=False)
+        db.commit()
+        db.refresh(intent)
+        return bool(claimed)
 
     @classmethod
     def reconcile_provider_payment(

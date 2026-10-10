@@ -218,16 +218,9 @@ def consultar_status_pedido_publico(
                 and payment_intent.external_payment_id
                 and payment_intent.provider in {"pagbank", "mercado_pago"}
             ):
-                intent_updated = payment_intent.updated_at
-                if intent_updated is not None and intent_updated.tzinfo is None:
-                    intent_updated = intent_updated.replace(tzinfo=datetime.timezone.utc)
-
-                is_expired = bool(expires_at is not None and expires_at <= now_utc)
-                time_since_update = (now_utc - intent_updated).total_seconds() if intent_updated else 999.0
-
-                if time_since_update >= 3.0 or is_expired:
+                from ..services.online_payments import OnlinePaymentService
+                if OnlinePaymentService.claim_poll_reconciliation(db, payment_intent):
                     try:
-                        from ..services.online_payments import OnlinePaymentService
                         account = OnlinePaymentService.account_for_intent(db, payment_intent)
                         reconciled_intent, approved = OnlinePaymentService.reconcile_provider_payment(
                             db,
@@ -245,10 +238,15 @@ def consultar_status_pedido_publico(
                                 except Exception:
                                     pass
                     except Exception as exc:
+                        db.rollback()
+                        db.refresh(payment_intent)
+                        db.refresh(comanda)
+                        payment_intent.last_error = 'Consulta financeira indisponível; aguardando reconciliação.'
+                        db.commit()
                         logger.warning(
                             "Falha na conciliação durante polling do cardápio para comanda %s: %s",
                             comanda.id,
-                            exc,
+                            type(exc).__name__,
                         )
 
             if comanda.fechada and comanda.delivery_status != "recusado":
@@ -256,7 +254,9 @@ def consultar_status_pedido_publico(
             elif comanda.delivery_status:
                 status_retorno = comanda.delivery_status
 
-            if payment_intent.status in {"created", "pending"} and expires_at is not None and expires_at <= now_utc:
+            if (payment_intent.provider not in {"pagbank", "mercado_pago"}
+                and payment_intent.status in {"created", "pending"}
+                and expires_at is not None and expires_at <= now_utc):
                 payment_intent.status = "expired"
                 if not comanda.fechada:
                     comanda.online_payment_status = "expired"

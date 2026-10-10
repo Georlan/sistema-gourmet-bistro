@@ -94,7 +94,13 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
             pending = db.query(OnlinePaymentIntent.id).filter(OnlinePaymentIntent.restaurante_id == rid,
                 OnlinePaymentIntent.status.in_(('created', 'pending', 'error'))).first()
             account = _account(db, rid)
-            if pending and (not account or account.provider_user_id != tokens.provider_user_id or account.status != 'active'):
+            if pending and (not account or account.provider_user_id != tokens.provider_user_id
+                            or account.status != 'active'
+                            or account.provider_environment != (oauth.env('PAGBANK_ENV') or 'sandbox')
+                            or db.query(RestaurantPaymentAccount.id).filter(
+                                RestaurantPaymentAccount.restaurante_id == rid,
+                                RestaurantPaymentAccount.provider != 'pagbank',
+                                RestaurantPaymentAccount.status == 'active').first()):
                 raise HTTPException(409, 'Resolva os pagamentos pendentes antes de trocar a conta de recebimento.')
             if account is None:
                 account = RestaurantPaymentAccount(id=str(uuid.uuid4()), restaurante_id=rid, provider='pagbank')
@@ -118,6 +124,56 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
         db.rollback()
         raise HTTPException(409, 'Conta PagBank já vinculada a outro restaurante.') from exc
     return {'status': 'connected'}
+
+
+@router.get('/pagbank/reconciliation')
+def reconciliation_queue(db: Session = Depends(get_db),
+                         user: Usuario = Depends(require_permission('configuracoes:administrar'))):
+    """Operator recovery queue; never discloses credentials or buyer documents."""
+    rid = require_tenant_id()
+    intents = db.query(OnlinePaymentIntent).filter(
+        OnlinePaymentIntent.restaurante_id == rid,
+        OnlinePaymentIntent.provider == 'pagbank',
+        ((OnlinePaymentIntent.status.in_(('created', 'pending', 'error')))
+         | OnlinePaymentIntent.last_error.isnot(None)),
+    ).order_by(OnlinePaymentIntent.created_at).limit(100).all()
+    return {'items': [{'id': row.id, 'comanda_id': row.comanda_id, 'status': row.status,
+                       'expires_at': row.expires_at, 'last_attempt_at': row.reconciliation_attempted_at,
+                       'last_error': row.last_error,
+                       'requires_review': bool(row.last_error or (row.expires_at and
+                           (row.expires_at.replace(tzinfo=datetime.timezone.utc) if row.expires_at.tzinfo is None else row.expires_at)
+                           < datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=15)))} for row in intents]}
+
+
+@router.post('/pagbank/reconciliation/{intent_id}')
+def retry_reconciliation(intent_id: str, db: Session = Depends(get_db),
+                         user: Usuario = Depends(require_permission('configuracoes:administrar'))):
+    rid = require_tenant_id()
+    intent = db.query(OnlinePaymentIntent).filter(
+        OnlinePaymentIntent.restaurante_id == rid, OnlinePaymentIntent.id == intent_id,
+        OnlinePaymentIntent.provider == 'pagbank',
+    ).first()
+    if intent is None:
+        raise HTTPException(404, 'Pagamento não encontrado.')
+    if not intent.external_payment_id:
+        raise HTTPException(409, 'Cobrança sem identificador externo; revisão necessária.')
+    if not OnlinePaymentService.claim_poll_reconciliation(db, intent):
+        return {'status': intent.status, 'queried': False}
+    try:
+        account = OnlinePaymentService.account_for_intent(db, intent)
+        result, approved = OnlinePaymentService.reconcile_provider_payment(
+            db, account=account, external_payment_id=intent.external_payment_id)
+    except Exception as exc:
+        db.rollback()
+        db.refresh(intent)
+        intent.last_error = 'Consulta financeira indisponível ou divergente; revisão necessária.'
+        db.commit()
+        raise HTTPException(503, 'Pagamento ainda não conciliado.') from exc
+    if approved:
+        manager.queue_committed_broadcast(db, {'event': 'tables_updated'}, int(rid))
+        manager.queue_committed_broadcast(db, {'event': 'new_delivery_order'}, int(rid))
+        db.commit()
+    return {'status': result.status if result else intent.status, 'queried': True}
 
 
 @router.post('/pagbank/disconnect')
@@ -163,7 +219,7 @@ def _process_webhook(account_id: str, payment_id: str, raw: bytes, signature: st
         if not account or account.id != account_id or account.status != 'active' or account.provider_environment != (oauth.env('PAGBANK_ENV') or 'sandbox'):
             raise HTTPException(404, 'Conta não encontrada.')
 
-        candidate_tokens = [t for t in (account.access_token, account.webhook_secret, oauth.env('PAGBANK_APP_TOKEN'), oauth.env('PAGBANK_CLIENT_SECRET')) if t]
+        candidate_tokens = [t for t in (account.access_token, account.webhook_secret) if t]
 
         if not signature:
             logger.warning('PagBank webhook rejeitado: assinatura ausente para conta %s', account_id)
@@ -218,9 +274,15 @@ def _process_webhook(account_id: str, payment_id: str, raw: bytes, signature: st
             intent, approved = OnlinePaymentService.reconcile_provider_payment(db, account=account, external_payment_id=payment_id)
         except OnlinePaymentValidationError as exc:
             db.rollback()
+            event.status = 'failed'
+            event.last_error = 'Divergência financeira; revisão obrigatória, inclusive pagamento após encerramento.'
+            db.commit()
             raise HTTPException(409, 'Pagamento divergente do pedido.') from exc
         except Exception as exc:
             db.rollback()
+            event.status = 'failed'
+            event.last_error = 'Consulta financeira indisponível; nova tentativa necessária.'
+            db.commit()
             raise HTTPException(503, 'Pagamento ainda não conciliado.') from exc
 
         event = db.query(OnlinePaymentWebhookEvent).filter(

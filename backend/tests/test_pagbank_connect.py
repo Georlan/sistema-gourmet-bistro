@@ -298,6 +298,12 @@ def test_pagbank_webhook_signature_validation_and_sandbox_fallback(monkeypatch):
         assert 'Assinatura ausente' in res.json()['detail']
 
         # 3. Valid signature in production -> processes successfully
+        for token in ('test-APP_TOKEN', 'test-CLIENT_SECRET'):
+            platform_signature = hashlib.sha256(token.encode() + b'-' + raw_body).hexdigest()
+            rejected = client.post(f'/payments/webhooks/pagbank/{account.id}', content=raw_body,
+                headers={'Content-Type': 'application/json', 'x-authenticity-token': platform_signature})
+            assert rejected.status_code == 401
+
         valid_sig = hashlib.sha256(b'seller-webhook-secret-token-' + raw_body).hexdigest()
         res = client.post(
             f'/payments/webhooks/pagbank/{account.id}',
@@ -387,11 +393,12 @@ def test_pagbank_webhook_signature_validation_and_sandbox_fallback(monkeypatch):
         current_restaurante_id.reset(context)
 
 
-def test_cardapio_polling_reconciles_and_guards_against_premature_expiration(monkeypatch):
+@pytest.mark.parametrize('initial_result', ['approved', 'timeout', 'pending', 'cancelled'])
+def test_cardapio_polling_reconciles_and_guards_against_premature_expiration(monkeypatch, initial_result):
     from fastapi.testclient import TestClient
     from app.main import app
     from app.database import SessionLocal, current_restaurante_id
-    from app.models import Restaurante, Usuario, Comanda, CaixaTurno, OnlinePaymentIntent, RestaurantPaymentAccount, Item, Lancamento, Produto, Categoria, Pagamento
+    from app.models import Restaurante, Usuario, Comanda, CaixaTurno, OnlinePaymentIntent, RestaurantPaymentAccount, Item, Lancamento, Produto, Categoria, Pagamento, OnlinePaymentWebhookEvent
     from app.services.online_payments.base import ProviderPayment
 
     rid = 9943
@@ -462,28 +469,76 @@ def test_cardapio_polling_reconciles_and_guards_against_premature_expiration(mon
             external_reference='intent-poll-test-1',
             qr_code='000201-pix',
         )
-        monkeypatch.setattr(PagBankProvider, 'get_payment', lambda self, pid: fake_payment)
-
+        calls = []
+        def provider_result(self, pid):
+            calls.append(pid)
+            if initial_result == 'timeout':
+                raise PagBankError('unavailable', retryable=True)
+            from dataclasses import replace
+            return replace(fake_payment, status=initial_result)
+        monkeypatch.setattr(PagBankProvider, 'get_payment', provider_result)
         client = TestClient(app, base_url='https://testserver')
-        # Poll order status via public cardapio endpoint with idempotency_key as key query param
-        res = client.get('/cardapio/pedidos/comanda-test-9943/status', params={'key': 'key-test-9943'})
-        assert res.status_code == 200, res.text
-        data = res.json()
-
-        # Crucial: order must NOT be cancelled/expired! It must be confirmed/pendente and payment approved!
-        assert data['status'] != 'cancelado'
-        assert data['pagamento']['status'] == 'approved'
-        assert data['state']['terminal'] is False
-        assert data['state']['rejected'] is False
-
+        url = '/cardapio/pedidos/comanda-test-9943/status'
+        assert intent.status == 'pending'  # Keep an older snapshot in this session.
+        for _ in range(2):
+            res = client.get(url, params={'key': 'key-test-9943'})
+            assert res.status_code == 200, res.text
+        assert len(calls) == 1
+        if initial_result == 'approved':
+            from dataclasses import replace
+            from app.services.online_payments import OnlinePaymentService
+            settled, approved = OnlinePaymentService.apply_provider_snapshot_in_session(
+                db, account=account, intent=intent, payment=replace(fake_payment, status='pending'))
+            assert settled.status == 'approved'
+            assert approved is False
+            db.commit()
         db.refresh(comanda)
         db.refresh(intent)
-        assert comanda.fechada is False
-        assert comanda.online_payment_status == 'approved'
-        assert intent.status == 'approved'
+        assert intent.reconciliation_attempted_at is not None
+        if initial_result == 'cancelled':
+            assert intent.status == 'cancelled'
+            assert comanda.fechada is True
+            import hashlib
+            monkeypatch.setattr(PagBankProvider, 'get_payment', lambda self, pid: fake_payment)
+            raw = b'{"id":"ORDE_POLL_TEST_789","event":"late-paid"}'
+            response = client.post('/payments/webhooks/pagbank/acc-pg-poll-1', content=raw,
+                headers={'Content-Type': 'application/json', 'x-authenticity-token': hashlib.sha256(b'poll-seller-token-' + raw).hexdigest()})
+            assert response.status_code == 409
+            audit = db.query(OnlinePaymentWebhookEvent).filter_by(restaurante_id=rid).one()
+            assert audit.status == 'failed'
+            assert 'revisão' in audit.last_error
+            db.refresh(comanda)
+            assert comanda.fechada is True
+        elif initial_result == 'approved':
+            assert intent.status == 'approved'
+            assert comanda.fechada is False
+        else:
+            assert intent.status == 'pending'
+            assert comanda.fechada is False
+            assert comanda.online_payment_status == 'pending'
+            assert res.json()['status'] == 'aguardando_pagamento'
+            from app.routes import pagbank_payments
+            queue = pagbank_payments.reconciliation_queue(db=db, user=user)
+            assert queue['items'][0]['id'] == intent.id
+            assert 'access_token' not in json.dumps(queue, default=str)
+            assert client.get('/payments/pagbank/reconciliation').status_code in {401, 403}
+            from fastapi import HTTPException
+            with pytest.raises(HTTPException) as missing:
+                pagbank_payments.retry_reconciliation('foreign-intent', db=db, user=user)
+            assert missing.value.status_code == 404
+            # A later authenticated observation recovers the uncertain payment.
+            intent.reconciliation_attempted_at = past_time - datetime.timedelta(seconds=120)
+            db.commit()
+            monkeypatch.setattr(PagBankProvider, 'get_payment', lambda self, pid: fake_payment)
+            recovered = pagbank_payments.retry_reconciliation(intent.id, db=db, user=user)
+            assert recovered == {'status': 'approved', 'queried': True}
+            db.refresh(comanda)
+            assert comanda.fechada is False
+        assert db.query(Pagamento).filter_by(restaurante_id=rid).count() == (0 if initial_result == 'cancelled' else 1)
 
     finally:
         db.rollback()
+        db.query(OnlinePaymentWebhookEvent).filter_by(restaurante_id=rid).delete()
         db.query(OnlinePaymentIntent).filter_by(restaurante_id=rid).delete()
         db.query(RestaurantPaymentAccount).filter_by(restaurante_id=rid).delete()
         db.query(Pagamento).filter_by(restaurante_id=rid).delete()
@@ -499,3 +554,33 @@ def test_cardapio_polling_reconciles_and_guards_against_premature_expiration(mon
         db.close()
         current_restaurante_id.reset(context)
 
+
+
+def test_oauth_state_cannot_cross_environments(monkeypatch):
+    _, state = oauth.authorization(9943, 'admin')
+    monkeypatch.setenv('PAGBANK_ENV', 'production')
+    with pytest.raises(oauth.PagBankOAuthError):
+        oauth.decode_state(state, state)
+
+
+def test_reconciliation_migration_roundtrip():
+    import importlib.util
+    from pathlib import Path
+    from sqlalchemy import create_engine, inspect
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    engine = create_engine('sqlite://')
+    path = Path(__file__).parents[1] / 'alembic/versions/7b8c9d0e1f23_payment_reconciliation_attempt.py'
+    spec = importlib.util.spec_from_file_location('reconciliation_migration', path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    with engine.begin() as connection:
+        connection.exec_driver_sql('CREATE TABLE online_payment_intents (id TEXT PRIMARY KEY)')
+        connection.exec_driver_sql("INSERT INTO online_payment_intents VALUES ('historic')")
+        operations = Operations(MigrationContext.configure(connection))
+        with operations.context(operations.migration_context):
+            migration.upgrade()
+            assert 'reconciliation_attempted_at' in {c['name'] for c in inspect(connection).get_columns('online_payment_intents')}
+            assert connection.exec_driver_sql('SELECT id, reconciliation_attempted_at FROM online_payment_intents').one() == ('historic', None)
+            migration.downgrade()
+            assert connection.exec_driver_sql('SELECT id FROM online_payment_intents').scalar() == 'historic'

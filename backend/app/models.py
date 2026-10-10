@@ -868,6 +868,7 @@ class OnlinePaymentIntent(Base):
     qr_code_base64 = Column(Text, nullable=True)
     ticket_url = Column(Text, nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)
+    reconciliation_attempted_at = Column(DateTime(timezone=True), nullable=True)
     approved_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
