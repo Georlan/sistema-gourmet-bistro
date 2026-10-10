@@ -133,20 +133,20 @@ def test_cpf_cnpj_validation_rejects_repeated_digits_and_accepts_valid_examples(
 
 
 def test_server_is_source_of_truth_for_contract_prices():
-    assert subscription_monthly_price("pocket") == Decimal("39.00")
-    assert subscription_marketplace_rate("pocket") == Decimal("0.0179")
-    assert subscription_annual_total("pocket") == Decimal("421.20")
-    assert subscription_annual_monthly_equivalent("pocket") == Decimal("35.10")
+    assert subscription_monthly_price("pocket") == Decimal("79.90")
+    assert subscription_marketplace_rate("pocket") == Decimal("0.000000")
+    assert subscription_annual_total("pocket") == Decimal("862.92")
+    assert subscription_annual_monthly_equivalent("pocket") == Decimal("71.91")
 
-    assert subscription_monthly_price("pro") == Decimal("129.00")
-    assert subscription_marketplace_rate("pro") == Decimal("0.0050")
-    assert subscription_annual_total("pro") == Decimal("1393.20")
-    assert subscription_annual_monthly_equivalent("pro") == Decimal("116.10")
+    assert subscription_monthly_price("pro") == Decimal("179.90")
+    assert subscription_marketplace_rate("pro") == Decimal("0.000000")
+    assert subscription_annual_total("pro") == Decimal("1942.92")
+    assert subscription_annual_monthly_equivalent("pro") == Decimal("161.91")
 
-    assert subscription_monthly_price("premium") == Decimal("249.00")
-    assert subscription_marketplace_rate("premium") == Decimal("0.0020")
-    assert subscription_annual_total("premium") == Decimal("2689.20")
-    assert subscription_annual_monthly_equivalent("premium") == Decimal("224.10")
+    assert subscription_monthly_price("premium") == Decimal("329.90")
+    assert subscription_marketplace_rate("premium") == Decimal("0.000000")
+    assert subscription_annual_total("premium") == Decimal("3562.92")
+    assert subscription_annual_monthly_equivalent("premium") == Decimal("296.91")
 
 
 def test_accept_persists_immutable_snapshot_and_returns_receipt(client_and_session):
@@ -164,10 +164,10 @@ def test_accept_persists_immutable_snapshot_and_returns_receipt(client_and_sessi
     assert data["protocol"].startswith("KOMA-CTR-")
     receipt = data["receipt"]
     assert receipt["commercial"]["pricingVersion"] == COMMERCIAL_PRICING_VERSION
-    assert receipt["commercial"]["fixedMonthlyPrice"] == "39.00"
-    assert receipt["commercial"]["billingAmount"] == "39.00"
+    assert receipt["commercial"]["fixedMonthlyPrice"] == "79.90"
+    assert receipt["commercial"]["billingAmount"] == "79.90"
     assert receipt["commercial"]["annualMonthlyEquivalent"] is None
-    assert receipt["commercial"]["marketplaceRate"] == "0.017900"
+    assert receipt["commercial"]["marketplaceRate"] == "0.000000"
     assert receipt["commercial"]["fixedBillingRequired"] is True
     assert receipt["commercial"]["trialDays"] == 7
     assert receipt["commercial"]["trialWaivesFixedFeeOnly"] is True
@@ -202,10 +202,10 @@ def test_paid_annual_contract_snapshots_discounted_fixed_amount_only(client_and_
     )
     assert pro.status_code == 201, pro.text
     pro_receipt = pro.json()["receipt"]["commercial"]
-    assert pro_receipt["fixedMonthlyPrice"] == "129.00"
-    assert pro_receipt["billingAmount"] == "1393.20"
-    assert pro_receipt["annualMonthlyEquivalent"] == "116.10"
-    assert pro_receipt["marketplaceRate"] == "0.005000"
+    assert pro_receipt["fixedMonthlyPrice"] == "179.90"
+    assert pro_receipt["billingAmount"] == "1942.92"
+    assert pro_receipt["annualMonthlyEquivalent"] == "161.91"
+    assert pro_receipt["marketplaceRate"] == "0.000000"
     assert pro_receipt["trialDays"] == 7
 
     premium = client.post(
@@ -214,10 +214,10 @@ def test_paid_annual_contract_snapshots_discounted_fixed_amount_only(client_and_
     )
     assert premium.status_code == 201, premium.text
     premium_receipt = premium.json()["receipt"]["commercial"]
-    assert premium_receipt["fixedMonthlyPrice"] == "249.00"
-    assert premium_receipt["billingAmount"] == "2689.20"
-    assert premium_receipt["annualMonthlyEquivalent"] == "224.10"
-    assert premium_receipt["marketplaceRate"] == "0.002000"
+    assert premium_receipt["fixedMonthlyPrice"] == "329.90"
+    assert premium_receipt["billingAmount"] == "3562.92"
+    assert premium_receipt["annualMonthlyEquivalent"] == "296.91"
+    assert premium_receipt["marketplaceRate"] == "0.000000"
 
 
 def test_pocket_annual_contract_snapshots_discounted_fixed_amount_and_same_online_fee(client_and_session):
@@ -228,10 +228,10 @@ def test_pocket_annual_contract_snapshots_discounted_fixed_amount_and_same_onlin
     )
     assert response.status_code == 201, response.text
     commercial = response.json()["receipt"]["commercial"]
-    assert commercial["fixedMonthlyPrice"] == "39.00"
-    assert commercial["billingAmount"] == "421.20"
-    assert commercial["annualMonthlyEquivalent"] == "35.10"
-    assert commercial["marketplaceRate"] == "0.017900"
+    assert commercial["fixedMonthlyPrice"] == "79.90"
+    assert commercial["billingAmount"] == "862.92"
+    assert commercial["annualMonthlyEquivalent"] == "71.91"
+    assert commercial["marketplaceRate"] == "0.000000"
     assert commercial["trialDays"] == 7
 
 
@@ -260,17 +260,17 @@ def test_tenant_commercial_terms_resolves_linked_signed_receipt(client_and_sessi
         assert terms.protocol == accepted.json()["protocol"]
         assert terms.plan == "pocket"
         assert terms.billing_cycle == "mensal"
-        assert terms.fixed_monthly_price == Decimal("39.00")
-        assert terms.billing_amount == Decimal("39.00")
+        assert terms.fixed_monthly_price == Decimal("79.90")
+        assert terms.billing_amount == Decimal("79.90")
         assert terms.annual_monthly_equivalent is None
-        assert terms.marketplace_rate == Decimal("0.017900")
+        assert terms.marketplace_rate == Decimal("0.000000")
         assert terms.legal_version == LEGAL_VERSION
         assert terms.pricing_version == COMMERCIAL_PRICING_VERSION
     finally:
         db.close()
 
 
-def test_legacy_v25_snapshot_remains_authoritative_and_immutable(client_and_session):
+def test_legacy_v25_snapshot_remains_authoritative_and_immutable(client_and_session, monkeypatch):
     client, Session = client_and_session
     accepted = client.post(
         "/api/contracts/accept",
@@ -315,8 +315,8 @@ def test_legacy_v25_snapshot_remains_authoritative_and_immutable(client_and_sess
         frozen_ciphertext = acceptance.receipt_snapshot_encrypted
 
         # Catálogo atual já é o vNext; o contrato antigo não acompanha a mudança.
-        assert subscription_monthly_price("pocket") == Decimal("39.00")
-        assert subscription_marketplace_rate("pocket") == Decimal("0.0179")
+        assert subscription_monthly_price("pocket") == Decimal("79.90")
+        assert subscription_marketplace_rate("pocket") == Decimal("0.000000")
 
         terms = tenant_commercial_terms(db, 988)
         assert terms is not None
@@ -324,6 +324,11 @@ def test_legacy_v25_snapshot_remains_authoritative_and_immutable(client_and_sess
         assert terms.fixed_monthly_price == Decimal("109.00")
         assert terms.billing_amount == Decimal("109.00")
         assert terms.marketplace_rate == Decimal("0.014900")
+        monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+        assert OnlinePaymentService.marketplace_fee_for_tenant(
+            db, Decimal("100.00"),
+            SimpleNamespace(id=988, plano="pocket", billing_mode="subscription"),
+        ) == Decimal("0.00")
         assert terms.legal_version == "2.5"
         assert terms.pricing_version is None
 
@@ -424,7 +429,7 @@ def test_latest_linked_acceptance_switches_future_split_without_rewriting_histor
         assert terms is not None
         assert terms.protocol == new_response.json()["protocol"]
         assert terms.plan == "premium"
-        assert terms.marketplace_rate == Decimal("0.002000")
+        assert terms.marketplace_rate == Decimal("0.000000")
         assert terms.pricing_version == COMMERCIAL_PRICING_VERSION
         assert OnlinePaymentService.marketplace_fee_for_tenant(
             db,
@@ -545,8 +550,8 @@ def test_superadmin_inbox_lists_pending_acceptance_without_exposing_full_tax_ids
     assert item["status"] == "SIGNED_PENDING_ACTIVATION"
     assert item["plan"] == "pocket"
     assert item["billingCycle"] == "mensal"
-    assert item["fixedMonthlyPrice"] == "39.00"
-    assert item["billingAmount"] == "39.00"
+    assert item["fixedMonthlyPrice"] == "79.90"
+    assert item["billingAmount"] == "79.90"
     assert item["billingStatus"] == "pending"
     assert item["activationEligible"] is False
     assert item["contractingPartyTaxIdLast4"] == VALID_CNPJ[-4:]
@@ -615,3 +620,61 @@ def test_accept_rejects_stale_legal_provenance(client_and_session):
     response = client.post("/api/contracts/accept", json=payload)
     assert response.status_code == 409
     assert "origem dos documentos" in response.json()["detail"].lower()
+
+
+@pytest.mark.parametrize(
+    "plan,cycle,expected_amount",
+    [
+        ("pocket", "mensal", "79.90"),
+        ("pocket", "anual", "862.92"),
+        ("pro", "mensal", "179.90"),
+        ("pro", "anual", "1942.92"),
+        ("premium", "mensal", "329.90"),
+        ("premium", "anual", "3562.92"),
+    ],
+)
+def test_new_signed_contract_never_sends_marketplace_split_to_mercado_pago(
+    client_and_session, monkeypatch, plan, cycle, expected_amount,
+):
+    import httpx
+    from app.services.online_payments.mercado_pago import MercadoPagoProvider
+
+    client, Session = client_and_session
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    accepted = client.post("/api/contracts/accept", json=_payload(plan=plan, billing_cycle=cycle))
+    assert accepted.status_code == 201, accepted.text
+    assert accepted.json()["receipt"]["commercial"]["billingAmount"] == expected_amount
+    captured = []
+
+    def handler(request):
+        payload = json.loads(request.content)
+        captured.append(payload)
+        return httpx.Response(201, json={
+            "id": 123456, "status": "pending", "transaction_amount": payload["transaction_amount"],
+            "external_reference": payload["external_reference"],
+            "point_of_interaction": {"transaction_data": {"qr_code": "test-only"}},
+        })
+
+    with Session() as db:
+        acceptance = db.query(ContractAcceptance).filter_by(protocol=accepted.json()["protocol"]).one()
+        db.add(RestaurantContractAcceptance(id=str(uuid.uuid4()), restaurante_id=992, acceptance_id=acceptance.id))
+        db.commit()
+        # Exercise the signed snapshot resolver, including when the feature flag is enabled.
+        fee = OnlinePaymentService.marketplace_fee_for_tenant(
+            db, Decimal("100.00"), SimpleNamespace(id=992, plano=plan, billing_mode="subscription"),
+        )
+        assert fee == Decimal("0.00")
+        provider = MercadoPagoProvider("test-token")
+        provider._client.close()
+        with httpx.Client(base_url=provider.API_URL, transport=httpx.MockTransport(handler)) as transport:
+            provider._client = transport
+            provider.create_pix(
+                amount=Decimal("100.00"), marketplace_fee=fee,
+                payer_email="test@example.com", external_reference="zero-commission-test",
+                idempotency_key=str(uuid.uuid4()), notification_url="https://example.test/webhook",
+                expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=30),
+            )
+    assert len(captured) == 1
+    assert captured[0]["transaction_amount"] == 100.0
+    assert "application_fee" not in captured[0]
+    assert "marketplace_fee" not in captured[0]

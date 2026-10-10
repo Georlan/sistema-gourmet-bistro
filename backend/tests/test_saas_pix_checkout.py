@@ -109,7 +109,7 @@ def test_saas_pix_legacy_without_acceptance_uses_frozen_v25_price(monkeypatch):
         lambda _db, _restaurant_id: None,
     )
 
-    # O catálogo vigente é R$ 129, mas o fallback pré-aceite permanece R$ 209.
+    # O catálogo vigente é R$ 179,90, mas o fallback pré-aceite permanece R$ 209.
     assert _subscription_amount(db, subscription, 11) == Decimal("209.00")
 
 
@@ -139,12 +139,12 @@ def test_saas_pix_subscription_tenant_without_acceptance_fails_closed(monkeypatc
 @pytest.mark.parametrize(
     ("plan", "cycle", "signed_amount"),
     [
-        ("pocket", "monthly", "39.00"),
-        ("pocket", "annual", "421.20"),
-        ("pro", "monthly", "129.00"),
-        ("pro", "annual", "1393.20"),
-        ("premium", "monthly", "249.00"),
-        ("premium", "annual", "2689.20"),
+        ("pocket", "monthly", "79.90"),
+        ("pocket", "annual", "862.92"),
+        ("pro", "monthly", "179.90"),
+        ("pro", "annual", "1942.92"),
+        ("premium", "monthly", "329.90"),
+        ("premium", "annual", "3562.92"),
     ],
 )
 def test_saas_pix_uses_signed_amount_for_each_new_plan_and_cycle(monkeypatch, plan, cycle, signed_amount):

@@ -162,12 +162,89 @@ def test_marketplace_fee_is_zero_until_plan_fees_are_explicitly_enabled(monkeypa
         assert OnlinePaymentService.marketplace_fee(Decimal("100.00"), plan) == Decimal("0.00")
 
 
-@pytest.mark.parametrize("plan", ["pocket", "pro", "premium", "gold", "unknown"])
-def test_new_payments_have_zero_platform_fee_even_with_old_fee_flag(monkeypatch, plan):
+def test_new_payments_have_zero_platform_fee_even_with_old_fee_flag(monkeypatch):
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
-    assert OnlinePaymentService.marketplace_fee(Decimal("100"), plan) == Decimal("0.00")
-    restaurant = SimpleNamespace(id=122, plano=plan, billing_mode="subscription")
-    assert OnlinePaymentService.marketplace_fee_for_tenant(None, Decimal("100"), restaurant) == Decimal("0.00")
+    amount = Decimal("100.00")
+
+    assert OnlinePaymentService.marketplace_fee(amount, "pocket") == Decimal("0.00")
+    assert OnlinePaymentService.marketplace_fee(amount, "pro") == Decimal("0.00")
+    assert OnlinePaymentService.marketplace_fee(amount, "premium") == Decimal("0.00")
+    assert OnlinePaymentService.marketplace_fee(amount, "gold") == Decimal("0.00")
+    assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("0.00")
+
+
+def test_new_pocket_tenant_uses_signed_vnext_marketplace_rate(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    monkeypatch.setattr(
+        "app.services.billing_service.tenant_commercial_terms",
+        lambda _db, _restaurante_id: SimpleNamespace(
+            marketplace_rate=Decimal("0.000000")
+        ),
+    )
+
+    restaurant = SimpleNamespace(id=122, plano="pocket")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None,
+        Decimal("100.00"),
+        restaurant,
+    ) == Decimal("0.00")
+
+
+def test_commission_waiver_applies_to_signed_old_rate_without_mutating_snapshot(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    monkeypatch.setitem(
+        SUBSCRIPTION_MARKETPLACE_RATES,
+        "pocket",
+        Decimal("0.0179"),
+    )
+    monkeypatch.setattr(
+        "app.services.billing_service.tenant_commercial_terms",
+        lambda _db, _restaurante_id: SimpleNamespace(
+            marketplace_rate=Decimal("0.0149")
+        ),
+    )
+
+    # Mesmo uma mutação isolada do slug/plano de recursos não pode alterar
+    # a taxa financeira enquanto o aceite comercial vigente continua antigo.
+    restaurant = SimpleNamespace(id=123, plano="premium", billing_mode="subscription")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None,
+        Decimal("100.00"),
+        restaurant,
+    ) == Decimal("0.00")
+
+
+def test_tenant_without_acceptance_has_zero_fee_even_if_catalog_rate_changes(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    monkeypatch.setitem(
+        SUBSCRIPTION_MARKETPLACE_RATES,
+        "pocket",
+        Decimal("0.0179"),
+    )
+    monkeypatch.setattr(
+        "app.services.billing_service.tenant_commercial_terms",
+        lambda _db, _restaurante_id: None,
+    )
+
+    restaurant = SimpleNamespace(id=124, plano="pocket", billing_mode="legacy")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None,
+        Decimal("100.00"),
+        restaurant,
+    ) == Decimal("0.00")
+
+
+@pytest.mark.parametrize("restaurant_id", [6, 8, 125])
+def test_manually_provisioned_subscription_without_acceptance_has_zero_commission(monkeypatch, restaurant_id):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    monkeypatch.setattr(
+        "app.services.billing_service.tenant_commercial_terms",
+        lambda _db, _restaurante_id: None,
+    )
+    restaurant = SimpleNamespace(id=restaurant_id, plano="pocket", billing_mode="subscription")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None, Decimal("100.00"), restaurant,
+    ) == Decimal("0.00")
 
 
 def test_tenant_marketplace_fee_flag_disabled_does_not_resolve_contract(monkeypatch):
@@ -274,6 +351,7 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
             provider=provider_name,
         )
         assert Decimal(str(intent.marketplace_fee)) == Decimal("0.0")
+        assert intent.fee_settlement == "none"
         intent.external_payment_id = "mp-payment-9917"
         intent.status = "pending"
         db.commit()

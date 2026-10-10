@@ -122,7 +122,7 @@ def test_rejects_marketplace_owner_as_restaurant_seller(monkeypatch):
     )
     db = _FakeSession()
 
-    with pytest.raises(MercadoPagoAccountConnectionError, match="split"):
+    with pytest.raises(MercadoPagoAccountConnectionError, match="conta proprietária"):
         upsert_mercado_pago_account(
             db,
             restaurant_id=7,

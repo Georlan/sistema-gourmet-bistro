@@ -66,19 +66,19 @@ O catálogo em `backend/app/subscription.py` descreve a oferta vigente para **no
 
 Para um tenant contratado, o backend resolve o `ContractAcceptance` mais recente vinculado ao restaurante e lê do comprovante assinado o snapshot comercial, incluindo `plan`, `fixedMonthlyPrice`, `billingAmount`, `marketplaceRate` e versão jurídica. Em PostgreSQL essa leitura usa a função tenant-scoped `koma_internal.current_contract_receipt()`; o runtime não recebe leitura direta irrestrita da tabela global de evidências.
 
-Se um tenant realmente legado ainda não possuir `ContractAcceptance` vinculado **e** estiver marcado com `billing_mode=legacy`, o split usa o snapshot legado congelado `LEGACY_V25_MARKETPLACE_RATES`. Esse fallback não acompanha mudanças futuras do catálogo público.
+Estabelecimentos sem aceite vinculado, inclusive os provisionados manualmente, recebem comissão zero. Os fallbacks históricos v2.5 permanecem congelados para proveniência e cobrança fixa legada; não são usados para reintroduzir split na oferta sem comissão.
 
-Um tenant com `billing_mode=subscription` sem aceite comercial vinculado **não** recebe o fallback legado: o cálculo falha fechado. Isso impede que um tenant novo provisionado administrativamente herde 1,49%/0,69%/0,29% por acidente só porque ainda não possui contrato.
+Um tenant com `billing_mode=subscription` sem aceite recebe comissão zero; essa isenção não cria contrato, não provisiona assinatura e não autoriza cobrança SaaS. Um vínculo de aceite inválido ou um snapshot corrompido continua falhando fechado.
 
 A ordem de autoridade é:
 
-`tenant -> último aceite comercial vinculado -> marketplaceRate contratada -> OnlinePaymentIntent.marketplace_fee -> Mercado Pago application_fee`.
+`tenant -> último aceite vinculado (snapshot preservado) -> política de isenção vigente -> taxa efetiva -> OnlinePaymentIntent.marketplace_fee -> Mercado Pago sem application_fee quando zero`.
 
 O resolvedor canônico `tenant_marketplace_rate(...)` deve ser usado por qualquer cálculo financeiro tenant-scoped que dependa da taxa KÔMA, inclusive simuladores de margem/fidelidade. `restaurante.plano` identifica o perfil de recursos/entitlements; ele não é autoridade para preço ou taxa de um tenant contratado. Alterar somente esse campo não pode alterar o split.
 
 Quando existe mais de um aceite histórico vinculado ao mesmo tenant, a autoridade vigente é escolhida deterministicamente. No PostgreSQL, a ordem é `linked_at DESC, accepted_at DESC, link.id DESC`; no fallback SQLite de testes, `linked_at DESC, link.id DESC`. Os aceites anteriores permanecem imutáveis e auditáveis.
 
-A trava `ONLINE_PAYMENT_PLAN_FEES_ENABLED=false` prevalece sobre qualquer taxa contratada e materializa `0.00`. Quando habilitada, a taxa resolvida é calculada e gravada na `OnlinePaymentIntent` no momento da criação do pagamento. O provider usa esse valor materializado; mudanças comerciais posteriores não alteram retroativamente uma intenção já criada.
+A política canônica `online_order_commission_enabled=false` em `product-contract.json` isenta a comissão KÔMA nos pagamentos futuros, inclusive de aceites anteriores, sem reescrever snapshots ou mensalidades. Tenants provisionados sem aceite também recebem comissão zero. Um vínculo contratual corrompido continua falhando fechado. A trava `ONLINE_PAYMENT_PLAN_FEES_ENABLED=false` também materializa `0.00`; habilitá-la isoladamente não remove a isenção canônica. A taxa efetiva resolvida é gravada na `OnlinePaymentIntent` no momento da criação do pagamento. O provider usa esse valor materializado; mudanças comerciais posteriores não alteram retroativamente uma intenção já criada.
 
 Planos legados (`bistro`, `delivery`, `gold`, `platinum`) continuam normalizados como Premium somente no fallback legado. O override de homologação `KOMA_TEST_PREMIUM_RESTAURANTE_IDS` continua limitado a recursos e não muda a taxa financeira.
 
@@ -93,7 +93,7 @@ Uma mudança canônica futura só poderá tornar o novo aceite a autoridade depo
 O deploy precisa definir:
 
 - `KOMA_PUBLIC_API_URL`: origem HTTPS pública do backend.
-- `ONLINE_PAYMENT_PLAN_FEES_ENABLED`: `false` por padrão. Somente `true` autoriza o backend a calcular e enviar a taxa comercial resolvida do contrato do tenant ao provedor.
+- `ONLINE_PAYMENT_PLAN_FEES_ENABLED`: `false` por padrão. `true` sozinho não reativa comissão: a política canônica também precisa permitir. Na oferta vigente, a comissão efetiva é zero e `application_fee` é omitido no Mercado Pago.
 - `ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES`: validade do Pix no provedor; mínimo de 30 minutos na integração atual.
 - `ONLINE_PAYMENT_PIX_CLOSE_GRACE_MINUTES`: janela operacional antes de o fechamento poder cancelar um Pix ainda pendente; padrão de 5 minutos.
 
@@ -102,3 +102,10 @@ A trava existe para impedir que um merge de código passe a cobrar comissão em 
 Cada restaurante precisa de uma linha ativa em `restaurant_payment_accounts`, criada pelo fluxo OAuth do marketplace. Access token, refresh token e segredo do webhook são criptografados em repouso. O cardápio só oferece Pix quando essa conta está ativa.
 
 O fluxo OAuth e a cobrança real já foram homologados em produção com tenant separado, Pix aprovado, webhook assinado, idempotência e `application_fee`. Nenhum segredo deve ser digitado ou armazenado no frontend.
+
+
+### Empacotamento do contrato canônico
+
+`product-contract.json` na raiz é a fonte editável. `npm run sync:product-contract` gera a cópia `backend/product-contract.json` usada pelo Railway, cujo diretório de publicação é `/backend`. A build e os testes recusam cópias divergentes. O loader não possui preços de fallback para contornar erro de empacotamento: com o repositório completo ele confere ambas as cópias; no deploy isolado usa a cópia gerada. Alterações no catálogo também alteram um arquivo sob `/backend/**`, acionando a implantação da API.
+
+Novas intenções com comissão zero registram `fee_settlement=none` (ou `test` quando houver liberação explícita de teste). Não acumulam dívida de uso em Pix direto e não enviam `application_fee` ao Mercado Pago. Intenções, recibos e faturas históricos permanecem intactos.

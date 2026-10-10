@@ -76,10 +76,10 @@ def test_recommendation_endpoint_uses_authenticated_tenant_plan_rate():
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["economics"]["koma_fee_percent"] == 0.69
-    assert payload["economics"]["koma_revenue_per_average_order"] == 0.69
-    assert payload["economics"]["contribution_margin_before_incentive_percent"] == 39.31
-    assert payload["economics"]["safe_incentive_ceiling_percent"] == 19.31
+    assert payload["economics"]["koma_fee_percent"] == 0.0
+    assert payload["economics"]["koma_revenue_per_average_order"] == 0.0
+    assert payload["economics"]["contribution_margin_before_incentive_percent"] == 40.0
+    assert payload["economics"]["safe_incentive_ceiling_percent"] == 20.0
 
 
 def test_recommendation_endpoint_uses_resolved_contract_rate_not_catalog_slug(monkeypatch):

@@ -10,9 +10,9 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..subscription import ONLINE_ORDER_COMMISSION_ENABLED
 from ..models import Restaurante
 from ..saas_billing_models import SaaSBillingSetup, SaaSSubscription
-from ..subscription import legacy_v25_marketplace_rate
 
 
 @dataclass(frozen=True)
@@ -169,25 +169,20 @@ def tenant_commercial_terms(
 
 
 def tenant_marketplace_rate(db: Session, restaurant: Restaurante) -> Decimal:
-    """Resolve a taxa comercial efetiva sem consultar o catálogo vigente.
+    """Preserva snapshots assinados; sem aceite, aplica comissão zero.
 
-    Tenants contratados usam sempre o snapshot do aceite mais recente. Somente
-    tenants explicitamente legados, ainda sem aceite, podem usar o fallback v2.5.
-    Um tenant de assinatura sem aceite falha fechado para impedir que uma troca
-    isolada de restaurante.plano altere a taxa financeira.
+    A isenção não altera mensalidades, contratos ou histórico. Um vínculo
+    contratual corrompido continua falhando em tenant_commercial_terms.
     """
     terms = tenant_commercial_terms(db, int(restaurant.id))
     if terms is not None:
-        return terms.marketplace_rate
+        # O comprovante continua intacto; a oferta sem comissão também isenta
+        # pagamentos futuros de contratos antigos, sem alterar a mensalidade.
+        return terms.marketplace_rate if ONLINE_ORDER_COMMISSION_ENABLED else Decimal("0.000000")
 
-    billing_mode = str(getattr(restaurant, "billing_mode", "") or "").strip().lower()
-    if billing_mode == "legacy":
-        return legacy_v25_marketplace_rate(restaurant.plano)
-
-    raise RuntimeError(
-        "Tenant de assinatura sem aceite comercial vinculado; "
-        "a taxa transacional não pode ser inferida pelo plano salvo."
-    )
+    # Isenção explícita para estabelecimentos sem aceite (incluindo tenants
+    # provisionados manualmente). Não cria contrato nem autoriza cobrança SaaS.
+    return Decimal("0.000000")
 
 
 def is_billing_enforcement_enabled() -> bool:

@@ -16,18 +16,18 @@ describe('Super Admin Hardening & Integrity', () => {
 
     const pocket = SUBSCRIPTION_PLANS.find(p => p.id === 'pocket');
     assert.ok(pocket);
-    assert.equal(pocket.price, 39);
-    assert.equal(pocket.splitFeeRate, 0.0179);
+    assert.equal(pocket.price, 79.90);
+    assert.equal(pocket.splitFeeRate, 0);
 
     const pro = SUBSCRIPTION_PLANS.find(p => p.id === 'pro');
     assert.ok(pro);
-    assert.equal(pro.price, 129);
-    assert.equal(pro.splitFeeRate, 0.005);
+    assert.equal(pro.price, 179.90);
+    assert.equal(pro.splitFeeRate, 0);
 
     const premium = SUBSCRIPTION_PLANS.find(p => p.id === 'premium');
     assert.ok(premium);
-    assert.equal(premium.price, 249);
-    assert.equal(premium.splitFeeRate, 0.002);
+    assert.equal(premium.price, 329.90);
+    assert.equal(premium.splitFeeRate, 0);
   });
 
   it('impede regressao para hardcodes, Sentry, Asaas e tenants ficticios', () => {

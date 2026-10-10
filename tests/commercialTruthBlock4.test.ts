@@ -18,12 +18,12 @@ test('catálogo de planos reflete a verdade comercial canônica', () => {
   const pro = getSubscriptionPlan('pro');
   const premium = getSubscriptionPlan('premium');
 
-  assert.equal(pocket.price, 39);
-  assert.equal(pocket.splitFeeRate, 0.0179);
-  assert.equal(pro.price, 129);
-  assert.equal(pro.splitFeeRate, 0.005);
-  assert.equal(premium.price, 249);
-  assert.equal(premium.splitFeeRate, 0.002);
+  assert.equal(pocket.price, 79.90);
+  assert.equal(pocket.splitFeeRate, 0);
+  assert.equal(pro.price, 179.90);
+  assert.equal(pro.splitFeeRate, 0);
+  assert.equal(premium.price, 329.90);
+  assert.equal(premium.splitFeeRate, 0);
 });
 
 test('matriz de comparação não promete DRE ou relatórios avançados no Pocket', () => {
@@ -77,10 +77,10 @@ test('.env.example não divulga Pocket R$ 0 nem domínios legados pages.dev', ()
   assert.doesNotMatch(envExample, /Pocket R\$ 0/);
   assert.doesNotMatch(envExample, /sistema-gourmet-bistro\.pages\.dev/);
   assert.match(envExample, /komafood\.com\.br/);
-  assert.match(envExample, /Pocket R\$ 39, Pro R\$ 129, Premium R\$ 249/);
+  assert.match(envExample, /Pocket R\$ 79,90, Pro R\$ 179,90, Premium R\$ 329,90/);
 });
 
-test('contratação V2 distingue explicitamente condição histórica R$0 de contratação atual R$39', () => {
+test('contratação V2 distingue explicitamente condição histórica R$0 de contratação atual R$79,90', () => {
   const v2 = source('src/legal/PlanContractPageV2.tsx');
 
   // Na contratação nova, hoje é R$ 0 pelo trial de 7 dias

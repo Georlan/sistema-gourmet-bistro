@@ -49,7 +49,8 @@ def test_branded_loader_is_reserved_for_blocking_or_fullscreen_waits():
     assert "KomaLoading" not in mercado_pago
     assert "KomaLoading" not in estorno
     assert "animate-spin" in smartpos_history
-    assert "animate-spin" in mercado_pago
+    assert "PaymentConnectionCard" in mercado_pago
+    assert "animate-spin" in source("src/components/caixa/online-menu/PaymentConnectionCard.tsx")
     assert "animate-spin" in estorno
 
 

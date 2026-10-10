@@ -288,8 +288,8 @@ def _requests_by(state: dict[str, object], method: str, path: str) -> list[httpx
     return [req for req in requests if req.method == method and req.url.path == path]
 
 
-def test_first_client_fee_free_payment_and_full_refund_simulation(monkeypatch):
-    """Simula pedido -> Pix sem comissão -> aprovação -> refund total -> retry idempotente."""
+def test_first_client_zero_commission_payment_and_full_refund_simulation(monkeypatch):
+    """Simula pedido -> Pix sem comissão KÔMA -> aprovação -> refund total -> retry idempotente."""
     restaurante_id = SUCCESS_RESTAURANT_ID
     tenant_token = current_restaurante_id.set(restaurante_id)
     db = _session(restaurante_id)

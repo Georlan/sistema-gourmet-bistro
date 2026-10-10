@@ -1,7 +1,7 @@
-import { LEGAL_DOCUMENTS, LEGAL_VERSION, type LegalDocument } from './legalContentV33';
+import { LEGAL_DOCUMENTS, LEGAL_VERSION, type LegalDocument } from './legalContentV34';
 
-export const LEGAL_SOURCE_COMMIT = '4833ec753826013e664f2021ba91a24d897db728';
-export const LEGAL_SOURCE_BLOB_SHA = '3d765459e76fc5468dc0ce1a48097f13fa7feb21';
+export const LEGAL_SOURCE_COMMIT = '95f1cae2af41bb5b09181c141ee460df534f619c';
+export const LEGAL_SOURCE_BLOB_SHA = 'd425a9e803cab0be0ed787c7c658677d5ae4cfdc';
 
 const bySlug = new Map(LEGAL_DOCUMENTS.map(document => [document.slug, document]));
 
