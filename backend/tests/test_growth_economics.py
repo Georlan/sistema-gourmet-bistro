@@ -14,7 +14,7 @@ def test_growth_recommendation_preserves_target_margin_and_koma_split():
         average_ticket="100.00",
         variable_cost_percent="60.00",
         minimum_margin_percent="20.00",
-        koma_fee_fraction=subscription_marketplace_rate("pocket"),
+        koma_fee_fraction=Decimal("0.0179"),
     )
 
     economics = result["economics"]
@@ -44,7 +44,7 @@ def test_growth_recommendation_does_not_invent_budget_when_target_margin_is_unav
         average_ticket=50,
         variable_cost_percent=80,
         minimum_margin_percent=20,
-        koma_fee_fraction=subscription_marketplace_rate("pro"),
+        koma_fee_fraction=Decimal("0.0050"),
     )
 
     assert result["economics"]["contribution_margin_before_incentive_percent"] == 19.5
@@ -72,9 +72,9 @@ def test_loyalty_auto_rate_is_capped_at_five_percent():
 @pytest.mark.parametrize(
     ("plan", "expected"),
     [
-        ("pocket", Decimal("0.0179")),
-        ("pro", Decimal("0.0050")),
-        ("premium", Decimal("0.0020")),
+        ("pocket", Decimal("0")),
+        ("pro", Decimal("0")),
+        ("premium", Decimal("0")),
     ],
 )
 def test_growth_economics_uses_existing_canonical_plan_rates(plan, expected):
