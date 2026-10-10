@@ -61,6 +61,13 @@ jobs:
             echo "The distribution repository must exist and be public" >&2
             exit 1
           fi
+          # GitHub Releases precisam de um commit na branch padrao do repo publico.
+          target_branch="$(gh api "repos/$TARGET_REPO" --jq '.default_branch')"
+          if [[ -z "$target_branch" || "$target_branch" == "null" ]]; then
+            echo "Initialize the public repository with a README first" >&2
+            exit 1
+          fi
+          gh api "repos/$TARGET_REPO/commits/$target_branch" --silent
           tag="print-agent-${GITHUB_RUN_NUMBER}-${GITHUB_SHA:0:12}"
           gh release create "$tag" \
             dist/KOMA-print-agent.zip \
