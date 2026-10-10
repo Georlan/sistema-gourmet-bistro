@@ -316,10 +316,10 @@ def test_pagbank_webhook_signature_validation_and_sandbox_fallback(monkeypatch):
         assert res.status_code == 200
         assert res.json()['status'] == 'already_processed'
 
-        # 5. Sandbox without signature -> pulls from provider API and reconciles
+        # 5. Sandbox without signature -> rejected with 401
         monkeypatch.setenv('PAGBANK_ENV', 'sandbox')
         account.provider_environment = 'sandbox'
-        # Create second order and comanda for sandbox missing header test
+        # Create second order and comanda for sandbox test
         comanda2 = Comanda(id='comanda-test-9942-2', restaurante_id=rid, garcom_id=user.id, numero_pedido=103, identificador='Mesa 2', status_comanda=None, tipo='Consumo no Local', delivery_status='pendente', online_payment_status='pending')
         db.add(comanda2)
         db.flush()
@@ -355,9 +355,20 @@ def test_pagbank_webhook_signature_validation_and_sandbox_fallback(monkeypatch):
             content=raw_body_sandbox,
             headers={'Content-Type': 'application/json'},  # no x-authenticity-token!
         )
+        assert res.status_code == 401
+        assert 'Assinatura ausente' in res.json()['detail']
+        db.refresh(intent2)
+        assert intent2.status == 'pending'
+
+        # 6. Sandbox with valid signature -> processes successfully
+        valid_sig_sandbox = hashlib.sha256(b'seller-webhook-secret-token-' + raw_body_sandbox).hexdigest()
+        res = client.post(
+            f'/payments/webhooks/pagbank/{account.id}',
+            content=raw_body_sandbox,
+            headers={'Content-Type': 'application/json', 'x-authenticity-token': valid_sig_sandbox},
+        )
         assert res.status_code == 200
         assert res.json()['status'] == 'processed'
-
         db.refresh(intent2)
         assert intent2.status == 'approved'
 

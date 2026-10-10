@@ -163,22 +163,19 @@ def _process_webhook(account_id: str, payment_id: str, raw: bytes, signature: st
         if not account or account.id != account_id or account.status != 'active' or account.provider_environment != (oauth.env('PAGBANK_ENV') or 'sandbox'):
             raise HTTPException(404, 'Conta não encontrada.')
 
-        is_production = (oauth.env('PAGBANK_ENV') or 'sandbox') == 'production'
         candidate_tokens = [t for t in (account.access_token, account.webhook_secret, oauth.env('PAGBANK_APP_TOKEN'), oauth.env('PAGBANK_CLIENT_SECRET')) if t]
 
-        if signature:
-            is_valid = any(
-                hmac.compare_digest(signature, hashlib.sha256(token.encode() + b'-' + raw).hexdigest())
-                for token in candidate_tokens
-            )
-            if not is_valid:
-                logger.warning('PagBank webhook rejeitado: assinatura divergente para conta %s', account_id)
-                raise HTTPException(401, 'Assinatura divergente.')
-        else:
-            if is_production:
-                logger.warning('PagBank webhook rejeitado: assinatura ausente em produção para conta %s', account_id)
-                raise HTTPException(401, 'Assinatura ausente.')
-            logger.info('PagBank sandbox webhook recebido sem x-authenticity-token para conta %s; validando diretamente na API PagBank.', account_id)
+        if not signature:
+            logger.warning('PagBank webhook rejeitado: assinatura ausente para conta %s', account_id)
+            raise HTTPException(401, 'Assinatura ausente.')
+
+        is_valid = any(
+            hmac.compare_digest(signature, hashlib.sha256(token.encode() + b'-' + raw).hexdigest())
+            for token in candidate_tokens
+        )
+        if not is_valid:
+            logger.warning('PagBank webhook rejeitado: assinatura divergente para conta %s', account_id)
+            raise HTTPException(401, 'Assinatura divergente.')
 
         known = db.query(OnlinePaymentIntent.id).filter(OnlinePaymentIntent.restaurante_id == rid,
             OnlinePaymentIntent.provider == 'pagbank', OnlinePaymentIntent.external_payment_id == payment_id).first()
