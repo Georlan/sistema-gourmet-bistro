@@ -47,19 +47,11 @@ if [[ "$ACTION" == "uninstall" || "$ACTION" == "purge" ]]; then
     exit 0
 fi
 
-# Se executado via curl em comando único direto, baixa o pacote automaticamente
+# A instalacao requer o pacote completo. Nunca baixar a main privada
+# anonimamente nem solicitar tokens do GitHub aos restaurantes.
 if [[ ! -f "$SCRIPT_DIR/main.py" ]]; then
-    for bootstrap_command in curl tar; do
-        if ! command -v "$bootstrap_command" >/dev/null 2>&1; then
-            echo "[ERRO] Comando obrigatório para instalação remota não encontrado: $bootstrap_command" >&2
-            exit 1
-        fi
-    done
-    echo "[KÔMA] Baixando a versão correta do Kôma Print Agent..."
-    DOWNLOAD_TMP="$(mktemp -d)"
-    trap 'rm -rf "$DOWNLOAD_TMP"' EXIT
-    curl -fsSL "https://github.com/Georlan/sistema-gourmet-bistro/tarball/main" | tar -xz -C "$DOWNLOAD_TMP" --strip-components=1
-    SCRIPT_DIR="$DOWNLOAD_TMP/print-agent"
+    echo "[ERRO] Pacote local do KOMA Print Agent ausente. Solicite o ZIP oficial ao suporte, extraia-o inteiro e execute bash print-agent/install-linux.sh da pasta extraida." >&2
+    exit 1
 fi
 
 required_commands=("$PYTHON_BIN" systemctl install flock)
