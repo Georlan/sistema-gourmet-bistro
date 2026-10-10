@@ -770,6 +770,7 @@ class RestaurantPaymentAccount(Base):
     )
     provider = Column(String(32), nullable=False)
     provider_user_id = Column(String(128), nullable=True)
+    provider_environment = Column(String(16), nullable=True)
     status = Column(String(20), nullable=False, default="active")
     _access_token = Column("access_token", Text, nullable=False)
     _refresh_token = Column("refresh_token", Text, nullable=True)
@@ -790,7 +791,7 @@ class RestaurantPaymentAccount(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "provider IN ('mercado_pago')",
+            "provider IN ('mercado_pago', 'pagbank')",
             name="ck_payment_accounts_provider",
         ),
         CheckConstraint(
@@ -883,7 +884,7 @@ class OnlinePaymentIntent(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "provider IN ('mercado_pago', 'direct_pix')",
+            "provider IN ('mercado_pago', 'direct_pix', 'pagbank')",
             name="ck_online_payment_intents_provider",
         ),
         CheckConstraint(
@@ -952,7 +953,7 @@ class OnlinePaymentWebhookEvent(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "provider IN ('mercado_pago')",
+            "provider IN ('mercado_pago', 'pagbank')",
             name="ck_online_payment_webhook_events_provider",
         ),
         CheckConstraint(

@@ -41,6 +41,9 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
   const normalizePlanTarget = (target: { tab: CashierTab; subTab: string }) =>
     normalizeCashierTargetForEntitlements(target, entitlements);
   const [initialNavigation] = useState(() => {
+    if (new URLSearchParams(window.location.search).has("pagbank")) {
+      return { tab: "impressao_salao" as CashierTab, subTab: "integracoes" };
+    }
     const restored = normalizePlanTarget(normalizeCashierNavigationState(
       sessionStorage.getItem('koma_active_tab'),
       sessionStorage.getItem('koma_active_subtab'),

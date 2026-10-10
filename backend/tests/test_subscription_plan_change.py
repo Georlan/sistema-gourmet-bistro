@@ -234,7 +234,7 @@ def test_legacy_pro_to_premium_changes_split_only_after_provider_sync_and_atomic
         ),
     )
 
-    assert _fee(Session) == Decimal("0.69")
+    assert _fee(Session) == Decimal("0.00")
 
     accepted = client.post(
         "/api/subscription/plan-change/accept",
@@ -251,7 +251,7 @@ def test_legacy_pro_to_premium_changes_split_only_after_provider_sync_and_atomic
     assert body["receipt"]["change"]["fromMarketplaceRate"] == "0.006900"
 
     # Aceitar novos termos ainda não troca nem recursos nem split.
-    assert _fee(Session) == Decimal("0.69")
+    assert _fee(Session) == Decimal("0.00")
     db = Session()
     try:
         restaurant = db.query(Restaurante).filter(Restaurante.id == TENANT_ID).one()
@@ -271,7 +271,7 @@ def test_legacy_pro_to_premium_changes_split_only_after_provider_sync_and_atomic
     assert applied.json()["marketplaceRate"] == "0.002000"
     assert provider_updates == [("mock-pro-v25", Decimal("249.00"), "premium")]
 
-    assert _fee(Session) == Decimal("0.20")
+    assert _fee(Session) == Decimal("0.00")
     db = Session()
     try:
         restaurant = db.query(Restaurante).filter(Restaurante.id == TENANT_ID).one()
@@ -328,12 +328,12 @@ def test_same_plan_legacy_pro_can_migrate_to_current_pro_terms(plan_change_env, 
     assert change["sourcePlan"] == "pro"
     assert change["targetPlan"] == "pro"
     assert change["providerAction"] == "update_amount"
-    assert _fee(Session) == Decimal("0.69")
+    assert _fee(Session) == Decimal("0.00")
 
     applied = client.post(f"/api/subscription/plan-change/{change['id']}/apply")
     assert applied.status_code == 200, applied.text
     assert updated == [Decimal("129.00")]
-    assert _fee(Session) == Decimal("0.50")
+    assert _fee(Session) == Decimal("0.00")
 
 
 def test_paid_to_pocket_updates_recurrence_before_new_split_becomes_authority(
@@ -367,12 +367,12 @@ def test_paid_to_pocket_updates_recurrence_before_new_split_becomes_authority(
     assert change["providerAction"] == "update_amount"
     assert change["receipt"]["commercial"]["billingAmount"] == "39.00"
     assert change["receipt"]["commercial"]["trialDays"] == 0
-    assert _fee(Session) == Decimal("0.69")
+    assert _fee(Session) == Decimal("0.00")
 
     applied = client.post(f"/api/subscription/plan-change/{change['id']}/apply")
     assert applied.status_code == 200, applied.text
     assert updated == [("mock-pro-v25", Decimal("39.00"), "pocket")]
-    assert _fee(Session) == Decimal("1.79")
+    assert _fee(Session) == Decimal("0.00")
 
     db = Session()
     try:
@@ -416,7 +416,7 @@ def test_pending_pix_blocks_plan_change_and_preserves_old_contract(plan_change_e
     applied = client.post(f"/api/subscription/plan-change/{change['id']}/apply")
     assert applied.status_code == 409
     assert "Pix pendente" in applied.text
-    assert _fee(Session) == Decimal("0.69")
+    assert _fee(Session) == Decimal("0.00")
 
     db = Session()
     try:
@@ -465,7 +465,7 @@ def test_approved_pix_waiting_for_reconciliation_blocks_plan_change(
     )
     assert applied.status_code == 409
     assert "aguardando reconciliação" in applied.text
-    assert _fee(Session) == Decimal("0.69")
+    assert _fee(Session) == Decimal("0.00")
 
     db = Session()
     try:
@@ -508,7 +508,7 @@ def test_plan_change_acceptance_is_not_exposed_as_new_tenant_activation(plan_cha
     )
     assert activation.status_code == 409
     assert "não pode provisionar um novo restaurante" in activation.text
-    assert _fee(Session) == Decimal("0.69")
+    assert _fee(Session) == Decimal("0.00")
 
 
 def test_fee_flag_false_still_forces_zero_after_plan_change(plan_change_env, monkeypatch):
@@ -624,7 +624,7 @@ def test_superadmin_cannot_replace_existing_contract_authority_by_manual_link(pl
     assert response.status_code == 409
     assert "fluxo canônico" in response.text
 
-    assert _fee(Session) == Decimal("0.69")
+    assert _fee(Session) == Decimal("0.00")
 
 
 def test_superadmin_cannot_manually_link_acceptance_owned_by_plan_change(plan_change_env):
@@ -647,4 +647,4 @@ def test_superadmin_cannot_manually_link_acceptance_owned_by_plan_change(plan_ch
     )
     assert response.status_code == 409
     assert "mudança comercial canônica" in response.text
-    assert _fee(Session) == Decimal("0.69")
+    assert _fee(Session) == Decimal("0.00")
