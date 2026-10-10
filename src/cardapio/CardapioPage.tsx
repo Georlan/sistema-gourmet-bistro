@@ -336,6 +336,7 @@ export default function CardapioPage() {
         about: String(restaurant.sobre_nos || ""),
         paymentMethods,
         onlinePaymentEnabled: restaurant.pagamento_online_ativo === true,
+        pixPayerDocumentRequired: restaurant.documento_pix_obrigatorio === true,
         benefits: {
           coupons: restaurant.beneficios?.coupons === true,
           loyalty: restaurant.beneficios?.loyalty === true,
@@ -1330,6 +1331,7 @@ export default function CardapioPage() {
           customerName={checkoutRequest.customerName}
           customerPhone={checkoutRequest.customerPhone}
           customerEmail={checkoutRequest.customerEmail}
+          customerDocument={checkoutRequest.customerDocument}
           customerToken={customerToken}
           paymentMethodDetail={checkoutRequest.paymentMethodDetail}
           trocoPara={checkoutRequest.trocoPara}

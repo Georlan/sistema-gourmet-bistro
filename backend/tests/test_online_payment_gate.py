@@ -162,99 +162,12 @@ def test_marketplace_fee_is_zero_until_plan_fees_are_explicitly_enabled(monkeypa
         assert OnlinePaymentService.marketplace_fee(Decimal("100.00"), plan) == Decimal("0.00")
 
 
-def test_marketplace_fee_uses_exact_commercial_rate_for_stored_plan(monkeypatch):
+@pytest.mark.parametrize("plan", ["pocket", "pro", "premium", "gold", "unknown"])
+def test_new_payments_have_zero_platform_fee_even_with_old_fee_flag(monkeypatch, plan):
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
-    amount = Decimal("100.00")
-
-    assert OnlinePaymentService.marketplace_fee(amount, "pocket") == Decimal("1.79")
-    assert OnlinePaymentService.marketplace_fee(amount, "pro") == Decimal("0.50")
-    assert OnlinePaymentService.marketplace_fee(amount, "premium") == Decimal("0.20")
-    assert OnlinePaymentService.marketplace_fee(amount, "gold") == Decimal("0.20")
-    assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("1.79")
-
-
-def test_new_pocket_tenant_uses_signed_vnext_marketplace_rate(monkeypatch):
-    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
-    monkeypatch.setattr(
-        "app.services.billing_service.tenant_commercial_terms",
-        lambda _db, _restaurante_id: SimpleNamespace(
-            marketplace_rate=Decimal("0.0179")
-        ),
-    )
-
-    restaurant = SimpleNamespace(id=122, plano="pocket")
-    assert OnlinePaymentService.marketplace_fee_for_tenant(
-        None,
-        Decimal("100.00"),
-        restaurant,
-    ) == Decimal("1.79")
-
-
-def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_and_plan_slug_change(monkeypatch):
-    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
-    monkeypatch.setitem(
-        SUBSCRIPTION_MARKETPLACE_RATES,
-        "pocket",
-        Decimal("0.0179"),
-    )
-    monkeypatch.setattr(
-        "app.services.billing_service.tenant_commercial_terms",
-        lambda _db, _restaurante_id: SimpleNamespace(
-            marketplace_rate=Decimal("0.0149")
-        ),
-    )
-
-    # Mesmo uma mutação isolada do slug/plano de recursos não pode alterar
-    # a taxa financeira enquanto o aceite comercial vigente continua antigo.
-    restaurant = SimpleNamespace(id=123, plano="premium", billing_mode="subscription")
-    assert OnlinePaymentService.marketplace_fee_for_tenant(
-        None,
-        Decimal("100.00"),
-        restaurant,
-    ) == Decimal("1.49")
-
-
-def test_tenant_without_acceptance_uses_frozen_legacy_rate_after_catalog_change(monkeypatch):
-    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
-    monkeypatch.setitem(
-        SUBSCRIPTION_MARKETPLACE_RATES,
-        "pocket",
-        Decimal("0.0179"),
-    )
-    monkeypatch.setattr(
-        "app.services.billing_service.tenant_commercial_terms",
-        lambda _db, _restaurante_id: None,
-    )
-
-    restaurant = SimpleNamespace(id=124, plano="pocket", billing_mode="legacy")
-    assert OnlinePaymentService.marketplace_fee_for_tenant(
-        None,
-        Decimal("100.00"),
-        restaurant,
-    ) == Decimal("1.49")
-
-
-def test_subscription_tenant_without_acceptance_fails_closed_instead_of_using_legacy_rate(monkeypatch):
-    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
-    monkeypatch.setattr(
-        "app.services.billing_service.tenant_commercial_terms",
-        lambda _db, _restaurante_id: None,
-    )
-
-    restaurant = SimpleNamespace(
-        id=127,
-        plano="pocket",
-        billing_mode="subscription",
-    )
-    with pytest.raises(
-        OnlinePaymentConfigurationError,
-        match="sem aceite comercial",
-    ):
-        OnlinePaymentService.marketplace_fee_for_tenant(
-            None,
-            Decimal("100.00"),
-            restaurant,
-        )
+    assert OnlinePaymentService.marketplace_fee(Decimal("100"), plan) == Decimal("0.00")
+    restaurant = SimpleNamespace(id=122, plano=plan, billing_mode="subscription")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(None, Decimal("100"), restaurant) == Decimal("0.00")
 
 
 def test_tenant_marketplace_fee_flag_disabled_does_not_resolve_contract(monkeypatch):
@@ -276,7 +189,7 @@ def test_tenant_marketplace_fee_flag_disabled_does_not_resolve_contract(monkeypa
     ) == Decimal("0.00")
 
 
-def test_tenant_marketplace_fee_fails_closed_for_broken_linked_contract(monkeypatch):
+def test_zero_fee_does_not_depend_on_old_linked_rate_contract(monkeypatch):
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
 
     def _broken_contract(_db, _restaurante_id):
@@ -288,18 +201,11 @@ def test_tenant_marketplace_fee_fails_closed_for_broken_linked_contract(monkeypa
     )
 
     restaurant = SimpleNamespace(id=126, plano="pocket")
-    with pytest.raises(
-        OnlinePaymentConfigurationError,
-        match="Termos comerciais indisponíveis",
-    ):
-        OnlinePaymentService.marketplace_fee_for_tenant(
-            None,
-            Decimal("100.00"),
-            restaurant,
-        )
+    assert OnlinePaymentService.marketplace_fee_for_tenant(None, Decimal("100.00"), restaurant) == Decimal("0.00")
 
 
-def test_online_order_is_published_and_settled_only_after_provider_approval(monkeypatch):
+@pytest.mark.parametrize("provider_name", ["mercado_pago", "pagbank"])
+def test_online_order_is_published_and_settled_only_after_provider_approval(monkeypatch, provider_name):
     Base.metadata.create_all(bind=engine)
     token = current_restaurante_id.set(RESTAURANT_ID)
     db = SessionLocal()
@@ -336,7 +242,8 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
         account = RestaurantPaymentAccount(
             id="payment-gate-account",
             restaurante_id=RESTAURANT_ID,
-            provider="mercado_pago",
+            provider=provider_name,
+            provider_environment="sandbox" if provider_name == "pagbank" else None,
             provider_user_id="seller-9917",
             status="active",
         )
@@ -364,6 +271,7 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
             turno=shift,
             amount=dto.total,
             idempotency_key="payment-gate-order-key",
+            provider=provider_name,
         )
         assert Decimal(str(intent.marketplace_fee)) == Decimal("0.0")
         intent.external_payment_id = "mp-payment-9917"
@@ -390,16 +298,30 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
                 )
 
         monkeypatch.setattr(
-            "app.services.online_payments.service.MercadoPagoProvider",
+            "app.services.online_payments.service.MercadoPagoProvider" if provider_name == "mercado_pago" else "app.services.online_payments.provider_registry.PagBankProvider",
             ApprovedProvider,
         )
+        if provider_name == "pagbank":
+            import json
+            from fastapi.testclient import TestClient
+            from app.main import app
+            from app.models import OnlinePaymentWebhookEvent
+            client = TestClient(app)
+            raw = json.dumps({"id": "mp-payment-9917"}).encode()
+            headers = {"content-type": "application/json", "x-authenticity-token": hashlib.sha256(b"seller-access-token-" + raw).hexdigest()}
+            path = "/payments/webhooks/pagbank/payment-gate-account"
+            assert client.post(path, content=raw, headers={"content-type": "application/json"}).status_code == 401
+            assert client.post(path, content=raw, headers=headers).status_code == 200
+            assert client.post(path, content=raw, headers=headers).status_code == 200
+            assert db.query(OnlinePaymentWebhookEvent).filter_by(restaurante_id=RESTAURANT_ID, provider="pagbank").count() == 1
+
         settled, became_approved = OnlinePaymentService.reconcile_provider_payment(
             db,
             account=account,
             external_payment_id="mp-payment-9917",
         )
 
-        assert became_approved is True
+        assert became_approved is (provider_name != "pagbank")
         assert settled is not None and settled.status == "approved"
         db.refresh(comanda)
         assert comanda.online_payment_status == "approved"
@@ -420,7 +342,8 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
         assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANT_ID).count() == 1
     finally:
         db.rollback()
-        for model in (OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
+        from app.models import OnlinePaymentWebhookEvent
+        for model in (OnlinePaymentWebhookEvent, OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
             db.query(model).filter(model.restaurante_id == RESTAURANT_ID).delete(synchronize_session=False)
         db.query(Restaurante).filter(Restaurante.id == RESTAURANT_ID).delete(synchronize_session=False)
         db.commit()
@@ -656,7 +579,7 @@ def test_mercado_pago_webhook_approved_integration_and_idempotency(monkeypatch):
             amount=dto.total,
             idempotency_key="webhook-order-key-9919",
         )
-        assert Decimal(str(intent.marketplace_fee)) == Decimal("0.14")
+        assert Decimal(str(intent.marketplace_fee)) == Decimal("0.00")
         intent.external_payment_id = "mp-payment-9919"
         intent.status = "pending"
         db.commit()

@@ -77,7 +77,7 @@ def read_settings(db: Session = Depends(get_db), user: Usuario = Depends(require
 def save_settings(payload: PixConfiguration, db: Session = Depends(get_db), user: Usuario = Depends(require_permission('configuracoes:administrar'))):
     available()
     if payload.enabled and not payload.accept_manual_confirmation_and_monthly_fees:
-        raise HTTPException(422, 'Confirme a conferência manual e a cobrança mensal das taxas.')
+        raise HTTPException(422, 'Confirme que conferirá os recebimentos no extrato antes de liberar os pedidos.')
     try:
         key = normalize_key(payload.key_type,payload.pix_key)
         name = merchant_text(payload.holder_name,25)

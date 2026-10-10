@@ -22,14 +22,13 @@ from ...models import (
     RestaurantPaymentAccount,
     RestaurantDirectPixConfig,
 )
-from ...subscription import subscription_marketplace_rate
-from ..billing_service import tenant_marketplace_rate
 from ..outbox import enqueue_outbox_event_in_session
 from .base import ProviderPayment
 from .mercado_pago import MercadoPagoError, MercadoPagoProvider
 from .provider_registry import UnsupportedPaymentProviderError, provider_for_account
 from .oauth import MercadoPagoOAuthError, refresh_access_token
 from .account_connection import is_marketplace_owner_account
+from .pagbank.oauth import PagBankOAuthError, refresh_access_token as refresh_pagbank, env as pagbank_env
 
 
 MONEY = Decimal("0.01")
@@ -114,15 +113,15 @@ class OnlinePaymentService:
                 .filter(
                     RestaurantPaymentAccount.restaurante_id == account.restaurante_id,
                     RestaurantPaymentAccount.id == account.id,
-                    RestaurantPaymentAccount.provider == "mercado_pago",
-                    RestaurantPaymentAccount.status == "active",
+                    RestaurantPaymentAccount.provider == account.provider,
+                    RestaurantPaymentAccount.status == account.status,
                 )
                 .with_for_update()
                 .first()
             )
             if locked is None:
                 raise OnlinePaymentConfigurationError(
-                    "A conta Mercado Pago precisa ser reconectada."
+                    "A conta de pagamento precisa ser reconectada."
                 )
 
             locked_access_token = locked.access_token
@@ -135,17 +134,17 @@ class OnlinePaymentService:
                 current_refresh_token = locked.refresh_token
                 if not current_refresh_token:
                     raise OnlinePaymentConfigurationError(
-                        "A conta Mercado Pago precisa ser reconectada."
+                        "A conta de pagamento precisa ser reconectada."
                     )
                 try:
-                    tokens = refresh_access_token(current_refresh_token)
-                except MercadoPagoOAuthError as exc:
+                    tokens = (refresh_pagbank if locked.provider == "pagbank" else refresh_access_token)(current_refresh_token)
+                except (MercadoPagoOAuthError, PagBankOAuthError) as exc:
                     logger.warning(
                         "Falha ao renovar OAuth Mercado Pago do restaurante %s.",
                         account.restaurante_id,
                     )
                     raise OnlinePaymentConfigurationError(
-                        "Não foi possível renovar a conexão com o Mercado Pago. Reconecte a conta e tente novamente."
+                        "Não foi possível renovar a conexão de pagamento. Reconecte a conta e tente novamente."
                     ) from exc
 
                 if (
@@ -153,9 +152,11 @@ class OnlinePaymentService:
                     and tokens.provider_user_id != locked.provider_user_id
                 ):
                     raise OnlinePaymentConfigurationError(
-                        "A renovação do Mercado Pago retornou uma conta diferente. Reconecte a conta."
+                        "A renovação retornou uma conta diferente. Reconecte a conta."
                     )
 
+                if locked.provider == "pagbank":
+                    locked.webhook_secret = locked.access_token
                 locked.access_token = tokens.access_token
                 if tokens.refresh_token:
                     locked.refresh_token = tokens.refresh_token
@@ -181,7 +182,7 @@ class OnlinePaymentService:
         return account
 
     @staticmethod
-    def has_active_account(db: Session, restaurant_id: int) -> bool:
+    def public_payment_capabilities(db: Session, restaurant_id: int) -> tuple[bool, bool]:
         from ..direct_pix_test_release import TEST_TERMS_VERSION, test_tenant_allowed
         # One roundtrip: keep the public catalog's existing read budget.
         direct = db.query(RestaurantDirectPixConfig.restaurante_id).filter(
@@ -189,15 +190,34 @@ class OnlinePaymentService:
             RestaurantDirectPixConfig.enabled.is_(True),
             or_(RestaurantDirectPixConfig.terms_version.is_(None), RestaurantDirectPixConfig.terms_version != TEST_TERMS_VERSION) if not test_tenant_allowed(restaurant_id) else True,
         ).exists()
+        pagbank = db.query(RestaurantPaymentAccount.id).filter(
+            RestaurantPaymentAccount.restaurante_id == restaurant_id,
+            RestaurantPaymentAccount.provider == "pagbank",
+            RestaurantPaymentAccount.provider_environment == (pagbank_env("PAGBANK_ENV") or "sandbox"),
+            RestaurantPaymentAccount.status == "active",
+        ).exists()
         mercado_pago = db.query(RestaurantPaymentAccount.id).filter(
             RestaurantPaymentAccount.restaurante_id == restaurant_id,
             RestaurantPaymentAccount.provider == "mercado_pago",
             RestaurantPaymentAccount.status == "active",
         ).exists()
-        return bool(db.query(case((direct, bool(settings.DIRECT_PIX_ENABLED)), else_=mercado_pago)).scalar())
+        enabled, document = db.query(
+            case((direct, bool(settings.DIRECT_PIX_ENABLED)), else_=(mercado_pago | pagbank)),
+            case((direct, False), else_=pagbank),
+        ).one()
+        return bool(enabled), bool(document)
+
+    @classmethod
+    def has_active_account(cls, db: Session, restaurant_id: int) -> bool:
+        return cls.public_payment_capabilities(db, restaurant_id)[0]
+
+    @classmethod
+    def requires_payer_document(cls, db: Session, restaurant_id: int) -> bool:
+        return cls.public_payment_capabilities(db, restaurant_id)[1]
 
     @classmethod
     def active_account(cls, db: Session, restaurant_id: int) -> RestaurantPaymentAccount:
+        db.query(Restaurante).filter(Restaurante.id == restaurant_id).with_for_update().one()
         config = db.query(RestaurantDirectPixConfig).filter(
             RestaurantDirectPixConfig.restaurante_id == restaurant_id,
             RestaurantDirectPixConfig.enabled.is_(True),
@@ -237,6 +257,13 @@ class OnlinePaymentService:
                 raise OnlinePaymentConfigurationError("A conta de pagamento precisa ser reconectada.")
             if _token_needs_refresh(account.token_expires_at):
                 account = cls._refresh_account_credentials(db, account)
+        elif account.provider == "pagbank":
+            if account.provider_environment != (pagbank_env("PAGBANK_ENV") or "sandbox"):
+                raise OnlinePaymentConfigurationError("Reconecte o PagBank no ambiente atual antes de receber Pix.")
+            if not account.access_token:
+                raise OnlinePaymentConfigurationError("Reconecte a conta PagBank.")
+            if _token_needs_refresh(account.token_expires_at):
+                account = cls._refresh_account_credentials(db, account)
         else:
             try:
                 _provider_adapter(account)
@@ -254,10 +281,12 @@ class OnlinePaymentService:
         account = db.query(RestaurantPaymentAccount).filter(
             RestaurantPaymentAccount.restaurante_id == intent.restaurante_id,
             RestaurantPaymentAccount.provider == intent.provider,
-            RestaurantPaymentAccount.status == "active",
+            RestaurantPaymentAccount.status.in_(("active", "disconnected")),
         ).one_or_none()
-        if account is None:
+        if account is None or not account.access_token:
             raise OnlinePaymentConfigurationError("A conta original do pagamento precisa ser reconectada.")
+        if account.provider == "pagbank" and account.provider_environment != (pagbank_env("PAGBANK_ENV") or "sandbox"):
+            raise OnlinePaymentConfigurationError("O Pix pertence a outro ambiente PagBank e não pode ser consultado aqui.")
         if _token_needs_refresh(account.token_expires_at):
             account = cls._refresh_account_credentials(db, account)
         return account
@@ -276,30 +305,12 @@ class OnlinePaymentService:
 
     @staticmethod
     def marketplace_fee(amount: Decimal, stored_plan: str | None) -> Decimal:
-        if not settings.ONLINE_PAYMENT_PLAN_FEES_ENABLED:
-            return Decimal("0.00")
-        rate = subscription_marketplace_rate(stored_plan)
-        return (amount * rate).quantize(MONEY, rounding=ROUND_HALF_UP)
+        return Decimal("0.00")
 
     @classmethod
-    def marketplace_fee_for_tenant(
-        cls,
-        db: Session,
-        amount: Decimal,
-        restaurant: Restaurante,
-    ) -> Decimal:
-        if not settings.ONLINE_PAYMENT_PLAN_FEES_ENABLED:
-            return Decimal("0.00")
-        try:
-            rate = tenant_marketplace_rate(db, restaurant)
-        except RuntimeError as exc:
-            detail = str(exc)
-            if "sem aceite comercial" in detail:
-                raise OnlinePaymentConfigurationError(detail) from exc
-            raise OnlinePaymentConfigurationError(
-                "Termos comerciais indisponíveis para calcular a taxa do pagamento."
-            ) from exc
-        return (amount * rate).quantize(MONEY, rounding=ROUND_HALF_UP)
+    def marketplace_fee_for_tenant(cls, db: Session, amount: Decimal, restaurant: Restaurante) -> Decimal:
+        # No platform transaction fee on new payments; historical intents stay intact.
+        return Decimal("0.00")
 
     @classmethod
     def create_intent_in_session(
@@ -319,7 +330,7 @@ class OnlinePaymentService:
             raise OnlinePaymentConfigurationError("Restaurante não encontrado para calcular o pagamento online.")
 
         normalized_amount = _money(amount)
-        settlement = "invoiced" if provider == "direct_pix" else "split"
+        settlement = "none" if provider == "pagbank" else "invoiced" if provider == "direct_pix" else "split"
         if provider == "direct_pix":
             from ..direct_pix_test_release import TEST_TERMS_VERSION, test_registration_allowed
             direct_config = db.query(RestaurantDirectPixConfig).filter(
@@ -564,6 +575,8 @@ class OnlinePaymentService:
         *,
         intent: OnlinePaymentIntent,
         payer_email: str,
+        payer_name: str | None = None,
+        payer_tax_id: str | None = None,
         account: RestaurantPaymentAccount | None = None,
     ) -> OnlinePaymentIntent:
         if intent.external_payment_id:
@@ -602,6 +615,7 @@ class OnlinePaymentService:
                 provider_adapter = _provider_adapter(account)
             except UnsupportedPaymentProviderError as exc:
                 raise OnlinePaymentConfigurationError(str(exc)) from exc
+            buyer = {"payer_name": payer_name, "payer_tax_id": payer_tax_id} if account.provider == "pagbank" else {}
             return provider_adapter.create_pix(
                 amount=_money(intent.amount),
                 marketplace_fee=_money(intent.marketplace_fee),
@@ -613,6 +627,7 @@ class OnlinePaymentService:
                     f"{account.provider.replace('_', '-')}/{account.id}"
                 ),
                 expires_at=expires_at,
+                **buyer,
             )
 
         try:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from ...models import RestaurantPaymentAccount
 from .base import OnlinePaymentProvider
 from .mercado_pago import MercadoPagoProvider
+from .pagbank.provider import PagBankProvider
 
 
 class UnsupportedPaymentProviderError(RuntimeError):
@@ -18,6 +19,8 @@ def provider_for_account(
     provider = str(account.provider or "").strip().lower()
     if provider == "mercado_pago":
         return mercado_pago_factory(account.access_token)
+    if provider == "pagbank":
+        return PagBankProvider(account.access_token)
     raise UnsupportedPaymentProviderError(
         f"Provedor de pagamento ainda não suportado: {provider or 'não informado'}."
     )

@@ -1164,6 +1164,7 @@ class CardapioPedidoCreate(BaseModel):
     forma_pagamento: Literal["na_entrega", "online"] = "na_entrega"
     forma_pagamento_detalhe: Optional[str] = Field(default="dinheiro", max_length=50)
     cliente_email: Optional[str] = Field(default=None, max_length=254)
+    cliente_documento: Optional[str] = Field(default=None, pattern=r"^([0-9]{11}|[0-9]{14})$")
     troco_para: Optional[float] = Field(default=None, ge=0)
     bairro: Optional[str] = Field(default=None, max_length=100)
     cupom_codigo: Optional[str] = Field(default=None, max_length=50)

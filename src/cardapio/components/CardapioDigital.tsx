@@ -75,6 +75,7 @@ interface CardapioDigitalProps {
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
+  customerDocument?: string;
   customerToken?: string | null;
   paymentMethodDetail?: "dinheiro" | "pix" | "cartao_credito" | "cartao_debito";
   trocoPara?: number;
@@ -147,6 +148,7 @@ export default function CardapioDigital({
   customerName,
   customerPhone,
   customerEmail,
+  customerDocument,
   customerToken,
   paymentMethodDetail,
   trocoPara,
@@ -366,6 +368,7 @@ export default function CardapioDigital({
       taxa_entrega: deliveryMethod === "delivery" ? deliveryFee : 0,
       forma_pagamento: paymentMethodDetail === "pix" ? "online" : "na_entrega",
       forma_pagamento_detalhe: paymentMethodDetail,
+      cliente_documento: paymentMethodDetail === "pix" ? customerDocument : undefined,
       cliente_email: paymentMethodDetail === "pix" ? customerEmail?.trim().toLowerCase() : undefined,
       troco_para: paymentMethodDetail === "dinheiro" ? trocoPara : undefined,
       bairro: deliveryMethod === "delivery" ? bairro?.trim() || undefined : undefined,
@@ -374,7 +377,7 @@ export default function CardapioDigital({
       tipo_pedido: publicFulfillmentValue(deliveryMethod),
       scheduled_for: scheduledForIso || null,
     };
-    const fingerprint = buildOrderSubmissionFingerprint(orderRequest);
+    const fingerprint = buildOrderSubmissionFingerprint({ ...orderRequest, cliente_documento: undefined });
     let idempotencyKey: string;
     try {
       idempotencyKey = resolvePersistentIdempotencyKey(fingerprint);

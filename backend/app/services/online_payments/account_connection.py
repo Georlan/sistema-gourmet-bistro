@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from ...config import settings
-from ...models import RestaurantPaymentAccount
+from ...models import RestaurantPaymentAccount, OnlinePaymentIntent, Restaurante
 from .oauth import MercadoPagoOAuthTokens
 
 
@@ -82,6 +82,22 @@ def upsert_mercado_pago_account(
             provider="mercado_pago",
         )
         db.add(account)
+
+    pagbank = db.query(RestaurantPaymentAccount).filter(
+        RestaurantPaymentAccount.restaurante_id == int(restaurant_id),
+        RestaurantPaymentAccount.provider == "pagbank",
+        RestaurantPaymentAccount.status == "active",
+    ).first()
+    if pagbank is not None and pagbank.provider == "pagbank":
+        db.query(Restaurante).filter(Restaurante.id == int(restaurant_id)).with_for_update().one()
+        pending = db.query(OnlinePaymentIntent.id).filter(
+            OnlinePaymentIntent.restaurante_id == int(restaurant_id),
+            OnlinePaymentIntent.status.in_(("created", "pending", "error")),
+        ).first()
+        if pending:
+            raise MercadoPagoAccountConnectionError("Resolva os Pix pendentes antes de trocar o provedor de recebimento.")
+        # Keep tokens for reconciliation of historical intents; select only MP for new orders.
+        pagbank.status = "disconnected"
 
     account.provider_user_id = tokens.provider_user_id
     account.status = "active"

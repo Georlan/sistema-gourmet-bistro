@@ -106,6 +106,7 @@ export interface BrandConfig {
   about?: string;
   paymentMethods?: PaymentMethodGroup[];
   onlinePaymentEnabled?: boolean;
+  pixPayerDocumentRequired?: boolean;
   benefits?: { coupons: boolean; loyalty: boolean; cashback: boolean };
   customerAccountRequired?: boolean;
   activeOrderTypes?: Array<"consumo_local" | "retirada" | "delivery">;

@@ -31,6 +31,7 @@ from .routes import (
     modificadores,
     optimization,
     online_payments,
+    pagbank_payments,
     direct_pix,
     orders,
     print_agents,
@@ -489,6 +490,7 @@ app.include_router(staff_push.router)
 app.include_router(optimization.router)
 app.include_router(customer_satisfaction.router)
 app.include_router(online_payments.router)
+app.include_router(pagbank_payments.router)
 app.include_router(direct_pix.router)
 app.include_router(estoque.router)
 app.include_router(cardapio.router)
