@@ -12,6 +12,7 @@ on:
       - 'DESINSTALAR-KOMA-WINDOWS.cmd'
       - 'VERIFICAR-KOMA-WINDOWS.cmd'
       - '.github/workflows/print-agent.yml'
+      - '.github/workflows/print-agent-public-release.yml'
       - 'scripts/package_print_agent.py'
       - 'scripts/tests/test_print_agent_distribution.py'
   workflow_dispatch:

@@ -3,21 +3,43 @@
 Serviço local que recebe da fila do Kôma e envia cupons ESC/POS para a
 impressora térmica. Ele funciona sem depender do navegador permanecer aberto.
 
-## Distribuição pelo suporte (repositório privado)
+## Distribuição pública do agente (sem publicar o KÔMA principal)
 
-O agente de impressão é distribuído como **pacote ZIP versionado** pelo suporte
-KÔMA, sem conceder acesso ao repositório nem solicitar tokens GitHub ao
-restaurante. A equipe gera o ZIP em GitHub Actions → **Print agent** →
-**Run workflow** (branch `main`) e baixa o artefato `KOMA-print-agent`.
-A equipe deve conferir o SHA-256 informado pelo job antes de entregar o ZIP
-por um canal controlado. O ZIP contém somente o agente e os instaladores;
-não inclui backend, variáveis de ambiente nem credenciais. Não distribuir
-pastas locais de instalação, `config.json` ou `credentials.json`.
+O código principal pode ser **privado**; apenas o pacote do agente de
+impressão precisa estar disponível para download público. A distribuição será
+feita por **GitHub Releases de um repositório público separado**, configurado
+pelo responsável de infraestrutura. Este repositório de distribuição não
+pode ser um fork ou cópia do repositório SaaS e não deve receber acesso ao
+backend, frontend, histórico Git privado nem credenciais.
 
-A instalação e a atualização usam o conteúdo do ZIP **extraído por inteiro**.
-Os comandos antigos de `raw.githubusercontent.com` ou `main.zip` não
-funcionam depois da privatização e não devem ser enviados a restaurantes.
-Uma cópia antiga não substitui o pacote atual validado.
+O workflow interno `Publish public Print Agent release` cria o pacote usando
+um manifesto fechado de arquivos e publica **somente**:
+
+- `KOMA-print-agent.zip` (instaladores e agente executável)
+- `KOMA-print-agent.zip.sha256` (verificação de integridade)
+
+A equipe deve configurar `KOMA_PRINT_AGENT_DISTRIBUTION_REPO` como `OWNER/REPO`
+de um repositório público realmente criado, e
+`KOMA_PRINT_AGENT_DISTRIBUTION_TOKEN` com permissão **Contents: write
+somente no repositório público de distribuição**, preferencialmente no
+environment `print-agent-public-release`. Nenhum token é enviado ao cliente.
+Veja `docs/operations/private-repository-cutover.md`.
+
+**O repositório público ainda precisa ser criado e a primeira release
+publicada e validada antes de privar o projeto principal.** Até lá, o
+workflow interno `Print agent` produz um ZIP que só pode ser baixado por
+alguém com acesso ao repositório. Não confundir artefatos privados de Actions
+com downloads públicos de Releases.
+
+Depois da publicação, a equipe obterá os dois arquivos em
+`https://github.com/OWNER/REPO/releases/latest/download/`, substituindo
+OWNER/REPO pelo endereço público real e verificando o SHA-256 recebido.
+Não usar o antigo `raw.githubusercontent.com/Georlan/sistema-gourmet-bistro`.
+
+Os instaladores executam **apenas a partir do ZIP completo extraído**.
+A atualização não apaga o pareamento. Nunca divulgar
+`config.json`, `credentials.json`, ZIP de código completo do SaaS nem
+credenciais ou tokens de GitHub.
 
 ## Instalação no Linux
 

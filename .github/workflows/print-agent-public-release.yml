@@ -1,0 +1,78 @@
+name: Publish public Print Agent release
+
+# Manual only; never publishes a pull-request build or a private-repo archive.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: koma-public-print-agent-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish approved Print Agent bundle
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: print-agent-public-release
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Verify the closed distribution manifest
+        run: |
+          python -m pip install "pytest>=8,<9"
+          python -m pytest scripts/tests/test_print_agent_distribution.py -q -ra
+          python -m compileall -q print-agent
+
+      - name: Build release assets
+        run: |
+          python scripts/package_print_agent.py --output dist/KOMA-print-agent.zip
+          cd dist
+          sha256sum KOMA-print-agent.zip > KOMA-print-agent.zip.sha256
+          sha256sum --check KOMA-print-agent.zip.sha256
+
+      - name: Publish assets to a different PUBLIC GitHub repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.KOMA_PRINT_AGENT_DISTRIBUTION_TOKEN }}
+          TARGET_REPO: ${{ vars.KOMA_PRINT_AGENT_DISTRIBUTION_REPO }}
+        run: |
+          set -euo pipefail
+          : "${GH_TOKEN:?Missing KOMA_PRINT_AGENT_DISTRIBUTION_TOKEN secret}"
+          : "${TARGET_REPO:?Missing KOMA_PRINT_AGENT_DISTRIBUTION_REPO variable}"
+          if [[ ! "$TARGET_REPO" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "Invalid public distribution repository format; expected OWNER/REPO" >&2
+            exit 1
+          fi
+          if [[ "$TARGET_REPO" == "$GITHUB_REPOSITORY" ]]; then
+            echo "Refusing to publish from the main KOMA repository" >&2
+            exit 1
+          fi
+          # Fail closed if target is missing/inaccessible or accidentally private.
+          if [[ "$(gh api "repos/$TARGET_REPO" --jq '.private')" != "false" ]]; then
+            echo "The distribution repository must exist and be public" >&2
+            exit 1
+          fi
+          # GitHub Releases precisam de um commit na branch padrao do repo publico.
+          target_branch="$(gh api "repos/$TARGET_REPO" --jq '.default_branch')"
+          if [[ -z "$target_branch" || "$target_branch" == "null" ]]; then
+            echo "Initialize the public repository with a README first" >&2
+            exit 1
+          fi
+          gh api "repos/$TARGET_REPO/commits/$target_branch" --silent
+          tag="print-agent-${GITHUB_RUN_NUMBER}-${GITHUB_SHA:0:12}"
+          gh release create "$tag" \
+            dist/KOMA-print-agent.zip \
+            dist/KOMA-print-agent.zip.sha256 \
+            --repo "$TARGET_REPO" \
+            --title "KOMA Print Agent $tag" \
+            --notes "Distribuicao do agente local de impressao KOMA. O codigo principal nao esta incluido. Build da main revisada. SHA do build: ${GITHUB_SHA}." \
+            --latest
