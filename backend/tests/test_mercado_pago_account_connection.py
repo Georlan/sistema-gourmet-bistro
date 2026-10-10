@@ -4,7 +4,7 @@ import datetime
 
 import pytest
 
-from app.models import RestaurantPaymentAccount
+from app.models import RestaurantPaymentAccount, RestaurantDirectPixConfig
 from app.services.online_payments.account_connection import (
     MercadoPagoAccountConnectionError,
     payment_account_status,
@@ -31,7 +31,7 @@ class _FakeSession:
         self.flush_count = 0
 
     def query(self, _model):
-        return _FakeQuery(self.existing)
+        return _FakeQuery(None if _model is RestaurantDirectPixConfig else self.existing)
 
     def add(self, value):
         self.added.append(value)

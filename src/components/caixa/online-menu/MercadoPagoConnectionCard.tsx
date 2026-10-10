@@ -1,4 +1,4 @@
-import { CheckCircle2, CreditCard, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
+import { PaymentConnectionCard } from './PaymentConnectionCard';
 import { useCallback, useEffect, useState } from 'react';
 import { authFetch, authRequestErrorMessage } from '../../../utils/authRequest';
 
@@ -69,13 +69,13 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders }: Props) {
     const oauthResult = params.get('mercado_pago');
 
     if (oauthResult === 'connected') {
-      setFeedback({ type: 'success', text: 'Mercado Pago conectado. O Pix online já pode ser homologado.' });
+      setFeedback({ type: 'success', text: 'Mercado Pago conectado. A conta do restaurante receberá os novos Pix.' });
     } else if (oauthResult === 'cancelled') {
       setFeedback({ type: 'info', text: 'Conexão com Mercado Pago cancelada. Nenhuma conta foi alterada.' });
     } else if (oauthResult === 'invalid_seller') {
       setFeedback({
         type: 'error',
-        text: 'Essa é a conta proprietária da aplicação KÔMA. Conecte a conta Mercado Pago própria do restaurante para que o split da taxa funcione.',
+        text: 'Essa é a conta proprietária da aplicação KÔMA. Conecte a conta Mercado Pago própria do restaurante para receber seus pagamentos.',
       });
     }
 
@@ -123,82 +123,8 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders }: Props) {
     }
   };
 
-  return (
-    <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5" aria-labelledby="mercado-pago-heading">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-sky-500/20 bg-sky-500/10 text-sky-500">
-            <CreditCard size={18} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 id="mercado-pago-heading" className="text-sm font-black text-koma-foreground">Mercado Pago</h3>
-              {isLoading ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-koma-border px-2 py-1 text-[9px] font-bold text-koma-muted">
-                  <Loader2 size={10} className="animate-spin" /> Consultando
-                </span>
-              ) : account.connected ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[9px] font-black text-emerald-600 dark:text-emerald-300">
-                  <CheckCircle2 size={10} /> Conectado
-                </span>
-              ) : (
-                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[9px] font-black text-amber-700 dark:text-amber-300">
-                  {account.status === 'error' ? 'Conta incompatível' : 'Não conectado'}
-                </span>
-              )}
-            </div>
-            <p className="mt-1.5 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-              Conecte a conta que receberá os pedidos. O cliente paga por Pix no cardápio e o KÔMA só libera o pedido após a confirmação financeira do Mercado Pago.
-            </p>
-            {account.status === 'error' && (
-              <p className="mt-2 text-[10px] font-bold text-rose-600 dark:text-rose-300">
-                Conecte uma conta Mercado Pago própria do restaurante. A conta da KÔMA não pode ser usada dos dois lados do split.
-              </p>
-            )}
-            {account.connected && account.provider_user_id && (
-              <p className="mt-2 text-[9px] text-koma-subtle">
-                Conta Mercado Pago vinculada · ID {account.provider_user_id}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 gap-2">
-          <button
-            type="button"
-            onClick={() => void loadStatus()}
-            disabled={isLoading || isConnecting}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-koma-border bg-koma-raised text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Atualizar status do Mercado Pago"
-          >
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-          </button>
-          <button
-            type="button"
-            onClick={() => void connect()}
-            disabled={isLoading || isConnecting}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-sky-500 px-4 text-[10px] font-black text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-55"
-          >
-            {isConnecting ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}
-            {account.connected ? 'Reconectar' : 'Conectar Mercado Pago'}
-          </button>
-        </div>
-      </div>
-
-      {feedback && (
-        <div
-          className={`mt-4 rounded-xl border px-3 py-2.5 text-[10px] leading-relaxed ${
-            feedback.type === 'success'
-              ? 'border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-700 dark:text-emerald-300'
-              : feedback.type === 'error'
-                ? 'border-rose-500/25 bg-rose-500/[0.08] text-rose-700 dark:text-rose-300'
-                : 'border-sky-500/25 bg-sky-500/[0.08] text-sky-700 dark:text-sky-300'
-          }`}
-          role="status"
-        >
-          {feedback.text}
-        </div>
-      )}
-    </section>
-  );
+  return <PaymentConnectionCard name="Mercado Pago" headingId="mercado-pago-heading" connected={account.connected}
+    loading={isLoading} busy={isConnecting} onConnect={() => void connect()} onRefresh={() => void loadStatus()} feedback={feedback}>
+    {account.status === 'error' && <p className="mt-3 text-xs text-rose-600 dark:text-rose-300">Conecte a conta própria do restaurante.</p>}
+  </PaymentConnectionCard>;
 }

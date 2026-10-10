@@ -1,6 +1,5 @@
 import { FileCheck2, PlugZap } from 'lucide-react';
 import React, { useState } from 'react';
-import { OperationalBanner } from '../../shared/OperationalBanner';
 import { KomaPaymentsSettings } from './KomaPaymentsSettings';
 import { CashierFiscalSettings } from './CashierFiscalSettings';
 import { RestaurantWhatsAppSettings } from './RestaurantWhatsAppSettings';
@@ -53,34 +52,11 @@ export function CashierIntegrationsSettings({ apiBaseUrl, authHeaders }: Props) 
         <CashierFiscalSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
       ) : (
         <>
-          <OperationalBanner
-            id="system-integrations-heading"
-            eyebrow="SISTEMA"
-            title="Integrações"
-            accent="em um só lugar"
-            description="Conexões técnicas ficam centralizadas aqui. As telas de venda usam apenas o status e as capacidades já conectadas."
-            metrics={[
-              { label: 'pagamentos', value: 'KÔMA Pagamentos' },
-              { label: 'provedores', value: 'por restaurante' },
-            ]}
-          />
-
-          <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
-            <div className="mb-4 flex items-start gap-3">
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-raised text-emerald-600 dark:text-emerald-300">
-                <PlugZap size={17} />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-koma-foreground">Pagamentos e serviços externos</h3>
-                <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
-                  O KÔMA Pagamentos centraliza o provedor financeiro. Configurações específicas de cada canal continuam no respectivo canal de vendas.
-                </p>
-              </div>
-            </div>
-
-            <KomaPaymentsSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
-          </section>
+          <KomaPaymentsSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+          <details className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
+            <summary className="cursor-pointer text-sm font-bold text-koma-foreground">WhatsApp · Avisos de pedidos</summary>
           <RestaurantWhatsAppSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+          </details>
         </>
       )}
     </div>

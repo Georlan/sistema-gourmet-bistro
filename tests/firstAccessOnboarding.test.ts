@@ -178,10 +178,10 @@ test('onboarding uses canonical server progress, canonical modes and optional K�
   assert.match(onboarding, /Modalidades salvas/);
   assert.match(onboarding, /order_types/);
   assert.match(onboarding, /Nenhum provedor conectado/);
-  assert.match(onboarding, /Mercado Pago é a opção recomendada/);
-  assert.match(onboarding, /chave Pix própria/);
+  assert.match(onboarding, /conecte Mercado Pago ou PagBank/);
+  assert.doesNotMatch(onboarding, /chave Pix própria/);
   assert.match(onboarding, /Novos pedidos online dependem do caixa aberto/);
-  assert.match(onboarding, /separada da cobrança da assinatura KÔMA/);
+  assert.match(onboarding, /assinatura KÔMA é cobrada separadamente/);
   assert.match(onboarding, /pedido de teste continua disponível como validação opcional/);
 });
 

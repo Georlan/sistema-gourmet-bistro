@@ -266,7 +266,7 @@ test('configurações usam somente a navegação canônica vertical + horizontal
   await expectNoHorizontalOverflow(page);
 
   await navigateHorizontal(page, 'Integrações');
-  await expect(page.getByRole('heading', { name: 'Pagamentos e serviços externos' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pagamentos online' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Mercado Pago' })).toBeVisible();
   await expect(page.getByText('Conectado')).toBeVisible();
   await expectNoHorizontalOverflow(page);
