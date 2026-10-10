@@ -21,35 +21,57 @@ def env(name: str) -> str:
     return os.getenv(name, '').strip()
 
 
-def api_url() -> str:
-    environment = env('PAGBANK_ENV') or 'sandbox'
-    if environment not in {'sandbox', 'production'}:
+def environment_for_restaurant(restaurant_id: int) -> str:
+    # Opt-in is server-owned; tenants cannot select credentials or API hosts.
+    allowed = {value.strip() for value in env('PAGBANK_PRODUCTION_RESTAURANT_IDS').split(',') if value.strip()}
+    return 'production' if str(int(restaurant_id)) in allowed else default_environment()
+
+
+def default_environment() -> str:
+    value = env('PAGBANK_ENV') or 'sandbox'
+    if value not in {'sandbox', 'production'}:
         raise PagBankOAuthError('PAGBANK_ENV inválido.')
-    return 'https://api.pagseguro.com' if environment == 'production' else 'https://sandbox.api.pagseguro.com'
+    return value
 
 
-def redirect_uri() -> str:
-    uri = env('PAGBANK_OAUTH_REDIRECT_URI') or f'{settings.KOMA_PUBLIC_API_URL}/payments/pagbank/oauth/callback'
+def api_url(environment: str | None = None) -> str:
+    value = environment or default_environment()
+    if value not in {'sandbox', 'production'}:
+        raise PagBankOAuthError('Ambiente PagBank inválido.')
+    return 'https://api.pagseguro.com' if value == 'production' else 'https://sandbox.api.pagseguro.com'
+
+
+def credential(name: str, environment: str | None = None) -> str:
+    value = environment or default_environment()
+    api_url(value)
+    # A production pilot never falls back to Sandbox application credentials.
+    prefix = 'PAGBANK_PRODUCTION_' if value == 'production' and default_environment() != 'production' else 'PAGBANK_'
+    return env(prefix + name)
+
+
+def redirect_uri(environment: str | None = None) -> str:
+    uri = credential('OAUTH_REDIRECT_URI', environment) or env('PAGBANK_OAUTH_REDIRECT_URI') or f'{settings.KOMA_PUBLIC_API_URL}/payments/pagbank/oauth/callback'
     if not uri.startswith('https://'):
         raise PagBankOAuthError('Configure a URL HTTPS de retorno do PagBank.')
     return uri
 
 
-def configured() -> bool:
-    return all(env(k) for k in ('PAGBANK_CLIENT_ID', 'PAGBANK_CLIENT_SECRET', 'PAGBANK_APP_TOKEN'))
+def configured(environment: str | None = None) -> bool:
+    return all(credential(k, environment) for k in ('CLIENT_ID', 'CLIENT_SECRET', 'APP_TOKEN'))
 
 
 def authorization(restaurant_id: int, user_id: str) -> tuple[str, str]:
-    if not configured():
+    environment = environment_for_restaurant(restaurant_id)
+    if not configured(environment):
         raise PagBankOAuthError('A conexão PagBank ainda está sendo preparada pela KÔMA.')
     # Domain-separated MAC; compact state respects PagBank's 128 character limit.
     data = f'{int(restaurant_id)}:{user_id}:{int(time.time())}:{secrets.token_hex(8)}'.encode()
-    mac = hmac.digest(settings.SECRET_KEY.encode(), b'pagbank-connect:' + api_url().encode() + b':' + data, 'sha256')[:16]
+    mac = hmac.digest(settings.SECRET_KEY.encode(), b'pagbank-connect:' + api_url(environment).encode() + b':' + data, 'sha256')[:16]
     state = base64.urlsafe_b64encode(data + mac).decode().rstrip('=')
     if len(state) > 128:
         raise PagBankOAuthError('Identificador OAuth excede o limite do PagBank.')
-    host = 'connect.pagbank.com.br' if api_url() == 'https://api.pagseguro.com' else 'connect.sandbox.pagbank.com.br'
-    query = urlencode(dict(response_type='code', client_id=env('PAGBANK_CLIENT_ID'), redirect_uri=redirect_uri(),
+    host = 'connect.pagbank.com.br' if environment == 'production' else 'connect.sandbox.pagbank.com.br'
+    query = urlencode(dict(response_type='code', client_id=credential('CLIENT_ID', environment), redirect_uri=redirect_uri(environment),
                           scope='payments.read payments.create payments.refund accounts.read', state=state))
     return f'https://{host}/oauth2/authorize?{query}', state
 
@@ -60,10 +82,11 @@ def decode_state(state: str, cookie: str) -> tuple[int, str]:
             raise ValueError()
         raw = base64.urlsafe_b64decode(state + '=' * (-len(state) % 4))
         data, mac = raw[:-16], raw[-16:]
-        expected = hmac.digest(settings.SECRET_KEY.encode(), b'pagbank-connect:' + api_url().encode() + b':' + data, 'sha256')[:16]
+        rid, uid, issued, nonce = data.decode().split(':')
+        environment = environment_for_restaurant(int(rid))
+        expected = hmac.digest(settings.SECRET_KEY.encode(), b'pagbank-connect:' + api_url(environment).encode() + b':' + data, 'sha256')[:16]
         if not hmac.compare_digest(mac, expected):
             raise ValueError()
-        rid, uid, issued, nonce = data.decode().split(':')
         if int(rid) <= 0 or not uid or not nonce or not -60 <= time.time() - int(issued) <= 600:
             raise ValueError()
         return int(rid), uid
@@ -71,15 +94,15 @@ def decode_state(state: str, cookie: str) -> tuple[int, str]:
         raise PagBankOAuthError('Autorização inválida ou expirada. Inicie a conexão novamente.') from exc
 
 
-def _post(path: str, payload: dict, *, client=None) -> dict:
-    if not configured():
+def _post(path: str, payload: dict, *, client=None, environment: str | None = None) -> dict:
+    if not configured(environment):
         raise PagBankOAuthError('A conexão PagBank ainda está sendo preparada pela KÔMA.')
     owned = client is None
     client = client or httpx.Client(timeout=settings.ONLINE_PAYMENT_REQUEST_TIMEOUT_SECONDS)
     try:
-        response = client.post(api_url() + path, headers={
-            'Authorization': f"Bearer {env('PAGBANK_APP_TOKEN')}",
-            'X_CLIENT_ID': env('PAGBANK_CLIENT_ID'), 'X_CLIENT_SECRET': env('PAGBANK_CLIENT_SECRET'),
+        response = client.post(api_url(environment) + path, headers={
+            'Authorization': f"Bearer {credential('APP_TOKEN', environment)}",
+            'X_CLIENT_ID': credential('CLIENT_ID', environment), 'X_CLIENT_SECRET': credential('CLIENT_SECRET', environment),
         }, json=payload)
         if response.is_error:
             raise PagBankOAuthError(f'PagBank recusou a autorização (HTTP {response.status_code}).')
@@ -98,13 +121,13 @@ def _tokens(data: dict) -> MercadoPagoOAuthTokens:
                                  provider_user_id=data['account_id'], public_key=None, expires_in=int(data.get('expires_in') or 0))
 
 
-def exchange(code: str) -> MercadoPagoOAuthTokens:
-    return _tokens(_post('/oauth2/token', dict(grant_type='authorization_code', code=code, redirect_uri=redirect_uri())))
+def exchange(code: str, *, environment: str | None = None) -> MercadoPagoOAuthTokens:
+    return _tokens(_post('/oauth2/token', dict(grant_type='authorization_code', code=code, redirect_uri=redirect_uri(environment)), environment=environment))
 
 
-def refresh_access_token(token: str) -> MercadoPagoOAuthTokens:
-    return _tokens(_post('/oauth2/refresh', dict(grant_type='refresh_token', refresh_token=token)))
+def refresh_access_token(token: str, *, environment: str | None = None) -> MercadoPagoOAuthTokens:
+    return _tokens(_post('/oauth2/refresh', dict(grant_type='refresh_token', refresh_token=token), environment=environment))
 
 
-def revoke(token: str) -> None:
-    _post('/oauth2/revoke', dict(token_type_hint='access_token', token=token))
+def revoke(token: str, *, environment: str | None = None) -> None:
+    _post('/oauth2/revoke', dict(token_type_hint='access_token', token=token), environment=environment)

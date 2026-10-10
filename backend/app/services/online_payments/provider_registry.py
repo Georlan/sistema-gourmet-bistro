@@ -20,7 +20,7 @@ def provider_for_account(
     if provider == "mercado_pago":
         return mercado_pago_factory(account.access_token)
     if provider == "pagbank":
-        return PagBankProvider(account.access_token)
+        return PagBankProvider(account.access_token, environment=account.provider_environment)
     raise UnsupportedPaymentProviderError(
         f"Provedor de pagamento ainda não suportado: {provider or 'não informado'}."
     )

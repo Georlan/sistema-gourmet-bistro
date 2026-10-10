@@ -28,7 +28,7 @@ from .mercado_pago import MercadoPagoError, MercadoPagoProvider
 from .provider_registry import UnsupportedPaymentProviderError, provider_for_account
 from .oauth import MercadoPagoOAuthError, refresh_access_token
 from .account_connection import is_marketplace_owner_account
-from .pagbank.oauth import PagBankOAuthError, refresh_access_token as refresh_pagbank, env as pagbank_env
+from .pagbank.oauth import PagBankOAuthError, refresh_access_token as refresh_pagbank, environment_for_restaurant as pagbank_environment
 
 
 MONEY = Decimal("0.01")
@@ -137,7 +137,8 @@ class OnlinePaymentService:
                         "A conta de pagamento precisa ser reconectada."
                     )
                 try:
-                    tokens = (refresh_pagbank if locked.provider == "pagbank" else refresh_access_token)(current_refresh_token)
+                    tokens = (refresh_pagbank(current_refresh_token, environment=locked.provider_environment)
+                              if locked.provider == "pagbank" else refresh_access_token(current_refresh_token))
                 except (MercadoPagoOAuthError, PagBankOAuthError) as exc:
                     logger.warning(
                         "Falha ao renovar OAuth Mercado Pago do restaurante %s.",
@@ -193,7 +194,7 @@ class OnlinePaymentService:
         pagbank = db.query(RestaurantPaymentAccount.id).filter(
             RestaurantPaymentAccount.restaurante_id == restaurant_id,
             RestaurantPaymentAccount.provider == "pagbank",
-            RestaurantPaymentAccount.provider_environment == (pagbank_env("PAGBANK_ENV") or "sandbox"),
+            RestaurantPaymentAccount.provider_environment == pagbank_environment(restaurant_id),
             RestaurantPaymentAccount.status == "active",
         ).exists()
         mercado_pago = db.query(RestaurantPaymentAccount.id).filter(
@@ -258,7 +259,7 @@ class OnlinePaymentService:
             if _token_needs_refresh(account.token_expires_at):
                 account = cls._refresh_account_credentials(db, account)
         elif account.provider == "pagbank":
-            if account.provider_environment != (pagbank_env("PAGBANK_ENV") or "sandbox"):
+            if account.provider_environment != pagbank_environment(restaurant_id):
                 raise OnlinePaymentConfigurationError("Reconecte o PagBank no ambiente atual antes de receber Pix.")
             if not account.access_token:
                 raise OnlinePaymentConfigurationError("Reconecte a conta PagBank.")
@@ -285,7 +286,7 @@ class OnlinePaymentService:
         ).one_or_none()
         if account is None or not account.access_token:
             raise OnlinePaymentConfigurationError("A conta original do pagamento precisa ser reconectada.")
-        if account.provider == "pagbank" and account.provider_environment != (pagbank_env("PAGBANK_ENV") or "sandbox"):
+        if account.provider == "pagbank" and account.provider_environment not in {"sandbox", "production"}:
             raise OnlinePaymentConfigurationError("O Pix pertence a outro ambiente PagBank e não pode ser consultado aqui.")
         if _token_needs_refresh(account.token_expires_at):
             account = cls._refresh_account_credentials(db, account)

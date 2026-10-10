@@ -31,10 +31,10 @@ def identifier(value: str, prefix='ORDE') -> str:
 
 
 class PagBankProvider:
-    def __init__(self, access_token: str):
+    def __init__(self, access_token: str, *, environment: str | None = None):
         if not access_token:
             raise PagBankError('Reconecte a conta PagBank.')
-        self._client = httpx.Client(base_url=api_url(), headers={'Authorization': f'Bearer {access_token}'},
+        self._client = httpx.Client(base_url=api_url(environment), headers={'Authorization': f'Bearer {access_token}'},
                                    timeout=settings.ONLINE_PAYMENT_REQUEST_TIMEOUT_SECONDS)
 
     def _request(self, method, path, **kwargs):

@@ -364,7 +364,7 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
         assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANT_ID).count() == 0
 
         class ApprovedProvider:
-            def __init__(self, _access_token):
+            def __init__(self, _access_token, **kwargs):
                 pass
 
             def get_payment(self, external_payment_id):
@@ -506,7 +506,7 @@ def test_pix_creation_approved_immediately_applies_financial_effects_once(monkey
         ).count() == 0
 
         class ImmediateApprovedProvider:
-            def __init__(self, _access_token):
+            def __init__(self, _access_token, **kwargs):
                 pass
 
             def create_pix(self, **kwargs):
@@ -671,7 +671,7 @@ def test_mercado_pago_webhook_approved_integration_and_idempotency(monkeypatch):
         ).count() == 0
 
         class ApprovedProviderMock:
-            def __init__(self, _access_token):
+            def __init__(self, _access_token, **kwargs):
                 pass
 
             def get_payment(self, external_payment_id):
@@ -884,7 +884,7 @@ def test_mercado_pago_webhook_rejects_divergent_amount_or_reference(monkeypatch)
 
         # Cenário 1: Valor retornado pelo Mercado Pago diverge (ex: R$ 50,00 em vez de R$ 48,00)
         class DivergentAmountProviderMock:
-            def __init__(self, _access_token):
+            def __init__(self, _access_token, **kwargs):
                 pass
 
             def get_payment(self, external_payment_id):
@@ -936,7 +936,7 @@ def test_mercado_pago_webhook_rejects_divergent_amount_or_reference(monkeypatch)
 
         # Cenário 2: External reference diverge da intent registrada
         class DivergentRefProviderMock:
-            def __init__(self, _access_token):
+            def __init__(self, _access_token, **kwargs):
                 pass
 
             def get_payment(self, external_payment_id):
