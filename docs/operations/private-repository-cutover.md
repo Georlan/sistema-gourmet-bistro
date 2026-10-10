@@ -10,7 +10,7 @@
 - Ruleset **Protect main branch** ativo na visibilidade pública, com PR obrigatório e status `Merge verdict` obrigatório.
 - `.github/workflows/secret-scan.yml` usa Gitleaks com checkout do histórico completo; a conclusão recente foi sucesso. Isso **não prova ausência de segredos** em commits anteriores.
 - `docs/security-credential-rotation.md` reconhece uma senha embutida numa migração antiga. A versão atual não contém a senha, mas o commit antigo permanece no histórico.
-- O Print Agent usava URLs anônimas de ZIP/tarball/`raw.githubusercontent.com` para instalação remota. Os instaladores nesta mudança exigem pacote local, e o workflow `Print agent` gera um ZIP de distribuição controlada.
+- O Print Agent usava URLs anônimas do repositório monolítico. Os instaladores foram desacoplados da main pública e aceitam pacote completo. O workflow `Print agent` produz ZIP interno e o workflow `Publish public Print Agent release` prepara publicação **somente do pacote de impressão** em GitHub Releases de **outro repositório público**.
 
 ## Bloqueios de liberação (não tratar como aprovados sem evidência)
 
@@ -19,14 +19,16 @@
 3. **GitHub privado + ChatGPT/Codex**: em repositório privado de teste, verificar que a conexão ao GitHub permite leitura, alteração em branch, abertura de PR e consulta a CI no plano/experiência ChatGPT realmente usados. Não presumir que acesso de leitura implica capacidade de escrita.
 4. **Deploys**: conferir, em ambiente administrativo próprio, que os GitHub Apps de **Railway** e **Cloudflare Pages** têm acesso autorizado ao repositório privado. Não remover integrações antigas antecipadamente. Confirmar webhook/push e preview em branch **sem mexer na produção**. Depois da mudança, confirmar os deploys da `main` e health/smoke não destrutivo (GET/OPTIONS).
 5. **GitHub Actions no privado**: conferir saldo/limite de minutos e orçamento, uma vez que jobs em repositórios privados passam a consumir cota. Confirmar Gitleaks e `Merge verdict` funcionando com as permissões existentes; não expor segredos em outputs nem artefatos.
-6. **Distribuição do Print Agent**: executar `Print agent` por `workflow_dispatch` na `main` já aprovada, obter artefato `KOMA-print-agent`, confirmar SHA256 do ZIP, instalar/atualizar em estação Windows de QA, parear e imprimir fisicamente. O ZIP contém fontes do agente local (necessárias ao produto), portanto só repassá-lo a responsáveis autorizados. Não colocar token pessoal em script de cliente.
+6. **Distribuição pública do Print Agent**: criar um repositório GitHub **público e vazio** específico para downloads (não pode ser fork do SaaS nem receber todo o repositório). A integração atual não permite criar o repo automaticamente; fazer pelo GitHub do proprietário/organização. Em Settings → Secrets and variables → Actions, configurar `KOMA_PRINT_AGENT_DISTRIBUTION_REPO` com o endereço real `OWNER/REPO` e `KOMA_PRINT_AGENT_DISTRIBUTION_TOKEN` (fine-grained PAT com `Contents: write` **somente** no repositório distribuidor). Preferir armazenar token no environment `print-agent-public-release` com aprovação para publicação; nunca expor o valor em arquivos, prints ou mensagens. Executar manualmente o workflow `Publish public Print Agent release` na `main` aprovada e conferir o alvo como público: se o alvo for privado/inexistente, o workflow falha. Ele envia somente `KOMA-print-agent.zip` e `KOMA-print-agent.zip.sha256` como assets de GitHub Release; não faz git push da main ou do histórico privado. Abrir a página pública da release sem login, testar os downloads e a verificação SHA-256 e validar instalação/atualização física de impressão Windows antes da mudança de visibilidade.
+
 7. **Outras dependências públicas**: pesquisar por downloads anônimos de `github.com/Georlan/sistema-gourmet-bistro` e `raw.githubusercontent.com` fora da documentação interna. Links para README/código deixarão de funcionar para visitantes anônimos; substituir somente materiais que precisam de acesso externo.
 8. **Cópias externas**: verificar forks e publicações existentes perto do corte; forks públicos pré-existentes não se tornam privados. Código baixado antes da mudança, indexação e credenciais em histórico não são apagados pelo ato de privatizar.
 
 ## Sequência segura do corte (executada pelo proprietário)
 
 - [ ] Guardar SHA e resultado de todos os gates obrigatórios da `main`, sem fazer merge de PRs com CI vermelho.
-- [ ] Confirmar que o ZIP da impressão foi gerado, baixado e validado em uma máquina Windows real; manter procedimento local de fallback.
+- [ ] Criar repositório **separado e público** para distribuir somente o Print Agent; registrar `OWNER/REPO` real na variável de Actions e token fine-grained restrito a esse repositório, protegido no environment.
+- [ ] Executar o publicador manual, baixar `KOMA-print-agent.zip` e `KOMA-print-agent.zip.sha256` anonimamente de GitHub Releases (sem login) e validar hash, conteúdo e instalação/atualização num Windows com impressora física; manter ZIP de fallback.
 - [ ] Confirmar rotação da credencial histórica e role PostgreSQL segura; sem dumps, seeds, purge ou SQL de escrita em produção.
 - [ ] Confirmar plano GitHub e enforcement de PR/`Merge verdict` para branch privada.
 - [ ] Confirmar permissões Railway e Cloudflare para o repositório privado e fluxo de IA conectado.
@@ -34,7 +36,7 @@
 - [ ] Em GitHub → Settings → General → Danger Zone → Change repository visibility, selecionar **Private**.
 - [ ] Imediatamente conferir ruleset `Protect main branch`, Action `Merge verdict`, Gitleaks, PR teste sem merge, webhooks e acesso de provedores.
 - [ ] Confirmar smoke não destrutivo dos serviços públicos, status do frontend e API; nada de pedido/pagamento de teste em produção.
-- [ ] Atualizar canais de suporte e documentação externa que faziam download público; não divulgar nova URL com token embutido.
+- [ ] Publicar a URL real do repositório público de distribuição do agente nos canais de suporte; usar URL de Releases sem token, jamais a URL da `main` privada.
 - [ ] Solicitar ao Google a atualização de resultados desatualizados; não considerar isso exclusão de cópias previamente acessadas.
 
 ## Se algo falhar
