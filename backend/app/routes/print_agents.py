@@ -880,6 +880,7 @@ def _claim_pending_jobs(
     # thresholds are five minutes / hours, so checking once per tenant every
     # 30s preserves recovery semantics while removing two write-capable queries
     # from virtually every idle poll made by installed agents.
+    maintenance_ran = False
     if _should_run_print_queue_maintenance(agent.restaurante_id):
         expired_jobs = _expire_stale_unresolved_jobs(
             db,
@@ -889,6 +890,7 @@ def _claim_pending_jobs(
         released_jobs = _release_stuck_jobs(db, agent.restaurante_id, now)
         if expired_jobs or released_jobs:
             db.flush()
+            maintenance_ran = True
 
     can_claim_generic, role = _can_agent_claim_generic_jobs(db, agent)
 
@@ -953,7 +955,8 @@ def _claim_pending_jobs(
             _claimed_job_payload(row, now)
             for row in ordered_rows
         ]
-        db.commit()
+        if claimed_rows or maintenance_ran:
+            db.commit()
         _log_claim_batch(agent, payload, role=role)
         return payload
 
@@ -2213,7 +2216,6 @@ def agent_heartbeat(
         or previous_heartbeat_age > AGENT_ONLINE_THRESHOLD_SECONDS
     )
     diagnostics_changed = False
-    agent.last_seen_at = now
     if req and req.diagnostics:
         diagnostics = req.diagnostics.model_dump()
         previous_diagnostics = (
@@ -2222,17 +2224,37 @@ def agent_heartbeat(
             else None
         )
         diagnostics_changed = previous_diagnostics != diagnostics
-        agent.printer_diagnostics = diagnostics
-        agent.diagnostics_updated_at = now
+        if diagnostics_changed:
+            agent.printer_diagnostics = diagnostics
+            agent.diagnostics_updated_at = now
 
     command = (
         dict(agent.pending_command)
         if isinstance(agent.pending_command, Mapping)
         else None
     )
-    if _expire_stale_agent_command(agent, now):
+    command_expired = _expire_stale_agent_command(agent, now)
+    if command_expired:
         command = None
-    db.commit()
+
+    # Economia de infraestrutura: coalescer persistência no banco.
+    # O limite de agente online é 90s; persistir a cada 20s (ou quando a presença,
+    # diagnósticos ou comandos mudarem) poupa ~75% de escritas e commits inúteis
+    # no PostgreSQL sem afetar a detecção em tempo real de hardware/online.
+    should_persist = (
+        previous_heartbeat_age is None
+        or previous_heartbeat_age >= 20.0
+        or diagnostics_changed
+        or presence_changed
+        or command is not None
+        or command_expired
+    )
+    if should_persist:
+        agent.last_seen_at = now
+        db.commit()
+    else:
+        agent.last_seen_at = now
+
     if presence_changed or diagnostics_changed:
         _schedule_print_monitor_refresh(
             background_tasks,
