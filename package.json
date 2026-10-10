@@ -7,6 +7,8 @@
     "dev": "vite --port=3000 --host=0.0.0.0",
     "dev:e2e": "vite --host=127.0.0.1 --port=4173",
     "build": "vite build",
+    "prebuild": "node scripts/sync-product-contract.mjs --check",
+    "sync:product-contract": "node scripts/sync-product-contract.mjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",

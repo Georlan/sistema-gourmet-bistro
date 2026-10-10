@@ -588,15 +588,3 @@ def test_zero_commission_direct_pix_does_not_accrue_usage_debt(db, monkeypatch):
     monkeypatch.setattr("app.services.direct_pix_billing.tenant_commercial_terms", lambda *_: SimpleNamespace(billing_amount=Decimal("862.92")))
     invoice = close_month(db, restaurant_id=99420, period="2025-01")
     assert invoice.fees == 0 and invoice.subscription_amount == 0 and invoice.status == "paid"
-
-
-def test_zero_commission_direct_pix_can_be_enabled_without_migrating_saas_billing(db, monkeypatch):
-    from app.routes.direct_pix import save_settings, PixConfiguration, TERMS_VERSION
-    monkeypatch.setattr(settings, "DIRECT_PIX_ENABLED", True)
-    result = save_settings(PixConfiguration(enabled=True, key_type="email", pix_key="pix@example.com",
-        holder_name="RESTAURANTE", city="FORTALEZA", accept_manual_confirmation_and_monthly_fees=True),
-        db, SimpleNamespace(id="direct-pix-user"))
-    assert result["enabled"] is True
-    assert db.query(SaaSSubscription).count() == 0
-    config = db.query(RestaurantDirectPixConfig).one()
-    assert config.terms_version == TERMS_VERSION

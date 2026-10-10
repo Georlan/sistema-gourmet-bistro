@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from ..config import settings
-from ..subscription import ONLINE_ORDER_COMMISSION_ENABLED
 from ..database import get_db, require_tenant_id
 from ..models import Comanda, DirectPixReceipt, DirectPixFeeInvoice, OnlinePaymentIntent, RestaurantDirectPixConfig, Usuario
 from ..security import require_permission
@@ -95,7 +94,7 @@ def save_settings(payload: PixConfiguration, db: Session = Depends(get_db), user
         except RuntimeError as exc:
             raise HTTPException(409,"Termos comerciais da assinatura indisponíveis.") from exc
         test_mode = terms is None and test_registration_allowed(db, rest_id)
-        if not test_mode and ONLINE_ORDER_COMMISSION_ENABLED:
+        if not test_mode:
             sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == rest_id).one_or_none()
             if sub is None:
                 raise HTTPException(409,"Configure a assinatura antes de ativar Pix direto.")

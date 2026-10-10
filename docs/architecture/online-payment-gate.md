@@ -102,3 +102,10 @@ A trava existe para impedir que um merge de código passe a cobrar comissão em 
 Cada restaurante precisa de uma linha ativa em `restaurant_payment_accounts`, criada pelo fluxo OAuth do marketplace. Access token, refresh token e segredo do webhook são criptografados em repouso. O cardápio só oferece Pix quando essa conta está ativa.
 
 O fluxo OAuth e a cobrança real já foram homologados em produção com tenant separado, Pix aprovado, webhook assinado, idempotência e `application_fee`. Nenhum segredo deve ser digitado ou armazenado no frontend.
+
+
+### Empacotamento do contrato canônico
+
+`product-contract.json` na raiz é a fonte editável. `npm run sync:product-contract` gera a cópia `backend/product-contract.json` usada pelo Railway, cujo diretório de publicação é `/backend`. A build e os testes recusam cópias divergentes. O loader não possui preços de fallback para contornar erro de empacotamento: com o repositório completo ele confere ambas as cópias; no deploy isolado usa a cópia gerada. Alterações no catálogo também alteram um arquivo sob `/backend/**`, acionando a implantação da API.
+
+Novas intenções com comissão zero registram `fee_settlement=none` (ou `test` quando houver liberação explícita de teste). Não acumulam dívida de uso em Pix direto e não enviam `application_fee` ao Mercado Pago. Intenções, recibos e faturas históricos permanecem intactos.

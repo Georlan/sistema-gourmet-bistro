@@ -1,10 +1,9 @@
-import json
 import logging
-from pathlib import Path
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from .config import settings
+from .product_catalog import load_product_catalog
 
 
 logger = logging.getLogger("koma.subscription")
@@ -12,9 +11,7 @@ logger = logging.getLogger("koma.subscription")
 VALID_SUBSCRIPTION_PLANS = {"pocket", "pro", "premium"}
 LEGACY_PREMIUM_PLANS = {"bistro", "delivery", "gold", "platinum"}
 ANNUAL_DISCOUNT_RATE = Decimal("0.10")
-_PRODUCT_CONTRACT = json.loads(
-    (Path(__file__).resolve().parents[2] / "product-contract.json").read_text(encoding="utf-8")
-)
+_PRODUCT_CONTRACT = load_product_catalog()
 _CONTRACT_PLANS = _PRODUCT_CONTRACT["plans"]
 COMMERCIAL_PRICING_VERSION = _PRODUCT_CONTRACT["version"]
 # Isenção operacional: não reescreve os valores dos snapshots assinados.
