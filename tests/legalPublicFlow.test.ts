@@ -14,6 +14,7 @@ const legalV30 = readFileSync('src/legal/legalContentV30.ts', 'utf8');
 const legalV31 = readFileSync('src/legal/legalContentV31.ts', 'utf8');
 const legalContent = readFileSync('src/legal/legalContentV32.ts', 'utf8');
 const legalV34 = readFileSync('src/legal/legalContentV34.ts', 'utf8');
+const legalV35 = readFileSync('src/legal/legalContentV35.ts', 'utf8');
 const legalV33 = readFileSync('src/legal/legalContentV33.ts', 'utf8');
 const legalEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const legalPage = readFileSync('src/legal/LegalPage.tsx', 'utf8');
@@ -31,7 +32,7 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal preserva snapshots anteriores e publica fachada vigente 3.4', () => {
+test('central legal preserva snapshots anteriores e publica fachada vigente 3.5', () => {
   for (const slug of ['termos','planos','privacidade','dpa','suboperadores','cookies','cardapio-termos','cardapio-privacidade']) {
     assert.match(legalV2, new RegExp(`slug: '${slug}'`));
   }
@@ -46,6 +47,8 @@ test('central legal preserva snapshots anteriores e publica fachada vigente 3.4'
   assert.match(legalV31, /LEGAL_VERSION = '3\.1'/);
   assert.match(legalContent, /LEGAL_VERSION = '3\.2'/);
   assert.match(legalV33, /LEGAL_VERSION = '3\.3'/);
+  assert.match(legalV34, /LEGAL_VERSION = '3\.4'/);
+  assert.match(legalV35, /LEGAL_VERSION = '3\.5'/);
   assert.match(legalV26, /18\/09\/2026/);
   assert.match(legalV29, /23\/09\/2026/);
   assert.match(legalContent, /24\/09\/2026/);
@@ -54,6 +57,8 @@ test('central legal preserva snapshots anteriores e publica fachada vigente 3.4'
   assert.match(legalV31, /from '\.\/legalContentV30'/);
   assert.match(legalContent, /from '\.\/legalContentV31'/);
   assert.match(legalV33, /from '\.\/legalContentV32'/);
+  assert.match(legalV34, /from '\.\/legalContentV33'/);
+  assert.match(legalV35, /from '\.\/legalContentV34'/);
   assert.match(legacyLegalContent, /LEGAL_VERSION = '1\.2'/);
   assert.match(legalPage, /from '\.\/legalContent'/);
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
@@ -122,8 +127,8 @@ test('checkout reconhece cartão Pix universal e Saldo Mercado Pago', () => {
   assert.match(planContract, /payment-methods-v2/);
 });
 
-test('proveniência jurídica fixa commit e blob da Legal 3.4 sem documento fiscal pessoal', () => {
-  assert.match(legalEvidence, /legalContentV34/);
+test('proveniência jurídica fixa commit e blob da Legal 3.5 sem documento fiscal pessoal', () => {
+  assert.match(legalEvidence, /legalContentV35/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /requireDocument\('termos'\)/);
@@ -199,11 +204,10 @@ test('pacote jurídico cobre LGPD, transferências, incidentes e dados sensívei
 });
 
 // Preserva as asserções históricas acima e verifica os documentos renderizados atuais.
-test('Legal 3.4 publica novos preços, anual e comissão zero', async () => {
+test('Legal 3.4 preserva snapshot histórico com preços oficiais e comissão zero', async () => {
   const { LEGAL_DOCUMENTS, LEGAL_VERSION } = await import('../src/legal/legalContentV34');
   assert.equal(LEGAL_VERSION, '3.4');
   assert.match(legalV34, /from '\.\/legalContentV33'/);
-  assert.match(readFileSync('src/legal/legalContent.ts', 'utf8'), /export \* from '\.\/legalContentV34'/);
   const serialized = JSON.stringify(LEGAL_DOCUMENTS);
   for (const amount of ['79,90', '179,90', '329,90', '862,92', '1.942,92', '3.562,92', '71,91', '161,91', '296,91']) {
     assert.ok(serialized.includes(`R$ ${amount}`), `Preço ausente: ${amount}`);
@@ -211,4 +215,21 @@ test('Legal 3.4 publica novos preços, anual e comissão zero', async () => {
   assert.match(serialized, /0% de comissão KÔMA/);
   assert.doesNotMatch(serialized, /R\$ (?:39,00|129 por mês|249 por mês|421,20|1\.393,20|2\.689,20)/);
   assert.ok(LEGAL_DOCUMENTS.every(document => document.version === '3.4'));
+});
+
+test('Legal 3.5 publica modernização jurídica com CRM, PagBank e Pix Direto', async () => {
+  const { LEGAL_DOCUMENTS, LEGAL_VERSION } = await import('../src/legal/legalContentV35');
+  assert.equal(LEGAL_VERSION, '3.5');
+  assert.match(legalV35, /from '\.\/legalContentV34'/);
+  assert.match(readFileSync('src/legal/legalContent.ts', 'utf8'), /export \* from '\.\/legalContentV35'/);
+  const serialized = JSON.stringify(LEGAL_DOCUMENTS);
+  for (const amount of ['79,90', '179,90', '329,90', '862,92', '1.942,92', '3.562,92']) {
+    assert.ok(serialized.includes(`R$ ${amount}`), `Preço ausente: ${amount}`);
+  }
+  assert.match(serialized, /0% de comissão KÔMA/);
+  assert.match(serialized, /PagBank/);
+  assert.match(serialized, /Pix Direto/);
+  assert.match(serialized, /Web Push/);
+  assert.match(serialized, /CRM/);
+  assert.ok(LEGAL_DOCUMENTS.every(document => document.version === '3.5'));
 });
