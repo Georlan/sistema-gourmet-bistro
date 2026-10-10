@@ -10,13 +10,6 @@ async function open(page:Page,pending=false) {
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
 }
-async function settings(page:Page) {
-  const sidebar=page.locator('.cashier-sidebar:visible');
-  if(!await sidebar.isVisible()) await page.getByRole('button',{name:'Abrir menu principal'}).click();
-  await sidebar.getByRole('button',{name:/^Configurações/}).click();
-  await page.getByRole('button',{name:'Integrações',exact:true}).first().click();
-}
-
 test('conferência mantém referência após falha e confirmação exige extrato',async({page})=>{
   await open(page,true);
   await page.getByRole('button',{name:/Conferir Pix/}).click();
