@@ -1,0 +1,4 @@
+# Synthetic import-only defaults in the promotional printing CLI, not production credentials.
+2d7e3494ff245d61e58a6dc559b16eed6e77ec92:scripts/print_cearatech_promo.py:generic-api-key:22
+# Deliberately invalid JWT ending in doNotLeakThis, used to test sanitizer redaction.
+f2b780331629ba12a804eeb46ac58aaec7117b26:backend/tests/test_super_admin_integrations.py:jwt:76
