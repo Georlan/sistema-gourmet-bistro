@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""Gera distribuicao controlada do Print Agent sem publicar o backend.
-
-A lista de entradas e deliberadamente restrita; nao use zip recursivo do repo.
-"""
+"""Empacota somente arquivos aprovados do Print Agent, nunca a arvore do KOMA."""
 from __future__ import annotations
 
 import argparse
@@ -12,6 +9,8 @@ from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENT = ROOT / "print-agent"
+
+# Manifesto fechado: arquivos novos NAO entram automaticamente no pacote publico.
 ROOT_FILES = (
     "INSTALAR-KOMA-WINDOWS.cmd",
     "ATUALIZAR-KOMA-WINDOWS.cmd",
@@ -19,29 +18,54 @@ ROOT_FILES = (
     "VERIFICAR-KOMA-WINDOWS.cmd",
     "LICENSE",
 )
-AGENT_FILES = {"README.md", "requirements.txt", "requirements.lock"}
-ALLOWED_SUFFIXES = {".py", ".ps1", ".sh"}
+AGENT_FILES = (
+    "README.md",
+    "agent.py",
+    "agent_runtime.py",
+    "api_client.py",
+    "check-windows.ps1",
+    "config.py",
+    "dispatcher.py",
+    "endpoints.py",
+    "hardware_preflight.py",
+    "install-linux.sh",
+    "install-windows.ps1",
+    "journal.py",
+    "koma-print-launcher.ps1",
+    "koma-print-launcher.sh",
+    "main.py",
+    "pairing.py",
+    "printer_profiles.py",
+    "requirements.lock",
+    "requirements.txt",
+    "retry_budget.py",
+    "simulator.py",
+    "wake_listener.py",
+    "worker.py",
+)
+ADAPTER_FILES = (
+    "__init__.py",
+    "base.py",
+    "escpos.py",
+    "file.py",
+    "linux.py",
+    "transports.py",
+    "windows.py",
+)
 
 
 def package_files() -> list[Path]:
     files = [ROOT / name for name in ROOT_FILES]
-    files.extend(
-        path for path in AGENT.iterdir()
-        if path.is_file()
-        and (path.suffix in ALLOWED_SUFFIXES or path.name in AGENT_FILES)
-    )
-    files.extend(path for path in (AGENT / "adapters").glob("*.py") if path.is_file())
-    files = sorted(files, key=lambda path: path.relative_to(ROOT).as_posix())
+    files.extend(AGENT / name for name in AGENT_FILES)
+    files.extend(AGENT / "adapters" / name for name in ADAPTER_FILES)
     for path in files:
         if path.is_symlink() or not path.is_file():
-            raise ValueError(f"Entrada invalida no pacote: {path.relative_to(ROOT)}")
-    return files
+            raise ValueError(f"Entrada ausente ou invalida: {path.relative_to(ROOT)}")
+    return sorted(files, key=lambda path: path.relative_to(ROOT).as_posix())
 
 
 def build_bundle(output: Path) -> str:
     files = package_files()
-    if not (AGENT / "main.py") in files or not (AGENT / "install-windows.ps1") in files:
-        raise RuntimeError("Print Agent incompleto; distribuicao cancelada.")
     output.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
         for path in files:
@@ -54,7 +78,7 @@ def build_bundle(output: Path) -> str:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Empacotar Print Agent para distribuicao privada")
+    parser = argparse.ArgumentParser(description="Empacotar o KOMA Print Agent para distribuicao")
     parser.add_argument("--output", type=Path, default=ROOT / "dist/KOMA-print-agent.zip")
     args = parser.parse_args()
     digest = build_bundle(args.output)
