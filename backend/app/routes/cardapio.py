@@ -213,6 +213,49 @@ def consultar_status_pedido_publico(
             if expires_at is not None and expires_at.tzinfo is None:
                 expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
 
+            if (
+                payment_intent.status in {"created", "pending"}
+                and payment_intent.external_payment_id
+                and payment_intent.provider in {"pagbank", "mercado_pago"}
+            ):
+                intent_updated = payment_intent.updated_at
+                if intent_updated is not None and intent_updated.tzinfo is None:
+                    intent_updated = intent_updated.replace(tzinfo=datetime.timezone.utc)
+
+                is_expired = bool(expires_at is not None and expires_at <= now_utc)
+                time_since_update = (now_utc - intent_updated).total_seconds() if intent_updated else 999.0
+
+                if time_since_update >= 3.0 or is_expired:
+                    try:
+                        from ..services.online_payments import OnlinePaymentService
+                        account = OnlinePaymentService.account_for_intent(db, payment_intent)
+                        reconciled_intent, approved = OnlinePaymentService.reconcile_provider_payment(
+                            db,
+                            account=account,
+                            external_payment_id=payment_intent.external_payment_id,
+                        )
+                        if reconciled_intent is not None:
+                            payment_intent = reconciled_intent
+                            db.refresh(comanda)
+                            if approved:
+                                try:
+                                    from ..websocket_manager import manager
+                                    manager.queue_committed_broadcast(db, {"event": "tables_updated"}, int(rest_id))
+                                    manager.queue_committed_broadcast(db, {"event": "new_delivery_order", "message": "Novo pedido online pago recebido!"}, int(rest_id))
+                                except Exception:
+                                    pass
+                    except Exception as exc:
+                        logger.warning(
+                            "Falha na conciliação durante polling do cardápio para comanda %s: %s",
+                            comanda.id,
+                            exc,
+                        )
+
+            if comanda.fechada and comanda.delivery_status != "recusado":
+                status_retorno = "finalizado"
+            elif comanda.delivery_status:
+                status_retorno = comanda.delivery_status
+
             if payment_intent.status in {"created", "pending"} and expires_at is not None and expires_at <= now_utc:
                 payment_intent.status = "expired"
                 if not comanda.fechada:

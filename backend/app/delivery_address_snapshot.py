@@ -12,7 +12,7 @@ from __future__ import annotations
 import datetime
 import json
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text, event
 from sqlalchemy.orm import Session
@@ -21,7 +21,9 @@ from .crypt import decrypt_field, encrypt_field
 from .database import Base, current_restaurante_id
 from .domain.orders.errors import OrderValidationError
 from .models import Comanda
-from .application.orders.commands import DeliveryAddressInput
+
+if TYPE_CHECKING:
+    from .application.orders.commands import DeliveryAddressInput
 
 
 class ComandaDeliveryAddressSnapshot(Base):

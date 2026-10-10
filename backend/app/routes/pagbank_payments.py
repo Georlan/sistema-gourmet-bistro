@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import uuid
+import logging
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
@@ -24,6 +25,7 @@ from ..services.online_payments.pagbank import oauth
 from ..websocket_manager import manager
 from .online_payments import _resolve_account_tenant
 
+logger = logging.getLogger('koma.pagbank')
 router = APIRouter(prefix='/payments', tags=['PagBank'])
 class AuthorizationCompletion(BaseModel):
     code: str = Field(min_length=1, max_length=512)
@@ -160,21 +162,36 @@ def _process_webhook(account_id: str, payment_id: str, raw: bytes, signature: st
         account = _account(db, rid)
         if not account or account.id != account_id or account.status != 'active' or account.provider_environment != (oauth.env('PAGBANK_ENV') or 'sandbox'):
             raise HTTPException(404, 'Conta não encontrada.')
-        # Order API authenticity is SHA256(token + '-' + raw-body), not ECDSA.
-        tokens = (account.access_token, account.webhook_secret, oauth.env('PAGBANK_APP_TOKEN'))
-        if not any(token and hmac.compare_digest(signature, hashlib.sha256(token.encode() + b'-' + raw).hexdigest()) for token in tokens):
-            raise HTTPException(401, 'Assinatura inválida.')
+
+        candidate_tokens = [t for t in (account.access_token, account.webhook_secret, oauth.env('PAGBANK_APP_TOKEN'), oauth.env('PAGBANK_CLIENT_SECRET')) if t]
+
+        if not signature:
+            logger.warning('PagBank webhook rejeitado: assinatura ausente para conta %s', account_id)
+            raise HTTPException(401, 'Assinatura ausente.')
+
+        is_valid = any(
+            hmac.compare_digest(signature, hashlib.sha256(token.encode() + b'-' + raw).hexdigest())
+            for token in candidate_tokens
+        )
+        if not is_valid:
+            logger.warning('PagBank webhook rejeitado: assinatura divergente para conta %s', account_id)
+            raise HTTPException(401, 'Assinatura divergente.')
+
         known = db.query(OnlinePaymentIntent.id).filter(OnlinePaymentIntent.restaurante_id == rid,
             OnlinePaymentIntent.provider == 'pagbank', OnlinePaymentIntent.external_payment_id == payment_id).first()
         if known is None:
             # Retry: a notification can arrive before the create response commits.
             raise HTTPException(503, 'Pagamento ainda não registrado.')
+
         event_key = hashlib.sha256(account_id.encode() + raw).hexdigest()
         event = db.query(OnlinePaymentWebhookEvent).filter(
             OnlinePaymentWebhookEvent.restaurante_id == rid,
             OnlinePaymentWebhookEvent.provider == 'pagbank',
             OnlinePaymentWebhookEvent.request_id == event_key,
         ).first()
+        if event is not None and event.status in {'processed', 'ignored'}:
+            return {'status': 'already_processed'}
+
         if event is None:
             event = OnlinePaymentWebhookEvent(restaurante_id=rid, provider='pagbank', request_id=event_key,
                 external_payment_id=payment_id, raw_payload={'id': payment_id})
@@ -187,7 +204,16 @@ def _process_webhook(account_id: str, payment_id: str, raw: bytes, signature: st
                     OnlinePaymentWebhookEvent.restaurante_id == rid,
                     OnlinePaymentWebhookEvent.provider == 'pagbank',
                     OnlinePaymentWebhookEvent.request_id == event_key,
-                ).one()
+                ).first()
+                if event is not None and event.status in {'processed', 'ignored'}:
+                    return {'status': 'already_processed'}
+                if event is None:
+                    raise HTTPException(500, 'Erro ao registrar evento de webhook.')
+        else:
+            event.status = 'received'
+            event.last_error = None
+            db.commit()
+
         try:
             intent, approved = OnlinePaymentService.reconcile_provider_payment(db, account=account, external_payment_id=payment_id)
         except OnlinePaymentValidationError as exc:
@@ -196,9 +222,16 @@ def _process_webhook(account_id: str, payment_id: str, raw: bytes, signature: st
         except Exception as exc:
             db.rollback()
             raise HTTPException(503, 'Pagamento ainda não conciliado.') from exc
-        event.status = 'processed'
-        event.processed_at = datetime.datetime.now(datetime.timezone.utc)
-        db.commit()
+
+        event = db.query(OnlinePaymentWebhookEvent).filter(
+            OnlinePaymentWebhookEvent.restaurante_id == rid,
+            OnlinePaymentWebhookEvent.id == event.id,
+        ).first()
+        if event is not None:
+            event.status = 'processed' if intent else 'ignored'
+            event.processed_at = datetime.datetime.now(datetime.timezone.utc)
+            db.commit()
+
         if approved and intent is not None:
             tasks.add_task(manager.broadcast, {'event': 'tables_updated'}, int(rid))
             tasks.add_task(manager.broadcast, {'event': 'new_delivery_order', 'message': 'Novo pedido online pago recebido!'}, int(rid))

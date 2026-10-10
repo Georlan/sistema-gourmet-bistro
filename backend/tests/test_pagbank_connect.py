@@ -210,3 +210,292 @@ def test_reconnecting_mercado_pago_selects_only_one_automatic_receiver():
         db.commit()
         db.close()
         current_restaurante_id.reset(context)
+
+
+def test_pagbank_webhook_signature_validation_and_sandbox_fallback(monkeypatch):
+    import hashlib
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.database import SessionLocal, current_restaurante_id
+    from app.models import Restaurante, Usuario, Comanda, CaixaTurno, OnlinePaymentIntent, RestaurantPaymentAccount, OnlinePaymentWebhookEvent, Pagamento
+    from app.services.online_payments.base import ProviderPayment
+
+    rid = 9942
+    context = current_restaurante_id.set(rid)
+    db = SessionLocal()
+    try:
+        db.add(Restaurante(id=rid, nome='PagBank Webhook Test', plano='pro'))
+        db.flush()
+        user = Usuario(id='admin-test-9942', restaurante_id=rid, nome='Admin', email='admin-9942@test.com', senha_hash='x', role='admin', cargo='admin', status='ativo')
+        db.add(user)
+        db.flush()
+        shift = CaixaTurno(restaurante_id=rid, aberto_por_id=user.id, status='aberto', saldo_inicial=0.0)
+        db.add(shift)
+        db.flush()
+        comanda = Comanda(id='comanda-test-9942', restaurante_id=rid, garcom_id=user.id, numero_pedido=101, identificador='Mesa 1', status_comanda=None, tipo='Consumo no Local', delivery_status='pendente', online_payment_status='pending')
+        db.add(comanda)
+        db.flush()
+        intent = OnlinePaymentIntent(
+            id='intent-pg-hook-test',
+            restaurante_id=rid,
+            comanda_id=comanda.id,
+            turno_id=shift.id,
+            provider='pagbank',
+            method='pix',
+            status='pending',
+            amount=30.00,
+            marketplace_fee=0.00,
+            fee_settlement='none',
+            idempotency_key='idem-hook-test',
+            external_payment_id='ORDE_HOOK_TEST_123',
+        )
+        db.add(intent)
+        account = RestaurantPaymentAccount(
+            id='acc-pg-hook-123',
+            restaurante_id=rid,
+            provider='pagbank',
+            provider_environment='sandbox',
+            provider_user_id='ACCO_HOOK_SELLER',
+            status='active',
+        )
+        account.access_token = 'seller-webhook-secret-token'
+        account.webhook_secret = 'seller-webhook-secret-token'
+        db.add(account)
+        db.commit()
+
+        client = TestClient(app, base_url='https://testserver')
+        raw_body = b'{"id": "ORDE_HOOK_TEST_123"}'
+
+        # Mock PagBankProvider.get_payment to return approved payment
+        fake_payment = ProviderPayment(
+            external_id='ORDE_HOOK_TEST_123',
+            status='approved',
+            amount=Decimal('30.00'),
+            external_reference='intent-pg-hook-test',
+            qr_code='000201-pix',
+        )
+        monkeypatch.setattr(PagBankProvider, 'get_payment', lambda self, pid: fake_payment)
+
+        # 1. Tampered signature -> 401 Assinatura divergente.
+        res = client.post(
+            f'/payments/webhooks/pagbank/{account.id}',
+            content=raw_body,
+            headers={'Content-Type': 'application/json', 'x-authenticity-token': 'bad-signature'},
+        )
+        assert res.status_code == 401
+        assert 'Assinatura divergente' in res.json()['detail']
+
+        # 2. Production with missing signature -> 401 Assinatura ausente.
+        monkeypatch.setenv('PAGBANK_ENV', 'production')
+        account.provider_environment = 'production'
+        db.commit()
+        res = client.post(
+            f'/payments/webhooks/pagbank/{account.id}',
+            content=raw_body,
+            headers={'Content-Type': 'application/json'},
+        )
+        assert res.status_code == 401
+        assert 'Assinatura ausente' in res.json()['detail']
+
+        # 3. Valid signature in production -> processes successfully
+        valid_sig = hashlib.sha256(b'seller-webhook-secret-token-' + raw_body).hexdigest()
+        res = client.post(
+            f'/payments/webhooks/pagbank/{account.id}',
+            content=raw_body,
+            headers={'Content-Type': 'application/json', 'x-authenticity-token': valid_sig},
+        )
+        assert res.status_code == 200
+        assert res.json()['status'] == 'processed'
+
+        # 4. Replay idempotency -> returns already_processed
+        res = client.post(
+            f'/payments/webhooks/pagbank/{account.id}',
+            content=raw_body,
+            headers={'Content-Type': 'application/json', 'x-authenticity-token': valid_sig},
+        )
+        assert res.status_code == 200
+        assert res.json()['status'] == 'already_processed'
+
+        # 5. Sandbox without signature -> rejected with 401
+        monkeypatch.setenv('PAGBANK_ENV', 'sandbox')
+        account.provider_environment = 'sandbox'
+        # Create second order and comanda for sandbox test
+        comanda2 = Comanda(id='comanda-test-9942-2', restaurante_id=rid, garcom_id=user.id, numero_pedido=103, identificador='Mesa 2', status_comanda=None, tipo='Consumo no Local', delivery_status='pendente', online_payment_status='pending')
+        db.add(comanda2)
+        db.flush()
+        intent2 = OnlinePaymentIntent(
+            id='intent-pg-hook-test-2',
+            restaurante_id=rid,
+            comanda_id=comanda2.id,
+            turno_id=shift.id,
+            provider='pagbank',
+            method='pix',
+            status='pending',
+            amount=30.00,
+            marketplace_fee=0.00,
+            fee_settlement='none',
+            idempotency_key='idem-hook-test-2',
+            external_payment_id='ORDE_HOOK_TEST_456',
+        )
+        db.add(intent2)
+        db.commit()
+
+        fake_payment2 = ProviderPayment(
+            external_id='ORDE_HOOK_TEST_456',
+            status='approved',
+            amount=Decimal('30.00'),
+            external_reference='intent-pg-hook-test-2',
+            qr_code='000201-pix',
+        )
+        monkeypatch.setattr(PagBankProvider, 'get_payment', lambda self, pid: fake_payment2)
+
+        raw_body_sandbox = b'{"id": "ORDE_HOOK_TEST_456"}'
+        res = client.post(
+            f'/payments/webhooks/pagbank/{account.id}',
+            content=raw_body_sandbox,
+            headers={'Content-Type': 'application/json'},  # no x-authenticity-token!
+        )
+        assert res.status_code == 401
+        assert 'Assinatura ausente' in res.json()['detail']
+        db.refresh(intent2)
+        assert intent2.status == 'pending'
+
+        # 6. Sandbox with valid signature -> processes successfully
+        valid_sig_sandbox = hashlib.sha256(b'seller-webhook-secret-token-' + raw_body_sandbox).hexdigest()
+        res = client.post(
+            f'/payments/webhooks/pagbank/{account.id}',
+            content=raw_body_sandbox,
+            headers={'Content-Type': 'application/json', 'x-authenticity-token': valid_sig_sandbox},
+        )
+        assert res.status_code == 200
+        assert res.json()['status'] == 'processed'
+        db.refresh(intent2)
+        assert intent2.status == 'approved'
+
+    finally:
+        db.rollback()
+        db.query(OnlinePaymentWebhookEvent).filter_by(restaurante_id=rid).delete()
+        db.query(OnlinePaymentIntent).filter_by(restaurante_id=rid).delete()
+        db.query(RestaurantPaymentAccount).filter_by(restaurante_id=rid).delete()
+        db.query(Pagamento).filter_by(restaurante_id=rid).delete()
+        db.query(Comanda).filter_by(restaurante_id=rid).delete()
+        db.query(CaixaTurno).filter_by(restaurante_id=rid).delete()
+        db.query(Usuario).filter_by(restaurante_id=rid).delete()
+        db.query(Restaurante).filter_by(id=rid).delete()
+        db.commit()
+        db.close()
+        current_restaurante_id.reset(context)
+
+
+def test_cardapio_polling_reconciles_and_guards_against_premature_expiration(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.database import SessionLocal, current_restaurante_id
+    from app.models import Restaurante, Usuario, Comanda, CaixaTurno, OnlinePaymentIntent, RestaurantPaymentAccount, Item, Lancamento, Produto, Categoria, Pagamento
+    from app.services.online_payments.base import ProviderPayment
+
+    rid = 9943
+    context = current_restaurante_id.set(rid)
+    db = SessionLocal()
+    try:
+        db.add(Restaurante(id=rid, nome='Cardapio Polling Test', plano='pro'))
+        db.flush()
+        user = Usuario(id='admin-test-9943', restaurante_id=rid, nome='Admin', email='admin-9943@test.com', senha_hash='x', role='admin', cargo='admin', status='ativo')
+        db.add(user)
+        db.flush()
+        shift = CaixaTurno(restaurante_id=rid, aberto_por_id=user.id, status='aberto', saldo_inicial=0.0)
+        db.add(shift)
+        db.flush()
+        cat = Categoria(id='cat-test-9943', restaurante_id=rid, nome='Lanches')
+        db.add(cat)
+        db.flush()
+        prod = Produto(id='prod-test-9943', restaurante_id=rid, categoria_id=cat.id, nome='Burger', preco=20.0)
+        db.add(prod)
+        db.flush()
+        comanda = Comanda(id='comanda-test-9943', restaurante_id=rid, garcom_id=user.id, numero_pedido=102, identificador='Cliente Online', status_comanda=None, tipo='Delivery', delivery_status='pendente', online_payment_status='pending', idempotency_key='key-test-9943')
+        db.add(comanda)
+        db.flush()
+        lanc = Lancamento(id='lanc-test-9943', restaurante_id=rid, comanda_id=comanda.id, garcom_id=user.id, status='pendente')
+        db.add(lanc)
+        db.flush()
+        item = Item(id='item-test-9943', restaurante_id=rid, comanda_id=comanda.id, lancamento_id=lanc.id, produto_id=prod.id, preco_unit=20.0, status='preparando', pago=False)
+        db.add(item)
+        db.flush()
+
+        # Payment intent expired 10 seconds ago locally, BUT was paid at PagBank!
+        past_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=10)
+        intent = OnlinePaymentIntent(
+            id='intent-poll-test-1',
+            restaurante_id=rid,
+            comanda_id=comanda.id,
+            turno_id=shift.id,
+            provider='pagbank',
+            method='pix',
+            status='pending',
+            amount=20.00,
+            marketplace_fee=0.00,
+            fee_settlement='none',
+            idempotency_key='idem-poll-test',
+            external_payment_id='ORDE_POLL_TEST_789',
+            expires_at=past_time,
+            updated_at=past_time,
+        )
+        db.add(intent)
+        account = RestaurantPaymentAccount(
+            id='acc-pg-poll-1',
+            restaurante_id=rid,
+            provider='pagbank',
+            provider_environment='sandbox',
+            provider_user_id='ACCO_POLL_SELLER',
+            status='active',
+        )
+        account.access_token = 'poll-seller-token'
+        account.webhook_secret = 'poll-seller-token'
+        db.add(account)
+        db.commit()
+
+        # Mock PagBankProvider.get_payment returning status approved (PAID)
+        fake_payment = ProviderPayment(
+            external_id='ORDE_POLL_TEST_789',
+            status='approved',
+            amount=Decimal('20.00'),
+            external_reference='intent-poll-test-1',
+            qr_code='000201-pix',
+        )
+        monkeypatch.setattr(PagBankProvider, 'get_payment', lambda self, pid: fake_payment)
+
+        client = TestClient(app, base_url='https://testserver')
+        # Poll order status via public cardapio endpoint with idempotency_key as key query param
+        res = client.get('/cardapio/pedidos/comanda-test-9943/status', params={'key': 'key-test-9943'})
+        assert res.status_code == 200, res.text
+        data = res.json()
+
+        # Crucial: order must NOT be cancelled/expired! It must be confirmed/pendente and payment approved!
+        assert data['status'] != 'cancelado'
+        assert data['pagamento']['status'] == 'approved'
+        assert data['state']['terminal'] is False
+        assert data['state']['rejected'] is False
+
+        db.refresh(comanda)
+        db.refresh(intent)
+        assert comanda.fechada is False
+        assert comanda.online_payment_status == 'approved'
+        assert intent.status == 'approved'
+
+    finally:
+        db.rollback()
+        db.query(OnlinePaymentIntent).filter_by(restaurante_id=rid).delete()
+        db.query(RestaurantPaymentAccount).filter_by(restaurante_id=rid).delete()
+        db.query(Pagamento).filter_by(restaurante_id=rid).delete()
+        db.query(Item).filter_by(restaurante_id=rid).delete()
+        db.query(Lancamento).filter_by(restaurante_id=rid).delete()
+        db.query(Produto).filter_by(restaurante_id=rid).delete()
+        db.query(Categoria).filter_by(restaurante_id=rid).delete()
+        db.query(Comanda).filter_by(restaurante_id=rid).delete()
+        db.query(CaixaTurno).filter_by(restaurante_id=rid).delete()
+        db.query(Usuario).filter_by(restaurante_id=rid).delete()
+        db.query(Restaurante).filter_by(id=rid).delete()
+        db.commit()
+        db.close()
+        current_restaurante_id.reset(context)
+
