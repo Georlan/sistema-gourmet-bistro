@@ -2,8 +2,11 @@
 
 Fonte canônica interna: [Print Agent](../../../print-agent/README.md)
 e [install-windows.ps1](../../../print-agent/install-windows.ps1).
-Use o ZIP oficial de distribuição **gerado na main aprovada** pelo workflow
-`Print agent` do GitHub Actions, fornecido pelo suporte. Nunca forneça tokens
+Use o ZIP público oficial de distribuição **produzido a partir da main
+aprovada** no workflow `Publish public Print Agent release` e publicado
+como GitHub Release em um **repositório público separado**. Enquanto este
+repositório não tiver sido criado/publicado e validado, use o ZIP interno
+entregue pelo suporte (workflow `Print agent`). Nunca forneça tokens
 GitHub a clientes nem compartilhe checkout completo do backend. Confira
 a integridade do ZIP com o SHA-256 registrado na execução que o gerou.
 
@@ -21,7 +24,9 @@ USB. O KÔMA memoriza o nome da fila e não altera a impressora padrão.
 
 ## Instalar e parear
 
-Receba o ZIP oficial do suporte, extraia todos os arquivos e dê dois
+Baixe a release oficial publicada no repositório público do Print Agent
+(endereço divulgado pela equipe KÔMA) ou receba o ZIP validado do suporte.
+Confira o SHA-256 com o manifesto de verificação disponibilizado. Extraia todos os arquivos e dê dois
 cliques em `INSTALAR-KOMA-WINDOWS.cmd` na pasta extraída, usando o
 usuário que operará o computador. O instalador deve encontrar a pasta
 `print-agent` ao lado do arquivo `.cmd`. Não use o antigo instalador
@@ -71,9 +76,8 @@ status de fila não substitui confirmação física.
 
 ## Atualizar futuramente
 
-Faça fora do turno, com fila conferida e cliente avisado. Baixe pelo
-suporte a **nova versão** do ZIP, valide o SHA-256 da execução do
-GitHub Actions, extraia todo o conteúdo e use o mesmo usuário Windows.
+Faça fora do turno, com fila conferida e cliente avisado. Baixe a **nova versão** do ZIP na distribuição pública oficial
+ou receba o ZIP do suporte; valide o SHA-256 do arquivo, extraia todo o conteúdo e use o mesmo usuário Windows.
 Execute `ATUALIZAR-KOMA-WINDOWS.cmd` a partir da nova pasta extraída.
 Depois execute:
 
