@@ -226,7 +226,7 @@ class OnlinePaymentService:
         if account.provider == "mercado_pago":
             if is_marketplace_owner_account(account.provider_user_id):
                 raise OnlinePaymentConfigurationError(
-                    "A conta Mercado Pago conectada é a proprietária da aplicação KÔMA e não pode receber com split. "
+                    "A conta Mercado Pago conectada é a proprietária da aplicação KÔMA. "
                     "O restaurante precisa conectar uma conta Mercado Pago própria."
                 )
             if not account.access_token or not account.webhook_secret:
@@ -315,6 +315,7 @@ class OnlinePaymentService:
             raise OnlinePaymentConfigurationError("Restaurante não encontrado para calcular o pagamento online.")
 
         normalized_amount = _money(amount)
+        fee = cls.marketplace_fee_for_tenant(db, normalized_amount, restaurant)
         intent = OnlinePaymentIntent(
             restaurante_id=comanda.restaurante_id,
             comanda_id=comanda.id,
@@ -323,8 +324,8 @@ class OnlinePaymentService:
             method="pix",
             status="created",
             amount=float(normalized_amount),
-            marketplace_fee=float(cls.marketplace_fee_for_tenant(db, normalized_amount, restaurant)),
-            fee_settlement="invoiced" if provider == "direct_pix" else "split",
+            marketplace_fee=float(fee),
+            fee_settlement="none" if fee == 0 else ("invoiced" if provider == "direct_pix" else "split"),
             idempotency_key=idempotency_key,
         )
         comanda.online_payment_status = "pending"

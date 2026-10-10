@@ -33,7 +33,7 @@ def db():
     disposable.dispose()
 
 
-def order(db, monkeypatch):
+def order(db, monkeypatch, *, historical_fee=True):
     monkeypatch.setattr(settings,'DIRECT_PIX_ENABLED',True)
     monkeypatch.setattr(settings,'ONLINE_PAYMENT_PLAN_FEES_ENABLED',False)
     db.add(Categoria(id='direct-category',restaurante_id=99420,nome='Teste'))
@@ -48,7 +48,10 @@ def order(db, monkeypatch):
     dto=OrderApplicationService.create_order(db,command,commit=False)
     comanda=db.query(Comanda).filter(Comanda.id==dto.comanda_id).one()
     intent=OnlinePaymentService.create_intent_in_session(db,comanda=comanda,turno=shift,amount=Decimal('100'),idempotency_key='direct-test',provider='direct_pix')
-    intent.marketplace_fee=1.79
+    if historical_fee:
+        # Fixture explícita de pagamento histórico anterior à isenção.
+        intent.marketplace_fee=1.79
+        intent.fee_settlement="invoiced"
     db.commit()
     return OnlinePaymentService.ensure_pix_created(db,intent=intent,payer_email=''),shift
 
@@ -323,3 +326,31 @@ def test_fee_invoice_reissue_requires_confirmed_terminal_state(db,monkeypatch):
     assert row.previous_payment_ids==['old-charge']
     assert create_invoice_pix(db,restaurant_id=99420,invoice_id=row.id,payer_email='admin@example.com')==result
     assert len(posted)==1
+
+
+def test_zero_commission_direct_pix_does_not_accrue_usage_debt(db, monkeypatch):
+    intent, _ = order(db, monkeypatch, historical_fee=False)
+    assert Decimal(str(intent.marketplace_fee)) == Decimal("0.00")
+    assert intent.fee_settlement == "none"
+    confirm_receipt(intent.id, ReceiptConfirmation(received_amount="100.00", bank_reference="E"+"9"*31,
+        checked_bank_statement=True), db, SimpleNamespace(id="direct-pix-user"))
+    receipt = db.query(DirectPixReceipt).one()
+    assert receipt.fee == Decimal("0.00")
+    receipt.confirmed_at = dt.datetime(2025, 1, 15, tzinfo=dt.timezone.utc)
+    db.add(SaaSSubscription(restaurante_id=99420, billing_cycle="annual", status="active", payment_method_type="pix"))
+    db.commit()
+    monkeypatch.setattr("app.services.direct_pix_billing.tenant_commercial_terms", lambda *_: SimpleNamespace(billing_amount=Decimal("862.92")))
+    invoice = close_month(db, restaurant_id=99420, period="2025-01")
+    assert invoice.fees == 0 and invoice.subscription_amount == 0 and invoice.status == "paid"
+
+
+def test_zero_commission_direct_pix_can_be_enabled_without_migrating_saas_billing(db, monkeypatch):
+    from app.routes.direct_pix import save_settings, PixConfiguration, TERMS_VERSION
+    monkeypatch.setattr(settings, "DIRECT_PIX_ENABLED", True)
+    result = save_settings(PixConfiguration(enabled=True, key_type="email", pix_key="pix@example.com",
+        holder_name="RESTAURANTE", city="FORTALEZA", accept_manual_confirmation_and_monthly_fees=True),
+        db, SimpleNamespace(id="direct-pix-user"))
+    assert result["enabled"] is True
+    assert db.query(SaaSSubscription).count() == 0
+    config = db.query(RestaurantDirectPixConfig).one()
+    assert config.terms_version == TERMS_VERSION

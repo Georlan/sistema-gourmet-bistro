@@ -356,6 +356,7 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
             idempotency_key="payment-gate-order-key",
         )
         assert Decimal(str(intent.marketplace_fee)) == Decimal("0.0")
+        assert intent.fee_settlement == "none"
         intent.external_payment_id = "mp-payment-9917"
         intent.status = "pending"
         db.commit()

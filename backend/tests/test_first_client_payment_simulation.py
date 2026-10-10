@@ -61,7 +61,7 @@ DINE_IN_RESTAURANT_ID = 8843
 PAYMENT_EXTERNAL_ID = "990001"
 REFUND_EXTERNAL_ID = "880001"
 ORDER_TOTAL = Decimal("100.00")
-EXPECTED_PRO_FEE = Decimal("0.69")
+EXPECTED_PRO_FEE = Decimal("0.00")
 
 
 def _external_postgres() -> bool:
@@ -288,8 +288,8 @@ def _requests_by(state: dict[str, object], method: str, path: str) -> list[httpx
     return [req for req in requests if req.method == method and req.url.path == path]
 
 
-def test_first_client_split_payment_and_full_refund_simulation(monkeypatch):
-    """Simula pedido -> Pix Split -> aprovação -> refund total -> retry idempotente."""
+def test_first_client_zero_commission_payment_and_full_refund_simulation(monkeypatch):
+    """Simula pedido -> Pix sem comissão KÔMA -> aprovação -> refund total -> retry idempotente."""
     restaurante_id = SUCCESS_RESTAURANT_ID
     tenant_token = current_restaurante_id.set(restaurante_id)
     db = _session(restaurante_id)
@@ -327,7 +327,7 @@ def test_first_client_split_payment_and_full_refund_simulation(monkeypatch):
         assert len(create_requests) == 1
         create_payload = json.loads(create_requests[0].content)
         assert Decimal(str(create_payload["transaction_amount"])) == ORDER_TOTAL
-        assert Decimal(str(create_payload["application_fee"])) == EXPECTED_PRO_FEE
+        assert "application_fee" not in create_payload
         assert create_payload["description"] == "Pedido KOMA"
         assert create_payload["payment_method_id"] == "pix"
         assert create_payload["external_reference"] == intent.id
@@ -501,7 +501,7 @@ def test_dine_in_pix_split_approval_and_full_lifecycle_simulation(monkeypatch):
         assert len(create_requests) == 1
         create_payload = json.loads(create_requests[0].content)
         assert Decimal(str(create_payload["transaction_amount"])) == ORDER_TOTAL
-        assert Decimal(str(create_payload["application_fee"])) == EXPECTED_PRO_FEE
+        assert "application_fee" not in create_payload
         assert create_payload["payment_method_id"] == "pix"
 
         settled, first_approval = OnlinePaymentService.reconcile_provider_payment(

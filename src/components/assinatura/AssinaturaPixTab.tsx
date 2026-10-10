@@ -183,7 +183,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               <div className="max-w-[220px] text-right">
                 <span className="block text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Recursos do plano</span>
                 <span className="mt-1 block text-[10px] leading-4 text-koma-muted">
-                  Valores e taxa efetivamente contratados ficam no comprovante vinculado.
+                  Valores originalmente contratados ficam no comprovante vinculado. Comissão KÔMA efetiva: 0% nos próximos pagamentos online.
                 </span>
               </div>
             </div>
@@ -213,7 +213,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             </div>
 
             <div className="pt-2">
-              <p className="mb-3 text-[10px] text-koma-muted">Este cartão identifica o plano de recursos. Consulte “Contrato e documentos” para ver a mensalidade e a taxa congeladas no seu aceite.</p>
+              <p className="mb-3 text-[10px] text-koma-muted">Este cartão identifica o plano de recursos. Consulte “Contrato e documentos” para ver os valores originais do aceite. Comissão KÔMA efetiva: 0% nos próximos pagamentos online.</p>
               <button
                 type="button"
                 onClick={() => setActiveSubTab('planos_upgrade')}
@@ -338,7 +338,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                             : 'Cobrança mensal · sem taxa de implantação'}
                         </p>
                         <p className="mt-1 text-[10px] leading-4 text-koma-muted">
-                          Taxa KÔMA: <strong className="text-emerald-700 dark:text-emerald-400">{formatPercentage(plan.splitFeeRate)}</strong> por pedido online pago
+                          Taxa KÔMA: <strong className="text-emerald-700 dark:text-emerald-400">{plan.splitFeeRate === 0 ? '0%' : formatPercentage(plan.splitFeeRate)}</strong> por pedido online pago
                         </p>
                         {isYearly && <p className="mt-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">Economize {formatCurrency(pricing.annualSavings)} por ano no componente fixo</p>}
                       </div>
@@ -392,7 +392,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                         <span className="text-[9px] font-bold text-koma-muted uppercase tracking-wider">Pagamentos online</span>
                         <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs">
                           <span>Taxa KÔMA por pedido online pago</span>
-                          <strong className="text-emerald-700 dark:text-emerald-400">{formatPercentage(plan.splitFeeRate)}</strong>
+                          <strong className="text-emerald-700 dark:text-emerald-400">{plan.splitFeeRate === 0 ? '0%' : formatPercentage(plan.splitFeeRate)}</strong>
                         </div>
                         <p className="mt-3 text-[10px] leading-4 text-koma-muted">
                           Sem implantação e sem add-ons. Custos do provedor de pagamento são separados.

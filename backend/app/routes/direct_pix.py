@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from ..config import settings
+from ..subscription import ONLINE_ORDER_COMMISSION_ENABLED
 from ..database import get_db, require_tenant_id
 from ..models import Comanda, DirectPixReceipt, DirectPixFeeInvoice, OnlinePaymentIntent, RestaurantDirectPixConfig, Usuario
 from ..security import require_permission
@@ -17,7 +18,7 @@ from ..services.direct_pix_billing import close_month
 from ..websocket_manager import manager
 
 router = APIRouter(prefix='/payments/direct-pix', tags=['Pix direto'])
-TERMS_VERSION = 'direct-pix-v1'
+TERMS_VERSION = 'direct-pix-v2-zero-commission'
 
 
 class PixConfiguration(BaseModel):
@@ -61,7 +62,7 @@ def read_settings(db: Session = Depends(get_db), user: Usuario = Depends(require
 def save_settings(payload: PixConfiguration, db: Session = Depends(get_db), user: Usuario = Depends(require_permission('configuracoes:administrar'))):
     available()
     if payload.enabled and not payload.accept_manual_confirmation_and_monthly_fees:
-        raise HTTPException(422, 'Confirme a conferência manual e a cobrança mensal das taxas.')
+        raise HTTPException(422, 'Confirme a conferência manual dos recebimentos.')
     try:
         key = normalize_key(payload.key_type,payload.pix_key)
         name = merchant_text(payload.holder_name,25)
@@ -69,7 +70,7 @@ def save_settings(payload: PixConfiguration, db: Session = Depends(get_db), user
     except ValueError as exc:
         raise HTTPException(422,str(exc)) from exc
     rest_id = require_tenant_id()
-    if payload.enabled:
+    if payload.enabled and ONLINE_ORDER_COMMISSION_ENABLED:
         from ..saas_billing_models import SaaSSubscription
         from ..services.billing_service import tenant_commercial_terms
         sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == rest_id).one_or_none()

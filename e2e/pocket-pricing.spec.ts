@@ -29,7 +29,9 @@ test('Pocket novo exige meio de pagamento para a mensalidade', async ({ page }) 
   await page.getByLabel('E-mail de acesso do administrador').fill('ana@example.com');
   await page.getByLabel('WhatsApp', { exact: true }).fill('85999999999');
   await page.getByRole('button', { name: 'Salvar e continuar' }).click();
-  await expect(page.getByText(/meios de pagamento estão temporariamente indisponíveis/)).toBeVisible();
+  await expect(page.getByRole('radio', { name: /Cartão de crédito · indisponível no momento/ })).toBeVisible();
+  await expect(page.getByRole('radio', { name: /Pix · indisponível no momento/ })).toBeVisible();
+  await expect(page.getByRole('radio', { name: /Saldo Mercado Pago · indisponível no momento/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Aceitar e registrar contratação' })).toBeDisabled();
 });
 

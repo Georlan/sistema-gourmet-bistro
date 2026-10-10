@@ -270,7 +270,7 @@ def test_tenant_commercial_terms_resolves_linked_signed_receipt(client_and_sessi
         db.close()
 
 
-def test_legacy_v25_snapshot_remains_authoritative_and_immutable(client_and_session):
+def test_legacy_v25_snapshot_remains_authoritative_and_immutable(client_and_session, monkeypatch):
     client, Session = client_and_session
     accepted = client.post(
         "/api/contracts/accept",
