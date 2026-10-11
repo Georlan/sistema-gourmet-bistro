@@ -1,6 +1,43 @@
 import { expect, test } from '@playwright/test';
 import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
+test('retorno em outra aba aceita só o estado iniciado no mesmo navegador', async ({ page, context }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.route('**/payments/pagbank/status', route => route.fulfill({ json: {
+    configured: true, connected: false, environment: 'production', status: 'disconnected',
+  } }));
+  await page.route('**/payments/pagbank/connect', route => route.fulfill({ json: {
+    authorization_url: 'https://connect.pagbank.com.br/oauth2/authorize?state=new-tab-state',
+  } }));
+  await page.route('https://connect.pagbank.com.br/**', route => route.fulfill({ body: 'Banco simulado' }));
+  await page.goto('/?view=caixa&pagbank=cancelled');
+  await page.getByRole('button', { name: 'Conectar PagBank' }).click();
+  await expect(page).toHaveURL(/connect.pagbank.com.br/);
+  const returned = await context.newPage();
+  await mockCashierBackend(returned);
+  await seedCashierSession(returned); // KÔMA login, but no OAuth state in this tab.
+  let completions = 0;
+  await returned.route('**/payments/pagbank/complete', route => {
+    completions++;
+    expect(route.request().postDataJSON()).toEqual({ code: 'new-tab-code', state: 'new-tab-state' });
+    return route.fulfill({ json: { status: 'connected' } });
+  });
+  await returned.route('**/payments/pagbank/status', route => route.fulfill({ json: {
+    configured: true, connected: completions > 0, environment: 'production', status: completions ? 'active' : 'disconnected',
+  } }));
+  await returned.goto('/?view=caixa&pagbank=authorized&code=new-tab-code&state=new-tab-state');
+  await expect(returned.getByText('PagBank conectado. A conta do restaurante receberá os novos Pix.')).toBeVisible();
+  expect(completions).toBe(1);
+  expect(await returned.evaluate(() => localStorage.getItem('koma_pagbank_oauth_pending:new-tab-state'))).toBeNull();
+  expect(returned.url()).not.toMatch(/[?&](code|state|pagbank)=/);
+  await returned.reload();
+  // The login fixture resets navigation to orders on every document load.
+  await expect(returned.locator('.orders-board')).toBeVisible();
+  expect(completions).toBe(1);
+  await returned.close();
+});
+
 test('PagBank informa preparação sem oferecer uma conexão falsa', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);

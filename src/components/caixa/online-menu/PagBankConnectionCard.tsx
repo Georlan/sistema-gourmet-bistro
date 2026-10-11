@@ -1,6 +1,7 @@
 import { PaymentConnectionCard } from './PaymentConnectionCard';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { authFetch, authRequestErrorMessage } from '../../../utils/authRequest';
+import { forgetPagBankState, matchesPagBankState, rememberPagBankState } from '../../../utils/pagbankOAuthState';
 
 interface Props {
   apiBaseUrl: string;
@@ -87,9 +88,7 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders }: Props) {
     }
     if (oauthResult === 'authorized' && !completionStarted.current) {
       completionStarted.current = true;
-      const expected = sessionStorage.getItem('koma_pagbank_oauth_state');
-      sessionStorage.removeItem('koma_pagbank_oauth_state');
-      if (!code || !state || expected !== state) {
+      if (!code || !state || !matchesPagBankState(state)) {
         setFeedback({ type: 'error', text: 'Autorização inválida. Inicie a conexão novamente neste navegador.' });
         void loadStatus();
         return;
@@ -106,6 +105,7 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders }: Props) {
         } catch (error) {
           setFeedback({ type: 'error', text: authRequestErrorMessage(error, 'Não foi possível concluir a conexão PagBank.') });
         } finally {
+          forgetPagBankState(state);
           setIsConnecting(false);
           await loadStatus();
         }
@@ -113,7 +113,7 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders }: Props) {
       return;
     }
     if (oauthResult === 'cancelled') {
-      sessionStorage.removeItem('koma_pagbank_oauth_state');
+      forgetPagBankState();
       setFeedback({ type: 'info', text: 'Conexão com PagBank cancelada. Nenhuma conta foi alterada.' });
     }
     void loadStatus();
@@ -142,7 +142,7 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders }: Props) {
       }
       const oauthState = authorizationUrl.searchParams.get('state');
       if (!oauthState) throw new Error('Estado de autorização PagBank ausente.');
-      sessionStorage.setItem('koma_pagbank_oauth_state', oauthState);
+      rememberPagBankState(oauthState);
       window.location.assign(authorizationUrl.toString());
     } catch (error) {
       setFeedback({
