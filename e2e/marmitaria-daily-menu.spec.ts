@@ -40,6 +40,8 @@ test('daily marmitaria selection reviews once, preserves draft on failure and sy
   await expect(page.getByRole('heading', { name: 'O que vamos servir?' })).toBeVisible();
   const chicken = page.getByRole('checkbox', { name: 'Frango cozido — Proteínas', exact: true });
   const beef = page.getByRole('checkbox', { name: 'Acém cozido — Proteínas', exact: true });
+  const rice = page.getByRole('checkbox', { name: 'Arroz refogado — Guarnições', exact: true });
+  const salad = page.getByRole('checkbox', { name: 'Vinagrete — Saladas', exact: true });
   await expect(chicken).toBeChecked();
   await expect(beef).not.toBeChecked();
   const extras = page.getByRole('region', { name: 'Opções de Adicionais pagos' });
@@ -52,6 +54,8 @@ test('daily marmitaria selection reviews once, preserves draft on failure and sy
   expect(writes).toBe(0);
   await expect(page.getByRole('button', { name: 'Revisar alterações', exact: true })).toBeDisabled();
   await chicken.uncheck(); await beef.check();
+  await expect(rice).toBeChecked();
+  await expect(salad).toBeChecked();
   expect(writes).toBe(0);
   // Filter membership must stay fixed until save/reload: a row must not vanish
   // under a second tap and accidentally toggle its newly shifted neighbor.
@@ -77,6 +81,7 @@ test('daily marmitaria selection reviews once, preserves draft on failure and sy
   await page.getByRole('button', { name: 'Salvar cardápio do dia', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Revisar alterações', exact: true })).toBeDisabled();
   await expect(chicken).not.toBeChecked(); await expect(beef).toBeChecked();
+  await expect(rice).toBeChecked(); await expect(salad).toBeChecked();
   expect(writes).toBe(2);
   await page.getByLabel('Buscar opção do cardápio diário').fill('acem');
   await expect(beef).toBeVisible(); await expect(chicken).toHaveCount(0);
