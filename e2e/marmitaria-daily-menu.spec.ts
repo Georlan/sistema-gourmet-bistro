@@ -53,6 +53,18 @@ test('daily marmitaria selection reviews once, preserves draft on failure and sy
   await expect(page.getByRole('button', { name: 'Revisar alterações', exact: true })).toBeDisabled();
   await chicken.uncheck(); await beef.check();
   expect(writes).toBe(0);
+  // Filter membership must stay fixed until save/reload: a row must not vanish
+  // under a second tap and accidentally toggle its newly shifted neighbor.
+  const availabilityFilter = page.getByLabel('Filtrar opções do dia');
+  await availabilityFilter.selectOption('disponiveis');
+  await expect(chicken).toBeVisible();
+  await expect(chicken).not.toBeChecked();
+  await expect(beef).toHaveCount(0);
+  await availabilityFilter.selectOption('pausadas');
+  await expect(beef).toBeVisible();
+  await expect(beef).toBeChecked();
+  await expect(chicken).toHaveCount(0);
+  await availabilityFilter.selectOption('todos');
   await expect(extra).toContainText('Pausado');
   await expect(extra).toContainText('R$ 5,00');
   await expect(page.getByRole('button', { name: 'Cadastros', exact: true })).toBeDisabled();
