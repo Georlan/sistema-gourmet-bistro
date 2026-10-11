@@ -782,15 +782,12 @@ class PrinterService:
                 item_label = (
                     f"{qty}x {_printable_product_name(product_code, product_name).upper()}"
                 )
-                if production_hierarchy:
-                    _append_bold_wrapped(lines, item_label, width)
-                else:
-                    _append_bold_amount_line(
-                        lines,
-                        item_label,
-                        _format_brl(item_total),
-                        width,
-                    )
+                # Production hierarchy controls the expanded composition layout,
+                # not whether the price is printed. Every sold item (including
+                # drinks and BAR-only tickets) keeps its respective line total.
+                _append_bold_amount_line(
+                    lines, item_label, _format_brl(item_total), width,
+                )
                 if production_hierarchy and composition:
                     lines.append("")
                 for composition_index, composition_line in enumerate(composition):
