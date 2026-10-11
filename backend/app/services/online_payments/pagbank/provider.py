@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import re
 from decimal import Decimal
 
@@ -11,6 +12,29 @@ from ....tax_ids import is_valid_cpf, is_valid_cnpj
 from ..base import ProviderPayment, ProviderRefund
 from ..mercado_pago import MercadoPagoError
 from .oauth import api_url
+
+logger = logging.getLogger(__name__)
+
+
+def _failure_reference(response: httpx.Response) -> str:
+    """Keep only provider identifiers, never arbitrary response text or PII."""
+    request_id = next((response.headers.get(key) for key in
+                       ('x-request-id', 'x-amzn-requestid', 'x-amz-apigw-id')
+                       if response.headers.get(key)), '')
+    if not re.fullmatch(r'[A-Za-z0-9._:-]{1,80}', request_id):
+        request_id = ''
+    code = ''
+    try:
+        data = response.json()
+        errors = data.get('error_messages', []) if isinstance(data, dict) else []
+        candidate = errors[0].get('code', '') if isinstance(errors, list) and errors and isinstance(errors[0], dict) else ''
+        if isinstance(candidate, str) and re.fullmatch(r'[A-Z0-9_-]{1,64}', candidate):
+            code = candidate
+    except ValueError:
+        pass
+    logger.warning('PagBank API failure status=%s provider_code=%s provider_request_id=%s',
+                   response.status_code, code or 'unavailable', request_id or 'unavailable')
+    return ''.join((f' Código: {code}.' if code else '', f' Referência PagBank: {request_id}.' if request_id else ''))
 
 
 class PagBankError(MercadoPagoError):
@@ -40,10 +64,11 @@ class PagBankProvider:
     def _request(self, method, path, **kwargs):
         try:
             response = self._client.request(method, path, **kwargs)
+            reference = _failure_reference(response) if response.is_error else ''
             if response.status_code == 403:
-                raise PagBankError('PagBank recusou a criação/consulta da cobrança (HTTP 403). Verifique a liberação da API Order/Pix e as permissões da aplicação e da conta conectada.', status_code=403)
+                raise PagBankError('PagBank recusou a criação/consulta da cobrança (HTTP 403). Verifique a liberação da API Order/Pix e as permissões da aplicação e da conta conectada.' + reference, status_code=403)
             if response.is_error:
-                raise PagBankError(f'PagBank recusou a operação (HTTP {response.status_code}).',
+                raise PagBankError(f'PagBank recusou a operação (HTTP {response.status_code}).' + reference,
                                    status_code=response.status_code, retryable=response.status_code >= 500 or response.status_code in {408, 429})
             data = response.json()
             if not isinstance(data, dict):

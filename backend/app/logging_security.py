@@ -6,7 +6,7 @@ from typing import Any
 
 
 _SENSITIVE_QUERY_VALUE = re.compile(
-    r"([?&](?:token|access_token|authorization)=)[^&\s\"']+",
+    r"([?&](?:token|access_token|refresh_token|client_secret|authorization|code|state)=)[^&\s\"']+",
     flags=re.IGNORECASE,
 )
 

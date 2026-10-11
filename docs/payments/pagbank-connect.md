@@ -86,3 +86,13 @@ O início da conexão usa o `Origin` da requisição autenticada, aceitando some
 Conectar a conta não comprova liberação da API de Pedidos em produção. Em 11/10/2026, o piloto conectado em produção recebeu HTTP 403 na criação de Pix, sem ID de pedido bancário registrado; o responsável confirmou que apenas cadastrou a aplicação e conectou a conta, sem homologação. Solicitar ao PagBank homologação/liberação de `POST https://api.pagseguro.com/orders` com Pix em nome dos vendedores via Connect. Verificar permissões da aplicação e da conta recebedora. Não trocar para Pix manual ou Sandbox para mascarar a recusa. O checkout diferencia a falta de autorização de um erro transitório e mantém a tentativa idempotente.
 
 Fonte oficial: https://developer.pagbank.com.br/docs/codigos-de-status
+
+### Rastreio e retorno em outra aba (11/10/2026)
+
+A aba que inicia a conexão grava apenas o estado aleatório em sessionStorage e um registro de validade de dez minutos no localStorage da mesma origem. Isso permite concluir em outra aba do mesmo navegador depois de autenticar o mesmo administrador, sem transportar códigos ou tokens para armazenamento compartilhado. Origens, perfis e navegadores diferentes continuam isolados; o servidor mantém a validação de MAC, ambiente, restaurante, administrador e prazo. Retornos desconhecidos não apagam uma autorização válida em andamento. Estados antigos em sessionStorage continuam compatíveis.
+
+A investigação das 17:33–17:38 encontrou callback 303 sem POST /complete; não comprovou a causa no navegador original. O cenário de retorno em outra aba agora tem regressão simulada própria, mas não foi declarado como causa confirmada desse incidente.
+
+Recusas da API passam a conservar apenas o código técnico validado em error_messages e o identificador de requisição do PagBank (quando fornecido). O corpo bruto, descrições, documentos e tokens não são registrados. Logs de acesso ocultam code/state e credenciais de query string. O diagnóstico novo se aplica às chamadas futuras; não recupera a resposta descartada no incidente anterior.
+
+Antes da homologação, ainda é necessário obter evidências genuínas de Connect + Order no Sandbox e validar qual token assina o webhook de Order criado via Connect. Não substituir assinatura por suposição, não declarar mocks como logs do banco e não apagar intenções de erro para forçar troca/desconexão de conta.

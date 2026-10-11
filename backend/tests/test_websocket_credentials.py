@@ -51,3 +51,13 @@ def test_tracking_path_tokens_are_redacted_in_access_logs():
         path = f"/api/cardapio/pedidos/acompanhar/private-token{suffix}"
         assert redact_sensitive_query_values(path) == f"/api/cardapio/pedidos/acompanhar/[REDACTED]{suffix}"
     assert redact_sensitive_query_values('/acompanhar/private-token') == '/acompanhar/[REDACTED]'
+
+
+def test_oauth_callback_secrets_are_redacted_in_real_uvicorn_argument_format():
+    record = logging.LogRecord('uvicorn.access', logging.INFO, __file__, 1,
+        '%s - "%s %s HTTP/%s" %d',
+        ('127.0.0.1', 'GET', '/payments/pagbank/oauth/callback?code=private-code&state=private-state', '1.1', 303), None)
+    SensitiveQueryFilter().filter(record)
+    assert 'private-code' not in record.getMessage()
+    assert 'private-state' not in record.getMessage()
+    assert 'code=[REDACTED]&state=[REDACTED]' in record.getMessage()

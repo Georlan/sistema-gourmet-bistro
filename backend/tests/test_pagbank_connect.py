@@ -717,3 +717,24 @@ def test_forbidden_bank_response_is_not_retryable_or_exposed_as_raw_payload():
     assert 'liberação' in str(denied.value)
     assert 'must-not-escape' not in str(denied.value)
     provider._client.close()
+
+
+@pytest.mark.parametrize('provider_code', ['ACCESS_DENIED', 'unsafe secret@example.test'])
+def test_bank_failure_keeps_only_safe_code_and_request_reference(caplog, provider_code):
+    provider = PagBankProvider('seller-token')
+    provider._client.close()
+    provider._client = httpx.Client(base_url=oauth.api_url(), transport=httpx.MockTransport(
+        lambda req: httpx.Response(403, headers={'x-request-id': 'bank-request-123'}, json={
+            'error_messages': [{'code': provider_code, 'description': 'private buyer@example.test'}],
+            'access_token': 'never-log-token', 'customer': {'tax_id': 'never-log-document'}})))
+    try:
+        with pytest.raises(PagBankError) as denied:
+            provider.get_payment('ORDE_test')
+        output = str(denied.value) + caplog.text
+        assert 'bank-request-123' in output
+        assert ('ACCESS_DENIED' in output) == (provider_code == 'ACCESS_DENIED')
+        for sensitive in ('secret@example.test', 'buyer@example.test', 'never-log-token', 'never-log-document'):
+            assert sensitive not in output
+        assert denied.value.status_code == 403 and not denied.value.retryable
+    finally:
+        provider._client.close()
