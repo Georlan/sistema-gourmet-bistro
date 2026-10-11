@@ -47,9 +47,9 @@ def connection_status(db: Session = Depends(get_db), user: Usuario = Depends(req
 
 
 @router.get('/pagbank/connect')
-def connect(response: Response, user: Usuario = Depends(require_permission('configuracoes:administrar'))):
+def connect(request: Request, response: Response, user: Usuario = Depends(require_permission('configuracoes:administrar'))):
     try:
-        url, _state = oauth.authorization(require_tenant_id(), str(user.id))
+        url, _state = oauth.authorization(require_tenant_id(), str(user.id), return_origin=request.headers.get("origin"))
     except oauth.PagBankOAuthError as exc:
         raise HTTPException(503, str(exc)) from exc
     response.headers['Cache-Control'] = 'no-store'
@@ -67,7 +67,7 @@ def callback(code: str = '', state: str = '', error: str = ''):
         if not code or len(code) > 512:
             raise HTTPException(400, 'Retorno OAuth incompleto.')
         params.update(code=code, state=state)
-    response = RedirectResponse(settings.KOMA_PUBLIC_APP_URL + '/?' + urlencode(params), status_code=303)
+    response = RedirectResponse(oauth.return_origin_for_state(state) + '/?' + urlencode(params), status_code=303)
     response.headers['Cache-Control'] = 'no-store'
     response.headers['Referrer-Policy'] = 'no-referrer'
     return response

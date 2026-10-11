@@ -653,8 +653,12 @@ class CardapioWebAdapter:
         except OnlinePaymentConfigurationError as err:
             db.rollback()
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(err))
-        except (MercadoPagoError, OnlinePaymentValidationError):
+        except (MercadoPagoError, OnlinePaymentValidationError) as exc:
             db.rollback()
+            from ...services.online_payments.pagbank.provider import PagBankError
+            if isinstance(exc, PagBankError) and exc.status_code == 403:
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="O PagBank não autorizou a emissão deste Pix. O restaurante precisa verificar a liberação de pagamentos online com o PagBank. Não houve confirmação de pagamento.") from exc
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Não foi possível gerar o Pix agora. Tente novamente sem alterar a sacola.",

@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from ....config import settings
+from ....config import settings, OFFICIAL_PUBLIC_FRONTEND_ORIGINS
 from ..oauth import MercadoPagoOAuthTokens
 
 
@@ -60,12 +60,28 @@ def configured(environment: str | None = None) -> bool:
     return all(credential(k, environment) for k in ('CLIENT_ID', 'CLIENT_SECRET', 'APP_TOKEN'))
 
 
-def authorization(restaurant_id: int, user_id: str) -> tuple[str, str]:
+def _return_origins() -> dict[str, str]:
+    # Short signed identifiers keep state within Connect's 128-character limit.
+    return {**{str(i): value for i, value in enumerate(OFFICIAL_PUBLIC_FRONTEND_ORIGINS)}, 'c': settings.KOMA_PUBLIC_APP_URL}
+
+
+def return_origin_for_state(state: str) -> str:
+    decode_state(state, state)
+    raw = base64.urlsafe_b64decode(state + '=' * (-len(state) % 4))
+    parts = raw[:-16].decode().split(':')
+    return _return_origins().get(parts[4], settings.KOMA_PUBLIC_APP_URL) if len(parts) == 5 else settings.KOMA_PUBLIC_APP_URL
+
+
+def authorization(restaurant_id: int, user_id: str, *, return_origin: str | None = None) -> tuple[str, str]:
     environment = environment_for_restaurant(restaurant_id)
     if not configured(environment):
         raise PagBankOAuthError('A conexão PagBank ainda está sendo preparada pela KÔMA.')
     # Domain-separated MAC; compact state respects PagBank's 128 character limit.
-    data = f'{int(restaurant_id)}:{user_id}:{int(time.time())}:{secrets.token_hex(8)}'.encode()
+    origin = return_origin or settings.KOMA_PUBLIC_APP_URL
+    origin_key = next((key for key, value in _return_origins().items() if value == origin), None)
+    if origin_key is None:
+        raise PagBankOAuthError('Endereço de retorno PagBank não autorizado.')
+    data = f'{int(restaurant_id)}:{user_id}:{int(time.time())}:{secrets.token_hex(8)}:{origin_key}'.encode()
     mac = hmac.digest(settings.SECRET_KEY.encode(), b'pagbank-connect:' + api_url(environment).encode() + b':' + data, 'sha256')[:16]
     state = base64.urlsafe_b64encode(data + mac).decode().rstrip('=')
     if len(state) > 128:
@@ -82,7 +98,10 @@ def decode_state(state: str, cookie: str) -> tuple[int, str]:
             raise ValueError()
         raw = base64.urlsafe_b64decode(state + '=' * (-len(state) % 4))
         data, mac = raw[:-16], raw[-16:]
-        rid, uid, issued, nonce = data.decode().split(':')
+        parts = data.decode().split(':')
+        if len(parts) not in (4, 5) or (len(parts) == 5 and parts[4] not in _return_origins()):
+            raise ValueError()
+        rid, uid, issued, nonce = parts[:4]
         environment = environment_for_restaurant(int(rid))
         expected = hmac.digest(settings.SECRET_KEY.encode(), b'pagbank-connect:' + api_url(environment).encode() + b':' + data, 'sha256')[:16]
         if not hmac.compare_digest(mac, expected):

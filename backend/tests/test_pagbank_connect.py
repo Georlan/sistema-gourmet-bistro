@@ -652,3 +652,68 @@ def test_payment_adapter_uses_account_environment_when_pilot_policy_changes(monk
             adapter._client.close()
     with pytest.raises(oauth.PagBankOAuthError):
         PagBankProvider('seller', environment='untrusted-host')
+
+
+@pytest.mark.parametrize('origin', ['https://app.komafood.com.br', 'https://komafood.com.br', 'https://sistema-gourmet-bistro.pages.dev'])
+def test_oauth_returns_to_same_origin_without_moving_browser_session(origin):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    uid = '00000000-0000-0000-0000-000000000001'
+    from fastapi import Request, Response
+    from types import SimpleNamespace
+    from app.database import current_restaurante_id
+    from app.routes import pagbank_payments
+    context = current_restaurante_id.set(8)
+    try:
+        result = pagbank_payments.connect(request=Request({'type': 'http', 'headers': [(b'origin', origin.encode())]}),
+            response=Response(), user=SimpleNamespace(id=uid))
+    finally:
+        current_restaurante_id.reset(context)
+    state = parse_qs(urlparse(result['authorization_url']).query)['state'][0]
+    assert len(state) <= 128
+    assert oauth.decode_state(state, state) == (8, uid)
+    with TestClient(app) as client:
+        response = client.get('/payments/pagbank/oauth/callback', params={'state': state, 'code': 'test-code'}, follow_redirects=False)
+    assert response.status_code == 303
+    target = urlparse(response.headers['location'])
+    assert target.scheme + '://' + target.netloc == origin
+    assert parse_qs(target.query)['state'] == [state]
+    assert response.headers['cache-control'] == 'no-store'
+
+
+def test_oauth_return_origin_cannot_be_redirected_or_tampered():
+    import base64
+    for origin in ['https://attacker.example', 'https://app.komafood.com.br.attacker.example', 'https://app.komafood.com.br/path', 'http://app.komafood.com.br']:
+        with pytest.raises(oauth.PagBankOAuthError):
+            oauth.authorization(8, 'admin', return_origin=origin)
+    _, state = oauth.authorization(8, 'admin', return_origin='https://app.komafood.com.br')
+    raw = base64.urlsafe_b64decode(state + '=' * (-len(state) % 4))
+    parts = raw[:-16].decode().split(':')
+    parts[-1] = '1' if parts[-1] != '1' else '2'
+    tampered = base64.urlsafe_b64encode(':'.join(parts).encode() + raw[-16:]).decode().rstrip('=')
+    with pytest.raises(oauth.PagBankOAuthError):
+        oauth.return_origin_for_state(tampered)
+
+
+def test_legacy_in_flight_oauth_state_keeps_configured_return_origin():
+    import base64, hmac, time
+    from app.config import settings
+    data = f'8:admin:{int(time.time())}:nonce'.encode()
+    mac = hmac.digest(settings.SECRET_KEY.encode(), b'pagbank-connect:' + oauth.api_url().encode() + b':' + data, 'sha256')[:16]
+    state = base64.urlsafe_b64encode(data + mac).decode().rstrip('=')
+    assert oauth.decode_state(state, state) == (8, 'admin')
+    assert oauth.return_origin_for_state(state) == settings.KOMA_PUBLIC_APP_URL
+
+
+def test_forbidden_bank_response_is_not_retryable_or_exposed_as_raw_payload():
+    provider = PagBankProvider('seller-token')
+    provider._client.close()
+    provider._client = httpx.Client(base_url=oauth.api_url(), transport=httpx.MockTransport(
+        lambda req: httpx.Response(403, json={'message': 'ACCESS_DENIED', 'secret': 'must-not-escape'})))
+    with pytest.raises(PagBankError) as denied:
+        provider.get_payment('ORDE_test')
+    assert denied.value.status_code == 403
+    assert not denied.value.retryable
+    assert 'liberação' in str(denied.value)
+    assert 'must-not-escape' not in str(denied.value)
+    provider._client.close()

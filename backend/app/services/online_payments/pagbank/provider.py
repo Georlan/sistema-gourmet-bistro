@@ -40,6 +40,8 @@ class PagBankProvider:
     def _request(self, method, path, **kwargs):
         try:
             response = self._client.request(method, path, **kwargs)
+            if response.status_code == 403:
+                raise PagBankError('PagBank recusou a criação/consulta da cobrança (HTTP 403). Verifique a liberação da API Order/Pix e as permissões da aplicação e da conta conectada.', status_code=403)
             if response.is_error:
                 raise PagBankError(f'PagBank recusou a operação (HTTP {response.status_code}).',
                                    status_code=response.status_code, retryable=response.status_code >= 500 or response.status_code in {408, 429})
