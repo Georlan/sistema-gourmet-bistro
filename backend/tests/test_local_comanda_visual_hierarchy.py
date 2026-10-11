@@ -76,6 +76,9 @@ def test_local_order_is_born_from_canonical_renderer_with_table_identity():
     assert "VALOR" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
     assert "R$ 46,00" in ticket
+    # The waiter's dine-in ticket must not print the Campari name alone.
+    drink_line = next(line for line in ticket.splitlines() if "1x CAMPARI DOSE" in line)
+    assert "R$ 5,00" in drink_line
 
 
 def test_online_remote_order_uses_same_renderer_without_operator_or_counter_channel():
@@ -114,7 +117,7 @@ def test_online_remote_order_uses_same_renderer_without_operator_or_counter_chan
     assert "FORMA: DINHEIRO" in ticket
     assert "SUBTOTAL ITENS:" in ticket
     item_line = next(line for line in ticket.splitlines() if "1x BURGUER PÔR DO SOL" in line)
-    assert "R$" not in item_line
+    assert "R$ 34,00" in item_line
 
 
 def test_dine_in_engine_calls_canonical_renderer_instead_of_table_formatter():
