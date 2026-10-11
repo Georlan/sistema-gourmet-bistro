@@ -54,7 +54,16 @@ router = APIRouter(
 ARCHIVED_MODIFIER_TYPE = "__archived__"
 
 
+class OpcaoModificadorSnapshot(BaseModel):
+    """State the editor actually loaded before the user started changing a group."""
+    id: str
+    nome: str
+    preco_adicional: float
+    ativo: StrictBool
+
+
 class GrupoModificadorCreateV2(GrupoModificadorCreate):
+    opcoes_originais: Optional[List[OpcaoModificadorSnapshot]] = None
     categoria_ids: List[str] = Field(default_factory=list)
     incluir_subcategorias: bool = True
     grupo_origem_id: Optional[str] = None
@@ -270,6 +279,32 @@ def _validate_product_ids(db: Session, restaurante_id: int, product_ids: List[st
         )
 
 
+def _assert_group_snapshot(
+    db: Session,
+    restaurante_id: int,
+    grupo_id: str,
+    original_options: List[OpcaoModificadorSnapshot],
+) -> None:
+    """Do not let an old group form restore paused items or archive newly added items."""
+    current = db.query(OpcaoModificador).filter(
+        OpcaoModificador.restaurante_id == restaurante_id,
+        OpcaoModificador.grupo_id == grupo_id,
+        OpcaoModificador.arquivada.is_(False),
+    ).all()
+    expected_by_id = {option.id: option for option in original_options}
+    current_by_id = {option.id: option for option in current}
+    if len(expected_by_id) != len(original_options) or expected_by_id.keys() != current_by_id.keys():
+        raise HTTPException(409, "O grupo mudou em outro acesso. Feche e reabra o cadastro antes de salvar.")
+    for option_id, expected in expected_by_id.items():
+        actual = current_by_id[option_id]
+        if (
+            bool(actual.ativo) != expected.ativo
+            or actual.nome != expected.nome
+            or float(actual.preco_adicional or 0) != expected.preco_adicional
+        ):
+            raise HTTPException(409, "O grupo mudou em outro acesso. Feche e reabra o cadastro antes de salvar.")
+
+
 def _sync_group_options(
     db: Session,
     *,
@@ -427,6 +462,7 @@ def criar_grupo(
 class OpcaoDisponibilidadeUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ativo: StrictBool
+    ativo_anterior: Optional[StrictBool] = None
 
 
 class OpcaoDisponibilidadeDiaria(BaseModel):
@@ -521,6 +557,8 @@ def atualizar_disponibilidade_opcao(
         raise HTTPException(status_code=404, detail="Opção não encontrada.")
     if opcao.opcao_origem_id:
         raise HTTPException(409, "Altere a disponibilidade no complemento de origem.")
+    if payload.ativo_anterior is not None and opcao.ativo != payload.ativo_anterior:
+        raise HTTPException(409, "A disponibilidade mudou em outro acesso. Atualize o cadastro antes de tentar novamente.")
     opcao.ativo = payload.ativo
     db.flush()
     sync_linked_complements(db, rest_id, opcao.grupo_id)
@@ -550,6 +588,8 @@ def atualizar_grupo(
         raise HTTPException(status_code=404, detail="Grupo não encontrado.")
     _validate_product_ids(db, rest_id, payload.produto_ids or [])
     if payload.opcoes is not None:
+        if payload.opcoes_originais is not None:
+            _assert_group_snapshot(db, rest_id, grupo_id, payload.opcoes_originais)
         _sync_group_options(
             db,
             restaurante_id=rest_id,
