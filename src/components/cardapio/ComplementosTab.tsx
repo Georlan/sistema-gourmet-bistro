@@ -288,6 +288,14 @@ export default function ComplementosTab({
         produto_ids: selectedProductIds,
         categoria_ids: selectedCategoryIds,
         incluir_subcategorias: includeSubcategories,
+        // A complete snapshot prevents a stale cadastro from changing statuses,
+        // overwriting prices/names, or removing an option added in another session.
+        ...(editingGrupo ? { opcoes_originais: editingGrupo.opcoes.map((option) => ({
+          id: option.id!,
+          nome: option.nome,
+          preco_adicional: Number(option.preco_adicional),
+          ativo: option.ativo !== false,
+        })) } : {}),
       };
 
       const url = editingGrupo
@@ -351,10 +359,11 @@ export default function ComplementosTab({
       const response = await fetch(`${apiBaseUrl}/cardapio/modificadores/opcoes/${encodeURIComponent(option.id)}/disponibilidade`, {
         method: 'PATCH',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ativo: option.ativo === false }),
+        body: JSON.stringify({ ativo: option.ativo === false, ativo_anterior: option.ativo !== false }),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok || typeof data?.ativo !== 'boolean') {
+        if (response.status === 409) await fetchCatalogBindings();
         throw new Error(data?.detail || 'Não foi possível atualizar a disponibilidade.');
       }
       await fetchCatalogBindings();
