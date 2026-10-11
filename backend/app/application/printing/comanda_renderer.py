@@ -688,7 +688,7 @@ def render_canonical_comanda(
         operator_label=variant.operator_label,
         operator_name=operator_name,
         location_label=variant.location_label,
-        show_item_values=not production_hierarchy,
+        show_item_values=True,
     )
     lines = receipt.split("\n")
     _insert_variant_header(lines, tipo=order_type, variant=variant, width=width)
