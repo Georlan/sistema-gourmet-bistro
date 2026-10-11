@@ -600,7 +600,7 @@ def test_stale_group_form_cannot_revert_daily_changes_or_archive_new_options():
     ]
     first_id = group['opcoes'][0]['id']
     assert client.patch(
-        f'{url}/opcoes/{first_id}/disponibilidade',
+        f'/cardapio/modificadores/opcoes/{first_id}/disponibilidade',
         headers=headers, json={'ativo': False, 'ativo_anterior': True},
     ).status_code == 200
     stale = client.put(group_url, headers=headers, json={
