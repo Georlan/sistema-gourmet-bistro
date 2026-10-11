@@ -53,7 +53,13 @@ test('daily marmitaria selection reviews once, preserves draft on failure and sy
   await extra.click();
   expect(writes).toBe(0);
   await expect(page.getByRole('button', { name: 'Revisar alterações', exact: true })).toBeDisabled();
-  await chicken.uncheck(); await beef.check();
+  const riceBeforePause = await rice.boundingBox();
+  await chicken.uncheck();
+  const riceAfterPause = await rice.boundingBox();
+  expect(riceBeforePause).not.toBeNull();
+  expect(riceAfterPause).not.toBeNull();
+  expect(Math.abs(riceAfterPause!.y - riceBeforePause!.y)).toBeLessThan(2);
+  await beef.check();
   await expect(rice).toBeChecked();
   await expect(salad).toBeChecked();
   expect(writes).toBe(0);
