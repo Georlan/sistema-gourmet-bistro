@@ -817,7 +817,7 @@ def test_stable_legacy_agent_prints_after_multiple_freshness_windows(monkeypatch
             return cls.current if tz else cls.current.replace(tzinfo=None)
 
     monkeypatch.setattr(print_agents_route, "datetime", SimpleNamespace(
-        datetime=Clock, timezone=datetime.timezone, timedelta=datetime.timedelta,
+        **{**vars(datetime), "datetime": Clock},
     ))
     client = TestClient(app)
     headers = {"X-Agent-Token": "token_agent_1"}
@@ -851,7 +851,12 @@ def test_stable_legacy_agent_prints_after_multiple_freshness_windows(monkeypatch
     assert client.post("/api/print-agents/jobs/claim-batch", headers=headers).json() == []
     with TestingSessionLocal() as db:
         assert db.query(PrintJob).filter_by(id="job-1001").one().status == "printed"
-        assert db.query(PrintJob).filter_by(id="job-2001").one().status == "pending"
+    other_tenant = current_restaurante_id.set(2)
+    try:
+        with TestingSessionLocal() as db:
+            assert db.query(PrintJob).filter_by(id="job-2001").one().status == "pending"
+    finally:
+        current_restaurante_id.reset(other_tenant)
 
 
 @pytest.mark.parametrize("age_seconds,diagnostics_age_seconds,send_diagnostics,expected_commits", [
