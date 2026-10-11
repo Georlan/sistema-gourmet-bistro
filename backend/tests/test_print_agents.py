@@ -804,6 +804,60 @@ def test_only_heartbeat_updates_agent_last_seen():
         db.close()
 
 
+@pytest.mark.parametrize("age_seconds,diagnostics_age_seconds,send_diagnostics,expected_commits", [
+    (5, 5, True, 0),
+    (25, 25, True, 1),
+    (100, 100, True, 1),
+    (100, 100, False, 1),
+    (5, 100, True, 1),
+])
+def test_heartbeat_keeps_unchanged_printer_report_fresh_without_idle_commits(
+    monkeypatch, age_seconds, diagnostics_age_seconds, send_diagnostics, expected_commits,
+):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    previous = now - datetime.timedelta(seconds=age_seconds)
+    previous_diagnostics = now - datetime.timedelta(seconds=diagnostics_age_seconds)
+    report = print_agents_route.PrinterDiagnosticsReport(
+        adapter="linux", platform="linux", default_printer="G250",
+        printers=[{
+            "name": "G250", "connection": "usb", "present": True,
+            "configured": True, "available": True,
+        }],
+    )
+    with TestingSessionLocal() as db:
+        agent = db.query(PrintAgentToken).filter_by(id="a1").one()
+        agent.last_seen_at = previous
+        agent.diagnostics_updated_at = previous_diagnostics
+        agent.printer_diagnostics = report.model_dump()
+        db.commit()
+        commit = db.commit
+        committed = []
+
+        def record_commit():
+            committed.append(True)
+            commit()
+
+        monkeypatch.setattr(db, "commit", record_commit)
+        print_agents_route.agent_heartbeat(
+            BackgroundTasks(),
+            print_agents_route.HeartbeatRequest(
+                diagnostics=report if send_diagnostics else None,
+            ),
+            agent, db,
+        )
+        assert len(committed) == expected_commits
+
+    with TestingSessionLocal() as db:
+        stored = db.query(PrintAgentToken).filter_by(id="a1").one()
+        updated = print_agents_route._as_utc(stored.diagnostics_updated_at)
+        if send_diagnostics and expected_commits:
+            assert updated >= now
+        else:
+            assert updated == previous_diagnostics
+        state = print_agents_route._agent_printer_state(stored, now)
+        assert state["printer_ready"] is send_diagnostics
+
+
 def test_heartbeat_accepts_bluetooth_spp_diagnostics_without_marking_usb_ready():
     client = TestClient(app)
     headers = {"X-Agent-Token": "token_agent_1"}
