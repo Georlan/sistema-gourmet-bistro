@@ -74,10 +74,10 @@ export function CardapioDiarioEditor({ grupos, apiBaseUrl, authHeaders, onSaved,
             <span aria-hidden="true" className={clsx('h-2 w-2 shrink-0 rounded-full', checked ? 'bg-emerald-500' : 'bg-koma-muted/40')} />
             <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-koma-foreground">{option.nome}</span><span className="mt-1 block text-xs text-koma-muted">{checked ? 'Disponível' : 'Pausado'}{option.preco_adicional > 0 ? ` · + ${Number(option.preco_adicional).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}</span></span>
           </article>;
-          return <label key={id || option.nome} className={clsx('flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors', checked ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-raised/30', option.opcao_origem_id ? 'cursor-default' : 'cursor-pointer')}>
+          return <label key={id || option.nome} title={changed ? 'Alteração pendente' : undefined} className={clsx('flex items-center gap-3 rounded-lg border px-3 py-2 transition-colors', checked ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-raised/30', option.opcao_origem_id ? 'cursor-default' : 'cursor-pointer')}>
             <input type="checkbox" aria-label={`${option.nome} — ${group.nome}`} checked={checked} disabled={saving || review || !id || Boolean(option.opcao_origem_id)} onChange={e => { setDraft(d => ({ ...d, [id]: e.target.checked })); setSaved(false); }} className="h-4 w-4 shrink-0 accent-emerald-600" />
-            <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-koma-foreground">{option.nome}</span><span className="mt-1 block text-xs text-koma-muted">{checked ? 'Disponível' : 'Pausado'}{changed ? ' · alteração pendente' : ''}{option.preco_adicional > 0 ? ` · + ${Number(option.preco_adicional).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}</span></span>
-            {checked && <Check size={16} className="shrink-0 text-emerald-700 dark:text-emerald-300" />}
+            <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-koma-foreground">{option.nome}</span><span className="mt-1 block text-xs text-koma-muted">{checked ? 'Disponível' : 'Pausado'}{option.preco_adicional > 0 ? ` · + ${Number(option.preco_adicional).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}</span></span>
+            <Check size={16} aria-hidden="true" className={clsx('shrink-0 text-emerald-700 dark:text-emerald-300', !checked && 'invisible')} />
           </label>;
         })}</div>
       </section>; })}
