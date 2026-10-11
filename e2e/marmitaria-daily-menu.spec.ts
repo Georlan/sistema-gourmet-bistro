@@ -53,12 +53,12 @@ test('daily marmitaria selection reviews once, preserves draft on failure and sy
   await extra.click();
   expect(writes).toBe(0);
   await expect(page.getByRole('button', { name: 'Revisar alterações', exact: true })).toBeDisabled();
-  const riceBeforePause = await rice.boundingBox();
+  // Playwright may scroll the page to click the protein. Measure document
+  // coordinates, not viewport coordinates, to detect actual row movement.
+  const riceBeforePause = await rice.evaluate(el => el.getBoundingClientRect().top + window.scrollY);
   await chicken.uncheck();
-  const riceAfterPause = await rice.boundingBox();
-  expect(riceBeforePause).not.toBeNull();
-  expect(riceAfterPause).not.toBeNull();
-  expect(Math.abs(riceAfterPause!.y - riceBeforePause!.y)).toBeLessThan(2);
+  const riceAfterPause = await rice.evaluate(el => el.getBoundingClientRect().top + window.scrollY);
+  expect(Math.abs(riceAfterPause - riceBeforePause)).toBeLessThan(2);
   await beef.check();
   await expect(rice).toBeChecked();
   await expect(salad).toBeChecked();
