@@ -469,7 +469,7 @@ def test_paid_complements_follow_source_and_preserve_existing_ids_prices():
     assert {option['id'] for option in response.json()['opcoes']} == {option['id'] for option in updated['opcoes']}
     source = client.get('/cardapio/modificadores/grupos', headers=headers).json()
     source = next(group for group in source if group['id'] == target['grupo_origem_id'])
-    source['opcoes'] = source['opcoes'][1:]
+    source['opcoes'] = [option for option in source['opcoes'] if option['id'] != chicken['opcao_origem_id']]
     assert client.put(f"/cardapio/modificadores/grupos/{source['id']}", headers=headers, json=source).status_code == 200
     db = SessionLocal()
     token = current_restaurante_id.set(999)
