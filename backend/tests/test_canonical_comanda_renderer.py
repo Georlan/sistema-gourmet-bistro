@@ -272,7 +272,7 @@ def test_secondary_sector_still_uses_same_visual_base():
     assert "PEDIDO #93" in ticket
     assert "ITENS" in ticket
     item_line = next(line for line in ticket.splitlines() if "1x DRINK DA CASA" in line)
-    assert "R$" not in item_line
+    assert "R$ 18,00" in item_line
     assert f"Gerenciado por {ESC_BOLD_ON}Kôma{ESC_BOLD_OFF}" in ticket
 
 
@@ -358,7 +358,7 @@ def test_online_dine_in_reprint_after_table_association_keeps_online_customer_an
     assert "FORMA: DINHEIRO" in ticket
     assert ticket.count("REIMPRESSÃO") == 1
 
-def test_remote_production_separates_and_bolds_marmitaria_groups_without_item_price():
+def test_remote_production_separates_and_bolds_marmitaria_groups_with_item_price():
     ticket = _render(
         [
             PrintItem(
@@ -387,7 +387,7 @@ def test_remote_production_separates_and_bolds_marmitaria_groups_without_item_pr
     )
 
     item_line = next(line for line in ticket.splitlines() if "1x QUENTINHA G" in line)
-    assert "R$" not in item_line
+    assert "R$ 10,00" in item_line
     for label in ("GUARNIÇÕES:", "PROTEÍNAS:", "SALADAS:"):
         group_line = next(line for line in ticket.splitlines() if label in line)
         assert group_line.startswith(ESC_DOUBLE_HEIGHT_ON + "   " + ESC_BOLD_ON + label + ESC_BOLD_OFF)
