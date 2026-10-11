@@ -628,3 +628,66 @@ def test_stale_group_form_cannot_revert_daily_changes_or_archive_new_options():
     saved = next(g for g in client.get(url, headers=headers).json() if g['id'] == group['id'])
     assert {o['nome'] for o in saved['opcoes']} == {'Frango', 'Peixe', 'Salada nova'}
     assert next(o for o in saved['opcoes'] if o['id'] == first_id)['ativo'] is False
+
+
+def test_protein_toggle_does_not_touch_unrelated_sides_or_salads():
+    """A source protein may sync its paid extra, never an unrelated food or group."""
+    headers = _auth_headers()
+    endpoint = '/cardapio/modificadores/grupos'
+
+    def create_group(name, options, **extra):
+        response = client.post(endpoint, headers=headers, json={
+            'nome': name, 'opcoes': options, **extra,
+        })
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    proteins = create_group('Proteínas isoladas', [
+        {'nome': 'Filé de frango', 'ativo': True},
+        {'nome': 'Carne de panela', 'ativo': True},
+    ])
+    sides = create_group('Guarnições isoladas', [
+        {'nome': 'Arroz', 'ativo': True},
+        {'nome': 'Feijão', 'ativo': False},
+    ])
+    salads = create_group('Saladas isoladas', [
+        {'nome': 'Alface', 'ativo': True},
+    ])
+    extras = create_group('Adicionais pagos isolados', [], 
+        grupo_origem_id=proteins['id'], preco_novo_adicional=5, preco_novo_ovo=2)
+
+    chicken_id = next(o['id'] for o in proteins['opcoes'] if o['nome'] == 'Filé de frango')
+    side_ids = {o['id']: o['ativo'] for o in sides['opcoes']}
+    salad_ids = {o['id']: o['ativo'] for o in salads['opcoes']}
+
+    def read_groups():
+        return {g['id']: g for g in client.get(endpoint, headers=headers).json()}
+
+    for active in (False, True):
+        response = client.patch(
+            '/cardapio/modificadores/cardapio-diario',
+            headers=headers,
+            json={'opcoes': [
+                {'id': chicken_id, 'ativo_anterior': not active, 'ativo': active},
+            ]},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()['atualizadas'] == 1
+        result = read_groups()
+        assert next(o for o in result[proteins['id']]['opcoes'] if o['id'] == chicken_id)['ativo'] is active
+        assert next(o for o in result[proteins['id']]['opcoes'] if o['nome'] == 'Carne de panela')['ativo'] is True
+        paid_chicken = next(o for o in result[extras['id']]['opcoes'] if o['opcao_origem_id'] == chicken_id)
+        assert paid_chicken['ativo'] is active
+        assert {o['id']: o['ativo'] for o in result[sides['id']]['opcoes']} == side_ids
+        assert {o['id']: o['ativo'] for o in result[salads['id']]['opcoes']} == salad_ids
+
+    # A direct pause uses the same synchronization boundary.
+    response = client.patch(
+        f'/cardapio/modificadores/opcoes/{chicken_id}/disponibilidade',
+        headers=headers, json={'ativo': False, 'ativo_anterior': True},
+    )
+    assert response.status_code == 200, response.text
+    result = read_groups()
+    assert next(o for o in result[extras['id']]['opcoes'] if o['opcao_origem_id'] == chicken_id)['ativo'] is False
+    assert {o['id']: o['ativo'] for o in result[sides['id']]['opcoes']} == side_ids
+    assert {o['id']: o['ativo'] for o in result[salads['id']]['opcoes']} == salad_ids
