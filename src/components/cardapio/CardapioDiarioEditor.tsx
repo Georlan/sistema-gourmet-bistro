@@ -30,7 +30,10 @@ export function CardapioDiarioEditor({ grupos, apiBaseUrl, authHeaders, onSaved,
   const groups = [...grupos].sort((a, b) => Number(Boolean(a.grupo_origem_id)) - Number(Boolean(b.grupo_origem_id)) || a.nome.localeCompare(b.nome, 'pt-BR'));
   const visible = groups.map(group => ({ ...group, opcoes: group.opcoes.filter(o =>
     (normalize(o.nome).includes(normalize(search)) || normalize(group.nome).includes(normalize(search)))
-    && (filter === 'todos' || (o.id && active(o.opcao_origem_id || o.id) === (filter === 'disponiveis')))
+    // Preserve list membership while the operator toggles options: filtering by the
+    // live draft would remove a row under the pointer and make rapid taps toggle
+    // the next unrelated option in its place.
+    && (filter === 'todos' || (o.id && original.get(o.opcao_origem_id || o.id) === (filter === 'disponiveis')))
   ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })) })).filter(g => g.opcoes.length > 0);
   const save = async () => {
     if (saving || !changes.length) return;
