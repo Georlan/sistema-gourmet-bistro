@@ -33,6 +33,13 @@ test('catalog search, alphabetical daily choices, add and remove preserve a fail
   await page.route('**/cardapio/modificadores/grupos/proteins', route => {
     writes++;
     const payload = route.request().postDataJSON();
+    if (writes === 1) {
+      expect(Object.fromEntries(payload.opcoes_originais.map((option: any) => [option.id, option]))).toEqual({
+        chicken: { id: 'chicken', nome: 'Frango cozido', preco_adicional: 0, ativo: true },
+        beef: { id: 'beef', nome: 'Acém cozido', preco_adicional: 0, ativo: false },
+        rib: { id: 'rib', nome: 'Costela cozida', preco_adicional: 0, ativo: false },
+      });
+    }
     expect(payload.opcoes.map((option: any) => option.nome)).toEqual(writes === 3 ? ['Peixe cozido', 'Acém cozido', 'Frango cozido', 'Porco cozido'] : ['Porco cozido', 'Acém cozido', 'Frango cozido']);
     expect(payload.opcoes.find((option: any) => option.nome === 'Acém cozido').id).toBe('beef');
     if (writes === 1) return route.fulfill({ status: 503, json: { detail: 'Falha temporária no cadastro.' } });

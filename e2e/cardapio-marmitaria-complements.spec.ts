@@ -20,7 +20,7 @@ test('pausa e reativa complemento do dia, preservando estado em falha', async ({
       return;
     }
     const body = route.request().postDataJSON();
-    expect(Object.keys(body)).toEqual(['ativo']);
+    expect(body).toEqual({ ativo: !option.ativo, ativo_anterior: option.ativo });
     option.ativo = body.ativo;
     await route.fulfill({ json: option });
   });

@@ -40,6 +40,8 @@ test('daily marmitaria selection reviews once, preserves draft on failure and sy
   await expect(page.getByRole('heading', { name: 'O que vamos servir?' })).toBeVisible();
   const chicken = page.getByRole('checkbox', { name: 'Frango cozido — Proteínas', exact: true });
   const beef = page.getByRole('checkbox', { name: 'Acém cozido — Proteínas', exact: true });
+  const rice = page.getByRole('checkbox', { name: 'Arroz refogado — Guarnições', exact: true });
+  const salad = page.getByRole('checkbox', { name: 'Vinagrete — Saladas', exact: true });
   await expect(chicken).toBeChecked();
   await expect(beef).not.toBeChecked();
   const extras = page.getByRole('region', { name: 'Opções de Adicionais pagos' });
@@ -51,8 +53,28 @@ test('daily marmitaria selection reviews once, preserves draft on failure and sy
   await extra.click();
   expect(writes).toBe(0);
   await expect(page.getByRole('button', { name: 'Revisar alterações', exact: true })).toBeDisabled();
-  await chicken.uncheck(); await beef.check();
+  // Playwright may scroll the page to click the protein. Measure document
+  // coordinates, not viewport coordinates, to detect actual row movement.
+  const riceBeforePause = await rice.evaluate(el => el.getBoundingClientRect().top + window.scrollY);
+  await chicken.uncheck();
+  const riceAfterPause = await rice.evaluate(el => el.getBoundingClientRect().top + window.scrollY);
+  expect(Math.abs(riceAfterPause - riceBeforePause)).toBeLessThan(2);
+  await beef.check();
+  await expect(rice).toBeChecked();
+  await expect(salad).toBeChecked();
   expect(writes).toBe(0);
+  // Filter membership must stay fixed until save/reload: a row must not vanish
+  // under a second tap and accidentally toggle its newly shifted neighbor.
+  const availabilityFilter = page.getByLabel('Filtrar opções do dia');
+  await availabilityFilter.selectOption('disponiveis');
+  await expect(chicken).toBeVisible();
+  await expect(chicken).not.toBeChecked();
+  await expect(beef).toHaveCount(0);
+  await availabilityFilter.selectOption('pausadas');
+  await expect(beef).toBeVisible();
+  await expect(beef).toBeChecked();
+  await expect(chicken).toHaveCount(0);
+  await availabilityFilter.selectOption('todos');
   await expect(extra).toContainText('Pausado');
   await expect(extra).toContainText('R$ 5,00');
   await expect(page.getByRole('button', { name: 'Cadastros', exact: true })).toBeDisabled();
@@ -65,6 +87,7 @@ test('daily marmitaria selection reviews once, preserves draft on failure and sy
   await page.getByRole('button', { name: 'Salvar cardápio do dia', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Revisar alterações', exact: true })).toBeDisabled();
   await expect(chicken).not.toBeChecked(); await expect(beef).toBeChecked();
+  await expect(rice).toBeChecked(); await expect(salad).toBeChecked();
   expect(writes).toBe(2);
   await page.getByLabel('Buscar opção do cardápio diário').fill('acem');
   await expect(beef).toBeVisible(); await expect(chicken).toHaveCount(0);
