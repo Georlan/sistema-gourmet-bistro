@@ -383,7 +383,9 @@ export default function ComplementosTab({
       {marmitariaCadastro && <div className="flex flex-wrap items-center gap-2" aria-label="Modo de edição dos complementos">
         <button onClick={() => setDailyMode(true)} className={clsx('rounded-xl border px-4 py-2 text-sm font-bold', dailyMode ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-koma-border text-koma-muted')}>Cardápio do dia</button>
         <button disabled={dailyPending} onClick={() => setDailyMode(false)} className={clsx('rounded-xl border px-4 py-2 text-sm font-bold disabled:opacity-40', !dailyMode ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-koma-border text-koma-muted')}>Cadastros</button>
-        {dailyPending && <span className="text-xs text-koma-muted">Salve ou desfaça a seleção antes de abrir Cadastros.</span>}
+        {/* Reserve the notice's layout space so the first tap cannot shift
+            unrelated options beneath the pointer on small screens. */}
+        <span className={clsx('text-xs text-koma-muted', !dailyPending && 'invisible')} aria-hidden={!dailyPending}>Salve ou desfaça a seleção antes de abrir Cadastros.</span>
       </div>}
       {catalogError && <div role="alert" className="rounded-2xl border border-rose-500/40 p-5 text-sm text-koma-foreground">Não foi possível conferir o cadastro atual. <button onClick={() => void fetchCatalogBindings()} className="underline">Tentar novamente</button></div>}
       {marmitariaCadastro && dailyMode && !catalogError && (loading ? <p role="status" className="p-6 text-koma-muted">Carregando cardápio do dia…</p> : <CardapioDiarioEditor grupos={grupos} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onEditGroup={handleOpenModal} onDirtyChange={setDailyPending} onReload={fetchCatalogBindings} onSaved={async () => { onShowNotification?.('Cardápio do dia salvo.', 'success'); await fetchCatalogBindings(); }} />)}
