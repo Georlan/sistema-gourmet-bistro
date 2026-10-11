@@ -26,6 +26,16 @@
 | CI / governança | `.github/workflows/quality-gate.yml` | `docs/engineering/change-governance.md` |
 | Rotas / aliases HTTP | `docs/engineering/route-ownership.md` | Um responsável por método/URL; preservar contratos e imports explícitos |
 
+## Frugalidade de infraestrutura e custos mínimos (Regra de Ouro)
+
+- O KÔMA opera em validação comercial com 1 cliente ativo; a infraestrutura deve refletir essa realidade e manter custo mensal <= US$ 5/mês no Railway.
+- Toda decisão técnica e arquitetural DEVE buscar o caminho mais econômico possível. Proibido superdimensionar capacidade antes de validação comercial comprovada.
+- Não criar nem manter ambientes de homologação caros rodando 24h: homologação deve operar com 1 réplica e auto-sleep ativo (`sleepApplication=true`).
+- Serviços temporários de teste, smoke ou validação devem ser destruídos imediatamente após o término do teste; nunca deixá-los persistindo na nuvem.
+- Não manter bancos de dados ou caches duplicados sem consumidores ativos reais. Em produção, FastAPI consome Supabase diretamente; não alocar réplicas/volumes sem uso.
+- Evitar polling agressivo sem backoff: rotas de polling de print agents, caixa e cardápio devem ser econômicas, coalescendo transações e evitando commits no banco sem alteração de estado.
+- Hospedagem estática (Cloudflare Pages) deve ser preferida para frontends em vez de containers Node pagos no Railway.
+
 ## Invariantes essenciais
 
 - AtendimentoMesa = sessão; Comanda = conta financeira; Lancamento = Pedido; Item = item do Pedido.
@@ -35,6 +45,7 @@
 - Uma Mesa agregada pode conter vários Pedidos; não identificá-la pelo primeiro lançamento.
 - Compartilhar apresentação não unifica ações de Caixa/Garçom nem muda regras financeiras.
 - Compartilhar impressão não autoriza bordas a montar texto térmico; política, documento e `PrintJob` pertencem ao Core de Impressão.
+- Frugalidade de infraestrutura é prioritária: nunca criar réplicas, bancos ou homologações caras sem necessidade justificada por demanda real de clientes.
 - Extrair responsabilidade com estado, efeitos e contratos, não fragmentar JSX apenas para reduzir linhas.
 - Preservar autenticação, idempotência, cleanup de subscriptions/timers e regras de SmartPOS/pagamento.
 - Histórico e decisões extensas ficam nos documentos apontados, não no contexto obrigatório.
