@@ -1,0 +1,15 @@
+---
+description: Preservar operação existente em pedidos de eficiência, economia e refatoração do KÔMA
+alwaysApply: true
+---
+
+# Eficiência sem regressão
+
+Aplicar a seção obrigatória "Eficiência sem regressão operacional" de `AGENTS.md` e `docs/engineering/change-governance.md` em toda otimização de código ou infraestrutura.
+
+- Preservar contratos e compatibilidade com clientes/agentes instalados.
+- Simular fluxos completos além dos TTLs; estado inalterado também renova evidência de presença quando recebido novamente.
+- Reduzir escritas não pode expirar diagnóstico válido, atrasar fila, perder pedido/pagamento ou exigir intervenção no restaurante.
+- ID 6: não gerar testes, reimpressões ou escritas operacionais; validar produção em leitura.
+- Exigir checks do SHA final, reversão e evidência de runtime após deploy. HTTP 200 e healthcheck não provam efeito operacional.
+- Diante de conflito, preservar a operação funcional; economia não autoriza interrupção.
