@@ -426,3 +426,44 @@ def test_remote_paid_online_makes_do_not_charge_a_large_operational_warning():
     warning_line = next(line for line in ticket.splitlines() if "NÃO COBRAR" in line)
     assert warning_line.startswith(ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON)
 
+
+def test_beverage_only_pickup_and_delivery_print_each_item_amount():
+    """Drink prices belong to order tickets, regardless of destination routing."""
+    items = [
+        PrintItem(
+            codigo="beb-coca", nome="REFRIGERANTE LATA",
+            quantidade=2, preco_unit=7.50, destino_impressao="BAR",
+        ),
+        PrintItem(
+            codigo="beb-suco", nome="SUCO NATURAL",
+            quantidade=1, preco_unit=9.00, destino_impressao="NENHUM",
+        ),
+    ]
+    for order_type in ("Retirada", "Delivery"):
+        ticket = _render(
+            items,
+            ComandaVariant(origin_label="CARDÁPIO ONLINE", via_label="BAR"),
+            order_type=order_type,
+        )
+        cola_line = next(line for line in ticket.splitlines() if "2x REFRIGERANTE LATA" in line)
+        juice_line = next(line for line in ticket.splitlines() if "1x SUCO NATURAL" in line)
+        assert "R$ 15,00" in cola_line
+        assert "R$ 9,00" in juice_line
+        assert "ITENS" in ticket and "VALOR" in ticket
+        assert "VIA: BAR" in ticket
+        assert "TOTAL DO PEDIDO:" in ticket
+        assert "R$ 24,00" in ticket
+
+
+def test_mixed_delivery_prints_beverage_and_meal_amounts_separately():
+    ticket = _render(
+        [
+            PrintItem(codigo="food", nome="QUENTINHA G", preco_unit=25.0, destino_impressao="COZINHA"),
+            PrintItem(codigo="drink", nome="REFRIGERANTE", preco_unit=6.0, destino_impressao="BAR"),
+        ],
+        ComandaVariant(origin_label="CARDÁPIO ONLINE"),
+        order_type="Delivery",
+    )
+    assert "R$ 25,00" in next(line for line in ticket.splitlines() if "1x QUENTINHA G" in line)
+    assert "R$ 6,00" in next(line for line in ticket.splitlines() if "1x REFRIGERANTE" in line)
+    assert "R$ 31,00" in ticket
