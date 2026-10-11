@@ -28,13 +28,15 @@
 
 ## Frugalidade de infraestrutura e custos mínimos (Regra de Ouro)
 
-- O KÔMA opera em validação comercial com 1 cliente ativo; a infraestrutura deve refletir essa realidade e manter custo mensal <= US$ 5/mês no Railway.
+- O KÔMA opera em validação comercial; a meta inicial de hospedagem Railway é o piso Hobby de US$ 5/mês. Meta não é garantia de fatura nem teto que autorize interromper produção. Separar hospedagem, Railway Agent e custos externos.
 - Toda decisão técnica e arquitetural DEVE buscar o caminho mais econômico possível. Proibido superdimensionar capacidade antes de validação comercial comprovada.
-- Não criar nem manter ambientes de homologação caros rodando 24h: homologação deve operar com 1 réplica e auto-sleep ativo (`sleepApplication=true`).
+- Não criar, religar nem manter homologação permanente no Railway. Validar localmente e no CI, com dados isolados; ambientes temporários pagos exigem autorização específica, orçamento e remoção ao terminar. Nunca redirecionar testes destrutivos ou de carga para produção.
 - Serviços temporários de teste, smoke ou validação devem ser destruídos imediatamente após o término do teste; nunca deixá-los persistindo na nuvem.
 - Não manter bancos de dados ou caches duplicados sem consumidores ativos reais. Em produção, FastAPI consome Supabase diretamente; não alocar réplicas/volumes sem uso.
 - Evitar polling agressivo sem backoff: rotas de polling de print agents, caixa e cardápio devem ser econômicas, coalescendo transações e evitando commits no banco sem alteração de estado.
 - Hospedagem estática (Cloudflare Pages) deve ser preferida para frontends em vez de containers Node pagos no Railway.
+- Compartilhar backend/banco entre tenants com isolamento; não criar serviço, banco, cache ou réplica por restaurante. Escalar por demanda medida, preservando filas duráveis, RLS e idempotência. Ver `docs/engineering/infra-frugal-capacity.md` para os marcos 1/10/100/1000.
+- Preferir alertas de gasto; não usar limite rígido de Compute como substituto de otimização, pois ele derruba a operação. Railway Agent deve permanecer com orçamento zero salvo autorização de gasto específica.
 
 ## Invariantes essenciais
 
