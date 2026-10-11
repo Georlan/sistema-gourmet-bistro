@@ -2237,6 +2237,12 @@ def agent_heartbeat(
     if command_expired:
         command = None
 
+    diagnostics_age = _age_seconds(agent.diagnostics_updated_at, now)
+    diagnostics_refresh_due = bool(
+        req and req.diagnostics
+        and (diagnostics_age is None or diagnostics_age >= 20.0)
+    )
+
     # Economia de infraestrutura: coalescer persistência no banco.
     # O limite de agente online é 90s; persistir a cada 20s (ou quando a presença,
     # diagnósticos ou comandos mudarem) poupa ~75% de escritas e commits inúteis
@@ -2245,12 +2251,17 @@ def agent_heartbeat(
         previous_heartbeat_age is None
         or previous_heartbeat_age >= 20.0
         or diagnostics_changed
+        or diagnostics_refresh_due
         or presence_changed
         or command is not None
         or command_expired
     )
     if should_persist:
         agent.last_seen_at = now
+        # An identical report still confirms the printer was observed recently.
+        # Renew freshness in the same coalesced transaction, not on every ping.
+        if req and req.diagnostics:
+            agent.diagnostics_updated_at = now
         db.commit()
     else:
         agent.last_seen_at = now
