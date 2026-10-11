@@ -48,6 +48,18 @@ Após deploy, confira o commit ativo na API e o deployment Railway. Execute
 forneça `KOMA_EXPECTED_API_SHA`. Um smoke verde sem conferir o SHA prova
 saúde da versão servida, não que a nova versão foi publicada.
 
+## Eficiência sem regressão: contrato de mudança
+
+Pedidos de economia, eficiência, redução de consumo ou refatoração preservam os fluxos existentes. Não autorizam sacrificar disponibilidade, latência operacional, segurança, idempotência, isolamento ou compatibilidade com instalações reais. A regra alcança código, banco e configurações Railway/Supabase; mudanças pelo painel também precisam de baseline, validação e reversão.
+
+Antes da mudança, identificar consumidores e registrar comportamento/versão, estado da fila, TTLs e sinais de saúde. Simular com fixtures o fluxo completo: criar trabalho, receber diagnóstico, reservar, confirmar e repetir confirmação sem duplicar. Avançar relógio virtual além das janelas de validade, mantendo conteúdo idêntico; testar também ausência de relatório, desconexão e recuperação. Nunca substituir esse ensaio por pedidos, pagamentos ou impressão de teste no ID 6.
+
+Incidente de 11/10/2026: a PR #1082 parou de renovar `diagnostics_updated_at` quando o conteúdo não mudava. Após 90 s, o backend respondia `200` e lista vazia no claim, com agente online e fila pendente. A PR #1083 restaurou a validade na transação agrupada. O teste `test_stable_legacy_agent_prints_after_multiple_freshness_windows` simula três minutos do protocolo instalado, reserva e confirma trabalho, preserva outro tenant e impede nova reserva do mesmo trabalho.
+
+O check obrigatório `Merge verdict` passa a executar o contrato de impressão quando backend, agente instalado, workflows ou configuração Railway/Docker da raiz mudar. A verificação é por arquivos, sem depender do autor chamar a PR de "otimização". O ruleset do GitHub continua sendo a fonte de verdade de obrigatoriedade; o teste vive dentro do check já exigido, sem criar um status opcional como única proteção.
+
+Antes de publicar, registrar no PR evidência antes/depois, compatibilidade instalada, riscos da fila acumulada e plano de reversão. Após publicação, conferir SHA servido e comportamento real em leitura durante mais de uma janela de TTL afetada. Em regressão, interromper a expansão da mudança e executar a reversão segura; não apagar fila nem repetir efeitos físicos para mascarar problema. Saúde HTTP, confirmação pelo spooler e papel impresso são evidências distintas.
+
 ## Regra de evidência
 
 - `main` deve permanecer verde.

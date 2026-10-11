@@ -26,6 +26,17 @@
 | CI / governança | `.github/workflows/quality-gate.yml` | `docs/engineering/change-governance.md` |
 | Rotas / aliases HTTP | `docs/engineering/route-ownership.md` | Um responsável por método/URL; preservar contratos e imports explícitos |
 
+## Eficiência sem regressão operacional (obrigatória)
+
+- Pedidos de eficiência, economia, otimização ou refatoração significam preservar o comportamento existente. Continuidade da operação real tem precedência sobre redução de custo, consultas, commits ou linhas de código.
+- Antes de alterar, registrar baseline, consumidores reais, contratos, timeouts/TTL, fila e versão instalada. Não pressupor que heartbeat online, HTTP 200, build verde ou menor consumo provam funcionamento.
+- Simular isoladamente o fluxo completo e a passagem do tempo além dos TTLs afetados, com estado estável, mudanças de hardware, falha/reconexão, idempotência e isolamento. Não desabilitar proteções nem ajustar testes para esconder regressão.
+- Preservar compatibilidade com agentes instalados; uma otimização de servidor não pode exigir atualização ou intervenção no restaurante sem escopo explícito.
+- ID 6 é operação real protegida: nenhuma carga, pedido sintético, reimpressão, mudança de configuração ou escrita manual para testar. Usar fixtures locais; produção somente leitura para validação.
+- Publicar por PR com checks relevantes verdes no SHA final, plano de reversão e acompanhamento do fluxo afetado após deploy, além do healthcheck. Considerar trabalhos acumulados e risco de duplicação antes de reativar consumidores.
+- Se não houver evidência suficiente de preservação, manter a versão funcional e informar a limitação. Não declarar resolvido/publicado/impresso sem distinguir cada evidência; saída física exige confirmação própria.
+- Seguir `docs/engineering/change-governance.md`; a regra também se aplica a configurações Railway/Supabase e ações fora do Git.
+
 ## Frugalidade de infraestrutura e custos mínimos (Regra de Ouro)
 
 - O KÔMA opera em validação comercial; a meta inicial de hospedagem Railway é o piso Hobby de US$ 5/mês. Meta não é garantia de fatura nem teto que autorize interromper produção. Separar hospedagem, Railway Agent e custos externos.
@@ -47,7 +58,7 @@
 - Uma Mesa agregada pode conter vários Pedidos; não identificá-la pelo primeiro lançamento.
 - Compartilhar apresentação não unifica ações de Caixa/Garçom nem muda regras financeiras.
 - Compartilhar impressão não autoriza bordas a montar texto térmico; política, documento e `PrintJob` pertencem ao Core de Impressão.
-- Frugalidade de infraestrutura é prioritária: nunca criar réplicas, bancos ou homologações caras sem necessidade justificada por demanda real de clientes.
+- Continuidade operacional tem precedência sobre frugalidade: nunca criar réplicas, bancos ou homologações caras sem necessidade justificada por demanda real de clientes.
 - Extrair responsabilidade com estado, efeitos e contratos, não fragmentar JSX apenas para reduzir linhas.
 - Preservar autenticação, idempotência, cleanup de subscriptions/timers e regras de SmartPOS/pagamento.
 - Histórico e decisões extensas ficam nos documentos apontados, não no contexto obrigatório.

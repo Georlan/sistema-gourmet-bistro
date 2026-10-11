@@ -804,6 +804,56 @@ def test_only_heartbeat_updates_agent_last_seen():
         db.close()
 
 
+def test_stable_legacy_agent_prints_after_multiple_freshness_windows(monkeypatch):
+    """Stable installed Windows reports must still consume jobs after >90s."""
+    real_datetime = datetime.datetime
+    start = real_datetime.now(datetime.timezone.utc)
+
+    class Clock(real_datetime):
+        current = start
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current if tz else cls.current.replace(tzinfo=None)
+
+    monkeypatch.setattr(print_agents_route, "datetime", SimpleNamespace(
+        datetime=Clock, timezone=datetime.timezone, timedelta=datetime.timedelta,
+    ))
+    client = TestClient(app)
+    headers = {"X-Agent-Token": "token_agent_1"}
+    report = {
+        "diagnostics": {
+            "adapter": "windows", "platform": "windows",
+            "agent_version": "2026.09.27.1", "default_printer": "POS80 Printer",
+            "printers": [{
+                "name": "POS80 Printer", "connection": "usb", "uri": "USB001",
+                "present": True, "configured": True, "available": True,
+                "connected": False,
+            }],
+        },
+    }
+    # No sleeping, production credentials, device calls or real tenant data.
+    for seconds in range(0, 181, 5):
+        Clock.current = start + datetime.timedelta(seconds=seconds)
+        assert client.post("/api/print-agents/heartbeat", headers=headers, json=report).status_code == 200
+        with TestingSessionLocal() as db:
+            agent = db.query(PrintAgentToken).filter_by(id="a1").one()
+            assert print_agents_route._agent_printer_state(agent, Clock.current)["printer_dispatchable"]
+
+    claim = client.post("/api/print-agents/jobs/claim-batch", headers=headers)
+    assert claim.status_code == 200
+    assert [job["id"] for job in claim.json()] == ["job-1001"]
+    assert client.post("/api/print-agents/jobs/claim-batch", headers=headers).json() == []
+    for _ in range(2):
+        complete = client.post("/api/print-agents/jobs/job-1001/complete", headers=headers, json={"printer_name": "POS80 Printer"})
+        assert complete.status_code == 200
+        assert complete.json()["status"] == "printed"
+    assert client.post("/api/print-agents/jobs/claim-batch", headers=headers).json() == []
+    with TestingSessionLocal() as db:
+        assert db.query(PrintJob).filter_by(id="job-1001").one().status == "printed"
+        assert db.query(PrintJob).filter_by(id="job-2001").one().status == "pending"
+
+
 @pytest.mark.parametrize("age_seconds,diagnostics_age_seconds,send_diagnostics,expected_commits", [
     (5, 5, True, 0),
     (25, 25, True, 1),
