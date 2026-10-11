@@ -566,3 +566,65 @@ def test_daily_menu_is_atomic_preserves_prices_and_syncs_linked_extras():
     assert client.patch(url, headers=headers, json={'opcoes': [changes[0], changes[0]]}).status_code == 422
     assert client.patch(url, headers=headers, json={'opcoes': [{'id': chicken['id'], 'ativo_anterior': False, 'ativo': 'true'}]}).status_code == 422
     assert client.patch(url, headers=headers, json={'opcoes': [], 'preco': 0}).status_code == 422
+
+
+def test_stale_single_option_toggle_cannot_revert_another_session():
+    headers = _auth_headers()
+    group = client.post('/cardapio/modificadores/grupos', headers=headers, json={
+        'nome': 'Concorrência disponibilidade', 'opcoes': [{'nome': 'Frango', 'ativo': True}],
+    }).json()
+    option_id = group['opcoes'][0]['id']
+    url = f'/cardapio/modificadores/opcoes/{option_id}/disponibilidade'
+    assert client.patch(url, headers=headers, json={'ativo': False, 'ativo_anterior': True}).status_code == 200
+    stale = client.patch(url, headers=headers, json={'ativo': True, 'ativo_anterior': True})
+    assert stale.status_code == 409
+    current = client.get('/cardapio/modificadores/grupos', headers=headers).json()
+    option = next(o for g in current if g['id'] == group['id'] for o in g['opcoes'])
+    assert option['ativo'] is False
+    assert client.patch(url, headers=headers, json={'ativo': True, 'ativo_anterior': False}).status_code == 200
+
+
+def test_stale_group_form_cannot_revert_daily_changes_or_archive_new_options():
+    headers = _auth_headers()
+    url = '/cardapio/modificadores/grupos'
+    group = client.post(url, headers=headers, json={
+        'nome': 'Grupo protegido', 'opcoes': [
+            {'nome': 'Frango', 'preco_adicional': 0, 'ativo': True},
+            {'nome': 'Peixe', 'preco_adicional': 2, 'ativo': True},
+        ],
+    }).json()
+    group_url = f"{url}/{group['id']}"
+    snapshot = [
+        {key: option[key] for key in ('id', 'nome', 'preco_adicional', 'ativo')}
+        for option in group['opcoes']
+    ]
+    first_id = group['opcoes'][0]['id']
+    assert client.patch(
+        f'{url}/opcoes/{first_id}/disponibilidade',
+        headers=headers, json={'ativo': False, 'ativo_anterior': True},
+    ).status_code == 200
+    stale = client.put(group_url, headers=headers, json={
+        **group, 'nome': 'Nome alterado', 'opcoes_originais': snapshot,
+    })
+    assert stale.status_code == 409
+    current = next(g for g in client.get(url, headers=headers).json() if g['id'] == group['id'])
+    assert current['nome'] == group['nome']
+    assert next(o for o in current['opcoes'] if o['id'] == first_id)['ativo'] is False
+
+    current_snapshot = [
+        {key: option[key] for key in ('id', 'nome', 'preco_adicional', 'ativo')}
+        for option in current['opcoes']
+    ]
+    updated = client.put(group_url, headers=headers, json={
+        **current, 'opcoes_originais': current_snapshot,
+        'opcoes': [*current['opcoes'], {'nome': 'Salada nova', 'ativo': True}],
+    })
+    assert updated.status_code == 200, updated.text
+    # A group modal opened before an option was added cannot silently archive it.
+    stale_again = client.put(group_url, headers=headers, json={
+        **current, 'opcoes_originais': current_snapshot,
+    })
+    assert stale_again.status_code == 409
+    saved = next(g for g in client.get(url, headers=headers).json() if g['id'] == group['id'])
+    assert {o['nome'] for o in saved['opcoes']} == {'Frango', 'Peixe', 'Salada nova'}
+    assert next(o for o in saved['opcoes'] if o['id'] == first_id)['ativo'] is False
