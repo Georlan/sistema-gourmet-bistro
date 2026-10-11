@@ -87,3 +87,32 @@ test('integrações mostra apenas bancos e recolhe WhatsApp; 404 tem recuperaç�
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath('integracoes.png'), fullPage: true });
 });
+
+
+test('ida ao banco e retorno preservam a sessão e concluem na primeira tentativa', async ({ page, baseURL }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  let connected = false;
+  let completions = 0;
+  await page.route('**/payments/pagbank/status', route => route.fulfill({ json: {
+    configured: true, connected, environment: 'production', status: connected ? 'active' : 'disconnected',
+  } }));
+  await page.route('**/payments/pagbank/connect', route => route.fulfill({ json: {
+    authorization_url: 'https://connect.pagbank.com.br/oauth2/authorize?state=roundtrip-state',
+  } }));
+  await page.route('https://connect.pagbank.com.br/**', route => route.fulfill({
+    status: 302, headers: { location: `${baseURL}/?view=caixa&pagbank=authorized&code=test-code&state=roundtrip-state` }, body: '',
+  }));
+  await page.route('**/payments/pagbank/complete', route => {
+    expect(route.request().headers()['authorization']).toBeTruthy();
+    expect(route.request().postDataJSON()).toEqual({ code: 'test-code', state: 'roundtrip-state' });
+    connected = true; completions++;
+    return route.fulfill({ json: { status: 'connected' } });
+  });
+  await page.goto('/?view=caixa&pagbank=cancelled');
+  await page.getByRole('button', { name: 'Conectar PagBank' }).click();
+  await expect(page.getByRole('region', { name: 'PagBank', exact: true }).getByText('Conectado', { exact: true })).toBeVisible();
+  expect(completions).toBe(1);
+  expect(new URL(page.url()).origin).toBe(baseURL);
+  await expect(page.getByRole('heading', { name: 'Pagamentos online' })).toBeVisible();
+});

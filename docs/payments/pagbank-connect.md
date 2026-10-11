@@ -77,3 +77,12 @@ Com `PAGBANK_ENV=sandbox`, o backend pode selecionar produção somente para os 
 O estado OAuth é vinculado ao ambiente selecionado do restaurante: alterar a seleção invalida autorizações em andamento. A nova conexão exige autorização do titular em produção e continua bloqueada se houver pagamentos pendentes de uma conta/ambiente anterior. A criação de novas cobranças exige conta autorizada no ambiente selecionado. Consultas de intenções anteriores, webhooks, renovação e revogação usam o ambiente persistido da conta original, permitindo reconciliar Sandbox antes da troca sem enviar tokens de vendedores ao outro host.
 
 Essa seleção é uma configuração explícita de piloto, não uma prova de homologação, permissão para `/orders`, liquidação ou funcionamento integral. O cadastro da aplicação com HTTP 201 não garante a liberação da API Order. Não incluir o restaurante ID 6 na lista de piloto. Remover o ID da lista exige a mesma revisão de pendências e reautorização; não desfazer a seleção durante um pagamento em andamento.
+
+
+### Retorno OAuth no mesmo domínio e recusa de produção
+
+O início da conexão usa o `Origin` da requisição autenticada, aceitando somente os domínios oficiais KÔMA ou a origem configurada no servidor. Um identificador curto dessa origem é incluído no estado autenticado (limite de 128 caracteres); o callback retorna ao mesmo domínio. Assim, iniciar em `app.komafood.com.br` não transfere a conclusão para `komafood.com.br`, onde localStorage/sessionStorage e a sessão são diferentes. Estados antigos sem identificador continuam usando a origem configurada. Não enviar tokens de sessão na URL nem compartilhar credenciais entre domínios.
+
+Conectar a conta não comprova liberação da API de Pedidos em produção. Em 11/10/2026, o piloto conectado em produção recebeu HTTP 403 na criação de Pix, sem ID de pedido bancário registrado; o responsável confirmou que apenas cadastrou a aplicação e conectou a conta, sem homologação. Solicitar ao PagBank homologação/liberação de `POST https://api.pagseguro.com/orders` com Pix em nome dos vendedores via Connect. Verificar permissões da aplicação e da conta recebedora. Não trocar para Pix manual ou Sandbox para mascarar a recusa. O checkout diferencia a falta de autorização de um erro transitório e mantém a tentativa idempotente.
+
+Fonte oficial: https://developer.pagbank.com.br/docs/codigos-de-status
