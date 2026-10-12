@@ -6,6 +6,14 @@ on:
       - 'backend/app/services/financial_read.py'
       - 'backend/app/services/menu_intelligence.py'
       - 'backend/tests/test_menu_intelligence.py'
+      - 'backend/app/domain/menu_economics.py'
+      - 'backend/tests/test_menu_economics.py'
+      - 'backend/tests/test_menu_intelligence_endpoints.py'
+      - 'backend/app/services/modifier_consumption.py'
+      - 'backend/tests/test_modifier_consumption.py'
+      - 'src/domain/menuIntelligence.ts'
+      - 'tests/menuIntelligence.test.ts'
+      - 'src/domain/modifierConsumption*'
       - 'src/components/caixa/navigation/cashierNavigation.ts'
       - 'src/components/caixa/reports/CashierReports.tsx'
       - 'backend/app/routes/financial*_routes.py'
@@ -46,6 +54,9 @@ jobs:
           backend/tests/test_relatorios.py
           backend/tests/test_report_snapshot_civil.py
           backend/tests/test_menu_intelligence.py
+          backend/tests/test_menu_economics.py
+          backend/tests/test_menu_intelligence_endpoints.py
+          backend/tests/test_modifier_consumption.py
           backend/tests/test_financial_read_stage3b.py
           backend/tests/test_financial_final_reconciliation_stage3d.py
           backend/tests/test_financial_cash_stage3c.py
