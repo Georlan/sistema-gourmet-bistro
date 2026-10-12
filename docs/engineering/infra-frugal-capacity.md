@@ -48,3 +48,37 @@ No ciclo 10/09–10/10, o painel mostrou US$ 13,50 de uso: RAM US$ 7,5332, CPU U
 5. Nunca usar `capacity-five-tenants.mjs` contra produção após retirar homologação. A proteção de host deve continuar bloqueando produção; eventual migração para teste local precisa preservar essa proteção.
 
 Fontes: [preços](https://docs.railway.com/pricing/plans), [cobrança](https://docs.railway.com/pricing/understanding-your-bill), [controle de gastos](https://docs.railway.com/pricing/cost-control).
+
+## Reconciliação Supabase em 12/10/2026
+
+Base `0547a91b3992`, também servida por backend e frontend na leitura passiva; API readiness 200/banco saudável. #1082 agrupou escritas de heartbeat; #1083 corrigiu a validade do diagnóstico e #1084 tornou a simulação do agente instalado um gate. Preservar essas três entregas juntas. #1058 já comprovou restauração isolada de dados/policies da aplicação; recuperação completa de mídia/Evolution/segredos continua pendente.
+
+Painel fornecido pelo proprietário às 13:04 Fortaleza: ciclo 08/10–08/11, egress 0,727/5 GB, cached egress 0,218/5 GB, database 0,049/0,5 GB, storage 0,116/1 GB e Logs Query 86,771/100 GB. São consumo da organização e escopos do billing, não medidas por restaurante. Contadores foram reiniciados no novo ciclo: comparar totais de ciclos diferentes não comprova economia percentual. Aviso de carência até 02/11 continua visível.
+
+SQL somente leitura às 13:07–13:08: projeto ACTIVE_HEALTHY, PostgreSQL 17.6, banco corrente 33.696.915 bytes, 12 conexões cliente (sete runtime), zero locks aguardando e zero idle in transaction. Banco corrente SQL e máximo/billing não têm o mesmo escopo/instante. D6: 341 jobs retidos confirmados como printed e nenhuma outra situação retornada; isso não comprova papel e não autoriza replay. Nenhum pedido, pagamento, configuração ou DDL foi executado em produção. Nova leitura de manutenção: 41 conversas encerradas ainda não purgadas, nenhuma elegível a 30 ou 90 dias; não há economia imediata de espaço comprovada com esta correção.
+
+Estatísticas acumuladas não têm data de reset disponível. Na amostra de 32,9 s, consultas legadas de lista global de restaurantes e despacho de outbox por tenant não cresceram; autenticação do agente cresceu seis chamadas e claim de avisos cresceu uma. Não atribuir milhões de chamadas históricas ao código atual nem extrapolar esse intervalo para capacidade de pico.
+
+### Gap corrigido em código, publicação pendente
+
+O worker atualiza o relógio da retenção a cada despacho, inclusive ocioso: ciclos frequentes podem impedir a manutenção de seis horas após a execução inicial. A correção só marca manutenção global concluída quando ela realmente estava vencida e a rodada terminou sem falha; rodada de um tenant não adia a dos demais. Mantém o owner existente, limite por lote, escopo de tenant, configuração de retenção e preservação de conversa/pedido. Não muda cadência de envio, polling, TTL do agente ou banco/RLS.
+
+Antes da publicação, conferir `ORDER_CHAT_RETENTION_DAYS` efetivo e backlog elegível: a rotina existente remove conteúdo antigo de conversas encerradas, eventos e inscrições de push. O código usa 30 dias por padrão; a antiga tasklist de 90 dias não configura o runtime. Reversão do relógio não recupera conteúdo já removido; backup validado e política de retenção precisam integrar a revisão. Não executar limpeza manual no D6.
+
+### Próximas tarefas de economia
+
+- [ ] Comprovar carga operacional representativa em 10/100/1000 tenants isolados. O teste de descoberta ociosa agora cobre até 1000 e exige uma consulta, mas não certifica throughput, p95, impressão ou concorrência financeira.
+- [ ] Priorizar planos de consultas reais antes de mexer em índices/RLS. Advisors: 31 FKs sem índice, 63 avisos initplan e quatro pares duplicados; já constavam em 09/10. Não criar/remover em lote. Sem alerta security WARN/ERROR nesta leitura; INFO deny-all do backup interno permanece intencional.
+- [ ] Medir custo de autenticação do agente sem cache positivo que atrase revogação; preservar agentes instalados e diagnóstico além do TTL.
+- [ ] Reduzir consultas administrativas de logs: janela pequena, filtro de fonte/status e nenhuma rotina de polling do Logs Explorer. 86,771 GB são dados varridos para ler logs, não tamanho do banco nem tráfego dos clientes; aplicação do limite anunciada para início de 2027. A autoria dessas consultas não foi determinada e nenhum log amplo foi consultado nesta rodada.
+- [ ] Medir bytes por pedido/visita e p95 sob o mesmo cenário antes/depois. Não aumentar pool, réplica, plano ou contratar cache baseado apenas em quantidade de restaurantes.
+
+Referências: [Logs Query](https://supabase.com/docs/guides/platform/manage-your-usage/log-query), [FKs sem índice](https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys), [RLS initplan](https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan), [índices duplicados](https://supabase.com/docs/guides/database/database-linter?lint=0009_duplicate_index). Supabase anunciou em 12/10 desativação de cifras TLS antigas nas APIs HTTP a partir de 10/11; não é atualização automática de capacidade e conexões PostgreSQL não entram nessa mudança: [aviso oficial](https://supabase.com/changelog/cbc-tls-ciphers-deprecated).
+
+## Retenção de conversas — decisão operacional de 12/10/2026
+
+- Proprietário confirmou 30 dias; runtime Railway não possui `ORDER_CHAT_RETENTION_DAYS` configurada e portanto usa o default explícito de 30 dias. Sem troca de plano, variável, pedido ou limpeza manual.
+- SQL agregado somente leitura na produção Supabase, em 12/10: **42 conversas encerradas ainda não purgadas**, das quais **0 elegíveis a 30 dias** e **0 a 90 dias**. A mais antiga encerrou em 02/10/2026 (UTC). É um retrato temporal, não uma garantia futura.
+- Log do serviço Railway Postgres S3 Backup em 12/10 às 03:05 UTC: arquivo de 1,31 MB validado e upload ao S3 confirmado. A nova cópia não passou por ensaio próprio de restauração.
+- Evidência de restore de aplicação: PR #1058 registra ensaio real em 09/10 usando PostgreSQL 17 isolado e a cópia Supabase/S3: contagens coincidentes das 117 tabelas, 154 policies restauradas e isolamento tenant verificado. A evidência é **da base KÔMA**; não cobre recuperação completa do Evolution, mídias, credenciais, segredos ou agentes, e não deve ser anunciada como recuperação integral.
+- Merge deste ajuste: rodar os checks sobre a `main` reconciliada; manter 30 dias e a política do método `purge_expired_order_chat_content` sem novos dados ou estrutura; conferir readiness e backlog antes e depois do deploy. Não fazer replay de impressões nem teste destrutivo no ID 6.
