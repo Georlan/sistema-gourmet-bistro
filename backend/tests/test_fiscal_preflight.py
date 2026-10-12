@@ -246,6 +246,9 @@ def test_preflighted_document_never_calls_numbering_when_gate_blocks(monkeypatch
         def filter(self, *_args):
             return self
 
+        def populate_existing(self):
+            return self
+
         def with_for_update(self):
             return self
 
@@ -314,11 +317,17 @@ def test_preflighted_document_embeds_active_reference_lineage(monkeypatch):
         def filter(self, *_args):
             return self
 
+        def populate_existing(self):
+            return self
+
         def with_for_update(self):
             return self
 
         def one_or_none(self):
             return profile
+
+        def scalar(self):
+            return None
 
     class Db:
         def query(self, _model):

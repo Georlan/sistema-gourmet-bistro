@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from ..fiscal_models import RestaurantFiscalProfile
+from ..fiscal_models import FiscalDocument, RestaurantFiscalProfile
 from .fiscal_documents import (
     FiscalDocumentCreationResult,
     FiscalDocumentPersistenceError,
@@ -67,6 +67,7 @@ def create_preflighted_fiscal_document(
     profile = (
         db.query(RestaurantFiscalProfile)
         .filter(RestaurantFiscalProfile.restaurante_id == restaurante_id)
+        .populate_existing()
         .with_for_update()
         .one_or_none()
     )
@@ -82,6 +83,16 @@ def create_preflighted_fiscal_document(
 
     versioned_snapshot = copy.deepcopy(sale_snapshot)
     versioned_snapshot["fiscalPreflight"] = _preflight_lineage(preflight)
+    previous_snapshot = db.query(FiscalDocument.sale_snapshot).filter(
+        FiscalDocument.restaurante_id == restaurante_id,
+        FiscalDocument.idempotency_key == str(idempotency_key or "").strip(),
+    ).scalar()
+    if isinstance(previous_snapshot, dict):
+        previous_lineage = previous_snapshot.get("fiscalPreflight")
+        if isinstance(previous_lineage, dict) and previous_lineage.get("evaluatedAt"):
+            # A repetição preserva o instante da primeira avaliação. Conteúdo,
+            # contexto e referências continuam sendo comparados integralmente.
+            versioned_snapshot["fiscalPreflight"]["evaluatedAt"] = previous_lineage["evaluatedAt"]
 
     return create_numbered_fiscal_document(
         db,

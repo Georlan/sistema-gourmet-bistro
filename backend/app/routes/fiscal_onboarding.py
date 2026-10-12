@@ -23,7 +23,9 @@ from ..fiscal.jurisdiction import FiscalJurisdictionError, resolve_fiscal_jurisd
 from ..fiscal_models import RestaurantFiscalProfile
 from ..models import Usuario
 from ..security import get_current_user
-from ..services.fiscal_credentials import FiscalCredentialError, store_fiscal_credentials
+from ..services.fiscal_credentials import (
+    FiscalCredentialError, invalidate_fiscal_credentials, store_fiscal_credentials,
+)
 from ..services.fiscal_onboarding import (
     evaluate_restaurant_fiscal_readiness,
     readiness_payload,
@@ -217,6 +219,16 @@ def update_fiscal_profile(
     if profile is None:
         profile = RestaurantFiscalProfile(restaurante_id=tenant_id)
         db.add(profile)
+    elif (
+        profile.cnpj != cnpj
+        or profile.country_code != "BR"
+        or profile.uf != resolution.uf
+        or profile.document_model != "65"
+        or profile.environment != payload.environment
+    ):
+        # CSC and A1 must never silently follow another issuer or environment.
+        # Ordinary name/address/series edits preserve the configured material.
+        invalidate_fiscal_credentials(profile)
 
     # Qualquer alteração cadastral exige nova ativação explícita após o preflight.
     profile.enabled = False

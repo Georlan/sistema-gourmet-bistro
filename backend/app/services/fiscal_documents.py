@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import datetime
+import json
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -12,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..fiscal_models import FiscalDocument, FiscalEvent, FiscalSequence
+from ..models import Comanda
 from .fiscal_state import validate_fiscal_transition
 
 
@@ -24,6 +26,10 @@ class FiscalDocumentNotFound(FiscalDocumentPersistenceError):
 
 
 class FiscalEventConflict(FiscalDocumentPersistenceError):
+    pass
+
+
+class FiscalIdempotencyConflict(FiscalDocumentPersistenceError):
     pass
 
 
@@ -60,7 +66,43 @@ def _money(value: object) -> Decimal:
         raise FiscalDocumentPersistenceError("Valor total fiscal inválido.") from exc
     if not amount.is_finite() or amount < 0:
         raise FiscalDocumentPersistenceError("Valor total fiscal não pode ser negativo.")
-    return amount.quantize(Decimal("0.01"))
+    try:
+        return amount.quantize(Decimal("0.01"))
+    except InvalidOperation as exc:
+        raise FiscalDocumentPersistenceError("Valor total fiscal inválido.") from exc
+
+
+def _canonical_json(value: object) -> str:
+    try:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise FiscalDocumentPersistenceError("Snapshot fiscal deve conter JSON válido e finito.") from exc
+
+
+def _assert_document_replay_matches(
+    document: FiscalDocument,
+    *,
+    snapshot: dict[str, Any],
+    amount: Decimal,
+    comanda_id: str | None,
+    environment: str,
+    model: str,
+    series: int,
+    provider: str,
+) -> None:
+    if (
+        document.environment != environment
+        or document.model != model
+        or document.series != series
+        or document.provider != provider
+        or document.comanda_id != comanda_id
+        or document.total_amount != amount
+        or _canonical_json(document.sale_snapshot) != _canonical_json(snapshot)
+    ):
+        # Nunca incluir conteúdo da venda/credenciais na mensagem de conflito.
+        raise FiscalIdempotencyConflict(
+            "idempotency_key fiscal já foi usada com outro conteúdo ou contexto."
+        )
 
 
 def reserve_fiscal_number(
@@ -171,6 +213,17 @@ def create_numbered_fiscal_document(
         raise FiscalDocumentPersistenceError("sale_snapshot fiscal é obrigatório.")
     _validate_scope(environment=environment, model=model, series=series)
     amount = _money(total_amount)
+    snapshot = copy.deepcopy(sale_snapshot)
+    _canonical_json(snapshot)
+    replay_scope = dict(
+        snapshot=snapshot,
+        amount=amount,
+        comanda_id=comanda_id,
+        environment=environment,
+        model=model,
+        series=series,
+        provider=provider,
+    )
 
     existing = (
         db.query(FiscalDocument)
@@ -181,7 +234,16 @@ def create_numbered_fiscal_document(
         .first()
     )
     if existing is not None:
+        _assert_document_replay_matches(existing, **replay_scope)
         return FiscalDocumentCreationResult(existing, True)
+
+    if comanda_id is not None:
+        owned_comanda = db.query(Comanda.id).filter(
+            Comanda.id == comanda_id,
+            Comanda.restaurante_id == restaurante_id,
+        ).first()
+        if owned_comanda is None:
+            raise FiscalDocumentPersistenceError("Comanda fiscal não encontrada neste restaurante.")
 
     document_id = str(uuid.uuid4())
     number = reserve_fiscal_number(
@@ -203,7 +265,7 @@ def create_numbered_fiscal_document(
         number=number,
         provider=provider,
         total_amount=amount,
-        sale_snapshot=copy.deepcopy(sale_snapshot),
+        sale_snapshot=snapshot,
     )
     event = FiscalEvent(
         restaurante_id=restaurante_id,
@@ -230,6 +292,7 @@ def create_numbered_fiscal_document(
             .first()
         )
         if recovered is not None:
+            _assert_document_replay_matches(recovered, **replay_scope)
             return FiscalDocumentCreationResult(recovered, True)
         raise FiscalDocumentPersistenceError(
             "Falha de integridade ao persistir documento fiscal."
@@ -244,10 +307,17 @@ def _assert_replay_matches(
     *,
     event_type: str,
     to_status: str,
+    external_protocol: str | None,
+    payload: dict[str, Any] | None,
 ) -> None:
-    if event.event_type != event_type or event.to_status != to_status:
+    if (
+        event.event_type != event_type
+        or event.to_status != to_status
+        or event.external_protocol != external_protocol
+        or _canonical_json(event.payload) != _canonical_json(payload)
+    ):
         raise FiscalEventConflict(
-            "event_key fiscal já foi usado com outro tipo ou estado de destino."
+            "event_key fiscal já foi usado com outro tipo, estado, protocolo ou conteúdo."
         )
 
 
@@ -269,6 +339,7 @@ def transition_fiscal_document(
     normalized_event_type = str(event_type or "").strip()
     if not normalized_event_key or not normalized_event_type:
         raise FiscalDocumentPersistenceError("event_key e event_type fiscais são obrigatórios.")
+    _canonical_json(payload)
 
     replay_event = (
         db.query(FiscalEvent)
@@ -284,6 +355,8 @@ def transition_fiscal_document(
             replay_event,
             event_type=normalized_event_type,
             to_status=to_status,
+            external_protocol=external_protocol,
+            payload=payload,
         )
         replay_document = (
             db.query(FiscalDocument)
@@ -303,12 +376,30 @@ def transition_fiscal_document(
             FiscalDocument.restaurante_id == restaurante_id,
             FiscalDocument.id == document_id,
         )
+        .populate_existing()
         .with_for_update()
         .first()
     )
     if document is None:
         db.rollback()
         raise FiscalDocumentNotFound("Documento fiscal não encontrado neste tenant.")
+
+    # Outra transação pode ter concluído o mesmo evento enquanto aguardávamos
+    # o lock. Conferir novamente antes de validar uma transição já aplicada.
+    concurrent_event = db.query(FiscalEvent).filter(
+        FiscalEvent.restaurante_id == restaurante_id,
+        FiscalEvent.document_id == document_id,
+        FiscalEvent.event_key == normalized_event_key,
+    ).first()
+    if concurrent_event is not None:
+        _assert_replay_matches(
+            concurrent_event,
+            event_type=normalized_event_type,
+            to_status=to_status,
+            external_protocol=external_protocol,
+            payload=payload,
+        )
+        return FiscalDocumentTransitionResult(document, concurrent_event, True)
 
     try:
         transition = validate_fiscal_transition(document.status, to_status)
@@ -356,6 +447,8 @@ def transition_fiscal_document(
                 recovered_event,
                 event_type=normalized_event_type,
                 to_status=to_status,
+                external_protocol=external_protocol,
+                payload=payload,
             )
             return FiscalDocumentTransitionResult(
                 recovered_document,

@@ -1,5 +1,5 @@
 import { FileCheck2, PlugZap } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { KomaPaymentsSettings } from './KomaPaymentsSettings';
 import { CashierFiscalSettings } from './CashierFiscalSettings';
 import { RestaurantWhatsAppSettings } from './RestaurantWhatsAppSettings';
@@ -14,6 +14,17 @@ type TechnicalSettingsTab = 'integrations' | 'fiscal';
 /** Technical integrations owner. Channel screens only consume integration status/capabilities. */
 export function CashierIntegrationsSettings({ apiBaseUrl, authHeaders }: Props) {
   const [activeTab, setActiveTab] = useState<TechnicalSettingsTab>('integrations');
+  // Fiscal drafts and credentials belong to one authenticated API scope. A new
+  // scope must get a fresh subtree; equivalent header objects preserve drafts.
+  // The identity stays in memory only and is never rendered, logged or stored.
+  const fiscalScopeKey = JSON.stringify([
+    apiBaseUrl,
+    [...new Headers(authHeaders).entries()].sort(([a], [b]) => a.localeCompare(b)),
+  ]);
+  const fiscalAuthHeaders = useMemo(
+    () => ({ ...authHeaders }),
+    [fiscalScopeKey],
+  );
 
   return (
     <div className="space-y-4">
@@ -49,7 +60,7 @@ export function CashierIntegrationsSettings({ apiBaseUrl, authHeaders }: Props) 
       </div>
 
       {activeTab === 'fiscal' ? (
-        <CashierFiscalSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+        <CashierFiscalSettings key={fiscalScopeKey} apiBaseUrl={apiBaseUrl} authHeaders={fiscalAuthHeaders} />
       ) : (
         <>
           <KomaPaymentsSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />

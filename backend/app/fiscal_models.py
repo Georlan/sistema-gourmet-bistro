@@ -175,6 +175,12 @@ class FiscalDocument(Base):
 
     __tablename__ = "fiscal_documents"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["restaurante_id", "comanda_id"],
+            ["comandas.restaurante_id", "comandas.id"],
+            name="fk_fiscal_document_comanda_tenant",
+            ondelete="RESTRICT",
+        ),
         UniqueConstraint("restaurante_id", "id", name="uq_fiscal_document_tenant_id"),
         UniqueConstraint(
             "restaurante_id",
@@ -303,6 +309,12 @@ class FiscalDocumentItem(Base):
 class FiscalPayment(Base):
     __tablename__ = "fiscal_payments"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["restaurante_id", "pagamento_id"],
+            ["pagamentos.restaurante_id", "pagamentos.id"],
+            name="fk_fiscal_payment_pagamento_tenant",
+            ondelete="RESTRICT",
+        ),
         ForeignKeyConstraint(
             ["restaurante_id", "document_id"],
             ["fiscal_documents.restaurante_id", "fiscal_documents.id"],

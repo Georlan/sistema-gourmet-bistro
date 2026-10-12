@@ -103,7 +103,7 @@ def test_transition_and_event_are_committed_once_and_replay_safely(fiscal_sessio
         event_key="preflight:ready",
         event_type="preflight.passed",
         to_status="ready",
-        payload={"rule_set": "ignored-on-replay"},
+        payload={"rule_set": "test-v1"},
     )
 
     assert first.replayed is False

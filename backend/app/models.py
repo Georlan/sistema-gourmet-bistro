@@ -354,6 +354,7 @@ class Cupom(Base):
 class Comanda(Base):
     __tablename__ = "comandas"
     __table_args__ = (
+        UniqueConstraint("restaurante_id", "id", name="uq_comandas_restaurante_id_id"),
         ForeignKeyConstraint(
             ['restaurante_id', 'mesa_id'],
             ['mesas.restaurante_id', 'mesas.id'],
@@ -688,6 +689,7 @@ class CaixaMovimentacao(Base):
 class Pagamento(Base):
     __tablename__ = "pagamentos"
     __table_args__ = (
+        UniqueConstraint("restaurante_id", "id", name="uq_pagamentos_restaurante_id_id"),
         CheckConstraint(
             "valor > 0",
             name="ck_pagamentos_valor_positive_finite",
