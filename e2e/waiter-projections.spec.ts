@@ -27,6 +27,7 @@ type WaiterScenario = {
   displayNumbers?: [string, string];
   sequences?: [number, number];
   emptySession?: boolean;
+  occupancyTargets?: boolean;
   withoutCheck?: boolean;
   canCloseTable?: boolean;
   canTransferTables?: boolean;
@@ -88,6 +89,14 @@ async function openWaiterScenario(
     { id: 7, nome: 'Mesa 7', capacidade: 4, status: 'ocupada' },
     { id: 8, nome: 'Mesa 8', capacidade: 4, status: 'livre' },
   ];
+  if (scenario.occupancyTargets) {
+    tables.push(
+      { id: 9, nome: 'Varanda', capacidade: 4, status: 'ocupada' },
+      { id: 10, nome: 'Mesa 10', capacidade: 4, status: 'livre' },
+      { id: 11, nome: 'Mesa 11', capacidade: 4, status: 'aguardando_pagamento' },
+    );
+    checks.push({ ...check, id: 'empty-target-check', mesa_id: 10, itens: [], lancamentos: [] });
+  }
   const writes: Write[] = [];
   const unexpectedApiRequests: string[] = [];
   let releasePrint: () => void = () => {};
@@ -609,3 +618,30 @@ test('dois garçons recebem presença na mesma mesa sem bloquear ações, inclus
   expect(first.writes).toEqual([]);
   expect(second.writes).toEqual([]);
 });
+
+for (const movement of ['total', 'parcial', 'mesclar'] as const) {
+  test(`destinos de ${movement} indicam ocupação inclusive atendimento sem itens`, async ({ page }) => {
+    const state = await openWaiterScenario(page, ['preparando', 'pronto'], { occupancyTargets: true });
+    await page.locator('#mesa-card-7').click();
+    await page.locator(`#tab-${movement === 'mesclar' ? 'mesclar' : 'transferir'}-btn`).click();
+    if (movement === 'parcial') {
+      await page.getByRole('button', { name: 'Selecionar Itens', exact: true }).click();
+      await expect(page.locator('#transfer-target-mesa-9')).toContainText('Ocupada');
+      await expect(page.locator('#transfer-target-mesa-9')).toBeDisabled();
+      await page.getByRole('checkbox').first().check();
+    }
+    const free = page.locator(movement === 'mesclar' ? '#merge-target-mesa-free-8' : '#transfer-target-mesa-8');
+    await expect(free).toContainText('Livre');
+    for (const id of [9, 10, 11]) {
+      const target = page.locator(movement === 'mesclar' ? `#merge-target-mesa-${id}` : `#transfer-target-mesa-${id}`);
+      await expect(target).toContainText('Ocupada');
+      await expect(target).toBeEnabled();
+    }
+    const occupied = page.locator(movement === 'mesclar' ? '#merge-target-mesa-9' : '#transfer-target-mesa-9');
+    await occupied.click();
+    await expect(occupied).toContainText('Confirmar?');
+    await expect(occupied).toContainText('Ocupada');
+    expect(state.writes).toEqual([]);
+    expect(state.unexpectedApiRequests).toEqual([]);
+  });
+}

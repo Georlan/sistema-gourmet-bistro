@@ -537,7 +537,7 @@ export function KanbanOrderDetails({
                       <option value="">Transferir para…</option>
                       {salonTables
                         .filter(table => Number(table.id) !== Number(selectedKanbanOrder.mesaId))
-                        .map(table => <option key={table.id} value={table.id}>Mesa {table.id}{table.nome ? ` · ${table.nome}` : ''}</option>)}
+                        .map(table => <option key={table.id} value={table.id}>{getTableAssociationOptionLabel(table)}</option>)}
                     </select>
                     <button
                       type="button"

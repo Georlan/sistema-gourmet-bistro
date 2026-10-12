@@ -6,6 +6,7 @@
 import React from 'react';
 import { Move, GitMerge, AlertTriangle } from 'lucide-react';
 import type { Order, Table } from '../../types';
+import { projectWaiterSalonTables } from '../../domain/waiterSalonProjection';
 
 interface MesaTransferMergePanelProps {
   activeTab: 'consumo' | 'lancamento' | 'transferir' | 'mesclar';
@@ -36,8 +37,13 @@ export function MesaTransferMergePanel({
 }: MesaTransferMergePanelProps) {
   const tablesList = salonTables || [];
   const availableTablesForTransfer = tablesList.filter(t => t.id !== table.id);
-  const tablesWithOrders = tablesList.filter(t => t.id !== table.id && allOrders.some(o => o.mesaId === t.id));
-  const tablesWithoutOrders = tablesList.filter(t => t.id !== table.id && !allOrders.some(o => o.mesaId === t.id));
+  const occupiedTableIds = new Set(
+    projectWaiterSalonTables(tablesList, allOrders, [], Date.now())
+      .filter(row => row.operationalState.occupancy === 'IN_SERVICE')
+      .map(row => row.table.id),
+  );
+  const tablesWithOrders = availableTablesForTransfer.filter(t => occupiedTableIds.has(t.id));
+  const tablesWithoutOrders = availableTablesForTransfer.filter(t => !occupiedTableIds.has(t.id));
 
   return (
     <>
@@ -132,6 +138,7 @@ export function MesaTransferMergePanel({
               ) : (
                 availableTablesForTransfer.map((t) => {
                   const isConfirming = confirmTransferTo === t.id;
+                  const isOccupied = occupiedTableIds.has(t.id);
                   const hasSelected = transferType === 'total' || selectedItemsForTransfer.length > 0;
                   return (
                     <button
@@ -139,6 +146,8 @@ export function MesaTransferMergePanel({
                       type="button"
                       disabled={!hasSelected}
                       id={`transfer-target-mesa-${t.id}`}
+                      aria-label={`Mesa ${t.id} · ${isOccupied ? 'Ocupada' : 'Livre'}${isConfirming ? ' · Confirmar?' : ''}`}
+                      data-table-status={isOccupied ? 'occupied' : 'free'}
                       onClick={() => {
                         if (!hasSelected) return;
                         if (isConfirming) {
@@ -166,7 +175,10 @@ export function MesaTransferMergePanel({
                       }`}
                     >
                       <span className={`text-base font-bold ${hasSelected ? 'text-koma-foreground group-hover:text-emerald-700 dark:text-emerald-400' : 'text-gray-600'}`}>
-                        {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
+                        {`Mesa ${t.id}`}{isConfirming && ' · Confirmar?'}
+                      </span>
+                      <span className={`text-[10px] font-bold ${isOccupied ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
+                        {isOccupied ? '● Ocupada' : '○ Livre'}
                       </span>
                       {isConfirming && (
                         <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
@@ -248,15 +260,14 @@ export function MesaTransferMergePanel({
                           }`}
                         >
                           <span className={`text-base font-bold text-koma-foreground ${!isTargetAlreadyMerged && 'group-hover:text-emerald-400'}`}>
-                            {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
+                            {`Mesa ${t.id}`}{isConfirming && ' · Confirmar?'}
                           </span>
+                          <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300">● Ocupada</span>
                           {isTargetAlreadyMerged ? (
                             <span className="text-[8px] text-koma-muted font-bold uppercase tracking-wider">Limite Atingido</span>
-                          ) : !isConfirming ? (
-                            <span className="text-[8px] text-rose-400 font-bold uppercase tracking-wider">Ocupada</span>
-                          ) : (
+                          ) : isConfirming ? (
                             <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
-                          )}
+                          ) : null}
                         </button>
                       );
                     })}
@@ -297,15 +308,14 @@ export function MesaTransferMergePanel({
                           }`}
                         >
                           <span className="text-base font-bold text-koma-foreground group-hover:text-emerald-400">
-                            {isConfirming ? 'Confirmar?' : `Mesa ${t.id}`}
+                            {`Mesa ${t.id}`}{isConfirming && ' · Confirmar?'}
                           </span>
+                          <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">○ Livre</span>
                           {isTargetAlreadyMerged ? (
                             <span className="text-[8px] text-koma-muted font-bold uppercase tracking-wider">Limite Atingido</span>
-                          ) : !isConfirming ? (
-                            <span className="text-[8px] text-emerald-400 font-bold uppercase tracking-wider">Livre</span>
-                          ) : (
+                          ) : isConfirming ? (
                             <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
-                          )}
+                          ) : null}
                         </button>
                       );
                     })}
