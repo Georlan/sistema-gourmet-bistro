@@ -38,6 +38,20 @@ fluxos atuais de pedidos, pagamentos, impressão e tenant 6.
 
 ## Migration e reversão
 
+Pré-publicação de 12/10/2026, somente leitura: banco na revisão anterior
+`7b8c9d0e1f23`, nenhum documento/pagamento/perfil fiscal e nenhum vínculo
+inválido. `comandas` e `pagamentos` têm menos de 1 MB cada, incluindo índices,
+e não havia transação longa no momento da inspeção. O catálogo protegido do
+tenant 6 tinha 18 produtos; comparar seu digest após a publicação. O deploy
+Railway aplica `alembic upgrade head` em pre-deploy antes de trocar a aplicação.
+Os limites de lock continuam valendo; falha de pre-deploy não autoriza reparar
+ou reatribuir dados manualmente. Nenhuma credencial fiscal legada estava em uso.
+
+Publicar em uma única PR a composição das entregas #1093, #1094, #1095 e #1097,
+preservando tanto a invalidação de credenciais quanto o provedor salvo no perfil.
+Revisão independente não encontrou bloqueadores para esta etapa com emissão
+desabilitada. Registrar SHA e comprovação de migration/versões servidas após merge.
+
 `1370ca2f0151` descende de `7b8c9d0e1f23`, sem branch Alembic paralela.
 Upgrade aborta se encontrar vínculo fiscal ausente/cross-tenant; não reassocia
 nem reescreve dados históricos. PostgreSQL valida as constraints e limita espera
