@@ -36,7 +36,7 @@ def test_aliases_formatted_documents_and_free_text_cannot_leak():
     sanitized = evidence.sanitize({
         'clientSecret': 'unregistered-secret', 'X-Client-Secret': 'header-secret',
         'accessToken': 'unregistered-token', 'Set-Cookie': 'private-session',
-        'password': 'private-password',
+        'password': 'fixture-pw',
         'error_messages': [{'code': 'FORBIDDEN', 'description': 'CVV 123; nome privado'}],
         'payment_response': {'code': '20000', 'message': 'cartão 4111 1111 1111 1111'},
         'diagnostic': 'CPF 123.456.789-01 CNPJ 12.345.678/0001-90 Bearer unknown-token',
@@ -44,7 +44,7 @@ def test_aliases_formatted_documents_and_free_text_cannot_leak():
     })
     text = json.dumps(sanitized)
     for secret in ('unregistered-secret', 'header-secret', 'unregistered-token',
-                   'private-session', 'private-password', '123.456.789-01',
+                   'private-session', 'fixture-pw', '123.456.789-01',
                    '12.345.678/0001-90', 'unknown-token', '4111', 'CVV', 'nome privado'):
         assert secret not in text
     assert sanitized['error_messages'][0]['code'] == 'FORBIDDEN'
