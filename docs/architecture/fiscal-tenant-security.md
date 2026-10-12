@@ -67,6 +67,13 @@ legados precisam de reenvio seguro, sem backfill ou exposição de segredos.
 - Browser: 12 casos desktop/mobile com A1/CSC/arquivo/rascunho, bootstrap e
   preflight atrasados, nova API, headers equivalentes e falha sem fallback.
   Nenhuma escrita HTTP nem dado real de restaurante nos cenários.
+- Composição local das PRs #1093/#1094/#1095/#1097: 168 testes fiscais, 28
+  cenários browser desktop/mobile, lint, 1.001 unitários frontend e build passaram.
+  Os testes de sessão também passam na tela anterior, sem exigir a UI guiada.
+- CI do backend desta alteração: 2.397 passaram e 69 skipped. A execução completa
+  local anterior foi invalidada por processos pytest sobrepostos que removiam o
+  mesmo SQLite da conftest; as oito simulações afetadas passaram em cópia isolada.
+  Não usar esse resultado local contaminado como prova de falha operacional.
 
 ## Limites e próximos gates
 

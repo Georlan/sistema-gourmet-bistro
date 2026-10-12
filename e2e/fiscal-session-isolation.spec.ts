@@ -49,21 +49,35 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
 
 async function fillDraftAndSecrets(page: Page) {
   await page.getByLabel('Razão social', { exact: true }).fill('Rascunho exclusivo da sessão A');
-  await page.getByLabel('Arquivo A1 (.pfx / .p12)', { exact: true }).setInputFiles({
+  await selectGuidedStep(page, /Certificado e segurança/);
+  await certificateInput(page).setInputFiles({
     name: 'synthetic-only.pfx', mimeType: 'application/x-pkcs12', buffer: Buffer.from('synthetic-not-a-certificate'),
   });
-  await page.getByLabel('Senha do A1', { exact: true }).fill('synthetic-secret-a');
-  await page.getByLabel('ID do CSC', { exact: true }).fill('123456');
-  await page.getByLabel('CSC', { exact: true }).fill('synthetic-csc-a');
+  await certificatePassword(page).fill('synthetic-secret-a');
+  await cscIdentifier(page).fill('123456');
+  await cscSecret(page).fill('synthetic-csc-a');
+}
+
+const certificateInput = (page: Page) => page.getByLabel(/^(Arquivo A1|Certificado A1) \(\.pfx \/ \.p12\)$/);
+const certificatePassword = (page: Page) => page.getByLabel(/^(Senha do A1|Senha do certificado \(se houver\))$/);
+const cscIdentifier = (page: Page) => page.getByLabel(/^(ID do CSC|Identificador do CSC)$/);
+const cscSecret = (page: Page) => page.getByLabel(/^(CSC|Código de segurança \(CSC\))$/);
+
+async function selectGuidedStep(page: Page, name: RegExp) {
+  const navigation = page.getByRole('navigation', { name: 'Etapas da configuração fiscal' });
+  if (await navigation.count()) await navigation.getByRole('button', { name }).click();
 }
 
 async function expectFreshScope(page: Page, scope: string) {
   await expect(page.getByLabel('Razão social', { exact: true })).toHaveValue(`Restaurante simulado ${scope}`);
-  await expect(page.getByLabel('Senha do A1', { exact: true })).toHaveValue('');
-  await expect(page.getByLabel('ID do CSC', { exact: true })).toHaveValue('');
-  await expect(page.getByLabel('CSC', { exact: true })).toHaveValue('');
-  expect(await page.getByLabel('Arquivo A1 (.pfx / .p12)', { exact: true }).evaluate((input: HTMLInputElement) => input.files?.length)).toBe(0);
+  await selectGuidedStep(page, /Certificado e segurança/);
+  await expect(certificatePassword(page)).toHaveValue('');
+  await expect(cscIdentifier(page)).toHaveValue('');
+  await expect(cscSecret(page)).toHaveValue('');
+  expect(await certificateInput(page).evaluate((input: HTMLInputElement) => input.files?.length)).toBe(0);
+  await selectGuidedStep(page, /Conferência/);
   await expect(page.getByText(`Pendência simulada ${scope}`, { exact: true })).toBeVisible();
+  await selectGuidedStep(page, /Dados da empresa/);
 }
 
 test('new credentials discard the previous fiscal draft, file, password and CSC without writing', async ({ page }) => {
@@ -83,9 +97,9 @@ test('equivalent header values preserve the draft and secrets without another bo
   await fillDraftAndSecrets(page);
   await page.getByRole('button', { name: 'Recriar headers equivalentes' }).click();
   await expect(page.getByLabel('Razão social', { exact: true })).toHaveValue('Rascunho exclusivo da sessão A');
-  await expect(page.getByLabel('Senha do A1', { exact: true })).toHaveValue('synthetic-secret-a');
-  await expect(page.getByLabel('CSC', { exact: true })).toHaveValue('synthetic-csc-a');
-  expect(await page.getByLabel('Arquivo A1 (.pfx / .p12)', { exact: true }).evaluate((input: HTMLInputElement) => input.files?.length)).toBe(1);
+  await expect(certificatePassword(page)).toHaveValue('synthetic-secret-a');
+  await expect(cscSecret(page)).toHaveValue('synthetic-csc-a');
+  expect(await certificateInput(page).evaluate((input: HTMLInputElement) => input.files?.length)).toBe(1);
   expect(reads.A).toBe(1);
   expect(writes).toEqual([]);
 });
@@ -132,7 +146,8 @@ test('late green preflight from the old session cannot approve the current sessi
     return true;
   } });
   await expectFreshScope(page, 'A');
-  await page.getByRole('button', { name: 'Revalidar agora', exact: true }).click();
+  await selectGuidedStep(page, /Conferência/);
+  await page.getByRole('button', { name: /^(Revalidar agora|Conferir novamente)$/ }).click();
   await expect.poll(() => Boolean(held)).toBe(true);
   await page.getByRole('button', { name: 'Trocar sessão simulada' }).click();
   await expectFreshScope(page, 'B');
@@ -141,6 +156,7 @@ test('late green preflight from the old session cannot approve the current sessi
   await completed;
   await expectFreshScope(page, 'B');
   await expect(page.getByText('Preflight verde', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Conferência concluída', { exact: true })).toHaveCount(0);
   expect(writes).toEqual([]);
 });
 
@@ -155,7 +171,8 @@ test('a failed new session load never falls back to the previous company or secr
   await page.getByRole('button', { name: 'Trocar sessão simulada' }).click();
   await expect(page.getByText('Perfil simulado indisponível', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Razão social', { exact: true })).toHaveValue('');
-  await expect(page.getByLabel('Senha do A1', { exact: true })).toHaveValue('');
-  await expect(page.getByLabel('CSC', { exact: true })).toHaveValue('');
+  await selectGuidedStep(page, /Certificado e segurança/);
+  await expect(certificatePassword(page)).toHaveValue('');
+  await expect(cscSecret(page)).toHaveValue('');
   expect(writes).toEqual([]);
 });
