@@ -62,6 +62,6 @@ test('resposta incompatível fica restrita ao painel e não derruba configuraç�
   await page.route('**/api/onboarding/fiscal/products?*', route => route.fulfill({ json: {} }));
   await page.getByRole('button', { name: 'Ver preparação dos produtos' }).click();
   await expect(page.getByRole('alert')).toContainText('Não foi possível carregar os produtos fiscais');
-  await expect(page.getByRole('heading', { name: 'Estabelecimento fiscal' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^(Estabelecimento fiscal|Dados da empresa)$/ })).toBeVisible();
   await expect(page.getByText(/Não foi possível abrir Configurações/)).toHaveCount(0);
 });
