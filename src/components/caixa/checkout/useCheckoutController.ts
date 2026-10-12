@@ -234,9 +234,17 @@ export function useCheckoutController({
 
   const [paymentValor, setPaymentValor] = useState<number | ''>('');
   const [mixedPayment, setMixedPayment] = useState(false);
+  // A successful partial payment must be reflected by the backend snapshot
+  // before another charge can be sent. Never manufacture paid balances locally.
+  const [awaitingMixedPayment, setAwaitingMixedPayment] = useState<{
+    orderId: string;
+    mesaId: number | null;
+    minimumPaid: number;
+  } | null>(null);
+  const [paymentVerificationRequired, setPaymentVerificationRequired] = useState(false);
 
   const toggleMixedPayment = (enabled: boolean) => {
-    if (isProcessingPaymentRef.current) return;
+    if (isProcessingPaymentRef.current || awaitingMixedPayment || paymentVerificationRequired) return;
     setMixedPayment(enabled);
     setSelectedItemIds([]);
     setSplitPeople('1');
@@ -280,6 +288,30 @@ export function useCheckoutController({
     setSelectionConflictTarget(null);
   }, [orders, selectionConflictTarget]);
 
+  // The canonical refreshed order, not a local +amount, unlocks the next part.
+  useEffect(() => {
+    if (!awaitingMixedPayment || !showCheckoutModal) return;
+    const refreshedOrder = awaitingMixedPayment.mesaId
+      ? buildTableCheckoutOrder(
+          orders.filter((order) =>
+            Number(order.mesaId) === awaitingMixedPayment.mesaId && isTableCheckoutOrder(order)
+          )
+        )
+      : orders.find((order) => order.id === awaitingMixedPayment.orderId) || null;
+    if (
+      !refreshedOrder ||
+      Number(refreshedOrder.valorPago || 0) + 0.01 < awaitingMixedPayment.minimumPaid
+    ) return;
+    const authoritativeBalance = getCheckoutBalance(refreshedOrder);
+    setSelectedOrder(refreshedOrder);
+    setPaymentValor(authoritativeBalance > 0.01 ? authoritativeBalance : '');
+    setAwaitingMixedPayment(null);
+    if (authoritativeBalance <= 0.01) {
+      setSelectedOrder(null);
+      setShowCheckoutModal(false);
+    }
+  }, [orders, awaitingMixedPayment, showCheckoutModal]);
+
   const refreshAfterItemSelectionConflict = async () => {
     const target = {
       orderId: selectedOrder?.id || '',
@@ -322,6 +354,8 @@ export function useCheckoutController({
       }
     } else if (!showCheckoutModal) {
       setMixedPayment(false);
+      setAwaitingMixedPayment(null);
+      setPaymentVerificationRequired(false);
       setPaymentValor('');
       setPaymentMetodo('');
     }
@@ -329,7 +363,7 @@ export function useCheckoutController({
 
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedOrder || isProcessingPaymentRef.current) return;
+    if (!selectedOrder || isProcessingPaymentRef.current || awaitingMixedPayment || paymentVerificationRequired) return;
     if (isTableCheckoutOrder(selectedOrder) && !ensureCashSettingsReady()) return;
     setErrorMsg('');
     if (!paymentMetodo) {
@@ -516,6 +550,38 @@ export function useCheckoutController({
         }
       }
 
+      if (mixedPayment) {
+        // A 2xx response may still carry a non-approved/pending payment.
+        // Never close the checkout or enable a second part without certainty.
+        if (
+          !confirmedApproved ||
+          !Number.isFinite(confirmedAmount) ||
+          confirmedAmount <= 0 ||
+          Math.abs(confirmedAmount - valorPagamento) > 0.01
+        ) {
+          setPaymentVerificationRequired(true);
+          await onRefreshOrders();
+          throw new Error(
+            'Pagamento ainda não confirmado. Confira a situação no Caixa antes de tentar cobrar novamente.'
+          );
+        }
+        const remainingBalance = Math.round((balanceBeforePayment - confirmedAmount) * 100) / 100;
+        if (remainingBalance > 0.01) {
+          setAwaitingMixedPayment({
+            orderId: selectedOrder.id,
+            mesaId: isMesaPayment ? Number(selectedOrder.mesaId) : null,
+            minimumPaid: Number(selectedOrder.valorPago || 0) + confirmedAmount,
+          });
+          setPaymentValor('');
+          setPaymentMetodo('');
+          setSelectedItemIds([]);
+          setIdempotencyKey('');
+          showToast('Parte registrada. Sincronizando saldo com o Caixa antes da próxima forma.', 'success');
+          await Promise.all([onRefreshOrders(), fetchTurno()]);
+          return;
+        }
+      }
+
       if (shouldCloseDigitalOrder) {
         const closed = await closeDigitalOrder(selectedOrder.id);
         if (!closed) {
@@ -532,15 +598,8 @@ export function useCheckoutController({
       setPaymentMetodo('');
       setIdempotencyKey('');
 
-      const remainingBalance = Math.round((balanceBeforePayment - confirmedAmount) * 100) / 100;
-      if (mixedPayment && confirmedApproved && Number.isFinite(confirmedAmount) && confirmedAmount > 0 && remainingBalance > 0.01) {
-        setSelectedOrder({ ...selectedOrder, valorPago: Number(selectedOrder.valorPago || 0) + confirmedAmount });
-        setPaymentValor(remainingBalance);
-        showToast('Parte recebida. Escolha a próxima forma de pagamento.', 'success');
-      } else {
-        setSelectedOrder(null);
-        setShowCheckoutModal(false);
-      }
+      setSelectedOrder(null);
+      setShowCheckoutModal(false);
       await Promise.all([onRefreshOrders(), fetchTurno()]);
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro de conexão ao servidor.');
@@ -804,6 +863,8 @@ export function useCheckoutController({
     setPaymentValor,
     mixedPayment,
     setMixedPayment: toggleMixedPayment,
+    mixedPaymentAwaitingRefresh: Boolean(awaitingMixedPayment),
+    paymentVerificationRequired,
     selectedItemIds,
     setSelectedItemIds,
     paymentCPF,
