@@ -88,7 +88,7 @@ def _reference(db: Session, source_key: str, version: str) -> None:
     db.commit()
 
 
-def test_activation_can_be_green_before_enabled_flag_is_set():
+def test_activation_requires_real_provider_even_when_configuration_is_complete():
     db = _session()
     try:
         _reference(db, "rfb-ncm-json", "ncm-v1")
@@ -96,7 +96,9 @@ def test_activation_can_be_green_before_enabled_flag_is_set():
 
         result = evaluate_fiscal_preflight(db, _profile(), mode="activation", now=NOW)
 
-        assert result.ready is True
+        assert result.ready is False
+        assert "fiscal_provider_not_ready" in {issue.code for issue in result.issues}
+        assert result.provider_ready is False
         assert result.profile_ready is True
         assert result.references_ready is True
         assert "fiscal_issuance_disabled" not in {issue.code for issue in result.issues}
@@ -117,5 +119,36 @@ def test_activation_fails_closed_without_rtc_reference():
             and issue.source_key == "rfb-rtc-calculator-local"
             for issue in result.issues
         )
+    finally:
+        db.close()
+
+
+def test_activation_accepts_server_adapter_homologated_for_exact_context(monkeypatch):
+    from app.fiscal.providers import FiscalProviderRegistry, FiscalProviderReadiness
+    from app.services import fiscal_preflight
+    class LocalAdapter:
+        def submit(self, request):
+            raise AssertionError("preflight cannot transmit")
+        query = submit
+        cancel = submit
+        invalidate = submit
+        def readiness(self, context):
+            return FiscalProviderReadiness(
+                context.restaurante_id == 1 and context.environment == "homologacao" and context.model == "65",
+                True, frozenset({"submit", "query", "cancel", "invalidate"}),
+            )
+    registry = FiscalProviderRegistry()
+    registry.register("direct_sefaz", LocalAdapter())
+    monkeypatch.setattr(fiscal_preflight, "fiscal_providers", registry)
+    db = _session()
+    try:
+        _reference(db, "rfb-ncm-json", "ncm-v1")
+        _reference(db, "rfb-rtc-calculator-local", "rtc-v1")
+        result = evaluate_fiscal_preflight(db, _profile(), mode="activation", now=NOW)
+        assert result.ready and result.provider_ready
+        wrong_tenant = _profile()
+        wrong_tenant.restaurante_id = 2
+        result = evaluate_fiscal_preflight(db, wrong_tenant, mode="activation", now=NOW)
+        assert not result.ready and not result.provider_ready
     finally:
         db.close()

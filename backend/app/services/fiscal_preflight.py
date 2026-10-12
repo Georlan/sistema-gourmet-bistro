@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..fiscal.compliance import baseline_by_key
 from ..fiscal.jurisdiction import FiscalJurisdictionError, fiscal_policy_for
+from ..fiscal.providers import FiscalProviderContext, fiscal_providers
 from ..fiscal_models import RestaurantFiscalProfile
 from ..fiscal_reference_models import FiscalOfficialReferenceState
 from .fiscal_onboarding import (
@@ -92,6 +93,7 @@ class FiscalPreflightResult:
     warnings: tuple[FiscalPreflightIssue, ...]
     references: tuple[FiscalReferenceCheck, ...]
     compliance_baseline: tuple[dict[str, str], ...]
+    provider_ready: bool = False
 
 
 def _as_utc(value: datetime.datetime | None) -> datetime.datetime | None:
@@ -289,8 +291,24 @@ def evaluate_fiscal_preflight(
             )
         )
 
+    provider_ready = False
+    if normalized_mode in {"activation", "issuance"}:
+        try:
+            provider_ready = fiscal_providers.readiness(
+                str(profile.provider or ""),
+                FiscalProviderContext(profile.restaurante_id, profile.environment, profile.document_model),
+            ).ready
+        except ValueError:
+            provider_ready = False
+        if not provider_ready:
+            blocking_issues.append(FiscalPreflightIssue(
+                code="fiscal_provider_not_ready",
+                message="A integração de emissão ainda precisa ser configurada e homologada para este restaurante e ambiente.",
+                severity="blocking",
+            ))
+
     references_ready = not any(issue.source_key for issue in blocking_issues)
-    ready = profile_result.ready and references_ready
+    ready = profile_result.ready and references_ready and (normalized_mode == "foundation" or provider_ready)
 
     if normalized_mode == "issuance" and not bool(profile.enabled):
         blocking_issues.append(
@@ -304,6 +322,7 @@ def evaluate_fiscal_preflight(
 
     return FiscalPreflightResult(
         ready=ready,
+        provider_ready=provider_ready,
         mode=normalized_mode,
         jurisdiction_key=profile_result.jurisdiction_key,
         profile_ready=profile_result.ready,
@@ -321,6 +340,7 @@ def preflight_payload(result: FiscalPreflightResult) -> dict[str, object]:
         "mode": result.mode,
         "jurisdictionKey": result.jurisdiction_key,
         "profileReady": result.profile_ready,
+        "providerReady": result.provider_ready,
         "referencesReady": result.references_ready,
         "issues": [
             {

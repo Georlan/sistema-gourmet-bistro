@@ -237,7 +237,8 @@ def update_fiscal_profile(
     profile.document_model = "65"
     profile.environment = payload.environment
     profile.series = payload.series
-    profile.provider = "direct_sefaz"
+    # Cadastro não pode substituir uma conexão fiscal já provisionada no servidor.
+    profile.provider = profile.provider or "direct_sefaz"
     profile.compliance_baseline = "ce-nfce-2026-09-15"
     profile.cnpj = cnpj
     profile.inscricao_estadual = str(payload.inscricao_estadual or "").strip()
