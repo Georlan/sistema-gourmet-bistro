@@ -116,3 +116,34 @@ test('falha de reconferência não mantém resultado verde anterior', async ({ p
   await expect(page.getByRole('alert')).toContainText('Verificação temporariamente indisponível.');
   await expect(page.getByText('Conferência concluída', { exact: true })).toHaveCount(0);
 });
+
+test('resumo orienta a próxima etapa e certificado salvo só muda por ação explícita', async ({ page }) => {
+  let writes = 0;
+  page.on('request', request => { if (request.url().includes('/onboarding/fiscal/') && request.method() !== 'GET') writes++; });
+  await openFiscal(page, {
+    ...savedProfile, certificateConfigured: true, cscConfigured: true,
+    certificateExpiresAt: new Date(Date.now() + 365 * 86400000).toISOString(),
+  });
+  await expect(page.getByRole('region', { name: 'Resumo fiscal do restaurante' })).toContainText('Restaurante de teste');
+  await expect(page.getByRole('button', { name: 'Revisar pendências', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /Certificado e segurança/ }).click();
+  await expect(page.getByText('Credenciais já armazenadas', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Certificado A1 (.pfx / .p12)', { exact: true })).toBeHidden();
+  await page.getByRole('button', { name: 'Substituir certificado e CSC' }).click();
+  await expect(page.getByLabel('Certificado A1 (.pfx / .p12)', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Código de segurança (CSC)', { exact: true })).toHaveValue('');
+  expect(writes).toBe(0);
+  await page.getByText('Como vamos chegar à emissão de notas', { exact: true }).click();
+  await expect(page.getByText('Já emite notas em outro sistema?', { exact: true })).toBeVisible();
+});
+
+test('certificado vencido é pendência mesmo quando as credenciais estão armazenadas', async ({ page }) => {
+  await openFiscal(page, {
+    ...savedProfile, certificateConfigured: true, cscConfigured: true, certificateExpiresAt: '2000-01-01T00:00:00Z',
+  });
+  await expect(page.getByRole('region', { name: 'Resumo fiscal do restaurante' })).toContainText('Vencido — precisa atualizar');
+  await expect(page.getByText('Atualize o certificado vencido', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Conferir credenciais', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Certificado e código de segurança' })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath('fiscal-resumo.png'), fullPage: true });
+});

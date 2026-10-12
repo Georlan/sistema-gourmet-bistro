@@ -226,6 +226,7 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
   const [changingEnabled, setChangingEnabled] = useState(false);
   const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
+  const [editingCredentials, setEditingCredentials] = useState(false);
   const [certificateFile, setCertificateFile] = useState<File | null>(null);
   const [certificatePassword, setCertificatePassword] = useState('');
   const [cscId, setCscId] = useState('');
@@ -377,6 +378,7 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
       const payload = await readJson(response);
       if (!response.ok) throw new Error(apiError(payload, 'Não foi possível armazenar as credenciais fiscais.'));
       setProfile(payload as FiscalProfile);
+      setEditingCredentials(false);
       setCertificateFile(null);
       setCertificatePassword('');
       setCscId('');
@@ -440,6 +442,16 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
   const activationBlockedByRtc = preflightMode !== 'foundation'
     && Boolean(rtcCheck && (rtcCheck.status !== 'current' || rtcCheck.stale || !rtcCheck.activeSnapshotId));
 
+  const credentialsConfigured = Boolean(profile?.certificateConfigured && profile?.cscConfigured);
+  const certificateExpiry = profile?.certificateExpiresAt ? Date.parse(profile.certificateExpiresAt) : NaN;
+  const certificateExpired = Number.isFinite(certificateExpiry) && certificateExpiry <= Date.now();
+  const nextStep: FiscalStep = !profile?.id ? 'profile' : !credentialsConfigured || certificateExpired ? 'credentials' : 'review';
+  const nextAction = {
+    profile: ['Comece pelos dados da empresa', 'Use o cadastro oficial e confirme o regime tributário com o responsável fiscal.', 'Preencher cadastro'],
+    credentials: [certificateExpired ? 'Atualize o certificado vencido' : 'Confira o certificado e o CSC', 'Use as credenciais do restaurante e do ambiente escolhido.', 'Conferir credenciais'],
+    review: ['Confira as pendências', 'Revise o cadastro e as verificações do sistema antes da etapa de integração.', 'Revisar pendências'],
+  }[nextStep];
+
   if (loading) {
     return (
       <div role="status" aria-label="Carregando configuração fiscal" className="flex min-h-56 items-center justify-center rounded-2xl border border-koma-border bg-koma-panel">
@@ -460,15 +472,29 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
         </span>
       </header>
 
-      <div className="rounded-xl border border-koma-border bg-koma-panel p-4 text-sm text-koma-secondary">
-        <p className="font-bold text-koma-foreground">Emissão de notas em preparação</p>
-        <p className="mt-1">Você já pode organizar o cadastro e as credenciais. A integração da emissão e dos pagamentos com a SEFAZ será a próxima etapa. Salvar ou validar estes dados não emite uma nota.</p>
-      </div>
+      <section aria-label="Resumo fiscal do restaurante" className="rounded-xl border border-koma-border bg-koma-panel p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-koma-foreground">{profile?.razaoSocial || 'Cadastro do restaurante'}</h2>
+            <p className="mt-1 text-xs text-koma-muted">{profile?.id ? `Série NFC-e ${profile.series ?? 'não informada'} · Ceará` : 'Dados fiscais ainda não salvos'}</p>
+          </div>
+          <span className="rounded-full border border-amber-500/30 px-2 py-1 text-xs font-bold text-amber-900 dark:text-amber-200">Emissão em preparação</span>
+        </div>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-3 text-xs">
+          <div><dt className="text-koma-muted">Cadastro da empresa</dt><dd className="mt-1 font-bold text-koma-foreground">{profile?.id ? 'Salvo' : 'Pendente'}</dd></div>
+          <div><dt className="text-koma-muted">Certificado A1</dt><dd className="mt-1 font-bold text-koma-foreground">{certificateExpired ? 'Vencido — precisa atualizar' : profile?.certificateConfigured ? 'Armazenado' : 'Pendente'}</dd></div>
+          <div><dt className="text-koma-muted">Código de segurança (CSC)</dt><dd className="mt-1 font-bold text-koma-foreground">{profile?.cscConfigured ? 'Armazenado com proteção' : 'Pendente'}</dd></div>
+        </dl>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-koma-border pt-4">
+          <div><p className="text-sm font-bold text-koma-foreground">{nextAction[0]}</p><p className="mt-1 text-xs text-koma-muted">{nextAction[1]}</p></div>
+          <button type="button" onClick={() => setActiveStep(nextStep)} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white">{nextAction[2]}</button>
+        </div>
+      </section>
 
       <nav aria-label="Etapas da configuração fiscal" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {([
           ['profile', '1', 'Dados da empresa', Boolean(profile?.id), 'Preencha o cadastro fiscal'],
-          ['credentials', '2', 'Certificado e segurança', Boolean(profile?.certificateConfigured && profile?.cscConfigured), 'Informe A1 e CSC'],
+          ['credentials', '2', 'Certificado e segurança', credentialsConfigured && !certificateExpired, 'Informe A1 e CSC'],
           ['review', '3', 'Conferência', Boolean(preflight?.ready), 'Veja o que falta para avançar'],
         ] as const).map(([step, number, label, complete, description]) => (
           <button key={step} type="button" aria-current={activeStep === step ? 'step' : undefined}
@@ -616,6 +642,13 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
           </div>
         )}
 
+        {credentialsConfigured && !editingCredentials && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-page p-4">
+            <div><p className="text-sm font-bold text-koma-foreground">Credenciais já armazenadas</p><p className="mt-1 text-xs text-koma-muted">Não é necessário enviar novamente para conferir a configuração.</p></div>
+            <button type="button" onClick={() => setEditingCredentials(true)} className="rounded-lg border border-koma-border px-3 py-2 text-sm font-bold text-koma-foreground">Substituir certificado e CSC</button>
+          </div>
+        )}
+        <div hidden={credentialsConfigured && !editingCredentials}>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="text-xs font-bold text-koma-secondary">Certificado A1 (.pfx / .p12)
             <input ref={fileInputRef} type="file" accept=".pfx,.p12,application/x-pkcs12" onChange={(e) => setCertificateFile(e.target.files?.[0] ?? null)} required className="mt-1 block w-full rounded-lg border border-koma-border bg-koma-page px-3 py-2 text-xs text-koma-foreground file:mr-3 file:rounded-md file:border-0 file:bg-koma-raised file:px-2 file:py-1 file:text-xs file:font-bold file:text-koma-foreground" />
@@ -640,6 +673,10 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
             Salvar e conferir
           </button>
         </div>
+        </div>
+        {credentialsConfigured && !editingCredentials && (
+          <div className="mt-4 flex justify-end"><button type="button" onClick={() => setActiveStep('review')} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white">Continuar para conferência</button></div>
+        )}
       </form>
 
       <section id="fiscal-step-review" hidden={activeStep !== 'review'} className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
@@ -685,6 +722,8 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
                       <div>
                         <p className="text-xs font-black">{issue.sourceKey ? 'Verificação do sistema pendente' : 'Dados do restaurante pendentes'}</p>
                         <p className="mt-1 text-xs leading-relaxed opacity-85">{issue.message}</p>
+                        {!issue.sourceKey && <button type="button" onClick={() => setActiveStep(/certificate|csc/.test(issue.code) ? 'credentials' : 'profile')} className="mt-2 rounded-lg border border-current px-2 py-1 text-xs font-bold">{/certificate|csc/.test(issue.code) ? 'Revisar credenciais' : 'Revisar cadastro'}</button>}
+                        {issue.sourceKey && <p className="mt-2 text-xs">Esta verificação precisa ser revisada pela equipe do KÔMA.</p>}
                       </div>
                     </div>
                   </div>
@@ -801,6 +840,19 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
           </>
         )}
       </section>
+
+      <details className="rounded-xl border border-koma-border bg-koma-panel p-4">
+        <summary className="cursor-pointer text-sm font-bold text-koma-foreground">Como vamos chegar à emissão de notas</summary>
+        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-koma-secondary">
+          <li>Preparar cadastro, certificado e código de segurança — disponível nesta tela.</li>
+          <li>Conferir a tributação dos produtos com o responsável fiscal.</li>
+          <li>Integrar notas e pagamentos, testar autorização e recuperação de falhas.</li>
+          <li>Disponibilizar notas, XMLs e fechamento para o contador.</li>
+        </ol>
+        <p className="mt-3 text-xs text-koma-muted">As etapas 2 a 4 ainda não estão disponíveis nesta configuração. Cadastro salvo e pagamento recebido não significam nota autorizada.</p>
+        <p className="mt-3 text-sm font-bold text-koma-foreground">Já emite notas em outro sistema?</p>
+        <p className="mt-1 text-sm text-koma-secondary">Continue usando o emissor atual até a integração do KÔMA estar validada. A migração deve conferir série e numeração com o responsável fiscal para evitar duplicidade.</p>
+      </details>
 
       <details hidden={activeStep !== 'review'} className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
         <summary className="cursor-pointer text-sm font-bold text-koma-foreground">Controles da preparação fiscal</summary>
