@@ -30,3 +30,23 @@ def test_secrets_and_card_fields_are_excluded_but_bank_error_codes_remain(monkey
     assert sanitized['payment_response']['code'] == '20000'
     assert sanitized['charges'][0]['id'] == 'CHAR_INTERNAL_FIXTURE'
     assert sanitized['charges'][0]['payment_method']['type'] == 'PIX'
+
+
+def test_aliases_formatted_documents_and_free_text_cannot_leak():
+    sanitized = evidence.sanitize({
+        'clientSecret': 'unregistered-secret', 'X-Client-Secret': 'header-secret',
+        'accessToken': 'unregistered-token', 'Set-Cookie': 'private-session',
+        'password': 'private-password',
+        'error_messages': [{'code': 'FORBIDDEN', 'description': 'CVV 123; nome privado'}],
+        'payment_response': {'code': '20000', 'message': 'cartão 4111 1111 1111 1111'},
+        'diagnostic': 'CPF 123.456.789-01 CNPJ 12.345.678/0001-90 Bearer unknown-token',
+        'id': 'ORDE_INTERNAL_FIXTURE',
+    })
+    text = json.dumps(sanitized)
+    for secret in ('unregistered-secret', 'header-secret', 'unregistered-token',
+                   'private-session', 'private-password', '123.456.789-01',
+                   '12.345.678/0001-90', 'unknown-token', '4111', 'CVV', 'nome privado'):
+        assert secret not in text
+    assert sanitized['error_messages'][0]['code'] == 'FORBIDDEN'
+    assert sanitized['payment_response']['code'] == '20000'
+    assert sanitized['id'] == 'ORDE_INTERNAL_FIXTURE'
