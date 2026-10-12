@@ -114,7 +114,7 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await consumer.getByRole('button',{name:'Fazer pedido',exact:true}).click();
   await expect(consumer.getByText('Aguardando pagamento',{exact:true}).first()).toBeVisible();
   await expect(consumer.getByText('O restaurante conferirá o recebimento',{exact:false})).toBeVisible();
-  await expect(consumer.getByText('Pague com Pix Copia e Cola no Mercado Pago ou em outro banco que aceite Pix.')).toBeVisible();
+  await expect(consumer.getByText('Abra o aplicativo do seu banco, escolha Pix Copia e Cola e confirme o pagamento.')).toBeVisible();
   await consumer.evaluate(() => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { (window as any).__copiedPix = value; } } });
   });
