@@ -1,7 +1,10 @@
 # KÔMA Fiscal Core — Ceará NFC-e
 
-Status: fundação F0/F1 concluída; onboarding fiscal Ceará em implementação.
-Baseline verificada em: **2026-09-15**.
+Status técnico em **2026-10-12**: fundação F0/F1, configuração guiada,
+provisionamento cifrado A1/CSC, projeção automática de produtos e contrato de
+provedor implementados. **Emissão ainda bloqueada**, sem adaptador homologado.
+Baseline do registry: **2026-09-15**; não é aprovação automática de vigência
+ou aplicabilidade de todas as regras para o restaurante.
 Escopo inicial: **NFC-e modelo 65 para restaurantes no Ceará**.
 
 ## Objetivo
@@ -90,6 +93,10 @@ ou `contingency`, conforme consulta e regras oficiais vigentes.
 As entidades de operação são tenant-scoped e usam RLS no PostgreSQL. Referências
 oficiais nacionais compartilhadas, como NCM e versão da Calculadora RTC, são
 estado global da plataforma e não pertencem a um tenant específico.
+
+Snapshot/itens/eventos são estruturas para preservar a operação; a proteção
+append-only completa no banco e o materializador da venda ainda são gates
+futuros. Não tratar a existência dos modelos como emissão executável.
 
 ## Baseline oficial verificada
 
@@ -239,8 +246,12 @@ contratação e pelo Fiscal Core para evitar regras divergentes.
 - `csc_id`
 - `csc_secret_ref`
 
-O material criptográfico real deverá permanecer em secret manager/armazenamento
-criptografado apropriado, com acesso exclusivo ao worker fiscal.
+O provisionamento atual abre e valida o arquivo A1, confere validade e guarda
+A1/senha e CSC cifrados no cofre existente de integrações, sem devolver segredos
+à tela. Envelopes vinculam o material ao tenant, CNPJ, jurisdição, modelo e
+ambiente. Trocar emissor/ambiente invalida as referências. Isso ainda não valida
+titularidade ICP-Brasil, credenciamento ou CSC real perante a SEFAZ, nem substitui
+o futuro histórico de rotação/conexões. Ver `fiscal-tenant-security.md`.
 
 ## Persistência transacional F1
 
@@ -250,10 +261,13 @@ leitura de `MAX(numero)`. A criação do `FiscalDocument` e do evento inicial oc
 na mesma transação da reserva. Se a transação falhar, o avanço da sequência é
 revertido junto.
 
-`idempotency_key` é único por tenant. Repetir a mesma criação retorna o documento
-já persistido, sem reservar outro número. Transições usam `event_key` único por
-documento; estado e `FiscalEvent` são confirmados no mesmo commit, e retries do
-mesmo evento são replay seguro.
+`idempotency_key` é único por tenant. Repetir a mesma criação com conteúdo e
+contexto iguais retorna o documento persistido sem reservar outro número;
+conteúdo divergente é recusado. Transições usam `event_key` único por documento,
+comparando tipo, destino, protocolo e payload sob lock; estado e `FiscalEvent`
+são confirmados no mesmo commit. FKs compostas conferem o tenant da comanda e
+do pagamento. Para dois tenants com o mesmo emissor legal, ainda é necessário
+definir o dono da numeração antes de ativar emissão.
 
 ## Próximos gates
 
@@ -293,18 +307,21 @@ mesmo evento são replay seguro.
 - [x] CRT com códigos aceitos no leiaute
 - [x] município confirmado na API oficial do IBGE
 - [x] UF/jurisdição derivada e validada pelo código IBGE
-- [x] apenas `BR-CE` habilitada; outras UFs falham fechadas
+- [x] apenas `BR-CE` suportada na fundação; isso não habilita emissão
 - [x] readiness bloqueia certificado vencido/ausente
 - [x] alteração inconsistente desabilita emissão fiscal
 - [ ] validar situação cadastral e IE/CGF em fonte oficial da SEFAZ/CE
-- [ ] fluxo seguro de provisionamento do certificado A1/CSC
-- [ ] endpoint explícito de ativação após homologação
+- [x] provisionamento cifrado e vinculado ao contexto do certificado A1/CSC
+- [x] endpoint de ativação exige provedor configurado e homologado no servidor
+- [ ] homologar credenciais, credenciamento e emissor real; registry nasce vazio
 
 ### F3 — Produto e tributação
 
 - [x] estrutura versionada de `ProductFiscalProfile`
 - [x] fonte NCM oficial preparada para detecção automática de atualização
 - [x] adapter da Calculadora RTC preparado para Tax Engine
+- [x] produtos atuais/novos/importados aparecem na preparação sem escrita;
+      nome/preço vêm do cardápio, com consulta paginada sob demanda
 - [ ] persistir snapshots históricos da NCM por vigência
 - [ ] fontes oficiais/versionadas para CEST/CFOP/CST/CSOSN/PIS/COFINS
 - [ ] aprovação do responsável fiscal/contador
@@ -316,3 +333,8 @@ Ainda não implementado: Tax Engine integrado à Calculadora RTC, Fiscal Preflig
 completo, XML NFC-e, assinatura, comunicação SEFAZ, contingência executável,
 ECONF, cancelamento/inutilização, DANFE e observabilidade de emissão. Nenhum
 tenant deve receber `fiscal_nfce=true` antes dos gates correspondentes.
+
+Sequência atual e responsabilidades: `fiscal-rollout-steps.md`,
+`fiscal-product-preparation.md`, `fiscal-provider-contract.md` e
+`fiscal-tenant-security.md`. Países novos exigem identidade, moeda, precisão,
+fuso e política próprios; a fundação BR/CE não comprova suporte internacional.
