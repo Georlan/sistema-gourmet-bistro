@@ -5,3 +5,5 @@ f2b780331629ba12a804eeb46ac58aaec7117b26:backend/tests/test_super_admin_integrat
 # Synthetic formatted CPF (123.456.789-01) in the sanitizer regression assertion;
 # matched only because the invented password label precedes it. No real credential.
 bbfa797170317f0a0b5f7b428c0108604d9ea71f:backend/tests/test_pagbank_evidence_sanitization.py:generic-api-key:47
+# Same synthetic CPF in the squash commit; fixture wording is corrected afterwards.
+800fd98a0244e55ad625e038ea748ccc65c9fc7e:backend/tests/test_pagbank_evidence_sanitization.py:generic-api-key:47
