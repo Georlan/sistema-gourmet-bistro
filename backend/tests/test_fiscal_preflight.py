@@ -213,7 +213,7 @@ def test_issuance_requires_current_rtc_snapshot_and_enabled_profile():
         db.close()
 
 
-def test_issuance_passes_when_profile_and_blocking_sources_are_current():
+def test_issuance_requires_provider_even_when_profile_and_sources_are_current():
     db = _session()
     try:
         _add_reference(db, "rfb-ncm-json")
@@ -226,7 +226,8 @@ def test_issuance_passes_when_profile_and_blocking_sources_are_current():
             now=NOW,
         )
 
-        assert result.ready is True
+        assert result.ready is False
+        assert "fiscal_provider_not_ready" in {issue.code for issue in result.issues}
         assert result.references_ready is True
         active = {
             check.source_key: check.active_snapshot_id
