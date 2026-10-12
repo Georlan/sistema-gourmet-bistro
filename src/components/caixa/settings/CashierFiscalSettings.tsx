@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OperationalBanner } from '../../shared/OperationalBanner';
+import { CashierFiscalProducts } from './CashierFiscalProducts';
 
 interface Props {
   apiBaseUrl: string;
@@ -433,6 +434,7 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
 
   return (
     <div className="space-y-5">
+      <CashierFiscalProducts apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
       <OperationalBanner
         id="fiscal-settings-heading"
         eyebrow="FISCAL CORE"

@@ -35,6 +35,19 @@ from ..services.fiscal_preflight import evaluate_fiscal_preflight, preflight_pay
 router = APIRouter(prefix="/api/onboarding/fiscal", tags=["Fiscal Onboarding"])
 
 
+@router.get("/products")
+def get_fiscal_products(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    from ..services.fiscal_catalog import fiscal_catalog_page
+
+    _require_fiscal_admin(current_user)
+    return fiscal_catalog_page(db, restaurante_id=require_tenant_id(), offset=offset, limit=limit)
+
+
 class FiscalProfileUpdate(BaseModel):
     cnpj: str
     inscricao_estadual: str
