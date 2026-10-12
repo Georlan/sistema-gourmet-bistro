@@ -212,7 +212,15 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   const reviewCta = `Revisar ${totalDraftQty} ${itemWord} · R$ ${money(draftTotal)}`;
   const submitCta = `Lançar ${totalDraftQty} ${itemWord} · R$ ${money(draftTotal)}`;
 
-  const currentGroups = productModifierGroups(selectedProductToConfigure);
+  // Preserve the saved order within each priority tier, but display mandatory
+  // choices first so operators can finish required selections without scrolling
+  // past optional extras. Do not mutate the catalog's canonical group order.
+  const currentGroups = useMemo(
+    () => [...productModifierGroups(selectedProductToConfigure)].sort(
+      (a, b) => Number(Number(b.min_selecoes || 0) > 0) - Number(Number(a.min_selecoes || 0) > 0),
+    ),
+    [selectedProductToConfigure],
+  );
   const selectedModifierOptions = useMemo(
     () => modifierSelectionsFor(currentGroups, selectedModifierIds),
     [currentGroups, selectedModifierIds],
