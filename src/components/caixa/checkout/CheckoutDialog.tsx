@@ -53,6 +53,8 @@ export function CheckoutDialog({
     setPaymentMetodo,
     paymentValor,
     setPaymentValor,
+    mixedPayment,
+    setMixedPayment,
     selectedItemIds,
     setSelectedItemIds,
     paymentCPF,
@@ -82,6 +84,9 @@ export function CheckoutDialog({
     selectedOrder && selectedItemIds.length > 0 ? getSelectedItemsTotal(selectedOrder, selectedItemIds) : 0;
 
   const primaryButtonLabel = (() => {
+    if (mixedPayment) return inputVal > 0
+      ? `Receber esta parte · ${formatCurrency(inputVal)}`
+      : 'Receber esta parte';
     if (selectedItemIds.length > 0) {
       return `Receber itens selecionados · ${formatCurrency(selectedTotal)}`;
     }
@@ -102,7 +107,7 @@ export function CheckoutDialog({
     showCheckoutModal && (
       <div
         className="fixed inset-0 bg-black/85 backdrop-blur-xs z-[80] flex items-center justify-center p-2 sm:p-4"
-        onClick={() => setShowCheckoutModal(false)}
+        onClick={() => { if (!isProcessingPayment) setShowCheckoutModal(false); }}
       >
         <div
           className="bg-koma-input/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl border border-koma-accent/15 shadow-2xl w-full max-w-3xl overflow-hidden max-h-[92vh] sm:max-h-[90vh] flex flex-col"
@@ -138,7 +143,7 @@ export function CheckoutDialog({
             </div>
             <button
               type="button"
-              onClick={() => setShowCheckoutModal(false)}
+              onClick={() => { if (!isProcessingPayment) setShowCheckoutModal(false); }}
               className={"p-1.5 hover:bg-koma-raised rounded-full text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"}
               title="Fechar (o pedido permanece na fila)"
             >
@@ -222,6 +227,7 @@ export function CheckoutDialog({
                   >
                     <input
                       type="checkbox"
+                      disabled={isProcessingPayment}
                       checked={checkoutServiceTax}
                       onChange={(e) => {
                         const includeServiceTax = e.target.checked;
@@ -244,7 +250,7 @@ export function CheckoutDialog({
                   const isPaid = item.pago;
                   const isCancelled = (item.status as string) === 'cancelado';
                   const isReadyForCheckout = isItemReadyForCheckout(item);
-                  const canSelect = !isPaid && !isCancelled && isReadyForCheckout;
+                  const canSelect = !mixedPayment && !isProcessingPayment && !isPaid && !isCancelled && isReadyForCheckout;
                   return (
                     <div
                       key={item.id}
@@ -487,6 +493,7 @@ export function CheckoutDialog({
                       <input
                         type="number"
                         min="1"
+                        disabled={isProcessingPayment || mixedPayment}
                         value={splitPeople}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -514,7 +521,18 @@ export function CheckoutDialog({
                 onSubmit={handleProcessPayment}
                 className="space-y-3.5 bg-koma-card/40 p-3.5 sm:p-4 rounded-2xl border border-koma-border/50 flex-1 flex flex-col justify-between"
               >
-                <div className="space-y-3.5">
+                <fieldset disabled={isProcessingPayment} className="space-y-3.5">
+                  <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-koma-foreground cursor-pointer">
+                    <input type="checkbox" checked={mixedPayment} onChange={e => setMixedPayment(e.target.checked)} className="h-4 w-4 rounded accent-emerald-600" />
+                    Dividir pagamento
+                  </label>
+                  {mixedPayment && (
+                    <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3" aria-live="polite">
+                      <p className="text-sm font-bold text-koma-foreground">Saldo restante: {formatCurrency(currentBalance)}</p>
+                      <p className="mt-1 text-xs text-koma-secondary">Receba uma parte por vez, escolhendo o valor e a forma de pagamento.</p>
+                      {inputVal > 0 && inputVal <= currentBalance && <p className="mt-2 text-xs text-koma-secondary">Após esta parte, faltam {formatCurrency(Math.max(0, currentBalance - inputVal))}.</p>}
+                    </div>
+                  )}
                   {/* Forma de Pagamento */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
@@ -559,7 +577,7 @@ export function CheckoutDialog({
                   {/* Valor a Lançar */}
                   <div className="space-y-1.5 font-sans">
                     <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
-                      Valor a Lançar (R$):
+                      {mixedPayment ? 'Valor desta parte (R$):' : 'Valor a Lançar (R$):'}
                     </label>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
@@ -693,7 +711,7 @@ export function CheckoutDialog({
                     }
                     return null;
                   })()}
-                </div>
+                </fieldset>
 
                 <div className="space-y-2 pt-2">
                   {errorMsg && (
