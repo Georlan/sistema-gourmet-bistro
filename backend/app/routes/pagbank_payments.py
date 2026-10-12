@@ -20,7 +20,7 @@ from ..database import get_db, require_tenant_id, tenant_session_scope
 from ..models import OnlinePaymentIntent, OnlinePaymentWebhookEvent, Restaurante, RestaurantDirectPixConfig, RestaurantPaymentAccount, Usuario
 from ..security import ensure_permission, require_permission
 from ..services.online_payments import OnlinePaymentService, OnlinePaymentValidationError
-from ..services.online_payments.account_connection import _expires_at
+from ..services.online_payments.account_connection import _expires_at, guard_receiver_change, MercadoPagoAccountConnectionError
 from ..services.online_payments.pagbank import oauth
 from ..websocket_manager import manager
 from .online_payments import _resolve_account_tenant
@@ -42,7 +42,7 @@ def connection_status(db: Session = Depends(get_db), user: Usuario = Depends(req
     environment = oauth.environment_for_restaurant(require_tenant_id())
     account = _account(db, require_tenant_id())
     return {'provider': 'pagbank', 'configured': oauth.configured(environment), 'environment': environment,
-            'connected': bool(account and account.access_token and account.status == 'active' and account.provider_environment == environment), 'status': account.status if account else 'disconnected',
+            'connected': bool(account and account.access_token and account.status == 'active' and account.provider_environment == environment and not oauth.is_application_owner(account.provider_user_id, environment=environment)), 'status': account.status if account else 'disconnected',
             'provider_user_id': account.provider_user_id if account else None}
 
 
@@ -90,19 +90,11 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
                 raise HTTPException(403, 'Usuário indisponível.')
             ensure_permission(initiator, 'configuracoes:administrar')
             tokens = oauth.exchange(code, environment=oauth.environment_for_restaurant(rid))
-            db.query(Restaurante).filter(Restaurante.id == rid).with_for_update().one()
-            # Switching receiver must never strand payments in flight.
-            pending = db.query(OnlinePaymentIntent.id).filter(OnlinePaymentIntent.restaurante_id == rid,
-                OnlinePaymentIntent.status.in_(('created', 'pending', 'error'))).first()
+            if oauth.is_application_owner(tokens.provider_user_id, environment=oauth.environment_for_restaurant(rid)):
+                raise HTTPException(409, 'A conta proprietária da aplicação KÔMA não pode receber vendas como restaurante.')
+            guard_receiver_change(db, restaurant_id=rid, provider='pagbank',
+                provider_user_id=tokens.provider_user_id, environment=oauth.environment_for_restaurant(rid))
             account = _account(db, rid)
-            if pending and (not account or account.provider_user_id != tokens.provider_user_id
-                            or account.status != 'active'
-                            or account.provider_environment != oauth.environment_for_restaurant(rid)
-                            or db.query(RestaurantPaymentAccount.id).filter(
-                                RestaurantPaymentAccount.restaurante_id == rid,
-                                RestaurantPaymentAccount.provider != 'pagbank',
-                                RestaurantPaymentAccount.status == 'active').first()):
-                raise HTTPException(409, 'Resolva os pagamentos pendentes antes de trocar a conta de recebimento.')
             if account is None:
                 account = RestaurantPaymentAccount(id=str(uuid.uuid4()), restaurante_id=rid, provider='pagbank')
                 db.add(account)
@@ -124,6 +116,9 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(409, 'Conta PagBank já vinculada a outro restaurante.') from exc
+    except MercadoPagoAccountConnectionError as exc:
+        db.rollback()
+        raise HTTPException(409, str(exc)) from exc
     return {'status': 'connected'}
 
 

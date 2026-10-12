@@ -4,7 +4,7 @@ import datetime
 
 import pytest
 
-from app.models import RestaurantPaymentAccount, RestaurantDirectPixConfig
+from app.models import RestaurantPaymentAccount, RestaurantDirectPixConfig, Restaurante
 from app.services.online_payments.account_connection import (
     MercadoPagoAccountConnectionError,
     payment_account_status,
@@ -23,6 +23,15 @@ class _FakeQuery:
     def first(self):
         return self.value
 
+    def all(self):
+        return [self.value] if self.value is not None else []
+
+    def with_for_update(self):
+        return self
+
+    def one(self):
+        return self.value
+
 
 class _FakeSession:
     def __init__(self, existing=None):
@@ -31,7 +40,7 @@ class _FakeSession:
         self.flush_count = 0
 
     def query(self, _model):
-        return _FakeQuery(None if _model is RestaurantDirectPixConfig else self.existing)
+        return _FakeQuery(object() if _model is Restaurante else self.existing if _model is RestaurantPaymentAccount else None)
 
     def add(self, value):
         self.added.append(value)
@@ -97,7 +106,7 @@ def test_reconnect_updates_existing_account_and_preserves_rotating_optional_valu
             access_token="new-access",
             refresh_token=None,
             public_key=None,
-            provider_user_id="seller-new",
+            provider_user_id="seller-old",
             expires_in=None,
         ),
         webhook_secret="new-webhook",
@@ -107,7 +116,7 @@ def test_reconnect_updates_existing_account_and_preserves_rotating_optional_valu
     assert db.added == []
     assert db.flush_count == 1
     assert account.status == "active"
-    assert account.provider_user_id == "seller-new"
+    assert account.provider_user_id == "seller-old"
     assert account.access_token == "new-access"
     assert account.refresh_token == "old-refresh"
     assert account.webhook_secret == "new-webhook"
@@ -181,3 +190,15 @@ def test_status_never_exposes_tokens_or_webhook_secret():
     assert "access_token" not in status
     assert "refresh_token" not in status
     assert "webhook_secret" not in status
+
+
+def test_new_seller_without_history_does_not_inherit_old_refresh_token():
+    previous = RestaurantPaymentAccount(id="old", restaurante_id=8, provider="mercado_pago",
+                                        provider_user_id="seller-old", status="disconnected", public_key="old-key")
+    previous.access_token = "old-access"
+    previous.refresh_token = "old-refresh"
+    db = _FakeSession(existing=previous)
+    account = upsert_mercado_pago_account(db, restaurant_id=8,
+        tokens=_tokens(provider_user_id="seller-new", refresh_token=None, public_key=None), webhook_secret="hook")
+    assert account.provider_user_id == "seller-new"
+    assert account.refresh_token is None and account.public_key is None
