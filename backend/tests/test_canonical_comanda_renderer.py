@@ -1,5 +1,7 @@
 import datetime
 
+import pytest
+
 from app.application.printing.comanda_renderer import (
     ComandaVariant,
     render_canonical_comanda,
@@ -467,3 +469,81 @@ def test_mixed_delivery_prints_beverage_and_meal_amounts_separately():
     assert "R$ 25,00" in next(line for line in ticket.splitlines() if "1x QUENTINHA G" in line)
     assert "R$ 6,00" in next(line for line in ticket.splitlines() if "1x REFRIGERANTE" in line)
     assert "R$ 31,00" in ticket
+@pytest.mark.parametrize("columns", (40, 48))
+@pytest.mark.parametrize("order_type", ("Retirada", "Delivery"))
+def test_mixed_marmitaria_and_beverage_prices_are_right_aligned_at_real_paper_width(
+    columns, order_type,
+):
+    """Regressão do cupom ID 6: cada item tem o preço na coluna direita.
+
+    A composição pode quebrar em várias linhas, mas não deve esconder o preço
+    da quentinha nem o da bebida. Exercita 40 e 48 colunas (G250/80 mm).
+    """
+    items = [
+        PrintItem(
+            codigo="quentinha-g",
+            nome="QUENTINHA G",
+            preco_unit=10.0,
+            destino_impressao="COZINHA",
+            composicao=(
+                "GUARNIÇÕES: Arroz branco refogado, farofa, macarrão, feijão de corda",
+                "PROTEÍNAS: Filé de frango acebolado",
+            ),
+        ),
+        PrintItem(
+            codigo="refrigerante-lata",
+            nome="REFRIGERANTE LATA",
+            preco_unit=6.0,
+            destino_impressao="BAR",
+        ),
+    ]
+    delivery_fee = 2.0 if order_type == "Delivery" else 0.0
+    previous_width = printer_service.width
+    printer_service.width = columns
+    try:
+        ticket = render_canonical_comanda(
+            restaurant_name="Quentinha Caseira",
+            restaurant_name_position="cabecalho",
+            print_footer=None,
+            order_number=105,
+            order_type=order_type,
+            operator_name="Admin",
+            items=items,
+            variant=ComandaVariant(
+                origin_label="CARDÁPIO ONLINE",
+                location_label=None,
+                operator_label=None,
+                customer_name="CLIENTE TESTE",
+                payment_method="dinheiro",
+                payment_required=True,
+                amount_due=16.0 + delivery_fee,
+                delivery_fee=delivery_fee,
+                show_financial_breakdown=True,
+            ),
+        )
+    finally:
+        printer_service.width = previous_width
+
+    assert "ITENS" in ticket and "VALOR" in ticket
+    for item_name, amount in (
+        ("QUENTINHA G", "R$ 10,00"),
+        ("REFRIGERANTE LATA", "R$ 6,00"),
+    ):
+        matching_lines = [
+            line for line in ticket.splitlines() if f"1x {item_name}" in line
+        ]
+        assert len(matching_lines) == 1
+        item_line = (
+            matching_lines[0]
+            .replace(ESC_BOLD_ON, "")
+            .replace(ESC_BOLD_OFF, "")
+        )
+        assert item_line.endswith(amount)
+        assert len(item_line) == columns
+
+    assert ticket.index("GUARNIÇÕES:") < ticket.index("PROTEÍNAS:")
+    assert "SUBTOTAL ITENS:" in ticket
+    assert "R$ 16,00" in ticket
+    assert "TOTAL DO PEDIDO:" in ticket
+    assert f"R$ {16 + delivery_fee:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") in ticket
+
