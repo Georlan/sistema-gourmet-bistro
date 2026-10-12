@@ -74,6 +74,9 @@ legados precisam de reenvio seguro, sem backfill ou exposição de segredos.
   local anterior foi invalidada por processos pytest sobrepostos que removiam o
   mesmo SQLite da conftest; as oito simulações afetadas passaram em cópia isolada.
   Não usar esse resultado local contaminado como prova de falha operacional.
+- `Merge verdict` passa a executar 22 regressões de FKs/RLS e concorrência
+  em PostgreSQL local temporário para mudanças fiscais e fronteiras compartilhadas.
+  O step falha com skips e remove o container no encerramento.
 
 ## Limites e próximos gates
 

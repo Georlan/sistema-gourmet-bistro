@@ -58,6 +58,8 @@ Incidente de 11/10/2026: a PR #1082 parou de renovar `diagnostics_updated_at` qu
 
 O check obrigatório `Merge verdict` passa a executar o contrato de impressão quando backend, agente instalado, workflows ou configuração Railway/Docker da raiz mudar. A verificação é por arquivos, sem depender do autor chamar a PR de "otimização". O ruleset do GitHub continua sendo a fonte de verdade de obrigatoriedade; o teste vive dentro do check já exigido, sem criar um status opcional como única proteção.
 
+Mudanças fiscais também acionam no `Merge verdict` as regressões de FKs/RLS e replay concorrente, em PostgreSQL local temporário. O detector cobre núcleo/rotas/serviços/testes fiscais, migrations fiscais, modelos/autenticação/banco compartilhados, telas fiscais e o próprio workflow. O step recusa testes pulados e remove o container ao terminar; não cria infraestrutura de homologação na nuvem.
+
 Antes de publicar, registrar no PR evidência antes/depois, compatibilidade instalada, riscos da fila acumulada e plano de reversão. Após publicação, conferir SHA servido e comportamento real em leitura durante mais de uma janela de TTL afetada. Em regressão, interromper a expansão da mudança e executar a reversão segura; não apagar fila nem repetir efeitos físicos para mascarar problema. Saúde HTTP, confirmação pelo spooler e papel impresso são evidências distintas.
 
 ## Regra de evidência
