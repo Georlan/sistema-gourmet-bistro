@@ -8,7 +8,7 @@ O restaurante autoriza sua própria conta no PagBank pelo botão em **Configura�
 2. Criar a aplicação Connect pelo endpoint oficial `POST /oauth2/application`, com nome KÔMA, descrição do sistema, site e logo público da marca. A URL de retorno cadastrada deve ser exatamente a configurada no servidor: `<KOMA_PUBLIC_API_URL>/payments/pagbank/oauth/callback`.
 3. Guardar as credenciais somente no ambiente do backend: `PAGBANK_ENV=sandbox`, `PAGBANK_CLIENT_ID`, `PAGBANK_CLIENT_SECRET`, `PAGBANK_APP_TOKEN` e `PAGBANK_OAUTH_REDIRECT_URI`. Não usar prefixo `VITE_`.
 4. Publicar a migração e a aplicação, mantendo sandbox. Autorizar uma conta Sandbox, emitir e pagar um Pix simulado e coletar evidências de autorização, criação, notificação, consulta financeira e liberação única do pedido. Verificar com PagBank qual token assina as notificações Connect da aplicação; a implementação aceita SHA256 do corpo bruto com o token do vendedor atual/anterior (sem aceitar token ou segredo da plataforma).
-5. Solicitar a homologação oficial de **Connect + API de Pedidos com Pix**. Só após a aprovação configurar as credenciais de produção e `PAGBANK_ENV=production`. Confirmar especificamente que a aplicação tem permissão para criar `/orders` em nome dos vendedores conectados.
+5. Solicitar a homologação oficial de **Connect + API de Pedidos com Pix**. Manter `PAGBANK_ENV=sandbox` no backend compartilhado e configurar produção somente pelo opt-in por restaurante abaixo, após aprovação. Confirmar especificamente que a aplicação tem permissão para criar `/orders` em nome dos vendedores conectados.
 6. Um restaurante piloto deve ter conta PagBank e ao menos uma chave Pix ativa. Após autorizar a aplicação, fazer uma transação real pequena e conferir o crédito no extrato, a liberação no Caixa e a ausência de comissão KÔMA. Não usar o restaurante ID 6 para testes de escrita.
 
 Ao mudar de Sandbox para produção, o restaurante precisa autorizar novamente a conta no ambiente de produção. Contas e intenções de outro ambiente não são reutilizadas.
@@ -39,7 +39,9 @@ Sem credenciais, a interface mostra **Conexão em preparação**. Sandbox é ide
 - [Autenticidade Order](https://developer.pagbank.com.br/reference/confirmar-autenticidade-da-notificacao)
 - [Solicitar homologação](https://developer.pagbank.com.br/docs/solicitar-homologacao)
 
-## Validação local
+## Validação local histórica (10/10/2026)
+
+Esta seção registra a validação da primeira entrega; não descreve o cadastro ou deploy atuais. As credenciais de aplicação de produção e a conexão do piloto foram configuradas posteriormente. Isso não comprova homologação ou recebimento.
 
 - 990 testes unitários de frontend aprovados; TypeScript e build aprovados.
 - 8 cenários de navegador em 390 e 1366 pixels aprovados, incluindo autorização única e recusa de sessão divergente.
@@ -62,7 +64,7 @@ Sem credenciais, a interface mostra **Conexão em preparação**. Sandbox é ide
 
 ### Produção sem substituir Sandbox
 
-Para isolamento completo de dados, usar um backend de homologação separado, domínio/callback próprios, banco isolado e credenciais Connect de produção específicas. Como alternativa de piloto no restaurante de demonstração, usar a seleção por restaurante descrita abaixo. O projeto Railway `Koma Homologacao` já existe, mas isso não comprova que seus serviços/banco estejam isolados ou prontos; verificar antes de provisionar. Não alterar `PAGBANK_ENV` no backend compartilhado atual nem copiar tokens de vendedores entre ambientes. Esta entrega não provisiona infraestrutura nem configura credenciais financeiras.
+Executar testes isolados localmente e no CI; não criar ou religar homologação permanente paga no Railway. Para o piloto de produção, usar somente a seleção por restaurante descrita abaixo. Não alterar `PAGBANK_ENV` no backend compartilhado nem copiar tokens de vendedores entre ambientes. Esta entrega não provisiona infraestrutura.
 
 Antes de habilitar, confirmar com PagBank: Connect de produção homologado, permissão de `payments.read`/`payments.create` para Pix Order em nome dos vendedores, callback exato `/payments/pagbank/oauth/callback`, contrato de assinatura dos webhooks Connect e token que assina durante renovação. O piloto deve ter conta recebedora própria e chave Pix ativa. Apenas o titular autoriza o pagamento real após conferir destinatário e valor.
 
@@ -99,7 +101,7 @@ Antes da homologação, ainda é necessário obter evidências genuínas de Conn
 
 ## Continuidade do protocolo 1461335012
 
-O escopo solicitado é Connect OAuth + Order Pix, sem cartão, boleto, split ou comissão KÔMA. A resposta do suporte foi informada pelo titular; este repositório não comprova leitura do Gmail. Evidências de produção com HTTP 403 não substituem logs Sandbox.
+O escopo atual pretendido é Connect OAuth + Order Pix, sem cartão, boleto, split ou comissão KÔMA. Em 12/10/2026 foram lidos os dois e-mails originais de 10/10/2026 na conta Gmail do titular, ambos encontrados no Spam: abertura e triagem do chamado 1461335012. A triagem exige mascarar cartão/omitir CVV, IDs reais, JSON de request/response Sandbox, `payment_method.type`, endpoint Sandbox e interpretação dos logs; boleto requer análise manual. O item `type` enumera cartão/boleto, sem mencionar Pix. Solicitar confirmação da atualização do escopo no chamado existente, usando a referência oficial Pix v2; não atribuir ao suporte aprovação de Pix nem dispensar requisitos de Sandbox. Evidências de produção com HTTP 403 não substituem logs Sandbox.
 
 - Todos os escritores de recebedor travam a linha do restaurante antes de alterar contas. Pix `created`, `pending` ou `error` impedem troca de provedor/vendedor/ambiente; renovar o mesmo vendedor continua permitido.
 - Uma identidade de vendedor/ambiente com histórico não pode ser sobrescrita: os intents atuais referenciam restaurante/provedor, sem conta versionada. Trocar de provedor preserva a conta anterior para consulta histórica.
@@ -110,6 +112,6 @@ O escopo solicitado é Connect OAuth + Order Pix, sem cartão, boleto, split ou 
 
 `scripts/pagbank-sandbox-evidence.py` aceita somente o host Sandbox e não importa o banco KÔMA. A operação `application` consulta o cadastro; `create` e `get` exigem o token OAuth individual do vendedor em `PAGBANK_SANDBOX_SELLER_ACCESS_TOKEN`. Nunca substituir por `PAGBANK_APP_TOKEN`. O consentimento e a troca de código devem ocorrer pelo fluxo canônico do KÔMA; o coletor não consome códigos nem persiste tokens.
 
-Credenciais entram por ambiente, nunca argumentos ou arquivos de evidência. O payload privado do comprador (`--request-file`) fica fora do Git e dos anexos. Usar idempotência em `PAGBANK_SANDBOX_IDEMPOTENCY_KEY`. O coletor preserva IDs técnicos e códigos de erro, remove cartão/CVV/segredos e mascara dados pessoais e conteúdo do QR. Salva endpoint, horário UTC, método, request, response, status e resultado sem sobrescrever evidências existentes.
+Credenciais entram por ambiente, nunca argumentos ou arquivos de evidência. O payload privado do comprador (`--request-file`) fica fora do Git e dos anexos. Usar idempotência em `PAGBANK_SANDBOX_IDEMPOTENCY_KEY`. O coletor preserva IDs técnicos e códigos de erro, remove cartão/CVV/segredos (incluindo aliases de headers/camelCase), mascara documentos formatados e conteúdo do QR e omite descrições/mensagens livres que podem ecoar dados privados. Salva endpoint, horário UTC, método, request, response, status e resultado sem sobrescrever evidências existentes. Explicar o resultado em texto separado após revisão do JSON; a sanitização não dispensa inspeção humana antes do envio.
 
 Consulta da aplicação com HTTP 200 **não comprova** vendedor autorizado, criação de Order, QR, pagamento, webhook ou conciliação. Testes com fixtures/mocks devem ficar separados do pacote bancário. Não enviar pacote como homologação completa enquanto faltarem request/response reais de `/orders`, consulta e confirmação pertinente. Confirmar com o PagBank o mecanismo de assinatura aplicável especificamente ao Connect + Order antes de alegar validação de webhook real.

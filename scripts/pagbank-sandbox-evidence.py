@@ -13,25 +13,34 @@ import httpx
 
 BASE = 'https://sandbox.api.pagseguro.com'
 DROP = {'security_code', 'cvv', 'cvc', 'private_key', 'client_secret', 'x_client_secret',
-        'authorization', 'access_token', 'refresh_token', 'state', 'token'}
+        'authorization', 'access_token', 'refresh_token', 'state', 'token',
+        'password', 'cookie', 'set_cookie', 'api_key', 'app_token', 'secret', 'client_assertion'}
 PII = {'name', 'email', 'tax_id', 'phones', 'phone', 'address', 'holder', 'number', 'text'}
+FREE_TEXT = {'description', 'message', 'error_description', 'details'}
+
+
+def normalized_key(key):
+    # Headers and OAuth responses can use hyphens or camelCase aliases.
+    return re.sub(r'(?<=[a-z0-9])(?=[A-Z])', '_', key).lower().replace('-', '_')
 
 
 def sanitize(value, *, parent=None):
     if isinstance(value, dict):
-        return {k: ('[REDACTED]' if k.lower() in PII else sanitize(v, parent=k.lower()))
-                for k, v in value.items() if k.lower() not in DROP and k.lower() != 'card'
-                and (k.lower() != 'code' or parent in {'error_messages', 'payment_response'})}
+        return {k: ('[REDACTED]' if normalized_key(k) in PII | FREE_TEXT else sanitize(v, parent=normalized_key(k)))
+                for k, v in value.items() if normalized_key(k) not in DROP and normalized_key(k) != 'card'
+                and (normalized_key(k) != 'code' or parent in {'error_messages', 'payment_response'})}
     if isinstance(value, list):
         return [sanitize(v, parent=parent) for v in value]
     if isinstance(value, str):
         value = re.sub(r'(?i)([?&](?:token|code|state|access_token|client_secret)=)[^&\s]+', r'\1[REDACTED]', value)
+        value = re.sub(r'(?i)\bBearer\s+[^\s,;]+', 'Bearer [REDACTED]', value)
         for key, secret in os.environ.items():
             if ('TOKEN' in key or 'SECRET' in key or key.endswith('_CODE')) and len(secret) >= 8:
                 value = value.replace(secret, '[REDACTED]')
         value = re.sub(r'[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}', '[REDACTED_EMAIL]', value)
         if parent not in {'id', 'account_id', 'client_id', 'reference_id'}:
             value = re.sub(r'(?<!\d)\d{11,19}(?!\d)', '[REDACTED_NUMBER]', value)
+            value = re.sub(r'(?<!\d)\d{3}\.\d{3}\.\d{3}-\d{2}(?!\d)|(?<!\d)\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}(?!\d)', '[REDACTED_NUMBER]', value)
     return value
 
 
@@ -41,7 +50,7 @@ def capture(operation, method, path, token, payload, output, *, extra_headers=No
     headers = {'Authorization': f'Bearer {token}', **(extra_headers or {})}
     record = {'evidence_kind': 'genuine_sandbox_http', 'operation': operation, 'environment': 'sandbox',
               'timestamp_utc': dt.datetime.now(dt.timezone.utc).isoformat(), 'method': method,
-              'endpoint': BASE + path, 'request': {'json': sanitize(payload), 'headers': {'Authorization': '[REDACTED]', **{k: ('[REDACTED]' if k.lower() in DROP else sanitize(v)) for k, v in (extra_headers or {}).items()}}}}
+              'endpoint': BASE + path, 'request': {'json': sanitize(payload), 'headers': {'Authorization': '[REDACTED]', **{k: ('[REDACTED]' if normalized_key(k) in DROP else sanitize(v)) for k, v in (extra_headers or {}).items()}}}}
     try:
         with httpx.Client(timeout=25, follow_redirects=False) as client:
             response = client.request(method, BASE + path, headers=headers, json=payload)
