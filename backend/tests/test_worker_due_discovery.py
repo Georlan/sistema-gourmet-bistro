@@ -39,7 +39,7 @@ def test_discovery_includes_due_retries_stale_claims_and_schedules_only(discover
     assert discover_due_restaurant_ids(db, stale_timeout_seconds=120) == [1, 3, 7, 8]
 
 
-@pytest.mark.parametrize('tenants', [1, 5, 10, 20])
+@pytest.mark.parametrize('tenants', [1, 5, 10, 20, 100, 1000])
 def test_idle_scan_query_count_does_not_grow_with_tenants(discovery_db, monkeypatch, tenants):
     db = discovery_db
     for rid in range(1, tenants + 1):
@@ -61,3 +61,65 @@ def test_discovery_database_errors_propagate(discovery_db):
     discovery_db.execute(text('DROP TABLE integration_outbox'))
     with pytest.raises(Exception):
         discover_due_restaurant_ids(discovery_db, stale_timeout_seconds=120)
+
+
+@pytest.mark.parametrize("failed_tenant", [None, 2])
+def test_retention_deadline_survives_idle_cycles_and_retries(discovery_db, monkeypatch, failed_tenant):
+    from contextlib import nullcontext
+
+    db = discovery_db
+    for rid in (1, 2):
+        db.execute(text('INSERT INTO restaurantes VALUES (:rid)'), dict(rid=rid))
+    db.commit()
+    clock = [100.0]
+    monkeypatch.setattr('app.services.outbox.worker.time.monotonic', lambda: clock[0])
+    monkeypatch.setattr('app.services.outbox.worker.SessionLocal', lambda: db)
+    monkeypatch.setattr('app.services.outbox.worker.tenant_session_scope', lambda db, rid: nullcontext())
+    monkeypatch.setattr('app.services.outbox.worker.release_due_scheduled_orders_in_session', lambda *a, **kw: 0)
+    monkeypatch.setattr('app.services.outbox.worker.dispatch_pending_outbox_events', lambda *a, **kw: {})
+    visited = []
+    failing = [failed_tenant]
+
+    def purge(db, *, restaurante_id, **kwargs):
+        visited.append(restaurante_id)
+        if restaurante_id == failing[0]:
+            raise RuntimeError('simulated maintenance failure')
+        return 0
+
+    monkeypatch.setattr('app.services.outbox.worker.purge_expired_order_chat_content', purge)
+    worker = OutboxWorker()
+    worker._last_chat_retention_at = 100.0
+    for elapsed in (30, 60, 3600, 21599):
+        clock[0] = 100.0 + elapsed
+        worker.run_once()
+        assert worker._last_chat_retention_at == 100.0
+        assert visited == []
+    clock[0] = 21700.0
+    worker.run_once()
+    assert visited == [1, 2]
+    if failed_tenant:
+        assert worker._last_chat_retention_at == 100.0
+        failing[0] = None
+        visited.clear()
+        worker.run_once()
+        assert visited == [1, 2]
+    assert worker._last_chat_retention_at == 21700.0
+    visited.clear()
+    clock[0] += 30
+    worker.run_once()
+    assert visited == []
+
+
+def test_targeted_dispatch_does_not_postpone_other_tenants_maintenance(discovery_db, monkeypatch):
+    from contextlib import nullcontext
+
+    monkeypatch.setattr('app.services.outbox.worker.SessionLocal', lambda: discovery_db)
+    monkeypatch.setattr('app.services.outbox.worker.time.monotonic', lambda: 30000.0)
+    monkeypatch.setattr('app.services.outbox.worker.tenant_session_scope', lambda db, rid: nullcontext())
+    monkeypatch.setattr('app.services.outbox.worker.release_due_scheduled_orders_in_session', lambda *a, **kw: 0)
+    monkeypatch.setattr('app.services.outbox.worker.dispatch_pending_outbox_events', lambda *a, **kw: {})
+    monkeypatch.setattr('app.services.outbox.worker.purge_expired_order_chat_content', lambda *a, **kw: 0)
+    worker = OutboxWorker()
+    worker._last_chat_retention_at = 100.0
+    worker.run_once(restaurant_id=1)
+    assert worker._last_chat_retention_at == 100.0
