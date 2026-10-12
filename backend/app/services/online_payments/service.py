@@ -5,7 +5,7 @@ import logging
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
 
-from sqlalchemy import case, or_
+from sqlalchemy import case, or_, func
 from sqlalchemy.orm import Session
 
 from ...config import settings
@@ -28,7 +28,7 @@ from .mercado_pago import MercadoPagoError, MercadoPagoProvider
 from .provider_registry import UnsupportedPaymentProviderError, provider_for_account
 from .oauth import MercadoPagoOAuthError, refresh_access_token
 from .account_connection import is_marketplace_owner_account
-from .pagbank.oauth import PagBankOAuthError, refresh_access_token as refresh_pagbank, environment_for_restaurant as pagbank_environment
+from .pagbank.oauth import PagBankOAuthError, refresh_access_token as refresh_pagbank, environment_for_restaurant as pagbank_environment, is_application_owner, credential as pagbank_credential
 
 
 MONEY = Decimal("0.01")
@@ -191,20 +191,32 @@ class OnlinePaymentService:
             RestaurantDirectPixConfig.enabled.is_(True),
             or_(RestaurantDirectPixConfig.terms_version.is_(None), RestaurantDirectPixConfig.terms_version != TEST_TERMS_VERSION) if not test_tenant_allowed(restaurant_id) else True,
         ).exists()
+        environment = pagbank_environment(restaurant_id)
+        application_owner = pagbank_credential('APPLICATION_OWNER_ACCOUNT_ID', environment)
         pagbank = db.query(RestaurantPaymentAccount.id).filter(
             RestaurantPaymentAccount.restaurante_id == restaurant_id,
             RestaurantPaymentAccount.provider == "pagbank",
-            RestaurantPaymentAccount.provider_environment == pagbank_environment(restaurant_id),
+            RestaurantPaymentAccount.provider_environment == environment,
             RestaurantPaymentAccount.status == "active",
+            RestaurantPaymentAccount.provider_user_id != application_owner if application_owner else True,
         ).exists()
         mercado_pago = db.query(RestaurantPaymentAccount.id).filter(
             RestaurantPaymentAccount.restaurante_id == restaurant_id,
             RestaurantPaymentAccount.provider == "mercado_pago",
             RestaurantPaymentAccount.status == "active",
         ).exists()
+        automatic_count = db.query(func.count(RestaurantPaymentAccount.id)).filter(
+            RestaurantPaymentAccount.restaurante_id == restaurant_id,
+            RestaurantPaymentAccount.status == "active",
+        ).scalar_subquery()
+        any_direct = db.query(RestaurantDirectPixConfig.restaurante_id).filter(
+            RestaurantDirectPixConfig.restaurante_id == restaurant_id,
+            RestaurantDirectPixConfig.enabled.is_(True),
+        ).exists()
+        receiver_count = case((any_direct, 1), else_=0) + automatic_count
         enabled, document = db.query(
-            case((direct, bool(settings.DIRECT_PIX_ENABLED)), else_=(mercado_pago | pagbank)),
-            case((direct, False), else_=pagbank),
+            (receiver_count == 1) & case((direct, bool(settings.DIRECT_PIX_ENABLED)), else_=(mercado_pago | pagbank)),
+            (receiver_count == 1) & pagbank,
         ).one()
         return bool(enabled), bool(document)
 
@@ -228,6 +240,10 @@ class OnlinePaymentService:
             if (not settings.DIRECT_PIX_ENABLED or
                 config.terms_version == TEST_TERMS_VERSION and not test_tenant_allowed(restaurant_id)):
                 raise OnlinePaymentConfigurationError("Pix direto temporariamente indisponível. Escolha pagamento na entrega.")
+            if db.query(RestaurantPaymentAccount.id).filter(
+                RestaurantPaymentAccount.restaurante_id == restaurant_id,
+                RestaurantPaymentAccount.status == 'active').first():
+                raise OnlinePaymentConfigurationError('Há mais de um provedor de recebimento ativo. Resolva a configuração antes de receber Pix.')
             return RestaurantPaymentAccount(restaurante_id=restaurant_id, provider="direct_pix", status="active")
         accounts = (
             db.query(RestaurantPaymentAccount)
@@ -259,6 +275,8 @@ class OnlinePaymentService:
             if _token_needs_refresh(account.token_expires_at):
                 account = cls._refresh_account_credentials(db, account)
         elif account.provider == "pagbank":
+            if is_application_owner(account.provider_user_id, environment=account.provider_environment):
+                raise OnlinePaymentConfigurationError('A conta proprietária da aplicação KÔMA não pode receber vendas como restaurante.')
             if account.provider_environment != pagbank_environment(restaurant_id):
                 raise OnlinePaymentConfigurationError("Reconecte o PagBank no ambiente atual antes de receber Pix.")
             if not account.access_token:

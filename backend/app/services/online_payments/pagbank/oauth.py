@@ -60,6 +60,13 @@ def configured(environment: str | None = None) -> bool:
     return all(credential(k, environment) for k in ('CLIENT_ID', 'CLIENT_SECRET', 'APP_TOKEN'))
 
 
+def is_application_owner(account_id: str | None, *, environment: str) -> bool:
+    # Configure only with account_id verified through GET /oauth2/application/{client_id}.
+    # Never infer ownership from token strings, buyer documents or display names.
+    owner = credential('APPLICATION_OWNER_ACCOUNT_ID', environment)
+    return bool(owner and account_id and hmac.compare_digest(owner, str(account_id)))
+
+
 def _return_origins() -> dict[str, str]:
     # Short signed identifiers keep state within Connect's 128-character limit.
     return {**{str(i): value for i, value in enumerate(OFFICIAL_PUBLIC_FRONTEND_ORIGINS)}, 'c': settings.KOMA_PUBLIC_APP_URL}
