@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html><head><title>Isolated fiscal session test</title></head>
+<body><div id="root"></div><script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {CashierIntegrationsSettings} from '/src/components/caixa/settings/CashierIntegrationsSettings.tsx';
+
+function Harness() {
+  const [token, setToken] = React.useState('synthetic-session-a');
+  const [apiBaseUrl, setApiBaseUrl] = React.useState('/fiscal-fixture-api-a');
+  const [reverseHeaders, setReverseHeaders] = React.useState(false);
+  const authHeaders = reverseHeaders
+    ? {'content-type': 'application/json', authorization: `Bearer ${token}`}
+    : {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'};
+  return React.createElement(React.Fragment, {},
+    React.createElement('nav', {'aria-label': 'Synthetic session controls'},
+      React.createElement('button', {onClick: () => setToken('synthetic-session-b')}, 'Trocar sessão simulada'),
+      React.createElement('button', {onClick: () => setReverseHeaders(v => !v)}, 'Recriar headers equivalentes'),
+      React.createElement('button', {onClick: () => setApiBaseUrl('/fiscal-fixture-api-b')}, 'Trocar API simulada')),
+    React.createElement(CashierIntegrationsSettings, {apiBaseUrl, authHeaders}));
+}
+createRoot(document.getElementById('root')).render(React.createElement(Harness));
+</script></body></html>

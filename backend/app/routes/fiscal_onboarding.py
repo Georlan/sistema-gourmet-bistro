@@ -23,7 +23,9 @@ from ..fiscal.jurisdiction import FiscalJurisdictionError, resolve_fiscal_jurisd
 from ..fiscal_models import RestaurantFiscalProfile
 from ..models import Usuario
 from ..security import get_current_user
-from ..services.fiscal_credentials import FiscalCredentialError, store_fiscal_credentials
+from ..services.fiscal_credentials import (
+    FiscalCredentialError, invalidate_fiscal_credentials, store_fiscal_credentials,
+)
 from ..services.fiscal_onboarding import (
     evaluate_restaurant_fiscal_readiness,
     readiness_payload,
@@ -33,6 +35,19 @@ from ..services.fiscal_preflight import evaluate_fiscal_preflight, preflight_pay
 
 
 router = APIRouter(prefix="/api/onboarding/fiscal", tags=["Fiscal Onboarding"])
+
+
+@router.get("/products")
+def get_fiscal_products(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    from ..services.fiscal_catalog import fiscal_catalog_page
+
+    _require_fiscal_admin(current_user)
+    return fiscal_catalog_page(db, restaurante_id=require_tenant_id(), offset=offset, limit=limit)
 
 
 class FiscalProfileUpdate(BaseModel):
@@ -217,6 +232,16 @@ def update_fiscal_profile(
     if profile is None:
         profile = RestaurantFiscalProfile(restaurante_id=tenant_id)
         db.add(profile)
+    elif (
+        profile.cnpj != cnpj
+        or profile.country_code != "BR"
+        or profile.uf != resolution.uf
+        or profile.document_model != "65"
+        or profile.environment != payload.environment
+    ):
+        # CSC and A1 must never silently follow another issuer or environment.
+        # Ordinary name/address/series edits preserve the configured material.
+        invalidate_fiscal_credentials(profile)
 
     # Qualquer alteração cadastral exige nova ativação explícita após o preflight.
     profile.enabled = False
@@ -225,7 +250,8 @@ def update_fiscal_profile(
     profile.document_model = "65"
     profile.environment = payload.environment
     profile.series = payload.series
-    profile.provider = "direct_sefaz"
+    # Cadastro não pode substituir uma conexão fiscal já provisionada no servidor.
+    profile.provider = profile.provider or "direct_sefaz"
     profile.compliance_baseline = "ce-nfce-2026-09-15"
     profile.cnpj = cnpj
     profile.inscricao_estadual = str(payload.inscricao_estadual or "").strip()

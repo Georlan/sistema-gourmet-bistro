@@ -213,7 +213,7 @@ def test_issuance_requires_current_rtc_snapshot_and_enabled_profile():
         db.close()
 
 
-def test_issuance_passes_when_profile_and_blocking_sources_are_current():
+def test_issuance_requires_provider_even_when_profile_and_sources_are_current():
     db = _session()
     try:
         _add_reference(db, "rfb-ncm-json")
@@ -226,7 +226,8 @@ def test_issuance_passes_when_profile_and_blocking_sources_are_current():
             now=NOW,
         )
 
-        assert result.ready is True
+        assert result.ready is False
+        assert "fiscal_provider_not_ready" in {issue.code for issue in result.issues}
         assert result.references_ready is True
         active = {
             check.source_key: check.active_snapshot_id
@@ -244,6 +245,9 @@ def test_preflighted_document_never_calls_numbering_when_gate_blocks(monkeypatch
 
     class Query:
         def filter(self, *_args):
+            return self
+
+        def populate_existing(self):
             return self
 
         def with_for_update(self):
@@ -314,11 +318,17 @@ def test_preflighted_document_embeds_active_reference_lineage(monkeypatch):
         def filter(self, *_args):
             return self
 
+        def populate_existing(self):
+            return self
+
         def with_for_update(self):
             return self
 
         def one_or_none(self):
             return profile
+
+        def scalar(self):
+            return None
 
     class Db:
         def query(self, _model):

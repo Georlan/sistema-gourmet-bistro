@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import datetime
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
@@ -25,17 +25,17 @@ class FiscalCredentialError(ValueError):
 
 @dataclass(frozen=True)
 class ParsedA1Certificate:
-    pfx_base64: str
-    password: str
+    pfx_base64: str = field(repr=False)
+    password: str = field(repr=False)
     fingerprint_sha256: str
     expires_at: datetime.datetime
 
 
 @dataclass(frozen=True)
 class FiscalCredentialMaterial:
-    pfx_bytes: bytes
-    password: str
-    csc: str
+    pfx_bytes: bytes = field(repr=False)
+    password: str = field(repr=False)
+    csc: str = field(repr=False)
     csc_id: str
     certificate_fingerprint: str
     certificate_expires_at: datetime.datetime
@@ -45,6 +45,43 @@ def _utc(value: datetime.datetime) -> datetime.datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=datetime.timezone.utc)
     return value.astimezone(datetime.timezone.utc)
+
+
+def _credential_scope(profile: RestaurantFiscalProfile) -> dict[str, object]:
+    """Bind encrypted material to its legal issuer and transmission context."""
+    if type(profile.restaurante_id) is not int or profile.restaurante_id <= 0:
+        raise FiscalCredentialError("Contexto do restaurante inválido para credencial fiscal.")
+    scope = {
+        "restauranteId": profile.restaurante_id,
+        "cnpj": str(profile.cnpj or "").strip().upper(),
+        "countryCode": str(profile.country_code or "").strip().upper(),
+        "uf": str(profile.uf or "").strip().upper(),
+        "documentModel": str(profile.document_model or "").strip(),
+        "environment": str(profile.environment or "").strip(),
+    }
+    if any(not value for value in scope.values()) or scope["environment"] not in {"homologacao", "producao"}:
+        raise FiscalCredentialError("Contexto fiscal incompleto para armazenar ou usar credenciais.")
+    return scope
+
+
+def invalidate_fiscal_credentials(profile: RestaurantFiscalProfile) -> None:
+    """A changed issuer/jurisdiction/environment requires a fresh secure upload."""
+    profile.certificate_secret_ref = None
+    profile.certificate_fingerprint = None
+    profile.certificate_expires_at = None
+    profile.csc_id = None
+    profile.csc_secret_ref = None
+    profile.enabled = False
+
+
+def _scoped_payload(plaintext: str, expected_scope: dict[str, object]) -> dict[str, object]:
+    try:
+        payload = json.loads(plaintext)
+    except (TypeError, ValueError) as exc:
+        raise FiscalCredentialError("Credencial fiscal sem contexto válido. Reenvie A1 e CSC.") from exc
+    if not isinstance(payload, dict) or payload.get("scope") != expected_scope:
+        raise FiscalCredentialError("Credencial fiscal de outro contexto ou antiga. Reenvie A1 e CSC.")
+    return payload
 
 
 def _parse_pfx(pfx_base64: str, password: str) -> ParsedA1Certificate:
@@ -105,6 +142,16 @@ def _upsert_secret(
     kind: str,
     plaintext: str,
 ) -> FiscalCredentialSecret:
+    try:
+        ciphertext = encrypt_field(plaintext)
+    except Exception:
+        raise FiscalCredentialError("Não foi possível cifrar a credencial fiscal.") from None
+    if (
+        not isinstance(ciphertext, str)
+        or ciphertext == plaintext
+        or not ciphertext.startswith("gAAAAA")
+    ):
+        raise FiscalCredentialError("A cifragem da credencial fiscal não foi confirmada.")
     secret = (
         db.query(FiscalCredentialSecret)
         .filter(
@@ -118,13 +165,13 @@ def _upsert_secret(
         secret = FiscalCredentialSecret(
             restaurante_id=restaurante_id,
             kind=kind,
-            ciphertext=encrypt_field(plaintext),
+            ciphertext=ciphertext,
         )
         db.add(secret)
         db.flush()
         return secret
 
-    secret.ciphertext = encrypt_field(plaintext)
+    secret.ciphertext = ciphertext
     secret.updated_at = datetime.datetime.now(datetime.timezone.utc)
     db.flush()
     return secret
@@ -139,7 +186,8 @@ def store_fiscal_credentials(
     csc_id: str,
     csc: str,
 ) -> None:
-    tenant_id = int(profile.restaurante_id)
+    scope = _credential_scope(profile)
+    tenant_id = profile.restaurante_id
     normalized_csc_id = str(csc_id or "").strip()
     normalized_csc = str(csc or "").strip()
     if not normalized_csc_id or len(normalized_csc_id) > 16:
@@ -150,6 +198,7 @@ def store_fiscal_credentials(
     parsed = _parse_pfx(certificate_pfx_base64, certificate_password)
     a1_payload = json.dumps(
         {
+            "scope": scope,
             "pfxBase64": parsed.pfx_base64,
             "password": parsed.password,
         },
@@ -166,7 +215,10 @@ def store_fiscal_credentials(
         db,
         restaurante_id=tenant_id,
         kind="csc",
-        plaintext=normalized_csc,
+        plaintext=json.dumps(
+            {"scope": {**scope, "cscId": normalized_csc_id}, "csc": normalized_csc},
+            ensure_ascii=False, separators=(",", ":"),
+        ),
     )
 
     profile.certificate_secret_ref = f"{CERTIFICATE_REF_PREFIX}{a1_secret.id}"
@@ -221,24 +273,27 @@ def load_fiscal_credentials(
     *,
     profile: RestaurantFiscalProfile,
 ) -> FiscalCredentialMaterial:
-    tenant_id = int(profile.restaurante_id)
+    scope = _credential_scope(profile)
+    tenant_id = profile.restaurante_id
     a1_plaintext = _load_secret(
         db,
         restaurante_id=tenant_id,
         reference=profile.certificate_secret_ref,
         kind="certificate_a1",
     )
-    csc = _load_secret(
+    csc_plaintext = _load_secret(
         db,
         restaurante_id=tenant_id,
         reference=profile.csc_secret_ref,
         kind="csc",
     )
     try:
-        a1_payload = json.loads(a1_plaintext)
+        a1_payload = _scoped_payload(a1_plaintext, scope)
         pfx_base64 = str(a1_payload["pfxBase64"])
         password = str(a1_payload.get("password") or "")
         pfx_bytes = base64.b64decode(pfx_base64, validate=True)
+    except FiscalCredentialError:
+        raise
     except Exception as exc:
         raise FiscalCredentialError("Payload cifrado do certificado A1 está inválido.") from exc
 
@@ -246,6 +301,10 @@ def load_fiscal_credentials(
         raise FiscalCredentialError("Metadados do certificado A1 estão incompletos.")
     if not profile.csc_id:
         raise FiscalCredentialError("ID do CSC não está configurado.")
+    csc_payload = _scoped_payload(csc_plaintext, {**scope, "cscId": str(profile.csc_id)})
+    csc = csc_payload.get("csc")
+    if not isinstance(csc, str) or not csc.strip():
+        raise FiscalCredentialError("Payload cifrado do CSC está inválido. Reenvie A1 e CSC.")
 
     return FiscalCredentialMaterial(
         pfx_bytes=pfx_bytes,
