@@ -59,3 +59,22 @@ test('modal de personalização separa rolagem das ações e respeita a área se
   assert.doesNotMatch(panel, /sticky bottom-0 z-20/);
   assert.match(panel, /Adicionar ao pedido/);
 });
+
+test('garçom apresenta grupos obrigatórios antes dos opcionais sem alterar a ordem original', () => {
+  const panel = source('src/components/MenuPanel.tsx');
+
+  assert.match(panel, /\.\.\.productModifierGroups\(selectedProductToConfigure\)/);
+  assert.match(panel, /Number\(Number\(b\.min_selecoes \|\| 0\) > 0\) - Number\(Number\(a\.min_selecoes \|\| 0\) > 0\)/);
+
+  const groups = [
+    { id: 'extras-1', min_selecoes: 0 },
+    { id: 'drink', min_selecoes: 1 },
+    { id: 'extras-2', min_selecoes: 0 },
+    { id: 'side', min_selecoes: 2 },
+  ];
+  const ordered = [...groups].sort(
+    (a, b) => Number(Number(b.min_selecoes || 0) > 0) - Number(Number(a.min_selecoes || 0) > 0),
+  );
+  assert.deepEqual(ordered.map(group => group.id), ['drink', 'side', 'extras-1', 'extras-2']);
+  assert.deepEqual(groups.map(group => group.id), ['extras-1', 'drink', 'extras-2', 'side']);
+});
