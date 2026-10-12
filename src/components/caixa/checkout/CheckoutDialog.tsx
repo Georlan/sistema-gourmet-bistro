@@ -55,6 +55,8 @@ export function CheckoutDialog({
     setPaymentValor,
     mixedPayment,
     setMixedPayment,
+    mixedPaymentAwaitingRefresh,
+    paymentVerificationRequired,
     selectedItemIds,
     setSelectedItemIds,
     paymentCPF,
@@ -84,6 +86,8 @@ export function CheckoutDialog({
     selectedOrder && selectedItemIds.length > 0 ? getSelectedItemsTotal(selectedOrder, selectedItemIds) : 0;
 
   const primaryButtonLabel = (() => {
+    if (mixedPaymentAwaitingRefresh) return 'Sincronizando saldo…';
+    if (paymentVerificationRequired) return 'Verifique o pagamento no Caixa';
     if (mixedPayment) return inputVal > 0
       ? `Receber esta parte · ${formatCurrency(inputVal)}`
       : 'Receber esta parte';
@@ -521,7 +525,7 @@ export function CheckoutDialog({
                 onSubmit={handleProcessPayment}
                 className="space-y-3.5 bg-koma-card/40 p-3.5 sm:p-4 rounded-2xl border border-koma-border/50 flex-1 flex flex-col justify-between"
               >
-                <fieldset disabled={isProcessingPayment} className="space-y-3.5">
+                <fieldset disabled={isProcessingPayment || mixedPaymentAwaitingRefresh || paymentVerificationRequired} className="space-y-3.5">
                   <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-koma-foreground cursor-pointer">
                     <input type="checkbox" checked={mixedPayment} onChange={e => setMixedPayment(e.target.checked)} className="h-4 w-4 rounded accent-emerald-600" />
                     Dividir pagamento
@@ -531,6 +535,16 @@ export function CheckoutDialog({
                       <p className="text-sm font-bold text-koma-foreground">Saldo restante: {formatCurrency(currentBalance)}</p>
                       <p className="mt-1 text-xs text-koma-secondary">Receba uma parte por vez, escolhendo o valor e a forma de pagamento.</p>
                       {inputVal > 0 && inputVal <= currentBalance && <p className="mt-2 text-xs text-koma-secondary">Após esta parte, faltam {formatCurrency(Math.max(0, currentBalance - inputVal))}.</p>}
+                      {mixedPaymentAwaitingRefresh && (
+                        <p className="mt-2 text-xs font-bold text-amber-400">
+                          Conferindo o saldo atualizado com o servidor. Não realize outra cobrança ainda.
+                        </p>
+                      )}
+                      {paymentVerificationRequired && (
+                        <p className="mt-2 text-xs font-bold text-amber-400">
+                          Pagamento sem confirmação definitiva. Feche esta tela e consulte o histórico do Caixa antes de tentar novamente.
+                        </p>
+                      )}
                     </div>
                   )}
                   {/* Forma de Pagamento */}
@@ -723,7 +737,7 @@ export function CheckoutDialog({
                   {/* Botão Principal sem ambiguidade com ação e valor explícitos */}
                   <button
                     type="submit"
-                    disabled={selectedCheckoutSmartPosState?.blocksPayment || isProcessingPayment}
+                    disabled={selectedCheckoutSmartPosState?.blocksPayment || isProcessingPayment || mixedPaymentAwaitingRefresh || paymentVerificationRequired}
                     className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer uppercase tracking-wider text-xs disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Check size={16} />
