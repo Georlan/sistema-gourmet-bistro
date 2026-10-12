@@ -14,6 +14,7 @@ from ..security import require_permission
 from ..security import get_current_user
 from ..services.online_payments.direct_pix import normalize_key, merchant_text
 from ..services.online_payments.base import ProviderPayment
+from ..services.online_payments.account_connection import guard_receiver_change, MercadoPagoAccountConnectionError
 from ..services.online_payments.service import OnlinePaymentService, OnlinePaymentConfigurationError, OnlinePaymentValidationError
 from ..services.direct_pix_billing import close_month
 from ..services.direct_pix_test_release import TEST_TERMS_VERSION, test_registration_allowed
@@ -105,6 +106,18 @@ def save_settings(payload: PixConfiguration, db: Session = Depends(get_db), user
     from ..models import Restaurante
     db.query(Restaurante).filter(Restaurante.id == rest_id).with_for_update().one()
     config = db.query(RestaurantDirectPixConfig).filter(RestaurantDirectPixConfig.restaurante_id == rest_id).one_or_none()
+    changing = bool(config and (config.enabled and not payload.enabled or
+        (config.key_type, config.pix_key, config.holder_name, config.city) != (payload.key_type, key, name, city)))
+    try:
+        if payload.enabled or changing:
+            guard_receiver_change(db, restaurant_id=rest_id, provider='direct_pix',
+                                  force_change=changing)
+    except MercadoPagoAccountConnectionError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    if payload.enabled:
+        from ..models import RestaurantPaymentAccount
+        db.query(RestaurantPaymentAccount).filter(RestaurantPaymentAccount.restaurante_id == rest_id,
+            RestaurantPaymentAccount.status == 'active').update({'status': 'disconnected'})
     if config is None:
         config = RestaurantDirectPixConfig(restaurante_id=rest_id)
         db.add(config)

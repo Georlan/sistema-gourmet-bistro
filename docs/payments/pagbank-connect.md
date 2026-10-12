@@ -96,3 +96,20 @@ A investigação das 17:33–17:38 encontrou callback 303 sem POST /complete; n�
 Recusas da API passam a conservar apenas o código técnico validado em error_messages e o identificador de requisição do PagBank (quando fornecido). O corpo bruto, descrições, documentos e tokens não são registrados. Logs de acesso ocultam code/state e credenciais de query string. O diagnóstico novo se aplica às chamadas futuras; não recupera a resposta descartada no incidente anterior.
 
 Antes da homologação, ainda é necessário obter evidências genuínas de Connect + Order no Sandbox e validar qual token assina o webhook de Order criado via Connect. Não substituir assinatura por suposição, não declarar mocks como logs do banco e não apagar intenções de erro para forçar troca/desconexão de conta.
+
+## Continuidade do protocolo 1461335012
+
+O escopo solicitado é Connect OAuth + Order Pix, sem cartão, boleto, split ou comissão KÔMA. A resposta do suporte foi informada pelo titular; este repositório não comprova leitura do Gmail. Evidências de produção com HTTP 403 não substituem logs Sandbox.
+
+- Todos os escritores de recebedor travam a linha do restaurante antes de alterar contas. Pix `created`, `pending` ou `error` impedem troca de provedor/vendedor/ambiente; renovar o mesmo vendedor continua permitido.
+- Uma identidade de vendedor/ambiente com histórico não pode ser sobrescrita: os intents atuais referenciam restaurante/provedor, sem conta versionada. Trocar de provedor preserva a conta anterior para consulta histórica.
+- Estados com mais de um recebedor ativo, inclusive Pix Direto legado, deixam de oferecer Pix público e são rejeitados na criação. O Pix manual continua fora da interface atual.
+- A conta titular da aplicação é rejeitada quando o identificador foi verificado e configurado em `PAGBANK_APPLICATION_OWNER_ACCOUNT_ID` (Sandbox) ou `PAGBANK_PRODUCTION_APPLICATION_OWNER_ACCOUNT_ID` (piloto). Obter o `account_id` por `GET /oauth2/application/{client_id}` autenticado no ambiente correspondente. Sem essa configuração, a proteção adicional de titularidade não está ativa; não inferir por nome ou documentos. As demais proteções de tenant permanecem obrigatórias.
+
+### Captura de evidências genuínas
+
+`scripts/pagbank-sandbox-evidence.py` aceita somente o host Sandbox e não importa o banco KÔMA. A operação `application` consulta o cadastro; `create` e `get` exigem o token OAuth individual do vendedor em `PAGBANK_SANDBOX_SELLER_ACCESS_TOKEN`. Nunca substituir por `PAGBANK_APP_TOKEN`. O consentimento e a troca de código devem ocorrer pelo fluxo canônico do KÔMA; o coletor não consome códigos nem persiste tokens.
+
+Credenciais entram por ambiente, nunca argumentos ou arquivos de evidência. O payload privado do comprador (`--request-file`) fica fora do Git e dos anexos. Usar idempotência em `PAGBANK_SANDBOX_IDEMPOTENCY_KEY`. O coletor preserva IDs técnicos e códigos de erro, remove cartão/CVV/segredos e mascara dados pessoais e conteúdo do QR. Salva endpoint, horário UTC, método, request, response, status e resultado sem sobrescrever evidências existentes.
+
+Consulta da aplicação com HTTP 200 **não comprova** vendedor autorizado, criação de Order, QR, pagamento, webhook ou conciliação. Testes com fixtures/mocks devem ficar separados do pacote bancário. Não enviar pacote como homologação completa enquanto faltarem request/response reais de `/orders`, consulta e confirmação pertinente. Confirmar com o PagBank o mecanismo de assinatura aplicável especificamente ao Connect + Order antes de alegar validação de webhook real.
