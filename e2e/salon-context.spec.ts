@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openOperationalScenario } from './fixtures/operational';
+import { API_ORIGIN, openOperationalScenario } from './fixtures/operational';
 
 test('Salão compacto preserva todas as comandas nos detalhes e no recebimento', async ({ page }, testInfo) => {
   const state = await openOperationalScenario(page, { subtab: 'mesas', canonicalIdentity: true, secondCheck: true, transferredSecondCheck: true });
@@ -13,7 +13,7 @@ test('Salão compacto preserva todas as comandas nos detalhes e no recebimento',
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.locator('body').evaluate(element => element.clientWidth));
   if (process.env.KOMA_CAPTURE_UI) await page.screenshot({ path: testInfo.outputPath('cashier-salon-context.png'), fullPage: true });
   await card.getByRole('button', { name: 'Ver comanda', exact: true }).click();
-  const details = page.getByRole('dialog', { name: 'Mesa 7', exact: true });
+  const details = page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true });
   const context = details.getByLabel('Contexto da mesa');
   await expect(context).toContainText('Comandas: 2');
   for (const text of ['24-A', '24-B', '25-Z', 'Bruno', 'Operador Fase 7']) await expect(context).toContainText(text);
@@ -30,7 +30,7 @@ test('Salão compacto preserva todas as comandas nos detalhes e no recebimento',
 test('transferência nos detalhes só envia a Comanda técnica após confirmar', async ({ page }) => {
   const state = await openOperationalScenario(page, { subtab: 'mesas', canonicalIdentity: true });
   await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda', exact: true }).click();
-  const details = page.getByRole('dialog', { name: 'Mesa 7', exact: true });
+  const details = page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true });
   expect(state.actions.filter(action => action.path.includes('/transferir/'))).toEqual([]);
   await expect(details.getByRole('button', { name: 'Transferir', exact: true })).toBeDisabled();
   await details.getByRole('combobox', { name: 'Mesa de destino' }).selectOption('8');
@@ -45,7 +45,7 @@ test('transferência nos detalhes só envia a Comanda técnica após confirmar',
 test('adicionar consumo abre o PDV na mesa correta e mantém o carrinho ao voltar ao Salão', async ({ page }) => {
   const state = await openOperationalScenario(page, { subtab: 'mesas' });
   await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda', exact: true }).click();
-  const details = page.getByRole('dialog', { name: 'Mesa 7', exact: true });
+  const details = page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true });
   await details.getByRole('button', { name: 'Adicionar consumo', exact: true }).click();
   await expect(details).toBeHidden();
   const preparedDishButton = page.getByRole('button', { name: 'Adicionar Prato em preparo rapidamente', exact: true });
@@ -69,7 +69,7 @@ test('receber fica disponível para a mesa sem transformar itens servidos em con
   await expect(card).toContainText('Itens servidos');
   await expect(card).not.toContainText('Aguardando pagamento');
   await card.getByRole('button', { name: 'Ver comanda', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Mesa 7', exact: true }).getByRole('button', { name: 'Receber', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true }).getByRole('button', { name: 'Receber', exact: true }).click();
   await expect(page.getByText('Receber Pagamento', { exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Digite qualquer valor para abater do saldo.' })).toHaveValue('160,00');
   expect(state.actions.filter(action => /pagar|status|transferir/.test(action.path))).toEqual([]);
@@ -166,4 +166,21 @@ test('Novo pedido preserva o carrinho e adapta os dados operacionais por modalid
   if (process.env.KOMA_CAPTURE_UI) {
     await page.screenshot({ path: testInfo.outputPath('cashier-pdv-operational-ux.png'), fullPage: true });
   }
+});
+
+test('transferência do Caixa identifica destinos ocupados sem itens e livres', async ({ page }) => {
+  const state = await openOperationalScenario(page, { subtab: 'mesas' });
+  await page.route(`${API_ORIGIN}/mesas/`, route => route.fulfill({ json: [
+    { id: 7, nome: 'Mesa 7', capacidade: 4, status: 'ocupada' },
+    { id: 8, nome: 'Varanda', capacidade: 4, status: 'ocupada' },
+    { id: 9, nome: 'Mesa 9', capacidade: 4, status: 'livre' },
+  ] }));
+  await page.reload();
+  await page.getByRole('button', { name: 'Ver comanda', exact: true }).first().click();
+  const select = page.getByRole('combobox', { name: 'Mesa de destino' });
+  await expect(select.locator('option[value="8"]')).toHaveText('● Mesa 8 · Varanda · EM ATENDIMENTO');
+  await expect(select.locator('option[value="9"]')).toHaveText('○ Mesa 9 · livre');
+  await expect(select.locator('option[value="7"]')).toHaveCount(0);
+  await select.selectOption('8');
+  expect(state.actions.filter(action => action.path.includes('/transferir/'))).toEqual([]);
 });
