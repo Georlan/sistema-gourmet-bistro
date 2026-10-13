@@ -50,6 +50,8 @@ test('marmitaria shows the same grouped choices in Kanban and details without me
   const details = page.locator('.orders-detail-modal');
   await expect(details.locator('.orders-detail-modal__item')).toHaveCount(2);
   await expect(details).toContainText('GUARNIÇÕES: Arroz à grega');
+  await expect(details).toContainText('Sem salada');
+  await details.getByText('Editar observação', { exact: true }).first().click();
   await expect(details.getByRole('textbox').first()).toHaveValue('Sem salada');
 });
 
