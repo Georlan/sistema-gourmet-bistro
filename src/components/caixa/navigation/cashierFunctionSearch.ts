@@ -50,8 +50,7 @@ const NAVIGATION_ALIASES: Readonly<Record<string, readonly string[]>> = {
   config_aparencia: ['tema', 'tema claro', 'tema escuro', 'fonte', 'tamanho do texto', 'texto grande'],
   config_impressao: ['impressora', 'impressoras', 'cupom', 'fila impressao', 'fila impressão', 'teste impressora'],
   config_mesas: ['cadastro mesas', 'capacidade mesa', 'nomes mesas'],
-  config_garcom: ['garcom', 'garçom', 'garcons', 'garçons', 'atendente', 'atendimento', 'app garcom', 'app garçom'],
-  config_taxa: ['taxa servico', 'taxa serviço', 'gorjeta', 'percentual servico', 'percentual serviço', '10%'],
+  config_atendimento: ['taxa servico', 'taxa serviço', 'gorjeta', 'percentual servico', 'percentual serviço', '10%'],
   config_implantacao: ['implantacao', 'implantação', 'ativacao', 'ativação', 'primeiro acesso', 'onboarding'],
   config_fiscal: ['fiscal', 'nfce', 'nfc e', 'nfe', 'nf e', 'nota fiscal', 'notas fiscais', 'sefaz', 'certificado digital', 'tributacao', 'impostos'],
   config_integracoes: ['integracao', 'integração', 'integracoes', 'integrações', 'mercado pago', 'pagbank', 'whatsapp', 'avisos de pedidos', 'pix', 'oauth'],
@@ -81,6 +80,7 @@ const FUNCTION_DESCRIPTIONS: Readonly<Record<string, string>> = {
   relatorios_cardapio: 'CMV estimado, custos, margens e simulação de preços',
   relatorios_equipe: 'Desempenho de vendas da equipe',
   equipe_funcoes_acessos: 'Cargos e permissões dos funcionários',
+  config_atendimento: 'Taxa de serviço e opções do atendimento',
   config_fiscal: 'Configuração fiscal e documentos eletrônicos',
   config_integracoes: 'PagBank, Mercado Pago e avisos pelo WhatsApp',
 };
@@ -149,7 +149,7 @@ export function buildCashierFunctionSearchEntries(
         label: child.label,
         context: `${group.category} › ${item.label}`,
         navigationId: child.id,
-        aliases: NAVIGATION_ALIASES[child.id],
+        aliases: [...(NAVIGATION_ALIASES[child.id] ?? []), ...(child.searchAliases ?? [])],
         description: FUNCTION_DESCRIPTIONS[child.id],
       }));
 

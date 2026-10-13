@@ -10,7 +10,7 @@ test('Cardápio online espelha as mesmas funções na navegação responsiva', (
   const online = getCashierNavigationItem('cardapio_digital');
   assert.deepEqual(
     online?.children?.map((child) => child.label),
-    ['Perfil', 'Marca', 'Pedidos online', 'Clientes bloqueados', 'Entrega', 'Pagamentos', 'Divulgação'],
+    ['Dados da loja', 'Marca', 'Horários e pedidos', 'Bloqueios', 'Entrega', 'Pagamentos', 'Divulgação'],
   );
   assert.deepEqual(getCashierNavigationTarget('online_perfil'), { tab: 'cardapio_digital', subTab: 'cardapio_perfil' });
   assert.deepEqual(getCashierNavigationTarget('online_bloqueios'), { tab: 'cardapio_digital', subTab: 'cardapio_bloqueios' });
@@ -22,19 +22,15 @@ test('Cardápio online espelha as mesmas funções na navegação responsiva', (
   assert.doesNotMatch(onlineMenu, /CompactOnlineMenuNavigation|detailsByWorkspace|workspaceBySection/);
 
   const caixa = source('../src/components/CaixaPanel.tsx');
-  assert.match(caixa, /onlineMenuSubnavItems = getCashierNavigationItem\('cardapio_digital'\)\?\.children \?\? \[\]/);
+  assert.match(caixa, /<CashierSubNavigation/);
   assert.match(caixa, /activeTab === 'cardapio_digital'/);
-  assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
-  assert.match(caixa, /className=\{clsx\('cashier-subnav__button', isSidebarTabActive\(sub\.id\) && 'is-active'\)\}/);
-  assert.match(caixa, /aria-current=\{isSidebarTabActive\(sub\.id\) \? 'page' : undefined\}/);
   assert.doesNotMatch(caixa, /cashier-subnav__mobile-select/);
   assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
 });
 
 test('Configurações também espelha filhos verticais na subnavegação horizontal', () => {
   const caixa = source('../src/components/CaixaPanel.tsx');
-  assert.match(caixa, /settingsSubnavItems = getCashierNavigationItem\('impressao_salao'\)\?\.children \?\? \[\]/);
-  assert.match(caixa, /activeTab === 'impressao_salao' && settingsSubnavItems\.filter/);
+  assert.match(caixa, /<CashierSubNavigation/);
 });
 
 test('CashierOnlineMenu routes channel concerns to their canonical owners', () => {

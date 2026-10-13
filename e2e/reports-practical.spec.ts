@@ -39,7 +39,7 @@ test('reports preserve explicit civil interval across tabs and reload', async ({
   await expect(page.getByText('Pico de movimento às 11h', { exact: true })).toBeVisible();
   await expect(page.getByText('Pico de movimento às 15h', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Contas', exact: true }).click();
-  for (const tab of ['Financeiro', 'Produtos', 'Inteligência do Cardápio', 'Equipe', 'Visão Geral']) {
+  for (const tab of ['Recebimentos', 'Vendas por produto', 'Inteligência do Cardápio', 'Desempenho da equipe', 'Visão geral']) {
     await page.getByRole('button', { name: tab, exact: true }).last().click();
     await expect(page.getByRole('button', { name: 'Alterar período: 02/10/2026 — 04/10/2026' })).toBeVisible();
   }

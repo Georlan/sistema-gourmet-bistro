@@ -44,10 +44,10 @@ export const operatorSections = {
   cardapio: ['Produtos', 'Complementos', 'Preparo/impressão'],
   estoque: ['Estoque', 'Compras', 'Inventário', 'Fornecedores'],
   clientes: ['Lista', 'Busca', 'Detalhe'],
-  cardapioOnline: ['Perfil', 'Marca', 'Pedidos online', 'Clientes bloqueados', 'Entrega', 'Pagamentos', 'Divulgação'],
-  relatorios: ['Geral', 'Financeiro', 'Produtos', 'Equipe'],
+  cardapioOnline: ['Dados da loja', 'Marca', 'Horários e pedidos', 'Bloqueios', 'Entrega', 'Pagamentos', 'Divulgação'],
+  relatorios: ['Visão geral', 'Recebimentos', 'Vendas por produto', 'Inteligência do Cardápio', 'Desempenho da equipe'],
   equipe: ['Pessoas', 'Funções/permissões'],
-  configuracoes: ['Aparência', 'Impressão', 'Mesas', 'Garçom', 'Taxa de Serviço', 'Implantação', 'Integrações'],
+  configuracoes: ['Mesas', 'Atendimento', 'Impressão', 'Fiscal', 'Integrações', 'Aparência', 'Implantação inicial'],
   conta: ['Meu Plano', 'Upgrade', 'Contrato/documentos'],
 } as const;
 
@@ -64,8 +64,8 @@ export const operatorNavigationIds = [
   'estoque_ingredientes', 'estoque_historico', 'estoque_inventario', 'estoque_fornecedores',
   'clientes',
   'online_perfil', 'online_marca', 'online_pedidos', 'online_bloqueios', 'online_entrega', 'online_pagamentos', 'online_divulgacao',
-  'relatorios_visao_geral', 'relatorios_financeiro', 'relatorios_produtos', 'relatorios_equipe',
+  'relatorios_visao_geral', 'relatorios_financeiro', 'relatorios_produtos', 'relatorios_cardapio', 'relatorios_equipe',
   'equipe_pessoas', 'equipe_funcoes_acessos',
-  'config_aparencia', 'config_impressao', 'config_mesas', 'config_garcom', 'config_taxa', 'config_implantacao', 'config_integracoes',
+  'config_aparencia', 'config_impressao', 'config_mesas', 'config_atendimento', 'config_implantacao', 'config_fiscal', 'config_integracoes',
   'assinatura_meu_plano', 'assinatura_planos_upgrade', 'assinatura_contrato_documentos',
 ] as const;

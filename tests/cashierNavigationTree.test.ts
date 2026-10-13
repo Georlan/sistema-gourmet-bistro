@@ -120,11 +120,11 @@ test('gestão expõe relatórios e equipe como destinos canônicos', () => {
   const equipe = parents().find((item) => item.id === 'permissoes_cargos');
 
   assert.deepEqual(relatorios?.children?.map((child) => child.label), [
-    'Visão Geral',
-    'Financeiro',
-    'Produtos',
+    'Visão geral',
+    'Recebimentos',
+    'Vendas por produto',
     'Inteligência do Cardápio',
-    'Equipe',
+    'Desempenho da equipe',
   ]);
   assert.deepEqual(equipe?.children?.map((child) => child.label), [
     'Pessoas',
@@ -158,32 +158,19 @@ test('gestão expõe relatórios e equipe como destinos canônicos', () => {
 
 test('relatórios espelha os mesmos destinos canônicos na vertical e horizontal', () => {
   const caixa = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
-  assert.match(caixa, /reportsSubnavItems = getCashierNavigationItem\('relatorios'\)\?\.children \?\? \[\]/);
-  assert.match(caixa, /\(activeTab === 'relatorios' \|\| activeTab === 'dashboard'\) && reportsSubnavItems\.map/);
-  assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
-  assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
+  assert.match(caixa, /<CashierSubNavigation/);
 });
 
 test('equipe espelha os mesmos destinos canônicos na vertical e horizontal', () => {
   const caixa = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
-  assert.match(caixa, /teamSubnavItems = getCashierNavigationItem\('permissoes_cargos'\)\?\.children \?\? \[\]/);
-  assert.match(caixa, /activeTab === 'permissoes_cargos' && teamSubnavItems\.map/);
-  assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
-  assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
+  assert.match(caixa, /<CashierSubNavigation/);
 });
 
 test('configurações expõe os mesmos destinos canônicos para navegação vertical e horizontal', () => {
   const settings = parents().find((item) => item.id === 'impressao_salao');
 
   assert.deepEqual(settings?.children?.map((child) => child.label), [
-    'Aparência',
-    'Impressão',
-    'Mesas',
-    'App do Garçom',
-    'Taxa de Serviço',
-    'Implantação inicial',
-    'Fiscal',
-    'Integrações',
+    'Mesas', 'Atendimento', 'Impressão', 'Fiscal', 'Integrações', 'Aparência', 'Implantação inicial',
   ]);
   assert.deepEqual(getCashierNavigationTarget('config_aparencia'), { tab: 'impressao_salao', subTab: 'aparencia' });
   assert.deepEqual(getCashierNavigationTarget('config_impressao'), { tab: 'impressao_salao', subTab: 'impressao' });
@@ -194,10 +181,7 @@ test('configurações expõe os mesmos destinos canônicos para navegação vert
   assert.deepEqual(getCashierNavigationTarget('config_integracoes'), { tab: 'impressao_salao', subTab: 'integracoes' });
 
   const caixa = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
-  assert.match(caixa, /settingsSubnavItems = getCashierNavigationItem\('impressao_salao'\)\?\.children \?\? \[\]/);
-  assert.match(caixa, /activeTab === 'impressao_salao' && settingsSubnavItems\.filter/);
-  assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
-  assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
+  assert.match(caixa, /<CashierSubNavigation/);
 });
 
 test('conta e assinatura espelha os mesmos destinos canônicos na vertical e horizontal', () => {
@@ -218,10 +202,7 @@ test('conta e assinatura espelha os mesmos destinos canônicos na vertical e hor
   });
 
   const caixa = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
-  assert.match(caixa, /subscriptionSubnavItems = getCashierNavigationItem\('assinatura_pix'\)\?\.children \?\? \[\]/);
-  assert.match(caixa, /activeTab === 'assinatura_pix' && subscriptionSubnavItems\.map/);
-  assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
-  assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
+  assert.match(caixa, /<CashierSubNavigation/);
 });
 
 test('navigation tree owns default tab and subtab destinations', () => {
@@ -232,7 +213,7 @@ test('navigation tree owns default tab and subtab destinations', () => {
     tab: 'cardapio_digital', subTab: 'cardapio_perfil',
   });
   assert.deepEqual(getCashierNavigationTarget('impressao_salao'), {
-    tab: 'impressao_salao', subTab: 'aparencia',
+    tab: 'impressao_salao', subTab: 'mesas',
   });
   assert.deepEqual(getCashierNavigationTarget('assinatura_pix'), { tab: 'assinatura_pix', subTab: 'meu_plano' });
   assert.equal(getCashierNavigationTarget('nao-existe'), undefined);
@@ -365,16 +346,14 @@ test('operation horizontal tabs mirror Navigation Tree v2 children', () => {
   const caixa = readFileSync(
     new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8',
   );
-  assert.match(caixa, /operationSubnavItems = getCashierNavigationItem\('operacao'\)\?\.children \?\? \[\]/);
-  assert.match(caixa, /operationSubnavItems\.map/);
+  assert.match(caixa, /<CashierSubNavigation/);
 });
 
 test('CaixaPanel delegates operation subnav clicks and active state to the shared navigation controller', () => {
   const caixa = readFileSync(
     new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8',
   );
-  assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
-  assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
+  assert.match(caixa, /onNavigate=\{handleSidebarNavigation\}/);
 });
 
 
@@ -393,10 +372,8 @@ test('online menu mirrors canonical destinations across responsive section navig
   const caixa = readFileSync(
     new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8',
   );
-  assert.match(caixa, /onlineMenuSubnavItems = getCashierNavigationItem\('cardapio_digital'\)\?\.children \?\? \[\]/);
+  assert.match(caixa, /<CashierSubNavigation/);
   assert.match(caixa, /activeTab === 'cardapio_digital'/);
-  assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
-  assert.match(caixa, /className=\{clsx\('cashier-subnav__button', isSidebarTabActive\(sub\.id\) && 'is-active'\)\}/);
   assert.doesNotMatch(caixa, /cashier-subnav__mobile-select/);
   assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
 });
@@ -422,11 +399,11 @@ test('restrições de plano vivem na árvore canônica, não em listas paralelas
     undefined,
   );
   assert.equal(
-    settings?.children?.find((child) => child.id === 'config_garcom')?.requiredFeature,
-    'waiter_app',
+    settings?.children?.find((child) => child.id === 'config_atendimento')?.requiredFeature,
+    undefined,
   );
   assert.equal(
-    settings?.children?.find((child) => child.id === 'config_garcom')?.plans,
+    settings?.children?.find((child) => child.id === 'config_atendimento')?.plans,
     undefined,
   );
 
@@ -461,13 +438,7 @@ test('implantação expõe somente cadastros e configurações práticas do prim
 
   const settings = setupItems.find((item) => item.id === 'impressao_salao');
   assert.deepEqual(settings?.children?.map((child) => child.id), [
-    'config_aparencia',
-    'config_impressao',
-    'config_mesas',
-    'config_garcom',
-    'config_taxa',
-    'config_fiscal',
-    'config_integracoes',
+    'config_mesas', 'config_atendimento', 'config_impressao', 'config_fiscal', 'config_integracoes', 'config_aparencia',
   ]);
 
   assert.equal(isCashierSetupTargetAllowed('permissoes_cargos', 'pessoas'), true);
@@ -507,16 +478,10 @@ test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redu
     .flatMap((group) => group.items)
     .find((item) => item.id === 'impressao_salao');
   assert.deepEqual(pocketSettings?.children?.map((child) => child.id), [
-    'config_aparencia',
-    'config_mesas',
-    'config_garcom',
-    'config_taxa',
-    'config_implantacao',
-    'config_fiscal',
-    'config_integracoes',
+    'config_mesas', 'config_atendimento', 'config_fiscal', 'config_integracoes', 'config_aparencia', 'config_implantacao',
   ]);
   assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_impressao'), false);
-  assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_garcom'), true);
+  assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_atendimento'), true);
 
   const pocketCardapio = pocketGroups
     .flatMap((group) => group.items)
@@ -564,7 +529,7 @@ test('explicit entitlement overrides can grant or revoke plan navigation capabil
   });
   const pocketSettings = pocketWithAddons.flatMap((group) => group.items).find((item) => item.id === 'impressao_salao');
   assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_impressao'), true);
-  assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_garcom'), true);
+  assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_atendimento'), true);
   assert.equal(
     pocketWithAddons.flatMap((group) => group.items).find((item) => item.id === 'operacao')
       ?.children?.find((child) => child.id === 'vendas_cozinha')?.target.subTab,
@@ -581,7 +546,7 @@ test('explicit entitlement overrides can grant or revoke plan navigation capabil
   const premiumItems = premiumRevoked.flatMap((group) => group.items);
   const premiumSettings = premiumItems.find((item) => item.id === 'impressao_salao');
   assert.equal(premiumSettings?.children?.some((child) => child.id === 'config_impressao'), false);
-  assert.equal(premiumSettings?.children?.some((child) => child.id === 'config_garcom'), false);
+  assert.equal(premiumSettings?.children?.some((child) => child.id === 'config_atendimento'), true);
   assert.equal(premiumItems.some((item) => item.id === 'estoque'), false);
   assert.equal(premiumItems.some((item) => item.id === 'relatorios'), false);
 });

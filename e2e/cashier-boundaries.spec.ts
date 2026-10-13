@@ -129,12 +129,13 @@ test('taxa compartilhada preserva o percentual entre telas e não altera permiss
     await route.fulfill({ status: 200, json: {} });
   });
   await navigate(page, 'Configurações');
-  await page.getByRole('button', { name: 'Taxa de Serviço', exact: true }).click();
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Atendimento', exact: true }).click();
   await page.getByRole('spinbutton').fill('12');
   await expect.poll(() => updates.length).toBe(1);
   expect(updates).toEqual([{ taxa_servico_padrao: 12 }]);
   await navigate(page, 'Vendas');
   await navigate(page, 'Configurações');
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Atendimento', exact: true }).click();
   await expect(page.getByRole('spinbutton')).toHaveValue('12');
   await test.info().attach('shared-service-tax', { body: await page.screenshot(), contentType: 'image/png' });
   expect(updates).toHaveLength(1);

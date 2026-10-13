@@ -32,6 +32,7 @@ export type CashierNavigationChild = {
   target: CashierNavigationTarget;
   action?: CashierNavigationAction;
   badge?: 'orders';
+  searchAliases?: readonly string[];
   plans?: readonly SubscriptionPlanId[];
   requiredFeature?: SubscriptionFeatureId;
 };
@@ -120,10 +121,10 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         target: { tab: 'cardapio_digital', subTab: 'cardapio_perfil' },
         capability: 'online-menu',
         children: [
-          { id: 'online_perfil', label: 'Perfil', target: { tab: 'cardapio_digital', subTab: 'cardapio_perfil' } },
+          { id: 'online_perfil', label: 'Dados da loja', target: { tab: 'cardapio_digital', subTab: 'cardapio_perfil' } },
           { id: 'online_marca', label: 'Marca', target: { tab: 'cardapio_digital', subTab: 'cardapio_marca' } },
-          { id: 'online_pedidos', label: 'Pedidos online', target: { tab: 'cardapio_digital', subTab: 'cardapio_pedidos' } },
-          { id: 'online_bloqueios', label: 'Clientes bloqueados', target: { tab: 'cardapio_digital', subTab: 'cardapio_bloqueios' } },
+          { id: 'online_pedidos', label: 'Horários e pedidos', target: { tab: 'cardapio_digital', subTab: 'cardapio_pedidos' } },
+          { id: 'online_bloqueios', label: 'Bloqueios', target: { tab: 'cardapio_digital', subTab: 'cardapio_bloqueios' } },
           { id: 'online_entrega', label: 'Entrega', target: { tab: 'cardapio_digital', subTab: 'cardapio_entrega' } },
           { id: 'online_pagamentos', label: 'Pagamentos', target: { tab: 'cardapio_digital', subTab: 'cardapio_pagamentos' } },
           { id: 'online_divulgacao', label: 'Divulgação', target: { tab: 'cardapio_digital', subTab: 'cardapio_qr_links' } },
@@ -165,11 +166,11 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         icon: TrendingUp,
         target: { tab: 'relatorios', subTab: 'visao_geral' },
         children: [
-          { id: 'relatorios_visao_geral', label: 'Visão Geral', target: { tab: 'relatorios', subTab: 'visao_geral' } },
-          { id: 'relatorios_financeiro', label: 'Financeiro', target: { tab: 'relatorios', subTab: 'financeiro' } },
-          { id: 'relatorios_produtos', label: 'Produtos', target: { tab: 'relatorios', subTab: 'produtos' } },
+          { id: 'relatorios_visao_geral', label: 'Visão geral', target: { tab: 'relatorios', subTab: 'visao_geral' } },
+          { id: 'relatorios_financeiro', label: 'Recebimentos', target: { tab: 'relatorios', subTab: 'financeiro' } },
+          { id: 'relatorios_produtos', label: 'Vendas por produto', target: { tab: 'relatorios', subTab: 'produtos' } },
           { id: 'relatorios_cardapio', label: 'Inteligência do Cardápio', target: { tab: 'relatorios', subTab: 'gestao_cardapio' } },
-          { id: 'relatorios_equipe', label: 'Equipe', target: { tab: 'relatorios', subTab: 'equipe' } },
+          { id: 'relatorios_equipe', label: 'Desempenho da equipe', target: { tab: 'relatorios', subTab: 'equipe' } },
         ],
       },
     ],
@@ -191,16 +192,15 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         id: 'impressao_salao',
         label: 'Configurações',
         icon: SlidersHorizontal,
-        target: { tab: 'impressao_salao', subTab: 'aparencia' },
+        target: { tab: 'impressao_salao', subTab: 'mesas' },
         children: [
-          { id: 'config_aparencia', label: 'Aparência', target: { tab: 'impressao_salao', subTab: 'aparencia' } },
-          { id: 'config_impressao', label: 'Impressão', requiredFeature: 'printing', target: { tab: 'impressao_salao', subTab: 'impressao' } },
           { id: 'config_mesas', label: 'Mesas', target: { tab: 'impressao_salao', subTab: 'mesas' } },
-          { id: 'config_garcom', label: 'App do Garçom', requiredFeature: 'waiter_app', target: { tab: 'impressao_salao', subTab: 'garcom' } },
-          { id: 'config_taxa', label: 'Taxa de Serviço', target: { tab: 'impressao_salao', subTab: 'taxa' } },
-          { id: 'config_implantacao', label: 'Implantação inicial', target: { tab: 'impressao_salao', subTab: 'implantacao' } },
+          { id: 'config_atendimento', label: 'Atendimento', searchAliases: ['garcom', 'app garcom', 'atendente', 'permissoes garcom'], target: { tab: 'impressao_salao', subTab: 'atendimento' } },
+          { id: 'config_impressao', label: 'Impressão', requiredFeature: 'printing', target: { tab: 'impressao_salao', subTab: 'impressao' } },
           { id: 'config_fiscal', label: 'Fiscal', target: { tab: 'impressao_salao', subTab: 'fiscal' } },
           { id: 'config_integracoes', label: 'Integrações', target: { tab: 'impressao_salao', subTab: 'integracoes' } },
+          { id: 'config_aparencia', label: 'Aparência', target: { tab: 'impressao_salao', subTab: 'aparencia' } },
+          { id: 'config_implantacao', label: 'Implantação inicial', target: { tab: 'impressao_salao', subTab: 'implantacao' } },
         ],
       },
       {
@@ -243,6 +243,7 @@ export function getCashierSidebarGroupsForPlan(
           const children = item.children
             .filter((child) => isNavigationEntryAvailable(child.plans, planId, child.requiredFeature, entitlements))
             .map((child) => {
+              if (child.id === 'config_atendimento' && !operationalEntitlementEnabled(entitlements, 'waiter_app')) return { ...child, searchAliases: [] };
               if (child.id === 'cardapio_preparo' && !operationalEntitlementEnabled(entitlements, 'printing')) {
                 return { ...child, label: 'Preparo' };
               }
@@ -280,8 +281,7 @@ const SETUP_ALLOWED_CHILD_IDS = new Set([
   'config_aparencia',
   'config_impressao',
   'config_mesas',
-  'config_garcom',
-  'config_taxa',
+  'config_atendimento',
   'config_integracoes',
   'config_fiscal',
 ]);
@@ -315,7 +315,7 @@ export function isCashierSetupTargetAllowed(tab: CashierTab, subTab: string): bo
     return subTab !== 'cardapio_bloqueios';
   }
   if (tab === 'impressao_salao') {
-    return ['aparencia', 'impressao', 'mesas', 'garcom', 'taxa', 'integracoes', 'fiscal'].includes(subTab);
+    return ['aparencia', 'impressao', 'mesas', 'garcom', 'taxa', 'atendimento', 'integracoes', 'fiscal'].includes(subTab);
   }
   return false;
 }
@@ -440,6 +440,7 @@ const VALID_TABS = new Set<CashierTab>(CASHIER_PARENT_ITEMS.map((item) => item.t
 
 const CHILD_DETAIL_SUBTABS: Readonly<Record<string, readonly string[]>> = {
   vendas_cozinha: ['kds', 'preparo'],
+  config_atendimento: ['atendimento', 'garcom', 'taxa'],
   relatorios_visao_geral: ['visao_geral', 'metas', 'vendas', 'indicadores', 'relatorio_geral', 'consolidado_vendas'],
   relatorios_financeiro: ['financeiro', 'dre', 'demonstrativo_dre', 'fluxo_caixa'],
   relatorios_produtos: ['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'],
@@ -566,9 +567,15 @@ export function getCashierNavigationParentId(id: string): string | undefined {
 }
 
 export function getCashierNavigationTarget(id: string): CashierNavigationTarget | undefined {
+  if (id === 'config_garcom' || id === 'config_taxa') return { tab: 'impressao_salao', subTab: id === 'config_garcom' ? 'garcom' : 'taxa' };
   return getCashierNavigationItem(id)?.target ?? getCashierNavigationChild(id)?.target;
 }
 
 export function getCashierNavigationAction(id: string): CashierNavigationAction | undefined {
   return getCashierNavigationChild(id)?.action;
+}
+/** Horizontal navigation shares labels, order, capabilities and owners with the sidebar. */
+export function getCashierHorizontalItems(tab: string, planId: SubscriptionPlanId, entitlements?: SubscriptionEntitlements, setupMode = false): readonly CashierNavigationChild[] {
+  const groups = setupMode ? getCashierSetupSidebarGroupsForPlan(planId, entitlements) : getCashierSidebarGroupsForPlan(planId, entitlements);
+  return groups.flatMap(group => group.items).find(item => item.id === (tab === 'dashboard' ? 'relatorios' : tab))?.children ?? [];
 }
