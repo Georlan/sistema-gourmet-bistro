@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
+import { previewTableRange } from '../../../domain/tableRange';
 import { Table } from '../../../types';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 
@@ -9,6 +10,7 @@ type BoundaryProps = {
   salonTableCards: ReturnType<typeof projectCashierSalonTables>;
   salonTables: Table[];
   onCreateMesa: (id: number, capacidade: number, nome?: string) => Promise<void>;
+  onCreateMesas?: CaixaPanelProps['onCreateMesas'];
   showToast: CashierNotice;
 };
 
@@ -19,9 +21,15 @@ export function useCashierTableSettings({
   salonTableCards,
   salonTables,
   onCreateMesa,
+  onCreateMesas,
   showToast,
 }: BoundaryProps) {
   const [showAddMesaModal, setShowAddMesaModal] = useState(false);
+
+  const [mesaCreateMode, setMesaCreateMode] = useState<'single' | 'batch'>('single');
+  const [mesaRangeFirst, setMesaRangeFirst] = useState('');
+  const [mesaRangeLast, setMesaRangeLast] = useState('');
+  const createInFlight = useRef(false);
 
   const [newMesaId, setNewMesaId] = useState('');
 
@@ -45,9 +53,33 @@ export function useCashierTableSettings({
     ? salonTableCards.find((card) => card.table.id === editingTable.id)
     : undefined;
 
+  const rangePreview = previewTableRange(mesaRangeFirst, mesaRangeLast, newMesaCap, salonTables.map(table => table.id));
+  const suggestedFirst = String(Math.max(0, ...salonTables.map(table => table.id)) + 1);
+
   const handleAddMesaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (tableMutation) return;
+    if (tableMutation || createInFlight.current) return;
+    if (mesaCreateMode === 'batch') {
+      if (!onCreateMesas) { setTableFormError('O cadastro em lote não está disponível.'); return; }
+      if (rangePreview.error || !rangePreview.ids.length) { setTableFormError(rangePreview.error || 'Todas as mesas desse intervalo já existem.'); return; }
+      createInFlight.current = true;
+      setTableMutation('create');
+      setTableFormError('');
+      try {
+        const result = await onCreateMesas(Number(mesaRangeFirst), Number(mesaRangeLast), Number(newMesaCap));
+        setShowAddMesaModal(false);
+        setMesaCreateMode('single');
+        setMesaRangeFirst('');
+        setMesaRangeLast('');
+        showToast(result.created_ids.length ? `${result.created_ids.length} mesas adicionadas. As existentes foram preservadas.` : 'As mesas desse intervalo já estavam cadastradas. Nenhuma mesa foi alterada.', 'success');
+      } catch (error: any) {
+        setTableFormError(error?.message || 'Não foi possível adicionar as mesas. Tente novamente.');
+      } finally {
+        createInFlight.current = false;
+        setTableMutation(null);
+      }
+      return;
+    }
     const mesaId = Number.parseInt(newMesaId, 10);
     const capacidade = Number.parseInt(newMesaCap, 10);
     if (!Number.isFinite(mesaId) || mesaId <= 0) {
@@ -115,6 +147,7 @@ export function useCashierTableSettings({
     }
   };
   return {
+    mesaCreateMode, setMesaCreateMode, mesaRangeFirst, setMesaRangeFirst, mesaRangeLast, setMesaRangeLast, rangePreview, suggestedFirst, batchAvailable: Boolean(onCreateMesas),
     handleDeleteMesa,
     handleUpdateMesaSubmit,
     showAddMesaModal,

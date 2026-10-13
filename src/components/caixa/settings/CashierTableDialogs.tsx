@@ -3,6 +3,7 @@ import { AlertTriangle, Check, Plus, RefreshCw, Trash2, Users, X } from 'lucide-
 import type { useCashierTableSettings } from './useCashierTableSettings';
 type BoundaryProps = Pick<
   ReturnType<typeof useCashierTableSettings>,
+  | 'mesaCreateMode' | 'setMesaCreateMode' | 'mesaRangeFirst' | 'setMesaRangeFirst' | 'mesaRangeLast' | 'setMesaRangeLast' | 'rangePreview' | 'suggestedFirst' | 'batchAvailable'
   | 'handleDeleteMesa'
   | 'handleUpdateMesaSubmit'
   | 'showAddMesaModal'
@@ -30,6 +31,7 @@ type BoundaryProps = Pick<
 
 /** Table dialogs controlled by the persistent table settings owner. */
 export function CashierTableDialogs({
+  mesaCreateMode, setMesaCreateMode, mesaRangeFirst, setMesaRangeFirst, mesaRangeLast, setMesaRangeLast, rangePreview, suggestedFirst, batchAvailable,
   handleDeleteMesa,
   handleUpdateMesaSubmit,
   showAddMesaModal,
@@ -65,8 +67,9 @@ export function CashierTableDialogs({
           className={"fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"}
         >
           <form
+            role="dialog" aria-modal="true" aria-labelledby="table-create-title"
             onSubmit={handleAddMesaSubmit}
-            className={"w-full max-w-md overflow-hidden rounded-[24px] border border-koma-border bg-koma-card shadow-2xl animate-scale-in"}
+            className={"w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-[24px] border border-koma-border bg-koma-card shadow-2xl animate-scale-in"}
           >
             <div
               className={"flex items-start justify-between border-b border-koma-border px-5 py-4 sm:px-6"}
@@ -83,11 +86,11 @@ export function CashierTableDialogs({
                   >
                     Estrutura do salão
                   </span>
-                  <h3 className={"mt-0.5 text-lg font-bold text-koma-foreground"}>
-                    Adicionar mesa
+                  <h3 id="table-create-title" className={"mt-0.5 text-lg font-bold text-koma-foreground"}>
+                    {mesaCreateMode === 'batch' ? 'Adicionar várias mesas' : 'Adicionar mesa'}
                   </h3>
                   <p className={"mt-0.5 text-[10px] text-koma-muted"}>
-                    Ela ficará disponível no caixa e no app do garçom.
+                    As mesas ficam disponíveis no caixa e no app do garçom.
                   </p>
                 </div>
               </div>
@@ -103,6 +106,36 @@ export function CashierTableDialogs({
             </div>
 
             <div className={"space-y-4 px-5 py-5 sm:px-6"}>
+              {batchAvailable && <div className="flex gap-2" aria-label="Forma de cadastro">
+                {(['single', 'batch'] as const).map(mode => <button key={mode} type="button" aria-pressed={mesaCreateMode === mode} disabled={tableMutation !== null}
+                  className="min-h-11 flex-1 rounded-xl border border-koma-border px-3 py-2 text-xs font-bold text-koma-foreground aria-pressed:bg-koma-raised"
+                  onClick={() => { setMesaCreateMode(mode); setTableFormError(''); if (mode === 'batch' && !mesaRangeFirst) setMesaRangeFirst(suggestedFirst); }}>
+                  {mode === 'single' ? 'Uma mesa' : 'Várias mesas'}
+                </button>)}
+              </div>}
+              {mesaCreateMode === 'batch' && <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block space-y-1 text-xs text-koma-secondary">Primeiro número
+                    <input type="number" min="1" max="300" step="1" required disabled={tableMutation !== null} value={mesaRangeFirst} onChange={e=>{setMesaRangeFirst(e.target.value);setTableFormError('');}}
+                      className="w-full rounded-xl border border-koma-border bg-koma-input px-3 py-3 text-sm text-koma-foreground" />
+                  </label>
+                  <label className="block space-y-1 text-xs text-koma-secondary">Último número
+                    <input type="number" min="1" max="300" step="1" required disabled={tableMutation !== null} value={mesaRangeLast} onChange={e=>{setMesaRangeLast(e.target.value);setTableFormError('');}}
+                      className="w-full rounded-xl border border-koma-border bg-koma-input px-3 py-3 text-sm text-koma-foreground" />
+                  </label>
+                </div>
+                <label className="block space-y-1 text-xs text-koma-secondary">Lugares por mesa
+                  <input type="number" min="1" max="50" step="1" required disabled={tableMutation !== null} value={newMesaCap} onChange={e=>{setNewMesaCap(e.target.value);setTableFormError('');}}
+                    className="w-full rounded-xl border border-koma-border bg-koma-input px-3 py-3 text-sm text-koma-foreground" />
+                </label>
+                {mesaRangeLast && <div role="status" className="rounded-xl border border-koma-border bg-koma-panel p-3 text-xs text-koma-secondary">
+                  {rangePreview.error || (rangePreview.ids.length ? `${rangePreview.ids.length} novas mesas serão criadas.` : 'Todas as mesas desse intervalo já existem.')}
+                  {!rangePreview.error && rangePreview.preserved > 0 && <p className="mt-1">{rangePreview.preserved} já cadastradas no intervalo serão mantidas.</p>}
+                </div>}
+                <p className="text-xs text-koma-muted">Mesas existentes mantêm seus nomes e lugares. Limite de número: 300.</p>
+              </div>}
+              {mesaCreateMode === 'single' && <>
+
               <div className={"grid grid-cols-2 gap-3"}>
                 <label className="space-y-1.5">
                   <span
@@ -164,6 +197,7 @@ export function CashierTableDialogs({
                 />
               </label>
 
+              </>}
               {tableFormError && (
                 <div
                   role="alert"
@@ -185,7 +219,7 @@ export function CashierTableDialogs({
                 </button>
                 <button
                   type="submit"
-                  disabled={tableMutation !== null}
+                  disabled={tableMutation !== null || (mesaCreateMode === 'batch' && (Boolean(rangePreview.error) || rangePreview.ids.length === 0))}
                   className={"flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white transition-colors hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"}
                 >
                   {tableMutation === 'create' ? (
@@ -193,7 +227,7 @@ export function CashierTableDialogs({
                   ) : (
                     <Check size={14} />
                   )}
-                  {tableMutation === 'create' ? 'Adicionando…' : 'Adicionar mesa'}
+                  {tableMutation === 'create' ? 'Adicionando…' : (mesaCreateMode === 'batch' ? `Criar ${rangePreview.ids.length} mesas` : 'Adicionar mesa')}
                 </button>
               </div>
             </div>
