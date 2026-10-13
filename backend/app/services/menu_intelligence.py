@@ -5,10 +5,12 @@ import datetime
 from decimal import Decimal
 from sqlalchemy import case, func, and_
 from sqlalchemy.orm import Session, joinedload
-from ..models import Comanda, Lancamento, Item, Produto, ProdutoInsumo, Categoria
+from ..models import Comanda, Lancamento, Item, Produto, ProdutoInsumo, Categoria, ItemModificador
 from ..timezone_utils import to_operational_local_time
 from .financial_read import FinancialPeriod, resolve_financial_period
 from .financeiro import money
+from ..domain.menu_economics import enrich_menu_analysis, METHOD_VERSION
+from ..timezone_utils import DEFAULT_TIMEZONE_NAME
 
 
 def order_entry_hour_rows(db: Session, tenant: int, period: FinancialPeriod):
@@ -57,13 +59,35 @@ def menu_intelligence(db: Session, tenant: int, start: str | None, end: str | No
     previous_start = previous_end - datetime.timedelta(days=days - 1)
     previous = resolve_financial_period(db, tenant, previous_start.isoformat(), previous_end.isoformat())
     current = Lancamento.timestamp >= period.start_utc
+    # EXISTS prevents modifier selections from multiplying product units/value.
+    # Selected options have no ingredient recipe yet: exclude their units from
+    # the new base-cost estimate, while preserving all legacy demand fields.
+    has_modifiers = db.query(ItemModificador.id).filter(
+        ItemModificador.restaurante_id == tenant, ItemModificador.item_id == Item.id,
+    ).exists()
+    covered_current = and_(current, ~has_modifiers)
+    covered_previous = and_(~current, ~has_modifiers)
     aggregates = scope_entered_items(db.query(
         Item.produto_id,
         func.sum(case((current, 1), else_=0)),
         func.sum(case((current, Item.preco_unit), else_=0)),
         func.sum(case((~current, 1), else_=0)),
+        func.sum(case((~current, Item.preco_unit), else_=0)),
+        func.sum(case((covered_current, 1), else_=0)),
+        func.sum(case((covered_previous, 1), else_=0)),
+        func.sum(case((covered_current, Item.preco_unit), else_=0)),
+        func.sum(case((covered_previous, Item.preco_unit), else_=0)),
     ), tenant, previous.start_utc, period.end_utc).group_by(Item.produto_id).all()
-    output = {str(pid): (int(qty or 0), money(value or 0), int(old or 0)) for pid, qty, value, old in aggregates}
+    output = {str(pid): (int(qty or 0), money(value or 0), int(old or 0), money(old_value or 0),
+                        int(safe_qty or 0), int(safe_old or 0), money(safe_value or 0), money(safe_old_value or 0))
+              for pid, qty, value, old, old_value, safe_qty, safe_old, safe_value, safe_old_value in aggregates}
+    # One additional batch query gives actual distinct orders per category;
+    # summing per-product order counts would duplicate mixed-product orders.
+    sample_rows = scope_entered_items(db.query(Produto.categoria_id, func.count(func.distinct(Lancamento.id)))
+        .select_from(Item).join(Produto, and_(Produto.id == Item.produto_id, Produto.restaurante_id == tenant)),
+        tenant, period.start_utc, period.end_utc,
+    ).group_by(Produto.categoria_id).all()
+    samples = {str(cid): int(count) for cid, count in sample_rows}
     products = db.query(Produto).filter(Produto.restaurante_id == tenant).options(
         joinedload(Produto.ficha_tecnica).joinedload(ProdutoInsumo.insumo)
     ).all()
@@ -71,7 +95,9 @@ def menu_intelligence(db: Session, tenant: int, start: str | None, end: str | No
     total = sum(row[0] for row in output.values())
     rows = []
     for product in products:
-        qty, value, old = output.get(str(product.id), (0, Decimal("0.00"), 0))
+        qty, value, old, old_value, safe_qty, safe_old, safe_value, safe_old_value = output.get(
+            str(product.id), (0, Decimal(0), 0, Decimal(0), 0, 0, Decimal(0), Decimal(0)),
+        )
         price = money(product.preco)
         avg = money(value / qty) if qty else None
         cost = complete_recipe_unit_cost(product)
@@ -87,7 +113,12 @@ def menu_intelligence(db: Session, tenant: int, start: str | None, end: str | No
             signals.append({"tipo": "queda", "titulo": "Investigar queda de saída", "motivo": f"{qty} unidades agora e {old} no período anterior de mesma duração. Confira disponibilidade e dias de funcionamento."})
         rows.append({
             "produto_id": str(product.id), "nome": product.nome, "categoria": categories.get(product.categoria_id, "Sem categoria"),
+            "categoria_id": str(product.categoria_id),
             "ativo": bool(product.ativo), "unidades": qty, "unidades_anteriores": old,
+            "valor_consumo_anterior": float(old_value),
+            "unidades_com_modificadores": qty - safe_qty,
+            "unidades_sem_modificadores": safe_qty, "unidades_anteriores_sem_modificadores": safe_old,
+            "valor_sem_modificadores": float(safe_value), "valor_anterior_sem_modificadores": float(safe_old_value),
             "variacao_pct": round((qty - old) / old * 100, 1) if old else None,
             "participacao_pct": round(qty / total * 100, 1) if total else 0,
             "valor_consumo": float(value), "preco_medio": float(avg) if avg is not None else None,
@@ -97,6 +128,9 @@ def menu_intelligence(db: Session, tenant: int, start: str | None, end: str | No
             "sugestoes": signals,
         })
     rows.sort(key=lambda row: (-row["unidades"], row["nome"].casefold()))
-    return {"inicio": period.start_day.isoformat(), "fim": period.end_day.isoformat(),
+    analysis = enrich_menu_analysis(rows, samples, days)
+    return {"schema_version": 2, "metodo_version": METHOD_VERSION,
+        "timezone": DEFAULT_TIMEZONE_NAME, "base_custo": "ingredientes_cadastrados_atuais_sem_modificadores",
+        **analysis, "inicio": period.start_day.isoformat(), "fim": period.end_day.isoformat(),
         "inicio_anterior": previous_start.isoformat(), "fim_anterior": previous_end.isoformat(),
         "fonte": "itens_nao_cancelados_por_entrada_pedido", "unidades": total, "produtos": rows}

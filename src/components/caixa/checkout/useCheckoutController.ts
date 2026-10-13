@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { isCashierTableOrder as isTableCheckoutOrder } from '../../../domain/cashierOrderProjection';
 import type { Order, OrderItem } from '../../../types';
+import { splitPlanStatus, toCents, type SplitPaymentPart } from './splitPaymentPlan';
 import { operationalFetch } from '../../../utils/operationalRequest';
 import { createSecureIdempotencyKey } from '../../../utils/secureIdempotency';
 import type { CaixaPanelProps, CashierNotice, LoyaltyCustomer } from '../cashierContracts';
@@ -233,6 +234,61 @@ export function useCheckoutController({
   >('');
 
   const [paymentValor, setPaymentValor] = useState<number | ''>('');
+  const [mixedPayment, setMixedPayment] = useState(false);
+  const [splitParts, setSplitParts] = useState<SplitPaymentPart[]>([]);
+  const splitIdRef = React.useRef(0);
+  const [splitPartLocked, setSplitPartLocked] = useState(false);
+
+  const createSplitPart = (): SplitPaymentPart => ({
+    id: ++splitIdRef.current,
+    metodo: '',
+    valor: '',
+  });
+
+  const beginSplitPlan = () => {
+    if (isProcessingPaymentRef.current || awaitingMixedPayment || paymentVerificationRequired) return;
+    setSplitParts([createSplitPart(), createSplitPart()]);
+    setPaymentMetodo('');
+    setPaymentValor('');
+  };
+  const clearSplitPlan = () => {
+    if (splitPartLocked || awaitingMixedPayment || isProcessingPaymentRef.current) return;
+    setSplitParts([]);
+    setPaymentMetodo('');
+    setPaymentValor('');
+  };
+  const addSplitPart = () => {
+    if (splitPartLocked || awaitingMixedPayment || isProcessingPaymentRef.current) return;
+    setSplitParts(current => [...current, createSplitPart()]);
+  };
+  const updateSplitPart = (id: number, patch: Partial<Pick<SplitPaymentPart, 'metodo' | 'valor'>>) => {
+    if (splitPartLocked || awaitingMixedPayment || isProcessingPaymentRef.current) return;
+    setSplitParts(current => current.map(part => part.id === id ? { ...part, ...patch } : part));
+  };
+  const removeSplitPart = (id: number) => {
+    if (splitPartLocked || awaitingMixedPayment || isProcessingPaymentRef.current) return;
+    setSplitParts(current => current.length > 2 ? current.filter(part => part.id !== id) : current);
+  };
+  // A successful partial payment must be reflected by the backend snapshot
+  // before another charge can be sent. Never manufacture paid balances locally.
+  const [awaitingMixedPayment, setAwaitingMixedPayment] = useState<{
+    orderId: string;
+    mesaId: number | null;
+    minimumPaid: number;
+  } | null>(null);
+  const [paymentVerificationRequired, setPaymentVerificationRequired] = useState(false);
+
+  const toggleMixedPayment = (enabled: boolean) => {
+    if (isProcessingPaymentRef.current || splitPartLocked || awaitingMixedPayment || paymentVerificationRequired) return;
+    setMixedPayment(enabled);
+    setSplitParts([]);
+    setSplitPartLocked(false);
+    setPaymentMetodo('');
+    setSelectedItemIds([]);
+    setSplitPeople('1');
+    setPaymentValor(enabled ? '' : selectedOrder ? getCheckoutBalance(selectedOrder) : '');
+    setErrorMsg('');
+  };
 
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
 
@@ -270,6 +326,44 @@ export function useCheckoutController({
     setSelectionConflictTarget(null);
   }, [orders, selectionConflictTarget]);
 
+  // The canonical refreshed order, not a local +amount, unlocks the next part.
+  useEffect(() => {
+    if (!awaitingMixedPayment || !showCheckoutModal) return;
+    const refreshedOrder = awaitingMixedPayment.mesaId
+      ? buildTableCheckoutOrder(
+          orders.filter((order) =>
+            Number(order.mesaId) === awaitingMixedPayment.mesaId && isTableCheckoutOrder(order)
+          )
+        )
+      : orders.find((order) => order.id === awaitingMixedPayment.orderId) || null;
+    if (
+      !refreshedOrder ||
+      Number(refreshedOrder.valorPago || 0) + 0.01 < awaitingMixedPayment.minimumPaid
+    ) return;
+    const authoritativeBalance = getCheckoutBalance(refreshedOrder);
+    setSelectedOrder(refreshedOrder);
+    // Advance exactly one planned tender after the canonical paid balance
+    // includes it. Never create a new Pagamento from an optimistic sum.
+    const nextParts = splitParts.length ? splitParts.slice(1) : [];
+    setSplitParts(nextParts);
+    setSplitPartLocked(false);
+    if (nextParts.length) {
+      setPaymentMetodo(nextParts[0].metodo);
+      setPaymentValor(nextParts[0].valor);
+      if (!splitPlanStatus(nextParts, authoritativeBalance).valid) {
+        setErrorMsg('O saldo da mesa mudou. Revise os valores da divisão antes de continuar.');
+      }
+    } else {
+      setPaymentMetodo('');
+      setPaymentValor(authoritativeBalance > 0.01 ? authoritativeBalance : '');
+    }
+    setAwaitingMixedPayment(null);
+    if (authoritativeBalance <= 0.01) {
+      setSelectedOrder(null);
+      setShowCheckoutModal(false);
+    }
+  }, [orders, awaitingMixedPayment, showCheckoutModal]);
+
   const refreshAfterItemSelectionConflict = async () => {
     const target = {
       orderId: selectedOrder?.id || '',
@@ -295,12 +389,18 @@ export function useCheckoutController({
 
   useEffect(() => {
     setIdempotencyKey('');
-    setPaymentMetodo('');
+    if (splitParts.length === 0) setPaymentMetodo('');
   }, [selectedOrder]);
 
   useEffect(() => {
+    if (!showCheckoutModal || !splitParts.length || awaitingMixedPayment) return;
+    setPaymentMetodo(splitParts[0].metodo);
+    setPaymentValor(splitParts[0].valor);
+  }, [splitParts, awaitingMixedPayment, showCheckoutModal, selectedOrder]);
+
+  useEffect(() => {
     if (showCheckoutModal && selectedOrder) {
-      if (!paymentValor || Number(paymentValor || 0) <= 0) {
+      if (!mixedPayment && (!paymentValor || Number(paymentValor || 0) <= 0)) {
         const balance = isTableCheckoutOrder(selectedOrder)
           ? selectedItemIds.length > 0
             ? getSelectedItemsTotal(selectedOrder, selectedItemIds)
@@ -311,14 +411,19 @@ export function useCheckoutController({
         }
       }
     } else if (!showCheckoutModal) {
+      setMixedPayment(false);
+      setSplitParts([]);
+      setSplitPartLocked(false);
+      setAwaitingMixedPayment(null);
+      setPaymentVerificationRequired(false);
       setPaymentValor('');
       setPaymentMetodo('');
     }
-  }, [showCheckoutModal, selectedOrder, selectedItemIds]);
+  }, [showCheckoutModal, selectedOrder, selectedItemIds, mixedPayment]);
 
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedOrder || isProcessingPaymentRef.current) return;
+    if (!selectedOrder || isProcessingPaymentRef.current || awaitingMixedPayment || paymentVerificationRequired) return;
     if (isTableCheckoutOrder(selectedOrder) && !ensureCashSettingsReady()) return;
     setErrorMsg('');
     if (!paymentMetodo) {
@@ -335,6 +440,19 @@ export function useCheckoutController({
 
     try {
       let valorPagamento = Number(paymentValor || 0);
+      const balanceBeforePayment = getCheckoutBalance(selectedOrder);
+      if (mixedPayment && splitParts.length && (
+        !splitPlanStatus(splitParts, balanceBeforePayment).valid ||
+        splitParts[0].metodo !== paymentMetodo ||
+        toCents(Number(splitParts[0].valor)) !== toCents(Number(valorPagamento))
+      )) {
+        throw new Error('Revise a divisão: informe a forma e o valor de cada parte até fechar o saldo da mesa.');
+      }
+      if (mixedPayment && (!Number.isFinite(valorPagamento) || valorPagamento <= 0 || valorPagamento > balanceBeforePayment)) {
+        throw new Error('Informe o valor desta parte, maior que zero e até o saldo restante.');
+      }
+      let confirmedAmount = 0;
+      let confirmedApproved = true;
       if (!Number.isFinite(valorPagamento) || valorPagamento <= 0) {
         const autoBalance = getCheckoutBalance(selectedOrder);
         if (autoBalance > 0) {
@@ -353,6 +471,7 @@ export function useCheckoutController({
       );
       const effectiveIdempotencyKey = idempotencyKey || createSecureIdempotencyKey('idem');
       if (!idempotencyKey) setIdempotencyKey(effectiveIdempotencyKey);
+      if (mixedPayment && splitParts.length) setSplitPartLocked(true);
 
       if (selectedItemIds.length > 0) {
         const totalSelecionado = getSelectedItemsTotal(selectedOrder, selectedItemIds);
@@ -392,6 +511,11 @@ export function useCheckoutController({
             throw new Error(await refreshAfterItemSelectionConflict());
           }
           throw new Error(errData.detail || 'Erro ao registrar pagamento da mesa');
+        }
+        if (mixedPayment) {
+          const payment = await res.json();
+          confirmedAmount = Number(payment.valor);
+          confirmedApproved = payment.status === 'aprovado';
         }
       } else if (selectedItemIds.length > 0) {
         const itemsByComanda: Record<string, { itemIds: string[]; subtotal: number }> = {};
@@ -485,7 +609,44 @@ export function useCheckoutController({
             const errData = await res.json();
             throw new Error(errData.detail || `Erro ao registrar pagamento na comanda ${cid}`);
           }
+          if (mixedPayment) {
+            const payment = await res.json();
+            confirmedAmount += Number(payment.valor);
+            confirmedApproved = confirmedApproved && payment.status === 'aprovado';
+          }
           remainingVal -= valToPay;
+        }
+      }
+
+      if (mixedPayment) {
+        // A 2xx response may still carry a non-approved/pending payment.
+        // Never close the checkout or enable a second part without certainty.
+        if (
+          !confirmedApproved ||
+          !Number.isFinite(confirmedAmount) ||
+          confirmedAmount <= 0 ||
+          Math.abs(confirmedAmount - valorPagamento) > 0.01
+        ) {
+          setPaymentVerificationRequired(true);
+          await onRefreshOrders();
+          throw new Error(
+            'Pagamento ainda não confirmado. Confira a situação no Caixa antes de tentar cobrar novamente.'
+          );
+        }
+        const remainingBalance = Math.round((balanceBeforePayment - confirmedAmount) * 100) / 100;
+        if (remainingBalance > 0.01) {
+          setAwaitingMixedPayment({
+            orderId: selectedOrder.id,
+            mesaId: isMesaPayment ? Number(selectedOrder.mesaId) : null,
+            minimumPaid: Number(selectedOrder.valorPago || 0) + confirmedAmount,
+          });
+          setPaymentValor('');
+          setPaymentMetodo('');
+          setSelectedItemIds([]);
+          setIdempotencyKey('');
+          showToast('Parte registrada. Sincronizando saldo com o Caixa antes da próxima forma.', 'success');
+          await Promise.all([onRefreshOrders(), fetchTurno()]);
+          return;
         }
       }
 
@@ -768,6 +929,17 @@ export function useCheckoutController({
     setPaymentMetodo: selectPaymentMetodo,
     paymentValor,
     setPaymentValor,
+    mixedPayment,
+    setMixedPayment: toggleMixedPayment,
+    splitParts,
+    splitPartLocked,
+    beginSplitPlan,
+    clearSplitPlan,
+    addSplitPart,
+    updateSplitPart,
+    removeSplitPart,
+    mixedPaymentAwaitingRefresh: Boolean(awaitingMixedPayment),
+    paymentVerificationRequired,
     selectedItemIds,
     setSelectedItemIds,
     paymentCPF,

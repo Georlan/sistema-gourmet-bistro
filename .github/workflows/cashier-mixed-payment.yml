@@ -1,0 +1,34 @@
+name: Cashier mixed payment browser
+on:
+  pull_request:
+    paths:
+      - 'src/components/caixa/checkout/**'
+      - 'e2e/cashier-mixed-payment.spec.ts'
+      - 'e2e/fixtures/operational.ts'
+      - '.github/workflows/cashier-mixed-payment.yml'
+permissions:
+  contents: read
+jobs:
+  split-payment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Pix and cash with canonical refresh, idempotent retry
+        env:
+          KOMA_E2E_PORT: '4299'
+        run: npm run test:e2e -- e2e/cashier-mixed-payment.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: cashier-mixed-payment-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

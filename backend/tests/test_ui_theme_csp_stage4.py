@@ -348,7 +348,7 @@ def test_smartpos_pending_state_opens_checkout_with_safe_recovery_instead_of_dea
     assert "Acompanhar pagamento" in smartpos
     assert "Concluir pagamento aprovado" in " ".join(checkout.split())
     assert "/reconciliar-liquidacao" in smartpos
-    assert "disabled={selectedCheckoutSmartPosState?.blocksPayment||isProcessingPayment}" in "".join(checkout.split())
+    assert "disabled={selectedCheckoutSmartPosState?.blocksPayment||isProcessingPayment||mixedPaymentAwaitingRefresh||paymentVerificationRequired||!planReady}" in "".join(checkout.split())
     assert "Revise a operação da maquininha antes de lançar outra baixa" in controller
 
 

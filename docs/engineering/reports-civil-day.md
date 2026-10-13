@@ -43,3 +43,57 @@ grupos são arquivados, não apagados). Seleção cujo ID não existe mais no ca
 "Opções sem cadastro" e é contada em `selecoes_sem_cadastro`. Participação é dentro do
 grupo; grupo sem seleções tem participação `null` (não calculável), não 0%. Opções com
 zero saída listadas são somente as ativas hoje nos grupos vinculados ao produto/categoria.
+
+## Inteligência do Cardápio — análise ampliada
+
+`gestao_cardapio` e `relatorios_cardapio` continuam sendo as identidades de
+navegação, agora com o rótulo Inteligência do Cardápio. Diagnóstico, Matriz,
+Oportunidades e Simulador compartilham a leitura já existente; a troca de aba
+não monta quatro consumidores ou polling. Produtos mantém seu contrato original.
+
+O GET de inteligência é aditivo (`schema_version=2`). Os campos legados
+permanecem; o resumo novo mostra valor dos itens, custos/contribuição estimados
+e cobertura por unidade. A estimativa nova usa somente unidades sem
+`ItemModificador` e com custo conhecido da ficha do produto. O preço do Item já
+contém adicionais: não somamos seu preço novamente e não presumimos custo zero
+das opções. Uma seleção gratuita também retira a unidade dessa cobertura.
+Custos são dos ingredientes cadastrados atuais, não de todas as despesas.
+Descontos de cupom/cashback na conta não são rateados nesses valores de itens. Os
+dois períodos são estimados com o mesmo custo atual; isso não é lucro histórico.
+Cobertura e valores anteriores ficam explícitos, sem percentual de ganho
+financeiro sobre amostras com custos diferentes/incompletos.
+
+A leitura passa de três para **quatro SELECTs fixos**: demanda dos dois períodos
+com EXISTS tenant-scoped de modificadores, amostra de pedidos distintos por
+categoria, catálogo/fichas e categorias. A consulta adicional impede somar
+contagens de pedidos por produto e duplicar pedidos com produtos diferentes.
+Usa os índices de entrada/seleções já versionados; não adiciona migração. SELECTs
+constantes não garantem desempenho em qualquer volume: avaliar EXPLAIN/latência
+antes de ampliar análises históricas ou implementar cesta de compras.
+
+A matriz compara por ID de categoria: itens com saída ou ativos hoje compõem N,
+inclusive sem custo e sem saída; pausados sem saída não entram. Popularidade
+alta >= 0,70/N, margem alta >= média ponderada pela quantidade coberta. Limiares
+são calculados antes do arredondamento. Custos desconhecidos não recebem classe,
+e não saem silenciosamente do denominador de popularidade. Categorias com
+cobertura parcial têm classificação provisória. Triagem requer três produtos,
+30 pedidos distintos na categoria e janela >= sete dias: é piso de engenharia,
+não probabilidade estatística. Não comprova sete dias de funcionamento ou oferta
+histórica. Zero saída não tem margem observada nem quadrante; contribuição
+não positiva não produz oportunidade automática de acompanhamento.
+
+Oportunidades são regras explicáveis de atenção e hipóteses para investigação.
+Não há taxas de inclusão, pares de cesta, elasticidade, causalidade ou previsão
+nesta entrega. Um quadrante cinza não remove produto, amarelo não significa
+rentabilidade negativa e nenhuma regra aplica preço ou campanha.
+
+`POST /relatorios/inteligencia-cardapio/simulacoes` calcula hipóteses monetárias
+com Decimal e sem leitura/escrita de produtos. Exige `relatorios:consultar` e
+`advanced_reports`. Entradas finitas, até duas casas e volumes inteiros têm
+limites explícitos. Mínimo para preservar = ceil((contribuição anterior + gasto
+da ação)/margem proposta); para superar = floor(...) + 1. Margem não positiva
+ou baseline sem contribuição positiva não recebe perda tolerável/equilíbrio.
+Despesas variáveis informadas por unidade se aplicam à referência e à proposta.
+Os três volumes são hipóteses editáveis, inicialmente iguais à referência.
+Editar campos, trocar período/produto ou sair da aba descarta/aborta o resultado
+obsoleto. A simulação nunca altera preço/custo no catálogo.

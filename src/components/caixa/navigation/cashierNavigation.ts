@@ -168,7 +168,7 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
           { id: 'relatorios_visao_geral', label: 'Visão Geral', target: { tab: 'relatorios', subTab: 'visao_geral' } },
           { id: 'relatorios_financeiro', label: 'Financeiro', target: { tab: 'relatorios', subTab: 'financeiro' } },
           { id: 'relatorios_produtos', label: 'Produtos', target: { tab: 'relatorios', subTab: 'produtos' } },
-          { id: 'relatorios_cardapio', label: 'Gestão do cardápio', target: { tab: 'relatorios', subTab: 'gestao_cardapio' } },
+          { id: 'relatorios_cardapio', label: 'Inteligência do Cardápio', target: { tab: 'relatorios', subTab: 'gestao_cardapio' } },
           { id: 'relatorios_equipe', label: 'Equipe', target: { tab: 'relatorios', subTab: 'equipe' } },
         ],
       },

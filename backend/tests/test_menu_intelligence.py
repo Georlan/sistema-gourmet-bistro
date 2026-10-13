@@ -73,7 +73,7 @@ def test_comparison_costs_cancellations_and_constant_queries(db):
         report = menu_intelligence(db, 9917, '2026-10-02', '2026-10-02')
     finally:
         event.remove(db.bind, 'before_cursor_execute', count)
-    assert len(selects) == 3  # aggregate + catalog with recipes + categories; no per-product reads
+    assert len(selects) == 4  # aggregate + category sample + catalog/recipes + categories; fixed batch reads
     assert report['unidades'] == 3
     assert report['inicio_anterior'] == report['fim_anterior'] == '2026-10-01'
     rows = {p['produto_id']: p for p in report['produtos']}
@@ -89,3 +89,59 @@ def test_comparison_costs_cancellations_and_constant_queries(db):
     assert rows['margem']['margem_unitaria_cardapio'] == -1
     assert rows['margem']['preco_medio'] == 6
     assert any(s['tipo'] == 'rever_preco' for s in rows['margem']['sugestoes'])
+
+
+def test_modifier_units_never_inflate_new_contribution_and_previous_uses_same_cost(db):
+    from app.models import GrupoModificador, OpcaoModificador, ItemModificador
+    db.add(GrupoModificador(id="extra", restaurante_id=9917, nome="Extras"))
+    db.flush()
+    db.add(OpcaoModificador(id="sauce", restaurante_id=9917, grupo_id="extra", nome="Molho", preco_adicional=5))
+    db.commit()
+    launch(db, 'old-cost', dt.datetime(2026, 10, 1, 14), [('margem', 20, 'pronto')])
+    launch(db, 'new-cost', dt.datetime(2026, 10, 2, 14), [('margem', 20, 'pronto'), ('margem', 100, 'pronto')])
+    # Three choices on one physical unit still exclude one unit, never three.
+    for _ in range(3):
+        db.add(ItemModificador(restaurante_id=9917, item_id='new-cost-1', opcao_modificador_id='sauce', preco_aplicado=5))
+    db.commit()
+    report = menu_intelligence(db, 9917, '2026-10-02', '2026-10-02')
+    p = next(p for p in report['produtos'] if p['produto_id'] == 'margem')
+    assert p['unidades'] == 2 and p['valor_consumo'] == 120
+    assert p['unidades_com_modificadores'] == p['unidades_cobertas'] == 1
+    assert p['custo_total_estimado'] == 9
+    assert p['contribuicao_estimada'] == p['contribuicao_anterior_estimada'] == 11
+    assert p['margem_unitaria_observada'] == 11
+    assert p['cmv_pct_estimado'] == 45
+    assert report['resumo']['cobertura_custo_pct'] == 50
+    assert report['resumo']['contribuicao_estimada'] == 11
+    assert any(o['tipo'] == 'composicao' for o in report['oportunidades'])
+    # Revaluing the old period is explicit: changing current ingredients affects
+    # both estimates, not an immutable historical profit measurement.
+    db.get(Insumo, 'custo').preco_medio_custo = 10
+    db.commit()
+    changed = menu_intelligence(db, 9917, '2026-10-02', '2026-10-02')
+    assert changed['resumo']['contribuicao_estimada'] == changed['resumo']['contribuicao_anterior_estimada'] == 10
+
+
+def test_sample_deduplicates_mixed_product_orders_and_zero_margin_not_missing(db):
+    for index in range(30):
+        launch(db, f'sample-{index}', dt.datetime(2026, 10, 2, 14), [('acerola', 7, 'pronto'), ('margem', 9, 'pronto')])
+    report = menu_intelligence(db, 9917, '2026-10-01', '2026-10-07')
+    category = report['categorias'][0]
+    assert category['pedidos_distintos'] == 30  # not 60
+    assert category['produtos_comparaveis'] == 3  # active zero-output product included, paused zero-output excluded
+    assert category['cobertura_custo_pct'] == 50
+    assert category['limite_popularidade_pct'] == pytest.approx(70 / 3)
+    p = next(p for p in report['produtos'] if p['produto_id'] == 'margem')
+    assert p['margem_unitaria_observada'] == 0
+    assert p['contribuicao_estimada'] == 0
+    assert p['classificacao'] == 'estrela'  # relative threshold equality; never promotes automatic financial action
+    assert 'provisória' in p['motivo_classificacao']
+    assert not any(o['tipo'] == 'acompanhamento' for o in report['oportunidades'])
+
+
+def test_no_sales_costs_remain_unknown_for_contribution(db):
+    report = menu_intelligence(db, 9917, '2026-10-02', '2026-10-02')
+    assert report['resumo']['contribuicao_estimada'] is None
+    assert report['resumo']['custo_total_estimado'] is None
+    assert report['resumo']['cobertura_custo_pct'] is None
+    assert all(p['classificacao'] is None for p in report['produtos'])
