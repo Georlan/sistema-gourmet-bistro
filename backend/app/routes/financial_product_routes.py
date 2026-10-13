@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from decimal import Decimal
+
+from pydantic import BaseModel, ConfigDict, Field, conlist, StrictInt
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Query
@@ -169,3 +171,26 @@ def get_consumo_complementos(
         return modifier_consumption(db, require_tenant_id(), data_inicio, data_fim, produto_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class MenuSimulationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    preco_atual: Decimal = Field(ge=0, le=1_000_000, decimal_places=2)
+    custo_atual: Decimal = Field(ge=0, le=1_000_000, decimal_places=2)
+    quantidade_atual: int = Field(ge=0, le=1_000_000, strict=True)
+    preco_proposto: Decimal = Field(ge=0, le=1_000_000, decimal_places=2)
+    custo_proposto: Decimal = Field(ge=0, le=1_000_000, decimal_places=2)
+    despesa_variavel_unitaria: Decimal = Field(default=Decimal("0"), ge=0, le=1_000_000, decimal_places=2)
+    gasto_acao: Decimal = Field(default=Decimal("0"), ge=0, le=1_000_000, decimal_places=2)
+    quantidades: conlist(StrictInt, min_length=3, max_length=3)
+
+
+def simulate_menu(
+    payload: MenuSimulationRequest,
+    current_user: Usuario = Depends(require_entitled_permission("relatorios:consultar", "advanced_reports")),
+):
+    """Calculate supplied hypotheses; never load or write restaurant products."""
+    from ..domain.menu_economics import simulate_menu_economics
+    if any(isinstance(q, bool) or q < 0 or q > 1_000_000 for q in payload.quantidades):
+        raise HTTPException(status_code=422, detail="Volumes devem ser inteiros entre 0 e 1.000.000.")
+    return simulate_menu_economics(**payload.model_dump())

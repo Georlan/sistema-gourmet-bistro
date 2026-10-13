@@ -446,7 +446,7 @@ export default function CashierReports({
           />
         )}
       {(activeTab === 'relatorios' || activeTab === 'dashboard') && activeSubTab === 'gestao_cardapio' && (
-        <RelatoriosCardapioTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+        <RelatoriosCardapioTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onNavigate={setActiveSubTab} />
       )}
       {(activeTab === 'relatorios' || activeTab === 'dashboard') && activeSubTab === 'equipe' && (
         <EquipeDesempenhoTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />
