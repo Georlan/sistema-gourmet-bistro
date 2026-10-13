@@ -65,7 +65,7 @@ import { CashierOpenShiftDialog } from './caixa/shift/CashierOpenShiftDialog';
 import { useCashShift } from './caixa/shift/useCashShift';
 import { useCashierSmartPos } from './caixa/smartpos/useCashierSmartPos';
 import { SuprimentoModal } from './caixa/SuprimentoModal';
-import { OperationalBanner } from './shared/OperationalBanner';
+import { OperationalBanner, OperationalSummaryProvider, OperationalSummaryButton } from './shared/OperationalBanner';
 import { SidebarProvider, SidebarTrigger } from './ui/sidebar';
 const loadCashierInventory = () => import('./caixa/inventory/CashierInventory');
 const loadCashierCatalog = () => import('./caixa/catalog/CashierCatalog');
@@ -720,7 +720,7 @@ export function CaixaPanel({
           {toastData.msg}
         </div>
       )}
-      <SidebarProvider className="contents">
+      <OperationalSummaryProvider scope={`${activeTab}:${activeSubTab}`}><SidebarProvider className="contents">
         <CashierMobileSidebar
           isMobileSidebarOpen={isMobileSidebarOpen}
           setIsMobileSidebarOpen={setIsMobileSidebarOpen}
@@ -792,6 +792,7 @@ export function CaixaPanel({
             </div>
 
             <div className={"flex items-center gap-2 shrink-0"}>
+              <OperationalSummaryButton />
               <button
                 type="button"
                 onClick={() => setIsChatDrawerOpen(true)}
@@ -1451,7 +1452,7 @@ export function CaixaPanel({
           kitchenCount={activeKitchenItems.length}
             shiftOpen={turno?.status === 'aberto'}
           />
-      </SidebarProvider>
+      </SidebarProvider></OperationalSummaryProvider>
     </div>
   );
 }

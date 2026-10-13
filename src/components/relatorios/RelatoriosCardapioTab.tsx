@@ -63,7 +63,7 @@ export function RelatoriosCardapioTab({ apiBaseUrl, authHeaders, onNavigate }: {
   };
   const simulate = (id: string) => { setSelectedId(null); setSimulationId(id); setTab('simulador'); };
   return <div className="space-y-5 text-left">
-    <OperationalBanner id="reports-menu-heading" eyebrow="INTELIGÊNCIA DO CARDÁPIO" title="Inteligência" accent="do Cardápio" description="Demanda, custos e contribuição para orientar decisões." metrics={[
+    <OperationalBanner id="reports-menu-heading" eyebrow="INTELIGÊNCIA DO CARDÁPIO" title="Inteligência do Cardápio" accent="" description="Demanda, custos e contribuição para orientar decisões." metrics={[
       { label: 'unidades pedidas', value: report?.unidades ?? '—' },
       { label: 'valor dos itens', value: menuMoney(summary?.valor_itens) },
       { label: 'contribuição estimada', value: menuMoney(summary?.contribuicao_estimada) },

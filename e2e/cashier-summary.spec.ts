@@ -1,0 +1,36 @@
+import { expect, test } from '@playwright/test';
+import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
+
+test('workspace banners are replaced by a scoped summary without losing controls', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  await expect(page.locator('.orders-hero, .operational-header')).toHaveCount(0);
+  const summary = page.getByRole('button', { name: 'Ver resumo da tela' });
+  await expect(summary).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath('pedidos-sem-banner.png') });
+  await summary.click();
+  const dialog = page.getByRole('dialog', { name: 'Resumo da tela' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Pedidos', exact: true })).toBeVisible();
+  await expect(dialog.getByText('valor em aberto', { exact: true })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath('resumo-sob-demanda.png') });
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  if ((page.viewportSize()?.width ?? 1366) < 1024) await page.locator('.cashier-mobile-bottom-bar').getByRole('button', { name: '+ Pedido', exact: true }).click();
+  else await page.locator('.cashier-subnav').getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  await expect(page.locator('.orders-hero, .operational-header')).toHaveCount(0);
+  await summary.click();
+  await expect(dialog.getByRole('heading', { name: 'Novo pedido', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Pedidos', exact: true })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Fechar resumo' }).click();
+  if ((page.viewportSize()?.width ?? 1366) < 1024) await page.getByRole('button', { name: 'Abrir menu principal', exact: true }).click();
+  await page.getByRole('button', { name: 'Cardápio', exact: true }).first().click();
+  await expect(page.locator('.orders-hero, .operational-header')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Novo produto', exact: true })).toBeVisible();
+  await summary.click();
+  await expect(dialog.getByRole('heading', { name: 'Produtos', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Novo pedido', exact: true })).toHaveCount(0);
+});

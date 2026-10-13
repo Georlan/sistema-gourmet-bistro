@@ -56,7 +56,8 @@ test('adicionar consumo abre o PDV na mesa correta e mantém o carrinho ao volta
   await expect(page.locator('#pdv-target-table')).toHaveValue('7');
   const main = page.getByRole('main');
   await main.getByRole('button', { name: 'Salão', exact: true }).click();
-  await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  if ((page.viewportSize()?.width ?? 1366) < 1024) await page.locator('.cashier-mobile-bottom-bar').getByRole('button', { name: '+ Pedido', exact: true }).click();
+  else await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
   if (await cart.isVisible()) await cart.click();
   await expect(page.locator('#pdv-target-table')).toHaveValue('7');
   await expect(page.locator('#pdv-submit-btn').locator('..')).toContainText('112,00');
@@ -81,11 +82,8 @@ test('desktop 1366x768 compacta banners e libera a área operacional', async ({ 
 
   await openOperationalScenario(page, { subtab: 'pedidos' });
 
-  const ordersHero = page.locator('.orders-hero').first();
-  await expect(ordersHero).toBeVisible();
-  await expect(ordersHero.locator('.orders-eyebrow')).toBeHidden();
-  await expect(ordersHero.locator('.orders-hero__copy > p:last-child')).toBeHidden();
-  expect(await ordersHero.evaluate(element => element.getBoundingClientRect().height)).toBeLessThanOrEqual(50);
+  await expect(page.locator('.orders-hero')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Ver resumo da tela' })).toBeVisible();
 
   const sidebar = page.locator('.cashier-sidebar:visible');
   await expect(sidebar.locator('.cashier-display-controls')).toBeHidden();
@@ -98,16 +96,12 @@ test('desktop 1366x768 compacta banners e libera a área operacional', async ({ 
   expect(boardBox!.y).toBeLessThan(280);
 
   const main = page.getByRole('main');
-  await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  if ((page.viewportSize()?.width ?? 1366) < 1024) await page.locator('.cashier-mobile-bottom-bar').getByRole('button', { name: '+ Pedido', exact: true }).click();
+  else await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
 
-  const pdvHeading = page.locator('#counter-heading');
-  await expect(pdvHeading).toBeVisible();
-  await expect(pdvHeading).toHaveText('Novo pedido rápido e simples');
-  const pdvHero = page.locator('.orders-hero').filter({ has: pdvHeading });
-  await expect(pdvHero).toBeVisible();
-  await expect(pdvHero.locator('.orders-eyebrow')).toBeHidden();
-  await expect(pdvHero.locator('.orders-hero__copy > p:last-child')).toBeHidden();
-  expect(await pdvHero.evaluate(element => element.getBoundingClientRect().height)).toBeLessThanOrEqual(50);
+  await expect(page.locator('.orders-hero')).toHaveCount(0);
+  await expect(page.locator('#counter-heading')).toHaveText('Novo pedido');
+  await expect(page.getByRole('button', { name: 'Ver resumo da tela' })).toBeVisible();
 
   const productSearch = page.getByPlaceholder('Buscar item, descrição ou código');
   await expect(productSearch).toBeVisible();
@@ -121,7 +115,8 @@ test('Novo pedido preserva o carrinho e adapta os dados operacionais por modalid
   await openOperationalScenario(page, { subtab: 'pedidos' });
 
   const main = page.getByRole('main');
-  await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  if ((page.viewportSize()?.width ?? 1366) < 1024) await page.locator('.cashier-mobile-bottom-bar').getByRole('button', { name: '+ Pedido', exact: true }).click();
+  else await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
   await page.getByRole('button', { name: 'Adicionar Prato em preparo rapidamente', exact: true }).click();
 
   const cartToggle = page.getByRole('button', { name: /^Carrinho \(/ });

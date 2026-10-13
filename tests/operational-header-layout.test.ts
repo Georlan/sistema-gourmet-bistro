@@ -1,51 +1,28 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import test from 'node:test';
+import { OperationalBanner, OperationalSummaryProvider } from '../src/components/shared/OperationalBanner';
 
-const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
-const component = source('../src/components/shared/OperationalBanner.tsx');
-const css = source('../src/components/shared/operationalHeader.css');
+const props = { id: 'orders-heading', eyebrow: 'OPERAÇÃO', title: 'Pedidos', accent: 'por etapa', description: 'Consulte os pedidos.', metrics: [{ label: 'valor em aberto', value: 'R$ 185' }] };
 
-const indexCss = source('../src/index.css');
-const lowHeightCss = source('../src/components/caixa/navigation/cashierLowHeight.css');
-
-test('cabeçalhos operacionais não renderizam mais o hero decorativo antigo', () => {
-  assert.match(component, /operational-header/);
-  assert.doesNotMatch(component, /orders-eyebrow/);
-  assert.doesNotMatch(component, /orders-hero__copy/);
-  assert.doesNotMatch(component, /orders-hero__metrics/);
-
-  assert.match(css, /\.orders-hero\.operational-header::before\s*\{\s*display:\s*none;/);
-  assert.match(css, /background:\s*transparent;/);
-  assert.match(css, /box-shadow:\s*none;/);
+test('workspace adapter removes the visible banner and slogan inside the cashier', () => {
+  const html = renderToStaticMarkup(createElement(OperationalSummaryProvider, { scope: 'operacao:pedidos', children: createElement(OperationalBanner, props) }));
+  assert.match(html, /id="orders-heading" class="sr-only"/);
+  assert.doesNotMatch(html, /orders-hero|operational-header|por etapa|R\$ 185/);
 });
 
-test('informações úteis continuam disponíveis em uma linha compacta', () => {
-  assert.match(component, /operational-header__metrics/);
-  assert.match(component, /metric\.value/);
-  assert.match(component, /metric\.label/);
-  assert.match(component, /className="sr-only">\{eyebrow\}\. \{description\}/);
-
-  const minHeight = Number(css.match(/\.orders-hero\.operational-header\s*\{[^}]*min-height:\s*([\d.]+)rem/)?.[1]);
-  assert.ok(Number.isFinite(minHeight));
-  assert.ok(minHeight <= 2.5, 'cabeçalho operacional deve permanecer compacto');
+test('standalone consumers retain their metrics on demand without a hero', () => {
+  const html = renderToStaticMarkup(createElement(OperationalBanner, props));
+  assert.match(html, /<details/);
+  assert.match(html, /<summary[^>]*>Resumo/);
+  assert.match(html, /valor em aberto/);
+  assert.match(html, /R\$ 185/);
+  assert.doesNotMatch(html, /orders-hero|por etapa/);
 });
 
-test('cabeçalho operacional compacto não é suprimido no mobile nem perde ênfase em monitores baixos', () => {
-  assert.match(css, /\.orders-hero\.operational-header\s*\{[^}]*display:\s*flex\s*!important;/);
-  assert.match(indexCss, /\.orders-hero:not\(\.operational-header\)\s*\{\s*display:\s*none\s*!important;/);
-  assert.match(lowHeightCss, /\.orders-workspace\s+\.orders-hero:not\(\.operational-header\)\s+h1\s+em\s*\{\s*display:\s*none;/);
-});
-
-test('KPIs do cabeçalho se acomodam no mobile sem deixar o último indicador parcialmente cortado', () => {
-  const mobile = css.split('@media (max-width: 560px)', 2)[1] ?? '';
-  assert.match(mobile, /\.operational-header__metrics\s*\{[^}]*display:\s*grid;/);
-  assert.match(mobile, /grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(5\.25rem,\s*1fr\)\);/);
-  assert.match(mobile, /\.operational-header__metrics\s*\{[^}]*overflow:\s*visible;/);
-  assert.match(mobile, /\.operational-header__metric\s*\{[^}]*min-width:\s*0;/);
-  assert.match(mobile, /\.operational-header__metric\s+dt\s*\{[^}]*text-overflow:\s*ellipsis;/);
-});
-
-test('coluna do kanban declara container-type para manter cards legíveis em qualquer largura', () => {
-  assert.match(indexCss, /\.orders-column\s*\{[^}]*container-type:\s*inline-size;/);
+test('kanban columns preserve their container-based card layout', () => {
+  const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+  assert.match(css, /\.orders-column\s*\{[^}]*container-type:\s*inline-size;/);
 });
