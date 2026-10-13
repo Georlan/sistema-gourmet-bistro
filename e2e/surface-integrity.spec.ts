@@ -142,7 +142,7 @@ test('official operational navigation opens every registered screen', async ({ p
   }
   await sidebar.locator('.cashier-nav-item[title="Vendas"]').click();
   await sidebar.locator('.cashier-nav-child').filter({ hasText: 'Novo pedido' }).click();
-  await expect(page.getByRole('region', { name: 'Novo pedido rápido e simples' })).toBeVisible();
+  await expect(page.getByPlaceholder('Buscar item, descrição ou código')).toBeVisible();
   expect(errors.exceptions).toEqual([]);
   expect(errors.assets).toEqual([]);
 });

@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Contraste dos componentes operacionais</title></head><body><main id="root"></main><script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import '/src/index.css';
+const params=new URLSearchParams(location.search);
+const theme=params.get('theme') || 'dark';
+document.documentElement.dataset.komaTheme=theme;
+document.documentElement.classList.toggle('dark',theme==='dark');
+document.documentElement.style.setProperty('--koma-text-scale',params.get('scale') || '1');
+const h=React.createElement;
+const sources=[['online','Online'],['waiter','Garçom'],['cashier','Caixa'],['smartpos','Maquininha']];
+createRoot(document.getElementById('root')).render(h('div',{style:{padding:'16px',background:'var(--koma-surface-page)',minHeight:'100dvh',color:'var(--koma-text-primary)'}},
+ h('nav',{className:'cashier-subnav'},h('button',{className:'cashier-subnav__button is-active'},'Pedidos'),h('button',{className:'cashier-subnav__button'},'Salão')),
+ h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,280px),1fr))',gap:'16px',marginTop:'16px'}},...sources.map(([source,label],index)=>h('article',{key:source,className:`orders-card orders-card--source-${source} orders-card--fulfillment-${index%2?'delivery':'retirada'}`,style:{padding:'16px',borderRadius:'16px'}},
+  h('div',{className:'orders-card__identity'},h('div',{className:'orders-card__number'},h('strong',null,`#${101+index}`)),h('div',null,h('strong',{className:'orders-card__identity-title'},'Cliente do pedido'),h('span',{className:'orders-card__identity-subtitle'},label)),h('span',{className:'orders-card__price'},'R$ 29,90')),
+  h('div',{className:'orders-card__identity-chips'},h('span',{className:'orders-card__chip is-primary'},'Em preparo'),h('span',{className:'orders-card__chip is-table-link'},'Mesa 2'),h('span',{className:'orders-card__chip is-attention'},'Atenção'),h('span',{className:'orders-card__chip orders-card__time is-late'},'20 min')),
+  h('p',{className:'orders-card__title'},'1× Item do pedido'),h('button',{className:'orders-card__action',style:{padding:'12px',width:'100%'}},'Marcar pronto')
+ ))),
+ h('button',{className:'orders-detail-modal__primary-action',style:{marginTop:'16px'}},'Despachar'),h('button',{className:'orders-detail-modal__reprint',style:{marginTop:'8px'}},'Reimprimir produção')
+));
+</script></body></html>

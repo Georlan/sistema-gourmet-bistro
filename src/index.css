@@ -79,8 +79,14 @@
   --koma-border-subtle: rgba(255, 255, 255, 0.08);
   --koma-border-default: rgba(220, 240, 230, 0.16);
   --koma-border-strong: rgba(220, 240, 230, 0.28);
-  --koma-accent: #00c996;
-  --koma-focus-ring: rgba(0, 201, 150, 0.34);
+  --koma-accent: #05c49d;
+  --koma-action-bg: #05c49d;
+  --koma-action-hover: #26d5b2;
+  --koma-action-text: #071c17;
+  --koma-accent-text: #81dfcb;
+  --koma-accent-soft: #14352d;
+  --koma-accent-border: #387f6d;
+  --koma-focus-ring: #81dfcb;
   --koma-stage-salon: #00c996;
   --koma-stage-digital: #68d7b3;
   --koma-stage-closing: #9bb7aa;
@@ -155,7 +161,13 @@
   --koma-border-default: #c3cdd2;
   --koma-border-strong: #94a3b8;
   --koma-accent: #00875f;
-  --koma-focus-ring: rgba(0, 135, 95, 0.35);
+  --koma-action-bg: #00745f;
+  --koma-action-hover: #005f4e;
+  --koma-action-text: #ffffff;
+  --koma-accent-text: #006c57;
+  --koma-accent-soft: #e0f4ed;
+  --koma-accent-border: #83b9a9;
+  --koma-focus-ring: #00745f;
   --koma-stage-salon: #047857;
   --koma-stage-digital: #0f766e;
   --koma-stage-closing: #475569;
@@ -823,15 +835,9 @@ body {
 }
 
 .cashier-subnav__button.is-active {
-  color: #047857;
-  border-color: rgba(5, 150, 105, 0.22);
-  background: rgba(5, 150, 105, 0.1);
-}
-
-[data-koma-theme="dark"] .cashier-subnav__button.is-active {
-  color: #79ddbd;
-  border-color: rgba(121, 221, 189, 0.18);
-  background: rgba(0, 201, 150, 0.085);
+  color: var(--koma-accent-text);
+  border-color: var(--koma-accent-border);
+  background: var(--koma-accent-soft);
 }
 
 [data-collapsible="icon"] .cashier-sidebar__brand-copy,
@@ -1586,22 +1592,19 @@ body {
   background: var(--orders-stage);
 }
 
-.orders-card--source-online::before { width: 3px; background: #8b5cf6; opacity: 0.9; }
-.orders-card--source-waiter::before { width: 3px; background: #06b6d4; opacity: 0.9; }
-.orders-card--source-cashier::before { width: 3px; background: #f59e0b; opacity: 0.9; }
-.orders-card--source-smartpos::before { width: 3px; background: #10b981; opacity: 0.9; }
+/* Origin is read from its label/icon; decorative color no longer competes with status. */
+.orders-card--source-online::before,
+.orders-card--source-waiter::before,
+.orders-card--source-cashier::before,
+.orders-card--source-smartpos::before { background: var(--koma-border-strong); opacity: 1; }
 
-.orders-card--fulfillment-retirada { box-shadow: inset 0 3px 0 rgba(6, 182, 212, 0.72), 0 4px 14px rgba(0, 0, 0, 0.08) !important; }
-.orders-card--fulfillment-delivery { box-shadow: inset 0 3px 0 rgba(139, 92, 246, 0.72), 0 4px 14px rgba(0, 0, 0, 0.08) !important; }
-.orders-card--salon { box-shadow: inset 0 3px 0 rgba(16, 185, 129, 0.72), 0 4px 14px rgba(0, 0, 0, 0.08) !important; }
+.orders-card--fulfillment-retirada,
+.orders-card--fulfillment-delivery,
+.orders-card--salon { box-shadow: inset 0 2px 0 var(--koma-accent-border), 0 4px 14px rgba(0, 0, 0, 0.08) !important; }
 
-.orders-card--source-online .orders-card__number { color: #7c3aed; border-color: rgba(139, 92, 246, 0.3); background: rgba(139, 92, 246, 0.08); }
-.orders-card--source-waiter .orders-card__number { color: #0891b2; border-color: rgba(6, 182, 212, 0.3); background: rgba(6, 182, 212, 0.08); }
-.orders-card--source-cashier .orders-card__number { color: #b45309; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.08); }
-
-[data-koma-theme="dark"] .orders-card--source-online .orders-card__number { color: #c4b5fd; }
-[data-koma-theme="dark"] .orders-card--source-waiter .orders-card__number { color: #67e8f9; }
-[data-koma-theme="dark"] .orders-card--source-cashier .orders-card__number { color: #fcd34d; }
+.orders-card--source-online .orders-card__number,
+.orders-card--source-waiter .orders-card__number,
+.orders-card--source-cashier .orders-card__number { color: var(--koma-text-secondary); border-color: var(--koma-border-default); background: var(--koma-surface-input); }
 
 .orders-card:hover {
   border-color: rgba(0, 201, 150, 0.4) !important;
@@ -1663,12 +1666,10 @@ body {
 }
 
 .orders-card__chip.is-table-link {
-  color: #6d28d9;
-  border-color: rgba(139, 92, 246, 0.3);
-  background: rgba(139, 92, 246, 0.09);
+  color: var(--koma-text-secondary);
+  border-color: var(--koma-border-default);
+  background: var(--koma-surface-raised);
 }
-
-[data-koma-theme="dark"] .orders-card__chip.is-table-link { color: #c4b5fd; }
 
 .orders-card__chip.is-attention {
   color: #92400e;
@@ -1876,31 +1877,19 @@ body {
 }
 
 .orders-card__action {
-  color: #065f46;
-  border: 1px solid #6ee7b7;
-  background: #d1fae5;
+  color: var(--koma-accent-text);
+  border: 1px solid var(--koma-accent-border);
+  background: var(--koma-accent-soft);
   border-radius: 0.58rem !important;
-  letter-spacing: 0.025em !important;
+  letter-spacing: normal !important;
   text-transform: none !important;
   font-weight: 800;
 }
 
-[data-koma-theme="dark"] .orders-card__action {
-  color: #62dfb7;
-  border: 1px solid rgba(0, 201, 150, 0.3);
-  background: rgba(0, 201, 150, 0.12);
-}
-
 .orders-card__action:hover {
-  color: #ffffff;
-  border-color: #059669;
-  background: #059669;
-}
-
-[data-koma-theme="dark"] .orders-card__action:hover {
-  color: #d7fff2;
-  border-color: rgba(0, 201, 150, 0.5);
-  background: rgba(0, 201, 150, 0.24);
+  color: var(--koma-action-text);
+  border-color: var(--koma-action-bg);
+  background: var(--koma-action-bg);
 }
 
 .orders-detail-modal {
@@ -2161,21 +2150,16 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  color: #052e25;
-  border: 1px solid #10b981;
+  color: var(--koma-action-text);
+  border: 1px solid var(--koma-action-bg);
   border-radius: 0.7rem;
-  background: #34d399;
+  background: var(--koma-action-bg);
   font-size: 0.72rem;
   font-weight: 900;
 }
 
-[data-koma-theme="dark"] .orders-detail-modal__primary-action {
-  color: #041b15;
-  background: #38d9aa;
-}
-
 .orders-detail-modal__primary-action:hover {
-  background: #5ee4bb;
+  background: var(--koma-action-hover);
 }
 
 .orders-detail-modal__reprint {
@@ -3485,3 +3469,15 @@ html[data-koma-text-size]:not([data-koma-text-size="padrao"]) .cashier-subnav__b
 .orders-detail-modal__eyebrow { display: block; line-height: 1.4; }
 .orders-detail-modal__observation strong { display: inline; font-size: inherit; line-height: inherit; }
 .orders-detail-modal__customer > div > span { display: block; line-height: 1.3; }
+
+/* Operational brand hierarchy: primary action > identity > supporting metadata. */
+.orders-card__price, [data-koma-theme="dark"] .orders-card__price,
+.orders-card__chip.is-primary, [data-koma-theme="dark"] .orders-card__chip.is-primary,
+.orders-detail-modal__item-status.is-ready, [data-koma-theme="dark"] .orders-detail-modal__item-status.is-ready { color: var(--koma-accent-text); }
+.orders-card__chip.is-primary, [data-koma-theme="dark"] .orders-card__chip.is-primary { background: var(--koma-accent-soft); border-color: var(--koma-accent-border); }
+.orders-detail-modal__reprint, [data-koma-theme="dark"] .orders-detail-modal__reprint { color: var(--koma-text-secondary); background: var(--koma-surface-raised); border-color: var(--koma-border-default); }
+.orders-card__number.is-table, [data-koma-theme="dark"] .orders-card__number.is-table,
+.orders-card__number.is-quick-sale, [data-koma-theme="dark"] .orders-card__number.is-quick-sale { color: var(--koma-accent-text); background: var(--koma-accent-soft); border-color: var(--koma-accent-border); }
+.orders-card--quick-sale::before { background: var(--koma-accent-border); }
+.orders-card:focus-visible, .orders-card__action:focus-visible, .orders-card__icon:focus-visible,
+.cashier-subnav__button:focus-visible, .orders-detail-modal button:focus-visible { outline: 2px solid var(--koma-focus-ring); outline-offset: 3px; }
