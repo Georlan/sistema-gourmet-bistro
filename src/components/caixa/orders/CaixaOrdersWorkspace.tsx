@@ -3,7 +3,7 @@ import { OrderItemComposition } from '../../shared/OrderItemComposition';
 import { itemCompositionSignature, type CompositionSource } from '../../../domain/orderItemComposition';
 import React from 'react';
 import clsx from 'clsx';
-import { AlertTriangle, Search, MapPin, ClipboardList, Users, Printer, Check, Globe, Smartphone, Clock, Store } from 'lucide-react';
+import { AlertTriangle, Search, MapPin, ClipboardList, Users, Printer, Check, Globe, Smartphone, Clock, Truck, ShoppingBag, Utensils } from 'lucide-react';
 import type { OrderItem } from '../../../types';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { deriveProductionState } from '../../../domain/operationalState';
@@ -81,12 +81,11 @@ export interface CaixaOrdersWorkspaceProps {
   readonly now: number;
 }
 
+// The icon identifies fulfillment, independently of who created the order.
 const digitalOrderIcon = (order: DeliveryOrderView) => {
-  const kind = getDigitalOrderVisualKind(order);
-  if (kind === 'waiter') return <Users size={15} />;
-  if (kind === 'cashier') return <Store size={15} />;
-  if (kind === 'smartpos') return <Smartphone size={15} />;
-  return <Globe size={15} />;
+  if (order.modalidade === 'delivery') return <Truck size={17} aria-hidden="true" />;
+  if (order.modalidade === 'dine_in') return <Utensils size={17} aria-hidden="true" />;
+  return <ShoppingBag size={17} aria-hidden="true" />;
 };
 
 // Renderizador compacto de itens de alta densidade
@@ -541,12 +540,13 @@ export function CaixaOrdersWorkspace({
                       {renderLatestTag(`salon:${order.id}`)}
                       <div className="orders-card__identity">
                         <div className="orders-card__number is-table">
-                          <Users size={15} />
-                          <strong>{presentation.shortLabel}</strong>
+                          <Users size={15} aria-hidden="true" />
+                          <span className="orders-card__number-label">{order.mesaId > 0 ? 'Mesa' : 'Balcão'}</span>
+                          <strong>{order.mesaId > 0 ? String(order.mesaId).padStart(2, '0') : 'B'}</strong>
                         </div>
                         <div className="min-w-0">
                           <strong className="orders-card__identity-title">{presentation.title}</strong>
-                          <span className="orders-card__identity-subtitle">{presentation.subtitle}</span>
+                          <span className="orders-card__identity-subtitle">{presentation.subtitle.replace(/^Mesa \d+ · /, '')}</span>
                           <div className="orders-card__identity-chips">
                             <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
                             <span className={"orders-card__chip is-primary"}>EM ATENDIMENTO</span>
@@ -693,17 +693,17 @@ export function CaixaOrdersWorkspace({
                       <div className="orders-card__identity">
                         <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale', tableBlockLabel && 'is-table')}>
                           {tableBlockLabel ? <Users size={15} /> : digitalOrderIcon(order)}
-                          <strong>{tableBlockLabel || `#${orderNumber}`}</strong>
-                          {tableBlockLabel && <span className="orders-card__number-detail">#{orderNumber}</span>}
+                          <strong>#{orderNumber}</strong>
+                          {tableBlockLabel && <span className="orders-card__number-detail">Mesa {String(order.mesaId).padStart(2, '0')}</span>}
                         </div>
                         <div className="min-w-0">
                           <strong className="orders-card__identity-title">
-                            {order.isQuickSale ? 'Venda rápida' : getDigitalOrderCustomerLabel(order)}
+                            {order.isQuickSale ? 'Balcão · venda rápida' : getDigitalOrderFulfillmentLabel(order)}
                           </strong>
                           <span className="orders-card__identity-subtitle">
                             {order.isQuickSale
-                              ? `Retirada no balcão · ${order.quantidadeItens} ${order.quantidadeItens === 1 ? 'item' : 'itens'}`
-                              : `${getDigitalOrderFulfillmentLabel(order)}${getDigitalOrderAssociation(order) ? ` · ${getDigitalOrderAssociation(order)}` : order.telefone ? ` · ${order.telefone}` : ''}`}
+                              ? `${order.quantidadeItens} ${order.quantidadeItens === 1 ? 'item' : 'itens'}`
+                              : `${getDigitalOrderCustomerLabel(order)}${getDigitalOrderAssociation(order) ? ` · ${getDigitalOrderAssociation(order)}` : ''}${order.telefone ? ` · ${order.telefone}` : ''}`}
                           </span>
                           <div className="orders-card__identity-chips">
                             <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
@@ -827,19 +827,20 @@ export function CaixaOrdersWorkspace({
                       {renderLatestTag(`closing:${order.id}`)}
                       <div className="orders-card__identity">
                         <div className="orders-card__number is-table">
-                          <Users size={15} />
-                          <strong>{presentation.shortLabel}</strong>
+                          <Users size={15} aria-hidden="true" />
+                          <span className="orders-card__number-label">{order.mesaId > 0 ? 'Mesa' : 'Balcão'}</span>
+                          <strong>{order.mesaId > 0 ? String(order.mesaId).padStart(2, '0') : 'B'}</strong>
                         </div>
                         <div className="min-w-0">
                           <strong className="orders-card__identity-title">
-                            {pendingTableItems > 0 && !contaPedida ? `Itens prontos · ${presentation.title}` : presentation.title}
+                            {presentation.title}
                           </strong>
                           <span className="orders-card__identity-subtitle">
                             {contaPedida
                               ? `Conta solicitada · ${totalTableItems} itens no fechamento · ${presentation.subtitle}`
                               : pendingTableItems > 0
                               ? `${readyTableItems} de ${totalTableItems} ${totalTableItems === 1 ? 'item pronto' : 'itens prontos'} · ${presentation.subtitle}`
-                              : presentation.subtitle}
+                              : presentation.subtitle.replace(/^Mesa \d+ · /, '')}
                           </span>
                           <div className="orders-card__identity-chips">
                             <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
@@ -962,17 +963,17 @@ export function CaixaOrdersWorkspace({
                       <div className="orders-card__identity">
                         <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale', tableBlockLabel && 'is-table')}>
                           {tableBlockLabel ? <Users size={15} /> : digitalOrderIcon(order)}
-                          <strong>{tableBlockLabel || `#${orderNumber}`}</strong>
-                          {tableBlockLabel && <span className="orders-card__number-detail">#{orderNumber}</span>}
+                          <strong>#{orderNumber}</strong>
+                          {tableBlockLabel && <span className="orders-card__number-detail">Mesa {String(order.mesaId).padStart(2, '0')}</span>}
                         </div>
                         <div className="min-w-0">
                           <strong className="orders-card__identity-title">
-                            {order.isQuickSale ? 'Venda rápida' : order.cliente}
+                            {order.isQuickSale ? 'Balcão · venda rápida' : getDigitalOrderFulfillmentLabel(order)}
                           </strong>
                           <span className="orders-card__identity-subtitle">
                             {order.isQuickSale
-                              ? `Retirada no balcão · ${order.quantidadeItens} ${order.quantidadeItens === 1 ? 'item' : 'itens'}`
-                              : `${getDigitalOrderFulfillmentLabel(order)}${getDigitalOrderAssociation(order) ? ` · ${getDigitalOrderAssociation(order)}` : order.telefone ? ` · ${order.telefone}` : ''}`}
+                              ? `${order.quantidadeItens} ${order.quantidadeItens === 1 ? 'item' : 'itens'}`
+                              : `${getDigitalOrderCustomerLabel(order)}${getDigitalOrderAssociation(order) ? ` · ${getDigitalOrderAssociation(order)}` : ''}${order.telefone ? ` · ${order.telefone}` : ''}`}
                           </span>
                           <div className="orders-card__identity-chips">
                             <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>

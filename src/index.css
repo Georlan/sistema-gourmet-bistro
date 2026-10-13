@@ -3481,3 +3481,21 @@ html[data-koma-text-size]:not([data-koma-text-size="padrao"]) .cashier-subnav__b
 .orders-card--quick-sale::before { background: var(--koma-accent-border); }
 .orders-card:focus-visible, .orders-card__action:focus-visible, .orders-card__icon:focus-visible,
 .cashier-subnav__button:focus-visible, .orders-detail-modal button:focus-visible { outline: 2px solid var(--koma-focus-ring); outline-offset: 3px; }
+
+/* Kanban identification: fulfillment/table and persisted number lead the scan. */
+.orders-card__identity { grid-template-columns: max-content minmax(0, 1fr) auto; align-items: start; gap: .6rem; }
+.orders-card__number { width: auto; min-width: 3.4rem; max-width: 5.5rem; min-height: 3.65rem; padding: .25rem .35rem; gap: .15rem; }
+.orders-card__number-label { color: var(--koma-text-secondary); font-size: .65rem; font-weight: 750; line-height: 1.2; }
+.orders-card__number strong { font-size: 1.05rem; line-height: 1.15; overflow-wrap: anywhere; }
+.orders-card__number-detail { font-size: .62rem; }
+.orders-card__identity-title { font-size: 1rem; line-height: 1.25; white-space: normal; overflow-wrap: anywhere; }
+.orders-card__identity-subtitle { font-size: .75rem; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
+.orders-card__identity-chips { gap: .3rem; margin-top: .45rem; }
+.orders-card__chip { letter-spacing: .025em; line-height: 1.25; white-space: normal; }
+.orders-card__identity-side { min-width: 0; gap: .5rem; }
+.orders-card__price { font-size: .85rem; white-space: nowrap; }
+@container (max-width: 380px) {
+  .orders-card__identity { grid-template-columns: auto minmax(0, 1fr); }
+  .orders-card__identity-side { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; }
+  .orders-card__price { margin-left: 0; }
+}
