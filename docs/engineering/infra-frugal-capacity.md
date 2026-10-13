@@ -82,3 +82,35 @@ Referências: [Logs Query](https://supabase.com/docs/guides/platform/manage-your
 - Log do serviço Railway Postgres S3 Backup em 12/10 às 03:05 UTC: arquivo de 1,31 MB validado e upload ao S3 confirmado. A nova cópia não passou por ensaio próprio de restauração.
 - Evidência de restore de aplicação: PR #1058 registra ensaio real em 09/10 usando PostgreSQL 17 isolado e a cópia Supabase/S3: contagens coincidentes das 117 tabelas, 154 policies restauradas e isolamento tenant verificado. A evidência é **da base KÔMA**; não cobre recuperação completa do Evolution, mídias, credenciais, segredos ou agentes, e não deve ser anunciada como recuperação integral.
 - Merge deste ajuste: rodar os checks sobre a `main` reconciliada; manter 30 dias e a política do método `purge_expired_order_chat_content` sem novos dados ou estrutura; conferir readiness e backlog antes e depois do deploy. Não fazer replay de impressões nem teste destrutivo no ID 6.
+
+## Escopo substituído em 13/10/2026: economia sem exclusão de dados
+
+O proprietário esclareceu que não há cópia local recente, que o objetivo é atender
+mais restaurantes com menos custo e que não autoriza ações destrutivas. O GitHub
+é a fonte de verdade do código. A proposta anterior de reativar automaticamente
+a retenção foi retirada deste rollout. Os registros de 12/10 acima são históricos,
+não comprovam o estado de hoje nem uma restauração do schema atual.
+
+O worker só executa retenção com `ORDER_CHAT_RETENTION_ENABLED=true` explícito;
+ausência, `false` e valores não reconhecidos mantêm a limpeza desligada. A variável
+não deve ser ativada nesta publicação. Antes de qualquer ativação futura, exigir
+autorização própria, política de retenção, inventário somente leitura e restauração
+comprovada de uma cópia recente em PostgreSQL descartável. Sem isso, preservar
+conteúdo. A retenção de 30 dias só se aplica se a limpeza for autorizada/ativada.
+
+Com a limpeza desligada, inclusive na inicialização e após múltiplas janelas de
+seis horas, o ciclo ocioso faz uma consulta de descoberta e não visita cada tenant.
+Fixtures cobrem 1/5/10/20/100/1000 restaurantes, trabalho devido e despacho
+direcionado; nenhum DELETE, alteração de schema, configuração de produção ou
+credencial é necessário. A descoberta existente, RLS, retries, leases, pedidos
+agendados e protocolo instalado de impressão são preservados. Nas simulações de
+uma futura retenção autorizada, falha de limpeza é revertida e não impede despacho.
+
+Limites: sem limpeza automática, o conteúdo cresce e deve ser monitorado; a
+consulta ociosa constante não certifica throughput, latência de pico ou redução
+na fatura. Esta entrega evita o fan-out inicial de manutenção e trabalho repetido
+por restaurante ocioso; não muda planos, pool, réplicas ou serviços pagos.
+
+Reversão: não há migration. Preferir correção progressiva ou reverter a mudança
+de despacho mantendo o opt-in da retenção; restaurar o worker antigo sem o opt-in
+pode executar a limpeza legada na inicialização. Não apagar filas nem fazer replay.

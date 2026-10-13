@@ -136,7 +136,12 @@ class OutboxWorker:
             "scheduled_released": 0,
             "chat_conversations_purged": 0,
         }
-        maintenance_due = time.monotonic() - self._last_chat_retention_at >= 21600
+        # Cleanup requires an explicit operational opt-in after a restore drill.
+        # Normal dispatch stays non-destructive and does not fan out to idle tenants.
+        maintenance_due = (
+            os.getenv("ORDER_CHAT_RETENTION_ENABLED", "false").strip().lower() == "true"
+            and time.monotonic() - self._last_chat_retention_at >= 21600
+        )
         maintenance_failed = False
         try:
             if restaurant_id is not None:
@@ -168,13 +173,24 @@ class OutboxWorker:
                             )
 
                         if maintenance_due:
-                            purged = purge_expired_order_chat_content(
-                                db, restaurante_id=rid,
-                                retention_days=int(os.getenv("ORDER_CHAT_RETENTION_DAYS", "30")),
-                            )
-                            if purged:
-                                db.commit()
-                                aggregated_stats["chat_conversations_purged"] += purged
+                            try:
+                                purged = purge_expired_order_chat_content(
+                                    db, restaurante_id=rid,
+                                    retention_days=int(os.getenv("ORDER_CHAT_RETENTION_DAYS", "30")),
+                                )
+                                if purged:
+                                    db.commit()
+                                    aggregated_stats["chat_conversations_purged"] += purged
+                            except Exception:
+                                # Retention is housekeeping, not a delivery prerequisite.
+                                # Roll back partial cleanup and keep this tenant's durable
+                                # work flowing; the global maintenance deadline stays due.
+                                maintenance_failed = True
+                                db.rollback()
+                                logger.exception(
+                                    "[OUTBOX WORKER] Falha na retenção do tenant %s; despacho preservado.",
+                                    rid,
+                                )
 
                         stats = dispatch_pending_outbox_events(
                             db,
