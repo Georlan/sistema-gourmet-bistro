@@ -44,6 +44,7 @@ for (const failure of [false, true]) {
     await card.click();
     const detail = page.locator('.orders-detail-modal');
     await expect(detail.getByRole('button', { name: 'Marcar pronto para retirada' })).toBeVisible();
+  await detail.getByText('Mais opções', { exact: true }).click();
     await detail.getByRole('button', { name: 'Alterar tipo do pedido' }).click();
     const dialog = page.getByRole('dialog', { name: 'Alterar tipo do pedido' });
     await dialog.locator('#conversion-address-logradouro').fill('Rua das Flores');

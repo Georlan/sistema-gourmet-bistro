@@ -1,0 +1,35 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script type="module">
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import '/src/index.css';
+import { KanbanOrderDetails } from '/src/components/caixa/orders/KanbanOrderDetails.tsx';
+const params = new URLSearchParams(location.search);
+document.documentElement.dataset.komaTheme = params.get('theme') || 'dark';
+document.documentElement.style.setProperty('--koma-text-scale', params.get('scale') || '1');
+window.detailCalls = [];
+const noop = () => {};
+const modifiers = [{ id:'bacon', nome:'Bacon', preco:2, grupo_id:'adicionais', grupo_nome:'Complementos' }];
+const base = { id:'order-test', mesaId:0, numeroPedido:107, modalidade:'delivery', deliveryStatus:'producao', origemOperacional:'caixa', identificador:'Ana Teste', telefone:'11900000000', total:100.8, paymentMethod:'Dinheiro', criadoEm:'17:54',
+ itens: params.has('grouped') ? [
+  { id:'combo-1', nome:'Combo Bacon', preco:40, status:'preparando', cliente_nome:'Ana Teste', observacao:'Sem sal', modificadores:modifiers, composicao_agrupada:true },
+  { id:'combo-2', nome:'Combo Bacon', preco:40, status:'preparando', cliente_nome:'Ana Teste', observacao:'Sem sal', modificadores:modifiers, composicao_agrupada:true }
+ ] : [
+  { id:'water', nome:'Água Mineral 500ml', preco:4.5, status:'preparando', cliente_nome:'Ana Teste' },
+  { id:'combo-1', nome:'Combo Bacon', preco:40, status:'preparando', cliente_nome:'Ana Teste', observacao:'Sem cebola', modificadores:modifiers, composicao_agrupada:true },
+  { id:'combo-2', nome:'Combo Bacon', preco:40, status:'pronto', cliente_nome:'Bia Teste', observacao:'Bem passado' }
+ ] };
+function App() {
+ const [order, setOrder] = React.useState(base);
+ return React.createElement(KanbanOrderDetails, {
+  order, restaurantConfig:{nome:'Restaurante de teste'}, canChangeFulfillment:true,
+  saveObservation:async(id, value)=>{
+   window.detailCalls.push({action:'observation',id,value});
+   if(params.has('fail')) throw new Error('Falha controlada ao salvar');
+   setOrder(current=>({...current,itens:current.itens.map(item=>item.id===id?{...item,observacao:value}:item)}));
+  },
+  transfer:{targetId:'',onTargetChange:noop,isTransferring:false,tables:[]},
+  actions:Object.fromEntries(['close','advanceDigitalOrder','reprintProduction','printFullTable','printTableValues','transferTable','associateTable','convertDeliveryToPickup','cancelConsumption','cancelOrder'].map(action=>[action,(...args)=>window.detailCalls.push({action,args})]))
+ });
+}
+createRoot(document.getElementById('root')).render(React.createElement(App));
+</script></body></html>

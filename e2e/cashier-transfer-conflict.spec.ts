@@ -16,6 +16,7 @@ test('conflito de transferência atualiza as mesas e exige nova seleção sem re
   });
   await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda', exact: true }).click();
   const details = page.getByRole('dialog', { name: /Mesa 0?7$/ });
+  await details.getByText('Mais opções', { exact: true }).click();
   const target = details.getByRole('combobox', { name: 'Mesa de destino' });
   await target.selectOption('8');
   await details.getByRole('button', { name: 'Transferir', exact: true }).click();

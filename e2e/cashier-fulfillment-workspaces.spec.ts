@@ -1035,6 +1035,7 @@ test('cancelar retirada pronta usa lifecycle canônico e remove o pedido sem cob
   const card = page.locator('.orders-card--closing').filter({ hasText: 'Ana Retirada' });
   await expect(card).toBeVisible();
   await card.click();
+  await page.locator('.orders-detail-modal').getByText('Mais opções', { exact: true }).click();
   await page.locator('.orders-detail-modal').getByRole('button', { name: 'Cancelar pedido', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Cancelar este pedido?' });
   await dialog.getByPlaceholder('Ex.: pedido lançado por engano').fill('Cliente desistiu da retirada');

@@ -114,6 +114,7 @@ type KanbanDetailItem = CompositionSource & {
   clienteNome: string;
   status: string;
   quantidade: number;
+  sourceItems: KanbanDetailSourceItem[];
 };
 
 function groupKanbanDetailItems(items: readonly KanbanDetailSourceItem[]): KanbanDetailItem[] {
@@ -128,8 +129,9 @@ function groupKanbanDetailItems(items: readonly KanbanDetailSourceItem[]): Kanba
     const current = grouped.get(key);
     if (current) {
       current.quantidade += 1;
+      current.sourceItems.push(item);
     } else {
-      grouped.set(key, { ...item, nome, observacao, clienteNome, status, quantidade: 1 });
+      grouped.set(key, { ...item, nome, observacao, clienteNome, status, quantidade: 1, sourceItems: [item] });
     }
   });
   return Array.from(grouped.values());
@@ -213,11 +215,10 @@ export function KanbanOrderDetails({
       onClick={(e) => { if (e.target === e.currentTarget) actions.close(); }}
       className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-[80] flex items-center justify-center p-4 cursor-pointer"}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="kanban-detail-title" className={"orders-detail-modal w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-3xl p-5 space-y-4 text-left relative animate-scale-in"}>
+      <div role="dialog" aria-modal="true" aria-labelledby="kanban-detail-title" className={"orders-detail-modal w-full max-w-[44rem] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-3xl flex flex-col text-left relative animate-scale-in"}>
         <div className="orders-detail-modal__hero">
           <div className={clsx('orders-detail-modal__number', selectedIsQuickSale && 'is-quick-sale')}>
             {selectedIsQuickSale ? <Smartphone size={18} /> : selectedKanbanOrder.mesaId > 0 ? <Users size={18} /> : <ShoppingCart size={18} />}
-            <strong>{selectedKanbanOrder.mesaId > 0 ? `M${selectedKanbanOrder.mesaId}` : `#${selectedOrderNumber}`}</strong>
           </div>
           <div className="min-w-0 flex-1">
             <span className="orders-detail-modal__eyebrow">
@@ -234,6 +235,7 @@ export function KanbanOrderDetails({
                         : selectedIsDineIn
                           ? 'Consumo no local'
                           : 'Retirada'}
+              {!selectedKanbanOrder.tableContext && <span> · {selectedKanbanOrder.criadoEm || formatBackendTime(selectedKanbanOrder.created_at) || '—'}</span>}
             </span>
             <h3 id="kanban-detail-title" className="orders-detail-modal__title">
               {selectedIsQuickSale
@@ -244,10 +246,12 @@ export function KanbanOrderDetails({
                     ? `Consumo local · Mesa ${String(selectedKanbanOrder.mesaId).padStart(2, '0')}`
                     : selectedKanbanOrder.contextoSalao && selectedKanbanOrder.mesaId > 0
                       ? `Mesa ${selectedKanbanOrder.mesaId}`
-                      : selectedKanbanOrder.identificador || `Pedido #${selectedOrderNumber}`}
+                      : `Pedido #${selectedOrderNumber}`}
             </h3>
             <div className="orders-detail-modal__status-line">
+              {selectedKanbanOrder.mesaId > 0 && !selectedKanbanOrder.tableContext && <span>Pedido #{selectedOrderNumber}</span>}
               <span>{operationalOriginLabel(selectedKanbanOrder.origemOperacional)}</span>
+              {restaurantConfig?.nome && <span>· {String(restaurantConfig.nome)}</span>}
               <span aria-hidden="true">•</span>
               <strong>{deliveryStatusLabel(selectedKanbanOrder.deliveryStatus, selectedKanbanOrder.modalidade)}</strong>
             </div>
@@ -264,51 +268,14 @@ export function KanbanOrderDetails({
             </button>
           </div>
         </div>
-        {selectedKanbanOrder.contextoSalao && salonActions && (
-          <div className="grid grid-cols-2 gap-2" aria-label="Ações da mesa">
-            <button type="button" onClick={salonActions.addConsumption} className="orders-detail-modal__reprint min-h-11">
-              <Plus size={14} aria-hidden="true" />Adicionar consumo
-            </button>
-            <button type="button" onClick={salonActions.receive} disabled={!salonActions.canReceive} className="orders-detail-modal__primary-action min-h-11 disabled:cursor-not-allowed disabled:opacity-40">
-              <CreditCard size={14} aria-hidden="true" />Receber
-            </button>
-          </div>
-        )}
-        {!selectedKanbanOrder.tableContext && (
-          <div className="orders-detail-modal__metrics">
-            <div><span>Pedido</span><strong>#{selectedOrderNumber}</strong></div>
-            <div><span>Horário</span><strong>{selectedKanbanOrder.criadoEm || formatBackendTime(selectedKanbanOrder.created_at) || '—'}</strong></div>
-            <div><span>Itens</span><strong>{selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)}</strong></div>
-          </div>
-        )}
-        {/* Itens e info extras */}
-        <div className="space-y-3">
-          {selectedKanbanOrder.tableContext && <TableOrderContext context={selectedKanbanOrder.tableContext} />}
-          {hasPrinting !== false && selectedKanbanOrder.tableContext && selectedKanbanOrder.tableContext.launches.length > 0 && (
-            <div className="space-y-2 rounded-xl border border-koma-border bg-koma-panel/60 p-3">
-              <div className="orders-detail-modal__section-title">
-                <span>Pedidos desta mesa</span>
-                <strong>{selectedKanbanOrder.tableContext.launches.length} no atendimento</strong>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {selectedKanbanOrder.tableContext.launches.map((launch) => {
-                  const label = launch.displayNumber || launch.id;
-                  return (
-                    <button
-                      key={launch.id}
-                      type="button"
-                      onClick={() => actions.reprintProduction(launch.id)}
-                      className="orders-detail-modal__reprint min-h-10"
-                      aria-label={`Reimprimir pedido ${label}`}
-                    >
-                      <Printer size={13} aria-hidden="true" />
-                      <span>Reimprimir #{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
+        <div className="orders-detail-modal__body">
+          {selectedKanbanOrder.identificador && !selectedIsQuickSale && (
+            <div className="orders-detail-modal__customer">
+              <div><span>Cliente</span><strong>{selectedKanbanOrder.identificador}</strong></div>
+              {selectedKanbanOrder.telefone && <span className="orders-detail-modal__phone">{selectedKanbanOrder.telefone}</span>}
             </div>
           )}
+          {selectedKanbanOrder.tableContext && <TableOrderContext context={selectedKanbanOrder.tableContext} />}
           {tableMovement && <div className="space-y-1 text-xs text-koma-secondary">
             {tableMovement.mergedMesaIds.length > 0 && <p>Consumo unido de: {tableMovement.mergedMesaIds.map(id => `Mesa ${id}`).join(', ')}.</p>}
             {tableMovement.transferredFromMesaIds.length > 0 && <p>Consumo transferido de: {tableMovement.transferredFromMesaIds.map(id => `Mesa ${id}`).join(', ')}.</p>}
@@ -329,15 +296,6 @@ export function KanbanOrderDetails({
               </div>
             </div>
           )}
-          {selectedKanbanOrder.identificador && !selectedIsQuickSale && (
-            <div className="orders-detail-modal__customer">
-              <div>
-                <span>Cliente</span>
-                <strong>{selectedKanbanOrder.identificador}</strong>
-              </div>
-              {selectedKanbanOrder.telefone && <span>{selectedKanbanOrder.telefone}</span>}
-            </div>
-          )}
           {(selectedKanbanOrder.paymentMethod || Number(selectedKanbanOrder.changeFor || 0) > 0) && (() => {
             const isOnlinePaid =
               selectedKanbanOrder.onlinePaymentStatus === 'approved' ||
@@ -346,7 +304,7 @@ export function KanbanOrderDetails({
 
             if (isOnlinePaid) {
               return (
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3" aria-label="Pagamento do pedido">
+                <div className="orders-detail-modal__payment is-paid" aria-label="Pagamento do pedido">
                   <div className="flex items-center gap-1.5">
                     <Check className="h-3.5 w-3.5 text-emerald-500" />
                     <span className="block text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
@@ -368,8 +326,8 @@ export function KanbanOrderDetails({
             }
 
             return (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3" aria-label="Pagamento do pedido">
-                <span className="block text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+              <div className="orders-detail-modal__payment" aria-label="Pagamento do pedido">
+                <span className="block text-[9px] font-bold uppercase tracking-wider text-koma-secondary">
                   Pagamento no atendimento
                 </span>
                 {selectedKanbanOrder.paymentMethod && (
@@ -385,6 +343,49 @@ export function KanbanOrderDetails({
               </div>
             );
           })()}
+          <div className="space-y-2">
+            <div className="orders-detail-modal__section-title">
+              <span>Itens do pedido</span>
+              <strong>{selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)} no total</strong>
+            </div>
+            <div className="orders-detail-modal__items">
+              {selectedDetailItems.map((item, idx) => (
+                <div key={item.sourceItems[0]?.id || `${item.nome}-${idx}`} className="orders-detail-modal__item">
+                  <span className="orders-detail-modal__quantity">{item.quantidade}×</span>
+                  <div className="min-w-0 flex-1">
+                    <strong>{item.nome}</strong>
+                    <OrderItemComposition item={item} className="orders-detail-modal__observation" />
+                    {item.clienteNome !== 'Consumo Geral' && item.clienteNome.toLowerCase() !== 'balcão' && item.clienteNome !== 'Cliente identificado' && item.clienteNome.toLocaleLowerCase() !== selectedKanbanOrder.identificador?.toLocaleLowerCase() && (
+                      <span className="orders-detail-modal__for">Para: {item.clienteNome}</span>
+                    )}
+                    {saveObservation && item.sourceItems.some(source => source.id && source.status === 'preparando' && !source.pago) && (
+                      <details className="orders-detail-modal__edit" onToggle={event => { if (event.currentTarget.open) event.currentTarget.querySelector<HTMLTextAreaElement>('textarea')?.focus(); }}>
+                        <summary>{itemCompositionPresentation(item).observation ? 'Editar observação' : 'Adicionar observação'}</summary>
+                        {item.sourceItems.filter(source => source.id && source.status === 'preparando' && !source.pago).map(source => (
+                          <ItemObservationEditor key={source.id} item={source} save={saveObservation} unit={item.quantidade > 1 ? item.sourceItems.indexOf(source) + 1 : undefined} />
+                        ))}
+                      </details>
+                    )}
+                  </div>
+                  <span className={clsx('orders-detail-modal__item-status', item.status === 'pronto' && 'is-ready')}>
+                    {item.status === 'preparando' ? 'Em preparo' : item.status === 'pronto' ? 'Pronto' : item.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <footer className="orders-detail-modal__footer">
+        {selectedKanbanOrder.contextoSalao && salonActions && (
+          <div className="grid grid-cols-2 gap-2" aria-label="Ações da mesa">
+            <button type="button" onClick={salonActions.addConsumption} className="orders-detail-modal__reprint min-h-11">
+              <Plus size={14} aria-hidden="true" />Adicionar consumo
+            </button>
+            <button type="button" onClick={salonActions.receive} disabled={!salonActions.canReceive} className="orders-detail-modal__primary-action min-h-11 disabled:cursor-not-allowed disabled:opacity-40">
+              <CreditCard size={14} aria-hidden="true" />Receber
+            </button>
+          </div>
+        )}
           {selectedIsDelivery && ['pronto', 'transito'].includes(selectedDeliveryStatus) && selectedKanbanOrder.courierAssignment && (
             <div className="rounded-xl border border-koma-border bg-koma-panel/60 p-3 space-y-2">
               <div className="orders-detail-modal__section-title">
@@ -413,34 +414,6 @@ export function KanbanOrderDetails({
               )}
             </div>
           )}
-          {saveObservation && selectedKanbanOrder.itens.filter(item => item.id && item.status === 'preparando' && !item.pago).map(item => (
-            <ItemObservationEditor key={item.id} item={item} save={saveObservation} />
-          ))}
-          <div className="space-y-2">
-            <div className="orders-detail-modal__section-title">
-              <span>Itens do pedido</span>
-              <strong>{selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)} no total</strong>
-            </div>
-            <div className="orders-detail-modal__items">
-              {selectedDetailItems.map((item, idx) => (
-                <div key={`${item.nome}-${item.observacao}-${idx}`} className="orders-detail-modal__item">
-                  <span className="orders-detail-modal__quantity">{item.quantidade}×</span>
-                  <div className="min-w-0 flex-1">
-                    <strong>{item.nome}</strong>
-                    <OrderItemComposition item={item} className="orders-detail-modal__observation" />
-                    {item.clienteNome !== 'Consumo Geral' && item.clienteNome.toLowerCase() !== 'balcão' && (
-                      <span className="orders-detail-modal__for">Para: {item.clienteNome}</span>
-                    )}
-                  </div>
-                  <span className={clsx('orders-detail-modal__item-status', item.status === 'pronto' && 'is-ready')}>
-                    {item.status === 'preparando' ? 'Em preparo' : item.status === 'pronto' ? 'Pronto' : item.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* Botões de impressão */}
-          <div className={"flex flex-col gap-2 pt-1"}>
             {selectedCanAdvanceDigital && (
               <button
                 type="button"
@@ -462,11 +435,40 @@ export function KanbanOrderDetails({
                 </span>
               </button>
             )}
+          <details className="orders-detail-modal__more">
+            <summary>Mais opções</summary>
+            <div className="orders-detail-modal__more-content">
+          {hasPrinting !== false && selectedKanbanOrder.tableContext && selectedKanbanOrder.tableContext.launches.length > 0 && (
+            <div className="space-y-2 rounded-xl border border-koma-border bg-koma-panel/60 p-3">
+              <div className="orders-detail-modal__section-title">
+                <span>Pedidos desta mesa</span>
+                <strong>{selectedKanbanOrder.tableContext.launches.length} no atendimento</strong>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {selectedKanbanOrder.tableContext.launches.map((launch) => {
+                  const label = launch.displayNumber || launch.id;
+                  return (
+                    <button
+                      key={launch.id}
+                      type="button"
+                      onClick={() => actions.reprintProduction(launch.id)}
+                      className="orders-detail-modal__reprint min-h-10"
+                      aria-label={`Reimprimir pedido ${label}`}
+                    >
+                      <Printer size={13} aria-hidden="true" />
+                      <span>Reimprimir #{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
             {canChangeFulfillment && (
               <button
                 type="button"
                 onClick={actions.convertDeliveryToPickup}
-                className="min-h-10 w-full rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 text-[10px] font-extrabold uppercase tracking-wide text-amber-500 transition hover:bg-amber-500/10"
+                className="orders-detail-modal__secondary-action"
               >
                 Alterar tipo do pedido
               </button>
@@ -624,19 +626,20 @@ export function KanbanOrderDetails({
                 </button>
               </div>
             )}
-          </div>
-        </div>
+            </div>
+          </details>
+        </footer>
       </div>
     </div>
   );
 }
 
-function ItemObservationEditor({ item, save }: { item: KanbanDetailSourceItem; save: (id: string, observation: string) => Promise<void> }) {
+function ItemObservationEditor({ item, save, unit }: { item: KanbanDetailSourceItem; unit?: number; save: (id: string, observation: string) => Promise<void> }) {
   const [value, setValue] = React.useState(itemCompositionPresentation(item).observation);
   const [saving, setSaving] = React.useState(false);
   const [message, setMessage] = React.useState('');
   return <div className="rounded-xl border border-koma-border p-3 space-y-2">
-    <label className="block text-xs text-koma-foreground">Observação — {item.nome || item.produto?.nome || 'Item'}
+    <label className="block text-xs text-koma-foreground">Observação — {item.nome || item.produto?.nome || 'Item'}{unit ? ` · Unidade ${unit}` : ''}
       <textarea value={value} maxLength={1000} disabled={saving} onChange={event => { setValue(event.target.value); setMessage(''); }} className="mt-2 block w-full rounded-lg border border-koma-border bg-koma-card p-2" />
     </label>
     <button type="button" disabled={saving || value === itemCompositionPresentation(item).observation} onClick={async () => {
