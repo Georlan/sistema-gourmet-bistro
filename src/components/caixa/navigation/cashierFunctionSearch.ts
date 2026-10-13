@@ -5,6 +5,7 @@ export type CashierFunctionSearchEntry = {
   label: string;
   context: string;
   navigationId: string;
+  description?: string;
   aliases?: readonly string[];
 };
 
@@ -21,11 +22,14 @@ const NAVIGATION_ALIASES: Readonly<Record<string, readonly string[]>> = {
   cardapio_produtos: ['produto', 'produtos', 'prato', 'pratos', 'item', 'itens'],
   cardapio_complementos: ['adicional', 'adicionais', 'modificador', 'modificadores'],
   cardapio_preparo: ['categoria', 'categorias', 'preparo', 'impressao cozinha', 'impressão cozinha'],
-  estoque_ingredientes: ['insumo', 'insumos', 'ingrediente', 'ingredientes'],
+  estoque_ingredientes: ['insumo', 'insumos', 'ingrediente', 'ingredientes', 'ficha tecnica', 'fichas tecnicas', 'receita', 'receitas', 'composicao produto', 'baixa automatica', 'estoque minimo', 'reposicao'],
   estoque_historico: ['entrada estoque', 'compras', 'nota entrada', 'notas entrada', 'xml'],
   estoque_inventario: ['contagem', 'inventario', 'inventário'],
   estoque_fornecedores: ['fornecedor', 'fornecedores', 'distribuidor', 'distribuidores'],
   clientes: ['crm', 'cadastro cliente', 'cadastro clientes'],
+  clientes_cadastro: ['crm', 'cadastro cliente', 'cadastro clientes', 'historico cliente', 'clientes inativos', 'clientes recorrentes'],
+  clientes_fidelidade: ['fidelidade', 'pontos', 'pontuacao', 'cashback', 'recompensas', 'resgate', 'programa de pontos'],
+  clientes_cupons: ['cupom desconto', 'cupons', 'promocoes', 'desconto promocional', 'codigo promocional'],
   online_perfil: ['loja online', 'perfil cardapio', 'perfil cardápio', 'dados restaurante online'],
   online_marca: ['marca cardapio', 'marca cardápio', 'logo cardapio', 'banner cardapio'],
   online_pedidos: ['pedidos online', 'horario', 'horários', 'pedidos agendados'],
@@ -36,7 +40,8 @@ const NAVIGATION_ALIASES: Readonly<Record<string, readonly string[]>> = {
   relatorios: ['dashboard', 'indicadores', 'faturamento'],
   relatorios_visao_geral: ['dashboard', 'indicadores', 'visao geral', 'visão geral', 'faturamento'],
   relatorios_financeiro: ['dre', 'fluxo de caixa', 'recebimentos', 'financeiro'],
-  relatorios_produtos: ['mais vendidos', 'top produtos', 'cmv', 'produtos'],
+  relatorios_produtos: ['mais vendidos', 'top produtos', 'cmv por produto', 'produtos'],
+  relatorios_cardapio: ['cmv', 'custo da mercadoria vendida', 'custo de mercadorias vendidas', 'custo dos ingredientes', 'margem', 'margem de contribuicao', 'precificacao', 'engenharia de cardapio', 'popularidade', 'matriz do cardapio', 'simulacao de preco', 'simulador', 'custos incompletos'],
   relatorios_equipe: ['desempenho equipe', 'garcom', 'garçom', 'equipe'],
   permissoes_cargos: ['equipe'],
   equipe_pessoas: ['pessoas', 'funcionarios', 'funcionários', 'colaboradores', 'convites'],
@@ -48,12 +53,39 @@ const NAVIGATION_ALIASES: Readonly<Record<string, readonly string[]>> = {
   config_garcom: ['garcom', 'garçom', 'garcons', 'garçons', 'atendente', 'atendimento', 'app garcom', 'app garçom'],
   config_taxa: ['taxa servico', 'taxa serviço', 'gorjeta', 'percentual servico', 'percentual serviço', '10%'],
   config_implantacao: ['implantacao', 'implantação', 'ativacao', 'ativação', 'primeiro acesso', 'onboarding'],
-  config_integracoes: ['integracao', 'integração', 'integracoes', 'integrações', 'mercado pago', 'pix', 'oauth'],
+  config_fiscal: ['fiscal', 'nfce', 'nfc e', 'nfe', 'nf e', 'nota fiscal', 'notas fiscais', 'sefaz', 'certificado digital', 'tributacao', 'impostos'],
+  config_integracoes: ['integracao', 'integração', 'integracoes', 'integrações', 'mercado pago', 'pagbank', 'whatsapp', 'avisos de pedidos', 'pix', 'oauth'],
   assinatura_pix: ['assinatura', 'cobranca', 'cobrança', 'conta assinatura'],
   assinatura_meu_plano: ['meu plano', 'plano atual', 'assinatura atual'],
   assinatura_planos_upgrade: ['planos', 'upgrade', 'comparar planos', 'mudar plano'],
   assinatura_contrato_documentos: ['contrato', 'documentos', 'comprovante', 'termos'],
 };
+
+// Index capabilities actually present in each screen, not customer/order data.
+const FUNCTION_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  vendas_pedidos: 'Fila de pedidos e etapas do atendimento',
+  vendas_entregas: 'Acompanhar entregas e atribuir entregadores',
+  caixa_movimentacoes: 'Sangria, suprimento e ajustes do caixa',
+  cardapio_produtos: 'Cadastro, preços e disponibilidade dos produtos',
+  cardapio_preparo: 'Categorias e destinos de preparo e impressão',
+  estoque_ingredientes: 'Ingredientes, fichas técnicas e custos de compra',
+  estoque_historico: 'Entradas de estoque, compras e importação de XML',
+  clientes_cadastro: 'Cadastro, histórico e relacionamento com clientes',
+  clientes_fidelidade: 'Pontos, cashback e regras de recompensa',
+  clientes_cupons: 'Cupons de desconto e promoções',
+  online_pedidos: 'Horários, disponibilidade e pedidos agendados',
+  online_entrega: 'Taxas, bairros e área de entrega',
+  online_pagamentos: 'Formas de pagamento do cardápio online',
+  relatorios_financeiro: 'DRE, recebimentos e fluxo de caixa',
+  relatorios_produtos: 'Vendas e desempenho dos produtos',
+  relatorios_cardapio: 'CMV estimado, custos, margens e simulação de preços',
+  relatorios_equipe: 'Desempenho de vendas da equipe',
+  equipe_funcoes_acessos: 'Cargos e permissões dos funcionários',
+  config_fiscal: 'Configuração fiscal e documentos eletrônicos',
+  config_integracoes: 'PagBank, Mercado Pago e avisos pelo WhatsApp',
+};
+
+const QUERY_STOP_WORDS = new Set(['a', 'as', 'o', 'os', 'de', 'da', 'das', 'do', 'dos', 'e', 'em', 'no', 'na', 'nos', 'nas', 'para', 'por', 'onde', 'como', 'quero', 'ver', 'vejo', 'achar', 'encontrar']);
 
 export function normalizeCashierFunctionSearch(value: string): string {
   return value
@@ -86,7 +118,7 @@ function scoreEntry(entry: CashierFunctionSearchEntry, normalizedQuery: string):
   if (aliases.some((alias) => alias.includes(normalizedQuery))) return 850;
 
   const queryTokens = normalizedQuery.split(' ').filter(Boolean);
-  const searchable = [label, context, ...aliases].join(' ');
+  const searchable = [label, context, ...aliases, normalizeCashierFunctionSearch(entry.description ?? '')].join(' ');
   if (queryTokens.every((token) => searchable.includes(token))) {
     const labelHits = queryTokens.filter((token) => label.includes(token)).length;
     const aliasHits = queryTokens.filter((token) => aliases.some((alias) => alias.includes(token))).length;
@@ -110,6 +142,7 @@ export function buildCashierFunctionSearchEntries(
         context: group.category,
         navigationId: item.id,
         aliases: NAVIGATION_ALIASES[item.id],
+        description: FUNCTION_DESCRIPTIONS[item.id],
       };
       const children = (item.children ?? []).map<CashierFunctionSearchEntry>((child) => ({
         id: child.id,
@@ -117,9 +150,11 @@ export function buildCashierFunctionSearchEntries(
         context: `${group.category} › ${item.label}`,
         navigationId: child.id,
         aliases: NAVIGATION_ALIASES[child.id],
+        description: FUNCTION_DESCRIPTIONS[child.id],
       }));
 
-      return [parent, ...children];
+      // A same-name child is a more precise result than a duplicate parent.
+      return children.some((child) => child.label === parent.label) ? children : [parent, ...children];
     }),
   );
 
@@ -131,11 +166,12 @@ export function searchCashierFunctions(
   query: string,
   limit = 7,
 ): CashierFunctionSearchEntry[] {
-  const normalizedQuery = normalizeCashierFunctionSearch(query);
+  const fullQuery = normalizeCashierFunctionSearch(query);
+  const normalizedQuery = fullQuery.split(' ').filter((word) => !QUERY_STOP_WORDS.has(word)).join(' ');
   if (!normalizedQuery) return [];
 
   return entries
-    .map((entry) => ({ entry, score: scoreEntry(entry, normalizedQuery) }))
+    .map((entry) => ({ entry, score: scoreEntry(entry, fullQuery) ?? scoreEntry(entry, normalizedQuery) }))
     .filter((candidate): candidate is { entry: CashierFunctionSearchEntry; score: number } => candidate.score !== null)
     .sort((a, b) => b.score - a.score || a.entry.label.localeCompare(b.entry.label, 'pt-BR'))
     .slice(0, limit)

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { CASHIER_SIDEBAR_GROUPS } from '../src/components/caixa/navigation/cashierNavigation';
+import { CASHIER_SIDEBAR_GROUPS, getCashierSidebarGroupsForPlan, getCashierSetupSidebarGroupsForPlan, getCashierNavigationTarget } from '../src/components/caixa/navigation/cashierNavigation';
 import {
   buildCashierFunctionSearchEntries,
   normalizeCashierFunctionSearch,
@@ -10,6 +10,38 @@ import {
 } from '../src/components/caixa/navigation/cashierFunctionSearch';
 
 const entries = buildCashierFunctionSearchEntries(CASHIER_SIDEBAR_GROUPS, true);
+
+test('subjects inside screens lead to the specific owner rather than a generic tab', () => {
+  for (const query of ['CMV', 'onde vejo o CMV', 'margem de contribuição', 'simulação de preço', 'custo da mercadoria vendida']) {
+    const result = searchCashierFunctions(entries, query)[0];
+    assert.equal(result?.navigationId, 'relatorios_cardapio', query);
+    assert.deepEqual(getCashierNavigationTarget(result!.navigationId), { tab: 'relatorios', subTab: 'gestao_cardapio' });
+    assert.match(result!.description!, /CMV estimado/);
+  }
+  for (const query of ['pontos', 'cashback', 'programa de pontos']) {
+    assert.equal(searchCashierFunctions(entries, query)[0]?.id, 'clientes_fidelidade', query);
+  }
+  assert.equal(searchCashierFunctions(entries, 'cupom desconto')[0]?.id, 'clientes_cupons');
+  assert.equal(searchCashierFunctions(entries, 'nota fiscal')[0]?.id, 'config_fiscal');
+  assert.deepEqual(getCashierNavigationTarget('config_fiscal'), { tab: 'impressao_salao', subTab: 'fiscal' });
+  assert.equal(searchCashierFunctions(entries, 'pagbank')[0]?.id, 'config_integracoes');
+  assert.equal(searchCashierFunctions(entries, 'ficha técnica')[0]?.id, 'estoque_ingredientes');
+});
+
+test('content search does not expose features absent from effective entitlements or setup', () => {
+  const restricted = buildCashierFunctionSearchEntries(getCashierSidebarGroupsForPlan('premium', {
+    printing: false, kds: false, waiter_app: false, inventory: false, advanced_reports: false, loyalty: false, coupons: false,
+  }), true);
+  for (const query of ['cmv', 'cashback', 'pontos', 'cupom desconto', 'impressora', 'compras']) {
+    assert.deepEqual(searchCashierFunctions(restricted, query), [], query);
+  }
+  const setup = buildCashierFunctionSearchEntries(getCashierSetupSidebarGroupsForPlan('premium', {
+    printing: true, kds: true, waiter_app: true, inventory: true, advanced_reports: true, loyalty: true, coupons: true,
+  }), true);
+  assert.deepEqual(searchCashierFunctions(setup, 'cmv'), []);
+  assert.deepEqual(searchCashierFunctions(setup, 'cashback'), []);
+  assert.equal(searchCashierFunctions(setup, 'nota fiscal')[0]?.id, 'config_fiscal');
+});
 
 test('function search ignores accents and ranks App do Garçom as the primary garçom result', () => {
   assert.equal(normalizeCashierFunctionSearch('Garçom'), 'garcom');

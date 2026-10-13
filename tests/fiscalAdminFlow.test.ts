@@ -54,7 +54,7 @@ test('new fiscal profile never guesses CRT or municipality', () => {
 
 test('technical settings expose a dedicated Fiscal tab without replacing existing integrations', () => {
   assert.match(integrations, /CashierFiscalSettings/);
-  assert.match(integrations, />\s*Fiscal\s*</);
+  assert.match(integrations, /section\?: 'integrations' \| 'fiscal'/);
   assert.match(integrations, /KomaPaymentsSettings/);
-  assert.match(integrations, /activeTab === 'fiscal'/);
+  assert.match(integrations, /section === 'fiscal'/);
 });

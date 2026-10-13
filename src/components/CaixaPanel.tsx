@@ -80,6 +80,7 @@ const onlineMenuSubnavItems = getCashierNavigationItem('cardapio_digital')?.chil
 const settingsSubnavItems = getCashierNavigationItem('impressao_salao')?.children ?? [];
 const reportsSubnavItems = getCashierNavigationItem('relatorios')?.children ?? [];
 const teamSubnavItems = getCashierNavigationItem('permissoes_cargos')?.children ?? [];
+const customerSubnavItems = getCashierNavigationItem('clientes')?.children ?? [];
 const subscriptionSubnavItems = getCashierNavigationItem('assinatura_pix')?.children ?? [];
 
 const formatClockTime = (value: unknown) => {
@@ -870,7 +871,7 @@ export function CaixaPanel({
               if (sub.requiredFeature) return operationalEntitlementEnabled(planEntitlements, sub.requiredFeature);
               return !sub.plans || sub.plans.includes(currentPlanId);
             }).map((sub) => (
-              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
+              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')} aria-current={isSidebarTabActive(sub.id) ? 'page' : undefined}>
                 {sub.label}
               </button>
             ))}
@@ -892,7 +893,7 @@ export function CaixaPanel({
 
             {activeTab === 'estoque' && [
               { id: 'insumos', label: 'Ingredientes' },
-              { id: 'historico', label: 'Histórico' },
+              { id: 'historico', label: 'Compras' },
               { id: 'inventario', label: 'Inventário' },
               { id: 'fornecedores', label: 'Fornecedores' },
             ].map((sub) => {
@@ -917,22 +918,18 @@ export function CaixaPanel({
               return <button key={sub.id} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
             })}
 
-            {activeTab === 'clientes' && [
-              { id: 'clientes', label: 'Clientes' },
-              ...(hasLoyalty ? [{ id: 'fidelidade', label: 'Programa de Fidelidade' }] : []),
-              ...(hasCoupons ? [{ id: 'cupons', label: 'Cupons & Promoções' }] : []),
-            ].map((sub) => {
-              const isSubActive =
-                (sub.id === 'clientes' && ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab)) ||
-                (sub.id === 'fidelidade' && ['fidelidade', 'programa_fidelidade'].includes(activeSubTab)) ||
-                (sub.id === 'cupons' && ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab)) || activeSubTab === sub.id;
-              return <button key={sub.id} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
-            })}
-
+            {activeTab === 'clientes' && customerSubnavItems.filter((sub) =>
+              (sub.requiredFeature !== 'loyalty' || hasLoyalty) && (sub.requiredFeature !== 'coupons' || hasCoupons)
+            ).map((sub) => (
+              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')} aria-current={isSidebarTabActive(sub.id) ? 'page' : undefined}>
+                {sub.label}
+              </button>
+            ))}
             {(activeTab === 'relatorios' || activeTab === 'dashboard') && reportsSubnavItems.map((sub) => (
               <button
                 key={sub.id}
                 id={`relatorios-subtab-${sub.target.subTab}`}
+                aria-current={isSidebarTabActive(sub.id) ? 'page' : undefined}
                 onClick={() => handleSidebarNavigation(sub.id)}
                 className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
               >

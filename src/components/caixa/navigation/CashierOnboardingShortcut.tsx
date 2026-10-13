@@ -16,7 +16,7 @@ export function CashierOnboardingShortcut({ mobile = false }: { mobile?: boolean
     try {
       sessionStorage.setItem(ONBOARDING_SETUP_MODE_KEY, '1');
       sessionStorage.setItem('koma_active_tab', 'impressao_salao');
-      sessionStorage.setItem('koma_active_subtab', 'integracoes');
+      sessionStorage.setItem('koma_active_subtab', 'fiscal');
     } catch {
       // The canonical URL still opens the cashier; navigation will fall back safely.
     }

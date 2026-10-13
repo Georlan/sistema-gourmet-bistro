@@ -17,7 +17,7 @@ function Harness() {
       React.createElement('button', {onClick: () => setToken('synthetic-session-b')}, 'Trocar sessão simulada'),
       React.createElement('button', {onClick: () => setReverseHeaders(v => !v)}, 'Recriar headers equivalentes'),
       React.createElement('button', {onClick: () => setApiBaseUrl('/fiscal-fixture-api-b')}, 'Trocar API simulada')),
-    React.createElement(CashierIntegrationsSettings, {apiBaseUrl, authHeaders}));
+    React.createElement(CashierIntegrationsSettings, {apiBaseUrl, authHeaders, section: 'fiscal'}));
 }
 createRoot(document.getElementById('root')).render(React.createElement(Harness));
 </script></body></html>

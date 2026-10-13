@@ -48,7 +48,7 @@ export type CashierNavigationItem = {
 };
 
 export type CashierNavigationGroup = {
-  category: 'Operação' | 'Cadastros' | 'Vendas online' | 'Gestão' | 'Sistema';
+  category: 'Operação' | 'Cardápio e vendas online' | 'Gestão' | 'Sistema';
   items: readonly CashierNavigationItem[];
 };
 
@@ -100,7 +100,7 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
     ],
   },
   {
-    category: 'Cadastros',
+    category: 'Cardápio e vendas online',
     items: [
       {
         id: 'cardapio',
@@ -113,30 +113,6 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
           { id: 'cardapio_preparo', label: 'Preparo e impressão', target: { tab: 'cardapio', subTab: 'categorias' } },
         ],
       },
-      {
-        id: 'estoque',
-        label: 'Estoque & compras',
-        requiredFeature: 'inventory',
-        icon: Package,
-        target: { tab: 'estoque', subTab: 'insumos' },
-        children: [
-          { id: 'estoque_ingredientes', label: 'Estoque', target: { tab: 'estoque', subTab: 'insumos' } },
-          { id: 'estoque_historico', label: 'Compras', target: { tab: 'estoque', subTab: 'historico' } },
-          { id: 'estoque_inventario', label: 'Inventário', target: { tab: 'estoque', subTab: 'inventario' } },
-          { id: 'estoque_fornecedores', label: 'Fornecedores', target: { tab: 'estoque', subTab: 'fornecedores' } },
-        ],
-      },
-      {
-        id: 'clientes',
-        label: 'Clientes',
-        icon: Users,
-        target: { tab: 'clientes', subTab: 'clientes' },
-      },
-    ],
-  },
-  {
-    category: 'Vendas online',
-    items: [
       {
         id: 'cardapio_digital',
         label: 'Cardápio online',
@@ -159,6 +135,30 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
     category: 'Gestão',
     items: [
       {
+        id: 'estoque',
+        label: 'Estoque & compras',
+        requiredFeature: 'inventory',
+        icon: Package,
+        target: { tab: 'estoque', subTab: 'insumos' },
+        children: [
+          { id: 'estoque_ingredientes', label: 'Ingredientes', target: { tab: 'estoque', subTab: 'insumos' } },
+          { id: 'estoque_historico', label: 'Compras', target: { tab: 'estoque', subTab: 'historico' } },
+          { id: 'estoque_inventario', label: 'Inventário', target: { tab: 'estoque', subTab: 'inventario' } },
+          { id: 'estoque_fornecedores', label: 'Fornecedores', target: { tab: 'estoque', subTab: 'fornecedores' } },
+        ],
+      },
+      {
+        id: 'clientes',
+        label: 'Clientes',
+        icon: Users,
+        target: { tab: 'clientes', subTab: 'clientes' },
+        children: [
+          { id: 'clientes_cadastro', label: 'Clientes', target: { tab: 'clientes', subTab: 'clientes' } },
+          { id: 'clientes_fidelidade', label: 'Programa de Fidelidade', requiredFeature: 'loyalty', target: { tab: 'clientes', subTab: 'fidelidade' } },
+          { id: 'clientes_cupons', label: 'Cupons & Promoções', requiredFeature: 'coupons', target: { tab: 'clientes', subTab: 'cupons' } },
+        ],
+      },
+      {
         id: 'relatorios',
         label: 'Relatórios',
         requiredFeature: 'advanced_reports',
@@ -172,6 +172,11 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
           { id: 'relatorios_equipe', label: 'Equipe', target: { tab: 'relatorios', subTab: 'equipe' } },
         ],
       },
+    ],
+  },
+  {
+    category: 'Sistema',
+    items: [
       {
         id: 'permissoes_cargos',
         label: 'Equipe',
@@ -182,11 +187,6 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
           { id: 'equipe_funcoes_acessos', label: 'Funções e acessos', target: { tab: 'permissoes_cargos', subTab: 'cargos_permissoes' } },
         ],
       },
-    ],
-  },
-  {
-    category: 'Sistema',
-    items: [
       {
         id: 'impressao_salao',
         label: 'Configurações',
@@ -199,6 +199,7 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
           { id: 'config_garcom', label: 'App do Garçom', requiredFeature: 'waiter_app', target: { tab: 'impressao_salao', subTab: 'garcom' } },
           { id: 'config_taxa', label: 'Taxa de Serviço', target: { tab: 'impressao_salao', subTab: 'taxa' } },
           { id: 'config_implantacao', label: 'Implantação inicial', target: { tab: 'impressao_salao', subTab: 'implantacao' } },
+          { id: 'config_fiscal', label: 'Fiscal', target: { tab: 'impressao_salao', subTab: 'fiscal' } },
           { id: 'config_integracoes', label: 'Integrações', target: { tab: 'impressao_salao', subTab: 'integracoes' } },
         ],
       },
@@ -282,6 +283,7 @@ const SETUP_ALLOWED_CHILD_IDS = new Set([
   'config_garcom',
   'config_taxa',
   'config_integracoes',
+  'config_fiscal',
 ]);
 
 /**
@@ -313,7 +315,7 @@ export function isCashierSetupTargetAllowed(tab: CashierTab, subTab: string): bo
     return subTab !== 'cardapio_bloqueios';
   }
   if (tab === 'impressao_salao') {
-    return ['aparencia', 'impressao', 'mesas', 'garcom', 'taxa', 'integracoes'].includes(subTab);
+    return ['aparencia', 'impressao', 'mesas', 'garcom', 'taxa', 'integracoes', 'fiscal'].includes(subTab);
   }
   return false;
 }
@@ -422,6 +424,8 @@ const SUBTAB_ALIASES: Readonly<Partial<Record<CashierTab, Readonly<Record<string
     impressoras: 'impressao',
     salao_impressao: 'impressao',
     salao_e_impressao: 'impressao',
+    notas_fiscais: 'fiscal',
+    nfce: 'fiscal',
   },
   assinatura_pix: {
     planos: 'meu_plano',

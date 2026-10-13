@@ -33,7 +33,7 @@ export function CashierSidebarSearch({
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [query]);
+  }, [query, results.length]);
 
   const openResult = (entry: CashierFunctionSearchEntry) => {
     handleSidebarNavigation(entry.navigationId, closeMobile);
@@ -70,8 +70,11 @@ export function CashierSidebarSearch({
             }
             if (event.key === 'Escape') setQuery('');
           }}
-          placeholder="Pesquisar funções..."
+          placeholder="Buscar tela ou função..."
           aria-label="Pesquisar funções do KÔMA"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={hasQuery}
           aria-controls={hasQuery ? resultsId : undefined}
           aria-activedescendant={hasQuery && results[activeIndex] ? `${resultsId}-${results[activeIndex].id}` : undefined}
           className="h-9 w-full rounded-xl border border-koma-border bg-koma-raised/40 pl-9 pr-3 text-[11px] font-semibold text-koma-foreground outline-none transition placeholder:text-koma-muted focus:border-emerald-500/50 focus:bg-koma-raised focus:ring-2 focus:ring-emerald-500/10"
@@ -98,14 +101,15 @@ export function CashierSidebarSearch({
                   onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => openResult(entry)}
                   className={clsx(
-                    'flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors',
+                    'flex w-full items-center justify-between gap-2 min-h-11 px-3 py-2 text-left transition-colors',
                     active ? 'bg-koma-raised' : 'hover:bg-koma-raised',
                     index > 0 && 'border-t border-koma-border/70',
                   )}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-[11px] font-bold text-koma-foreground">{entry.label}</span>
-                    <span className="mt-0.5 block truncate text-[9px] font-medium text-koma-muted">{entry.context}</span>
+                    <span className="block whitespace-normal text-xs font-bold leading-snug text-koma-foreground">{entry.label}</span>
+                    <span className="mt-0.5 block truncate text-[10px] font-medium text-koma-muted">{entry.context}</span>
+                    {entry.description && <span className="mt-0.5 block truncate text-[10px] text-koma-muted">{entry.description}</span>}
                   </span>
                   {active && (
                     <span className="shrink-0 rounded-md border border-koma-border bg-koma-panel px-1.5 py-0.5 text-[8px] font-bold text-koma-muted">
@@ -116,7 +120,7 @@ export function CashierSidebarSearch({
               );
             })
           ) : (
-            <p className="px-3 py-2.5 text-[10px] font-medium text-koma-muted">Nenhuma função encontrada.</p>
+            <p className="px-3 py-2.5 text-[10px] font-medium text-koma-muted">Nenhuma função encontrada. Tente um assunto como CMV, pontos ou taxa de entrega.</p>
           )}
         </div>
       )}
