@@ -136,6 +136,13 @@ class OutboxWorker:
             "scheduled_released": 0,
             "chat_conversations_purged": 0,
         }
+        # Cleanup requires an explicit operational opt-in after a restore drill.
+        # Normal dispatch stays non-destructive and does not fan out to idle tenants.
+        maintenance_due = (
+            os.getenv("ORDER_CHAT_RETENTION_ENABLED", "false").strip().lower() == "true"
+            and time.monotonic() - self._last_chat_retention_at >= 21600
+        )
+        maintenance_failed = False
         try:
             if restaurant_id is not None:
                 target_tenant_ids = [restaurant_id]
@@ -144,7 +151,7 @@ class OutboxWorker:
                     db, stale_timeout_seconds=self.stale_timeout_seconds,
                 )
                 # Preserve the existing maintenance cadence and scoped retention path.
-                if time.monotonic() - self._last_chat_retention_at >= 21600:
+                if maintenance_due:
                     target_tenant_ids = sorted(set(target_tenant_ids).union(
                         self._active_restaurant_ids(db),
                     ))
@@ -165,14 +172,25 @@ class OutboxWorker:
                                 rid,
                             )
 
-                        if time.monotonic() - self._last_chat_retention_at >= 21600:
-                            purged = purge_expired_order_chat_content(
-                                db, restaurante_id=rid,
-                                retention_days=int(os.getenv("ORDER_CHAT_RETENTION_DAYS", "30")),
-                            )
-                            if purged:
-                                db.commit()
-                                aggregated_stats["chat_conversations_purged"] += purged
+                        if maintenance_due:
+                            try:
+                                purged = purge_expired_order_chat_content(
+                                    db, restaurante_id=rid,
+                                    retention_days=int(os.getenv("ORDER_CHAT_RETENTION_DAYS", "30")),
+                                )
+                                if purged:
+                                    db.commit()
+                                    aggregated_stats["chat_conversations_purged"] += purged
+                            except Exception:
+                                # Retention is housekeeping, not a delivery prerequisite.
+                                # Roll back partial cleanup and keep this tenant's durable
+                                # work flowing; the global maintenance deadline stays due.
+                                maintenance_failed = True
+                                db.rollback()
+                                logger.exception(
+                                    "[OUTBOX WORKER] Falha na retenção do tenant %s; despacho preservado.",
+                                    rid,
+                                )
 
                         stats = dispatch_pending_outbox_events(
                             db,
@@ -192,6 +210,7 @@ class OutboxWorker:
                         ):
                             aggregated_stats[key] += stats.get(key, 0)
                 except Exception as tenant_exc:
+                    maintenance_failed = True
                     db.rollback()
                     logger.error(
                         "[OUTBOX WORKER] Erro ao processar outbox do tenant %s: %s",
@@ -200,7 +219,11 @@ class OutboxWorker:
                         exc_info=True,
                     )
 
-            self._last_chat_retention_at = time.monotonic()
+            # Idle dispatch must not postpone the six-hour retention deadline.
+            # A tenant failure leaves maintenance due for a safe retry.
+            # Targeted dispatch must not mark global maintenance as complete.
+            if maintenance_due and not maintenance_failed and restaurant_id is None:
+                self._last_chat_retention_at = time.monotonic()
             return aggregated_stats
         finally:
             db.close()
