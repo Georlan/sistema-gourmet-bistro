@@ -7,6 +7,8 @@ import { formatCurrency } from '../cashierPresentation';
 import type { RestaurantReceiptInfo } from '../digital-receipt/digitalReceipt';
 import type { useCashierSmartPos } from '../smartpos/useCashierSmartPos';
 import type { CheckoutController } from './useCheckoutController';
+import { SplitPaymentPlanner } from './SplitPaymentPlanner';
+import { splitPlanStatus } from './splitPaymentPlan';
 
 interface Props {
   controller: CheckoutController;
@@ -53,6 +55,17 @@ export function CheckoutDialog({
     setPaymentMetodo,
     paymentValor,
     setPaymentValor,
+    mixedPayment,
+    setMixedPayment,
+    splitParts,
+    splitPartLocked,
+    beginSplitPlan,
+    clearSplitPlan,
+    addSplitPart,
+    updateSplitPart,
+    removeSplitPart,
+    mixedPaymentAwaitingRefresh,
+    paymentVerificationRequired,
     selectedItemIds,
     setSelectedItemIds,
     paymentCPF,
@@ -78,10 +91,21 @@ export function CheckoutDialog({
 
   const currentBalance = selectedOrder ? getCheckoutBalance(selectedOrder) : 0;
   const inputVal = Number(paymentValor || 0);
+  const hasSplitPlan = mixedPayment && splitParts.length > 0;
+  const planReady = !hasSplitPlan || splitPlanStatus(splitParts, currentBalance).valid;
   const selectedTotal =
     selectedOrder && selectedItemIds.length > 0 ? getSelectedItemsTotal(selectedOrder, selectedItemIds) : 0;
 
   const primaryButtonLabel = (() => {
+    if (mixedPaymentAwaitingRefresh) return 'Sincronizando saldo…';
+    if (paymentVerificationRequired) return 'Verifique o pagamento no Caixa';
+    if (hasSplitPlan && !planReady) return 'Revise a divisão';
+    if (hasSplitPlan) return inputVal > 0
+      ? `Receber ${splitParts[0].metodo === 'pix' ? 'Pix' : splitParts[0].metodo === 'dinheiro' ? 'Dinheiro' : splitParts[0].metodo === 'cartao_credito' ? 'Crédito' : 'Débito'} · ${formatCurrency(inputVal)}`
+      : 'Receber próxima parte';
+    if (mixedPayment) return inputVal > 0
+      ? `Receber esta parte · ${formatCurrency(inputVal)}`
+      : 'Receber esta parte';
     if (selectedItemIds.length > 0) {
       return `Receber itens selecionados · ${formatCurrency(selectedTotal)}`;
     }
@@ -102,7 +126,7 @@ export function CheckoutDialog({
     showCheckoutModal && (
       <div
         className="fixed inset-0 bg-black/85 backdrop-blur-xs z-[80] flex items-center justify-center p-2 sm:p-4"
-        onClick={() => setShowCheckoutModal(false)}
+        onClick={() => { if (!isProcessingPayment) setShowCheckoutModal(false); }}
       >
         <div
           className="bg-koma-input/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl border border-koma-accent/15 shadow-2xl w-full max-w-3xl overflow-hidden max-h-[92vh] sm:max-h-[90vh] flex flex-col"
@@ -138,7 +162,7 @@ export function CheckoutDialog({
             </div>
             <button
               type="button"
-              onClick={() => setShowCheckoutModal(false)}
+              onClick={() => { if (!isProcessingPayment) setShowCheckoutModal(false); }}
               className={"p-1.5 hover:bg-koma-raised rounded-full text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"}
               title="Fechar (o pedido permanece na fila)"
             >
@@ -222,6 +246,7 @@ export function CheckoutDialog({
                   >
                     <input
                       type="checkbox"
+                      disabled={isProcessingPayment}
                       checked={checkoutServiceTax}
                       onChange={(e) => {
                         const includeServiceTax = e.target.checked;
@@ -244,7 +269,7 @@ export function CheckoutDialog({
                   const isPaid = item.pago;
                   const isCancelled = (item.status as string) === 'cancelado';
                   const isReadyForCheckout = isItemReadyForCheckout(item);
-                  const canSelect = !isPaid && !isCancelled && isReadyForCheckout;
+                  const canSelect = !mixedPayment && !isProcessingPayment && !isPaid && !isCancelled && isReadyForCheckout;
                   return (
                     <div
                       key={item.id}
@@ -487,6 +512,7 @@ export function CheckoutDialog({
                       <input
                         type="number"
                         min="1"
+                        disabled={isProcessingPayment || mixedPayment}
                         value={splitPeople}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -514,9 +540,48 @@ export function CheckoutDialog({
                 onSubmit={handleProcessPayment}
                 className="space-y-3.5 bg-koma-card/40 p-3.5 sm:p-4 rounded-2xl border border-koma-border/50 flex-1 flex flex-col justify-between"
               >
-                <div className="space-y-3.5">
-                  {/* Forma de Pagamento */}
-                  <div className="space-y-1.5">
+                <fieldset disabled={isProcessingPayment || mixedPaymentAwaitingRefresh || paymentVerificationRequired} className="space-y-3.5">
+                  <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-koma-foreground cursor-pointer">
+                    <input type="checkbox" checked={mixedPayment} onChange={e => setMixedPayment(e.target.checked)} className="h-4 w-4 rounded accent-emerald-600" />
+                    Dividir pagamento
+                  </label>
+                  {mixedPayment && (
+                    <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3" aria-live="polite">
+                      <p className="text-sm font-bold text-koma-foreground">Saldo restante: {formatCurrency(currentBalance)}</p>
+                      <p className="mt-1 text-xs text-koma-secondary">Receba uma parte por vez, escolhendo o valor e a forma de pagamento.</p>
+                      {!hasSplitPlan && inputVal > 0 && inputVal <= currentBalance && <p className="mt-2 text-xs text-koma-secondary">Após esta parte, faltam {formatCurrency(Math.max(0, currentBalance - inputVal))}.</p>}
+                      {mixedPaymentAwaitingRefresh && (
+                        <p className="mt-2 text-xs font-bold text-amber-400">
+                          Conferindo o saldo atualizado com o servidor. Não realize outra cobrança ainda.
+                        </p>
+                      )}
+                      {paymentVerificationRequired && (
+                        <p className="mt-2 text-xs font-bold text-amber-400">
+                          Pagamento sem confirmação definitiva. Feche esta tela e consulte o histórico do Caixa antes de tentar novamente.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {mixedPayment && !hasSplitPlan && (
+                    <button type="button" onClick={beginSplitPlan}
+                      disabled={splitPartLocked || mixedPaymentAwaitingRefresh || paymentVerificationRequired}
+                      className="min-h-11 w-full rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                      Planejar divisão: dinheiro + Pix + cartão
+                    </button>
+                  )}
+                  {hasSplitPlan && (
+                    <SplitPaymentPlanner
+                      parts={splitParts}
+                      balance={currentBalance}
+                      locked={splitPartLocked || mixedPaymentAwaitingRefresh || paymentVerificationRequired || isProcessingPayment}
+                      onUpdate={updateSplitPart}
+                      onAdd={addSplitPart}
+                      onRemove={removeSplitPart}
+                      onClear={clearSplitPlan}
+                    />
+                  )}
+                  {/* Forma de Pagamento avulsa (não altera a divisão planejada) */}
+                  <div className={clsx('space-y-1.5', hasSplitPlan && 'hidden')}>
                     <div className="flex items-center justify-between">
                       <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
                         Forma de Pagamento:
@@ -556,10 +621,10 @@ export function CheckoutDialog({
                     </div>
                   </div>
 
-                  {/* Valor a Lançar */}
-                  <div className="space-y-1.5 font-sans">
+                  {/* Valor a Lançar avulso */}
+                  <div className={clsx('space-y-1.5 font-sans', hasSplitPlan && 'hidden')}>
                     <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
-                      Valor a Lançar (R$):
+                      {mixedPayment ? 'Valor desta parte (R$):' : 'Valor a Lançar (R$):'}
                     </label>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
@@ -609,7 +674,7 @@ export function CheckoutDialog({
                   </div>
 
                   {/* Atalhos de Cédulas para Dinheiro */}
-                  {paymentMetodo === 'dinheiro' && (
+                  {!hasSplitPlan && paymentMetodo === 'dinheiro' && (
                     <div className="space-y-1" role="group" aria-label="Atalhos de cédulas">
                       <label className="text-[8px] font-bold text-koma-muted uppercase tracking-wider block">
                         Atalhos de Cédulas:
@@ -693,7 +758,7 @@ export function CheckoutDialog({
                     }
                     return null;
                   })()}
-                </div>
+                </fieldset>
 
                 <div className="space-y-2 pt-2">
                   {errorMsg && (
@@ -705,7 +770,7 @@ export function CheckoutDialog({
                   {/* Botão Principal sem ambiguidade com ação e valor explícitos */}
                   <button
                     type="submit"
-                    disabled={selectedCheckoutSmartPosState?.blocksPayment || isProcessingPayment}
+                    disabled={selectedCheckoutSmartPosState?.blocksPayment || isProcessingPayment || mixedPaymentAwaitingRefresh || paymentVerificationRequired || !planReady}
                     className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer uppercase tracking-wider text-xs disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Check size={16} />
