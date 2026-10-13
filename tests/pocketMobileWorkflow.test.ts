@@ -196,20 +196,19 @@ test('all plans share the mobile shell while Pocket keeps its plan-specific refi
 
   assert.match(caixaPanel, /data-koma-plan=\{currentPlanId\}/);
   assert.match(caixaPanel, /<CashierMobileBottomBar/);
-  assert.match(caixaPanel, /label: hasPrinting \? 'Preparo e impressão' : 'Preparo'/);
+  assert.match(caixaPanel, /<CashierSubNavigation/);
   assert.match(cashierCss, /\.cashier-shell \.cashier-content/);
   assert.match(cashierCss, /padding-bottom: calc\(6\.5rem \+ env\(safe-area-inset-bottom\)\)/);
   assert.match(cashierCss, /\.cashier-shell\[data-koma-plan="pocket"\] \.cashier-salon-grid/);
 });
 
 
-test('mobile operation subnav avoids duplicating actions already pinned to the bottom bar', () => {
-  const caixaPanel = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
-
-  assert.match(caixaPanel, /isPrimaryMobileBottomAction = \['vendas_novo_pedido', 'vendas_cozinha'\]\.includes\(sub\.id\)/);
-  assert.match(caixaPanel, /isPrimaryMobileBottomAction && 'hidden lg:inline-flex'/);
+test('mobile operation subnav keeps every destination accessible above the content', () => {
+  const subnav = readFileSync(new URL('../src/components/caixa/navigation/CashierSubNavigation.tsx', import.meta.url), 'utf8');
+  assert.match(subnav, /items.map/);
+  assert.doesNotMatch(subnav, /isPrimaryMobileBottomAction|hidden lg:inline-flex/);
+  assert.match(subnav, /Ver próximas abas/);
 });
-
 
 test('mobile menu avoids duplicated owner shortcuts and keeps the compact touch-first shell', () => {
   const mobileSidebar = readFileSync(new URL('../src/components/caixa/navigation/CashierMobileSidebar.tsx', import.meta.url), 'utf8');
@@ -273,9 +272,9 @@ test('mobile information architecture avoids duplicated deep navigation', () => 
 
   assert.match(mobileSidebar, /expandActiveChildren=\{false\}/);
   assert.match(sidebarNavigation, /expandActiveChildren = true/);
-  assert.match(caixaPanel, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
+  assert.match(caixaPanel, /<CashierSubNavigation/);
   assert.doesNotMatch(caixaPanel, /cashier-subnav__mobile-select/);
-  assert.match(caixaPanel, /if \(sub\.requiredFeature\) return operationalEntitlementEnabled\(planEntitlements, sub\.requiredFeature\)/);
+  assert.match(caixaPanel, /entitlements=\{planEntitlements\}/);
   assert.match(caixaPanel, /'Cardápio online'/);
 });
 

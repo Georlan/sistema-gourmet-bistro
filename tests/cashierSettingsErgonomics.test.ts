@@ -19,12 +19,12 @@ test('cashier settings render only the active canonical destination without inte
   assert.match(navigation, /config_aparencia[\s\S]*Aparência[\s\S]*subTab: 'aparencia'/);
   assert.match(navigation, /config_impressao[\s\S]*Impressão[\s\S]*subTab: 'impressao'/);
   assert.match(navigation, /config_mesas[\s\S]*Mesas[\s\S]*subTab: 'mesas'/);
-  assert.match(navigation, /config_garcom[\s\S]*App do Garçom[\s\S]*subTab: 'garcom'/);
-  assert.match(navigation, /config_taxa[\s\S]*Taxa de Serviço[\s\S]*subTab: 'taxa'/);
+  assert.match(navigation, /config_atendimento[\s\S]*Atendimento[\s\S]*subTab: 'atendimento'/);
+  assert.match(settings, /isAttendance && hasWaiterApp/);
+  assert.match(settings, /<details[\s\S]*App do Garçom — permissões/);
   assert.match(navigation, /config_implantacao[\s\S]*Implantação inicial[\s\S]*subTab: 'implantacao'/);
   assert.match(navigation, /config_integracoes[\s\S]*Integrações[\s\S]*subTab: 'integracoes'/);
-  assert.match(panel, /settingsSubnavItems = getCashierNavigationItem\('impressao_salao'\)\?\.children \?\? \[\]/);
-  assert.match(panel, /activeTab === 'impressao_salao' && settingsSubnavItems\.filter/);
+  assert.match(panel, /<CashierSubNavigation/);
 
   assert.doesNotMatch(settings, /cashier-settings-tab|CASHIER_SETTINGS_GROUPS|selectSettingsTab|readInitialCashierSettingsTab/);
   assert.doesNotMatch(settings, /Configurações do Caixa/);

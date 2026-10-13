@@ -3463,3 +3463,14 @@ body {
     min-height: 44px;
   }
 }
+
+/* One navigation strip for all restaurant workspaces; overflow stays local. */
+.cashier-subnav--shared { min-width: 0; width: 100%; align-items: center; }
+.cashier-subnav__scroll { display: flex; gap: .25rem; min-width: 0; flex: 1; overflow-x: auto; position: relative; scrollbar-width: thin; }
+.cashier-subnav .cashier-subnav__arrow { display: grid; place-items: center; flex: 0 0 28px; color: var(--koma-text-muted); }
+.cashier-subnav__arrow:disabled { visibility: hidden; }
+@media (max-width: 767px) {
+  .cashier-subnav--shared .cashier-subnav__button,
+  .cashier-subnav--shared .cashier-subnav__arrow { min-height: 44px; }
+  .cashier-subnav--shared .cashier-subnav__arrow { flex-basis: 44px; }
+}

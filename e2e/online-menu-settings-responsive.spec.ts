@@ -114,8 +114,8 @@ for (const theme of ['dark', 'light'] as const) {
 
       const subnav = page.locator('.cashier-subnav');
       await expect(subnav).toBeVisible();
-      await expect(subnav.getByRole('button')).toHaveCount(7);
-      await expect(subnav.getByRole('button', { name: 'Perfil', exact: true })).toHaveClass(/is-active/);
+      await expect(subnav.locator('.cashier-subnav__button')).toHaveCount(7);
+      await expect(subnav.getByRole('button', { name: 'Dados da loja', exact: true })).toHaveClass(/is-active/);
       await expect(page.getByRole('heading', { name: 'Perfil do cardápio', exact: true })).toBeVisible();
       await expect(page.getByText('Informações principais', { exact: true })).toBeVisible();
       const additional = page.locator('details').filter({ hasText: 'Informações adicionais' });
@@ -126,12 +126,12 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(page.getByRole('heading', { name: 'Marca', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
-      await navigateHorizontal(page, 'Pedidos online');
+      await navigateHorizontal(page, 'Horários e pedidos');
       await expect(page.getByRole('heading', { name: 'Pedidos online', exact: true })).toBeVisible();
       await expect(page.getByText('Horário do estabelecimento', { exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
-      await navigateHorizontal(page, 'Clientes bloqueados');
+      await navigateHorizontal(page, 'Bloqueios');
       await expect(page.getByRole('heading', { name: 'Clientes bloqueados', exact: true })).toBeVisible();
       await expect(page.getByText('Histórico de bloqueios', { exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
@@ -172,7 +172,7 @@ test('cardápio online mantém abas verticais e horizontais no notebook', async 
   const subnav = page.locator('.cashier-subnav');
   await expect(subnav).toBeVisible();
 
-  for (const label of ['Perfil', 'Marca', 'Pedidos online', 'Clientes bloqueados', 'Entrega', 'Pagamentos', 'Divulgação']) {
+  for (const label of ['Dados da loja', 'Marca', 'Horários e pedidos', 'Bloqueios', 'Entrega', 'Pagamentos', 'Divulgação']) {
     await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
     await expect(subnav.getByRole('button', { name: label, exact: true })).toBeVisible();
   }
@@ -199,7 +199,7 @@ test('implantação usa o slug salvo no link, na abertura e no QR de divulgaçã
   await expect(page.locator('code')).toHaveText(/\/c\/quentinha-caseira$/);
   await expect(page.getByRole('link', { name: 'Abrir cardápio' })).toHaveAttribute('href', /\/c\/quentinha-caseira$/);
   const svgBefore = await page.locator('svg').filter({ has: page.locator('title', { hasText: 'QR Code do cardápio Kôma' }) }).innerHTML();
-  await navigateHorizontal(page, 'Perfil');
+  await navigateHorizontal(page, 'Dados da loja');
   await page.route('**/api/cardapio-digital/config?restaurante_id=*', route => route.fulfill({ json: profile }));
   await page.reload();
   await expect(page.locator('.cashier-topbar')).toBeVisible();

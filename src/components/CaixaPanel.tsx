@@ -38,7 +38,7 @@ import { CashierDesktopSidebar } from './caixa/navigation/CashierDesktopSidebar'
 import { CashierMobileBottomBar } from './caixa/navigation/CashierMobileBottomBar';
 import { CashierMobileSidebar } from './caixa/navigation/CashierMobileSidebar';
 import { CashierOperatorDrawer } from './caixa/navigation/CashierOperatorDrawer';
-import { getCashierNavigationItem } from './caixa/navigation/cashierNavigation';
+import { CashierSubNavigation } from './caixa/navigation/CashierSubNavigation';
 import { useCashierNavigation } from './caixa/navigation/useCashierNavigation';
 import { useCashierPreferences } from './caixa/navigation/useCashierPreferences';
 import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
@@ -75,13 +75,6 @@ const loadCashierOnlineMenu = () => import('./caixa/online-menu/CashierOnlineMen
 const loadCashierTeam = () => import('./caixa/team/CashierTeam');
 const loadCashierReports = () => import('./caixa/reports/CashierReports');
 const loadCashierPdvView = () => import('./caixa/pdv/CashierPdvView');
-const operationSubnavItems = getCashierNavigationItem('operacao')?.children ?? [];
-const onlineMenuSubnavItems = getCashierNavigationItem('cardapio_digital')?.children ?? [];
-const settingsSubnavItems = getCashierNavigationItem('impressao_salao')?.children ?? [];
-const reportsSubnavItems = getCashierNavigationItem('relatorios')?.children ?? [];
-const teamSubnavItems = getCashierNavigationItem('permissoes_cargos')?.children ?? [];
-const customerSubnavItems = getCashierNavigationItem('clientes')?.children ?? [];
-const subscriptionSubnavItems = getCashierNavigationItem('assinatura_pix')?.children ?? [];
 
 const formatClockTime = (value: unknown) => {
   const timestamp = normalizeOperationalTimestamp(value);
@@ -237,6 +230,7 @@ export function CaixaPanel({
       : summaryShiftState ?? (turnoLoadState === 'error' ? 'error' : 'loading');
 
   const {
+    setupMode,
     activeTab,
     setActiveTab,
     activeSubTab,
@@ -786,7 +780,7 @@ export function CaixaPanel({
                 {activeTab === 'clientes' && 'Clientes'}
                 {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Equipe'}
                 {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações'}
-                {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
+                {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Conta & assinatura'}
                 {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && 'Cardápio online'}
               </h2>
             </div>
@@ -838,128 +832,7 @@ export function CaixaPanel({
 
           <KomaBillingNotice apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onOpenBilling={(consolidated)=>{setActiveTab(consolidated ? 'configuracoes' : 'assinatura_pix');setActiveSubTab(consolidated ? 'integracoes' : 'contrato_documentos');}} />
 
-          <div className="cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none">
-            {activeTab === 'operacao' && operationSubnavItems.map((sub) => {
-              const isPrimaryMobileBottomAction = ['vendas_novo_pedido', 'vendas_cozinha'].includes(sub.id);
-              return (
-                <button
-                  key={sub.id}
-                  onClick={() => handleSidebarNavigation(sub.id)}
-                  className={clsx(
-                    'cashier-subnav__button',
-                    isPrimaryMobileBottomAction && 'hidden lg:inline-flex',
-                    isSidebarTabActive(sub.id) && 'is-active',
-                  )}
-                >
-                  {sub.id === 'vendas_cozinha' && !hasDedicatedKds ? 'Preparo' : sub.label}
-                </button>
-              );
-            })}
-
-            {activeTab === 'cardapio_digital' && onlineMenuSubnavItems.map((sub) => (
-              <button
-                key={sub.id}
-                type="button"
-                onClick={() => handleSidebarNavigation(sub.id)}
-                aria-current={isSidebarTabActive(sub.id) ? 'page' : undefined}
-                className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
-              >
-                {sub.label}
-              </button>
-            ))}
-
-            {activeTab === 'impressao_salao' && settingsSubnavItems.filter((sub) => {
-              if (sub.requiredFeature) return operationalEntitlementEnabled(planEntitlements, sub.requiredFeature);
-              return !sub.plans || sub.plans.includes(currentPlanId);
-            }).map((sub) => (
-              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')} aria-current={isSidebarTabActive(sub.id) ? 'page' : undefined}>
-                {sub.label}
-              </button>
-            ))}
-
-            {activeTab === 'cardapio' && [
-              { id: 'produtos', label: 'Produtos', count: apiProdutos.length },
-              { id: 'complementos', label: 'Complementos' },
-              { id: 'categorias', label: hasPrinting ? 'Preparo e impressão' : 'Preparo', count: apiCategorias.length },
-            ].map((sub) => (
-              <button key={sub.id} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', activeSubTab === sub.id && 'is-active')}>
-                {sub.label}
-                {sub.count !== undefined && (
-                  <span aria-hidden="true" className={clsx('ml-1.5','rounded-full','px-1.5','py-0.5','font-mono','text-[8px]', activeSubTab === sub.id ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-koma-raised text-koma-muted')}>
-                    {sub.count}
-                  </span>
-                )}
-              </button>
-            ))}
-
-            {activeTab === 'estoque' && [
-              { id: 'insumos', label: 'Ingredientes' },
-              { id: 'historico', label: 'Compras' },
-              { id: 'inventario', label: 'Inventário' },
-              { id: 'fornecedores', label: 'Fornecedores' },
-            ].map((sub) => {
-              const isSubActive =
-                (sub.id === 'historico' && ['historico', 'entradas', 'xml', 'notas_entrada', 'movimentacoes'].includes(activeSubTab)) ||
-                (sub.id === 'inventario' && ['inventario', 'contagem'].includes(activeSubTab)) ||
-                (sub.id === 'fornecedores' && ['fornecedores', 'distribuidores'].includes(activeSubTab)) ||
-                activeSubTab === sub.id;
-              return <button key={sub.id} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
-            })}
-
-            {activeTab === 'financeiro' && [
-              { id: 'turno_atual', label: 'Turno Atual' },
-              { id: 'movimentacoes', label: 'Movimentações' },
-              { id: 'fechamento', label: 'Fechamento' },
-            ].map((sub) => {
-              const isSubActive =
-                (sub.id === 'turno_atual' && ['turno_atual', 'fluxo'].includes(activeSubTab)) ||
-                (sub.id === 'movimentacoes' && ['movimentacoes', 'ajustes', 'ajustes_caixa', 'suprimento', 'sangria'].includes(activeSubTab)) ||
-                (sub.id === 'fechamento' && ['fechamento', 'conferencia', 'conferencia_cega'].includes(activeSubTab)) ||
-                activeSubTab === sub.id;
-              return <button key={sub.id} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
-            })}
-
-            {activeTab === 'clientes' && customerSubnavItems.filter((sub) =>
-              (sub.requiredFeature !== 'loyalty' || hasLoyalty) && (sub.requiredFeature !== 'coupons' || hasCoupons)
-            ).map((sub) => (
-              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')} aria-current={isSidebarTabActive(sub.id) ? 'page' : undefined}>
-                {sub.label}
-              </button>
-            ))}
-            {(activeTab === 'relatorios' || activeTab === 'dashboard') && reportsSubnavItems.map((sub) => (
-              <button
-                key={sub.id}
-                id={`relatorios-subtab-${sub.target.subTab}`}
-                aria-current={isSidebarTabActive(sub.id) ? 'page' : undefined}
-                onClick={() => handleSidebarNavigation(sub.id)}
-                className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
-              >
-                {sub.label}
-              </button>
-            ))}
-
-            {activeTab === 'permissoes_cargos' && teamSubnavItems.map((sub) => (
-              <button
-                key={sub.id}
-                id={`equipe-subtab-${sub.target.subTab}`}
-                onClick={() => handleSidebarNavigation(sub.id)}
-                className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
-              >
-                {sub.label}
-              </button>
-            ))}
-
-            {activeTab === 'assinatura_pix' && subscriptionSubnavItems.map((sub) => (
-              <button
-                key={sub.id}
-                id={`assinatura-subtab-${sub.target.subTab}`}
-                onClick={() => handleSidebarNavigation(sub.id)}
-                className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
-              >
-                {sub.label}
-              </button>
-            ))}
-          </div>
+          <CashierSubNavigation activeTab={activeTab} activeSubTab={activeSubTab} planId={currentPlanId} entitlements={planEntitlements} setupMode={setupMode} onNavigate={handleSidebarNavigation} counts={{ cardapio_produtos: apiProdutos.length, cardapio_preparo: apiCategorias.length }} />
 
           <div ref={cashierContentRef} className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
             {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
@@ -1113,6 +986,7 @@ export function CaixaPanel({
                 showToast,
                 setActiveTab,
                 hasPrinting,
+                hasWaiterApp: operationalEntitlementEnabled(planEntitlements, 'waiter_app'),
                 salonTables,
                 salonTableCards,
                 onCreateMesa,

@@ -185,6 +185,7 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
   };
 
   return {
+    setupMode,
     activeTab,
     setActiveTab,
     activeSubTab,

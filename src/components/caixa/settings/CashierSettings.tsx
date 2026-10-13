@@ -24,6 +24,7 @@ interface Props {
   showToast: CashierNotice;
   setActiveTab: (tab: CashierTab) => void;
   hasPrinting: boolean;
+  hasWaiterApp: boolean;
   salonTables: Table[];
   salonTableCards: ReturnType<typeof projectCashierSalonTables>;
   onCreateMesa: CaixaPanelProps['onCreateMesa'];
@@ -52,6 +53,7 @@ export default function CashierSettings({
   showToast,
   setActiveTab,
   hasPrinting,
+  hasWaiterApp,
   salonTables,
   salonTableCards,
   onCreateMesa,
@@ -81,10 +83,11 @@ export default function CashierSettings({
     fetchConfiguracoes,
     handleTestPrinter,
   } = settings;
+  const isAttendance = ['atendimento', 'garcom', 'taxa'].includes(activeSubTab);
   const operationalSettingsTab =
     activeSubTab === 'impressao' || activeSubTab === 'mesas' || activeSubTab === 'garcom' || activeSubTab === 'taxa'
       ? activeSubTab
-      : null;
+      : isAttendance ? 'taxa' : null;
 
   const [configSalSubTab, setConfigSalSubTab] = useState<'pedido' | 'fechamento' | 'atendimento'>('pedido');
   const isTechnicalIntegrations = activeSubTab === 'integracoes' || activeSubTab === 'fiscal';
@@ -221,17 +224,8 @@ export default function CashierSettings({
                 setIsConfirmingDelete={setIsConfirmingDelete}
               />
 
-              <CashierWaiterSettings
-                printingSettingsTab={operationalSettingsTab}
-                hasPrinting={hasPrinting}
-                setConfigSalSubTab={setConfigSalSubTab}
-                configSalSubTab={configSalSubTab}
-                waiterPermissions={waiterPermissions}
-                updateConfiguracoes={updateConfiguracoes}
-              />
-
               <CashierServiceTaxSettings
-                printingSettingsTab={operationalSettingsTab}
+                printingSettingsTab={isAttendance ? 'taxa' : operationalSettingsTab}
                 taxaServicoAtiva={taxaServicoAtiva}
                 serviceTaxRate={serviceTaxRate}
                 setTaxaServicoAtiva={setTaxaServicoAtiva}
@@ -239,6 +233,22 @@ export default function CashierSettings({
                 updateConfiguracoes={updateConfiguracoes}
                 setServiceTaxRate={setServiceTaxRate}
               />
+              {isAttendance && hasWaiterApp && (
+                <details className="rounded-2xl border border-koma-border bg-koma-panel p-5" open={activeSubTab === 'garcom' ? true : undefined}>
+                  <summary className="cursor-pointer text-sm font-bold text-koma-foreground">App do Garçom — permissões</summary>
+                  <div className="mt-4">
+                    <CashierWaiterSettings
+                      printingSettingsTab="garcom"
+                      hasPrinting={hasPrinting}
+                      setConfigSalSubTab={setConfigSalSubTab}
+                      configSalSubTab={configSalSubTab}
+                      waiterPermissions={waiterPermissions}
+                      updateConfiguracoes={updateConfiguracoes}
+                    />
+
+                  </div>
+                </details>
+              )}
             </>
           )}
         </div>

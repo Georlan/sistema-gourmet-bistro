@@ -47,16 +47,16 @@ test('function search ignores accents and ranks App do Garçom as the primary ga
   assert.equal(normalizeCashierFunctionSearch('Garçom'), 'garcom');
 
   const [result] = searchCashierFunctions(entries, 'garçom');
-  assert.equal(result?.id, 'config_garcom');
-  assert.equal(result?.label, 'App do Garçom');
-  assert.equal(result?.navigationId, 'config_garcom');
+  assert.equal(result?.id, 'config_atendimento');
+  assert.equal(result?.label, 'Atendimento');
+  assert.equal(result?.navigationId, 'config_atendimento');
 });
 
 test('aliases find internal settings without requiring exact menu labels', () => {
-  assert.equal(searchCashierFunctions(entries, 'atendente')[0]?.id, 'config_garcom');
+  assert.equal(searchCashierFunctions(entries, 'atendente')[0]?.id, 'config_atendimento');
   assert.equal(searchCashierFunctions(entries, 'tema')[0]?.id, 'config_aparencia');
   assert.equal(searchCashierFunctions(entries, 'impressora')[0]?.id, 'config_impressao');
-  assert.equal(searchCashierFunctions(entries, 'gorjeta')[0]?.id, 'config_taxa');
+  assert.equal(searchCashierFunctions(entries, 'gorjeta')[0]?.id, 'config_atendimento');
   assert.equal(searchCashierFunctions(entries, 'implantação')[0]?.id, 'config_implantacao');
 });
 

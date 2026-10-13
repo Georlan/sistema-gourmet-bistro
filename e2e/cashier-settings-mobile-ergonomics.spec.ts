@@ -77,7 +77,7 @@ for (const theme of ['dark', 'light'] as const) {
       const menu = page.locator('#btn-mobile-caixa-sidebar-open');
       const chat = page.locator('#btn-caixa-conversas-drawer');
       const fullscreen = page.locator('#btn-modo-pdv-fullscreen');
-      const title = page.locator('.cashier-topbar h2');
+      const title = page.locator('.cashier-topbar h2:not(dialog h2)');
 
       await expect(menu).toBeVisible();
       await expect(chat).toBeVisible();
@@ -86,7 +86,7 @@ for (const theme of ['dark', 'light'] as const) {
 
       const [menuBox, titleBox, chatBox, fullscreenBox] = await Promise.all([
         rect(page, '#btn-mobile-caixa-sidebar-open'),
-        rect(page, '.cashier-topbar h2'),
+        rect(page, '.cashier-topbar h2:not(dialog h2)'),
         rect(page, '#btn-caixa-conversas-drawer'),
         rect(page, '#btn-modo-pdv-fullscreen'),
       ]);
@@ -111,7 +111,7 @@ for (const theme of ['dark', 'light'] as const) {
       }
 
       const subnavButtons = page.locator('.cashier-subnav__button');
-      await expect(subnavButtons).toHaveCount(5);
+      await expect(subnavButtons).toHaveCount(6);
       for (const button of await subnavButtons.all()) {
         const buttonBox = await button.boundingBox();
         expect(buttonBox?.height ?? 0).toBeGreaterThanOrEqual(44);
@@ -127,8 +127,8 @@ test('topbar acomoda títulos longos de outras áreas sem colisão nem overflow'
   await openCashier(page, 'light');
 
   const longTitleAreas = [
-    { nav: 'Cardápio online', expectedHeading: /Configurações do cardápio online/i },
-    { nav: 'Conta & assinatura', expectedHeading: /Planos de Assinatura e Recebimento Pix/i },
+    { nav: 'Cardápio online', expectedHeading: /Cardápio online/i },
+    { nav: 'Conta & assinatura', expectedHeading: /Conta & assinatura/i },
     { nav: 'Configurações', expectedHeading: /Configurações/i },
     { nav: 'Relatórios', expectedHeading: /Relatórios/i },
     { nav: 'Estoque & compras', expectedHeading: /Estoque/i },
@@ -138,13 +138,13 @@ test('topbar acomoda títulos longos de outras áreas sem colisão nem overflow'
 
   for (const area of longTitleAreas) {
     await navigate(page, area.nav);
-    const title = page.locator('.cashier-topbar h2');
+    const title = page.locator('.cashier-topbar h2:not(dialog h2)');
     await expect(title).toBeVisible();
     await expect(title).toHaveText(area.expectedHeading);
 
     const [menuBox, titleBox, chatBox, fullscreenBox] = await Promise.all([
       rect(page, '#btn-mobile-caixa-sidebar-open'),
-      rect(page, '.cashier-topbar h2'),
+      rect(page, '.cashier-topbar h2:not(dialog h2)'),
       rect(page, '#btn-caixa-conversas-drawer'),
       rect(page, '#btn-modo-pdv-fullscreen'),
     ]);
@@ -210,14 +210,15 @@ test('configurações usam somente a navegação canônica vertical + horizontal
 
   const subnav = page.locator('.cashier-subnav');
   await expect(subnav).toBeVisible();
-  await expect(subnav.getByRole('button')).toHaveCount(7);
-  await expect(subnav.getByRole('button', { name: 'Aparência', exact: true })).toHaveClass(/is-active/);
+  await expect(subnav.locator('.cashier-subnav__button')).toHaveCount(7);
+  await expect(subnav.getByRole('button', { name: 'Mesas', exact: true })).toHaveClass(/is-active/);
   await expect(page.locator('.cashier-settings-tab')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Configurações do Caixa' })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Aparência deste caixa' })).toBeVisible();
+  await expect(page.getByText('Configuração das mesas')).toBeVisible();
 
-  // O mesmo destino também existe no menu vertical e fecha a gaveta ao navegar.
-  await navigate(page, 'Mesas');
+  // No celular, o menu abre a área; a barra superior mantém os destinos internos.
+  await navigate(page, 'Configurações');
+  await navigateHorizontal(page, 'Mesas');
   await expect(page.getByText('Configuração das mesas')).toBeVisible();
   await expect(page.getByText('Mesas por situação', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Mesas prontas para receber', { exact: true })).toHaveCount(0);
@@ -249,15 +250,17 @@ test('configurações usam somente a navegação canônica vertical + horizontal
   await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_font_size'))).toBe('padrao');
 
   await navigateHorizontal(page, 'Impressão');
-  await expect(page.getByRole('heading', { name: 'Estado e diagnóstico', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Estado atual', exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await navigateHorizontal(page, 'App do Garçom');
+  await navigateHorizontal(page, 'Atendimento');
+  await expect(page.getByRole('checkbox', { name: 'Cobrar taxa de serviço' })).toBeVisible();
+  await page.locator('summary').filter({ hasText: 'App do Garçom — permissões' }).click();
   await expect(page.getByRole('heading', { name: 'Permissões da equipe', exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await navigateHorizontal(page, 'Taxa de Serviço');
-  await expect(page.getByText('Taxa de Serviço do Salão')).toBeVisible();
+  await navigateHorizontal(page, 'Atendimento');
+  await expect(page.getByText('Taxa de serviço', { exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await navigateHorizontal(page, 'Implantação inicial');
@@ -268,7 +271,7 @@ test('configurações usam somente a navegação canônica vertical + horizontal
   await navigateHorizontal(page, 'Integrações');
   await expect(page.getByRole('heading', { name: 'Pagamentos online' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Mercado Pago' })).toBeVisible();
-  await expect(page.getByText('Conectado')).toBeVisible();
+  await expect(page.getByText('Conectado', { exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   const topbarStyles = await page.locator('.cashier-topbar').evaluate((element) => {
@@ -285,7 +288,7 @@ test('configurações usam somente a navegação canônica vertical + horizontal
   expect(topbarStyles.border).not.toBe(topbarStyles.background);
 });
 
-test('configurações espelham os mesmos oito destinos no menu vertical e horizontal no notebook', async ({ page }) => {
+test('configurações espelham os mesmos sete destinos no menu vertical e horizontal no notebook', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 800 });
   await openCashier(page, 'dark');
 
@@ -293,7 +296,7 @@ test('configurações espelham os mesmos oito destinos no menu vertical e horizo
   await sidebar.getByRole('button', { name: 'Configurações', exact: true }).click();
 
   const subnav = page.locator('.cashier-subnav');
-  const labels = ['Aparência', 'Impressão', 'Mesas', 'App do Garçom', 'Taxa de Serviço', 'Implantação inicial', 'Fiscal', 'Integrações'];
+  const labels = ['Mesas', 'Atendimento', 'Impressão', 'Fiscal', 'Integrações', 'Aparência', 'Implantação inicial'];
 
   for (const label of labels) {
     await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();

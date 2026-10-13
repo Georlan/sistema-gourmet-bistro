@@ -44,16 +44,17 @@ export function CashierServiceTaxSettings({
           <span
             className={"font-serif font-bold text-koma-secondary block pb-1 border-b border-koma-border"}
           >
-            Taxa de Serviço do Salão
+            Taxa de serviço
           </span>
 
           <div className={"flex justify-between items-center pt-1"}>
             <span className={"text-[10px] text-koma-secondary font-semibold"}>
-              Ativar Taxa de 10% de Serviço
+              Cobrar taxa de serviço
             </span>
             <label className={"relative inline-flex items-center cursor-pointer"}>
               <input
                 type="checkbox"
+                aria-label="Cobrar taxa de serviço"
                 checked={taxaServicoAtiva}
                 onChange={(e) => {
                   setTaxaServicoAtiva(e.target.checked);
@@ -73,10 +74,11 @@ export function CashierServiceTaxSettings({
               <label
                 className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}
               >
-                Porcentagem Customizada (%):
+                Percentual (%)
               </label>
               <input
                 type="number"
+                aria-label="Percentual da taxa de serviço"
                 min="1"
                 max="30"
                 value={serviceTaxRate}

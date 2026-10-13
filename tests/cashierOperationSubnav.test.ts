@@ -22,9 +22,10 @@ test('operation horizontal tabs mirror Navigation Tree v2 children', () => {
 test('CaixaPanel delegates operation subnav clicks and active state to the shared navigation controller', () => {
   const panel = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
 
-  assert.match(panel, /getCashierNavigationItem\('operacao'\)\?\.children \?\? \[\]/);
-  assert.match(panel, /operationSubnavItems\.map\(\(sub\) =>/);
-  assert.match(panel, /onClick=\{\(\) => handleSidebarNavigation\(sub\.id\)\}/);
-  assert.match(panel, /isSidebarTabActive\(sub\.id\)/);
+  assert.match(panel, /<CashierSubNavigation/);
+  assert.match(panel, /onNavigate=\{handleSidebarNavigation\}/);
+  const subnav = readFileSync(new URL('../src/components/caixa/navigation/CashierSubNavigation.tsx', import.meta.url), 'utf8');
+  assert.match(subnav, /onNavigate\(item.id\)/);
+  assert.match(subnav, /isCashierNavigationActive\(item.id/);
   assert.doesNotMatch(panel, /\{ id: 'pedidos', label: 'Pedidos' \}[\s\S]*\{ id: 'mesas', label: 'Salão' \}/);
 });
