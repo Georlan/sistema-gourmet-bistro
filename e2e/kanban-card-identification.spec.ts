@@ -35,7 +35,7 @@ for (const theme of ['dark','light']) for (const size of ['padrao','gigante']) {
     await expect(cards.first()).toBeVisible();
     for(const [index,card] of (await cards.all()).entries()) {
       await expect(card.locator('.orders-card__identity-title')).toHaveText(`Cliente ${index} com nome comprido`);
-      const tag=card.locator('..').locator('.orders-card__fulfillment-tag');
+      const tag=card.locator('.orders-card__fulfillment-tag');
       await expect(tag).toHaveText(index%2?'Delivery':'Retirada');
       expect(await tag.evaluate(el=>{
         const style=getComputedStyle(el);
@@ -48,8 +48,8 @@ for (const theme of ['dark','light']) for (const size of ['padrao','gigante']) {
       })).toBeGreaterThanOrEqual(4.5);
       const tagBox=await tag.boundingBox();
       const cardBox=await card.boundingBox();
-      expect(tagBox!.y).toBeLessThan(cardBox!.y);
-      expect(tagBox!.y+tagBox!.height).toBeGreaterThan(cardBox!.y);
+      expect(tagBox!.y).toBeGreaterThanOrEqual(cardBox!.y);
+      expect(tagBox!.y+tagBox!.height).toBeLessThanOrEqual(cardBox!.y+cardBox!.height);
       await expect(card.locator('.orders-card__number strong')).toHaveText(`#${101+index}`);
       await expect(card.locator('.orders-card__identity-subtitle')).toContainText('85999999999');
       expect(await card.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
@@ -58,6 +58,12 @@ for (const theme of ['dark','light']) for (const size of ['padrao','gigante']) {
       expect(number!.x+number!.width).toBeLessThan(title!.x);
       expect(await card.locator('.orders-card__number strong').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
     }
+    const first=await cards.nth(0).boundingBox(), next=await cards.nth(1).boundingBox();
+    expect(next!.y-(first!.y+first!.height)).toBeGreaterThanOrEqual(8);
+    expect(next!.y-(first!.y+first!.height)).toBeLessThanOrEqual(12);
+    const relativeTop=await cards.first().evaluate(el=>el.querySelector('.orders-card__fulfillment-tag')!.getBoundingClientRect().top-el.getBoundingClientRect().top);
+    await cards.first().hover();
+    expect(await cards.first().evaluate(el=>el.querySelector('.orders-card__fulfillment-tag')!.getBoundingClientRect().top-el.getBoundingClientRect().top)).toBeCloseTo(relativeTop,0);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
     await page.screenshot({path:test.info().outputPath(`cards-${theme}-${size}.png`),fullPage:true});
     await cards.first().getByRole('button',{name:'Imprimir conferência do pedido 101',exact:true}).click();
