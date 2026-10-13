@@ -3,3 +3,10 @@
 #btn-caixa-resumo {
   min-height: 44px;
 }
+
+/* The compact desktop topbar is shorter than mobile touch targets. */
+@media (min-width: 1024px) {
+  .cashier-topbar #btn-caixa-resumo {
+    min-height: 36px;
+  }
+}
