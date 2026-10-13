@@ -56,6 +56,10 @@ for (const theme of ['dark','light']) for (const size of ['padrao','gigante']) {
       const number=await card.locator('.orders-card__number').boundingBox();
       const title=await card.locator('.orders-card__identity-title').boundingBox();
       expect(number!.x+number!.width).toBeLessThan(title!.x);
+      const amount=await card.locator('.orders-card__price').boundingBox();
+      const print=await card.getByRole('button',{name:`Imprimir conferência do pedido ${101+index}`,exact:true}).boundingBox();
+      expect(Math.max(amount!.y,print!.y)).toBeLessThan(Math.min(amount!.y+amount!.height,print!.y+print!.height));
+      if(cardBox!.width>380) expect(Math.abs(tagBox!.y-title!.y)).toBeLessThanOrEqual(2);
       expect(await card.locator('.orders-card__number strong').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
     }
     const first=await cards.nth(0).boundingBox(), next=await cards.nth(1).boundingBox();

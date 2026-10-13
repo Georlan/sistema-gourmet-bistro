@@ -689,7 +689,6 @@ export function CaixaOrdersWorkspace({
                         sla.borderTopClass
                       )}
                     >
-                      {renderLatestTag(`digital:${order.id}`)}
                       <div className="orders-card__identity">
                         <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale', tableBlockLabel && 'is-table')}>
                           {tableBlockLabel ? <Users size={15} /> : digitalOrderIcon(order)}
@@ -706,15 +705,16 @@ export function CaixaOrdersWorkspace({
                               : [getDigitalOrderAssociation(order), order.telefone].filter(Boolean).join(' · ')}
                           </span>
                           <div className="orders-card__identity-chips">
+                            {renderLatestTag(`digital:${order.id}`)}
                             <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
                             <span className={"orders-card__chip is-primary"}>{badgeText}</span>
                             <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>
                           </div>
                         </div>
-                        <div className="orders-card__identity-side">
+                        <div className="orders-card__identity-side orders-card__identity-side--digital">
                           <span className="orders-card__fulfillment-tag">{order.isQuickSale ? 'Balcão · venda rápida' : getDigitalOrderFulfillmentLabel(order)}</span>
-                          <span className="orders-card__price">{formatCurrency(order.total)}</span>
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="orders-card__money-actions">
+                            <span className="orders-card__price">{formatCurrency(order.total)}</span>
                             {hasPrinting !== false ? (
                               <button
                                 type="button"
@@ -960,7 +960,6 @@ export function CaixaOrdersWorkspace({
                         sla.borderTopClass
                       )}
                     >
-                      {renderLatestTag(`finalization:${order.id}`)}
                       <div className="orders-card__identity">
                         <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale', tableBlockLabel && 'is-table')}>
                           {tableBlockLabel ? <Users size={15} /> : digitalOrderIcon(order)}
@@ -977,15 +976,16 @@ export function CaixaOrdersWorkspace({
                               : [getDigitalOrderAssociation(order), order.telefone].filter(Boolean).join(' · ')}
                           </span>
                           <div className="orders-card__identity-chips">
+                            {renderLatestTag(`finalization:${order.id}`)}
                             <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
                             <span className={"orders-card__chip is-primary"}>{badgeText}</span>
                             <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>
                           </div>
                         </div>
-                        <div className="orders-card__identity-side">
+                        <div className="orders-card__identity-side orders-card__identity-side--digital">
                           <span className="orders-card__fulfillment-tag">{order.isQuickSale ? 'Balcão · venda rápida' : getDigitalOrderFulfillmentLabel(order)}</span>
-                          <span className="orders-card__price">{formatCurrency(order.total)}</span>
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="orders-card__money-actions">
+                            <span className="orders-card__price">{formatCurrency(order.total)}</span>
                             {hasPrinting !== false ? (
                               <button
                                 type="button"
