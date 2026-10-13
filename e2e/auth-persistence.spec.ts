@@ -354,7 +354,7 @@ test('duas abas de Caixa em restaurantes diferentes e uma de Garçom isolam toke
   if (test.info().project.name.startsWith('mobile')) await tabs[1].getByRole('button',{name:'Abrir menu principal'}).click();
   await expect(tabs[1].getByRole('button',{name:'Abrir conta e preferências',exact:true})).toBeVisible();
   await tabs[1].getByRole('button',{name:'Abrir conta e preferências',exact:true}).click();
-  await tabs[1].getByRole('button',{name:'LOGOUT / TROCAR OPERADOR'}).click();
+  await tabs[1].getByRole('button',{name:'Sair / trocar operador'}).click();
   await expect(tabs[1].getByLabel('E-MAIL')).toBeVisible();
   await Promise.all([tabs[0].reload(),tabs[2].reload()]);
   await expect(tabs[0].getByLabel('E-MAIL')).toHaveCount(0);

@@ -1,0 +1,4 @@
+/* Keep touch targets usable despite the generic mobile control rule. */
+.cashier-options button {
+  min-height: 44px;
+}

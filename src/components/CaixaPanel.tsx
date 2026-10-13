@@ -1414,14 +1414,11 @@ export function CaixaPanel({
           setIsOperatorDrawerOpen={setIsOperatorDrawerOpen}
           activeWaiterNome={activeWaiterNome}
           handleLogoutOperator={handleLogoutOperator}
-          orders={orders}
-          salonTables={salonTables}
           onRefreshOrders={onRefreshOrders}
           showToast={showToast}
-          toggleFullscreen={toggleFullscreen}
-          isFullscreen={isFullscreen}
           changeFontSize={changeFontSize}
           fontSize={fontSize}
+          theme={theme}
           soundEnabled={soundEnabled}
           toggleSound={toggleSound}
           audioReady={audioReady}
