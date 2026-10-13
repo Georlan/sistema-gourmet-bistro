@@ -3506,3 +3506,8 @@ html[data-koma-text-size]:not([data-koma-text-size="padrao"]) .cashier-subnav__b
   .orders-card__identity-side { flex-wrap: wrap; }
   .orders-card__fulfillment-tag { max-width: 45%; }
 }
+
+/* Compact digital heading: latest joins status; amount and print share a row. */
+.orders-card__identity-side--digital { gap: .3rem; }
+.orders-card__money-actions { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: .4rem; }
+.orders-card__money-actions .orders-card__price { margin-left: 0; }
