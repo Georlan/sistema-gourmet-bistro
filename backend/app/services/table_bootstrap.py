@@ -42,16 +42,22 @@ def bootstrap_standard_tables(
     tenant_id: int,
     count: int,
     default_capacity: int,
+    first_number: int = 1,
+    activate_map: bool = True,
 ) -> TableBootstrapResult:
-    """Cria somente mesas padronizadas ausentes de 1..count.
+    """Cria somente mesas padronizadas ausentes de first_number..count.
 
     A operação é deliberadamente não destrutiva: reduzir a quantidade nunca remove
-    mesas existentes nem altera nomes/capacidades personalizados.
+    mesas existentes nem altera nomes/capacidades personalizados. O bootstrap inicial
+    ativa o mapa; a criação em lote preserva essa configuração com activate_map=False.
     """
     if count < 1 or count > 300:
         raise ValueError("A quantidade de mesas deve ficar entre 1 e 300.")
     if default_capacity < 1 or default_capacity > 50:
         raise ValueError("A capacidade padrão deve ficar entre 1 e 50 lugares.")
+
+    if first_number < 1 or first_number > count:
+        raise ValueError("O primeiro número deve ficar entre 1 e o último número.")
 
     _serialize_tenant_bootstrap(db, tenant_id)
 
@@ -70,7 +76,7 @@ def bootstrap_standard_tables(
         .all()
     }
     created_ids: list[int] = []
-    for table_id in range(1, count + 1):
+    for table_id in range(first_number, count + 1):
         if table_id in existing_ids:
             continue
         mesa = Mesa(
@@ -92,7 +98,7 @@ def bootstrap_standard_tables(
         .filter(ConfiguracaoRestaurante.restaurante_id == tenant_id)
         .one_or_none()
     )
-    if config is not None:
+    if config is not None and activate_map:
         config.mapa_mesas_ativo = True
         db.flush([config])
 

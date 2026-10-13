@@ -123,6 +123,22 @@ export function useOperationalTables({
     }
   };
 
+  const handleCreateMesas = async (first: number, last: number, capacity: number) => {
+    const requestScope = scopeKey;
+    const headers = getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/mesas/lote`, {
+      method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ first_number: first, last_number: last, capacity }),
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(typeof payload?.detail === 'string' ? payload.detail : 'Não foi possível criar as mesas. Tente novamente.');
+    if (requestScope !== scopeKeyRef.current || headers.Authorization !== getAuthHeaders().Authorization) {
+      throw new Error('A loja ativa mudou. Volte à loja original para conferir as mesas criadas.');
+    }
+    await fetchTables();
+    return payload as { created_ids: number[]; preserved_count: number; total_after: number };
+  };
+
   const handleUpdateMesa = async (id: number, capacidade?: number, nome?: string) => {
     try {
       const res = await fetch(`${API_BASE_URL}/mesas/${id}`, {
@@ -168,6 +184,7 @@ export function useOperationalTables({
     setSalonTables,
     fetchTables,
     handleCreateMesa,
+    handleCreateMesas,
     handleUpdateMesa,
     handleDeleteMesa,
     isTablesLoaded,

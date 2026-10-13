@@ -1,4 +1,6 @@
 import datetime
+import json
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
@@ -27,11 +29,59 @@ from ..schemas import (
 from ..security import get_current_user, require_permission
 from ..services.inventory import estornar_estoque_dos_itens
 from ..websocket_manager import manager
+from ..services.table_bootstrap import bootstrap_standard_tables
 
 router = APIRouter(
     prefix="/mesas",
     tags=["Mesas e Observações"]
 )
+
+class MesaRangeCreate(BaseModel):
+    first_number: int = Field(ge=1, le=300)
+    last_number: int = Field(ge=1, le=300)
+    capacity: int = Field(default=4, ge=1, le=50)
+
+
+@router.post("/lote")
+def create_mesas_lote(
+    payload: MesaRangeCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("caixa:operar")),
+):
+    """Cria somente os números faltantes do intervalo, sem mudar a configuração."""
+    tenant_id = require_tenant_id()
+    try:
+        result = bootstrap_standard_tables(
+            db, tenant_id=tenant_id, count=payload.last_number,
+            first_number=payload.first_number, default_capacity=payload.capacity,
+            activate_map=False,
+        )
+        db.add(ActivityLog(
+            restaurante_id=tenant_id, garcom_id=current_user.id,
+            action="TABLES_RANGE_CREATE",
+            details=json.dumps({"first_number": payload.first_number,
+                "last_number": payload.last_number, "capacity": payload.capacity,
+                "created_ids": list(result.created_ids)}, ensure_ascii=False),
+        ))
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="As mesas mudaram durante o cadastro. Revise o intervalo e tente novamente.") from exc
+    if result.created_ids:
+        background_tasks.add_task(manager.broadcast,
+            {"event": "tables_updated", "detail": {"type": "layout_mesa_atualizado", "action": "created_batch", "mesa_ids": list(result.created_ids)}},
+            tenant_id)
+    return {"created_ids": list(result.created_ids),
+        "preserved_count": payload.last_number - payload.first_number + 1 - len(result.created_ids),
+        "total_after": result.total_after}
+
 
 # ----------------- TABLES ENDPOINTS -----------------
 @router.get("/", response_model=List[MesaResponse])

@@ -28,6 +28,7 @@ interface Props {
   salonTables: Table[];
   salonTableCards: ReturnType<typeof projectCashierSalonTables>;
   onCreateMesa: CaixaPanelProps['onCreateMesa'];
+  onCreateMesas: CaixaPanelProps['onCreateMesas'];
   onUpdateMesa: CaixaPanelProps['onUpdateMesa'];
   onDeleteMesa: CaixaPanelProps['onDeleteMesa'];
   setCheckoutServiceTax: React.Dispatch<React.SetStateAction<boolean>>;
@@ -57,6 +58,7 @@ export default function CashierSettings({
   salonTables,
   salonTableCards,
   onCreateMesa,
+  onCreateMesas,
   onUpdateMesa,
   onDeleteMesa,
   setCheckoutServiceTax,
@@ -118,12 +120,14 @@ export default function CashierSettings({
     setTableFormError,
     editingTableRuntime,
     handleAddMesaSubmit,
+    mesaCreateMode, setMesaCreateMode, mesaRangeFirst, setMesaRangeFirst, mesaRangeLast, setMesaRangeLast, rangePreview, suggestedFirst, batchAvailable,
   } = useCashierTableSettings({
     onUpdateMesa,
     onDeleteMesa,
     salonTableCards,
     salonTables,
     onCreateMesa,
+    onCreateMesas,
     showToast,
   });
 
@@ -254,6 +258,10 @@ export default function CashierSettings({
         </div>
       )}
       <CashierTableDialogs
+        mesaCreateMode={mesaCreateMode} setMesaCreateMode={setMesaCreateMode}
+        mesaRangeFirst={mesaRangeFirst} setMesaRangeFirst={setMesaRangeFirst}
+        mesaRangeLast={mesaRangeLast} setMesaRangeLast={setMesaRangeLast}
+        rangePreview={rangePreview} suggestedFirst={suggestedFirst} batchAvailable={batchAvailable}
         handleDeleteMesa={handleDeleteMesa}
         handleUpdateMesaSubmit={handleUpdateMesaSubmit}
         showAddMesaModal={showAddMesaModal}

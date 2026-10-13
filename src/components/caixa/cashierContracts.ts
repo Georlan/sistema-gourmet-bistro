@@ -11,6 +11,7 @@ export interface CaixaPanelProps {
   activeWaiterNome: string;
   salonTables: Table[];
   onCreateMesa: (id: number, capacidade: number, nome?: string) => Promise<void>;
+  onCreateMesas?: (first: number, last: number, capacity: number) => Promise<{ created_ids: number[]; preserved_count: number; total_after: number }>;
   onUpdateMesa: (id: number, capacidade?: number, nome?: string) => Promise<void>;
   onDeleteMesa: (id: number) => Promise<void>;
   pagamentosPendentes?: any[];

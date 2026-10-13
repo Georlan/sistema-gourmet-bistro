@@ -556,6 +556,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     setSalonTables,
     fetchTables,
     handleCreateMesa,
+    handleCreateMesas,
     handleUpdateMesa,
     handleDeleteMesa,
     isTablesLoaded,
@@ -1689,6 +1690,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             activeWaiterNome={activeWaiterNome}
             salonTables={salonTables}
             onCreateMesa={handleCreateMesa}
+            onCreateMesas={handleCreateMesas}
             onUpdateMesa={handleUpdateMesa}
             onDeleteMesa={handleDeleteMesa}
             pagamentosPendentes={pagamentosPendentes}
@@ -1797,6 +1799,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
               activeWaiterNome={activeWaiterNome}
               salonTables={salonTables}
               onCreateMesa={handleCreateMesa}
+              onCreateMesas={handleCreateMesas}
               onUpdateMesa={handleUpdateMesa}
               onDeleteMesa={handleDeleteMesa}
               pagamentosPendentes={pagamentosPendentes}
