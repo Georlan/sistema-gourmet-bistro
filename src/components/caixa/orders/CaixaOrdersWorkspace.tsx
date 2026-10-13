@@ -88,16 +88,6 @@ const digitalOrderIcon = (order: DeliveryOrderView) => {
   return <ShoppingBag size={17} aria-hidden="true" />;
 };
 
-// The ribbon lives outside the painted card, so it stays attached without clipping.
-function FulfillmentCard({ order, children }: { order: DeliveryOrderView; children: React.ReactNode }) {
-  return <div className="orders-card-shell">
-    <div className="orders-card-shell__ribbon">
-      <span className="orders-card__fulfillment-tag">{order.isQuickSale ? 'Balcão · venda rápida' : getDigitalOrderFulfillmentLabel(order)}</span>
-    </div>
-    {children}
-  </div>;
-}
-
 // Renderizador compacto de itens de alta densidade
 const renderCompactItemsList = (
   items: string | readonly (CompositionSource & { nome?: string; produto?: { nome?: string }; status?: string })[],
@@ -678,7 +668,6 @@ export function CaixaOrdersWorkspace({
                   const tableBlockLabel = getDigitalOrderTableBlockLabel(order);
                   const orderNumber = humanOrderNumber(order);
                   return (
-                    <FulfillmentCard key={order.id} order={order}>
                     <div
                       key={order.id}
                       onClick={() => actions.inspectDigitalOrder(order)}
@@ -723,6 +712,7 @@ export function CaixaOrdersWorkspace({
                           </div>
                         </div>
                         <div className="orders-card__identity-side">
+                          <span className="orders-card__fulfillment-tag">{order.isQuickSale ? 'Balcão · venda rápida' : getDigitalOrderFulfillmentLabel(order)}</span>
                           <span className="orders-card__price">{formatCurrency(order.total)}</span>
                           <div className="flex items-center justify-end gap-1">
                             {hasPrinting !== false ? (
@@ -779,7 +769,6 @@ export function CaixaOrdersWorkspace({
                         <span>{buttonText}</span>
                       </button>
                     </div>
-                    </FulfillmentCard>
                   );
                 })}
               </>
@@ -950,7 +939,6 @@ export function CaixaOrdersWorkspace({
                   const tableBlockLabel = getDigitalOrderTableBlockLabel(order);
                   const orderNumber = humanOrderNumber(order);
                   return (
-                    <FulfillmentCard key={order.id} order={order}>
                     <div
                       key={`transito-${order.id}`}
                       onClick={() => actions.inspectDigitalOrder(order)}
@@ -995,6 +983,7 @@ export function CaixaOrdersWorkspace({
                           </div>
                         </div>
                         <div className="orders-card__identity-side">
+                          <span className="orders-card__fulfillment-tag">{order.isQuickSale ? 'Balcão · venda rápida' : getDigitalOrderFulfillmentLabel(order)}</span>
                           <span className="orders-card__price">{formatCurrency(order.total)}</span>
                           <div className="flex items-center justify-end gap-1">
                             {hasPrinting !== false ? (
@@ -1055,7 +1044,6 @@ export function CaixaOrdersWorkspace({
                         <span>{capability.label}</span>
                       </button>
                     </div>
-                    </FulfillmentCard>
                   );
                 })}
               </>
