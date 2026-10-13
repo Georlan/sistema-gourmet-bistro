@@ -10,6 +10,7 @@ test('workspace banners are replaced by a scoped summary without losing controls
   await expect(page.locator('.orders-hero, .operational-header')).toHaveCount(0);
   const summary = page.getByRole('button', { name: 'Ver resumo da tela' });
   await expect(summary).toBeVisible();
+  await expect(page.getByText('valor em aberto', { exact: true })).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('pedidos-sem-banner.png') });
   await summary.click();
   const dialog = page.getByRole('dialog', { name: 'Resumo da tela' });
@@ -19,6 +20,7 @@ test('workspace banners are replaced by a scoped summary without losing controls
   await page.screenshot({ path: test.info().outputPath('resumo-sob-demanda.png') });
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
+  await expect(page.getByText('valor em aberto', { exact: true })).toHaveCount(0);
   if ((page.viewportSize()?.width ?? 1366) < 1024) await page.locator('.cashier-mobile-bottom-bar').getByRole('button', { name: '+ Pedido', exact: true }).click();
   else await page.locator('.cashier-subnav').getByRole('button', { name: 'Novo pedido', exact: true }).click();
   await expect(page.locator('.orders-hero, .operational-header')).toHaveCount(0);

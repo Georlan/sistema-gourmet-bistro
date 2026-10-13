@@ -75,7 +75,7 @@ export function OperationalSummaryButton() {
         <h2 id={titleId} className="text-base font-bold">Resumo da tela</h2>
         <button type="button" autoFocus onClick={close} aria-label="Fechar resumo" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl hover:bg-koma-raised"><X size={20} /></button>
       </header>
-      <SummaryContent summaries={summaries} />
+      {open && <SummaryContent summaries={summaries} />}
     </dialog>
   </>;
 }
