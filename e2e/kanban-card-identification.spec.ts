@@ -34,9 +34,24 @@ for (const theme of ['dark','light']) for (const size of ['padrao','gigante']) {
     if(await digitalTab.isVisible()) await digitalTab.click();
     await expect(cards.first()).toBeVisible();
     for(const [index,card] of (await cards.all()).entries()) {
-      await expect(card.locator('.orders-card__identity-title')).toHaveText(index%2?'Delivery':'Retirada');
+      await expect(card.locator('.orders-card__identity-title')).toHaveText(`Cliente ${index} com nome comprido`);
+      const tag=card.locator('..').locator('.orders-card__fulfillment-tag');
+      await expect(tag).toHaveText(index%2?'Delivery':'Retirada');
+      expect(await tag.evaluate(el=>{
+        const style=getComputedStyle(el);
+        const luminance=(value:string)=>{
+          const channels=value.match(/[\d.]+/g)!.slice(0,3).map(Number).map(c=>{const v=c/255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});
+          return channels.reduce((sum,c,i)=>sum+c*[.2126,.7152,.0722][i],0);
+        };
+        const fg=luminance(style.color), bg=luminance(style.backgroundColor);
+        return (Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05);
+      })).toBeGreaterThanOrEqual(4.5);
+      const tagBox=await tag.boundingBox();
+      const cardBox=await card.boundingBox();
+      expect(tagBox!.y).toBeLessThan(cardBox!.y);
+      expect(tagBox!.y+tagBox!.height).toBeGreaterThan(cardBox!.y);
       await expect(card.locator('.orders-card__number strong')).toHaveText(`#${101+index}`);
-      await expect(card.locator('.orders-card__identity-subtitle')).toContainText(`Cliente ${index}`);
+      await expect(card.locator('.orders-card__identity-subtitle')).toContainText('85999999999');
       expect(await card.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
       const number=await card.locator('.orders-card__number').boundingBox();
       const title=await card.locator('.orders-card__identity-title').boundingBox();
