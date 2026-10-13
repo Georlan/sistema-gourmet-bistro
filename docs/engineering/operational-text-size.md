@@ -16,7 +16,7 @@ Abas mantêm sua seleção visível também ao mudar o tamanho dos textos, obser
 
 ## Evidência
 
-Typecheck, suíte unitária, build e preview de produção. Matriz: dez áreas, três tamanhos, 360/390/1366px; teste de proporção real via computedStyle, altura da aba e overflow da página. Controles reais da preferência, restauração em reload, Resumo e convite em portal, navegação e PDV com fixtures. Nenhuma gravação no restaurante real; nenhum pedido, impressão, convite ou pagamento real.
+Typecheck, suíte unitária, build e preview de produção. Matriz: dez áreas, três tamanhos, 360/390/1366px; teste de proporção real via computedStyle, altura da aba e overflow da página. Controles reais da preferência, restauração em reload, Resumo e convite em portal, navegação e PDV com fixtures. Recuperação de venda simulada após 503/422/502 em Padrão e Gigante, no celular e notebook: sacola, destino, valor e chave de idempotência preservados. O seletor ambíguo dos dois atalhos de Novo pedido foi atualizado sem remover os atalhos nem relaxar os contratos. Nenhuma gravação no restaurante real; nenhum pedido, impressão, convite ou pagamento real.
 
 Limite: a matriz cobre áreas e fluxos indicados, não todas as combinações possíveis de conteúdo do cliente. Texto impresso, imagens e canvas externos não são redimensionados pelo controle visual do operador.
 
