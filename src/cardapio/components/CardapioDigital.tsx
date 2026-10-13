@@ -41,6 +41,7 @@ import {
   upsertPendingOrderSubmission,
 } from "../orderSubmission";
 import { trackAnalyticsEvent } from "../../analytics";
+import { startPaymentStatusPolling } from "../paymentStatusPolling";
 
 interface CreatedOrder {
   comanda_id: string;
@@ -515,18 +516,15 @@ export default function CardapioDigital({
       || !["created", "pending", "in_process"].includes(createdOrder.pagamento.status)
     ) return;
     let cancelled = false;
-    let isFetching = false;
-    const checkPayment = async () => {
-      if (cancelled || isFetching) return;
-      if (typeof navigator !== "undefined" && !navigator.onLine) return;
-      isFetching = true;
+    const stopPolling = startPaymentStatusPolling(async (signal) => {
       try {
         const response = await fetch(
           `${API_BASE_URL}/cardapio/pedidos/${encodeURIComponent(createdOrder.comanda_id)}/status?key=${encodeURIComponent(idempotencyKeyRef.current)}`,
-          { cache: "no-store" },
+          { cache: "no-store", signal },
         );
-        if (!response.ok || cancelled) return;
+        if (!response.ok || cancelled || signal.aborted) return;
         const payload = await response.json();
+        if (cancelled || signal.aborted) return;
         const nextStatus = String(payload?.pagamento?.status || "pending");
         setCreatedOrder((current) => current ? {
           ...current,
@@ -534,15 +532,11 @@ export default function CardapioDigital({
         } : current);
       } catch {
         // O webhook é a autoridade; uma falha pontual de rede ou DNS só adia a checagem sem travar a UI.
-      } finally {
-        isFetching = false;
       }
-    };
-    void checkPayment();
-    const interval = window.setInterval(() => void checkPayment(), 3_000);
+    });
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      stopPolling();
     };
   }, [createdOrder?.comanda_id, createdOrder?.pagamento?.cobranca_online, createdOrder?.pagamento?.status]);
 
