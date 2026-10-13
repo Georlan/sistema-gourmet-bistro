@@ -535,6 +535,7 @@ test('card do Caixa permite salvar a observação durante o preparo', async ({ p
   await expect(page.getByRole('heading', { name: 'Vendas', exact: true })).toBeVisible();
   if ((page.viewportSize()?.width || 0) < 768) await page.getByRole('tab', { name: 'Digitais' }).click();
   await page.getByRole('button', { name: /delivery pedido 4321, ver detalhes/i }).click();
+  await page.locator('.orders-detail-modal__edit').getByText('Editar observação', { exact: true }).click();
   const input = page.getByLabel('Observação — Pizza Margherita');
   await expect(input).toHaveValue('Sem cebola');
   await input.fill('Sem sal');

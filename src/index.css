@@ -3453,3 +3453,35 @@ html[data-koma-text-size]:not([data-koma-text-size="padrao"]) .cashier-subnav__b
 
 .cashier-pdv-product-actions { flex-wrap: wrap; }
 .cashier-pdv-product-actions > span, .cashier-pdv-product-actions > button { white-space: nowrap; flex-shrink: 0; }
+
+/* Order details: one scroll area for content, fixed identity and primary action. */
+.orders-detail-modal__hero { flex-shrink: 0; padding: .75rem 1rem; gap: .65rem; }
+.orders-detail-modal__number { width: 2.5rem; min-height: 2.5rem; }
+.orders-detail-modal__close { width: 2.75rem; height: 2.75rem; flex-shrink: 0; }
+.orders-detail-modal__title { white-space: normal; overflow-wrap: anywhere; }
+.orders-detail-modal__body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: .75rem 1rem; display: flex; flex-direction: column; gap: .5rem; }
+.orders-detail-modal__time { color: var(--koma-text-muted); font-size: .7rem; margin: -.35rem 0 0; }
+.orders-detail-modal__customer { padding: .5rem .7rem; flex-wrap: wrap; gap: .4rem; }
+.orders-detail-modal__customer strong { white-space: normal; overflow-wrap: anywhere; }
+.orders-detail-modal__customer .orders-detail-modal__phone { font-size: .75rem; letter-spacing: normal; white-space: nowrap; color: var(--koma-text-primary); }
+.orders-detail-modal__payment { border: 1px solid var(--koma-border-default); border-radius: .75rem; padding: .65rem .75rem; background: var(--koma-surface-raised); display: flex; align-items: center; flex-wrap: wrap; gap: .3rem .8rem; }
+.orders-detail-modal__payment.is-paid { border-color: rgba(16,185,129,.35); background: rgba(16,185,129,.08); }
+.orders-detail-modal__payment > strong, .orders-detail-modal__payment > p { margin: 0; }
+.orders-detail-modal__items { max-height: none; overflow: visible; }
+.orders-detail-modal__item { gap: .6rem; padding: .65rem; }
+.orders-detail-modal__item-status { max-width: 7rem; white-space: normal; }
+.orders-detail-modal__edit { margin-top: .4rem; color: var(--koma-text-secondary); font-size: .7rem; }
+.orders-detail-modal__edit summary { cursor: pointer; width: fit-content; padding: .35rem 0; font-weight: 700; }
+.orders-detail-modal__footer { flex-shrink: 0; padding: .75rem 1rem; display: flex; flex-direction: column; gap: .5rem; border-top: 1px solid var(--koma-border-default); background: var(--koma-surface-dialog); }
+.orders-detail-modal__more > summary { display: list-item; cursor: pointer; font-size: .75rem; font-weight: 700; color: var(--koma-text-secondary); min-height: 2.5rem; padding: .65rem .85rem; border: 1px solid var(--koma-border-default); border-radius: .65rem; background: var(--koma-surface-raised); }
+.orders-detail-modal__more-content { display: flex; flex-direction: column; gap: .5rem; margin-top: .5rem; max-height: min(36dvh, 19rem); overflow-y: auto; overscroll-behavior: contain; }
+.orders-detail-modal__secondary-action { min-height: 2.5rem; border-radius: .65rem; border: 1px solid var(--koma-border-default); padding: .5rem .75rem; background: var(--koma-surface-raised); color: var(--koma-text-primary); font-size: .75rem; font-weight: 700; }
+@media (max-width: 639px) {
+  .orders-detail-modal { border-radius: 1.25rem; }
+  .orders-detail-modal__hero, .orders-detail-modal__body, .orders-detail-modal__footer { padding-inline: .75rem; }
+  .orders-detail-modal__item { flex-wrap: wrap; }
+  .orders-detail-modal__more > summary, .orders-detail-modal__edit summary { min-height: 44px; }
+}
+.orders-detail-modal__eyebrow { display: block; line-height: 1.4; }
+.orders-detail-modal__observation strong { display: inline; font-size: inherit; line-height: inherit; }
+.orders-detail-modal__customer > div > span { display: block; line-height: 1.3; }

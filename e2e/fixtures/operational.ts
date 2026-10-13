@@ -1,3 +1,4 @@
+import { cashierConfig } from './cashier';
 import { expect, type Page } from '@playwright/test';
 
 // Characterization written against the pre-Fase-7 consumers. These are UI
@@ -104,6 +105,7 @@ export async function openOperationalScenario(page: Page, scenario: Scenario = {
       produtos: items.map(item => ({ ...item.produto, categoria_id: 'phase7-meals' })),
     };
     else if (path === '/caixa/configuracoes') body = {
+      ...cashierConfig,
       taxa_servico_ativa: false,
       taxa_servico_padrao: 0,
       perm_garcom_status: true,

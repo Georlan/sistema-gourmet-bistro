@@ -94,9 +94,11 @@ export function useCashierOrders({
       (item: any) => String(item?.status || '').toLowerCase() !== 'cancelado' && item?.id
     );
     const normalizedType = String(order?.modalidade || order?.tipo || '').toLowerCase();
-    const isDigitalOrder =
+    const isProjectedTableLaunch = order?.projectionScope === 'launch' && Number(order?.mesaId || 0) > 0;
+    const isDigitalOrder = !isProjectedTableLaunch && (
       Number(order?.mesaId || 0) <= 0
-      || ['delivery', 'entrega', 'retirada', 'pickup', 'dine_in', 'consumo_local', 'consumo no local'].includes(normalizedType);
+      || ['delivery', 'entrega', 'retirada', 'pickup', 'dine_in', 'consumo_local', 'consumo no local'].includes(normalizedType)
+    );
     const comandaIds = new Set(
       activeItems.map((item: any) => String(item.comandaId || order.comandaId || order.id)).filter(Boolean)
     );
@@ -350,7 +352,8 @@ export function useCashierOrders({
   useEffect(() => {
     const selected = selectedKanbanOrder;
     const mesaId = Number(selected?.mesaId || 0);
-    if (!selected || mesaId <= 0 || selected.contextoSalao || selected.projectionScope === 'table') return;
+    // Explicit Kanban slices must not be promoted to the whole table after refresh.
+    if (!selected || mesaId <= 0 || selected.contextoSalao || selected.projectionScope === 'table' || selected.projectionScope === 'launch') return;
 
     const tableOrders = (orders || []).filter((order) => {
       const normalizedType = String(order.tipo || '').toLowerCase();

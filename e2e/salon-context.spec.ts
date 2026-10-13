@@ -32,6 +32,7 @@ test('transferência nos detalhes só envia a Comanda técnica após confirmar',
   await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda', exact: true }).click();
   const details = page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true });
   expect(state.actions.filter(action => action.path.includes('/transferir/'))).toEqual([]);
+  await details.getByText('Mais opções', { exact: true }).click();
   await expect(details.getByRole('button', { name: 'Transferir', exact: true })).toBeDisabled();
   await details.getByRole('combobox', { name: 'Mesa de destino' }).selectOption('8');
   expect(state.actions.filter(action => action.path.includes('/transferir/'))).toEqual([]);
@@ -172,6 +173,7 @@ test('transferência do Caixa identifica destinos ocupados sem itens e livres', 
   ] }));
   await page.reload();
   await page.getByRole('button', { name: 'Ver comanda', exact: true }).first().click();
+  await page.locator('.orders-detail-modal').getByText('Mais opções', { exact: true }).click();
   const select = page.getByRole('combobox', { name: 'Mesa de destino' });
   await expect(select.locator('option[value="8"]')).toHaveText('● Mesa 8 · Varanda · EM ATENDIMENTO');
   await expect(select.locator('option[value="9"]')).toHaveText('○ Mesa 9 · livre');
