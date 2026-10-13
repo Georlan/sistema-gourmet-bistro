@@ -18,6 +18,7 @@ test('Configurações expõe destinos diretos sem duplicar os owners técnicos',
     'App do Garçom',
     'Taxa de Serviço',
     'Implantação inicial',
+    'Fiscal',
     'Integrações',
   ]);
   assert.deepEqual(getCashierNavigationTarget('config_integracoes'), {

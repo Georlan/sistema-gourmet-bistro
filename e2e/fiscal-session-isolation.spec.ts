@@ -43,7 +43,6 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
     }
   });
   await page.goto('/e2e/fixtures/fiscal-session.html');
-  await page.getByRole('tab', { name: 'Fiscal', exact: true }).click();
   return { reads, checks, writes };
 }
 

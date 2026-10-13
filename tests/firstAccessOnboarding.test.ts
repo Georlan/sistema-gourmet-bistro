@@ -36,7 +36,7 @@ test('configured restaurants prioritize function search and can resume setup fro
   assert.match(onboardingShortcut, /removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
   assert.match(desktopSidebar, /<CashierSidebarSearch/);
   assert.match(mobileSidebar, /<CashierSidebarSearch/);
-  assert.match(sidebarSearch, /Pesquisar funções\.\.\./);
+  assert.match(sidebarSearch, /Buscar tela ou função\.\.\./);
   assert.match(sidebarSearch, /handleSidebarNavigation/);
   assert.match(cashierSettings, /activeSubTab === 'implantacao'/);
   assert.match(cashierSettings, /Implantação inicial/);
@@ -71,10 +71,10 @@ test('setup mode exposes practical configuration without exposing normal operati
   assert.match(mobileSidebar, /<CashierOnboardingShortcut mobile/);
   assert.match(onboardingShortcut, /Abrir configuração fiscal/);
   assert.match(onboardingShortcut, /setItem\('koma_active_tab', 'impressao_salao'\)/);
-  assert.match(onboardingShortcut, /setItem\('koma_active_subtab', 'integracoes'\)/);
+  assert.match(onboardingShortcut, /setItem\('koma_active_subtab', 'fiscal'\)/);
   assert.match(onboardingShortcut, /window\.location\.href = '\/\?view=caixa'/);
   assert.match(integrationsSettings, /CashierFiscalSettings/);
-  assert.match(integrationsSettings, />\s*Fiscal\s*</);
+  assert.match(integrationsSettings, /section === 'fiscal'/);
 });
 
 test('initial setup reuses cashier screens and sends provider setup to KÔMA Pagamentos', () => {

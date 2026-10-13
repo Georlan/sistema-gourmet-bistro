@@ -87,7 +87,7 @@ export default function CashierSettings({
       : null;
 
   const [configSalSubTab, setConfigSalSubTab] = useState<'pedido' | 'fechamento' | 'atendimento'>('pedido');
-  const isTechnicalIntegrations = activeSubTab === 'integracoes';
+  const isTechnicalIntegrations = activeSubTab === 'integracoes' || activeSubTab === 'fiscal';
   const isAppearance = activeSubTab === 'aparencia';
   const isInitialSetup = activeSubTab === 'implantacao';
 
@@ -129,7 +129,7 @@ export default function CashierSettings({
   return (
     <>
       {isTechnicalIntegrations && activeTab === 'impressao_salao' && (
-        <CashierIntegrationsSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+        <CashierIntegrationsSettings section={activeSubTab === 'fiscal' ? 'fiscal' : 'integrations'} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
       )}
 
       {!isTechnicalIntegrations && activeTab === 'impressao_salao' && (

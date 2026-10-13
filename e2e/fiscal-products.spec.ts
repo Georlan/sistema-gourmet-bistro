@@ -11,7 +11,7 @@ async function openFiscal(page: Page) {
     issues: [], warnings: [], references: [], complianceBaseline: [],
   } }));
   await page.goto('/?view=caixa&pagbank=cancelled');
-  await page.getByRole('tab', { name: 'Fiscal', exact: true }).click();
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Fiscal', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Ver preparação dos produtos' })).toBeVisible();
 }
 

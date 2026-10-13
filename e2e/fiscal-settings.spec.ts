@@ -23,7 +23,7 @@ async function openFiscal(page: Page, profile: object = { status: 'draft', enabl
   } }));
   await page.route('**/api/onboarding/fiscal/preflight?*', route => route.fulfill({ json: pendingCheck }));
   await page.goto('/?view=caixa&pagbank=cancelled');
-  await page.getByRole('tab', { name: 'Fiscal', exact: true }).click();
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Fiscal', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Configuração fiscal', exact: true })).toBeVisible();
 }
 

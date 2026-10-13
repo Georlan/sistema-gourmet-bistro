@@ -285,7 +285,7 @@ test('configurações usam somente a navegação canônica vertical + horizontal
   expect(topbarStyles.border).not.toBe(topbarStyles.background);
 });
 
-test('configurações espelham os mesmos sete destinos no menu vertical e horizontal no notebook', async ({ page }) => {
+test('configurações espelham os mesmos oito destinos no menu vertical e horizontal no notebook', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 800 });
   await openCashier(page, 'dark');
 
@@ -293,7 +293,7 @@ test('configurações espelham os mesmos sete destinos no menu vertical e horizo
   await sidebar.getByRole('button', { name: 'Configurações', exact: true }).click();
 
   const subnav = page.locator('.cashier-subnav');
-  const labels = ['Aparência', 'Impressão', 'Mesas', 'App do Garçom', 'Taxa de Serviço', 'Implantação inicial', 'Integrações'];
+  const labels = ['Aparência', 'Impressão', 'Mesas', 'App do Garçom', 'Taxa de Serviço', 'Implantação inicial', 'Fiscal', 'Integrações'];
 
   for (const label of labels) {
     await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
