@@ -3499,3 +3499,9 @@ html[data-koma-text-size]:not([data-koma-text-size="padrao"]) .cashier-subnav__b
   .orders-card__identity-side { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: center; }
   .orders-card__price { margin-left: 0; }
 }
+
+/* Attached modality ribbon keeps the customer as the digital card's headline. */
+.orders-card-shell { min-width: 0; }
+.orders-card-shell__ribbon { display: flex; justify-content: flex-end; padding-inline: .75rem; }
+.orders-card__fulfillment-tag { position: relative; z-index: 1; margin-bottom: -.45rem; max-width: 100%; padding: .3rem .65rem; border: 1px solid var(--koma-accent-border); border-radius: .5rem; background: var(--koma-accent-soft); color: var(--koma-accent-text); font-size: .85rem; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
+.orders-card-shell > .orders-card { padding-top: 1rem !important; }
