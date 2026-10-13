@@ -2,6 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import { scaleOperationalText } from './scripts/scaleOperationalText';
 import { prerenderLanding } from './scripts/prerenderLanding';
 
 export default defineConfig(() => {
@@ -50,6 +51,7 @@ export default defineConfig(() => {
         },
       },
     ],
+    css: { postcss: { plugins: [scaleOperationalText()] } },
     build: { manifest: true },
     resolve: {
       alias: {

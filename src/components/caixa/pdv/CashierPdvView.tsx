@@ -426,7 +426,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                               )}
                             </div>
                             <div
-                              className={"flex justify-between items-center border-t border-koma-border pt-2 sm:pt-2.5 gap-2"}
+                              className={"cashier-pdv-product-actions flex justify-between items-center border-t border-koma-border pt-2 sm:pt-2.5 gap-2"}
                             >
                               <span
                                 className={"font-bold text-emerald-700 dark:text-emerald-400 font-mono text-xs"}

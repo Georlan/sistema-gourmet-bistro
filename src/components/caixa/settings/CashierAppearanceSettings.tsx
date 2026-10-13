@@ -8,33 +8,26 @@ import {
   type KomaTheme,
 } from '../../../config/theme';
 
-type CashierFontSize = 'padrao' | 'grande' | 'gigante';
-
-const FONT_SIZE_CHANGED_EVENT = 'koma_font_size_changed';
-
-function readCashierFontSize(): CashierFontSize {
-  const stored = localStorage.getItem('koma_font_size');
-  return stored === 'grande' || stored === 'gigante' ? stored : 'padrao';
-}
+import { KOMA_TEXT_SIZE_EVENT, readKomaTextSize, persistKomaTextSize, type KomaTextSize as CashierFontSize } from '../../../config/textSize';
 
 export function CashierAppearanceSettings() {
   const [theme, setTheme] = useState<KomaTheme>(() => readKomaTheme());
-  const [fontSize, setFontSize] = useState<CashierFontSize>(() => readCashierFontSize());
+  const [fontSize, setFontSize] = useState<CashierFontSize>(() => readKomaTextSize());
 
   useEffect(() => {
     const syncPreferences = () => {
       setTheme(readKomaTheme());
-      setFontSize(readCashierFontSize());
+      setFontSize(readKomaTextSize());
     };
 
     window.addEventListener('storage', syncPreferences);
     window.addEventListener(KOMA_THEME_CHANGED_EVENT, syncPreferences);
-    window.addEventListener(FONT_SIZE_CHANGED_EVENT, syncPreferences);
+    window.addEventListener(KOMA_TEXT_SIZE_EVENT, syncPreferences);
 
     return () => {
       window.removeEventListener('storage', syncPreferences);
       window.removeEventListener(KOMA_THEME_CHANGED_EVENT, syncPreferences);
-      window.removeEventListener(FONT_SIZE_CHANGED_EVENT, syncPreferences);
+      window.removeEventListener(KOMA_TEXT_SIZE_EVENT, syncPreferences);
     };
   }, []);
 
@@ -43,9 +36,7 @@ export function CashierAppearanceSettings() {
   };
 
   const selectFontSize = (nextFontSize: CashierFontSize) => {
-    localStorage.setItem('koma_font_size', nextFontSize);
-    setFontSize(nextFontSize);
-    window.dispatchEvent(new Event(FONT_SIZE_CHANGED_EVENT));
+    setFontSize(persistKomaTextSize(nextFontSize));
   };
 
   return (

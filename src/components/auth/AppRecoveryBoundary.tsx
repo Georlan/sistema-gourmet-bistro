@@ -85,7 +85,7 @@ export class AppRecoveryBoundary extends React.Component<React.PropsWithChildren
         >
           <h1
             className="text-xl font-semibold"
-            style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0, color: '#ffffff' }}
+            style={{ fontSize: 'calc(1.25rem * var(--koma-text-scale, 1))', fontWeight: 600, margin: 0, color: '#ffffff' }}
           >
             Vamos reabrir o Kôma
           </h1>
@@ -94,7 +94,7 @@ export class AppRecoveryBoundary extends React.Component<React.PropsWithChildren
           </p>
           <p
             className="text-sm"
-            style={{ fontSize: '0.875rem', margin: 0, opacity: 0.75, lineHeight: 1.4 }}
+            style={{ fontSize: 'calc(0.875rem * var(--koma-text-scale, 1))', margin: 0, opacity: 0.75, lineHeight: 1.4 }}
           >
             Pedidos já enviados continuam no sistema. Ao voltar, confira o pedido antes de enviá-lo outra vez.
           </p>

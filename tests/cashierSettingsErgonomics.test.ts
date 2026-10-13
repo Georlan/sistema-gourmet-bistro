@@ -50,8 +50,8 @@ test('table settings stay configuration-only and do not leak the operational sal
 
 test('appearance settings persist theme and local text size using the cashier preference contract', () => {
   assert.match(appearance, /persistKomaTheme\(nextTheme\)/);
-  assert.match(appearance, /localStorage\.setItem\('koma_font_size', nextFontSize\)/);
-  assert.match(appearance, /koma_font_size_changed/);
+  assert.match(appearance, /persistKomaTextSize\(nextFontSize\)/);
+  assert.match(appearance, /KOMA_TEXT_SIZE_EVENT/);
   assert.match(appearance, /aria-label="Tema do caixa"/);
   assert.match(appearance, /aria-label="Tamanho do texto do caixa"/);
   assert.match(appearance, /aria-pressed=\{selected\}/);

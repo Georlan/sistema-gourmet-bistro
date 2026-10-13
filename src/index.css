@@ -3153,38 +3153,6 @@ body {
   }
 }
 
-/* Accessibility Font Size Scales */
-.font-large {
-  font-size: 14px !important;
-}
-.font-large .text-\[8px\] { font-size: 10px !important; }
-.font-large .text-\[9px\] { font-size: 11px !important; }
-.font-large .text-\[10px\] { font-size: 12px !important; }
-.font-large .text-\[11px\] { font-size: 13px !important; }
-.font-large .text-xs { font-size: 14px !important; }
-.font-large .text-sm { font-size: 16px !important; }
-.font-large .text-base { font-size: 18px !important; }
-.font-large .text-lg { font-size: 20px !important; }
-.font-large .text-xl { font-size: 24px !important; }
-
-.font-huge {
-  font-size: 16px !important;
-}
-.font-huge .text-\[8px\] { font-size: 11px !important; }
-.font-huge .text-\[9px\] { font-size: 12px !important; }
-.font-huge .text-\[10px\] { font-size: 14px !important; }
-.font-huge .text-\[11px\] { font-size: 15px !important; }
-.font-huge .text-xs { font-size: 16px !important; }
-.font-huge .text-sm { font-size: 18px !important; }
-.font-huge .text-base { font-size: 20px !important; }
-.font-huge .text-lg { font-size: 22px !important; }
-.font-huge .text-xl { font-size: 28px !important; }
-
-.font-large .orders-card__identity-subtitle { font-size: 0.69rem; }
-.font-large .orders-card__chip { font-size: 0.59rem; }
-.font-huge .orders-card__identity-subtitle { font-size: 0.74rem; }
-.font-huge .orders-card__chip { font-size: 0.64rem; }
-
 /* Cardápio Digital Whitelabel Utilities */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -3474,3 +3442,14 @@ body {
   .cashier-subnav--shared .cashier-subnav__arrow { min-height: 44px; }
   .cashier-subnav--shared .cashier-subnav__arrow { flex-basis: 44px; }
 }
+
+/* Inherited text participates too; dimensions are not zoomed. */
+body { font-size: calc(1rem * var(--koma-text-scale, 1)); }
+html[data-koma-text-size]:not([data-koma-text-size="padrao"]) .cashier-subnav__button {
+  line-height: 1.4;
+  height: auto;
+  padding-block: .5rem;
+}
+
+.cashier-pdv-product-actions { flex-wrap: wrap; }
+.cashier-pdv-product-actions > span, .cashier-pdv-product-actions > button { white-space: nowrap; flex-shrink: 0; }
