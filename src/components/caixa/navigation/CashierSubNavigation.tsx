@@ -23,15 +23,20 @@ export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlem
     const scroller = scrollRef.current;
     if (!scroller) return;
     const update = () => setEdges({ left: scroller.scrollLeft > 2, right: scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 2 });
-    const selected = scroller.querySelector<HTMLElement>('[aria-current="page"]');
-    if (selected) {
-      const start = selected.offsetLeft - scroller.offsetLeft;
-      if (start < scroller.scrollLeft) scroller.scrollLeft = start;
-      else if (start + selected.offsetWidth > scroller.scrollLeft + scroller.clientWidth) scroller.scrollLeft = start + selected.offsetWidth - scroller.clientWidth;
-    }
-    update();
-    const observer = new ResizeObserver(update);
+    const revealSelected = () => {
+      const selected = scroller.querySelector<HTMLElement>('[aria-current="page"]');
+      if (selected) {
+        const start = selected.offsetLeft - scroller.offsetLeft;
+        if (start < scroller.scrollLeft) scroller.scrollLeft = start;
+        else if (start + selected.offsetWidth > scroller.scrollLeft + scroller.clientWidth) scroller.scrollLeft = start + selected.offsetWidth - scroller.clientWidth;
+      }
+      update();
+    };
+    revealSelected();
+    const observer = new ResizeObserver(revealSelected);
     observer.observe(scroller);
+    // Text scaling changes child widths even when the viewport is unchanged.
+    for (const child of scroller.children) observer.observe(child);
     scroller.addEventListener('scroll', update, { passive: true });
     return () => { observer.disconnect(); scroller.removeEventListener('scroll', update); };
   }, [activeTab, activeSubTab, itemKey]);

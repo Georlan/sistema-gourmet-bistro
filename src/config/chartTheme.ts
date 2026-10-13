@@ -40,7 +40,7 @@ export const KOMA_CHART_COLORS = {
 
 export const KOMA_CHART_AXIS = {
   stroke: 'var(--koma-text-muted)',
-  fontSize: 11,
+  fontSize: 'calc(11px * var(--koma-text-scale, 1))',
   tickLine: false,
   axisLine: false,
 };

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { KOMA_TEXT_SIZE_EVENT, KOMA_TEXT_SCALES, normalizeKomaTextSize, persistKomaTextSize, readKomaTextSize, type KomaTextSize } from '../../../config/textSize';
 import { KOMA_THEME_CHANGED_EVENT, readKomaTheme, type KomaTheme } from '../../../config/theme';
 
 /** Owns display preferences, fullscreen and event cleanup; no operational state. */
@@ -47,15 +48,22 @@ export function useCashierPreferences() {
     }
   };
 
-  const [fontSize, setFontSize] = useState<'padrao' | 'grande' | 'gigante'>(() => {
-    return (localStorage.getItem('koma_font_size') as any) || 'padrao';
-  });
+  const [fontSize, setFontSize] = useState<KomaTextSize>(readKomaTextSize);
+  const changeFontSize = (size: KomaTextSize) => setFontSize(persistKomaTextSize(size));
 
-  const changeFontSize = (size: 'padrao' | 'grande' | 'gigante') => {
-    localStorage.setItem('koma_font_size', size);
-    setFontSize(size);
-    window.dispatchEvent(new Event('koma_font_size_changed'));
-  };
+  useEffect(() => {
+    const root = document.documentElement;
+    const previousScale = root.style.getPropertyValue('--koma-text-scale');
+    const previousSize = root.getAttribute('data-koma-text-size');
+    root.style.setProperty('--koma-text-scale', String(KOMA_TEXT_SCALES[fontSize]));
+    root.setAttribute('data-koma-text-size', fontSize);
+    return () => {
+      if (previousScale) root.style.setProperty('--koma-text-scale', previousScale);
+      else root.style.removeProperty('--koma-text-scale');
+      if (previousSize) root.setAttribute('data-koma-text-size', previousSize);
+      else root.removeAttribute('data-koma-text-size');
+    };
+  }, [fontSize]);
 
   const [theme, setTheme] = useState<KomaTheme>(() => readKomaTheme());
 
@@ -63,17 +71,15 @@ export function useCashierPreferences() {
     const handleStorageChange = () => {
       setTheme(readKomaTheme());
 
-      const storedFontSize = localStorage.getItem('koma_font_size') as any;
-      if (storedFontSize && ['padrao', 'grande', 'gigante'].includes(storedFontSize)) {
-        setFontSize(storedFontSize);
-      }
+      setFontSize(readKomaTextSize());
     };
+    const handleTextSizeChange = (event: Event) => setFontSize(event instanceof CustomEvent ? normalizeKomaTextSize(event.detail) : readKomaTextSize());
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('koma_font_size_changed', handleStorageChange);
+    window.addEventListener(KOMA_TEXT_SIZE_EVENT, handleTextSizeChange);
     window.addEventListener(KOMA_THEME_CHANGED_EVENT, handleStorageChange);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('koma_font_size_changed', handleStorageChange);
+      window.removeEventListener(KOMA_TEXT_SIZE_EVENT, handleTextSizeChange);
       window.removeEventListener(KOMA_THEME_CHANGED_EVENT, handleStorageChange);
     };
   }, []);
