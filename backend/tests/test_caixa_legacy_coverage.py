@@ -210,6 +210,11 @@ def test_pagamento_credita_cliente_estavel_uma_vez_inclusive_quando_pendente():
     headers_caixa = get_auth_headers(client, "caixa", "123")
     headers_garcom = get_auth_headers(client, "garcom", "123")
 
+    # Payment regression starts with an explicitly active program; GET is read-only.
+    with TestingSessionLocal() as db:
+        db.add(ConfigFidelizacao(restaurante_id=1, ativo=True, tipo_recompensa="PONTOS",
+                                taxa_conversao=1.0, valor_ponto_em_dinheiro=0.05))
+        db.commit()
     assert client.get("/fidelidade/config", headers=headers_caixa).status_code == 200
     cadastro = client.post(
         "/fidelidade/clientes",

@@ -12,6 +12,7 @@ from ..models import Comanda, Insumo, ConfigFidelizacao, Pagamento, Cliente
 from ..schemas import ConfigFidelizacaoResponse
 from ..security import require_entitled_permission, require_permission
 from ..models import Usuario
+from ..services.loyalty_config import effective_loyalty_config
 from ..services.clientes import (
     buscar_cliente_por_id,
     buscar_cliente_por_telefone,
@@ -211,21 +212,7 @@ def get_fidelidade_config(
     """Retorna as configurações do programa de fidelidade do restaurante."""
     restaurante_id = require_tenant_id()
     _require_loyalty_entitlement(db, restaurante_id)
-    config = db.query(ConfigFidelizacao).filter(
-        ConfigFidelizacao.restaurante_id == restaurante_id
-    ).first()
-    if not config:
-        config = ConfigFidelizacao(
-            restaurante_id=restaurante_id,
-            ativo=True,
-            tipo_recompensa="PONTOS",
-            taxa_conversao=1.0,
-            valor_ponto_em_dinheiro=0.05,
-        )
-        db.add(config)
-        db.commit()
-        db.refresh(config)
-    return config
+    return effective_loyalty_config(db, restaurante_id)
 
 @router.get("/fidelidade/clientes")
 def get_loyalty_clients(

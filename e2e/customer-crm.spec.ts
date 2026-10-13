@@ -14,7 +14,11 @@ test('CRM ranks buyers, filters inactivity, searches formatted phones and preser
   ] }));
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
-  if (testInfo.project.name.startsWith('mobile')) await page.getByRole('button', { name: 'Abrir menu completo' }).click();
+  if (testInfo.project.name.startsWith('mobile')) {
+    await page.getByRole('button', { name: 'Abrir menu completo' }).click();
+  } else if (testInfo.project.name.startsWith('tablet')) {
+    await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+  }
   await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
   const records = page.locator(testInfo.project.name.startsWith('mobile') ? 'article:visible' : 'tbody:visible tr');
   await expect(records.first()).toContainText('Ana Frequente');
