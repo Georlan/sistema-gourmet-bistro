@@ -1,6 +1,6 @@
 # KÔMA — Política interna de retenção e resposta a incidentes
 
-Data de referência: 05/09/2026.
+Data de referência: 13/10/2026. Fluxo de incidentes alinhado ao DPA 3.5 vigente; demais políticas não são alteradas por esta revisão.
 
 Documento interno. Não publicar detalhes operacionais que facilitem abuso; a versão pública da Política de Privacidade comunica somente o necessário aos titulares.
 
@@ -41,7 +41,7 @@ Documento interno. Não publicar detalhes operacionais que facilitem abuso; a ve
 
 Ao detectar evento suspeito, registrar pelo menos:
 
-- data/hora de detecção;
+- data/hora de detecção e de ciência qualificada, com fundamento e responsável pelo registro;
 - data/hora estimada de início;
 - sistemas e restaurantes possivelmente afetados;
 - categorias de titulares e dados;
@@ -64,15 +64,17 @@ Ao detectar evento suspeito, registrar pelo menos:
 
 ### 5.2 Confirmar escopo
 
-Um alerta só deve ser tratado como incidente confirmado após evidência razoável de comprometimento. Não atrasar contenção enquanto a confirmação é investigada.
+Um alerta só deve ser tratado como incidente confirmado após evidência razoável de comprometimento. Não atrasar contenção enquanto a confirmação é investigada. A conclusão integral da investigação não é condição para iniciar a contagem ou enviar a notificação contratual: registrar a ciência qualificada do incidente relevante e complementar o escopo durante a apuração.
 
 ### 5.3 Avisar restaurante controlador
 
-Quando o incidente confirmado afetar dados tratados pelo KÔMA em nome de um restaurante:
+A partir da ciência qualificada de incidente de segurança relevante envolvendo dados pessoais tratados pelo KÔMA em nome de um restaurante:
 
 - notificar sem demora injustificada;
-- prazo contratual máximo: 24 horas após confirmação, salvo impedimento técnico/legal justificado;
-- informar em etapas se todos os detalhes ainda não estiverem disponíveis.
+- prazo contratual máximo: 24 horas a partir da ciência qualificada, conforme o DPA vigente;
+- enviar as informações preliminares disponíveis e complementar progressivamente; a ausência de conclusão integral da investigação não justifica atrasar o aviso inicial.
+
+Registrar o horário-limite, o responsável pelo aviso e a evidência de envio em canal restrito. O prazo contratual entre Operador e Controlador não se confunde com o prazo regulatório de eventual comunicação à ANPD e aos titulares, em regra de 3 dias úteis, cuja aplicabilidade cabe ao Controlador avaliar. Esta revisão não altera termos públicos nem aceites históricos.
 
 A primeira comunicação deve conter, na medida do conhecido:
 

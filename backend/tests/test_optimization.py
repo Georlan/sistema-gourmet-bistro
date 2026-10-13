@@ -114,7 +114,14 @@ def test_unified_fidelity_points_and_cashback():
     resp = client.get("/fidelidade/config", headers=headers)
     assert resp.status_code == 200
     config = resp.json()
-    assert config["ativo"] is True
+    assert config["ativo"] is False
+    # Activation is explicit; reading configuration must not activate benefits.
+    saved = client.post("/fidelidade/config", headers=headers, json={
+        "ativo": True, "tipo_recompensa": "PONTOS", "taxa_conversao": 1.0,
+        "valor_ponto_em_dinheiro": 0.05,
+    })
+    assert saved.status_code == 200
+    assert saved.json()["id"] > 0
     assert config["tipo_recompensa"] == "PONTOS"
 
     cliente_pontos = client.post("/fidelidade/clientes", json={
@@ -405,3 +412,95 @@ def test_manual_insumos_and_distribuidores():
     # 7. Excluir distribuidor (DELETE)
     resp = client.delete("/estoque/distribuidores/ambev-test", headers=headers)
     assert resp.status_code == 204
+
+
+def test_config_get_is_read_only_and_missing_config_stays_inactive():
+    from sqlalchemy import event
+
+    client = TestClient(app)
+    headers = get_auth_headers(client, "gerente", "123")
+    writes = []
+
+    def capture_writes(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().split()[0].upper() in {"INSERT", "UPDATE", "DELETE"}:
+            writes.append(statement.split()[0])
+
+    event.listen(engine, "before_cursor_execute", capture_writes)
+    try:
+        first = client.get("/fidelidade/config", headers=headers)
+        second = client.get("/fidelidade/config", headers=headers)
+        assert first.status_code == second.status_code == 200
+        assert first.json() == second.json() == {
+            "id": 0, "ativo": False, "tipo_recompensa": "PONTOS",
+            "taxa_conversao": 1.0, "valor_ponto_em_dinheiro": 0.05,
+        }
+        assert writes == []
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_writes)
+
+    customer = client.post('/fidelidade/clientes', headers=headers, json={
+        'cliente': 'Fixture', 'telefone': '81987654321',
+    })
+    assert customer.status_code == 201
+    checkout = client.post('/fidelidade/checkout', headers=headers, json={
+        'cliente_id': customer.json()['id'], 'valor_total': 10,
+    })
+    assert checkout.status_code == 400
+    assert checkout.json()['detail'] == 'Programa de fidelidade inativo.'
+    with TestingSessionLocal() as db:
+        assert db.query(ConfigFidelizacao).count() == 0
+        assert db.query(Cliente).count() == 1
+        assert db.query(HistoricoFidelidade).count() == 0
+
+
+@pytest.mark.parametrize('active,reward', [(False, 'PONTOS'), (True, 'CASHBACK')])
+def test_explicit_config_preserved_and_other_tenant_does_not_supply_default(active, reward):
+    from app.services.loyalty_config import effective_loyalty_config
+
+    with TestingSessionLocal() as db:
+        saved = ConfigFidelizacao(restaurante_id=1, ativo=active, tipo_recompensa=reward,
+                                  taxa_conversao=7.0, valor_ponto_em_dinheiro=0.02)
+        db.add(saved)
+        db.commit()
+        assert effective_loyalty_config(db, 1).id == saved.id
+        assert effective_loyalty_config(db, 1).ativo == active
+        # Explicit tenant predicate even in SQLite, which has no production RLS.
+        virtual = effective_loyalty_config(db, 2)
+        assert virtual.id == 0 and virtual.tipo_recompensa == 'PONTOS'
+        assert virtual not in db
+
+    client = TestClient(app)
+    headers = get_auth_headers(client, 'gerente', '123')
+    config = client.get('/fidelidade/config', headers=headers).json()
+    assert config['ativo'] == active
+    assert config['tipo_recompensa'] == reward
+    assert config['taxa_conversao'] == 7.0
+    if not active:
+        result = client.post('/fidelidade/checkout', headers=headers, json={'valor_total': 10})
+        assert result.status_code == 400
+
+
+@pytest.mark.parametrize('source', ['cashier', 'online'])
+@pytest.mark.parametrize('explicit_disabled', [False, True])
+def test_payment_awards_preserve_missing_and_disabled_config(source, explicit_disabled):
+    from app.routes.caixa import _registrar_fidelidade_quitacao
+    from app.services.clientes import cadastrar_ou_atualizar_cliente, registrar_fidelidade_compra_quitada
+
+    with TestingSessionLocal() as db:
+        customer = cadastrar_ou_atualizar_cliente(db, restaurante_id=1,
+                                                 telefone='81987654321', nome='Fixture')
+        order = Comanda(id='fixture-loyalty-order', restaurante_id=1, mesa_id=1,
+                        garcom_id='g-1', numero_pedido=101, cliente_id=customer.id,
+                        valor_pago=10, fechada=True)
+        db.add(order)
+        if explicit_disabled:
+            db.add(ConfigFidelizacao(restaurante_id=1, ativo=False))
+        db.commit()
+        award = (lambda: _registrar_fidelidade_quitacao(db, order)) if source == 'cashier' else (
+            lambda: registrar_fidelidade_compra_quitada(db, comanda=order, cliente=customer)
+        )
+        assert award() is False
+        db.commit()
+        assert award() is False
+        assert customer.saldo_pontos == 0
+        assert db.query(ConfigFidelizacao).count() == int(explicit_disabled)
