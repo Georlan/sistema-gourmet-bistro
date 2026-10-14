@@ -1159,6 +1159,7 @@ class CardapioPedidoCreate(BaseModel):
     itens: List[CardapioItemPedido] = Field(min_length=1, max_length=100)
     cliente_nome: str = Field(min_length=2, max_length=100)
     cliente_telefone: str = Field(min_length=10, max_length=20)
+    whatsapp_status_opt_in: bool = False
     endereco_entrega: str = Field(default="", max_length=300)
     address_snapshot: Optional[DeliveryAddressSnapshotSchema] = None
     taxa_entrega: float = Field(default=0.0, ge=0, le=10_000)
