@@ -536,6 +536,7 @@ class CardapioWebAdapter:
                 idempotency_fingerprint_version=fingerprint_intent.version if idempotency_key else None,
                 operator_user_id=garcom.id,
                 defer_operational_publish=online_payment or is_scheduled,
+                whatsapp_status_opt_in=bool(payload.whatsapp_status_opt_in and customer_token and cliente is not None and cliente.telefone_verificado_em is not None),
             )
 
             order_dto = OrderApplicationService.create_order(
