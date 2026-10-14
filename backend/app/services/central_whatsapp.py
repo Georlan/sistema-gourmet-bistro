@@ -135,7 +135,8 @@ def _provider_sender_matches(client: httpx.Client, base: str, headers: dict, ins
     status = client.get(f"{base}/instance/connectionState/{instance_path}", headers=headers)
     status.raise_for_status()
     state = status.json()
-    if not isinstance(state, dict) or (state.get("instance") or {}).get("state") != "open":
+    instance_status = state.get("instance") if isinstance(state, dict) else None
+    if not isinstance(instance_status, dict) or instance_status.get("state") != "open":
         return False
     response = client.get(f"{base}/instance/fetchInstances", params={"instanceName": instance}, headers=headers)
     response.raise_for_status()
@@ -214,7 +215,8 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
     if event is None:
         return False
     # Persist the uncertain attempt before provider I/O.
-    event.attempts = int(snapshot["attempts"]) + 1
+    attempt_number = int(snapshot["attempts"]) + 1
+    event.attempts = attempt_number
     db.commit()
 
     try:
@@ -226,15 +228,15 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
             )
         if 200 <= response.status_code < 300:
             return settle("delivered", "Aceito pelo conector; entrega no aparelho não verificada.",
-                          attempts=event.attempts, code=response.status_code)
+                          attempts=attempt_number, code=response.status_code)
         # An HTTP 429 explicitly refuses the send; retry no sooner than five minutes.
-        if response.status_code == 429 and event.attempts < int(snapshot["max_attempts"]):
+        if response.status_code == 429 and attempt_number < int(snapshot["max_attempts"]):
             return settle("failed", "Limite do provedor.",
-                          attempts=event.attempts,
+                          attempts=attempt_number,
                           retry_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=5),
                           code=429)
         return settle("dead_letter", f"Provedor recusou HTTP {response.status_code}.",
-                      attempts=event.attempts, code=response.status_code)
+                      attempts=attempt_number, code=response.status_code)
     except httpx.RequestError:
         return settle("dead_letter", "Resultado de envio incerto; repetição automática bloqueada.",
-                      attempts=event.attempts)
+                      attempts=attempt_number)
