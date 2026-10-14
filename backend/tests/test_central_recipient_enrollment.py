@@ -11,6 +11,24 @@ from app.services.central_whatsapp import CENTRAL_INSTANCE_MARKER
 from tests.characterization.orders.fixtures import CHAR_RESTAURANT_ID, char_client, char_setup
 
 
+@pytest.fixture(autouse=True)
+def restore_settings_after_test(char_setup):
+    rid = CHAR_RESTAURANT_ID
+    fields = ('whatsapp_instance_name', 'whatsapp_recipient_phone',
+              'whatsapp_alerts_enabled', 'whatsapp_next_send_at')
+    with SessionLocal(restaurante_id=rid) as check:
+        conf = check.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one()
+        original = {name: getattr(conf, name) for name in fields}
+    try:
+        yield
+    finally:
+        with SessionLocal(restaurante_id=rid) as cleanup:
+            conf = cleanup.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one()
+            for name, value in original.items():
+                setattr(conf, name, value)
+            cleanup.commit()
+
+
 def test_central_recipient_enrollment_never_contacts_evolution(char_setup, monkeypatch):
     rid = CHAR_RESTAURANT_ID
     db = SessionLocal(restaurante_id=rid)
