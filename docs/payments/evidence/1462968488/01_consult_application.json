@@ -1,0 +1,28 @@
+{
+  "evidence_kind": "genuine_sandbox_http",
+  "operation": "consult_application",
+  "environment": "sandbox",
+  "timestamp_utc": "2026-10-14T17:34:29.909891+00:00",
+  "method": "GET",
+  "endpoint": "https://sandbox.api.pagseguro.com/oauth2/application/c555229e-d90a-4e32-b28c-814f0f19c793",
+  "request": {
+    "json": null,
+    "headers": {
+      "Authorization": "[REDACTED]"
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "json": {
+      "name": "[REDACTED]",
+      "description": "[REDACTED]",
+      "client_id": "c555229e-d90a-4e32-b28c-814f0f19c793",
+      "site": "https://app.komafood.com.br",
+      "redirect_uri": "https://sistema-gourmet-bistro-production.up.railway.app/payments/pagbank/oauth/callback",
+      "account_id": "ACCO_1A624D03-01FE-43D0-A85A-5DF579EBB36A",
+      "client_type": "confidential"
+    },
+    "request_id": ""
+  },
+  "result": "success"
+}

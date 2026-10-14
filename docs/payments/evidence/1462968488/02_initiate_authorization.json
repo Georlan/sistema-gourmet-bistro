@@ -1,0 +1,19 @@
+{
+  "evidence_kind": "genuine_sandbox_oauth_initiation",
+  "operation": "initiate_authorization",
+  "environment": "sandbox",
+  "timestamp_utc": "2026-10-14T17:35:11.349146+00:00",
+  "method": "GET",
+  "endpoint": "https://connect.sandbox.pagbank.com.br/oauth2/authorize",
+  "request": {
+    "query_params": {
+      "response_type": "code",
+      "client_id": "c555229e-d90a-4e32-b28c-814f0f19c793",
+      "redirect_uri": "https://sistema-gourmet-bistro-production.up.railway.app/payments/pagbank/oauth/callback",
+      "scope": "payments.read payments.create payments.refund accounts.read",
+      "state": "[REDACTED_STATE:len=112]"
+    }
+  },
+  "result": "ready_for_seller_consent",
+  "authorization_url_sanitized": "https://connect.sandbox.pagbank.com.br/oauth2/authorize?response_type=code&client_id=c555229e-d90a-4e32-b28c-814f0f19c793&redirect_uri=https://sistema-gourmet-bistro-production.up.railway.app/payments/pagbank/oauth/callback&scope=payments.read+payments.create+payments.refund+accounts.read&state=[REDACTED]"
+}

@@ -50,3 +50,78 @@ def test_aliases_formatted_documents_and_free_text_cannot_leak():
     assert sanitized['error_messages'][0]['code'] == 'FORBIDDEN'
     assert sanitized['payment_response']['code'] == '20000'
     assert sanitized['id'] == 'ORDE_INTERNAL_FIXTURE'
+
+
+def test_authorize_and_callback_evidence_sanitization(tmp_path, monkeypatch):
+    monkeypatch.setenv('PAGBANK_CLIENT_ID', 'test-client-id')
+    monkeypatch.setenv('PAGBANK_OAUTH_STATE', 'signed-state-data-not-to-be-leaked')
+    monkeypatch.setenv('PAGBANK_AUTHORIZATION_CODE', 'real-oauth-code-12345')
+
+    out_auth = tmp_path / 'auth.json'
+    monkeypatch.setattr('sys.argv', ['evidence', 'authorize', '--output', str(out_auth)])
+    evidence.main()
+
+    data_auth = json.loads(out_auth.read_text())
+    assert data_auth['operation'] == 'initiate_authorization'
+    assert data_auth['environment'] == 'sandbox'
+    assert 'signed-state-data-not-to-be-leaked' not in json.dumps(data_auth)
+    assert 'test-client-id' in json.dumps(data_auth)
+    assert data_auth['request']['query_params']['scope'] == 'payments.read payments.create payments.refund accounts.read'
+
+    out_cb = tmp_path / 'callback.json'
+    monkeypatch.setattr('sys.argv', ['evidence', 'callback', '--output', str(out_cb)])
+    evidence.main()
+
+    data_cb = json.loads(out_cb.read_text())
+    assert data_cb['operation'] == 'seller_authorization_callback'
+    assert data_cb['status'] == 'authorized'
+    assert 'real-oauth-code-12345' not in json.dumps(data_cb)
+    assert data_cb['callback']['code_present'] is True
+
+
+def test_token_exchange_evidence_structure_and_masking(tmp_path, monkeypatch):
+    monkeypatch.setenv('PAGBANK_APP_TOKEN', 'fixture-app-token')
+    monkeypatch.setenv('PAGBANK_CLIENT_ID', 'fixture-client-id')
+    monkeypatch.setenv('PAGBANK_CLIENT_SECRET', 'fixture-secret-value')
+    monkeypatch.setenv('PAGBANK_AUTHORIZATION_CODE', 'fixture-auth-code')
+
+    requests = []
+    def mock_post(url, headers, json, **kwargs):
+        requests.append((url, headers, json))
+        import httpx
+        return httpx.Response(201, json={
+            'access_token': 'fixture-seller-access-token',
+            'refresh_token': 'fixture-seller-refresh-token',
+            'token_type': 'bearer',
+            'expires_in': 3600,
+            'account_id': 'ACCO_TEST_SELLER',
+        })
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def request(self, method, url, headers=None, json=None, **kwargs):
+            return mock_post(url, headers, json, **kwargs)
+
+    monkeypatch.setattr(evidence.httpx, 'Client', FakeClient)
+
+    out_token = tmp_path / 'token.json'
+    monkeypatch.setattr('sys.argv', ['evidence', 'token', '--output', str(out_token)])
+    evidence.main()
+
+    data = json.loads(out_token.read_text())
+    raw_text = out_token.read_text()
+    assert 'fixture-seller-access-token' not in raw_text
+    assert 'fixture-seller-refresh-token' not in raw_text
+    assert 'fixture-secret-value' not in raw_text
+    assert 'fixture-auth-code' not in raw_text
+
+    assert data['operation'] == 'exchange_token'
+    assert data['result'] == 'success'
+    assert data['token_fields_returned']['has_access_token'] is True
+    assert data['token_fields_returned']['has_refresh_token'] is True
+    assert data['token_fields_returned']['token_type'] == 'bearer'
+    assert data['token_fields_returned']['expires_in'] == 3600
+    assert data['token_fields_returned']['account_id'] == 'ACCO_TEST_SELLER'
+
