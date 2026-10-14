@@ -14,6 +14,7 @@ import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
 import { SupportCodeNotice } from "./components/app/SupportCodeNotice";
 import { installSupportCodeObserver } from "./utils/supportCode";
 import { AnalyticsProvider, initAnalytics } from "./analytics";
+import { canonicalOperationalQuery } from "./utils/operationalCallbackParams";
 
 import {
   KOMA_OPERATIONAL_APP_URL,
@@ -231,30 +232,15 @@ const hasCustomerSupportSurface =
 
 // O Chrome mobile pode esconder path/query na barra e fazer links legados
 // parecerem o domínio puro. Em produção, antes de montar o shell, removemos
-// rota/query legadas. A única exceção são os parâmetros efêmeros de pareamento
-// do Print Agent: eles precisam sobreviver ao login unificado para que o App
-// consiga devolver a credencial ao servidor localhost do agente.
+// rota/query legadas. Preservamos somente os parâmetros efêmeros do pareamento
+// de impressão e do retorno OAuth PagBank até que seus handlers validem e
+// consumam o estado; remover code/state aqui impediria /pagbank/complete.
 if (
   isUnifiedOperationalRoute
   && isOperationalAppHost()
   && (window.location.pathname !== "/" || window.location.search || window.location.hash)
 ) {
-  const currentParams = new URLSearchParams(window.location.search);
-  const pairingNonce = currentParams.get("pair_print_agent")?.trim() || "";
-  const pairingPortText = currentParams.get("agent_port")?.trim() || "";
-  const pairingPort = Number(pairingPortText);
-  const hasValidPrintPairingContext = Boolean(pairingNonce)
-    && Number.isInteger(pairingPort)
-    && pairingPort >= 17654
-    && pairingPort <= 17664;
-
-  const canonicalParams = new URLSearchParams();
-  if (hasValidPrintPairingContext) {
-    canonicalParams.set("pair_print_agent", pairingNonce);
-    canonicalParams.set("agent_port", String(pairingPort));
-  }
-
-  const canonicalSearch = canonicalParams.toString();
+  const canonicalSearch = canonicalOperationalQuery(window.location.search);
   window.history.replaceState(
     window.history.state,
     "",
