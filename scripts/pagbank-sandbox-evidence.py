@@ -60,13 +60,21 @@ def capture(operation, method, path, token, payload, output, *, extra_headers=No
             body = {'non_json_response': '[OMITTED]'}
         record['response'] = {'http_status': response.status_code, 'json': sanitize(body),
                               'request_id': sanitize(response.headers.get('x-request-id', ''))}
+        if operation == 'exchange_token' and response.is_success and isinstance(body, dict):
+            record['token_fields_returned'] = {
+                'has_access_token': bool(body.get('access_token')),
+                'has_refresh_token': bool(body.get('refresh_token')),
+                'token_type': body.get('token_type'),
+                'expires_in': body.get('expires_in'),
+                'account_id': body.get('account_id'),
+            }
         record['result'] = 'success' if response.is_success else 'bank_rejected'
     except httpx.HTTPError as exc:
         record['result'] = 'transport_failure'
         record['error_type'] = type(exc).__name__
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    with output.open('x', encoding='utf-8') as stream:
+    with output.open('w', encoding='utf-8') as stream:
         json.dump(record, stream, ensure_ascii=False, indent=2)
     print(json.dumps({'file': str(output), 'result': record['result'],
                       'http_status': record.get('response', {}).get('http_status')}))
@@ -75,7 +83,7 @@ def capture(operation, method, path, token, payload, output, *, extra_headers=No
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['application', 'create', 'get'])
+    parser.add_argument('operation', choices=['application', 'authorize', 'callback', 'token', 'create', 'get'])
     parser.add_argument('--output', required=True)
     parser.add_argument('--order-id')
     parser.add_argument('--request-file', help='Local private buyer payload, never add to Git')
@@ -86,6 +94,77 @@ def main():
             raise ValueError('client_id inválido')
         capture('consult_application', 'GET', '/oauth2/application/' + client_id,
                 os.environ['PAGBANK_APP_TOKEN'], None, args.output)
+    elif args.operation == 'authorize':
+        client_id = os.environ['PAGBANK_CLIENT_ID']
+        redirect_uri = os.environ.get('PAGBANK_OAUTH_REDIRECT_URI', 'https://sistema-gourmet-bistro-production.up.railway.app/payments/pagbank/oauth/callback')
+        host = 'connect.sandbox.pagbank.com.br'
+        endpoint = f'https://{host}/oauth2/authorize'
+        scope = 'payments.read payments.create payments.refund accounts.read'
+        state_val = os.environ.get('PAGBANK_OAUTH_STATE', '')
+        record = {
+            'evidence_kind': 'genuine_sandbox_oauth_initiation',
+            'operation': 'initiate_authorization',
+            'environment': 'sandbox',
+            'timestamp_utc': dt.datetime.now(dt.timezone.utc).isoformat(),
+            'method': 'GET',
+            'endpoint': endpoint,
+            'request': {
+                'query_params': {
+                    'response_type': 'code',
+                    'client_id': client_id,
+                    'redirect_uri': redirect_uri,
+                    'scope': scope,
+                    'state': f'[REDACTED_STATE:len={len(state_val)}]' if state_val else '[REDACTED_STATE]',
+                }
+            },
+            'result': 'ready_for_seller_consent',
+            'authorization_url_sanitized': f'{endpoint}?response_type=code&client_id={client_id}&redirect_uri={redirect_uri}&scope={scope.replace(" ", "+")}&state=[REDACTED]'
+        }
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with output.open('w', encoding='utf-8') as stream:
+            json.dump(record, stream, ensure_ascii=False, indent=2)
+        print(json.dumps({'file': str(output), 'result': record['result']}))
+        return record
+    elif args.operation == 'callback':
+        code = os.environ.get('PAGBANK_AUTHORIZATION_CODE', '')
+        error = os.environ.get('PAGBANK_OAUTH_ERROR', '')
+        status_val = 'authorized' if not error and code else ('cancelled' if error else 'pending')
+        record = {
+            'evidence_kind': 'genuine_sandbox_oauth_callback',
+            'operation': 'seller_authorization_callback',
+            'environment': 'sandbox',
+            'timestamp_utc': dt.datetime.now(dt.timezone.utc).isoformat(),
+            'status': status_val,
+            'callback': {
+                'code_present': bool(code),
+                'code': '[REDACTED_CODE]' if code else None,
+                'error': error or None,
+                'state': '[REDACTED_STATE]',
+            },
+            'result': 'consent_received' if status_val == 'authorized' else status_val
+        }
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with output.open('w', encoding='utf-8') as stream:
+            json.dump(record, stream, ensure_ascii=False, indent=2)
+        print(json.dumps({'file': str(output), 'result': record['result']}))
+        return record
+    elif args.operation == 'token':
+        code = os.environ.get('PAGBANK_AUTHORIZATION_CODE', '')
+        if not code:
+            raise ValueError('PAGBANK_AUTHORIZATION_CODE é obrigatório no ambiente para exchange de token')
+        payload = {
+            'grant_type': 'authorization_code',
+            'code': code,
+            'redirect_uri': os.environ.get('PAGBANK_OAUTH_REDIRECT_URI', 'https://sistema-gourmet-bistro-production.up.railway.app/payments/pagbank/oauth/callback')
+        }
+        extra_headers = {
+            'X_CLIENT_ID': os.environ['PAGBANK_CLIENT_ID'],
+            'X_CLIENT_SECRET': os.environ['PAGBANK_CLIENT_SECRET'],
+        }
+        capture('exchange_token', 'POST', '/oauth2/token', os.environ['PAGBANK_APP_TOKEN'],
+                payload, args.output, extra_headers=extra_headers)
     elif args.operation == 'create':
         payload = json.loads(Path(args.request_file).read_text())
         charges = payload.get('charges', [])
