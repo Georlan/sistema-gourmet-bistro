@@ -24,6 +24,7 @@ from ..models import Comanda, ConfiguracaoRestaurante
 from .outbox.publisher import enqueue_outbox_event_in_session
 from .tenant_order_whatsapp import _locked_whatsapp_config_query, _snapshot_alert_items, normalize_phone, phones_match
 
+CENTRAL_INSTANCE_MARKER = "koma-central"  # Tenant config marker; never an Evolution instance.
 EVENT_NAME = "koma.whatsapp.central_operator_order"
 EVENT_NAMESPACE = uuid.UUID("51a975e6-81d3-49b2-8dba-48d8c39d9897")
 _INSTANCE_RE = re.compile(r"^[a-zA-Z0-9._-]{1,100}$")
