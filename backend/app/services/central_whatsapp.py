@@ -71,6 +71,10 @@ def enqueue_operator_alert(db: Session, order: OrderCreated):
     """Only register at the same transaction boundary as a released online order."""
     if order.channel != OrderChannel.WEB_CARDAPIO or not enabled_for(order.restaurant_id):
         return None
+    tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=order.restaurant_id).one_or_none()
+    if tenant is None or tenant.whatsapp_alerts_enabled:
+        # One WhatsApp operator channel at a time; never duplicate with the tenant instance.
+        return None
     event = CentralOperatorAlert(
         restaurant_id=order.restaurant_id,
         order_id=str(order.order_id),
@@ -181,6 +185,8 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
     settings = _locked_whatsapp_config_query(db, rid).one_or_none()
     if settings is None:
         return settle("dead_letter", "Configuração operacional ausente.")
+    if settings.whatsapp_alerts_enabled:
+        return settle("delivered", "WhatsApp individual ativo; aviso central dispensado.")
     now = dt.datetime.now(dt.timezone.utc)
     due = settings.whatsapp_next_send_at
     if due and (due.replace(tzinfo=dt.timezone.utc) if due.tzinfo is None else due) > now:
