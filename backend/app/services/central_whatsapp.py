@@ -193,18 +193,9 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
 
     pilot_rid, target, sender, instance = config
     headers = {"apikey": key, "Accept": "application/json"}
-    try:
-        with httpx.Client(timeout=4.0) as client:
-            if not _provider_sender_matches(client, base, headers, instance, sender):
-                return settle("failed", "Remetente não conectado ou identidade incompatível.",
-                              attempts=int(snapshot["attempts"]) + 1,
-                              retry_at=now + dt.timedelta(minutes=5))
-    except (httpx.HTTPError, ValueError, TypeError):
-        return settle("failed", "Estado do remetente indisponível.",
-                      attempts=int(snapshot["attempts"]) + 1,
-                      retry_at=now + dt.timedelta(minutes=5))
-
     message = render_operator_message(db, snapshot["payload"])
+    # Hold the tenant config lock only while reserving the next send slot.
+    # A single pilot tenant makes this reservation global for the central number.
     settings.whatsapp_next_send_at = now + dt.timedelta(seconds=15)
     from ..models import IntegrationOutbox
     event = db.query(IntegrationOutbox).filter(
@@ -214,10 +205,24 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
     ).one_or_none()
     if event is None:
         return False
-    # Persist the uncertain attempt before provider I/O.
     attempt_number = int(snapshot["attempts"]) + 1
     event.attempts = attempt_number
-    db.commit()
+    db.commit()  # Release all SQL locks BEFORE provider HTTP requests.
+
+    def unavailable(reason: str) -> bool:
+        if attempt_number >= int(snapshot["max_attempts"]):
+            return settle("dead_letter", reason, attempts=attempt_number)
+        return settle(
+            "failed", reason, attempts=attempt_number,
+            retry_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=5),
+        )
+
+    try:
+        with httpx.Client(timeout=4.0) as client:
+            if not _provider_sender_matches(client, base, headers, instance, sender):
+                return unavailable("Remetente não conectado ou identidade incompatível.")
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+        return unavailable("Estado do remetente indisponível.")
 
     try:
         with httpx.Client(timeout=4.0) as client:
