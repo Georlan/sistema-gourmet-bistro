@@ -93,7 +93,7 @@ export function RestaurantWhatsAppSettings({ apiBaseUrl, authHeaders }: {
     </button>
   );
 
-  if (status.mode !== 'individual') {
+  if (status.mode === 'central') {
     const registered = status.state === 'registered';
     return <section className="mt-4 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5" aria-label="Avisos de pedidos pelo WhatsApp">
       <h3 className="text-sm font-black text-koma-foreground">Comandas pelo WhatsApp</h3>
