@@ -40,7 +40,7 @@ class CentralOperatorAlert:
     total: str
 
 
-def pilot_configuration() -> tuple[int, str, str, str] | None:
+def pilot_configuration() -> tuple[int, str, str, str, str] | None:
     """Fail closed; one restaurant and two verified telephone values, never mass fanout."""
     if os.getenv("KOMA_CENTRAL_WA_ENABLED", "false").strip().lower() != "true":
         return None
@@ -48,6 +48,7 @@ def pilot_configuration() -> tuple[int, str, str, str] | None:
     target = os.getenv("KOMA_CENTRAL_WA_OPERATOR_PHONE", "").strip()
     sender = os.getenv("KOMA_CENTRAL_WA_SENDER_PHONE", "").strip()
     instance = os.getenv("KOMA_CENTRAL_WA_INSTANCE_NAME", "").strip()
+    test_customer = os.getenv("KOMA_CENTRAL_WA_PILOT_CUSTOMER_PHONE", "").strip()
     if not rid_text.isdecimal() or int(rid_text) < 1 or not _INSTANCE_RE.fullmatch(instance):
         return None
     if instance.startswith("koma-restaurant-"):
@@ -55,11 +56,12 @@ def pilot_configuration() -> tuple[int, str, str, str] | None:
     try:
         target_phone = normalize_phone(target)
         sender_phone = normalize_phone(sender)
+        customer_phone = normalize_phone(test_customer)
     except ValueError:
         return None
     if target_phone == sender_phone:
         return None
-    return int(rid_text), target_phone, sender_phone, instance
+    return int(rid_text), target_phone, sender_phone, instance, customer_phone
 
 
 def enabled_for(restaurant_id: int) -> bool:
@@ -70,6 +72,13 @@ def enabled_for(restaurant_id: int) -> bool:
 def enqueue_operator_alert(db: Session, order: OrderCreated):
     """Only register at the same transaction boundary as a released online order."""
     if order.channel != OrderChannel.WEB_CARDAPIO or not enabled_for(order.restaurant_id):
+        return None
+    config = pilot_configuration()
+    try:
+        # Restrict pilot sends to an explicitly authorized test checkout phone.
+        if config is None or normalize_phone(order.customer_phone or "") != config[4]:
+            return None
+    except ValueError:
         return None
     tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=order.restaurant_id).one_or_none()
     if tenant is None or tenant.whatsapp_alerts_enabled:
@@ -182,6 +191,19 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
     if int(snapshot["payload"].get("restaurant_id", -1)) != rid:
         return settle("dead_letter", "Evento e restaurante divergentes.")
 
+    check_id = snapshot["payload"].get("check_id")
+    check = (
+        db.query(Comanda)
+        .filter(Comanda.restaurante_id == rid, Comanda.id == str(check_id))
+        .one_or_none()
+        if check_id else None
+    )
+    try:
+        if check is None or normalize_phone(check.delivery_telefone or "") != config[4]:
+            return settle("delivered", "Pedido não autorizado para teste do canal central.")
+    except ValueError:
+        return settle("delivered", "Telefone de teste indisponível.")
+
     settings = _locked_whatsapp_config_query(db, rid).one_or_none()
     if settings is None:
         return settle("dead_letter", "Configuração operacional ausente.")
@@ -197,7 +219,7 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
     if not (base.startswith("https://") or base.startswith("http://")) or not key:
         return settle("dead_letter", "Evolution não configurada.")
 
-    pilot_rid, target, sender, instance = config
+    pilot_rid, target, sender, instance, _test_customer = config
     headers = {"apikey": key, "Accept": "application/json"}
     message = render_operator_message(db, snapshot["payload"])
     # Hold the tenant config lock only while reserving the next send slot.
