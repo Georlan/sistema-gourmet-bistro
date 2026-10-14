@@ -817,6 +817,8 @@ class OrderApplicationService:
                 enqueue_order_alert(db, event)
                 from ...services.staff_push import enqueue_staff_order_alert
                 enqueue_staff_order_alert(db, event)
+                from ...services.central_whatsapp import enqueue_operator_alert
+                enqueue_operator_alert(db, event)
 
             if commit:
                 db.commit()
