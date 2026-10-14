@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import base64
+import datetime
+import hashlib
 import hmac
+import json
+import logging
 import os
+import re
 import secrets
 import time
 from urllib.parse import urlencode
@@ -15,6 +20,72 @@ from ..oauth import MercadoPagoOAuthTokens
 
 class PagBankOAuthError(RuntimeError):
     pass
+
+
+logger = logging.getLogger('koma.pagbank')
+OAUTH_SCOPES = 'payments.read payments.create payments.refund accounts.read'
+
+
+def log_sandbox_oauth_evidence(
+    stage: str, *, restaurant_id: int, state: str, http_status: int | None = None,
+    token_response: dict | None = None, request_id: str | None = None,
+    code_present: bool | None = None, error_present: bool | None = None,
+) -> None:
+    """Emit strictly allowlisted metadata from the actual QA OAuth flow.
+
+    Never log the authorization code, state, tokens, seller identifiers, headers,
+    free-form PagBank response bodies, or a full authorization URL. Railway logs
+    are not a substitute for the bank's response: HTTP status is captured live.
+    """
+    allowed = {s.strip() for s in env('PAGBANK_SANDBOX_OAUTH_EVIDENCE_RESTAURANT_IDS').split(',') if s.strip()}
+    rid = str(int(restaurant_id))
+    if rid not in allowed or environment_for_restaurant(int(rid)) != 'sandbox':
+        return
+    if stage not in {'authorization_url_issued', 'callback_received', 'token_exchange', 'connection_completed', 'connection_rejected_owner'}:
+        raise ValueError('Etapa de evidência OAuth desconhecida.')
+    flow_id = hmac.new(settings.SECRET_KEY.encode(), b'pagbank-evidence:' + state.encode(), hashlib.sha256).hexdigest()[:20]
+    event = {
+        'evidence_kind': 'koma_real_sandbox_oauth_flow',
+        'stage': stage,
+        'timestamp_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        'restaurant_id': int(rid),
+        'environment': 'sandbox',
+        'flow_id': flow_id,
+    }
+    if stage == 'authorization_url_issued':
+        event.update({
+            'method': 'GET',
+            'endpoint': 'https://connect.sandbox.pagbank.com.br/oauth2/authorize',
+            'response_type': 'code',
+            'scope': OAUTH_SCOPES,
+            'redirect_uri': redirect_uri('sandbox'),
+            'result': 'authorization_url_issued_by_koma',
+        })
+    elif stage == 'callback_received':
+        event.update({'code_present': bool(code_present), 'error_present': bool(error_present),
+                      'result': 'callback_received_by_koma'})
+    elif stage == 'token_exchange':
+        body = token_response if isinstance(token_response, dict) else {}
+        event.update({
+            'method': 'POST',
+            'endpoint': 'https://sandbox.api.pagseguro.com/oauth2/token',
+            'grant_type': 'authorization_code',
+            'redirect_uri': redirect_uri('sandbox'),
+            'http_status': http_status,
+            'result': ('transport_failure' if http_status is None else
+                       'http_success' if 200 <= http_status < 300 else 'bank_rejected'),
+            'has_access_token': bool(body.get('access_token')),
+            'has_refresh_token': bool(body.get('refresh_token')),
+            'has_account_id': bool(body.get('account_id')),
+            'expires_in': body.get('expires_in') if isinstance(body.get('expires_in'), int) else None,
+        })
+        if request_id and re.fullmatch(r'[A-Za-z0-9_-]{1,128}', request_id):
+            event['pagbank_request_id'] = request_id
+    else:
+        event['result'] = stage
+    # WARNING intentionally: the scoped, redacted QA evidence must be retained
+    # even when application INFO-level logs are disabled in the runtime.
+    logger.warning('PAGBANK_OAUTH_EVIDENCE %s', json.dumps(event, sort_keys=True))
 
 
 def env(name: str) -> str:
@@ -95,7 +166,7 @@ def authorization(restaurant_id: int, user_id: str, *, return_origin: str | None
         raise PagBankOAuthError('Identificador OAuth excede o limite do PagBank.')
     host = 'connect.pagbank.com.br' if environment == 'production' else 'connect.sandbox.pagbank.com.br'
     query = urlencode(dict(response_type='code', client_id=credential('CLIENT_ID', environment), redirect_uri=redirect_uri(environment),
-                          scope='payments.read payments.create payments.refund accounts.read', state=state))
+                          scope=OAUTH_SCOPES, state=state))
     return f'https://{host}/oauth2/authorize?{query}', state
 
 
@@ -120,20 +191,34 @@ def decode_state(state: str, cookie: str) -> tuple[int, str]:
         raise PagBankOAuthError('Autorização inválida ou expirada. Inicie a conexão novamente.') from exc
 
 
-def _post(path: str, payload: dict, *, client=None, environment: str | None = None) -> dict:
+def _post(path: str, payload: dict, *, client=None, environment: str | None = None,
+          evidence_restaurant_id: int | None = None, evidence_state: str | None = None) -> dict:
     if not configured(environment):
         raise PagBankOAuthError('A conexão PagBank ainda está sendo preparada pela KÔMA.')
     owned = client is None
     client = client or httpx.Client(timeout=settings.ONLINE_PAYMENT_REQUEST_TIMEOUT_SECONDS)
+    capture = path == '/oauth2/token' and evidence_restaurant_id is not None and evidence_state is not None
     try:
         response = client.post(api_url(environment) + path, headers={
             'Authorization': f"Bearer {credential('APP_TOKEN', environment)}",
             'X_CLIENT_ID': credential('CLIENT_ID', environment), 'X_CLIENT_SECRET': credential('CLIENT_SECRET', environment),
         }, json=payload)
         if response.is_error:
+            if capture:
+                log_sandbox_oauth_evidence('token_exchange', restaurant_id=evidence_restaurant_id,
+                    state=evidence_state, http_status=response.status_code,
+                    request_id=response.headers.get('x-request-id'))
             raise PagBankOAuthError(f'PagBank recusou a autorização (HTTP {response.status_code}).')
-        return response.json() if response.content else {}
+        data = response.json() if response.content else {}
+        if capture:
+            log_sandbox_oauth_evidence('token_exchange', restaurant_id=evidence_restaurant_id,
+                state=evidence_state, http_status=response.status_code, token_response=data,
+                request_id=response.headers.get('x-request-id'))
+        return data
     except (httpx.HTTPError, ValueError) as exc:
+        if capture:
+            log_sandbox_oauth_evidence('token_exchange', restaurant_id=evidence_restaurant_id,
+                state=evidence_state)
         raise PagBankOAuthError('Não foi possível comunicar com a autorização PagBank.') from exc
     finally:
         if owned:
@@ -147,8 +232,11 @@ def _tokens(data: dict) -> MercadoPagoOAuthTokens:
                                  provider_user_id=data['account_id'], public_key=None, expires_in=int(data.get('expires_in') or 0))
 
 
-def exchange(code: str, *, environment: str | None = None) -> MercadoPagoOAuthTokens:
-    return _tokens(_post('/oauth2/token', dict(grant_type='authorization_code', code=code, redirect_uri=redirect_uri(environment)), environment=environment))
+def exchange(code: str, *, environment: str | None = None,
+             evidence_restaurant_id: int | None = None, evidence_state: str | None = None) -> MercadoPagoOAuthTokens:
+    return _tokens(_post('/oauth2/token',
+        dict(grant_type='authorization_code', code=code, redirect_uri=redirect_uri(environment)),
+        environment=environment, evidence_restaurant_id=evidence_restaurant_id, evidence_state=evidence_state))
 
 
 def refresh_access_token(token: str, *, environment: str | None = None) -> MercadoPagoOAuthTokens:

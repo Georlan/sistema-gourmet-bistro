@@ -49,7 +49,9 @@ def connection_status(db: Session = Depends(get_db), user: Usuario = Depends(req
 @router.get('/pagbank/connect')
 def connect(request: Request, response: Response, user: Usuario = Depends(require_permission('configuracoes:administrar'))):
     try:
-        url, _state = oauth.authorization(require_tenant_id(), str(user.id), return_origin=request.headers.get("origin"))
+        rid = require_tenant_id()
+        url, _state = oauth.authorization(rid, str(user.id), return_origin=request.headers.get("origin"))
+        oauth.log_sandbox_oauth_evidence('authorization_url_issued', restaurant_id=rid, state=_state)
     except oauth.PagBankOAuthError as exc:
         raise HTTPException(503, str(exc)) from exc
     response.headers['Cache-Control'] = 'no-store'
@@ -59,9 +61,11 @@ def connect(request: Request, response: Response, user: Usuario = Depends(requir
 @router.get('/pagbank/oauth/callback')
 def callback(code: str = '', state: str = '', error: str = ''):
     try:
-        oauth.decode_state(state, state)
+        rid, _ = oauth.decode_state(state, state)
     except oauth.PagBankOAuthError as exc:
         raise HTTPException(400, str(exc)) from exc
+    oauth.log_sandbox_oauth_evidence('callback_received', restaurant_id=rid, state=state,
+                                    code_present=bool(code), error_present=bool(error))
     params = {'view': 'caixa', 'pagbank': 'cancelled' if error else 'authorized'}
     if not error:
         if not code or len(code) > 512:
@@ -89,8 +93,11 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
             if initiator is None:
                 raise HTTPException(403, 'Usuário indisponível.')
             ensure_permission(initiator, 'configuracoes:administrar')
-            tokens = oauth.exchange(code, environment=oauth.environment_for_restaurant(rid))
-            if oauth.is_application_owner(tokens.provider_user_id, environment=oauth.environment_for_restaurant(rid)):
+            environment = oauth.environment_for_restaurant(rid)
+            tokens = oauth.exchange(code, environment=environment,
+                                    evidence_restaurant_id=rid, evidence_state=state)
+            if oauth.is_application_owner(tokens.provider_user_id, environment=environment):
+                oauth.log_sandbox_oauth_evidence('connection_rejected_owner', restaurant_id=rid, state=state)
                 raise HTTPException(409, 'A conta proprietária da aplicação KÔMA não pode receber vendas como restaurante.')
             guard_receiver_change(db, restaurant_id=rid, provider='pagbank',
                 provider_user_id=tokens.provider_user_id, environment=oauth.environment_for_restaurant(rid))
@@ -110,6 +117,7 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
                 RestaurantPaymentAccount.provider != 'pagbank').update({'status': 'disconnected'})
             db.query(RestaurantDirectPixConfig).filter(RestaurantDirectPixConfig.restaurante_id == rid).update({'enabled': False})
             db.commit()
+            oauth.log_sandbox_oauth_evidence('connection_completed', restaurant_id=rid, state=state)
     except oauth.PagBankOAuthError as exc:
         db.rollback()
         raise HTTPException(502, 'Não foi possível concluir a conexão PagBank.') from exc
