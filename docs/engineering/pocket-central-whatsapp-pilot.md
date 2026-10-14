@@ -18,8 +18,9 @@ O destinatário da mensagem nunca é recuperado de dados de outro tenant.
 Todos os parâmetros a seguir permanecem ausentes/desativados em produção:
 
 - `KOMA_CENTRAL_WA_ENABLED=false` — feature flag principal.
-- `KOMA_CENTRAL_WA_PILOT_RESTAURANT_ID` — apenas **um** tenant QA explicitamente aprovado.
+- `KOMA_CENTRAL_WA_PILOT_RESTAURANT_ID` — apenas **um** tenant explicitamente aprovado; ID 8 é D8 Burger, piloto de produção, não tenant QA.
 - `KOMA_CENTRAL_WA_OPERATOR_PHONE` — número do operador que autorizou os avisos.
+- `KOMA_CENTRAL_WA_PILOT_CUSTOMER_PHONE` — **único** telefone de checkout autorizado a acionar a comanda central neste piloto; outros clientes do mesmo restaurante nunca enfileiram alertas centrais.
 - `KOMA_CENTRAL_WA_SENDER_PHONE` — número Business remetente, distinto do destinatário.
 - `KOMA_CENTRAL_WA_INSTANCE_NAME` — instância Evolution exclusiva do Business;
   não reutilizar `koma-restaurant-*` nem o número pessoal.
@@ -29,7 +30,7 @@ Não registrar os números, chaves, QR, tokens, mensagens nem configuração rea
 em commits, PRs, issues, testes ou logs. Registrar consentimento e possibilidade
 de cancelamento em evidência privada antes de habilitar a flag. A flag,
 restaurante único, destinatário e remetente válido precisam coexistir.
-Configuração parcial, id incorreto ou instância de tenant resultam em **sem evento**.
+Configuração parcial, id incorreto, cliente que não esteja na allowlist ou instância de tenant resultam em **sem evento**. O worker verifica novamente o telefone da comanda com tenant-scoping antes de qualquer envio.
 
 ## Comanda e privacidade
 
@@ -63,9 +64,9 @@ Ao perder rede, o Caixa/Kanban continua fonte de verdade.
 ## Próximos gates antes de habilitar
 
 1. Conferir cobertura da suíte CI/POSTGRES e testes dos três fluxos de pedido.
-2. Confirmar em QA o remetente Business dedicado e o destino autorizado, sem
+2. Confirmar a sessão Business dedicada e o destino autorizado em teste isolado, sem
    tocar restaurantes de produção. Não ativar o ID 6.
-3. Fazer um pedido de teste canônico sem pagamento real; conferir exibição no
+3. Em D8 Burger (ID 8), fazer no máximo um pedido de teste canônico sem pagamento real, com o telefone explicitamente autorizado no checkout; conferir exibição no
    Kanban, uma comanda no destino, conteúdo completo e ausência de vazamento.
 4. Verificar desconexão, número divergente, flood, pedido duplicado,
    reinício do worker e perda de rede; manter o canal desligado se algum gate falhar.
