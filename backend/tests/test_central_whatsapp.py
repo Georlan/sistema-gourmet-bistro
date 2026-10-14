@@ -9,7 +9,7 @@ import httpx
 from app.database import SessionLocal
 from app.domain.orders.events import OrderCreated
 from app.domain.orders.types import FulfillmentType, OrderChannel
-from app.models import IntegrationOutbox
+from app.models import ConfiguracaoRestaurante, IntegrationOutbox
 from app.services import central_whatsapp as wa
 from app.services.outbox.dispatcher import dispatch_single_outbox_event
 from tests.characterization.orders.fixtures import CHAR_RESTAURANT_ID, char_setup
@@ -82,6 +82,10 @@ def test_enqueue_is_gated_deduped_and_contains_no_personal_contact(char_setup, m
         assert "phone" not in first.payload
         assert "customer_name" not in first.payload
         assert "Não persistir" not in str(first.payload)
+        tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=CHAR_RESTAURANT_ID).one()
+        tenant.whatsapp_alerts_enabled = True
+        assert wa.enqueue_operator_alert(db, _order()) is None
+        tenant.whatsapp_alerts_enabled = False
         assert wa.enqueue_operator_alert(db, _order(CHAR_RESTAURANT_ID + 1)) is None
         assert wa.enqueue_operator_alert(db, OrderCreated(
             restaurant_id=CHAR_RESTAURANT_ID, order_id="pos-order",
