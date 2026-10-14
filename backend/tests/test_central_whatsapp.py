@@ -3,6 +3,7 @@
 No real WhatsApp API calls are performed by these tests.
 """
 from decimal import Decimal
+from dataclasses import replace
 
 import httpx
 
@@ -21,6 +22,7 @@ def _enable(monkeypatch, rid=CHAR_RESTAURANT_ID):
     monkeypatch.setenv("KOMA_CENTRAL_WA_OPERATOR_PHONE", "5511999999999")
     monkeypatch.setenv("KOMA_CENTRAL_WA_SENDER_PHONE", "5511888888888")
     monkeypatch.setenv("KOMA_CENTRAL_WA_INSTANCE_NAME", "koma-business-pilot")
+    monkeypatch.setenv("KOMA_CENTRAL_WA_PILOT_CUSTOMER_PHONE", "5511777777777")
 
 
 def _order(rid=CHAR_RESTAURANT_ID):
@@ -37,7 +39,7 @@ def test_default_off_and_fail_closed(monkeypatch):
     for key in (
         "KOMA_CENTRAL_WA_ENABLED", "KOMA_CENTRAL_WA_PILOT_RESTAURANT_ID",
         "KOMA_CENTRAL_WA_OPERATOR_PHONE", "KOMA_CENTRAL_WA_SENDER_PHONE",
-        "KOMA_CENTRAL_WA_INSTANCE_NAME",
+        "KOMA_CENTRAL_WA_INSTANCE_NAME", "KOMA_CENTRAL_WA_PILOT_CUSTOMER_PHONE",
     ):
         monkeypatch.delenv(key, raising=False)
     assert wa.pilot_configuration() is None
@@ -82,6 +84,10 @@ def test_enqueue_is_gated_deduped_and_contains_no_personal_contact(char_setup, m
         assert "phone" not in first.payload
         assert "customer_name" not in first.payload
         assert "Não persistir" not in str(first.payload)
+        assert wa.enqueue_operator_alert(db, replace(_order(), customer_phone="5511999000000")) is None
+        monkeypatch.delenv("KOMA_CENTRAL_WA_PILOT_CUSTOMER_PHONE")
+        assert wa.enqueue_operator_alert(db, _order()) is None
+        monkeypatch.setenv("KOMA_CENTRAL_WA_PILOT_CUSTOMER_PHONE", "5511777777777")
         tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=CHAR_RESTAURANT_ID).one()
         tenant.whatsapp_alerts_enabled = True
         assert wa.enqueue_operator_alert(db, _order()) is None
