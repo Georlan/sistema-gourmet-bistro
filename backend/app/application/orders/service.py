@@ -678,6 +678,9 @@ class OrderApplicationService:
                     numero_pedido=numero_pedido,
                     fechada=False,
                     onboarding_test=bool(cmd.onboarding_test),
+                    whatsapp_status_opt_in=bool(
+                        cmd.channel == OrderChannel.WEB_CARDAPIO and cmd.whatsapp_status_opt_in
+                    ),
                     criado_em=datetime.datetime.now(datetime.timezone.utc),
                     delivery_status=auto_delivery_status,
                     delivery_telefone=clean_phone,
