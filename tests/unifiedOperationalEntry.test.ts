@@ -19,17 +19,20 @@ test('main routes every canonical staff URL through the unified operational entr
   assert.doesNotMatch(main, /resolvedHost\.surface === ["']caixa["']/);
 });
 
-test('canonical app entry preserves only a valid print-agent pairing context through login', () => {
+test('canonical app entry preserves Print Agent pairing and PagBank callback through login', () => {
   const main = source('../src/main.tsx');
-  assert.match(main, /isUnifiedOperationalRoute[\s\S]*isOperationalAppHost\(\)[\s\S]*window\.location\.pathname !== "\/"/);
-  assert.match(main, /currentParams\.get\("pair_print_agent"\)/);
-  assert.match(main, /currentParams\.get\("agent_port"\)/);
-  assert.match(main, /pairingPort >= 17654/);
-  assert.match(main, /pairingPort <= 17664/);
-  assert.match(main, /canonicalParams\.set\("pair_print_agent", pairingNonce\)/);
-  assert.match(main, /canonicalParams\.set\("agent_port", String\(pairingPort\)\)/);
-  assert.match(main, /canonicalSearch \? `\/\?\$\{canonicalSearch\}` : "\/"/);
-  assert.doesNotMatch(main, /window\.history\.replaceState\(window\.history\.state, "", "\/"\)/);
+  const helper = source('../src/utils/operationalCallbackParams.ts');
+  assert.match(main, /isUnifiedOperationalRoute[\\s\\S]*isOperationalAppHost\\(\\)[\\s\\S]*window\\.location\\.pathname !== "\\/"/);
+  assert.match(main, /canonicalOperationalQuery\\(window\\.location\\.search\\)/);
+  assert.match(helper, /incoming\\.get\\('pair_print_agent'\\)/);
+  assert.match(helper, /incoming\\.get\\('agent_port'\\)/);
+  assert.match(helper, /pairingPort >= 17654/);
+  assert.match(helper, /pairingPort <= 17664/);
+  assert.match(helper, /canonical\\.set\\('pair_print_agent', pairingNonce\\)/);
+  assert.match(helper, /canonical\\.set\\('agent_port', String\\(pairingPort\\)\\)/);
+  assert.match(helper, /result === 'authorized'/);
+  assert.match(main, /canonicalSearch \\? `\\/\\?\\$\\{canonicalSearch\\}` : "\\/"/);
+  assert.doesNotMatch(main, /window\\.history\\.replaceState\\(window\\.history\\.state, "", "\\/"\\)/);
 });
 
 test('legacy cashier and waiter tenant hosts converge to the canonical team entry', () => {
