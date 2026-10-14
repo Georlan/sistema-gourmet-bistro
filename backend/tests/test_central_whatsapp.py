@@ -12,7 +12,7 @@ from app.domain.orders.types import FulfillmentType, OrderChannel
 from app.models import ConfiguracaoRestaurante, IntegrationOutbox
 from app.services import central_whatsapp as wa
 from app.services.outbox.dispatcher import dispatch_single_outbox_event
-from tests.characterization.orders.fixtures import CHAR_RESTAURANT_ID, char_setup
+from tests.characterization.orders.fixtures import CHAR_RESTAURANT_ID, char_client, char_setup
 
 
 def _enable(monkeypatch, rid=CHAR_RESTAURANT_ID):
