@@ -1,39 +1,33 @@
-# Evidências PagBank Connect OAuth Sandbox — Chamado 1462968488
+# Evidências PagBank Connect OAuth Sandbox — chamado 1462968488
 
-**Analista PagBank:** Gabriel Santos  
-**Plataforma:** KÔMA (SaaS Multi-tenant para Restaurantes)  
-**Restaurante QA:** KÔMA QA — PagBank Sandbox (ID 9)  
-**Ambiente:** Sandbox (`https://sandbox.api.pagseguro.com`)  
-**Data:** 14/10/2026  
+**Escopo solicitado por Gabriel Santos:** fluxo Connect, desde o cadastro da aplicação até o retorno de `access_token` de uma conta vendedora Sandbox. O pacote anterior de API Order Pix já foi encaminhado. Não repetir pagamentos Pix nesta etapa.
 
----
+**Tenant QA:** KÔMA QA — PagBank Sandbox (ID 9). **Não alterar** o D8 Burger (ID 8, piloto de produção) nem outros restaurantes.
 
-## 1. Escopo da Demonstração
+## Evidências existentes — classificação obrigatória
 
-Conforme alinhado expressamente com Gabriel Santos no chamado 1462968488, a bateria anterior de 11 trocas HTTP da API Order Pix com estados, consultas e idempotência já foi aprovada na triagem.
+- `01_consult_application.json`: **consulta HTTP real** `GET https://sandbox.api.pagseguro.com/oauth2/application/{client_id}` com status HTTP 200. Demonstra que uma aplicação Sandbox já cadastrada pode ser consultada. **Não é o log da criação original** `POST /oauth2/application`.
+- `02_initiate_authorization.json`: **metadados de preparação** gerados pelo script anterior (URL, escopos e redirect URI previstos). Não é uma navegação realmente observada, não comprova consentimento e não deve ser rotulada como `genuine_sandbox_oauth_initiation` em uma entrega ao banco. O registro de autorização emitida pelo backend é coletado no fluxo novo abaixo.
+- O teste HTTP 400 com `code` inválido prova apenas que o endpoint de troca respondeu. **Não comprova** autorização ou `access_token`.
 
-Esta etapa cobre exclusivamente o **fluxo Connect OAuth no Sandbox**, desde a identificação da aplicação até a autorização e obtenção do `access_token`.
+## Como executar e capturar a autorização real
 
----
+1. Confirmar que `GET /payments/pagbank/status` autenticado **no restaurante 9** informa `environment=sandbox`, `configured=true`, `connected=false`. A seleção efetiva de ambiente é feita pelo backend, e não pelo navegador.
+2. No serviço **Kôma** do Railway, definir `PAGBANK_SANDBOX_OAUTH_EVIDENCE_RESTAURANT_IDS=9`. Essa flag não altera credenciais, recebedor ou ambiente; habilita **somente para o tenant 9 em Sandbox** logs sem valores secretos. Nenhum outro restaurante gera evidência.
+3. Verificar que existe **um vendedor Sandbox separado do titular da aplicação**, autorizado pelo PagBank. Não utilizar conta de produção nem contornar o bloqueio de conta proprietária.
+4. Entrar no KÔMA como administrador do restaurante 9, ir a Configurações → Integrações e clicar **Conectar PagBank**. Não copiar a URL completa; ela contém `state` assinado.
+5. Concluir o consentimento no site Sandbox do PagBank e deixar o navegador retornar ao KÔMA **sem executar scripts de token separadamente**. O KÔMA realiza a troca do `code` automaticamente, uma única vez.
+6. Filtrar logs do serviço Kôma no Railway por `PAGBANK_OAUTH_EVIDENCE`. A trilha esperada do mesmo `flow_id` (HMAC não reversível do state) é:
+   - `authorization_url_issued`: comprova que KÔMA **emitiu** a URL de autorização Sandbox; não prova que o usuário navegou até lá.
+   - `callback_received`: comprova que o callback chegou ao KÔMA com `code_present=true`; não inclui o código nem o state original.
+   - `token_exchange`: **troca HTTP real**, com método, endpoint Sandbox, grant, status, presença de access/refresh token e account_id, tempo de validade e request ID quando seguro.
+   - `connection_completed`: armazenamento validado e conexão concluída para o restaurante correto. Se o titular for rejeitado, aparece `connection_rejected_owner` após a troca de token.
+7. Copiar apenas as quatro entradas de evidência necessárias, **revisá-las antes de enviá-las** e anexá-las em documento ou JSON sanitizado fora de quaisquer arquivos de credenciais. Não incluir screenshots de URLs de callback completas ou de abas com tokens.
 
-## 2. Inventário de Evidências
+A trilha é **metadado seguro emitido pelo backend**, e não corpo integral assinado do PagBank. Distinguir claramente logs do KÔMA de respostas bancárias. O log `token_exchange` só existe com sucesso quando o PagBank realmente retorna HTTP 2xx; falhas exibem HTTP real e nenhum token. Não declarar homologação concluída antes de obter uma resposta real e o aceite de Gabriel.
 
-### A. Aplicação Connect (`01_consult_application.json`)
-- **Operação:** `consult_application`
-- **Método / Endpoint:** `GET https://sandbox.api.pagseguro.com/oauth2/application/c555229e-d90a-4e32-b28c-814f0f19c793`
-- **Autenticação:** `Bearer [REDACTED]` (App Token da aplicação Sandbox KÔMA)
-- **Status HTTP:** `200 OK`
-- **Validação:** confirma o cadastro ativo da aplicação, client_id, tipo `confidential`, account_id proprietária `ACCO_1A624D03-01FE-43D0-A85A-5DF579EBB36A` e redirect_uri HTTPS cadastrada.
+## Coletor de Sandbox
 
-### B. Início da Autorização (`02_initiate_authorization.json`)
-- **Operação:** `initiate_authorization`
-- **Método / Endpoint:** `GET https://connect.sandbox.pagbank.com.br/oauth2/authorize`
-- **Escopos solicitados:** `payments.read payments.create payments.refund accounts.read`
-- **Redirect URI:** `https://sistema-gourmet-bistro-production.up.railway.app/payments/pagbank/oauth/callback`
-- **Proteção do `state`:** gerado com HMAC assinado e validade de 10 minutos, criptograficamente vinculado ao restaurante ID 9 e ao administrador autenticado, mantendo o limite estrito de 128 caracteres do PagBank.
+O script `scripts/pagbank-sandbox-evidence.py` continua disponível somente para `application`, `create` e `get`, sempre contra `https://sandbox.api.pagseguro.com`. Operações antigas `authorize`, `callback` e `token` foram removidas para não gerar logs sintéticos de consentimento nem consumir o código OAuth duas vezes. O script não é necessário para executar o Connect.
 
-### C & D. Autorização do Vendedor e Troca de Código por Token
-- O comando automatizado para captura do token exchange está pronto em `scripts/pagbank-sandbox-evidence.py token --output docs/payments/evidence/1462968488/04_exchange_token.json`.
-- A chamada realiza `POST https://sandbox.api.pagseguro.com/oauth2/token` com `grant_type: authorization_code`, `Authorization: Bearer <PAGBANK_APP_TOKEN>`, `X_CLIENT_ID` e `X_CLIENT_SECRET`.
-- A validação de endpoint contra o Sandbox PagBank já foi confirmada com resposta técnica HTTP 400 (`code: 41001, parameter_name: code`), comprovando a conectividade com a API oficial sem mocks.
-- A conclusão com sucesso exige o consentimento humano de uma conta de vendedor de testes Sandbox no portal do PagBank.
+A variável de captura pode ser removida do Railway após a homologação. Não publicar novas credenciais no Git, em logs ou no ticket.
