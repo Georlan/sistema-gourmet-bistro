@@ -73,6 +73,70 @@ def test_sender_identity_verified_without_sending():
         )
 
 
+
+def test_sender_identity_accepts_legacy_brazilian_mobile_jid():
+    # WhatsApp can publish BR mobile IDs with the ninth digit omitted.
+    def provider(request):
+        if request.url.path.endswith("/connectionState/koma-business-pilot"):
+            return httpx.Response(200, json={"instance": {"state": "open"}})
+        return httpx.Response(200, json=[{
+            "name": "koma-business-pilot",
+            "ownerJid": "551187654321@s.whatsapp.net",
+        }])
+
+    with httpx.Client(transport=httpx.MockTransport(provider)) as client:
+        assert wa._provider_sender_status(
+            client, "https://example.test", {}, "koma-business-pilot", "5511987654321"
+        ) == "matched"
+        assert wa._provider_sender_status(
+            client, "https://example.test", {}, "koma-business-pilot", "5511981234567"
+        ) == "mismatch"
+
+
+def test_sender_verification_blocks_closed_or_unknown_business_session():
+    requests = []
+
+    def disconnected(request):
+        requests.append(request.url.path)
+        return httpx.Response(200, json={"instance": {"state": "close"}})
+
+    with httpx.Client(transport=httpx.MockTransport(disconnected)) as client:
+        assert wa._provider_sender_status(
+            client, "https://example.test", {}, "koma-business-pilot", "5511987654321"
+        ) == "not_open"
+    assert requests == ["/instance/connectionState/koma-business-pilot"]
+
+    def no_owner(request):
+        if "connectionState" in request.url.path:
+            return httpx.Response(200, json={"instance": {"state": "open"}})
+        return httpx.Response(200, json=[{
+            "name": "koma-business-pilot",
+            "connectionStatus": "open",
+        }])
+
+    with httpx.Client(transport=httpx.MockTransport(no_owner)) as client:
+        assert wa._provider_sender_status(
+            client, "https://example.test", {}, "koma-business-pilot", "5511987654321"
+        ) == "owner_missing"
+
+
+def test_sender_verification_supports_nested_instance_without_cross_instance_fallback():
+    def nested(request):
+        if "connectionState" in request.url.path:
+            return httpx.Response(200, json={"instance": {"state": "open"}})
+        return httpx.Response(200, json=[
+            {"name": "another-instance", "ownerJid": "5511987654321@s.whatsapp.net"},
+            {"instance": {"instanceName": "koma-business-pilot",
+                          "ownerJid": "551187654321@s.whatsapp.net"}},
+        ])
+
+    with httpx.Client(transport=httpx.MockTransport(nested)) as client:
+        assert wa._provider_sender_matches(
+            client, "https://example.test", {}, "koma-business-pilot", "5511987654321"
+        )
+
+
+
 def test_enqueue_is_gated_deduped_and_contains_no_personal_contact(char_setup, monkeypatch):
     _enable(monkeypatch)
     db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
@@ -111,9 +175,10 @@ def test_disabled_after_enqueue_skips_provider_entirely(char_setup, monkeypatch)
         event_id = row.id
         monkeypatch.setenv("KOMA_CENTRAL_WA_ENABLED", "false")
         event = db.query(IntegrationOutbox).filter_by(id=event_id, restaurante_id=CHAR_RESTAURANT_ID).one()
-        assert dispatch_single_outbox_event(db, event)
+        assert not dispatch_single_outbox_event(db, event)
         db.refresh(event)
-        assert event.status == "delivered"
+        assert event.status == "dead_letter"
+        assert "nenhuma mensagem enviada" in event.last_error
         assert event.attempts == 0
     finally:
         db.close()
