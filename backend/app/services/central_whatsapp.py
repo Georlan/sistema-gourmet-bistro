@@ -22,7 +22,7 @@ from ..domain.orders.events import OrderCreated
 from ..domain.orders.types import OrderChannel
 from ..models import Comanda, ConfiguracaoRestaurante
 from .outbox.publisher import enqueue_outbox_event_in_session
-from .tenant_order_whatsapp import _locked_whatsapp_config_query, _snapshot_alert_items, normalize_phone
+from .tenant_order_whatsapp import _locked_whatsapp_config_query, _snapshot_alert_items, normalize_phone, phones_match
 
 EVENT_NAME = "koma.whatsapp.central_operator_order"
 EVENT_NAMESPACE = uuid.UUID("51a975e6-81d3-49b2-8dba-48d8c39d9897")
@@ -143,29 +143,55 @@ def render_operator_message(db: Session, payload: dict) -> str:
     return message if len(message) <= 3000 else message[:2890].rstrip() + "\n…\nConfira o pedido completo no KÔMA."
 
 
-def _provider_sender_matches(client: httpx.Client, base: str, headers: dict, instance: str, sender: str) -> bool:
+def _provider_sender_status(
+    client: httpx.Client, base: str, headers: dict, instance: str, sender: str,
+) -> str:
+    """Read-only Evolution validation; never return/log phone numbers or JIDs.
+
+    The Brazilian WhatsApp JID can omit the ninth mobile digit even when
+    the paired Business account has the full E.164 number. Reuse the trusted
+    tenant comparison rather than demanding identical textual representations.
+    """
     instance_path = quote(instance, safe="")
     status = client.get(f"{base}/instance/connectionState/{instance_path}", headers=headers)
     status.raise_for_status()
     state = status.json()
     instance_status = state.get("instance") if isinstance(state, dict) else None
     if not isinstance(instance_status, dict) or instance_status.get("state") != "open":
-        return False
-    response = client.get(f"{base}/instance/fetchInstances", params={"instanceName": instance}, headers=headers)
+        return "not_open"
+
+    response = client.get(
+        f"{base}/instance/fetchInstances",
+        params={"instanceName": instance}, headers=headers,
+    )
     response.raise_for_status()
     data = response.json()
-    for entry in data if isinstance(data, list) else [data]:
-        if not isinstance(entry, dict) or entry.get("name", entry.get("instanceName")) != instance:
+    entries = data if isinstance(data, list) else [data]
+    matched_instance = False
+    for entry in entries:
+        if not isinstance(entry, dict):
             continue
-        jid = entry.get("ownerJid") or entry.get("owner")
+        info = entry.get("instance")
+        nested = info if isinstance(info, dict) else {}
+        entry_name = entry.get("name") or entry.get("instanceName") or nested.get("instanceName")
+        if entry_name != instance:
+            continue
+        matched_instance = True
+        jid = entry.get("ownerJid") or entry.get("owner") or nested.get("ownerJid")
         if not isinstance(jid, str):
             continue
         raw = jid.split("@", 1)[0].split(":", 1)[0]
-        try:
-            return normalize_phone(raw) == sender
-        except ValueError:
-            return False
-    return False
+        if phones_match(raw, sender):
+            return "matched"
+        return "mismatch"
+    return "owner_missing" if matched_instance else "instance_missing"
+
+
+def _provider_sender_matches(
+    client: httpx.Client, base: str, headers: dict, instance: str, sender: str,
+) -> bool:
+    """Backwards-compatible predicate for callers/tests."""
+    return _provider_sender_status(client, base, headers, instance, sender) == "matched"
 
 
 def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
@@ -187,7 +213,7 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
 
     config = pilot_configuration()
     if config is None or config[0] != rid:
-        return settle("delivered", "Piloto central desativado ou restaurante não autorizado.")
+        return settle("dead_letter", "Piloto central desativado ou restaurante não autorizado; nenhuma mensagem enviada.")
     if int(snapshot["payload"].get("restaurant_id", -1)) != rid:
         return settle("dead_letter", "Evento e restaurante divergentes.")
 
@@ -200,15 +226,15 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
     )
     try:
         if check is None or normalize_phone(check.delivery_telefone or "") != config[4]:
-            return settle("delivered", "Pedido não autorizado para teste do canal central.")
+            return settle("dead_letter", "Pedido não autorizado para teste do canal central; nenhuma mensagem enviada.")
     except ValueError:
-        return settle("delivered", "Telefone de teste indisponível.")
+        return settle("dead_letter", "Telefone de teste indisponível; nenhuma mensagem enviada.")
 
     settings = _locked_whatsapp_config_query(db, rid).one_or_none()
     if settings is None:
         return settle("dead_letter", "Configuração operacional ausente.")
     if settings.whatsapp_alerts_enabled:
-        return settle("delivered", "WhatsApp individual ativo; aviso central dispensado.")
+        return settle("dead_letter", "Canal individual ativo; envio central cancelado sem mensagem.")
     now = dt.datetime.now(dt.timezone.utc)
     due = settings.whatsapp_next_send_at
     if due and (due.replace(tzinfo=dt.timezone.utc) if due.tzinfo is None else due) > now:
@@ -247,8 +273,15 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
 
     try:
         with httpx.Client(timeout=4.0) as client:
-            if not _provider_sender_matches(client, base, headers, instance, sender):
-                return unavailable("Remetente não conectado ou identidade incompatível.")
+            verification = _provider_sender_status(client, base, headers, instance, sender)
+            if verification != "matched":
+                safe_reasons = {
+                    "not_open": "Instância Business sem conexão aberta.",
+                    "mismatch": "Número da sessão Business difere do remetente autorizado.",
+                    "owner_missing": "Identidade do remetente não publicada pela Evolution.",
+                    "instance_missing": "Instância Business esperada não consta na Evolution.",
+                }
+                return unavailable(safe_reasons.get(verification, "Remetente indisponível."))
     except (httpx.HTTPError, ValueError, TypeError, AttributeError):
         return unavailable("Estado do remetente indisponível.")
 
