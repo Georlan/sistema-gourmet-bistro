@@ -88,6 +88,44 @@ def test_stale_expected_application_and_collector_do_not_block_valid_application
     assert runtime_auth.resolve_saas_access_token(_service()).startswith("APP_USR-123456789-")
 
 
+def test_dedicated_saas_credentials_are_used_instead_of_restaurant_oauth(monkeypatch):
+    _configure_identity(monkeypatch)
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_ID", "987654321")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET", "saas-only-test-secret")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "987654321")
+    calls = []
+
+    def mint(**credentials):
+        calls.append(credentials)
+        return _valid_payload(access_token="APP_USR-987654321-091512-abcdef-99887766")
+
+    monkeypatch.setattr(runtime_auth, "_mint_client_credentials_token", mint)
+    assert runtime_auth.resolve_saas_access_token(_service()).startswith("APP_USR-987654321-")
+    assert calls == [{"client_id": "987654321", "client_secret": "saas-only-test-secret"}]
+
+
+@pytest.mark.parametrize("missing", ["id", "secret"])
+def test_partial_dedicated_credentials_fail_closed(monkeypatch, missing):
+    _configure_identity(monkeypatch)
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_ID", "987654321")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET", "saas-only-test-secret")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "987654321")
+    key = "KOMA_SAAS_MERCADO_PAGO_CLIENT_ID" if missing == "id" else "KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET"
+    monkeypatch.delenv(key)
+    with pytest.raises(SaasMercadoPagoError, match="par completo") as exc:
+        runtime_auth.resolve_saas_access_token(_service())
+    assert runtime_auth.runtime_auth_reason(exc.value) == "missing_saas_client_credentials"
+
+
+def test_dedicated_application_must_match_expected_saas_application(monkeypatch):
+    _configure_identity(monkeypatch)
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_ID", "987654321")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET", "saas-only-test-secret")
+    with pytest.raises(SaasMercadoPagoError, match="não corresponde") as exc:
+        runtime_auth.resolve_saas_access_token(_service())
+    assert runtime_auth.runtime_auth_reason(exc.value) == "configured_application_mismatch"
+
+
 def test_runtime_token_rejects_public_key_mismatch_when_provider_returns_it(monkeypatch):
     _configure_identity(monkeypatch)
     monkeypatch.setattr(
