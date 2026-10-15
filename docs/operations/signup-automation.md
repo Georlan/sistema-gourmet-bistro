@@ -2,22 +2,23 @@
 
 ## Regra comercial canônica
 
-Plano e ciclo → dados mínimos salvos → aceite jurídico → autorização recorrente → liberação → implantação essencial → liberação operacional explícita pelo SuperAdmin → 7 dias grátis → primeira cobrança automática → operação normal.
+Plano e ciclo → dados mínimos salvos → aceite jurídico → **cartão autorizado ou Pix selecionado** → alerta único ao proprietário (e-mail + Telegram) → liberação de acesso pelo SuperAdmin → convite para criar senha → implantação essencial → liberação operacional pelo SuperAdmin → 7 dias grátis → **cobrança automática no cartão ou QR Pix a pagar** → operação normal.
 
 A mensalidade fixa do KÔMA segue a mesma regra em qualquer forma de pagamento disponibilizada no checkout:
 
 - **R$ 0 de mensalidade fixa hoje**;
-- o cliente apenas autoriza a recorrência antes da liberação;
-- a recorrência fica **pausada durante a implantação inicial**;
+- no cartão, o cliente autoriza a recorrência antes da liberação e ela fica **pausada durante a implantação inicial**;
+- no Pix, o cliente apenas seleciona a modalidade; **nenhum QR é gerado nem pago na adesão**;
 - cadastro, criação de senha, perfil, horários e preparação do primeiro cardápio **não consomem nenhum dia grátis**;
 - os **7 dias grátis começam somente após os 4 itens essenciais**: perfil, horários, ao menos um produto ativo publicado e modalidades de operação; o SuperAdmin deve então conferir a implantação e liberar a operação;
-- no início do trial, a primeira cobrança é alinhada para D+7 antes de reativar a recorrência;
+- no cartão, ao iniciar o trial o backend sincroniza a primeira cobrança com D+7 e só então reativa a recorrência;
+- no Pix, após o vencimento D+7 o KÔMA disponibiliza QR Code/Copia e Cola para pagamento explícito do cliente; **não existe débito Pix automático**;
 - mensal renova mensalmente e anual renova a cada 12 meses;
 - o anual conserva o desconto de 10% sobre a mensalidade fixa, mas não é cobrado antecipadamente no dia da adesão;
 - não existem “dias bônus” em substituição ao trial;
-- Pix avulso/QR Code antecipado não é um método válido para novas assinaturas SaaS.
+- Pix antecipado antes dos sete dias é proibido; o QR da mensalidade só aparece quando houver valor vencido após o trial.
 
-Métodos recorrentes modelados no backend devem obedecer à mesma regra de autorização recorrente + implantação sem consumir trial + 7 dias grátis completos + cobrança posterior. A disponibilidade comercial de cada método continua controlada pelas capabilities do ambiente.
+Cartão e Pix são as únicas modalidades públicas para novas assinaturas. Saldo Mercado Pago continua no código somente para retomada/reconciliação histórica; está oculto no checkout e rejeitado em novas tentativas. O ambiente expõe as capabilities efetivas e o checkout falha fechado quando indisponível.
 
 ## Comportamento entregue
 
@@ -25,19 +26,20 @@ Métodos recorrentes modelados no backend devem obedecer à mesma regra de autor
 - A retomada usa token aleatório enviado em `X-Signup-Token`. Só o hash fica no banco e só o token fica no navegador. Dados de contato ficam criptografados. O rascunho expira em 30 dias.
 - O contrato aceito é imutável e é recuperado sem novo aceite. Valores da cobrança vêm do comprovante assinado, mesmo se o catálogo mudar depois.
 - **Cartão mensal/anual:** cria autorização recorrente sem cobrar a mensalidade fixa na contratação. A autorização não comprova pagamento; as faturas posteriores são reconciliadas separadamente.
-- **Pix Automático mensal/anual:** quando habilitado pelo provedor, cria uma assinatura pendente no Mercado Pago e recebe `init_point` para o cliente autorizar a recorrência no ambiente do provedor. O KÔMA só aceita a autorização como pronta depois que o provedor confirma o preapproval e o método corresponde a Pix. Nenhuma cobrança Pix avulsa é gerada pelo checkout SaaS.
-- `payment_method_type=pix` é recusado para novas contratações. Registros históricos podem continuar existindo para reconciliação/migração, mas nunca liberam uma nova assinatura.
-- Quando `KOMA_SAAS_MANUAL_RELEASE_REQUIRED=true`, uma autorização recorrente pronta entra em `awaiting_release`; nenhum tenant é criado antes da ação do SuperAdmin.
-- Assim que uma autorização recorrente fica pronta para o fluxo de onboarding, ela deve permanecer pausada até a conclusão da implantação essencial. Se a pausa não puder ser confirmada, o fluxo falha fechado em vez de arriscar cobrança antecipada.
+- **Pix mensal/anual:** a seleção `POST /api/contracts/{protocol}/billing/pix/select` registra um método sem cobrança inicial. Depois do trial, `POST /api/subscription/pix` gera QR Code/Copia e Cola na conta SaaS KÔMA do Mercado Pago somente quando existir valor devido. O cliente paga manualmente no banco, e o KÔMA confirma por webhook.
+- `payment_method_type=pix` continua rejeitado no endpoint **recorrente** `/billing/setup`; o Pix universal usa exclusivamente a rota dedicada, sem mandato `/preapproval`.
+- Quando `KOMA_SAAS_MANUAL_RELEASE_REQUIRED=true`, cartão autorizado ou Pix selecionado entra em `awaiting_release`; nenhum tenant é criado antes da ação do SuperAdmin.
+- Autorizações de cartão devem permanecer pausadas durante a implantação; se a pausa não for confirmada, o fluxo falha fechado. Pix não possui autorização recorrente nem tentativa antecipada.
 - Na liberação, o tenant nasce com assinatura canônica em estado `onboarding`, sem `trial_started_at`, `trial_ends_at` ou período corrente. O cliente recebe o convite e pode configurar o restaurante, mas o gate de onboarding mantém Vendas/Caixa bloqueados até os 4 itens essenciais e o início explícito do trial.
-- O endpoint canônico `/api/onboarding/status` calcula o progresso usando dados reais. Após os 4 itens essenciais, **Super Admin → Períodos grátis → Ver implantação e liberar** usa `POST /api/super-admin/onboarding/restaurantes/{tenant_id}/release` para iniciar o trial de forma idempotente: define D+7 no provedor, reativa a recorrência, grava `trial_started_at`/`trial_ends_at` e muda a assinatura para `trialing`.
+- O endpoint canônico `/api/onboarding/status` calcula o progresso usando dados reais. Após os 4 itens essenciais, **Super Admin → Períodos grátis → Ver implantação e liberar** usa `POST /api/super-admin/onboarding/restaurantes/{tenant_id}/release` para iniciar o trial idempotente: cartão alinha D+7 e reativa recorrência, Pix apenas define vencimento após D+7; ambos registram `trial_started_at`/`trial_ends_at` e mudam para `trialing`.
 - A rota antiga `POST /api/onboarding/start-trial` recusa liberação pelo administrador do restaurante; o início comercial pertence ao SuperAdmin.
-- Se o alinhamento D+7 ou a reativação do provedor falhar, o backend não inicia o trial localmente e não libera uma cobrança antecipada; a configuração já salva permanece intacta para nova tentativa.
+- Se o alinhamento D+7 ou a reativação do cartão falhar, o backend não inicia o trial localmente nem libera cobrança antecipada; a configuração salva permanece para nova tentativa.
 - Recarregar a implantação depois do início do trial não renova nem empurra a data final.
 - Assinaturas antigas que já estavam `trialing` ou `active` não são reescritas por esta regra.
 - A ativação é idempotente. Repetir webhook ou retomar uma ativação interrompida não cria outro restaurante.
 - Retentativas com resultado incerto procuram a autorização anterior antes de permitir nova recorrência.
-- Confirmação e convite entram em fila persistente. O worker tenta e-mail/WhatsApp, conserva falhas para diagnóstico e permite reagendamento no SuperAdmin.
+- Confirmação e convite do **cliente** entram na fila de e-mail Resend, com retentativa. O convite de senha só é criado **após a liberação do acesso** pelo SuperAdmin (72h). O navegador informa que ele será enviado após essa etapa.
+- Para o **proprietário KÔMA**, um único aviso por e-mail e Telegram no checkout pronto para liberação, e outro após os quatro itens essenciais aguardando sua ação. Rascunho de cadastro, aceite isolado e início do trial não geram novos avisos administrativos redundantes. A outbox é idempotente por protocolo/evento/canal.
 - No primeiro acesso, a implantação inicial reutiliza as telas canônicas de configuração. Perfil, horários, cardápio e modalidades são a mesma fonte de verdade usada depois na operação.
 - O restaurante pode enviar PDF/foto do cardápio para implantação assistida. O envio não conclui o passo: o catálogo só conta como pronto quando houver produto realmente publicado.
 
@@ -63,11 +65,11 @@ Eventos mínimos do fluxo:
 
 Não confundir esse endpoint com o webhook de pagamentos dos restaurantes.
 
-## Pix Automático
+## Pix universal
 
-O fluxo implementado usa a API de Assinaturas (`/preapproval`) em estado `pending` para obter um `init_point`. O cliente é redirecionado ao checkout hospedado do Mercado Pago para escolher/concluir o meio recorrente. A autorização só vira `ready` se o preapproval retornar autorizado e o método confirmado for Pix.
+O checkout **não cobra Pix no cadastro**: apenas persiste a escolha. O Pix é gerado via API de pagamentos Mercado Pago (valor congelado no aceite comercial) quando terminar a implantação, iniciarem e terminarem os sete dias grátis e houver vencimento devido. No mensal, um novo QR por vencimento; no anual, um QR do total anual quitando doze meses. `/api/integrations/saas-pix/mercado-pago/webhook` reconcilia a confirmação. A geração só é considerada pronta após teste isolado de idempotência, vencimento, expiração, reemissão e conta recebedora.
 
-Essa parte exige homologação real com credenciais TEST antes de habilitar o checkout. Se o sandbox do provedor exigir um formato diferente para Pix Automático, a integração deve ser ajustada antes de qualquer liberação; nunca substituir o fluxo por Pix avulso antecipado.
+Esse método **não tem débito automático**, mesmo quando o contratante informa CPF. Não prometer pagamento automático Pix após o trial. Não confundir a conta recebedora SaaS da plataforma com as contas OAuth Mercado Pago dos restaurantes.
 
 ## Cancelamento
 
@@ -76,7 +78,7 @@ Métodos recorrentes podem cancelar as cobranças futuras. Se o cancelamento aco
 ## Notificações
 
 - E-mail: `RESEND_API_KEY`, `EMAIL_FROM`.
-- Aviso ao operador: `KOMA_OWNER_EMAIL` e/ou `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`. O Telegram recebe novos avisos de inscrição, pedidos de liberação, conclusão dos 4 itens essenciais da implantação e início do trial somente quando as duas variáveis estão configuradas. A conclusão 4/4 gera uma única notificação por restaurante/canal, mesmo com recargas e polling do onboarding. O canal WhatsApp do operador não é enfileirado para esses avisos.
+- Aviso ao proprietário: `KOMA_OWNER_EMAIL` e/ou `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`. Enviar somente quando há **contratação pronta para liberação** e depois quando os **4 essenciais** estão concluídos; não avisar a cada passo nem ao iniciar trial. Cada evento/canal é idempotente. Sem WhatsApp para o operador.
 - WhatsApp para clientes: integração existente + `KOMA_WHATSAPP_AUTOMATION_ENABLED=true`; manter desligada até homologar esse fluxo separadamente.
 - Worker: `ENABLE_OUTBOX_WORKER=true`.
 
@@ -93,15 +95,15 @@ Executar no ambiente isolado:
 5. cancelar durante `onboarding` → nenhuma primeira cobrança e nenhum dia de trial consumido;
 6. cancelar durante `trialing` → nenhuma primeira cobrança após o cancelamento;
 7. primeira fatura de cartão aprovada/recusada após o trial e replay idempotente;
-8. quando Pix Automático estiver habilitado: autorização → pausa durante implantação → 4 itens + início explícito → D+7 → `trialing`;
-9. confirmar que `payment_method_type=pix` é recusado e nunca provisiona tenant;
+8. Pix: selecionar método sem QR no cadastro → liberação e implantação → D+7 → gerar QR só com vencimento devido → pagar em ambiente isolado → confirmar webhook e acesso;
+9. confirmar que `payment_method_type=pix` é recusado no **setup recorrente**, mas Pix funciona pela rota de seleção dedicada;
 10. repetir webhooks/preapprovals e validar idempotência;
-11. validar convite, primeiro acesso, e-mail e WhatsApp;
+11. validar e-mail de confirmação do cliente após aceite, convite após liberação do SuperAdmin, link 72h, login e onboarding; confirmar um alerta por canal no checkout e um após 4/4, sem duplicações;
 12. validar que o gate operacional não permite Vendas/Caixa antes dos 4 itens e do início explícito.
 
 ## Fora do checkout até homologação própria
 
-NuPay, carteira Mercado Pago, débito e anual parcelado não devem ser anunciados como disponíveis enquanto não suportarem explicitamente a regra canônica: autorização recorrente, R$ 0 hoje, implantação sem consumir trial, 7 dias grátis completos e cobrança automática posterior.
+NuPay, Saldo Mercado Pago, débito, Pix Automático e anual parcelado não são opções de novas contratações. Histórico do saldo MP continua reconciliável; qualquer retorno comercial exige homologação própria.
 
 Importação de PDF/foto com IA continua separada da cobrança, mas faz parte do passo essencial de cardápio quando resultar em produto publicado.
 
