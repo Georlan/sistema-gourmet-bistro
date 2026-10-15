@@ -93,6 +93,7 @@ def test_dedicated_saas_credentials_are_used_instead_of_restaurant_oauth(monkeyp
     monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_ID", "987654321")
     monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET", "saas-only-test-secret")
     monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "987654321")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID", "99887766")
     calls = []
 
     def mint(**credentials):
@@ -115,6 +116,18 @@ def test_partial_dedicated_credentials_fail_closed(monkeypatch, missing):
     with pytest.raises(SaasMercadoPagoError, match="par completo") as exc:
         runtime_auth.resolve_saas_access_token(_service())
     assert runtime_auth.runtime_auth_reason(exc.value) == "missing_saas_client_credentials"
+
+
+def test_dedicated_saas_token_rejects_another_collector(monkeypatch):
+    _configure_identity(monkeypatch)
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_ID", "987654321")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET", "saas-only-test-secret")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "987654321")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID", "main-merchant-user")
+    monkeypatch.setattr(runtime_auth, "_mint_client_credentials_token", lambda **_: _valid_payload(access_token="APP_USR-987654321-091512-abcdef-99887766"))
+    with pytest.raises(SaasMercadoPagoError, match="conta recebedora diferente") as exc:
+        runtime_auth.resolve_saas_access_token(_service())
+    assert runtime_auth.runtime_auth_reason(exc.value) == "token_collector_mismatch"
 
 
 def test_dedicated_application_must_match_expected_saas_application(monkeypatch):
