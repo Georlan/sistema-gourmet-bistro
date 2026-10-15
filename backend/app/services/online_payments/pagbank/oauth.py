@@ -41,7 +41,7 @@ def log_sandbox_oauth_evidence(
     rid = str(int(restaurant_id))
     if rid not in allowed or environment_for_restaurant(int(rid)) != 'sandbox':
         return
-    if stage not in {'authorization_url_issued', 'callback_received', 'token_exchange', 'connection_completed', 'connection_rejected_owner'}:
+    if stage not in {'authorization_url_issued', 'callback_received', 'token_exchange', 'connection_completed', 'connection_rejected_owner', 'connection_evidence_only'}:
         raise ValueError('Etapa de evidência OAuth desconhecida.')
     flow_id = hmac.new(settings.SECRET_KEY.encode(), b'pagbank-evidence:' + state.encode(), hashlib.sha256).hexdigest()[:20]
     event = {
@@ -129,6 +129,22 @@ def redirect_uri(environment: str | None = None) -> str:
 
 def configured(environment: str | None = None) -> bool:
     return all(credential(k, environment) for k in ('CLIENT_ID', 'CLIENT_SECRET', 'APP_TOKEN'))
+
+
+def qa9_sandbox_evidence_only(restaurant_id: int) -> bool:
+    """Explicitly opt into a *read-only OAuth evidence* run for QA tenant 9.
+
+    The application owner's token may be exchanged once and inspected through
+    sanitized evidence, but must never become a restaurant payment receiver.
+    No environment variable can enable this for another tenant or production.
+    """
+    return (
+        int(restaurant_id) == 9
+        and environment_for_restaurant(9) == 'sandbox'
+        and env('PAGBANK_SANDBOX_QA9_OAUTH_EVIDENCE_ONLY') == 'true'
+        and '9' in {value.strip() for value in
+                    env('PAGBANK_SANDBOX_OAUTH_EVIDENCE_RESTAURANT_IDS').split(',')}
+    )
 
 
 def is_application_owner(account_id: str | None, *, environment: str) -> bool:
