@@ -223,6 +223,29 @@ def test_runtime_token_requires_client_credentials(monkeypatch):
     assert runtime_auth.public_runtime_auth_reason(exc_info.value) == "provider_credentials_invalid"
 
 
+def test_checkout_disables_both_card_and_pix_when_static_identity_is_wrong(monkeypatch):
+    from app import services as registry
+
+    monkeypatch.setenv("KOMA_SAAS_MP_RUNTIME_TOKEN_ENABLED", "false")
+    monkeypatch.setattr(
+        registry, "_original_checkout_capabilities",
+        lambda: {"credit_card": True, "pix": True, "account_money": False},
+    )
+
+    def raise_wrong_app():
+        raise SaasMercadoPagoError("Aplicação incorreta", status_code=409)
+
+    monkeypatch.setattr(
+        registry, "_hosted_saas_mp_service",
+        SimpleNamespace(environment="production", _ensure_provider_ready=raise_wrong_app),
+    )
+
+    caps = registry._runtime_auth_aware_checkout_capabilities()
+    assert caps["credit_card"] is False
+    assert caps["providerAuthReady"] is False
+    assert caps["providerAuthReason"] == "provider_identity_not_ready"
+
+
 def test_provider_oauth_error_is_reduced_to_safe_reason():
     class FakeResponse:
         status_code = 400
