@@ -91,7 +91,7 @@ interface CardapioDigitalProps {
 }
 
 // Kept off until WhatsApp status dispatch, revocation and cost limits are homologated.
-const CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED = import.meta.env.VITE_CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED === "true";
+const CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED = import.meta.env?.VITE_CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED === "true";
 
 const PENDING_ORDER_STORAGE_KEY = "koma_pending_order_submission";
 const PENDING_ORDER_TTL_MS = 15 * 60 * 1000;

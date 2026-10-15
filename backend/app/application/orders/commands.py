@@ -226,7 +226,7 @@ class CreateOrderCommand:
     # Pedidos com pagamento online existem antes da autorização, mas ainda não
     # podem ser publicados para cozinha/caixa. O webhook publica após aprovar.
     defer_operational_publish: bool = False
-    # Optional permission snapshot set only by the verified customer checkout.
+    # Optional self-declared permission snapshot set only by the web checkout.
     whatsapp_status_opt_in: bool = False
 
     def __post_init__(self) -> None:
