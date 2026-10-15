@@ -76,33 +76,11 @@ def enqueue(
     return inserted
 
 
-def enqueue_signup_started(db, *, signup_id, restaurant_name, plan, billing_cycle):
-    """Queue an idempotent owner notice when a resumable signup first exists."""
-    owner_email = settings.KOMA_OWNER_EMAIL
-    owner_telegram = _owner_telegram_chat()
-    if not (owner_email or owner_telegram):
-        return
-    enqueue(
-        db,
-        protocol=signup_id,
-        kind="signup-started-owner",
-        email=owner_email,
-        phone=None,
-        telegram_chat=owner_telegram,
-        subject="Nova inscrição iniciada — KÔMA",
-        message=(
-            f"Nova inscrição KÔMA iniciada: {restaurant_name}. Plano: {plan} ({billing_cycle}). "
-            f"Identificador: {signup_id}. Acompanhe o status em "
-            f"{settings.KOMA_PUBLIC_APP_URL}/super-admin (aba Inscrições)."
-        ),
-    )
-
-
 def enqueue_trial_started(
     db, *, tenant_id, restaurant_name, plan, billing_cycle,
     customer_name, customer_email, customer_phone, trial_ends_at,
 ):
-    """Queue customer and owner notices with stable IDs for release retries."""
+    """Queue the customer trial confirmation; the Super Admin already approved the release."""
     protocol = f"tenant-{tenant_id}"
     cycle = "anual" if billing_cycle in {"annual", "anual"} else "mensal"
     end_label = trial_ends_at.strftime("%d/%m/%Y às %H:%M UTC")
@@ -120,23 +98,6 @@ def enqueue_trial_started(
             f"Acesse {settings.KOMA_PUBLIC_APP_URL}/?view=caixa para continuar."
         ),
     )
-    owner_email = settings.KOMA_OWNER_EMAIL
-    owner_telegram = _owner_telegram_chat()
-    if owner_email or owner_telegram:
-        enqueue(
-            db,
-            protocol=protocol,
-            kind="trial-started-owner",
-            email=owner_email,
-            phone=None,
-            telegram_chat=owner_telegram,
-            subject="Operação liberada e trial iniciado — KÔMA",
-            message=(
-                f"Operação liberada: {restaurant_name} (#{tenant_id}), plano {plan} ({cycle}). "
-                f"Trial termina em {end_label}. Acompanhe no SuperAdmin."
-            ),
-        )
-
 
 def enqueue_acceptance(
     db, *, protocol, restaurant_name, representative_name, email, phone
@@ -156,23 +117,6 @@ def enqueue_acceptance(
         subject="Inscrição recebida — KÔMA",
         message=message,
     )
-    owner_email = settings.KOMA_OWNER_EMAIL
-    owner_telegram = _owner_telegram_chat()
-    if owner_email or owner_telegram:
-        enqueue(
-            db,
-            protocol=protocol,
-            kind="owner",
-            email=owner_email,
-            phone=None,
-            telegram_chat=owner_telegram,
-            subject="Nova inscrição iniciada — KÔMA",
-            message=(
-                f"Nova inscrição KÔMA iniciada: {restaurant_name}. Protocolo: {protocol}. "
-                "Acompanhe o status na aba Inscrições do SuperAdmin."
-            ),
-        )
-
 
 def enqueue_activation(
     db,
