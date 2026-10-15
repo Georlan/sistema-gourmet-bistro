@@ -96,42 +96,20 @@ def test_commercial_signup_profile_is_written_when_tenant_is_provisioned(signup_
         assert profile.profile_key == "pizzaria"
 
 
-def test_new_signup_queues_owner_notice_once_before_acceptance(signup_client, monkeypatch):
+def test_incomplete_signup_does_not_notify_owner_before_checkout(signup_client, monkeypatch):
     client, Session = signup_client
     monkeypatch.setattr(settings, "KOMA_OWNER_EMAIL", "owner@example.com")
-    monkeypatch.delenv("KOMA_OWNER_WHATSAPP_PHONE", raising=False)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-bot-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "owner-chat")
     created = client.post("/api/signups", json=DATA)
     assert created.status_code == 201, created.text
-    with Session() as db:
-        notices = db.query(SignupNotification).all()
-        assert len(notices) == 1
-        assert notices[0].id == f"{created.json()['id']}:signup-started-owner:email"
-        assert notices[0].status == "pending"
     updated = client.put(
         "/api/signups/current", json=DATA,
         headers={"X-Signup-Token": created.json()["token"]},
     )
     assert updated.status_code == 200, updated.text
     with Session() as db:
-        assert db.query(SignupNotification).count() == 1
-
-
-def test_new_signup_queues_telegram_only_for_owner(signup_client, monkeypatch):
-    client, Session = signup_client
-    monkeypatch.setattr(settings, "KOMA_OWNER_EMAIL", "")
-    monkeypatch.setenv("KOMA_OWNER_WHATSAPP_PHONE", "5585999999999")
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-bot-token")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "owner-chat")
-
-    created = client.post("/api/signups", json=DATA)
-    assert created.status_code == 201, created.text
-    with Session() as db:
-        notices = db.query(SignupNotification).all()
-        assert [notice.id for notice in notices] == [
-            f"{created.json()['id']}:signup-started-owner:telegram"
-        ]
-
-
+        assert db.query(SignupNotification).count() == 0
 
 
 def test_onboarding_ready_queues_email_and_telegram_once(signup_client, monkeypatch):
