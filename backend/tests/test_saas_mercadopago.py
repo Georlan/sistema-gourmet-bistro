@@ -234,6 +234,24 @@ def test_webhook_signature_verification(monkeypatch):
     ) is True
 
 
+def test_static_saas_token_rejects_wrong_application_before_provider_post(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("KOMA_SAAS_MP_RUNTIME_TOKEN_ENABLED", "false")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "815955951076095")
+    service = SaasMercadoPagoService("APP_USR-2722128383126106-091512-abcdef-99887766")
+
+    with pytest.raises(SaasMercadoPagoError, match="token estático não pertence"):
+        service._ensure_provider_ready()
+
+
+def test_static_saas_token_accepts_expected_application(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("KOMA_SAAS_MP_RUNTIME_TOKEN_ENABLED", "false")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "815955951076095")
+    service = SaasMercadoPagoService("APP_USR-815955951076095-091512-abcdef-99887766")
+    service._ensure_provider_ready()
+
+
 def test_test_token_is_forbidden_in_production(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     with pytest.raises(SaasMercadoPagoError, match="proibidas em ambiente de produção"):
