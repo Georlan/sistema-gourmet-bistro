@@ -22,9 +22,10 @@ from app.services.saas_billing_policy import (
 )
 
 
-def test_checkout_contract_has_exactly_three_methods():
-    assert CHECKOUT_PAYMENT_METHODS == {"credit_card", "pix", "account_money"}
+def test_checkout_contract_has_only_card_and_pix():
+    assert CHECKOUT_PAYMENT_METHODS == {"credit_card", "pix"}
     assert is_trial_eligible_payment_method("pix") is True
+    assert saas_pix._checkout_methods_payload()["account_money"] is False
     assert is_recurring_trial_payment_method("pix") is False
 
 
