@@ -90,6 +90,9 @@ interface CardapioDigitalProps {
   onSessionExpired?: () => void;
 }
 
+// Kept off until WhatsApp status dispatch, revocation and cost limits are homologated.
+const CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED = import.meta.env.VITE_CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED === "true";
+
 const PENDING_ORDER_STORAGE_KEY = "koma_pending_order_submission";
 const PENDING_ORDER_TTL_MS = 15 * 60 * 1000;
 const ORDER_REQUEST_TIMEOUT_MS = 15_000;
@@ -166,6 +169,7 @@ export default function CardapioDigital({
   const [errorMessage, setErrorMessage] = useState("");
   const [orderingBlocked, setOrderingBlocked] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
+  const [whatsappStatusOptIn, setWhatsappStatusOptIn] = useState(false);
   const [scheduledOrdersEnabled, setScheduledOrdersEnabled] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<"now" | "scheduled">("now");
   const [scheduledFor, setScheduledFor] = useState("");
@@ -364,6 +368,7 @@ export default function CardapioDigital({
       itens: cleanedItems,
       cliente_nome: normalizedName,
       cliente_telefone: normalizedPhone,
+      whatsapp_status_opt_in: CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED && deliveryMethod !== "dine_in" && whatsappStatusOptIn,
       endereco_entrega: deliveryMethod === "delivery" ? normalizedAddress : "",
       address_snapshot: deliveryMethod === "delivery" ? addressSnapshot || undefined : undefined,
       taxa_entrega: deliveryMethod === "delivery" ? deliveryFee : 0,
@@ -378,7 +383,8 @@ export default function CardapioDigital({
       tipo_pedido: publicFulfillmentValue(deliveryMethod),
       scheduled_for: scheduledForIso || null,
     };
-    const fingerprint = buildOrderSubmissionFingerprint({ ...orderRequest, cliente_documento: undefined });
+    // A consent choice changed after a timeout must not create a second order.
+    const fingerprint = buildOrderSubmissionFingerprint({ ...orderRequest, cliente_documento: undefined, whatsapp_status_opt_in: undefined });
     let idempotencyKey: string;
     try {
       idempotencyKey = resolvePersistentIdempotencyKey(fingerprint);
@@ -654,6 +660,23 @@ export default function CardapioDigital({
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><UserRound className="h-3.5 w-3.5 text-emerald-500" /> Contato</div><p className="mt-2 text-xs font-black text-koma-foreground">{customerName}</p><p className="mt-0.5 text-[10px] text-koma-muted">{customerPhone}</p></div>
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><MapPin className="h-3.5 w-3.5 text-emerald-500" /> {checkoutFulfillmentLabel(deliveryMethod)}</div><p className="mt-2 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? address : deliveryMethod === "dine_in" ? activeBrand.address || "Consumo no estabelecimento" : activeBrand.address || "Retirada no balcão do restaurante"}</p></div>
               </div>
+
+              {CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED && deliveryMethod !== "dine_in" && (
+                <label htmlFor="checkout-whatsapp-status-opt-in" className="flex cursor-pointer items-start gap-3 rounded-2xl border border-koma-border bg-koma-card px-4 py-3.5">
+                  <input
+                    id="checkout-whatsapp-status-opt-in"
+                    type="checkbox"
+                    checked={whatsappStatusOptIn}
+                    onChange={(event) => setWhatsappStatusOptIn(event.target.checked)}
+                    disabled={isSubmitting}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-500"
+                  />
+                  <span className="text-xs leading-relaxed text-koma-foreground">
+                    <strong className="block font-semibold">Quero receber atualizações deste pedido pelo WhatsApp</strong>
+                    <span className="mt-1 block text-[11px] text-koma-muted">Autorizo o KÔMA a enviar avisos de pedido recebido, pronto para retirada ou saída para entrega e eventual cancelamento para o celular informado acima. Sem promoções. É opcional e posso continuar acompanhando tudo por aqui.</span>
+                  </span>
+                </label>
+              )}
 
               {scheduledOrdersEnabled && (
                 <section className="rounded-2xl border border-koma-border bg-koma-card p-4">
