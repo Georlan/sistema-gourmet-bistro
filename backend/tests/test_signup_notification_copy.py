@@ -71,7 +71,7 @@ def test_acceptance_notifies_only_the_customer(monkeypatch):
     assert len(calls) == 1
     assert calls[0]["kind"] == "accepted"
     assert calls[0]["email"] == "ana@example.com"
-    assert calls[0]["telegram_chat"] is None
+    assert calls[0].get("telegram_chat") is None
 
 
 def test_release_required_message_describes_authorization_not_payment(monkeypatch):
