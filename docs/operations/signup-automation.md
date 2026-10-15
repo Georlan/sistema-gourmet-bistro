@@ -124,3 +124,18 @@ A criação na tela Equipe exige e-mail e mantém o telefone como contato. Convi
 Os convites usam Resend pela fila persistente existente (`signup_notifications`), com payload criptografado, chave idempotente por geração do convite, validade de 24 horas e retentativas limitadas. Cadastro/renovação e enfileiramento são confirmados na mesma transação. Reenviar renova o link e invalida o anterior.
 
 A equipe mostra “na fila”, “enviado ao Resend” ou “falha”; envio aceito pelo provedor não comprova entrega na caixa de entrada. A consulta de metadados no PostgreSQL é restrita ao tenant da transação e não expõe destinatário, conteúdo ou token. Não depende da automação de WhatsApp.
+
+## Checklist de identidade do faturamento SaaS (sem revelar credenciais)
+
+A conta recebedora exibida nas duas aplicações Mercado Pago do proprietário é a mesma, mas a **aplicação** não é: nas capturas, KomaBilling (Assinaturas) = `815955951076095` e KomaADMIN (Checkout Transparente) = `2722128383126106`, ambas com User ID `2155440812`. São IDs públicos de identificação, **não tokens**.
+
+A implantação do checkout de assinaturas é considerada **pronta para teste**, não homologada, apenas quando:
+
+1. Railway, serviço backend de produção: `KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID` identifica a KomaBilling; `KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID` identifica o User ID recebedor; `KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY` e `KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN` são da mesma aplicação; `KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET` é o segredo do webhook de faturamento SaaS.
+2. A conta do marketplace (`MERCADO_PAGO_MARKETPLACE_USER_ID`) aponta para esse mesmo User ID. O OAuth dos **restaurantes** (`MERCADO_PAGO_CLIENT_ID` e `MERCADO_PAGO_CLIENT_SECRET`) não pode ser automaticamente tratado como OAuth de faturamento SaaS.
+3. Quando `KOMA_SAAS_MP_RUNTIME_TOKEN_ENABLED=true`: configure **ambos** `KOMA_SAAS_MERCADO_PAGO_CLIENT_ID` e `KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET` da KomaBilling se o OAuth dos restaurantes for outra aplicação. O backend agora falha fechado se a aplicação efetiva divergir da aplicação SaaS esperada, inclusive no fallback legado.
+4. Quando `KOMA_SAAS_MP_RUNTIME_TOKEN_ENABLED=false`: o access token estático configurado precisa ser da KomaBilling. Tokens estáticos identificáveis pela aplicação também são verificados antes de tentar cobrar; tokens sem identificação legível ainda precisam ser validados por teste isolado.
+5. A rota pública `GET /api/contracts/payment-methods-v2` deve anunciar `credit_card=true`, `pix=true` e `providerAuthReady` sem erro. Esse sinal confirma apenas pré-validações de configuração, **não pagamento aprovado**.
+6. Teste isolado com credenciais TEST: autorização de cartão tokenizado, assinatura pausada durante implantação, quatro itens essenciais, liberação supervisionada, sete dias completos, cobrança no vencimento, Pix QR gerado após vencimento, expiração/reemissão, assinatura de webhook, deduplicação e confirmação do destinatário do pagamento. Nunca efetuar transações reais sem aprovação explícita.
+
+Não copiar Client Secret, Access Token, chave de webhook, cartão ou CPF para o GitHub ou chat. Se as variáveis anteriores já estiverem corretas, não sobrescrevê-las por precaução; faça apenas as correções comprovadamente necessárias no Railway.
