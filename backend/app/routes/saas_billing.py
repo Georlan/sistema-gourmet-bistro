@@ -325,10 +325,12 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="E-mail do pagador inválido.")
 
     existing = get_billing_setup(db, normalized_protocol)
-    # Oculta saldo MP no checkout novo e bloqueia bypass direto pela API.
-    # Tentativas históricas já persistidas continuam retomáveis/reconciliáveis.
+    # Em produção, saldo MP é bloqueado para novos contratos até por chamada direta.
+    # Em test/development o mock mantém cenários históricos de integração exercitáveis.
+    # Tentativas históricas persistidas continuam retomáveis/reconciliáveis.
     if payload.payment_method_type == "account_money" and not (
-        existing and existing.payment_method_type == "account_money"
+        (existing and existing.payment_method_type == "account_money")
+        or default_saas_mp_service.mock_allowed
     ):
         raise HTTPException(
             status_code=409,
