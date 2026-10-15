@@ -1,32 +1,25 @@
-"""Pure consent checks for future customer status notifications.
+"""Voluntary per-order WhatsApp status opt-in, with zero outgoing sends.
 
-Consent is captured per order. A phone number typed into a public form does
-not prove that its owner requested automated WhatsApp updates.
-
-No provider I/O happens here. Messaging must remain disabled until an
-approved utility-template sender and persistent delivery pipeline exist.
+Guest checkouts need no new account/OTP. Opt-in is self-declared, NOT proof
+of ownership. The customer sender stays OFF pending opt-out, budgeting,
+provider authorization and rate-limit rollout.
 """
 from __future__ import annotations
 
 from typing import Any
 
-from .tenant_order_whatsapp import phones_match
+from .tenant_order_whatsapp import normalize_phone, phones_match
 
 
-def verified_checkout_consent(
-    *,
-    requested: bool,
-    customer_token: str | None,
-    customer: Any | None,
-) -> bool:
-    """Reject unauthenticated and unverified consent claims, default off."""
-    return bool(
-        requested is True
-        and customer_token
-        and customer is not None
-        and getattr(customer, "telefone_verificado_em", None) is not None
-        and getattr(customer, "telefone", None)
-    )
+def checkout_status_consent(*, requested: bool, phone: str | None, fulfillment: str) -> bool:
+    """Capture this checkout's checkbox only; never infer consent from login."""
+    if requested is not True or fulfillment not in {"retirada", "delivery"}:
+        return False
+    try:
+        normalize_phone(phone or "")
+    except ValueError:
+        return False
+    return True
 
 
 def eligible_order_status_recipient(
@@ -34,21 +27,30 @@ def eligible_order_status_recipient(
     restaurant_id: int,
     order: Any,
     customer: Any | None,
+    opted_out: bool = False,
 ) -> bool:
-    """Fail closed if tenant, authenticated identity or telephone diverges.
+    """Validate tenant, order consent and contact before any future dispatch.
 
-    No message is enqueued or sent by this function. A future dispatcher will
-    also need fresh opt-out and provider authorization checks.
+    Guest orders have no associated Cliente. Never claim that the typed phone
+    identifies a registered profile. Authenticated orders must match the actual
+    same-tenant customer ID and phone. Further checks at dispatch are needed.
     """
-    if customer is None or not bool(getattr(order, "whatsapp_status_opt_in", False)):
+    if opted_out or not bool(getattr(order, "whatsapp_status_opt_in", False)):
         return False
     if int(getattr(order, "restaurante_id", -1)) != int(restaurant_id):
         return False
+    try:
+        normalize_phone(getattr(order, "delivery_telefone", "") or "")
+    except ValueError:
+        return False
+    customer_id = getattr(order, "cliente_id", None)
+    if customer_id is None:
+        return customer is None
+    if customer is None:
+        return False
     if int(getattr(customer, "restaurante_id", -1)) != int(restaurant_id):
         return False
-    if getattr(order, "cliente_id", None) != getattr(customer, "id", None):
-        return False
-    if getattr(customer, "telefone_verificado_em", None) is None:
+    if str(customer_id) != str(getattr(customer, "id", None)):
         return False
     return phones_match(
         getattr(order, "delivery_telefone", None),
