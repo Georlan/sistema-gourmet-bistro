@@ -83,9 +83,9 @@ test('.env.example não divulga Pocket R$ 0 nem domínios legados pages.dev', ()
 test('contratação V2 distingue explicitamente condição histórica R$0 de contratação atual R$79,90', () => {
   const v2 = source('src/legal/PlanContractPageV2.tsx');
 
-  // Na contratação nova, hoje é R$ 0 pelo trial de 7 dias
-  assert.match(v2, /Cobrança hoje: R\$ 0 \(período de 7 dias grátis\)/);
-  assert.match(v2, /Cobrança de hoje: R\$ 0 \(7 dias grátis\)/);
+  // Na contratação nova, R$ 0 hoje; os sete dias só começam após a implantação/liberação
+  assert.match(v2, /Cobrança hoje: R\$ 0\. Seus 7 dias grátis começam após a implantação e a liberação da operação/);
+  assert.match(v2, /Cobrança de hoje: R\$ 0\. Seus 7 dias grátis começam depois da implantação e liberação/);
 
   // Condição histórica de R$ 0 explicitamente rotulada como contrato anterior
   assert.match(v2, /Condição Contratual Histórica/);
