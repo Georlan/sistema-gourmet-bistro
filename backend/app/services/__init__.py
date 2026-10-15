@@ -46,19 +46,29 @@ def _runtime_auth_aware_checkout_capabilities():
     segura antes de o usuário enviar a contratação. Nenhum segredo é retornado.
     """
     capabilities = dict(_original_checkout_capabilities())
-    if not _runtime_token_enabled() or _hosted_saas_mp_service.environment != "production":
+    if _hosted_saas_mp_service.environment != "production":
         return capabilities
 
     try:
-        _resolve_saas_access_token(_hosted_saas_mp_service)
+        if _runtime_token_enabled():
+            _resolve_saas_access_token(_hosted_saas_mp_service)
+        else:
+            # Não ofertar cartão/Pix com token estático de outra aplicação.
+            # Esta verificação é local e nunca envia dados financeiros.
+            _hosted_saas_mp_service._ensure_provider_ready()
     except _saas_mercadopago.SaasMercadoPagoError as exc:
         reason = _runtime_auth_reason(exc)
+        if reason == "provider_auth_error" and getattr(exc, "status_code", None) == 409:
+            reason = "static_application_mismatch"
         _logger.warning("saas_mp_runtime_auth_unavailable reason=%s", reason)
         capabilities["credit_card"] = False
         capabilities["pix_automatic"] = False
         capabilities["account_money"] = False
         capabilities["providerAuthReady"] = False
-        capabilities["providerAuthReason"] = _public_runtime_auth_reason(exc)
+        capabilities["providerAuthReason"] = (
+            "provider_identity_not_ready" if reason == "static_application_mismatch"
+            else _public_runtime_auth_reason(exc)
+        )
         return capabilities
 
     capabilities["providerAuthReady"] = True
