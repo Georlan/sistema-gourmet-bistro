@@ -88,6 +88,28 @@ test('retorno autorizado conclui uma vez pela sessão KÔMA e limpa o código da
   await expect(page.getByRole('region', { name: 'PagBank', exact: true }).getByRole('button', { name: 'Desconectar', exact: true })).toBeVisible();
 });
 
+
+test('QA9 Sandbox conclui troca OAuth como evidência sem anunciar recebedor conectado', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => sessionStorage.setItem('koma_pagbank_oauth_state', 'qa9-evidence-state'));
+  let completions = 0;
+  await page.route('**/payments/pagbank/complete', route => {
+    completions++;
+    expect(route.request().postDataJSON()).toEqual({ code: 'qa9-once', state: 'qa9-evidence-state' });
+    return route.fulfill({ json: { status: 'sandbox_evidence_captured' } });
+  });
+  await page.route('**/payments/pagbank/status', route => route.fulfill({ json: {
+    configured: true, environment: 'sandbox', connected: false, status: 'disconnected',
+  } }));
+  await page.goto('/?view=caixa&pagbank=authorized&code=qa9-once&state=qa9-evidence-state');
+  await expect(page.getByText('OAuth Sandbox validado e evidência registrada. Nenhuma conta foi conectada para receber Pix.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Conectar PagBank' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'PagBank', exact: true }).getByRole('button', { name: 'Desconectar', exact: true })).toHaveCount(0);
+  expect(completions).toBe(1);
+  expect(page.url()).not.toMatch(/[?&](code|state|pagbank)=/);
+});
+
 test('retorno sem estado iniciado no navegador não troca a conta', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
