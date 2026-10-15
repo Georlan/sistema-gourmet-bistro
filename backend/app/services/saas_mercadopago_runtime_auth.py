@@ -181,6 +181,16 @@ def _validate_oauth_identity(
             reason="missing_provider_user",
             status_code=502,
         )
+    dedicated_saas_id = os.getenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_ID", "").strip()
+    expected_collector = os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID", "").strip()
+    # Quando o faturamento usa credenciais SaaS específicas, não aceitar
+    # tokens de outra conta: os valores recebidos devem ser do titular KÔMA.
+    if dedicated_saas_id and expected_collector and provider_user_id != expected_collector:
+        raise _auth_error(
+            "A credencial SaaS pertence a uma conta recebedora diferente da conta KÔMA esperada.",
+            reason="token_collector_mismatch",
+            status_code=409,
+        )
 
     # O endpoint OAuth client_credentials nem sempre devolve `public_key`.
     # Quando ela vier, usamos como vínculo adicional. Quando não vier, a
@@ -262,6 +272,7 @@ def public_runtime_auth_reason(exc: BaseException) -> str:
         "public_key_mismatch",
         "token_client_id_mismatch",
         "configured_application_mismatch",
+        "token_collector_mismatch",
         "test_credential",
         "unexpected_token_type",
         "missing_provider_user",
