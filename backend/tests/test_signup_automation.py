@@ -277,29 +277,18 @@ def test_authorized_card_waits_for_manual_release_and_notifies_owner(client_and_
         assert {item.id.rsplit(":", 1)[-1] for item in releases} == {"email"}
 
 
-def test_account_money_authorization_waits_for_manual_release(client_and_session, monkeypatch):
+def test_new_account_money_checkout_is_rejected_without_creating_mandate(client_and_session, monkeypatch):
     client, Session = client_and_session
-    monkeypatch.setattr(settings, "KOMA_SAAS_MANUAL_RELEASE_REQUIRED", True)
     protocol = client.post("/api/contracts/accept", json=_contract_payload("pro", "mensal")).json()["protocol"]
-    setup = client.post(
+    response = client.post(
         f"/api/contracts/{protocol}/billing/setup",
         json={"payment_method_type": "account_money"},
     )
-    assert setup.status_code == 200, setup.text
-    sub_id = setup.json()["subscriptionId"]
-
-    response = client.post(
-        "/api/integrations/saas-billing/mercado-pago/webhook",
-        json={"type": "subscription_preapproval", "data": {"id": sub_id}},
-    )
-    assert response.status_code == 200, response.text
+    assert response.status_code == 409, response.text
+    assert "novas contratações" in response.json()["detail"]
     with Session() as db:
-        billing = db.query(SaaSBillingSetup).one()
-        assert billing.status == "ready"
-        assert billing.payment_method_type == "account_money"
-        assert billing.restaurante_id is None
+        assert db.query(SaaSBillingSetup).count() == 0
         assert db.query(Restaurante).count() == 0
-        assert db.query(SaaSSubscription).count() == 0
 
 
 def test_card_network_timeout_recovers_without_creating_second_mandate(client_and_session, monkeypatch):
