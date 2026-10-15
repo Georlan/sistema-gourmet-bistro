@@ -2,17 +2,24 @@ import React, { useMemo } from 'react';
 import { Megaphone } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
 
-const CAMPAIGN_CATEGORY = /(destaque|oferta|promo(?:c[aã]o|ç[aã]o)?|campanha|especial)/i;
+const CAMPAIGN_CATEGORY = /(destaque|oferta|promo(?:c[aã]o|ç[aã]o)?|campanha|especial|especiais)/i;
+const PROMOTION_CATEGORY = /(oferta|promo(?:c[aã]o|ç[aã]o)?)/i;
+const isPromotion = (product: Product) => PROMOTION_CATEGORY.test(String(product.category || ''));
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 export function getCatalogHighlights(products: Product[]): Product[] {
-  return products
-    .filter((product) => product.isAvailable !== false && CAMPAIGN_CATEGORY.test(String(product.category || '')))
-    .slice(0, 4);
+  const eligible = products.filter(
+    (product) => product.isAvailable !== false && CAMPAIGN_CATEGORY.test(String(product.category || '')),
+  );
+  // Campanhas promocionais nunca ficam escondidas atrás do limite de outros destaques.
+  // Produtos e preços continuam vindo exclusivamente do catálogo público vigente.
+  const promotions = eligible.filter(isPromotion);
+  return promotions.length > 0 ? promotions : eligible.slice(0, 4);
 }
 
 export function CardapioHighlights({ brand }: { brand: BrandConfig }) {
   const highlights = useMemo(() => getCatalogHighlights(brand.products), [brand.products]);
+  const hasPromotions = highlights.some(isPromotion);
 
   if (highlights.length === 0) return null;
 
@@ -33,8 +40,8 @@ export function CardapioHighlights({ brand }: { brand: BrandConfig }) {
           <Megaphone className="h-4 w-4" aria-hidden="true" />
         </span>
         <div>
-          <h2 id="cardapio-highlights-title" className="text-sm font-black text-koma-foreground">Destaques da casa</h2>
-          <p className="text-[10px] text-koma-muted">Seleções e campanhas publicadas no catálogo atual.</p>
+          <h2 id="cardapio-highlights-title" className="text-sm font-black text-koma-foreground">{hasPromotions ? "Promoções" : "Destaques da casa"}</h2>
+          <p className="text-[10px] text-koma-muted">{hasPromotions ? "Ofertas disponíveis no cardápio atual." : "Seleções e campanhas publicadas no catálogo atual."}</p>
         </div>
       </div>
 
@@ -50,7 +57,7 @@ export function CardapioHighlights({ brand }: { brand: BrandConfig }) {
           >
             <img src={product.image} alt="" loading="lazy" decoding="async" className="h-24 w-full object-cover" />
             <span className="block p-3">
-              <span className="text-[9px] font-black uppercase tracking-[0.12em] text-amber-400">Destaque</span>
+              <span className="text-[9px] font-black uppercase tracking-[0.12em] text-amber-400">{isPromotion(product) ? "Oferta" : "Destaque"}</span>
               <strong className="mt-1 block truncate text-xs text-koma-foreground">{product.name}</strong>
               <span className="mt-1 block text-xs font-black text-emerald-400">{money(product.price)}</span>
             </span>
