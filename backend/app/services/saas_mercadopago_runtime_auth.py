@@ -39,8 +39,25 @@ def runtime_token_enabled() -> bool:
 
 
 def _configured_credentials() -> tuple[str, str, str]:
-    client_id = os.getenv("MERCADO_PAGO_CLIENT_ID", "").strip()
-    client_secret = os.getenv("MERCADO_PAGO_CLIENT_SECRET", "").strip()
+    # Aplicações separadas: OAuth de restaurantes e faturamento SaaS.
+    # O par dedicado tem prioridade; ausência total preserva o fallback legado.
+    saas_id = os.getenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_ID", "").strip()
+    saas_secret = os.getenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET", "").strip()
+    if bool(saas_id) != bool(saas_secret):
+        raise _auth_error(
+            "Configure o par completo de credenciais OAuth da aplicação SaaS KÔMA.",
+            reason="missing_saas_client_credentials",
+            status_code=503,
+        )
+    client_id = saas_id or os.getenv("MERCADO_PAGO_CLIENT_ID", "").strip()
+    client_secret = saas_secret or os.getenv("MERCADO_PAGO_CLIENT_SECRET", "").strip()
+    expected_app = os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "").strip()
+    if saas_id and expected_app and saas_id != expected_app:
+        raise _auth_error(
+            "A aplicação OAuth SaaS não corresponde à aplicação de faturamento KÔMA esperada.",
+            reason="configured_application_mismatch",
+            status_code=409,
+        )
     configured_public_key = settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY.strip()
 
     if not client_id or not client_secret:
@@ -235,6 +252,7 @@ def public_runtime_auth_reason(exc: BaseException) -> str:
     reason = runtime_auth_reason(exc)
     if reason in {
         "missing_client_credentials",
+        "missing_saas_client_credentials",
         "oauth_invalid_client",
         "oauth_unauthorized_client",
     }:
@@ -243,6 +261,7 @@ def public_runtime_auth_reason(exc: BaseException) -> str:
         "missing_public_key",
         "public_key_mismatch",
         "token_client_id_mismatch",
+        "configured_application_mismatch",
         "test_credential",
         "unexpected_token_type",
         "missing_provider_user",
