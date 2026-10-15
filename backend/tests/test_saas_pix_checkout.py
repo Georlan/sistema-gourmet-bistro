@@ -73,6 +73,63 @@ def test_saas_pix_uses_platform_gateway_without_split(monkeypatch):
     assert request["headers"]["X-Idempotency-Key"]
 
 
+def test_expired_saas_pix_can_be_reissued_same_day_without_reusing_idempotency_key(monkeypatch):
+    keys = []
+
+    class Client:
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def post(self, _url, *, json, headers):
+            keys.append(headers["X-Idempotency-Key"])
+            class Response:
+                status_code = 201
+                headers = {"content-type": "application/json"}
+                def json(self):
+                    return {"id": "pix-generated", "collector_id": "owner"}
+            return Response()
+
+    monkeypatch.setattr(saas_pix, "default_saas_mp_service", SimpleNamespace(
+        is_mock=False, _ensure_provider_ready=lambda: None,
+        _client=lambda: Client(), _validate_merchant_identity=lambda *_args: None,
+    ))
+    due = dt.datetime(2026, 10, 22, tzinfo=dt.timezone.utc)
+    kwargs = {"restaurante_id": 12, "amount": Decimal("179.90"),
+              "payer_email": "payer@example.test", "due_at": due}
+    saas_pix._create_pix_payment(**kwargs)
+    saas_pix._create_pix_payment(**kwargs)
+    saas_pix._create_pix_payment(**kwargs, previous_payment_id="expired-payment-1")
+    saas_pix._create_pix_payment(**kwargs, previous_payment_id="expired-payment-1")
+    saas_pix._create_pix_payment(**kwargs, previous_payment_id="expired-payment-2")
+    assert keys[0] == keys[1]
+    assert keys[2] == keys[3]
+    assert len({keys[0], keys[2], keys[4]}) == 3
+
+
+def test_prior_pix_uncertainty_does_not_start_a_second_payment(monkeypatch):
+    from app.services.saas_mercadopago import SaasMercadoPagoError
+
+    def unavailable(_payment_id):
+        raise SaasMercadoPagoError("Provider temporary error", status_code=503)
+
+    monkeypatch.setattr(saas_pix, "default_saas_mp_service",
+                        SimpleNamespace(get_payment=unavailable))
+    with pytest.raises(HTTPException) as exc:
+        saas_pix._get_existing_pix_payment_or_fail("old-pix")
+    assert exc.value.status_code == 502
+    assert "Tente novamente" in str(exc.value.detail)
+
+
+def test_missing_prior_pix_can_be_reissued(monkeypatch):
+    from app.services.saas_mercadopago import SaasMercadoPagoError
+
+    def missing(_payment_id):
+        raise SaasMercadoPagoError("Not found", status_code=404)
+
+    monkeypatch.setattr(saas_pix, "default_saas_mp_service",
+                        SimpleNamespace(get_payment=missing))
+    assert saas_pix._get_existing_pix_payment_or_fail("old-pix") is None
+
+
 def test_pix_reference_is_deterministic_per_tenant_and_due_date():
     due = dt.datetime(2026, 10, 1, 12, 30, tzinfo=dt.timezone.utc)
     assert _pix_reference(42, due) == "KOMA-SAAS-PIX-42-20261001"
