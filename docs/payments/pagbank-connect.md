@@ -108,6 +108,19 @@ O escopo atual pretendido é Connect OAuth + Order Pix, sem cartão, boleto, spl
 - Estados com mais de um recebedor ativo, inclusive Pix Direto legado, deixam de oferecer Pix público e são rejeitados na criação. O Pix manual continua fora da interface atual.
 - A conta titular da aplicação é rejeitada quando o identificador foi verificado e configurado em `PAGBANK_APPLICATION_OWNER_ACCOUNT_ID` (Sandbox) ou `PAGBANK_PRODUCTION_APPLICATION_OWNER_ACCOUNT_ID` (piloto). Obter o `account_id` por `GET /oauth2/application/{client_id}` autenticado no ambiente correspondente. Sem essa configuração, a proteção adicional de titularidade não está ativa; não inferir por nome ou documentos. As demais proteções de tenant permanecem obrigatórias.
 
+### Homologação Connect Sandbox com titular da aplicação — somente QA ID 9 (15/10/2026)
+
+Conforme resposta do PagBank no chamado **1462968488**, o consentimento no Connect Sandbox pode utilizar a **conta principal proprietária da aplicação**, com login antecipado no Portal do Desenvolvedor. Contas adicionais não acessam o Sandbox. Esse consentimento **não autoriza** vincular a titular da plataforma como recebedora de pedidos dos restaurantes.
+
+Para gerar apenas os logs reais da troca OAuth de uso único, habilitar **somente no backend**:
+
+- `PAGBANK_SANDBOX_OAUTH_EVIDENCE_RESTAURANT_IDS=9` (captura sanitizada existente).
+- `PAGBANK_SANDBOX_QA9_OAUTH_EVIDENCE_ONLY=true` (opt-in separado; ausente ou qualquer outro valor mantém bloqueio).
+
+O bypass de **persistência**, não de validação, só existe com essas duas condições **e** `restaurant_id == 9` **e** ambiente efetivo `sandbox`. Não se aplica ao D8/ID 8, a outros tenants nem a nenhuma conta em produção, independentemente de variáveis. O fluxo continua validando state assinado, prazo, administrador, tenant e credenciais Sandbox antes de trocar o código. No retorno de sucesso, o backend registra metadados sanitizados reais de `POST /oauth2/token` e evento `connection_evidence_only`, devolvendo `sandbox_evidence_captured` à interface. **Não grava access_token/refresh_token, não cria ou habilita RestaurantPaymentAccount, não altera o Pix Direto, não seleciona provedor recebedor e não cria pedidos ou cobranças.** A interface apresenta sucesso da evidência, mas mostra PagBank como **não conectado**. O token só existe em memória durante a resposta bancária e não deve ser compartilhado ou copiado para coleta manual.
+
+Desabilitar `PAGBANK_SANDBOX_QA9_OAUTH_EVIDENCE_ONLY` depois de coletar e revisar os logs; manter o bloqueio normal da conta titular para conexão financeira. Caso o PagBank retorne erro, registrar apenas status HTTP e presença de campos, sem declarar sucesso na obtenção de token. Não repetir códigos OAuth antigos. Para testes financeiros posteriores, utilizar vendedor independente ou estratégia aprovada e não esse modo de evidência.
+
 ### Captura de evidências genuínas
 
 `scripts/pagbank-sandbox-evidence.py` aceita somente o host Sandbox e não importa o banco KÔMA. A operação `application` consulta o cadastro; `create` e `get` exigem o token OAuth individual do vendedor em `PAGBANK_SANDBOX_SELLER_ACCESS_TOKEN`. Nunca substituir por `PAGBANK_APP_TOKEN`. O consentimento e a troca de código devem ocorrer pelo fluxo canônico do KÔMA; o coletor não consome códigos nem persiste tokens.
