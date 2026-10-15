@@ -48,6 +48,7 @@ interface CardapioProductModalProps {
     current: number;
     total: number;
     actionLabel: string;
+    stepLabel: string;
     onBack?: () => void;
   };
 }
@@ -335,7 +336,7 @@ export default function CardapioProductModal({
           {compositionStep && (
             <div className="mb-3" aria-label={`Etapa ${compositionStep.current} de ${compositionStep.total}`}>
               <p className="text-xs font-bold text-emerald-400">
-                Etapa {compositionStep.current} de {compositionStep.total} · Monte sua quentinha
+                Etapa {compositionStep.current} de {compositionStep.total} · {compositionStep.stepLabel}
               </p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-koma-raised" aria-hidden="true">
                 <div className="h-full rounded-full bg-emerald-500" style={{ width: `${(compositionStep.current / compositionStep.total) * 100}%` }} />
