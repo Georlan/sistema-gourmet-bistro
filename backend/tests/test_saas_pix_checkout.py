@@ -29,6 +29,50 @@ def test_checkout_contract_has_only_card_and_pix():
     assert is_recurring_trial_payment_method("pix") is False
 
 
+def test_saas_pix_uses_platform_gateway_without_split(monkeypatch):
+    request = {}
+
+    class Response:
+        status_code = 201
+        headers = {"content-type": "application/json"}
+
+        def json(self):
+            return {"id": "saas-platform-pix", "collector_id": "platform-owner"}
+
+    class Client:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def post(self, url, *, json, headers):
+            request.update(url=url, body=json, headers=headers)
+            return Response()
+
+    service = SimpleNamespace(
+        is_mock=False,
+        _ensure_provider_ready=lambda: None,
+        _client=lambda: Client(),
+        _validate_merchant_identity=lambda result: request.update(validated_collector=result["collector_id"]),
+    )
+    monkeypatch.setattr(saas_pix, "default_saas_mp_service", service)
+    monkeypatch.setattr(saas_pix.settings, "KOMA_PUBLIC_API_URL", "https://api.koma.example")
+    due = dt.datetime(2026, 10, 22, tzinfo=dt.timezone.utc)
+    created = saas_pix._create_pix_payment(
+        restaurante_id=12, amount=Decimal("179.90"), payer_email="payer@example.test", due_at=due
+    )
+    assert created["id"] == "saas-platform-pix"
+    assert request["url"] == "/v1/payments"
+    assert request["body"]["payment_method_id"] == "pix"
+    assert request["body"]["transaction_amount"] == 179.90
+    assert request["body"]["notification_url"].endswith("/api/integrations/saas-pix/mercado-pago/webhook")
+    assert "application_fee" not in request["body"]
+    assert "split" not in request["body"]
+    assert request["validated_collector"] == "platform-owner"
+    assert request["headers"]["X-Idempotency-Key"]
+
+
 def test_pix_reference_is_deterministic_per_tenant_and_due_date():
     due = dt.datetime(2026, 10, 1, 12, 30, tzinfo=dt.timezone.utc)
     assert _pix_reference(42, due) == "KOMA-SAAS-PIX-42-20261001"
