@@ -28,8 +28,8 @@ def _configure_identity(monkeypatch):
     monkeypatch.setenv("KOMA_SAAS_MP_RUNTIME_TOKEN_ENABLED", "true")
     monkeypatch.setenv("MERCADO_PAGO_CLIENT_ID", "123456789")
     monkeypatch.setenv("MERCADO_PAGO_CLIENT_SECRET", "client-secret")
-    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "old-app-id")
-    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID", "old-user-id")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "123456789")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID", "99887766")
     monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY", "APP_USR-public")
 
 
@@ -81,11 +81,26 @@ def test_runtime_token_uses_client_credentials_and_caches(monkeypatch):
     assert calls == [{"client_id": "123456789", "client_secret": "client-secret"}]
 
 
-def test_stale_expected_application_and_collector_do_not_block_valid_application(monkeypatch):
+def test_legacy_oauth_fallback_rejects_wrong_saas_application_before_token_request(monkeypatch):
     _configure_identity(monkeypatch)
-    monkeypatch.setattr(runtime_auth, "_mint_client_credentials_token", lambda **_kwargs: _valid_payload())
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "987654321")
+    monkeypatch.setattr(
+        runtime_auth, "_mint_client_credentials_token",
+        lambda **_kwargs: pytest.fail("Não solicitar token da aplicação errada."),
+    )
 
-    assert runtime_auth.resolve_saas_access_token(_service()).startswith("APP_USR-123456789-")
+    with pytest.raises(SaasMercadoPagoError, match="não corresponde") as exc:
+        runtime_auth.resolve_saas_access_token(_service())
+    assert runtime_auth.runtime_auth_reason(exc.value) == "configured_application_mismatch"
+
+
+def test_legacy_runtime_token_must_match_expected_collector(monkeypatch):
+    _configure_identity(monkeypatch)
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID", "another-owner")
+    monkeypatch.setattr(runtime_auth, "_mint_client_credentials_token", lambda **_kwargs: _valid_payload())
+    with pytest.raises(SaasMercadoPagoError, match="conta recebedora diferente") as exc:
+        runtime_auth.resolve_saas_access_token(_service())
+    assert runtime_auth.runtime_auth_reason(exc.value) == "token_collector_mismatch"
 
 
 def test_dedicated_saas_credentials_are_used_instead_of_restaurant_oauth(monkeypatch):
