@@ -832,7 +832,7 @@ export default function PlanContractPageV2() {
                 </>
               ) : (
                 <>
-                  <div><span className="is-active"><Gift size={16} /></span><div><strong>Hoje</strong><p>Cobrança de hoje: R$ 0 (7 dias grátis).</p></div></div>
+                  <div><span className="is-active"><Gift size={16} /></span><div><strong>Hoje</strong><p>Cobrança de hoje: R$ 0. Seus 7 dias grátis começam depois da implantação e liberação.</p></div></div>
                   <div><span><Info size={16} /></span><div><strong>Após a implantação</strong><p>Começam 7 dias grátis completos.</p></div></div>
                   <div><span>{billingMethod === 'pix' ? <QrCode size={16} /> : <CreditCard size={16} />}</span><div><strong>Depois do trial</strong><p>{billingMethod === 'pix' ? `QR Pix disponível: ${formatCurrency(nextChargeAmount)}.` : `Primeira cobrança automática: ${formatCurrency(nextChargeAmount)}.`}</p></div></div>
                 </>
@@ -852,7 +852,7 @@ export default function PlanContractPageV2() {
               <button type="submit" form="koma-signup-form" className="koma-sub-primary-action" disabled={isSubmitting}>{isSubmitting ? 'Salvando…' : 'Salvar e continuar'} <ArrowRight size={18} /></button>
             ) : (
               <button type="submit" form="koma-checkout-form" className="koma-sub-primary-action" disabled={!canContinue} aria-label="Aceitar e registrar contratação">
-                {isSubmitting ? 'Processando…' : !fixedBillingRequired ? 'Ativar Pocket' : billingMethod === 'pix' ? 'Escolher Pix' : 'Ativar 7 dias grátis'} <ArrowRight size={18} />
+                {isSubmitting ? 'Processando…' : !fixedBillingRequired ? 'Ativar Pocket' : billingMethod === 'pix' ? 'Escolher Pix' : 'Autorizar cartão'} <ArrowRight size={18} />
               </button>
             )}
             <p className="koma-sub-fineprint">O aceite registra protocolo, hashes dos documentos, condições comerciais e evidências técnicas da contratação.</p>
