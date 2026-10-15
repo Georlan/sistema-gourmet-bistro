@@ -28,7 +28,7 @@ jobs:
       - name: Run checkout smoke
         env:
           KOMA_E2E_PORT: '4284'
-        run: npm run test:e2e -- e2e/plan-subscription-flow.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
+        run: npm run test:e2e -- e2e/checkout-money-clicks.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
       - name: Upload diagnostics
         if: failure()
         uses: actions/upload-artifact@v6
