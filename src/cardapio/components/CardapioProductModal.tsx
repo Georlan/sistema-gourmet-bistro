@@ -232,7 +232,7 @@ export default function CardapioProductModal({
     });
 
     if (unsatisfied.length > 0) {
-      setFeedback(`Confira as escolhas em ${unsatisfied.map((m) => m.title).join(", ")} antes de ${initialItem ? "salvar" : "adicionar"}.`);
+      setFeedback(`Confira as escolhas em ${unsatisfied.map((m) => m.title).join(", ")} antes de ${compositionStep ? "continuar" : initialItem ? "salvar" : "adicionar"}.`);
       setExpandedExtras(current => ({ ...current, [unsatisfied[0].id]: true }));
       const group = groupRefs.current.get(unsatisfied[0].id);
       group?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -350,7 +350,7 @@ export default function CardapioProductModal({
                 <p className="mt-2 text-sm leading-relaxed text-koma-muted">{product.description}</p>
               )}
             </div>
-            <strong className="shrink-0 text-lg font-black text-emerald-400">{formatPrice(product.price)}</strong>
+            <strong className="shrink-0 text-sm font-black text-emerald-400">{compositionStep ? "Incluso na promoção" : formatPrice(product.price)}</strong>
           </div>
 
           {product.marmitaria === true && allModifiers.some(modifier => (modifier.minSelection ?? 0) > 0) && (
