@@ -140,6 +140,22 @@ def test_pix_annual_release_notice_does_not_claim_recurring_authorization(monkey
     assert "recorrência" not in message
 
 
+def test_pix_monthly_release_notice_does_not_mislabel_as_annual(monkeypatch):
+    calls = _capture_enqueue(monkeypatch)
+    monkeypatch.setattr(signup_notifications.settings, "KOMA_OWNER_EMAIL", "owner@example.com")
+    signup_notifications.enqueue_release_required(
+        object(), protocol="pix-monthly-contract", restaurant_name="Marmitaria",
+        plan="pro", billing_cycle="mensal", payment_method_type="pix",
+    )
+    assert len(calls) == 1
+    message = calls[0]["message"]
+    assert "Pix mensal selecionado" in message
+    assert "Pix anual selecionado" not in message
+    assert "a cada vencimento mensal" in message
+    assert "Não há débito automático" in message
+    assert "Nenhuma mensalidade fixa foi cobrada hoje" in message
+
+
 def test_no_fixed_release_notice_does_not_promise_trial_or_authorization(monkeypatch):
     calls = _capture_enqueue(monkeypatch)
     signup_notifications.enqueue_release_required(
