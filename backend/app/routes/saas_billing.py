@@ -325,6 +325,17 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="E-mail do pagador inválido.")
 
     existing = get_billing_setup(db, normalized_protocol)
+    # Em produção, saldo MP é bloqueado para novos contratos até por chamada direta.
+    # Em test/development o mock mantém cenários históricos de integração exercitáveis.
+    # Tentativas históricas persistidas continuam retomáveis/reconciliáveis.
+    if payload.payment_method_type == "account_money" and not (
+        (existing and existing.payment_method_type == "account_money")
+        or default_saas_mp_service.mock_allowed
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Saldo Mercado Pago indisponível para novas contratações. Escolha cartão de crédito ou Pix.",
+        )
     if existing and existing.status == "ready":
         if not is_recurring_trial_payment_method(existing.payment_method_type):
             raise HTTPException(409, "Pagamento antecipado legado não pode liberar uma nova assinatura. Configure um método recorrente.")

@@ -9,7 +9,7 @@ const paymentCatalog = readFileSync('src/config/subscriptionPaymentOptions.ts', 
 const planStyles = readFileSync('src/legal/planSubscriptionFlow.css', 'utf8');
 const main = readFileSync('src/main.tsx', 'utf8');
 
-test('fluxo unificado de contratação usa o checkout de três meios', () => {
+test('fluxo unificado de contratação usa o checkout de dois meios', () => {
   assert.match(main, /pathname\.startsWith\("\/contratar"\)/);
   assert.match(main, /PlanContractPageV2/);
   assert.match(planContract, /01 · PLANO E COBRANÇA/);
@@ -32,13 +32,18 @@ test('seleção comercial oferece anual com desconto aos três planos', () => {
   assert.doesNotMatch(planContract, /12 meses \+ 7 dias|dias adicionais de bônus/);
 });
 
-test('checkout expõe exatamente cartão Pix e Saldo Mercado Pago', () => {
-  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix' \| 'account_money'/);
+test('checkout expõe somente cartão e Pix', () => {
+  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix'/);
   assert.match(planContract, /Cartão de crédito/);
   assert.match(planContract, /QR Code \+ Pix Copia e Cola/);
-  assert.match(planContract, /Saldo Mercado Pago/);
+  assert.doesNotMatch(planContract, /Saldo Mercado Pago/);
   assert.match(planContract, /payment-methods-v2/);
   assert.doesNotMatch(planContract, /Pix Automático via Mercado Pago/);
+});
+
+test('checkout centraliza o topo em cada mudança de etapa no celular', () => {
+  assert.match(planContract, /requestAnimationFrame\(\(\) => window\.scrollTo\(\{ top: 0, behavior: 'auto' \}\)\)/);
+  assert.match(planContract, /\[step, checkoutComplete\]/);
 });
 
 test('Pix é universal e não gera cobrança no aceite', () => {
@@ -60,14 +65,14 @@ test('checkout diferencia claramente Pix mensal de Pix anual', () => {
 
 test('resumo lateral acompanha o meio de pagamento selecionado', () => {
   assert.match(planContract, /billingMethod === 'pix'[\s\S]*Pix anual não é débito automático/);
-  assert.match(planContract, /billingMethod === 'account_money'[\s\S]*Saldo Mercado Pago é recorrente/);
+  assert.doesNotMatch(planContract, /Saldo Mercado Pago é recorrente/);
   assert.match(planContract, /Cartão de crédito é recorrente/);
 });
 
-test('catálogo contém somente os três meios publicados', () => {
+test('catálogo contém somente os dois meios publicados', () => {
   assert.match(paymentCatalog, /id: 'credit_card'/);
   assert.match(paymentCatalog, /id: 'pix'/);
-  assert.match(paymentCatalog, /id: 'account_money'/);
+  assert.doesNotMatch(paymentCatalog, /id: 'account_money'/);
   assert.doesNotMatch(paymentCatalog, /pix_automatic|nupay|annual_installments|boleto/);
 });
 

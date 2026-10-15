@@ -118,10 +118,10 @@ test('contratação registra clickwrap com identidade, evidência e comprovante'
   assert.doesNotMatch(planContract, /defaultChecked/i);
 });
 
-test('checkout reconhece cartão Pix universal e Saldo Mercado Pago', () => {
-  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix' \| 'account_money'/);
+test('checkout reconhece cartão e Pix universal', () => {
+  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix'/);
   assert.match(planContract, /QR Code \+ Pix Copia e Cola/);
-  assert.match(planContract, /Saldo Mercado Pago/);
+  assert.doesNotMatch(planContract, /Saldo Mercado Pago/);
   assert.match(planContract, /\/billing\/pix\/select/);
   assert.match(planContract, /\/billing\/activate-free/);
   assert.match(planContract, /payment-methods-v2/);

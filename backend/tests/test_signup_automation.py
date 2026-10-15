@@ -96,42 +96,20 @@ def test_commercial_signup_profile_is_written_when_tenant_is_provisioned(signup_
         assert profile.profile_key == "pizzaria"
 
 
-def test_new_signup_queues_owner_notice_once_before_acceptance(signup_client, monkeypatch):
+def test_incomplete_signup_does_not_notify_owner_before_checkout(signup_client, monkeypatch):
     client, Session = signup_client
     monkeypatch.setattr(settings, "KOMA_OWNER_EMAIL", "owner@example.com")
-    monkeypatch.delenv("KOMA_OWNER_WHATSAPP_PHONE", raising=False)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-bot-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "owner-chat")
     created = client.post("/api/signups", json=DATA)
     assert created.status_code == 201, created.text
-    with Session() as db:
-        notices = db.query(SignupNotification).all()
-        assert len(notices) == 1
-        assert notices[0].id == f"{created.json()['id']}:signup-started-owner:email"
-        assert notices[0].status == "pending"
     updated = client.put(
         "/api/signups/current", json=DATA,
         headers={"X-Signup-Token": created.json()["token"]},
     )
     assert updated.status_code == 200, updated.text
     with Session() as db:
-        assert db.query(SignupNotification).count() == 1
-
-
-def test_new_signup_queues_telegram_only_for_owner(signup_client, monkeypatch):
-    client, Session = signup_client
-    monkeypatch.setattr(settings, "KOMA_OWNER_EMAIL", "")
-    monkeypatch.setenv("KOMA_OWNER_WHATSAPP_PHONE", "5585999999999")
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-bot-token")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "owner-chat")
-
-    created = client.post("/api/signups", json=DATA)
-    assert created.status_code == 201, created.text
-    with Session() as db:
-        notices = db.query(SignupNotification).all()
-        assert [notice.id for notice in notices] == [
-            f"{created.json()['id']}:signup-started-owner:telegram"
-        ]
-
-
+        assert db.query(SignupNotification).count() == 0
 
 
 def test_onboarding_ready_queues_email_and_telegram_once(signup_client, monkeypatch):
@@ -299,29 +277,20 @@ def test_authorized_card_waits_for_manual_release_and_notifies_owner(client_and_
         assert {item.id.rsplit(":", 1)[-1] for item in releases} == {"email"}
 
 
-def test_account_money_authorization_waits_for_manual_release(client_and_session, monkeypatch):
+def test_new_account_money_checkout_is_rejected_without_creating_mandate(client_and_session, monkeypatch):
     client, Session = client_and_session
-    monkeypatch.setattr(settings, "KOMA_SAAS_MANUAL_RELEASE_REQUIRED", True)
+    # Exercita o bloqueio de produção com as demais capabilities em mock.
+    monkeypatch.setattr(default_saas_mp_service, "mock_allowed", False)
     protocol = client.post("/api/contracts/accept", json=_contract_payload("pro", "mensal")).json()["protocol"]
-    setup = client.post(
+    response = client.post(
         f"/api/contracts/{protocol}/billing/setup",
         json={"payment_method_type": "account_money"},
     )
-    assert setup.status_code == 200, setup.text
-    sub_id = setup.json()["subscriptionId"]
-
-    response = client.post(
-        "/api/integrations/saas-billing/mercado-pago/webhook",
-        json={"type": "subscription_preapproval", "data": {"id": sub_id}},
-    )
-    assert response.status_code == 200, response.text
+    assert response.status_code == 409, response.text
+    assert "novas contratações" in response.json()["detail"]
     with Session() as db:
-        billing = db.query(SaaSBillingSetup).one()
-        assert billing.status == "ready"
-        assert billing.payment_method_type == "account_money"
-        assert billing.restaurante_id is None
+        assert db.query(SaaSBillingSetup).count() == 0
         assert db.query(Restaurante).count() == 0
-        assert db.query(SaaSSubscription).count() == 0
 
 
 def test_card_network_timeout_recovers_without_creating_second_mandate(client_and_session, monkeypatch):

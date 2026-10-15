@@ -2,11 +2,9 @@ from __future__ import annotations
 
 SAAS_TRIAL_DAYS = 7
 
-# Checkout SaaS canônico do KÔMA: exatamente três opções visíveis.
-# - cartão: recorrência automática;
-# - Pix: cobrança avulsa interoperável por QR Code/Copia e Cola;
-# - Saldo Mercado Pago: autorização recorrente no provedor.
-CHECKOUT_PAYMENT_METHODS = frozenset({"credit_card", "pix", "account_money"})
+# Novas contratações públicas: somente cartão recorrente e Pix por QR Code.
+# Saldo Mercado Pago permanece apenas para contratos anteriores e reconciliação.
+CHECKOUT_PAYMENT_METHODS = frozenset({"credit_card", "pix"})
 
 # Meios que possuem mandato/assinatura automática no provedor.
 # `pix_automatic` permanece somente para reconciliação de tentativas históricas;
@@ -16,7 +14,7 @@ RECURRING_TRIAL_PAYMENT_METHODS = frozenset({"credit_card", "pix_automatic", "ac
 # Todo meio oferecido no checkout preserva a mesma regra de trial. Para Pix não
 # existe cobrança antecipada: o QR da mensalidade é criado apenas quando houver
 # valor devido depois do onboarding + 7 dias grátis.
-TRIAL_ELIGIBLE_PAYMENT_METHODS = CHECKOUT_PAYMENT_METHODS
+TRIAL_ELIGIBLE_PAYMENT_METHODS = CHECKOUT_PAYMENT_METHODS | frozenset({"account_money"})
 
 LEGACY_CHECKOUT_PAYMENT_METHODS = frozenset({"pix_automatic"})
 

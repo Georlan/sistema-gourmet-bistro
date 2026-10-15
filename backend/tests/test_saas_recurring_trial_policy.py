@@ -15,16 +15,18 @@ from app.services.saas_billing_policy import (
 )
 
 
-def test_checkout_has_exactly_three_methods_and_preserves_trial():
+def test_checkout_has_only_card_and_pix_and_preserves_historical_trial():
     assert SAAS_TRIAL_DAYS == 7
-    assert CHECKOUT_PAYMENT_METHODS == {"credit_card", "pix", "account_money"}
-    assert TRIAL_ELIGIBLE_PAYMENT_METHODS == CHECKOUT_PAYMENT_METHODS
+    assert CHECKOUT_PAYMENT_METHODS == {"credit_card", "pix"}
+    assert TRIAL_ELIGIBLE_PAYMENT_METHODS == {"credit_card", "pix", "account_money"}
+    assert is_checkout_payment_method("account_money") is False
+    assert is_trial_eligible_payment_method("account_money") is True
     for method in CHECKOUT_PAYMENT_METHODS:
         assert is_checkout_payment_method(method) is True
         assert is_trial_eligible_payment_method(method) is True
 
 
-def test_only_card_and_balance_are_provider_recurring_in_new_checkout():
+def test_existing_balance_mandates_remain_reconcilable_but_not_publicly_offered():
     assert RECURRING_TRIAL_PAYMENT_METHODS == {"credit_card", "pix_automatic", "account_money"}
     assert is_recurring_trial_payment_method("credit_card") is True
     assert is_recurring_trial_payment_method("account_money") is True

@@ -18,7 +18,6 @@ import {
   ShieldCheck,
   Store,
   User,
-  Wallet,
 } from 'lucide-react';
 import { KOMA_WORDMARK_ON_DARK_SRC } from '../brand/komaBrand';
 import { API_BASE_URL } from '../config/api';
@@ -41,7 +40,7 @@ import './legal.css';
 import './planSubscriptionFlow.css';
 import './paymentOptionsCatalog.css';
 
-type BillingMethod = 'credit_card' | 'pix' | 'account_money';
+type BillingMethod = 'credit_card' | 'pix';
 type BillingCycle = 'mensal' | 'anual';
 type OperationProfile = 'generic' | 'pizzaria' | 'acai' | 'churrasco' | 'marmitaria';
 
@@ -106,7 +105,6 @@ type ActivationResult = {
 type BillingCapabilities = {
   credit_card: boolean;
   pix: boolean;
-  account_money: boolean;
   publicKey: string;
   environment?: string;
   isTestMode?: boolean;
@@ -200,9 +198,16 @@ export default function PlanContractPageV2() {
   const [capabilities, setCapabilities] = useState<BillingCapabilities>({
     credit_card: false,
     pix: false,
-    account_money: false,
     publicKey: '',
   });
+
+  // Cada etapa substitui o conteúdo da anterior. Voltar ao topo evita que
+  // o formulário de pagamento abra fora da área visível, sobretudo no celular.
+  const checkoutComplete = Boolean(activationResult);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'auto' }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [step, checkoutComplete]);
 
   const [cardNumber, setCardNumber] = useState('');
   const [cardHolder, setCardHolder] = useState('');
@@ -268,20 +273,14 @@ export default function PlanContractPageV2() {
   const paymentFieldsValid = !fixedBillingRequired || billingMethod !== 'credit_card' || cardFieldsValid;
   const methodAvailable = !fixedBillingRequired || (billingMethod === 'credit_card'
     ? capabilities.credit_card
-    : billingMethod === 'pix'
-      ? capabilities.pix
-      : capabilities.account_money);
+    : capabilities.pix);
   const canContinue = methodAvailable
     && ((baseFieldsValid && representativeValid && accepted) || Boolean(receipt))
     && paymentFieldsValid
     && !isSubmitting
     && !activationResult;
 
-  const billingMethodLabel = billingMethod === 'pix'
-    ? 'Pix'
-    : billingMethod === 'account_money'
-      ? 'Saldo Mercado Pago'
-      : 'cartão de crédito';
+  const billingMethodLabel = billingMethod === 'pix' ? 'Pix' : 'cartão de crédito';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -292,7 +291,6 @@ export default function PlanContractPageV2() {
         setCapabilities({
           credit_card: Boolean(payload.credit_card),
           pix: Boolean(payload.pix),
-          account_money: Boolean(payload.account_money),
           publicKey: String(payload.publicKey || ''),
           environment: payload.environment,
           isTestMode: Boolean(payload.isTestMode),
@@ -394,7 +392,7 @@ export default function PlanContractPageV2() {
         if (!response.ok) return;
         const payload = await response.json();
         if (!active) return;
-        if (payload.paymentMethodType === 'account_money' || payload.paymentMethodType === 'pix' || payload.paymentMethodType === 'credit_card') {
+        if (payload.paymentMethodType === 'pix' || payload.paymentMethodType === 'credit_card') {
           setBillingMethod(payload.paymentMethodType);
         }
         if (payload.billingStatus === 'ready' && !payload.isActivated) {
@@ -603,11 +601,6 @@ export default function PlanContractPageV2() {
       }
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(contractErrorMessage(payload?.detail));
-      if (billingMethod === 'account_money' && payload?.status === 'authorization_required' && payload?.authorizationUrl) {
-        setSignupNotice('Abrindo a autorização segura do Saldo Mercado Pago. A mensalidade fixa hoje é R$ 0.');
-        window.location.assign(String(payload.authorizationUrl));
-        return;
-      }
       setActivationResult({
         restaurantId: payload.restaurantId ? String(payload.restaurantId) : undefined,
         status: payload.status,
@@ -642,7 +635,7 @@ export default function PlanContractPageV2() {
                 : 'Cobrança de hoje concluída: R$ 0 (7 dias grátis iniciados após a implantação essencial).')}</p>
             {activationResult.slug && <div className="koma-sub-success-detail"><span>Endereço do estabelecimento</span><strong>https://{activationResult.slug}.komafood.com.br</strong></div>}
             {activationResult.status === 'awaiting_release' ? (
-              <div className="koma-sub-success-detail koma-sub-activation-pending"><span>Próximo passo</span><strong>Aguarde o convite para criar sua senha.</strong></div>
+              <div className="koma-sub-success-detail koma-sub-activation-pending"><span>Próximo passo</span><strong>Assim que a equipe KÔMA liberar seu acesso, enviaremos um convite ao e-mail cadastrado para você criar sua senha.</strong><p>Depois do primeiro login, você fará a implantação inicial. Seus 7 dias grátis começarão somente após os quatro itens essenciais e a liberação da operação.</p></div>
             ) : activationResult.activationToken ? (
               <a href={`/ativar#token=${encodeURIComponent(activationResult.activationToken)}`} className="koma-sub-primary-action">Concluir primeiro acesso <ArrowRight size={18} /></a>
             ) : (
@@ -747,7 +740,7 @@ export default function PlanContractPageV2() {
           ) : (
             <>
               <button type="button" className="koma-sub-back" onClick={() => void handleSwitchPlanOrCycle()} disabled={isCheckingBilling}><ArrowLeft size={16} /> {isCheckingBilling ? 'Verificando…' : receipt ? 'Trocar plano ou ciclo' : 'Voltar para plano e cobrança'}</button>
-              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">03 · CONTRATAÇÃO{fixedBillingRequired ? ' E PAGAMENTO' : ''}</span><h1>Ative seu restaurante.</h1><p>{fixedBillingRequired ? 'Escolha cartão, Pix ou Saldo Mercado Pago. Cobrança hoje: R$ 0 (período de 7 dias grátis).' : 'Condição contratual histórica: Seu contrato anterior mantém mensalidade fixa de R$ 0 e dispensa meio de pagamento.'}</p></div>
+              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">03 · CONTRATAÇÃO{fixedBillingRequired ? ' E PAGAMENTO' : ''}</span><h1>Ative seu restaurante.</h1><p>{fixedBillingRequired ? 'Escolha cartão de crédito ou Pix. Cobrança hoje: R$ 0. Seus 7 dias grátis começam após a implantação e a liberação da operação.' : 'Condição contratual histórica: Seu contrato anterior mantém mensalidade fixa de R$ 0 e dispensa meio de pagamento.'}</p></div>
               {error && <div className="koma-sub-error" role="alert"><Info size={18} /> {error}</div>}
               {contractLocked && <div className="koma-sub-locked-note"><Lock size={17} /> O aceite jurídico já foi registrado para esta tentativa.</div>}
 
@@ -779,7 +772,6 @@ export default function PlanContractPageV2() {
                   <div className="koma-sub-methods" role="radiogroup" aria-label="Forma de pagamento disponível">
                     <button type="button" role="radio" aria-checked={billingMethod === 'credit_card'} className={billingMethod === 'credit_card' ? 'is-selected' : ''} onClick={() => setBillingMethod('credit_card')}><span className="koma-sub-method-radio" /><CreditCard size={19} /><div><strong>Cartão de crédito{!capabilities.credit_card ? ' · indisponível no momento' : ''}</strong><small>Recorrente · R$ 0 hoje · cobrança automática depois do trial</small></div></button>
                     <button type="button" role="radio" aria-checked={billingMethod === 'pix'} className={billingMethod === 'pix' ? 'is-selected' : ''} onClick={() => setBillingMethod('pix')}><span className="koma-sub-method-radio" /><QrCode size={19} /><div><strong>Pix{!capabilities.pix ? ' · indisponível no momento' : ''}</strong><small>QR Code + Pix Copia e Cola · pague com qualquer banco · R$ 0 hoje</small></div></button>
-                    <button type="button" role="radio" aria-checked={billingMethod === 'account_money'} className={billingMethod === 'account_money' ? 'is-selected' : ''} onClick={() => setBillingMethod('account_money')}><span className="koma-sub-method-radio" /><Wallet size={19} /><div><strong>Saldo Mercado Pago{!capabilities.account_money ? ' · indisponível no momento' : ''}</strong><small>Recorrente pela sua conta Mercado Pago · R$ 0 hoje</small></div></button>
                   </div>
 
                   {billingMethod === 'credit_card' && (
@@ -792,9 +784,8 @@ export default function PlanContractPageV2() {
                     </div>
                   )}
                   {billingMethod === 'pix' && capabilities.pix && <div className="koma-sub-locked-note"><QrCode size={17} /> Nenhum Pix é cobrado hoje. {activeBillingCycle === 'anual' ? 'Depois da implantação e dos 7 dias grátis, o KÔMA gerará um único QR Code e Pix Copia e Cola do valor anual, quitando os próximos 12 meses.' : 'Quando a primeira mensalidade vencer, o KÔMA exibirá o QR Code e o Pix Copia e Cola; um novo QR será gerado a cada vencimento mensal.'} Você poderá pagar com qualquer banco ou PSP Pix.</div>}
-                  {billingMethod === 'account_money' && capabilities.account_money && <div className="koma-sub-locked-note"><Wallet size={17} /> Ao continuar, você será levado ao Mercado Pago apenas para autorizar o uso do seu saldo. A recorrência começa depois do trial.</div>}
                   {!methodAvailable && <p role="status" className="koma-sub-locked-note">{billingMethodLabel} está indisponível nesta contratação. Escolha outro meio disponível para continuar; sua inscrição permanece salva.</p>}
-                  {!capabilities.credit_card && !capabilities.pix && !capabilities.account_money && <p role="status">Ambiente de homologação: o checkout recorrente está temporariamente pausado enquanto as credenciais TEST do gateway são concluídas (KOMA_SAAS_CHECKOUT_ENABLED=false). Sua inscrição fica salva.</p>}
+                  {!capabilities.credit_card && !capabilities.pix && <p role="status">Ambiente de homologação: o checkout recorrente está temporariamente pausado enquanto as credenciais TEST do gateway são concluídas (KOMA_SAAS_CHECKOUT_ENABLED=false). Sua inscrição fica salva.</p>}
                 </section>
                 ) : (
                   <section className="koma-sub-section-card">
@@ -841,9 +832,9 @@ export default function PlanContractPageV2() {
                 </>
               ) : (
                 <>
-                  <div><span className="is-active"><Gift size={16} /></span><div><strong>Hoje</strong><p>Cobrança de hoje: R$ 0 (7 dias grátis).</p></div></div>
+                  <div><span className="is-active"><Gift size={16} /></span><div><strong>Hoje</strong><p>Cobrança de hoje: R$ 0. Seus 7 dias grátis começam depois da implantação e liberação.</p></div></div>
                   <div><span><Info size={16} /></span><div><strong>Após a implantação</strong><p>Começam 7 dias grátis completos.</p></div></div>
-                  <div><span>{billingMethod === 'pix' ? <QrCode size={16} /> : billingMethod === 'account_money' ? <Wallet size={16} /> : <CreditCard size={16} />}</span><div><strong>Depois do trial</strong><p>{billingMethod === 'pix' ? `QR Pix disponível: ${formatCurrency(nextChargeAmount)}.` : `Primeira cobrança automática: ${formatCurrency(nextChargeAmount)}.`}</p></div></div>
+                  <div><span>{billingMethod === 'pix' ? <QrCode size={16} /> : <CreditCard size={16} />}</span><div><strong>Depois do trial</strong><p>{billingMethod === 'pix' ? `QR Pix disponível: ${formatCurrency(nextChargeAmount)}.` : `Primeira cobrança automática: ${formatCurrency(nextChargeAmount)}.`}</p></div></div>
                 </>
               )}
             </div>
@@ -854,16 +845,14 @@ export default function PlanContractPageV2() {
               ? activeBillingCycle === 'anual'
                 ? 'Pix anual não é débito automático: depois do trial, um único QR/Copia e Cola universal quita os próximos 12 meses.'
                 : 'Pix mensal não é débito automático: cada vencimento gera um novo QR/Copia e Cola universal.'
-              : billingMethod === 'account_money'
-                ? 'Saldo Mercado Pago é recorrente e depende de saldo disponível na sua conta Mercado Pago no vencimento.'
-                : 'Cartão de crédito é recorrente: a primeira cobrança automática acontece somente depois da implantação e dos 7 dias grátis.'}</p>
+              : 'Cartão de crédito é recorrente: a primeira cobrança automática acontece somente depois da implantação e dos 7 dias grátis.'}</p>
             {step === 1 ? (
-              <button type="button" className="koma-sub-primary-action" onClick={() => { setStep(2); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Continuar <ArrowRight size={18} /></button>
+              <button type="button" className="koma-sub-primary-action" onClick={() => setStep(2)}>Continuar <ArrowRight size={18} /></button>
             ) : step === 2 ? (
               <button type="submit" form="koma-signup-form" className="koma-sub-primary-action" disabled={isSubmitting}>{isSubmitting ? 'Salvando…' : 'Salvar e continuar'} <ArrowRight size={18} /></button>
             ) : (
               <button type="submit" form="koma-checkout-form" className="koma-sub-primary-action" disabled={!canContinue} aria-label="Aceitar e registrar contratação">
-                {isSubmitting ? 'Processando…' : !fixedBillingRequired ? 'Ativar Pocket' : billingMethod === 'pix' ? 'Escolher Pix' : billingMethod === 'account_money' ? 'Autorizar Saldo Mercado Pago' : 'Ativar 7 dias grátis'} <ArrowRight size={18} />
+                {isSubmitting ? 'Processando…' : !fixedBillingRequired ? 'Ativar Pocket' : billingMethod === 'pix' ? 'Escolher Pix' : 'Autorizar cartão'} <ArrowRight size={18} />
               </button>
             )}
             <p className="koma-sub-fineprint">O aceite registra protocolo, hashes dos documentos, condições comerciais e evidências técnicas da contratação.</p>

@@ -15,7 +15,7 @@ def _capture_enqueue(monkeypatch):
     return calls
 
 
-def test_trial_release_queues_customer_and_owner_once_per_channel(monkeypatch):
+def test_trial_release_queues_only_customer_notice(monkeypatch):
     calls = _capture_enqueue(monkeypatch)
     monkeypatch.setattr(signup_notifications.settings, "KOMA_OWNER_EMAIL", "owner@example.com")
     monkeypatch.delenv("KOMA_OWNER_WHATSAPP_PHONE", raising=False)
@@ -25,7 +25,7 @@ def test_trial_release_queues_customer_and_owner_once_per_channel(monkeypatch):
         customer_phone="5584999999999",
         trial_ends_at=datetime.datetime(2026, 10, 4, 12, tzinfo=datetime.timezone.utc),
     )
-    assert [item["kind"] for item in calls] == ["trial-started-customer", "trial-started-owner"]
+    assert [item["kind"] for item in calls] == ["trial-started-customer"]
     assert all(item["protocol"] == "tenant-42" for item in calls)
     assert "plano pro (anual)" in calls[0]["message"].lower()
     assert "04/10/2026" in calls[0]["message"]
@@ -55,27 +55,23 @@ def test_acceptance_message_does_not_claim_upfront_payment(monkeypatch):
     assert "Conclua o pagamento para liberar" not in message
 
 
-def test_acceptance_notifies_owner_by_email_without_requiring_whatsapp(monkeypatch):
+def test_acceptance_notifies_only_the_customer(monkeypatch):
     calls = _capture_enqueue(monkeypatch)
-    monkeypatch.delenv("KOMA_OWNER_WHATSAPP_PHONE", raising=False)
     monkeypatch.setattr(signup_notifications.settings, "KOMA_OWNER_EMAIL", "owner@example.com")
-
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-bot-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "owner-chat")
     signup_notifications.enqueue_acceptance(
         object(),
         protocol="KOMA-CTR-20260913-ABCDEF123456",
         restaurant_name="Restaurante QA",
         representative_name="Ana",
         email="ana@example.com",
-        phone="5584999999999",
+        phone="5585999999999",
     )
-
-    assert len(calls) == 2
-    owner = calls[1]
-    assert owner["kind"] == "owner"
-    assert owner["email"] == "owner@example.com"
-    assert owner["phone"] is None
-    assert owner["subject"] == "Nova inscrição iniciada — KÔMA"
-    assert "Acompanhe o status na aba Inscrições do SuperAdmin" in owner["message"]
+    assert len(calls) == 1
+    assert calls[0]["kind"] == "accepted"
+    assert calls[0]["email"] == "ana@example.com"
+    assert calls[0].get("telegram_chat") is None
 
 
 def test_release_required_message_describes_authorization_not_payment(monkeypatch):
@@ -138,6 +134,22 @@ def test_pix_annual_release_notice_does_not_claim_recurring_authorization(monkey
     assert "7 dias grátis só começarão depois dos 4 itens essenciais" in message
     assert "recorrente" not in message
     assert "recorrência" not in message
+
+
+def test_pix_monthly_release_notice_does_not_mislabel_as_annual(monkeypatch):
+    calls = _capture_enqueue(monkeypatch)
+    monkeypatch.setattr(signup_notifications.settings, "KOMA_OWNER_EMAIL", "owner@example.com")
+    signup_notifications.enqueue_release_required(
+        object(), protocol="pix-monthly-contract", restaurant_name="Marmitaria",
+        plan="pro", billing_cycle="mensal", payment_method_type="pix",
+    )
+    assert len(calls) == 1
+    message = calls[0]["message"]
+    assert "Pix mensal selecionado" in message
+    assert "Pix anual selecionado" not in message
+    assert "a cada vencimento mensal" in message
+    assert "Não há débito automático" in message
+    assert "Nenhuma mensalidade fixa foi cobrada hoje" in message
 
 
 def test_no_fixed_release_notice_does_not_promise_trial_or_authorization(monkeypatch):

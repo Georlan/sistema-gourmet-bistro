@@ -2,6 +2,8 @@
 
 Inscrição, confirmação de cadastro, recuperação de senha e convites da equipe usam e-mail pelo Resend. Inscrição não cria notificações WhatsApp, mesmo com a configuração legada habilitada. Telegram é exclusivo do administrador da plataforma para acompanhamento das inscrições; não envia convites a funcionários ou clientes.
 
+Para o **proprietário da plataforma**, avisos de inscrição em rascunho e de aceite isolado foram suprimidos. Um aviso por e-mail e Telegram só é enfileirado quando cartão está autorizado ou Pix escolhido e a contratação precisa de liberação no Super Admin. Depois dos 4 itens essenciais, há um segundo aviso de revisão/liberação operacional; iniciar o trial não duplica o alerta. A deduplicação é persistente por evento/protocolo/canal. O **cliente** continua recebendo seu comprovante após aceite e só recebe o convite para criar senha depois que o Super Admin liberar seu acesso. Ao terminar o checkout, o site informa que o convite virá **após a aprovação**.
+
 Pedidos do cardápio online preservam o WhatsApp operacional do restaurante. A regra entre impressora e WhatsApp fica para a revisão de impressão: com impressora operacional, o alerta WhatsApp pode ser dispensado. Esta mudança não altera impressão nem suprime alertas de pedidos.
 
 O worker mantém tentativas e expiração dos convites e inscrições. Cadastro de cliente e recuperação de senha repetem somente falhas temporárias, com a mesma chave de idempotência. Eventos assinados do Resend registram entrega, atraso ou rejeição sem armazenar destinatário, conteúdo ou token. Eventos duplicados ou atrasados não regridem uma entrega concluída para envio pendente.
