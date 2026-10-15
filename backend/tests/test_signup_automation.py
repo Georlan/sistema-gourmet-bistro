@@ -279,6 +279,8 @@ def test_authorized_card_waits_for_manual_release_and_notifies_owner(client_and_
 
 def test_new_account_money_checkout_is_rejected_without_creating_mandate(client_and_session, monkeypatch):
     client, Session = client_and_session
+    # Exercita o bloqueio de produção com as demais capabilities em mock.
+    monkeypatch.setattr(default_saas_mp_service, "mock_allowed", False)
     protocol = client.post("/api/contracts/accept", json=_contract_payload("pro", "mensal")).json()["protocol"]
     response = client.post(
         f"/api/contracts/{protocol}/billing/setup",
