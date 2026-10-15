@@ -66,16 +66,16 @@ test('SaaS diagnostics protects canonical webhook, required events, and KOMA_PUB
   assert.match(saasMp, /\/api\/integrations\/saas-billing\/mercado-pago\/webhook/);
 });
 
-test('SaaS diagnostics describes annual Pix separately from recurring methods', () => {
+test('SaaS diagnostics uses current checkout policy and fails closed for unavailable Pix', () => {
   assert.match(readiness, /publicApiFetch/);
-  assert.match(readiness, /\/api\/contracts\/payment-methods/);
+  assert.match(readiness, /\/api\/contracts\/payment-methods-v2/);
   assert.match(readiness, /Política ativa do checkout/);
   assert.match(readiness, /A cobrança depende do meio escolhido no contrato/);
-  assert.match(readiness, /Pix anual é uma cobrança única/);
+  assert.match(readiness, /Pix mensal ou anual exige pagamento por QR Code/);
   assert.match(readiness, /sem débito automático/);
-  assert.match(readiness, /Pix Automático/);
-  assert.match(readiness, /Saldo Mercado Pago/);
-  assert.match(readiness, /capabilities\.pix !== false/);
+  assert.doesNotMatch(readiness, /label="Pix Automático"|label="Saldo Mercado Pago"/);
+  assert.match(readiness, /capabilities\.pix === true/);
+  assert.match(readiness, /if \(!capabilitiesResponse\.ok\)/);
   assert.match(readiness, /upfrontPaymentAllowed/);
   assert.match(readiness, /Em homologação, use credenciais de teste; em produção, não simule cobranças em clientes reais/);
   assert.doesNotMatch(readiness, /todos.*mesma regra recorrente/i);

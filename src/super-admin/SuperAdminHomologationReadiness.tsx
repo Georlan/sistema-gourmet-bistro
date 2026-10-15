@@ -25,9 +25,7 @@ type HomologationReadiness = {
 };
 
 type BillingCapabilities = {
-  pix?: boolean;
-  pix_automatic: boolean;
-  account_money?: boolean;
+  pix: boolean;
   credit_card: boolean;
   environment: string;
   isTestMode: boolean;
@@ -134,7 +132,8 @@ export function SuperAdminHomologationReadiness() {
       setError('');
 
       try {
-        const capabilitiesResponse = await publicApiFetch('/api/contracts/payment-methods', { signal });
+        const capabilitiesResponse = await publicApiFetch('/api/contracts/payment-methods-v2', { signal });
+        if (!capabilitiesResponse.ok) throw new Error('Política do checkout indisponível.');
         setCapabilities(await capabilitiesResponse.json());
       } catch {
         if (!signal?.aborted) setCapabilities(null);
@@ -250,7 +249,7 @@ export function SuperAdminHomologationReadiness() {
               <div>
                 <p className="text-sm font-bold text-zinc-100">Política ativa do checkout</p>
                 <p className="mt-1 text-xs text-koma-muted">
-                  A cobrança depende do meio escolhido no contrato. Pix anual é uma cobrança única após implantação e 7 dias grátis, sem débito automático; meios recorrentes seguem a autorização específica do gateway.
+                  A cobrança depende do meio escolhido no contrato. Pix mensal ou anual exige pagamento por QR Code após implantação e 7 dias grátis, sem débito automático; cartão segue a autorização recorrente do gateway.
                 </p>
               </div>
               {capabilities && (
@@ -264,9 +263,7 @@ export function SuperAdminHomologationReadiness() {
               <div className="mt-3 space-y-2">
                 <div className="flex flex-wrap gap-2">
                   <CapabilityBadge label="Cartão" ready={capabilities.credit_card} />
-                  <CapabilityBadge label="Pix Automático" ready={capabilities.pix_automatic} />
-                  <CapabilityBadge label="Saldo Mercado Pago" ready={Boolean(capabilities.account_money)} />
-                  <CapabilityBadge label="Pix anual" ready={capabilities.pix !== false} />
+                  <CapabilityBadge label="Pix mensal/anual" ready={capabilities.pix === true} />
                 </div>
                 <p className="text-xs text-zinc-400">
                   Trial informado pela API: <strong className="text-zinc-200">{capabilities.trialDays} dias</strong> · cobrança antecipada: <strong className="text-zinc-200">{capabilities.upfrontPaymentAllowed ? 'permitida' : 'proibida'}</strong>.
@@ -274,7 +271,7 @@ export function SuperAdminHomologationReadiness() {
               </div>
             ) : (
               <p className="mt-3 text-xs text-amber-300">
-                Não foi possível ler /api/contracts/payment-methods. A prontidão acima continua válida, mas a política pública do checkout precisa ser conferida antes do teste.
+                Não foi possível consultar a política ativa do checkout. A prontidão acima continua válida, mas a política pública do checkout precisa ser conferida antes do teste.
               </p>
             )}
           </div>
