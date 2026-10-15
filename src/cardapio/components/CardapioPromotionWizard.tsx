@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, CheckCircle2, ShoppingBag } from 'lucide-react';
-import type { Product, ProductOption } from '../CardapioTypes';
+import { isValidPromotionParts, selectedPromotionExtras, type PromotionPartSelection, type PromotionCompositionStep } from '../promotionComposition';
 import CardapioProductModal from './CardapioProductModal';
 
 /**
@@ -8,17 +8,6 @@ import CardapioProductModal from './CardapioProductModal';
  * nem envia itens soltos: a integração futura deve submeter a promoção inteira
  * para validação atômica pelo Order Core.
  */
-export interface PromotionPartSelection {
-  product: Product;
-  quantity: 1;
-  selectedOptions: Record<string, ProductOption[]>;
-  notes: string;
-}
-
-export interface PromotionCompositionStep {
-  product: Product;
-  label: string;
-}
 
 interface Props {
   title: string;
@@ -33,18 +22,6 @@ const formatMoney = (amount: number) => new Intl.NumberFormat('pt-BR', {
   style: 'currency', currency: 'BRL',
 }).format(amount);
 
-export function isValidPromotionParts(
-  steps: PromotionCompositionStep[],
-  parts: Array<PromotionPartSelection | null | undefined>,
-): parts is PromotionPartSelection[] {
-  return steps.length > 0
-    && steps.every((step, index) => (
-      step.product.isAvailable !== false
-      && parts[index]?.quantity === 1
-      && parts[index]?.product.id === step.product.id
-    ));
-}
-
 export default function CardapioPromotionWizard({
   title, basePrice, steps, restaurantId, onClose, onConfirm,
 }: Props) {
@@ -53,11 +30,7 @@ export default function CardapioPromotionWizard({
   const review = stepIndex >= steps.length;
   const hasUnavailableProduct = steps.length === 0 || steps.some((step) => step.product.isAvailable === false);
   const complete = isValidPromotionParts(steps, parts);
-  const extras = parts.reduce((subtotal, part) => (
-    subtotal + (part
-      ? Object.values(part.selectedOptions).flat().reduce((sum, option) => sum + (option.extraPrice || 0), 0)
-      : 0)
-  ), 0);
+  const extras = selectedPromotionExtras(parts);
 
   if (hasUnavailableProduct) {
     return (
