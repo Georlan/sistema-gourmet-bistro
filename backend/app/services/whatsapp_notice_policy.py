@@ -72,10 +72,12 @@ def customer_notice_for_event(
     """
     if not online_order or not operationally_released:
         return None
+    modality = normalize_to_fulfillment(fulfillment)
+    if modality not in {FulfillmentType.PICKUP, FulfillmentType.DELIVERY}:
+        return None
     kind = _CANONICAL_EVENTS.get(event_name)
     if kind is not None:
         return kind
-    modality = normalize_to_fulfillment(fulfillment)
     if event_name == "koma.order.ready" and modality == FulfillmentType.PICKUP:
         return NoticeKind.CUSTOMER_READY_PICKUP
     if event_name == "koma.order.dispatched" and modality == FulfillmentType.DELIVERY:
