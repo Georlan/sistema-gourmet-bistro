@@ -73,6 +73,10 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
         pela API. A variável EXPECTED_APPLICATION_ID fica apenas como fallback
         legado para ambientes que não tenham Client ID configurado.
         """
+        dedicated_id = os.getenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_ID", "").strip()
+        dedicated_secret = os.getenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET", "").strip()
+        if dedicated_id and dedicated_secret:
+            return dedicated_id
         return (
             os.getenv("MERCADO_PAGO_CLIENT_ID", "").strip()
             or os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "").strip()

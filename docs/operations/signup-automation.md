@@ -45,6 +45,16 @@ Cartão e Pix são as únicas modalidades públicas para novas assinaturas. Sald
 
 ## Mercado Pago
 
+**Duas operações, sem split de faturamento:** mensalidades do KÔMA no cartão e Pix usam o gateway SaaS da plataforma e são destinadas à conta Mercado Pago da plataforma. O Pix SaaS é gerado por `/v1/payments` sem `application_fee` ou divisão. Já o Pix de pedidos usa o token OAuth da conta escolhida pelo restaurante, pertence ao restaurante e tem taxa de plataforma zero nas novas cobranças. Não use a conta proprietária KÔMA como conta de pagamento OAuth de um restaurante.
+
+Se KomaBilling (Assinaturas) e KomaADMIN (Checkout Transparente) forem aplicações diferentes da mesma conta recebedora:
+- `MERCADO_PAGO_CLIENT_ID` / `MERCADO_PAGO_CLIENT_SECRET` pertencem à aplicação OAuth dos restaurantes;
+- `KOMA_SAAS_MERCADO_PAGO_CLIENT_ID` / `KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET` permitem usar a aplicação SaaS para renovar o token de assinaturas, quando runtime OAuth está ativo;
+- `KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID` identifica a aplicação de faturamento; `KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID` identifica a conta beneficiária;
+- `MERCADO_PAGO_MARKETPLACE_USER_ID` identifica a conta proprietária e impede sua conexão como um restaurante comum.
+
+Os valores privados devem ser configurados diretamente no gerenciador seguro do Railway, nunca em tickets, chat ou commits. Confirme os IDs não secretos e teste cartão/Pix em ambiente isolado antes de habilitar cobrança comercial.
+
 Credenciais SaaS do KÔMA são separadas do recebimento dos pedidos dos restaurantes:
 
 - `KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN`
