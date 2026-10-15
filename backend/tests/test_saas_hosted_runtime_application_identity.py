@@ -66,6 +66,7 @@ def test_saas_app_identity_overrides_restaurant_oauth_identity(monkeypatch):
     service = _service(monkeypatch)
     monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_ID", "dedicated-saas-app")
     monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "dedicated-saas-app")
     service._validate_merchant_identity(
         {"application_id": "dedicated-saas-app", "collector_id": "collector-456"}
     )
