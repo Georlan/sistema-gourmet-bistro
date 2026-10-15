@@ -54,7 +54,7 @@ from ...models import (
 )
 from ...schemas import CardapioPedidoCreate
 from ...services.clientes import normalizar_telefone_cliente
-from ...services.customer_status_whatsapp import verified_checkout_consent
+from ...services.customer_status_whatsapp import checkout_status_consent
 from ...services.order_financials import payable_total
 from ...services.online_order_policy import evaluate_online_order_policy
 from ...services.operational_modes import mode_is_allowed
@@ -537,10 +537,10 @@ class CardapioWebAdapter:
                 idempotency_fingerprint_version=fingerprint_intent.version if idempotency_key else None,
                 operator_user_id=garcom.id,
                 defer_operational_publish=online_payment or is_scheduled,
-                whatsapp_status_opt_in=verified_checkout_consent(
+                whatsapp_status_opt_in=checkout_status_consent(
                     requested=payload.whatsapp_status_opt_in,
-                    customer_token=customer_token,
-                    customer=cliente,
+                    phone=telefone_clean,
+                    fulfillment=payload.tipo_pedido,
                 ),
             )
 
