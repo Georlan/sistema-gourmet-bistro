@@ -205,10 +205,17 @@ def enqueue_activation(
 def enqueue_release_required(db, *, protocol, restaurant_name, plan, billing_cycle, payment_method_type):
     """Describe the selected billing method without claiming an upfront payment."""
     if payment_method_type == "pix":
+        is_annual = str(billing_cycle or "").strip().lower() in {"annual", "anual"}
         billing_message = (
-            "Pix anual selecionado. Nenhuma mensalidade fixa foi cobrada hoje. "
-            "Depois da implantação e dos 7 dias grátis, será gerado um único QR Code "
-            "e Pix Copia e Cola do valor anual. Não há débito automático. "
+            f"Pix {'anual' if is_annual else 'mensal'} selecionado. "
+            "Nenhuma mensalidade fixa foi cobrada hoje. "
+            "Depois da implantação e dos 7 dias grátis, "
+            + (
+                "será gerado um único QR Code e Pix Copia e Cola do valor anual. "
+                if is_annual
+                else "será gerado um novo QR Code e Pix Copia e Cola a cada vencimento mensal. "
+            )
+            + "Não há débito automático. "
         )
         next_steps = (
             "Revise e libere o acesso. Os 7 dias grátis só começarão depois dos 4 itens "
