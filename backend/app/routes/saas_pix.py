@@ -93,7 +93,7 @@ def _checkout_methods_payload() -> dict[str, Any]:
     return {
         "credit_card": bool(capabilities.get("credit_card")),
         "pix": pix_ready,
-        "account_money": bool(capabilities.get("account_money")),
+        "account_money": False,  # descontinuado para novas inscrições; preserva assinaturas existentes
         "publicKey": str(capabilities.get("publicKey") or ""),
         "providerAuthReady": capabilities.get("providerAuthReady"),
         "providerAuthReason": capabilities.get("providerAuthReason"),
@@ -109,7 +109,7 @@ def _checkout_methods_payload() -> dict[str, Any]:
 
 @contract_router.get("/payment-methods-v2")
 def available_checkout_methods():
-    """Expõe somente os três meios canônicos do checkout SaaS."""
+    """Expõe apenas cartão e Pix para novas contratações SaaS."""
     return _checkout_methods_payload()
 
 
