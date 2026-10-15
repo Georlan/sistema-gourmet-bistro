@@ -4,8 +4,7 @@ export type SubscriptionPaymentOptionStatus = 'available';
 
 export type SubscriptionPaymentOptionId =
   | 'credit_card'
-  | 'pix'
-  | 'account_money';
+  | 'pix';
 
 export type SubscriptionPaymentOption = {
   id: SubscriptionPaymentOptionId;
@@ -50,19 +49,7 @@ export const SUBSCRIPTION_PAYMENT_OPTIONS: readonly SubscriptionPaymentOption[] 
     selectable: true,
     automaticRenewal: false,
   },
-  {
-    id: 'account_money',
-    label: 'Saldo Mercado Pago',
-    status: 'available',
-    statusLabel: 'Disponível',
-    billingCycles: ['mensal', 'anual'],
-    checkoutSummary: 'Autorize sua conta Mercado Pago hoje, sem cobrança da mensalidade fixa, e preserve os 7 dias grátis.',
-    landingSummary: 'Cobrança recorrente pelo Saldo Mercado Pago para quem prefere usar a carteira do provedor.',
-    previewTitle: 'Saldo Mercado Pago',
-    previewDescription: 'A autorização ocorre no ambiente seguro do Mercado Pago. A mensalidade fixa continua R$ 0 hoje e a recorrência só começa depois da implantação essencial e dos 7 dias grátis.',
-    selectable: true,
-    automaticRenewal: true,
-  },
+
 ] as const;
 
 export function getSubscriptionPaymentOptions(
