@@ -16,6 +16,8 @@ from app.services.whatsapp_notice_policy import (
 @pytest.mark.parametrize(("event", "modality", "expected"), [
     ("koma.order.created", "retirada", NoticeKind.CUSTOMER_RECEIVED),
     ("koma.order.created", "entrega", NoticeKind.CUSTOMER_RECEIVED),
+    ("koma.order.created", "mesa", None),
+    ("koma.order.cancelled", "mesa", None),
     ("koma.order.ready", "retirada", NoticeKind.CUSTOMER_READY_PICKUP),
     ("koma.order.ready", "entrega", None),
     ("koma.order.dispatched", "entrega", NoticeKind.CUSTOMER_DISPATCHED),
