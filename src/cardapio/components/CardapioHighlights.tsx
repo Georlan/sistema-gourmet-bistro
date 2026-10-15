@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Megaphone } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
 
-const CAMPAIGN_CATEGORY = /(destaque|oferta|promo(?:c[aã]o|ç[aã]o)?|campanha|especial)/i;
+const CAMPAIGN_CATEGORY = /(destaque|oferta|promo(?:c[aã]o|ç[aã]o)?|campanha|especial|especiais)/i;
 const PROMOTION_CATEGORY = /(oferta|promo(?:c[aã]o|ç[aã]o)?)/i;
 const isPromotion = (product: Product) => PROMOTION_CATEGORY.test(String(product.category || ''));
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
