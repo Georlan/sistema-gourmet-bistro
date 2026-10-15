@@ -62,6 +62,19 @@ def test_subscription_still_fails_closed_for_collector_mismatch(monkeypatch):
     assert exc.value.status_code == 409
 
 
+def test_saas_app_identity_overrides_restaurant_oauth_identity(monkeypatch):
+    service = _service(monkeypatch)
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_ID", "dedicated-saas-app")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET", "test-secret")
+    service._validate_merchant_identity(
+        {"application_id": "dedicated-saas-app", "collector_id": "collector-456"}
+    )
+    with pytest.raises(SaasMercadoPagoError, match="aplicação diferente"):
+        service._validate_merchant_identity(
+            {"application_id": "runtime-app-123", "collector_id": "collector-456"}
+        )
+
+
 def test_legacy_expected_application_remains_fallback_without_client_id(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.delenv("MERCADO_PAGO_CLIENT_ID", raising=False)
