@@ -11,6 +11,7 @@ from ..database import get_db
 from ..models import ConfiguracaoRestaurante, Usuario
 from ..security import require_permission
 from ..services import tenant_order_whatsapp as wa
+from ..services.central_whatsapp import CENTRAL_INSTANCE_MARKER
 
 router = APIRouter(prefix="/caixa/configuracoes/whatsapp", tags=["WhatsApp operacional"])
 
@@ -18,6 +19,11 @@ router = APIRouter(prefix="/caixa/configuracoes/whatsapp", tags=["WhatsApp opera
 class ConfigureRequest(BaseModel):
     phone: str
     mode: str = "qr"
+
+
+class RecipientRegistrationRequest(BaseModel):
+    phone: str
+    confirm_receiving: bool = False
 
 
 def _config(db: Session, user: Usuario) -> ConfiguracaoRestaurante:
@@ -62,7 +68,16 @@ def get_status(
 ):
     config = _config(db, user)
     if not config.whatsapp_instance_name:
-        return {"state": "not_configured", "enabled": False, "phone_ending": None}
+        return {"state": "not_configured", "enabled": False, "phone_ending": None,
+                "mode": "central"}
+    if config.whatsapp_instance_name == CENTRAL_INSTANCE_MARKER:
+        phone = config.whatsapp_recipient_phone or ""
+        return {
+            "state": "registered" if phone else "not_configured",
+            "enabled": False,  # Delivery must remain off until shared-sender gating ships.
+            "phone_ending": phone[-4:] or None,
+            "mode": "central",
+        }
     _release_before_provider(db, config)
     state = "error"
     try:
@@ -79,7 +94,64 @@ def get_status(
     except Exception:
         state = "error"
     phone = config.whatsapp_recipient_phone or ""
-    return {"state": state, "enabled": bool(config.whatsapp_alerts_enabled), "phone_ending": phone[-4:] or None}
+    return {"state": state, "enabled": bool(config.whatsapp_alerts_enabled), "phone_ending": phone[-4:] or None, "mode": "individual"}
+
+
+@router.post("/recipient")
+def register_central_recipient(
+    body: RecipientRegistrationRequest,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    """Record an explicitly authorized destination; NO Evolution session or send.
+
+    Registering is independent of the operator's own WhatsApp account and
+    never enables delivery implicitly. Existing individual connections must
+    be disconnected explicitly, so no live session is silently replaced.
+    """
+    if not body.confirm_receiving:
+        raise HTTPException(
+            status_code=422,
+            detail="Confirme que o responsável pelo telefone autorizou receber comandas.",
+        )
+    try:
+        phone = wa.normalize_phone(body.phone)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    config = _config(db, user)
+    if config.whatsapp_instance_name not in (None, CENTRAL_INSTANCE_MARKER):
+        raise HTTPException(
+            status_code=409,
+            detail="Desconecte a integração individual antes de cadastrar o destinatário central.",
+        )
+    config.whatsapp_instance_name = CENTRAL_INSTANCE_MARKER
+    config.whatsapp_recipient_phone = phone
+    config.whatsapp_alerts_enabled = False
+    config.whatsapp_next_send_at = None
+    db.commit()
+    return {
+        "state": "registered",
+        "mode": "central",
+        "enabled": False,
+        "phone_ending": phone[-4:],
+    }
+
+
+@router.post("/recipient/remove")
+def remove_central_recipient(
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    config = _config(db, user)
+    if config.whatsapp_instance_name != CENTRAL_INSTANCE_MARKER:
+        raise HTTPException(status_code=409, detail="Nenhum destinatário central cadastrado.")
+    config.whatsapp_alerts_enabled = False
+    config.whatsapp_instance_name = None
+    config.whatsapp_recipient_phone = None
+    config.whatsapp_next_send_at = None
+    db.commit()
+    return {"state": "not_configured", "mode": "central", "enabled": False}
 
 
 @router.post("/configure")
@@ -97,6 +169,8 @@ def configure(
         raise HTTPException(status_code=422, detail="Modo de conexão inválido.")
 
     config = _config(db, user)
+    if config.whatsapp_instance_name == CENTRAL_INSTANCE_MARKER:
+        raise HTTPException(status_code=409, detail="Remova o cadastro central antes de usar a conexão individual.")
     if config.whatsapp_instance_name and config.whatsapp_recipient_phone != phone:
         raise HTTPException(status_code=409, detail="Desconecte o número atual antes de configurar outro.")
 
@@ -199,6 +273,8 @@ def enable(
     user: Usuario = Depends(require_permission("configuracoes:administrar")),
 ):
     config = _config(db, user)
+    if config.whatsapp_instance_name == CENTRAL_INSTANCE_MARKER:
+        raise HTTPException(status_code=409, detail="O canal central compartilhado ainda está em homologação.")
     _release_before_provider(db, config)
     try:
         valid = (

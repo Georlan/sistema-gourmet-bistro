@@ -3,13 +3,15 @@ import { QRCodeSVG } from 'qrcode.react';
 import { authFetch, authRequestErrorMessage } from '../../../utils/authRequest';
 
 type Status = {
-  state: 'not_configured' | 'waiting_qr' | 'connecting' | 'connected' | 'disconnected' | 'error';
+  state: 'not_configured' | 'registered' | 'waiting_qr' | 'connecting' | 'connected' | 'disconnected' | 'error';
+  mode?: 'central' | 'individual';
   enabled: boolean;
   phone_ending: string | null;
 };
 
 const labels: Record<Status['state'], string> = {
   not_configured: 'Não configurado',
+  registered: 'Cadastro recebido (envio ainda não habilitado)',
   waiting_qr: 'Aguardando QR',
   connecting: 'Conectando',
   connected: 'Conectado',
@@ -23,6 +25,7 @@ export function RestaurantWhatsAppSettings({ apiBaseUrl, authHeaders }: {
 }) {
   const [status, setStatus] = useState<Status>({ state: 'not_configured', enabled: false, phone_ending: null });
   const [phone, setPhone] = useState('');
+  const [recipientConsent, setRecipientConsent] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -62,8 +65,12 @@ export function RestaurantWhatsAppSettings({ apiBaseUrl, authHeaders }: {
       if (nextQr) setPairingCode(null);
       await refresh();
       setFeedback(
-        name === 'enable'
-          ? 'Avisos ativados para este restaurante.'
+        name === 'recipient'
+          ? 'Número cadastrado. As notificações centrais ainda aguardam liberação pela plataforma.'
+          : name === 'recipient/remove'
+            ? 'Número de recebimento removido.'
+            : name === 'enable'
+              ? 'Avisos ativados para este restaurante.'
           : name === 'disable'
             ? 'Avisos desativados.'
             : name === 'disconnect'
@@ -85,6 +92,45 @@ export function RestaurantWhatsAppSettings({ apiBaseUrl, authHeaders }: {
       {label}
     </button>
   );
+
+  if (status.mode === 'central') {
+    const registered = status.state === 'registered';
+    return <section className="mt-4 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5" aria-label="Avisos de pedidos pelo WhatsApp">
+      <h3 className="text-sm font-black text-koma-foreground">Comandas pelo WhatsApp</h3>
+      <p className="mt-2 text-xs leading-relaxed text-koma-muted">
+        Cadastre o WhatsApp que receberá as comandas dos pedidos online. O KÔMA enviará os avisos pelo número oficial da plataforma:
+        você não precisa vincular seu próprio WhatsApp por QR Code nem instalar outro aplicativo.
+      </p>
+      <p className="mt-3 text-xs text-koma-foreground" role="status">
+        Estado: <strong>{registered ? 'Cadastrado — aguardando liberação' : 'Ainda não cadastrado'}</strong>
+        {status.phone_ending ? ` · Destinatário final ${status.phone_ending}` : ''}
+      </p>
+      {!registered && <div className="mt-4 space-y-3">
+        <label className="block text-xs font-semibold text-koma-foreground">Telefone que receberá as comandas (com DDD)
+          <input type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)}
+            className="mt-1 block w-full rounded-xl border border-koma-border bg-koma-raised px-3 py-2 text-sm"
+            placeholder="(11) 99999-9999" />
+        </label>
+        <label className="flex items-start gap-2 text-xs leading-relaxed text-koma-muted">
+          <input type="checkbox" className="mt-1" checked={recipientConsent} onChange={(event) => setRecipientConsent(event.target.checked)} />
+          Confirmo que sou responsável por esse telefone ou tenho autorização do titular para receber apenas avisos operacionais dos pedidos deste restaurante.
+        </label>
+        <button type="button" disabled={busy || !recipientConsent || !phone.trim()}
+          onClick={() => void action('recipient', { phone, confirm_receiving: true })}
+          className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50">
+          Salvar telefone de recebimento
+        </button>
+      </div>}
+      {registered && <div className="mt-4">
+        {button('Remover telefone cadastrado', 'recipient/remove')}
+      </div>}
+      <p className="mt-3 text-[11px] leading-relaxed text-koma-muted">
+        O cadastro por si só não ativa mensagens. O envio central está em homologação e será liberado de forma controlada.
+        O Kanban do KÔMA continua recebendo todos os pedidos independentemente do WhatsApp.
+      </p>
+      {feedback && <p className="mt-3 text-xs text-koma-foreground" role="alert">{feedback}</p>}
+    </section>;
+  }
 
   return <section className="mt-4 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5" aria-label="WhatsApp operacional">
     <h3 className="text-sm font-black text-koma-foreground">WhatsApp operacional</h3>
