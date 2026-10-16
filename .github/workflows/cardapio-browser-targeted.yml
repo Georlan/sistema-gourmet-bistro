@@ -82,6 +82,7 @@ jobs:
           e2e/cashier-delivery-new-order.spec.ts
           e2e/cashier-sale-recovery.spec.ts
           e2e/public-menu-order.spec.ts
+          e2e/cardapio-whatsapp-optout.spec.ts
           e2e/order-tracking-chat.spec.ts
           e2e/cardapio-chat-viewports.spec.ts
           e2e/cardapio-payment-polling.spec.ts

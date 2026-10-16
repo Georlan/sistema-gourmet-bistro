@@ -8,10 +8,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import ConfiguracaoRestaurante, Usuario
+from ..models import ConfiguracaoRestaurante, Usuario, IntegrationOutbox
 from ..security import require_permission
 from ..services import tenant_order_whatsapp as wa
-from ..services.central_whatsapp import CENTRAL_INSTANCE_MARKER
+from ..services.central_whatsapp import CENTRAL_INSTANCE_MARKER, enabled_for, pilot_configuration, registered_operator_phone
 
 router = APIRouter(prefix="/caixa/configuracoes/whatsapp", tags=["WhatsApp operacional"])
 
@@ -74,7 +74,7 @@ def get_status(
         phone = config.whatsapp_recipient_phone or ""
         return {
             "state": "registered" if phone else "not_configured",
-            "enabled": False,  # Delivery must remain off until shared-sender gating ships.
+            "enabled": bool(enabled_for(user.restaurante_id) and (transport := pilot_configuration()) and registered_operator_phone(config, transport.sender)),
             "phone_ending": phone[-4:] or None,
             "mode": "central",
         }
@@ -95,6 +95,15 @@ def get_status(
         state = "error"
     phone = config.whatsapp_recipient_phone or ""
     return {"state": state, "enabled": bool(config.whatsapp_alerts_enabled), "phone_ending": phone[-4:] or None, "mode": "individual"}
+
+
+def _cancel_pending_central_notices(db: Session, restaurant_id: int) -> None:
+    db.query(IntegrationOutbox).filter(
+        IntegrationOutbox.restaurante_id == restaurant_id,
+        IntegrationOutbox.event_name.in_(["koma.whatsapp.central_operator_order", "koma.whatsapp.customer_status"]),
+        IntegrationOutbox.status.in_(["pending", "failed", "processing"]),
+    ).update({"status": "dead_letter", "locked_by": None, "locked_at": None,
+        "last_error": "Cadastro de recebimento alterado; aguardando novos pedidos."}, synchronize_session=False)
 
 
 @router.post("/recipient")
@@ -125,10 +134,10 @@ def register_central_recipient(
             status_code=409,
             detail="Desconecte a integração individual antes de cadastrar o destinatário central.",
         )
+    _cancel_pending_central_notices(db, user.restaurante_id)
     config.whatsapp_instance_name = CENTRAL_INSTANCE_MARKER
     config.whatsapp_recipient_phone = phone
     config.whatsapp_alerts_enabled = False
-    config.whatsapp_next_send_at = None
     db.commit()
     return {
         "state": "registered",
@@ -147,9 +156,9 @@ def remove_central_recipient(
     if config.whatsapp_instance_name != CENTRAL_INSTANCE_MARKER:
         raise HTTPException(status_code=409, detail="Nenhum destinatário central cadastrado.")
     config.whatsapp_alerts_enabled = False
+    _cancel_pending_central_notices(db, user.restaurante_id)
     config.whatsapp_instance_name = None
     config.whatsapp_recipient_phone = None
-    config.whatsapp_next_send_at = None
     db.commit()
     return {"state": "not_configured", "mode": "central", "enabled": False}
 

@@ -46,6 +46,7 @@ type CapturedOrder = {
   restaurante_id?: number;
   cliente_nome?: string;
   cliente_telefone?: string;
+  whatsapp_status_opt_in?: boolean;
   tipo_pedido?: string;
   taxa_entrega?: number;
   forma_pagamento?: string;
@@ -73,6 +74,7 @@ type BackendOptions = {
   restaurant?: Partial<typeof basePublicMenuPayload.restaurante> & {
     delivery_ativo?: boolean;
     pagamento_online_ativo?: boolean;
+    avisos_whatsapp_disponiveis?: boolean;
     pedido_minimo?: number;
     aceitando_pedidos?: boolean;
     motivo_indisponibilidade?: string;
@@ -394,6 +396,7 @@ test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos d
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
 
   await expect(page.getByRole('heading', { name: 'Revise e confirme', exact: true })).toBeVisible();
+  await expect(page.locator('#checkout-whatsapp-status-opt-in')).toHaveCount(0);
   const paymentSummary = page.getByRole('heading', { name: 'Pagamento escolhido', exact: true }).locator('..');
   await expect(paymentSummary.getByText('Você paga diretamente ao restaurante. Não há cobrança online nesta etapa.', { exact: true })).toBeVisible();
   await expect(paymentSummary.getByText(/^Dinheiro\s*· na retirada$/)).toBeVisible();
@@ -870,3 +873,31 @@ test('mínimo é validado ao avançar e retirada ignora endereço de entrega', a
   await cart.locator('#btn-confirm-order').click();
   await expect(cart.locator('#cart-payment-methods-content')).toBeVisible();
 });
+
+for (const optedIn of [false, true]) {
+  test(`WhatsApp voluntário por pedido: escolha ${optedIn} sem cadastro ou OTP`, async ({ page }) => {
+    const captured: CapturedOrder[] = [];
+    const backend = await mockPublicMenuBackend(page, captured, { restaurant: { avisos_whatsapp_disponiveis: true } });
+    await page.goto('/cardapio?restaurante_id=2');
+    await page.locator('#btn-fast-add-101').click();
+    await openCart(page);
+    await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
+    await page.getByPlaceholder('Como devemos chamar você?').fill('Cliente teste');
+    await page.getByPlaceholder('(00) 00000-0000').fill('85999999999');
+    await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
+    await page.getByRole('button', { name: /Retirada/ }).click();
+    await page.locator('#cart-drawer-container').getByRole('button', { name: 'Pagamento', exact: true }).click();
+    await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
+    await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
+    await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
+    const checkbox = page.locator('#checkout-whatsapp-status-opt-in');
+    await expect(checkbox).toBeVisible();
+    await expect(checkbox).not.toBeChecked();
+    if (optedIn) await checkbox.check();
+    await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
+    await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
+    expect(captured).toHaveLength(1);
+    expect(captured[0].whatsapp_status_opt_in).toBe(optedIn);
+    expect(backend.getOtpRequests()).toBe(0);
+  });
+}

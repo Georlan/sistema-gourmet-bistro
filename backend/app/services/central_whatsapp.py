@@ -1,9 +1,7 @@
-"""Pilot-only central WhatsApp comanda channel; never an order source of truth.
+"""Shared Business comanda transport with a dynamically registered tenant recipient.
 
-This channel uses one explicitly authorized restaurant and one explicitly
-authorized operator. It is independent of tenant-linked WhatsApp instances.
-All rollout variables are empty/off by default; never copy operator or sender
-phones into code, commits, logs or outbox payloads.
+Rollout remains explicitly allowlisted and default-off. Destinations always come from
+the same restaurant registration, never an environment variable or buyer phone.
 """
 from __future__ import annotations
 
@@ -41,33 +39,66 @@ class CentralOperatorAlert:
     total: str
 
 
-def pilot_configuration() -> tuple[int, str, str, str, str] | None:
-    """Fail closed; one restaurant and two verified telephone values, never mass fanout."""
+@dataclass(frozen=True)
+class CentralConfiguration:
+    restaurant_ids: frozenset[int]
+    sender: str
+    instance: str
+
+
+def allowed_restaurants(variable: str) -> frozenset[int]:
+    # Legacy single-tenant rollout remains compatible. No wildcard/all-tenants
+    # mode and no fallback if an explicit allowlist is malformed or empty.
+    raw = os.getenv(variable)
+    if raw is None:
+        raw = os.getenv("KOMA_CENTRAL_WA_PILOT_RESTAURANT_ID", "").strip()
+        if not raw.isdecimal():
+            return frozenset()
+    parts = [part.strip() for part in raw.split(",")]
+    if not parts or any(not part.isdecimal() or int(part) < 1 for part in parts):
+        return frozenset()
+    return frozenset(map(int, parts))
+
+
+def pilot_configuration() -> CentralConfiguration | None:
+    """Shared Business transport with an explicit tenant allowlist; default-off."""
     if os.getenv("KOMA_CENTRAL_WA_ENABLED", "false").strip().lower() != "true":
         return None
-    rid_text = os.getenv("KOMA_CENTRAL_WA_PILOT_RESTAURANT_ID", "").strip()
-    target = os.getenv("KOMA_CENTRAL_WA_OPERATOR_PHONE", "").strip()
-    sender = os.getenv("KOMA_CENTRAL_WA_SENDER_PHONE", "").strip()
+    allowed = allowed_restaurants("KOMA_CENTRAL_WA_ALLOWED_RESTAURANT_IDS")
     instance = os.getenv("KOMA_CENTRAL_WA_INSTANCE_NAME", "").strip()
-    test_customer = os.getenv("KOMA_CENTRAL_WA_PILOT_CUSTOMER_PHONE", "").strip()
-    if not rid_text.isdecimal() or int(rid_text) < 1 or not _INSTANCE_RE.fullmatch(instance):
+    if not allowed or not _INSTANCE_RE.fullmatch(instance):
         return None
     if instance.startswith("koma-restaurant-"):
         return None
     try:
-        target_phone = normalize_phone(target)
-        sender_phone = normalize_phone(sender)
-        customer_phone = normalize_phone(test_customer)
+        sender = normalize_phone(os.getenv("KOMA_CENTRAL_WA_SENDER_PHONE", ""))
     except ValueError:
         return None
-    if target_phone == sender_phone:
-        return None
-    return int(rid_text), target_phone, sender_phone, instance, customer_phone
+    return CentralConfiguration(allowed, sender, instance)
 
 
 def enabled_for(restaurant_id: int) -> bool:
     config = pilot_configuration()
-    return config is not None and config[0] == int(restaurant_id)
+    return config is not None and int(restaurant_id) in config.restaurant_ids
+
+
+def registered_operator_phone(tenant: ConfiguracaoRestaurante | None, sender: str) -> str | None:
+    if tenant is None or tenant.whatsapp_instance_name != CENTRAL_INSTANCE_MARKER or tenant.whatsapp_alerts_enabled:
+        return None
+    try:
+        phone = normalize_phone(tenant.whatsapp_recipient_phone or "")
+    except ValueError:
+        return None
+    return phone if not phones_match(phone, sender) else None
+
+
+def recipient_fingerprint(restaurant_id: int, phone: str) -> str:
+    from .customer_auth import hash_public_rate_key
+    # WhatsApp BR JIDs may omit the ninth mobile digit.
+    value = normalize_phone(phone)
+    if len(value) == 13 and value[4] == "9":
+        value = value[:4] + value[5:]
+    return hash_public_rate_key(restaurant_id, "whatsapp-recipient", value)
 
 
 def enqueue_operator_alert(db: Session, order: OrderCreated):
@@ -75,15 +106,8 @@ def enqueue_operator_alert(db: Session, order: OrderCreated):
     if order.channel != OrderChannel.WEB_CARDAPIO or not enabled_for(order.restaurant_id):
         return None
     config = pilot_configuration()
-    try:
-        # Restrict pilot sends to an explicitly authorized test checkout phone.
-        if config is None or normalize_phone(order.customer_phone or "") != config[4]:
-            return None
-    except ValueError:
-        return None
     tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=order.restaurant_id).one_or_none()
-    if tenant is None or tenant.whatsapp_alerts_enabled:
-        # One WhatsApp operator channel at a time; never duplicate with the tenant instance.
+    if config is None or registered_operator_phone(tenant, config.sender) is None:
         return None
     event = CentralOperatorAlert(
         restaurant_id=order.restaurant_id,
@@ -213,29 +237,61 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
         return status == "delivered"
 
     config = pilot_configuration()
-    if config is None or config[0] != rid:
+    if config is None or rid not in config.restaurant_ids:
         return settle("dead_letter", "Piloto central desativado ou restaurante não autorizado; nenhuma mensagem enviada.")
     if int(snapshot["payload"].get("restaurant_id", -1)) != rid:
         return settle("dead_letter", "Evento e restaurante divergentes.")
 
-    check_id = snapshot["payload"].get("check_id")
-    check = (
-        db.query(Comanda)
-        .filter(Comanda.restaurante_id == rid, Comanda.id == str(check_id))
-        .one_or_none()
-        if check_id else None
-    )
-    try:
-        if check is None or normalize_phone(check.delivery_telefone or "") != config[4]:
-            return settle("dead_letter", "Pedido não autorizado para teste do canal central; nenhuma mensagem enviada.")
-    except ValueError:
-        return settle("dead_letter", "Telefone de teste indisponível; nenhuma mensagem enviada.")
+    from ..models import Lancamento
+    check = db.query(Comanda).filter_by(restaurante_id=rid, id=str(snapshot["payload"].get("check_id"))).one_or_none()
+    source = db.query(Lancamento).filter_by(restaurante_id=rid,
+        id=str(snapshot["payload"].get("order_id")), comanda_id=check.id if check else "",
+        origem="cardapio").one_or_none()
+    if check is None or source is None or check.fechada or source.status in {"cancelado", "recusado"}:
+        return settle("dead_letter", "Pedido ausente, encerrado ou divergente do restaurante.")
+    from .customer_whatsapp_dispatch import snapshot_time
+    age = dt.datetime.now(dt.timezone.utc) - snapshot_time(snapshot)
+    if age < dt.timedelta(0) or age > dt.timedelta(minutes=10):
+        return settle("dead_letter", "Aviso de comanda expirado; nenhuma mensagem enviada.")
+    settings = _locked_whatsapp_config_query(db, rid).populate_existing().one_or_none()
+    target = registered_operator_phone(settings, config.sender)
+    if target is None:
+        return settle("dead_letter", "Destinatário central ausente, removido ou não autorizado; nenhuma mensagem enviada.")
+    return dispatch_registered_message(db, snapshot, config, target, render_operator_message(db, snapshot["payload"]))
 
-    settings = _locked_whatsapp_config_query(db, rid).one_or_none()
-    if settings is None:
-        return settle("dead_letter", "Configuração operacional ausente.")
-    if settings.whatsapp_alerts_enabled:
-        return settle("dead_letter", "Canal individual ativo; envio central cancelado sem mensagem.")
+
+def dispatch_registered_message(
+    db: Session, snapshot: dict, config: CentralConfiguration, target: str, message: str,
+    *, customer: bool = False,
+) -> bool:
+    """Persistent shared sender lane for operator and status notices.
+
+    SQL locks are released before HTTP. A reserved/ambiguous attempt is never
+    silently replayed. Every released tenant shares the same sender lock/clock.
+    """
+    from .outbox.dispatcher import settle_outbox_event
+    rid = int(snapshot["restaurante_id"])
+    outbox_id = str(snapshot["id"])
+    worker_id = snapshot.get("locked_by")
+
+    def settle(status: str, reason: str, *, attempts=None, retry_at=None, code=None):
+        settle_outbox_event(db, outbox_id, status=status,
+            attempts=int(snapshot["attempts"]) if attempts is None else attempts,
+            next_retry_at=retry_at, response_status_code=code, last_error=reason, worker_id=worker_id)
+        return status == "delivered"
+
+    settings = _locked_whatsapp_config_query(db, rid).populate_existing().one_or_none()
+    if settings is None or registered_operator_phone(settings, config.sender) is None:
+        return settle("dead_letter", "Cadastro central removido ou desativado.")
+    from .whatsapp_sender_gate import lock_sender, wait_until
+    sender_state = lock_sender(db, config)
+    pause = wait_until(sender_state)
+    if pause is not None:
+        return settle("failed", "Remetente central em pausa; aviso mantido na fila.", retry_at=pause)
+    if customer:
+        from .customer_whatsapp_dispatch import budget_available
+        if not budget_available(settings):
+            return settle("dead_letter", "Cota de mensagens do restaurante atingida.")
     now = dt.datetime.now(dt.timezone.utc)
     due = settings.whatsapp_next_send_at
     if due and (due.replace(tzinfo=dt.timezone.utc) if due.tzinfo is None else due) > now:
@@ -246,12 +302,11 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
     if not (base.startswith("https://") or base.startswith("http://")) or not key:
         return settle("dead_letter", "Evolution não configurada.")
 
-    pilot_rid, target, sender, instance, _test_customer = config
+    pilot_rid, sender, instance = rid, config.sender, config.instance
     headers = {"apikey": key, "Accept": "application/json"}
-    message = render_operator_message(db, snapshot["payload"])
-    # Hold the tenant config lock only while reserving the next send slot.
-    # A single pilot tenant makes this reservation global for the central number.
+    # Reserve both the tenant lane and shared Business lane before HTTP.
     settings.whatsapp_next_send_at = now + dt.timedelta(seconds=15)
+    sender_state.next_send_at = now + dt.timedelta(seconds=15)
     from ..models import IntegrationOutbox
     event = db.query(IntegrationOutbox).filter(
         IntegrationOutbox.id == outbox_id,
@@ -261,10 +316,16 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
     if event is None:
         return False
     attempt_number = int(snapshot["attempts"]) + 1
+    if customer:
+        from .customer_whatsapp_dispatch import reserve_budget
+        reserve_budget(settings)
     event.attempts = attempt_number
+    event.processed_at = now  # Reservation time for conservative monthly accounting.
     db.commit()  # Release all SQL locks BEFORE provider HTTP requests.
 
     def unavailable(reason: str) -> bool:
+        from .whatsapp_sender_gate import note_failure
+        note_failure(db, config)
         if attempt_number >= int(snapshot["max_attempts"]):
             return settle("dead_letter", reason, attempts=attempt_number)
         return settle(
@@ -286,6 +347,29 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
     except (httpx.HTTPError, ValueError, TypeError, AttributeError):
         return unavailable("Estado do remetente indisponível.")
 
+    # Provider validation can take seconds: reload consent and destination after it.
+    db.expire_all()
+    from ..models import IntegrationOutbox
+    still_owned = db.query(IntegrationOutbox.id).filter_by(id=outbox_id, restaurante_id=rid,
+        locked_by=worker_id, status="processing").first()
+    if still_owned is None:
+        db.rollback()
+        return False
+    current = pilot_configuration()
+    latest_settings = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one_or_none()
+    if current != config or registered_operator_phone(latest_settings, config.sender) is None:
+        return settle("dead_letter", "Liberação ou cadastro alterado antes do envio.", attempts=attempt_number)
+    if customer:
+        from .customer_whatsapp_dispatch import resolve_customer_notice
+        resolved = resolve_customer_notice(db, snapshot)
+        if resolved is None or not phones_match(resolved[0], target):
+            return settle("dead_letter", "Consentimento, contato ou estado alterado antes do envio.", attempts=attempt_number)
+    else:
+        latest_target = registered_operator_phone(latest_settings, config.sender)
+        if not phones_match(latest_target, target):
+            return settle("dead_letter", "Destinatário alterado durante a tentativa; aguarde um novo pedido.", attempts=attempt_number)
+    db.rollback()  # No read transaction held over the send.
+
     try:
         with httpx.Client(timeout=4.0) as client:
             response = client.post(
@@ -294,9 +378,14 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
                 json={"number": target, "text": message},
             )
         if 200 <= response.status_code < 300:
+            from .whatsapp_sender_gate import clear_failures
+            clear_failures(db, config)
             return settle("delivered", "Aceito pelo conector; entrega no aparelho não verificada.",
                           attempts=attempt_number, code=response.status_code)
         # An HTTP 429 explicitly refuses the send; retry no sooner than five minutes.
+        if response.status_code == 429:
+            from .whatsapp_sender_gate import note_failure
+            note_failure(db, config, immediate=True)
         if response.status_code == 429 and attempt_number < int(snapshot["max_attempts"]):
             return settle("failed", "Limite do provedor.",
                           attempts=attempt_number,
