@@ -666,7 +666,7 @@ export function CardapioProdutosTab({
                             : 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/35 dark:bg-rose-500/10 dark:text-rose-300',
                         )}>
                           <span className={clsx('h-1.5 w-1.5 rounded-full', isAvailable ? 'bg-emerald-500' : 'bg-rose-500')} />
-                          {isAvailable ? 'À venda' : 'Pausado'}
+                          {isAvailable ? (product.somente_promocao ? 'Só em promoções' : 'À venda') : 'Pausado'}
                         </span>
                       </div>
                     </div>
