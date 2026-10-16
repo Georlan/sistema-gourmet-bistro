@@ -38,23 +38,24 @@ MIN_REDEEMABLE_VALUE_BRL = 1.00
 DEFAULT_ATTRIBUTION_WINDOW_DAYS = 14
 
 
+CRM_TABLE_NAMES = frozenset({
+    "crm_clientes_preferencias", "crm_campanhas", "crm_contatos_clientes",
+})
+
+
+def crm_schema_available(db: Session) -> bool:
+    """Only inspect schema on the tenant-bound connection; never issue DDL."""
+    existing = set(sa_inspect(db.connection()).get_table_names())
+    return CRM_TABLE_NAMES.issubset(existing)
+
+
 def ensure_crm_tables(db: Session) -> None:
-    """Garante que as tabelas do CRM existam em bancos SQLite/locais de revisão."""
-    bind = db.get_bind()
-    inspector = sa_inspect(bind)
-    existing = set(inspector.get_table_names())
-    needed = [
-        table
-        for name, table in (
-            ("crm_clientes_preferencias", CrmClientePreferencia.__table__),
-            ("crm_campanhas", CrmCampanha.__table__),
-            ("crm_contatos_clientes", CrmContatoCliente.__table__),
+    """Fail closed until Alembic provisions CRM; runtime has no DDL rights."""
+    if not crm_schema_available(db):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="CRM temporariamente indisponível. Tente novamente em instantes.",
         )
-        if name not in existing
-    ]
-    if needed:
-        for table in needed:
-            table.create(bind=bind, checkfirst=True)
 
 
 def is_valid_whatsapp_phone(telefone: Optional[str]) -> bool:
@@ -207,7 +208,10 @@ def enrich_customer_crm_payloads(
     if not payloads:
         return []
 
-    ensure_crm_tables(db)
+    if not crm_schema_available(db):
+        # Preserve customer lookup and balances during a rolling deployment.
+        # Unknown opt-outs/history must never become a marketing audience.
+        return [dict(p, opt_out_marketing=True, contato_recente=True) for p in payloads]
     utc_now = to_utc(now) if now is not None else get_utc_now()
     cliente_ids = [str(p["id"]) for p in payloads if p.get("id")]
 
