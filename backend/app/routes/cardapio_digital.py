@@ -5,6 +5,8 @@ from typing import Optional
 from urllib.parse import quote
 import uuid
 from decimal import Decimal
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, ConfigDict
 import httpx
@@ -13,7 +15,7 @@ from starlette.concurrency import run_in_threadpool
 from sqlalchemy import text
 from sqlalchemy.orm import Session, load_only, raiseload, lazyload
 
-from ..promotions import active_promotions, money
+from ..promotions import active_promotions, money, promotion_status
 from ..catalog_addons import effective_modifier_payloads_by_product
 from ..marmitaria_catalog import enabled as marmitaria_enabled
 from ..restaurant_profile_models import RestauranteOperationProfile
@@ -862,6 +864,9 @@ class PromotionConfigInput(BaseModel):
     # Cada slot contém um ou mais IDs aceitáveis: G + (bebida A ou B).
     componentes: list[list[str]] = Field(min_length=2, max_length=2)
     ativo: bool = False
+    inicio_em: datetime | None = None
+    fim_em: datetime | None = None
+    fuso_horario: str = Field(default="America/Fortaleza", max_length=64)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -887,6 +892,15 @@ def _promotion_authorized_config(
 
 
 def _validate_promotion_input(db: Session, rest_id: int, offer: PromotionConfigInput) -> dict:
+    try:
+        ZoneInfo(offer.fuso_horario)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(status_code=422, detail="Fuso horário inválido.")
+    for value in (offer.inicio_em, offer.fim_em):
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise HTTPException(status_code=422, detail="Informe data e horário com fuso horário.")
+    if offer.inicio_em and offer.fim_em and offer.fim_em <= offer.inicio_em:
+        raise HTTPException(status_code=422, detail="O encerramento deve ser posterior ao início.")
     cleaned = []
     seen: set[str] = set()
     for ids in offer.componentes:
@@ -926,6 +940,9 @@ def _validate_promotion_input(db: Session, rest_id: int, offer: PromotionConfigI
         "preco": float(money(offer.preco)),
         "componentes": cleaned,
         "ativo": offer.ativo,
+        "inicio_em": offer.inicio_em.astimezone(timezone.utc).isoformat() if offer.inicio_em else None,
+        "fim_em": offer.fim_em.astimezone(timezone.utc).isoformat() if offer.fim_em else None,
+        "fuso_horario": offer.fuso_horario,
     }
 
 
@@ -937,7 +954,7 @@ def listar_promocoes_admin(
     rest_id, config = _promotion_authorized_config(db, for_update=False)
     products = db.query(Produto).filter(Produto.restaurante_id == rest_id).all()
     return {
-        "promocoes": config.promocoes or [],
+        "promocoes": [{**entry, "status": promotion_status(entry)} for entry in (config.promocoes or [])],
         "produtos": [
             {"id": p.id, "nome": p.nome, "preco": float(p.preco), "ativo": bool(p.ativo),
              "tamanho": p.marmitaria_tamanho, "categoria_id": p.categoria_id,

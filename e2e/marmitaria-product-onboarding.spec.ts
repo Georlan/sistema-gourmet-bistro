@@ -317,7 +317,7 @@ test('promoções ficam como categoria virtual no catálogo, sem bloco acima dos
   await panel.getByRole('button', { name: 'Pausar Quentinha G + Quentinha M' }).click();
   await expect(panel.getByText('Pausada', { exact: true })).toHaveCount(2);
   await panel.getByRole('button', { name: 'Publicar Quentinha G + Pitulinha' }).click();
-  await expect(panel.getByText('Publicada', { exact: true })).toHaveCount(1);
+  await expect(panel.getByText('Ativa', { exact: true })).toHaveCount(1);
 
   await panel.getByRole('button', { name: 'Nova oferta' }).click();
   await expect(panel.getByRole('region', { name: 'Cadastrar promoção' })).toBeVisible();
@@ -329,6 +329,21 @@ test('promoções ficam como categoria virtual no catálogo, sem bloco acima dos
   await expect(panel.getByRole('spinbutton', { name: 'Preço do conjunto' })).toHaveValue('22.00');
   await panel.getByRole('button', { name: 'Cancelar' }).click();
   await expect(panel.getByRole('region', { name: 'Cadastrar promoção' })).toHaveCount(0);
+
+  const scheduledCard = panel.locator('article').filter({ hasText: 'Quentinha G + Quentinha M' });
+  await scheduledCard.getByRole('button', { name: 'Editar', exact: true }).click();
+  await panel.getByLabel('Início programado (opcional)').fill('2099-10-16T12:00');
+  await panel.getByLabel('Encerramento (opcional)').fill('2099-10-16T14:00');
+  await panel.getByLabel('Habilitar oferta').check();
+  const savedSchedule = page.waitForRequest(request => request.method() === 'PUT' && request.url().endsWith('/promocoes/gm'));
+  await panel.getByRole('button', { name: 'Salvar alterações' }).click();
+  const scheduled = (await savedSchedule).postDataJSON();
+  expect(scheduled.inicio_em).toBe('2099-10-16T15:00:00.000Z');
+  expect(scheduled.fim_em).toBe('2099-10-16T17:00:00.000Z');
+  expect(scheduled.fuso_horario).toBe('America/Fortaleza');
+  await scheduledCard.getByRole('button', { name: 'Editar', exact: true }).click();
+  await expect(panel.getByLabel('Início programado (opcional)')).toHaveValue('2099-10-16T12:00');
+  await panel.getByRole('button', { name: 'Cancelar', exact: true }).click();
 
   await categoriesBar.getByRole('button', { name: /Todos/ }).click();
   await expect(page.getByRole('button', { name: 'Novo produto', exact: true })).toBeVisible();
