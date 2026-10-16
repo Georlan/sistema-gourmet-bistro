@@ -1,0 +1,47 @@
+name: Relationship navigation browser regressions
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/components/caixa/navigation/**'
+      - 'src/components/caixa/customers/**'
+      - 'src/utils/storeSwitch.ts'
+      - 'e2e/relationship-navigation.spec.ts'
+      - 'e2e/crm-api-contract.spec.ts'
+      - 'e2e/customer-crm.spec.ts'
+      - 'e2e/shared-snapshot-requests.spec.ts'
+      - 'e2e/fixtures/relationshipNavigation.ts'
+      - 'tests/cashierNavigationTree.test.ts'
+      - '.github/workflows/relationship-navigation-targeted.yml'
+permissions:
+  contents: read
+jobs:
+  browser:
+    name: CRM eight-viewports browser gate
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise all CRM destinations in the configured viewport matrix
+        run: >-
+          KOMA_E2E_PORT=4283 npm run test:e2e --
+          e2e/relationship-navigation.spec.ts
+          e2e/crm-api-contract.spec.ts
+          e2e/customer-crm.spec.ts
+          e2e/shared-snapshot-requests.spec.ts
+          --workers=2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: relationship-navigation-browser-evidence
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 3
