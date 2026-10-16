@@ -233,6 +233,11 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
             ConfiguracaoRestaurante.tabela_taxas_bairros,
             ConfiguracaoRestaurante.tabela_taxas_km,
             ConfiguracaoRestaurante.promocoes,
+            # Consultados apenas para restaurantes liberados aos avisos WhatsApp.
+            # Devem vir na projeção: raiseload impede buscas implícitas.
+            ConfiguracaoRestaurante.whatsapp_instance_name,
+            ConfiguracaoRestaurante.whatsapp_alerts_enabled,
+            ConfiguracaoRestaurante.whatsapp_recipient_phone,
             raiseload=True,
         ),
         raiseload(ConfiguracaoRestaurante.restaurante),
