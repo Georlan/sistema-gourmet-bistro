@@ -72,3 +72,55 @@ def test_publicacao_somente_com_componentes_ativos():
     assert len(active_promotions(cfg, [g, m])) == 1
     assert active_promotions(cfg, [g, SimpleNamespace(id="m", ativo=False)]) == []
     assert active_promotions(SimpleNamespace(promocoes=[{**_campaign(), "ativo": False}]), [g, m]) == []
+
+
+
+def test_pitulinha_preco_simbolico_um_real_combo_dezesseis_revalida_no_servidor():
+    promo = {
+        "id": "promo-g-pitulinha", "nome": "G + Pitulinha", "preco": 16.0,
+        "componentes": [["g"], ["pitulinha"]], "ativo": True,
+    }
+    original = _validated(_item("g", "14", "2"), _item("pitulinha", "1"))
+    result = apply_promotion_to_validated(
+        original, promo, exclusive_ids={"pitulinha"},
+    )
+    assert result.items[0].base_price == Decimal("14")
+    assert result.items[1].base_price == Decimal("2.00")
+    assert sum(
+        (item.base_price + sum(mod.price for mod in item.modifiers))
+        for item in result.items
+    ) == Decimal("18.00")
+    assert original.items[1].base_price == Decimal("1")
+
+
+def test_combo_preco_maior_sem_item_exclusivo_continua_bloqueado():
+    promo = {
+        "id": "promo-g-m", "nome": "G + M", "preco": 25.0,
+        "componentes": [["g"], ["m"]], "ativo": True,
+    }
+    with pytest.raises(OrderValidationError):
+        apply_promotion_to_validated(
+            _validated(_item("g", "14"), _item("m", "10")), promo,
+        )
+    with pytest.raises(OrderValidationError):
+        apply_promotion_to_validated(
+            _validated(_item("g", "14"), _item("m", "10")), promo,
+            exclusive_ids={"pitulinha"},
+        )
+
+
+def test_pitulinha_pausada_ou_faltando_nunca_recebe_preco_de_combo():
+    promo = {
+        "id": "promo-g-pitulinha", "nome": "G + Pitulinha", "preco": 16.0,
+        "componentes": [["g"], ["pitulinha"]], "ativo": True,
+    }
+    with pytest.raises(OrderValidationError):
+        apply_promotion_to_validated(
+            _validated(_item("g", "14")), promo,
+            exclusive_ids={"pitulinha"},
+        )
+    with pytest.raises(OrderValidationError):
+        apply_promotion_to_validated(
+            _validated(_item("g", "14"), _item("pitulinha", "1")),
+            {**promo, "ativo": False}, exclusive_ids={"pitulinha"},
+        )

@@ -11,7 +11,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy import text
-from sqlalchemy.orm import Session, load_only, raiseload
+from sqlalchemy.orm import Session, load_only, raiseload, lazyload
 
 from ..promotions import active_promotions, money
 from ..catalog_addons import effective_modifier_payloads_by_product
@@ -866,13 +866,21 @@ class PromotionConfigInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-def _promotion_authorized_config(db: Session) -> tuple[int, ConfiguracaoRestaurante]:
+def _promotion_authorized_config(
+    db: Session, *, for_update: bool = True,
+) -> tuple[int, ConfiguracaoRestaurante]:
     rest_id = require_tenant_id()
     if not marmitaria_enabled(db, rest_id):
         raise HTTPException(status_code=403, detail="Promoções disponíveis inicialmente para marmitarias.")
-    config = db.query(ConfiguracaoRestaurante).filter(
-        ConfiguracaoRestaurante.restaurante_id == rest_id,
-    ).with_for_update().first()
+    # ConfiguracaoRestaurante.restaurante usa lazy='joined' por padrão.
+    # FOR UPDATE sem OF em LEFT OUTER JOIN falha no PostgreSQL (NotSupportedError).
+    # A leitura nunca precisa bloquear; somente a escrita bloqueia a linha do tenant.
+    query = db.query(ConfiguracaoRestaurante).options(
+        lazyload(ConfiguracaoRestaurante.restaurante),
+    ).filter(ConfiguracaoRestaurante.restaurante_id == rest_id)
+    if for_update:
+        query = query.with_for_update(of=ConfiguracaoRestaurante)
+    config = query.first()
     if config is None:
         raise HTTPException(status_code=409, detail="Configure o restaurante antes de cadastrar promoções.")
     return rest_id, config
@@ -897,10 +905,19 @@ def _validate_promotion_input(db: Session, rest_id: int, offer: PromotionConfigI
     if len(products) != len(seen):
         raise HTTPException(status_code=422, detail="Todos os produtos devem existir neste restaurante.")
     by_id = {str(product.id): product for product in products}
-    # Precificar sobre a menor combinação permitida, sem custo surpresa.
+    # Normalmente o conjunto não deve superar a soma avulsa. Produtos
+    # exclusivos (como Pitulinha de referência R$ 1) podem compor um combo com
+    # preço próprio: um slot inteiro de itens exclusivos é obrigatório para
+    # evitar combinações avulsas com valores que o checkout recusaria.
     minimum_base = sum(min(Decimal(str(by_id[pid].preco)) for pid in ids) for ids in cleaned)
-    if money(offer.preco) > money(minimum_base):
-        raise HTTPException(status_code=422, detail="O preço promocional não pode superar o menor preço avulso da combinação.")
+    has_exclusive_slot = any(
+        all(by_id[pid].somente_promocao for pid in ids) for ids in cleaned
+    )
+    if money(offer.preco) > money(minimum_base) and not has_exclusive_slot:
+        raise HTTPException(
+            status_code=422,
+            detail="Preço acima da soma avulsa exige ao menos uma etapa exclusiva de promoção.",
+        )
     if offer.ativo and any(not product.ativo for product in products):
         raise HTTPException(status_code=409, detail="Ative os produtos componentes antes de publicar esta oferta.")
     return {
@@ -917,7 +934,7 @@ def listar_promocoes_admin(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
 ):
-    rest_id, config = _promotion_authorized_config(db)
+    rest_id, config = _promotion_authorized_config(db, for_update=False)
     products = db.query(Produto).filter(Produto.restaurante_id == rest_id).all()
     return {
         "promocoes": config.promocoes or [],
