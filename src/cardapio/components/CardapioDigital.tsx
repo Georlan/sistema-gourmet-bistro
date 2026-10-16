@@ -337,6 +337,14 @@ export default function CardapioDigital({
       setErrorMessage("Sua sacola está vazia.");
       return;
     }
+    if (cart.some(item => item.promotionId) && (cupomCodigo?.trim() || usarCashback)) {
+      setErrorMessage("Esta promoção não é cumulativa com cupom ou cashback. Volte à sacola e retire o benefício.");
+      return;
+    }
+    if (cart.filter(item => item.promotionId).length > 1) {
+      setErrorMessage("Escolha apenas uma promoção por pedido.");
+      return;
+    }
     if (scheduleMode === "scheduled") {
       if (!scheduledOrdersEnabled) {
         setErrorMessage("Este restaurante não está aceitando pedidos agendados.");
@@ -366,6 +374,7 @@ export default function CardapioDigital({
     const orderRequest = {
       restaurante_id: targetRestauranteId,
       itens: cleanedItems,
+      promocao_id: cart.find(item => item.promotionId)?.promotionId || undefined,
       cliente_nome: normalizedName,
       cliente_telefone: normalizedPhone,
       whatsapp_status_opt_in: CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED && deliveryMethod !== "dine_in" && whatsappStatusOptIn,
