@@ -392,16 +392,16 @@ export default function ComplementosTab({
       {catalogError && <div role="alert" className="rounded-2xl border border-rose-500/40 p-5 text-sm text-koma-foreground">Não foi possível conferir o cadastro atual. <button onClick={() => void fetchCatalogBindings()} className="underline">Tentar novamente</button></div>}
       {marmitariaCadastro && dailyMode && !catalogError && (loading ? <p role="status" className="p-6 text-koma-muted">Carregando cardápio do dia…</p> : <CardapioDiarioEditor grupos={grupos} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onEditGroup={handleOpenModal} onDirtyChange={setDailyPending} onReload={fetchCatalogBindings} onSaved={async () => { onShowNotification?.('Cardápio do dia salvo.', 'success'); await fetchCatalogBindings(); }} />)}
       {(!marmitariaCadastro || !dailyMode) && !catalogError && <details open className="space-y-4">
-        <summary className="cursor-pointer font-bold text-koma-foreground">{marmitariaCadastro ? 'Proteínas, guarnições e saladas' : 'Complementos e adicionais'}</summary>
+        <summary className="cursor-pointer font-bold text-koma-foreground">Complementos e adicionais</summary>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-koma-card border border-koma-border p-5 rounded-2xl">
         <div>
           <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm">
             <Layers className="w-5 h-5" />
-            <span>{marmitariaCadastro ? 'Grupos da quentinha' : 'Grupos de Complementos & Adicionais'}</span>
+            <span>Grupos de Complementos & Adicionais</span>
           </div>
           <p className="text-xs text-koma-muted mt-1 max-w-2xl">
             {marmitariaCadastro
-              ? 'Cadastre aqui apenas o que pode ir na quentinha, como Proteínas, Guarnições e Saladas. Os limites mínimo e máximo são definidos em cada quentinha na aba Produtos.'
+              ? 'Cadastre proteínas, acompanhamentos e escolhas de outros produtos, como sabores de bebidas. Os limites das quentinhas são definidos em cada tamanho na aba Produtos.'
               : 'Vincule grupos às categorias e subcategorias, ou a produtos específicos. Pause as opções que não serão servidas hoje.'}
           </p>
         </div>
@@ -502,7 +502,7 @@ export default function ComplementosTab({
 
               {marmitariaCadastro ? (
                 <div className="mt-4 pt-3 border-t border-koma-border/60 text-[11px] text-koma-muted">
-                  Os limites de escolha são configurados separadamente em cada quentinha na aba Produtos.
+                  Confira limites e produtos vinculados em Editar. Nas quentinhas, configure os limites de cada tamanho em Produtos.
                 </div>
               ) : (
               <div className="mt-4 pt-3 border-t border-koma-border/60 text-[11px] text-koma-muted space-y-1">
@@ -599,7 +599,7 @@ export default function ComplementosTab({
 
               {marmitariaCadastro && !showGroupRules && (
                 <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-koma-muted">
-                  Este grupo define apenas os itens disponíveis. O mínimo e o máximo pertencem a cada Quentinha P, M ou G e são configurados em Produtos.
+                  Para quentinhas, configure o mínimo e o máximo em cada tamanho na aba Produtos. Para outros produtos, abra Limites e produtos vinculados.
                 </div>
               )}
               {marmitariaCadastro && <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
