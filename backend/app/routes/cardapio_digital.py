@@ -4,13 +4,16 @@ import logging
 from typing import Optional
 from urllib.parse import quote
 import uuid
+from decimal import Decimal
 
+from pydantic import BaseModel, Field, ConfigDict
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy import text
 from sqlalchemy.orm import Session, load_only, raiseload
 
+from ..promotions import active_promotions, money
 from ..catalog_addons import effective_modifier_payloads_by_product
 from ..marmitaria_catalog import enabled as marmitaria_enabled
 from ..restaurant_profile_models import RestauranteOperationProfile
@@ -226,6 +229,7 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
             ConfiguracaoRestaurante.taxa_entrega_fixa,
             ConfiguracaoRestaurante.tabela_taxas_bairros,
             ConfiguracaoRestaurante.tabela_taxas_km,
+            ConfiguracaoRestaurante.promocoes,
             raiseload=True,
         ),
         raiseload(ConfiguracaoRestaurante.restaurante),
@@ -440,6 +444,7 @@ def obter_cardapio_publico(
                 )
                 for product in produtos
             ],
+            "promocoes": active_promotions(configuracao, produtos) if is_marmitaria else [],
         }
 
 
@@ -834,3 +839,114 @@ def atualizar_config_cardapio_digital(
     db.refresh(restaurante)
     notify_cardapio_config_update(background_tasks, int(rest_id))
     return restaurante
+
+
+class PromotionConfigInput(BaseModel):
+    nome: str = Field(min_length=4, max_length=90)
+    descricao: str = Field(default="", max_length=240)
+    preco: Decimal = Field(ge=0, le=100000, max_digits=8, decimal_places=2)
+    # Cada slot contém um ou mais IDs aceitáveis: G + (bebida A ou B).
+    componentes: list[list[str]] = Field(min_length=2, max_length=2)
+    ativo: bool = False
+
+    model_config = ConfigDict(extra="forbid")
+
+
+def _promotion_authorized_config(db: Session) -> tuple[int, ConfiguracaoRestaurante]:
+    rest_id = require_tenant_id()
+    if not marmitaria_enabled(db, rest_id):
+        raise HTTPException(status_code=403, detail="Promoções disponíveis inicialmente para marmitarias.")
+    config = db.query(ConfiguracaoRestaurante).filter(
+        ConfiguracaoRestaurante.restaurante_id == rest_id,
+    ).with_for_update().first()
+    if config is None:
+        raise HTTPException(status_code=409, detail="Configure o restaurante antes de cadastrar promoções.")
+    return rest_id, config
+
+
+def _validate_promotion_input(db: Session, rest_id: int, offer: PromotionConfigInput) -> dict:
+    cleaned = []
+    seen: set[str] = set()
+    for ids in offer.componentes:
+        normalized = list(dict.fromkeys(str(pid).strip() for pid in ids))
+        if not normalized or any(not pid for pid in normalized) or len(normalized) > 12:
+            raise HTTPException(status_code=422, detail="Cada etapa precisa de 1 a 12 produtos válidos.")
+        if seen.intersection(normalized):
+            raise HTTPException(status_code=422, detail="Um produto não pode ocupar duas etapas.")
+        seen.update(normalized)
+        cleaned.append(normalized)
+
+    products = db.query(Produto).filter(
+        Produto.restaurante_id == rest_id,
+        Produto.id.in_(list(seen)),
+    ).all()
+    if len(products) != len(seen):
+        raise HTTPException(status_code=422, detail="Todos os produtos devem existir neste restaurante.")
+    by_id = {str(product.id): product for product in products}
+    # Precificar sobre a menor combinação permitida, sem custo surpresa.
+    minimum_base = sum(min(Decimal(str(by_id[pid].preco)) for pid in ids) for ids in cleaned)
+    if money(offer.preco) > money(minimum_base):
+        raise HTTPException(status_code=422, detail="O preço promocional não pode superar o menor preço avulso da combinação.")
+    if offer.ativo and any(not product.ativo for product in products):
+        raise HTTPException(status_code=409, detail="Ative os produtos componentes antes de publicar esta oferta.")
+    return {
+        "nome": " ".join(offer.nome.split()),
+        "descricao": offer.descricao.strip(),
+        "preco": float(money(offer.preco)),
+        "componentes": cleaned,
+        "ativo": offer.ativo,
+    }
+
+
+@router.get("/promocoes")
+def listar_promocoes_admin(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    rest_id, config = _promotion_authorized_config(db)
+    products = db.query(Produto).filter(Produto.restaurante_id == rest_id).all()
+    return {
+        "promocoes": config.promocoes or [],
+        "produtos": [
+            {"id": p.id, "nome": p.nome, "preco": float(p.preco), "ativo": bool(p.ativo),
+             "tamanho": p.marmitaria_tamanho}
+            for p in products
+        ],
+    }
+
+
+@router.post("/promocoes", status_code=201)
+def criar_promocao(
+    data: PromotionConfigInput,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    rest_id, config = _promotion_authorized_config(db)
+    saved = _validate_promotion_input(db, rest_id, data)
+    saved["id"] = f"promo-{uuid.uuid4().hex[:12]}"
+    config.promocoes = [*(config.promocoes or []), saved]
+    db.commit()
+    notify_cardapio_config_update(background_tasks, rest_id)
+    return saved
+
+
+@router.put("/promocoes/{promotion_id}")
+def atualizar_promocao(
+    promotion_id: str,
+    data: PromotionConfigInput,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    rest_id, config = _promotion_authorized_config(db)
+    current = config.promocoes or []
+    if not any(entry.get("id") == promotion_id for entry in current):
+        raise HTTPException(status_code=404, detail="Promoção não encontrada.")
+    saved = _validate_promotion_input(db, rest_id, data)
+    saved["id"] = promotion_id
+    config.promocoes = [saved if entry.get("id") == promotion_id else entry for entry in current]
+    db.commit()
+    notify_cardapio_config_update(background_tasks, rest_id)
+    return saved
+
