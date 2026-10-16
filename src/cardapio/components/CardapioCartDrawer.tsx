@@ -779,8 +779,17 @@ export default function CardapioCartDrawer({
                         />
                         <div className="min-w-0 flex-1">
                           <h4 className="text-sm font-bold text-koma-foreground">{item.quantity}× {item.product.name}</h4>
-                          <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-koma-muted" />
-                          {item.promotionParts && <p className="mt-2 text-xs text-koma-muted">{item.promotionParts.map(part => part.product.name).join(' + ')}</p>}
+                          {item.promotionParts ? (
+                            <div className="mt-2 space-y-2 text-xs text-koma-muted">
+                              {item.promotionParts.map((part, index) => (
+                                <div key={index} className="rounded-lg border border-koma-border p-2">
+                                  <strong className="text-koma-foreground">{part.product.name}</strong>
+                                  <p>{Object.values(part.selectedOptions).flat().map(option => option.name).join(', ') || 'Sem adicionais'}</p>
+                                  {part.notes && <p>Obs.: {part.notes}</p>}
+                                </div>
+                              ))}
+                            </div>
+                          ) : <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-koma-muted" />}
                           {onEditItem && <button type="button" onClick={() => onEditItem(item)} className="mt-2 min-h-11 text-xs font-bold text-emerald-400" aria-label={`Editar montagem de ${item.product.name}`}>Editar montagem</button>}
                           {onComposeAnother && !item.promotionId && Boolean(item.product.modifiers?.length || item.product.modifierGroups?.length) && <button type="button" onClick={() => onComposeAnother(item)} className="mt-2 block min-h-11 text-xs font-bold text-emerald-400" aria-label={`Montar outra diferente de ${item.product.name}`}>Montar outra diferente</button>}
                           {item.notes && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-amber-400">Obs.: {item.notes}</p>}
