@@ -96,9 +96,7 @@ export default function CashierOnlineMenu({
     ? `/c/${encodeURIComponent(configuredSlug)}`
     : resolvedHost.kind === 'tenant' && resolvedHost.tenantSlug
     ? getTenantPublicMenuUrl(resolvedHost.tenantSlug)
-    : restaurantId
-      ? `/cardapio?restaurante_id=${restaurantId}`
-      : null;
+    : null;
   const contents: Partial<Record<OnlineMenuSection, ReactNode>> = {};
 
   contents.pedidos = (
