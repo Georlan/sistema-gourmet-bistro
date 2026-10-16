@@ -711,7 +711,11 @@ export default function CardapioDigital({
                   {cart.map((item) => {
                     let unitPrice = item.product.price;
                     Object.values(item.selectedOptions).forEach((options) => options.forEach((option) => { unitPrice += option.extraPrice; }));
-                    return <div key={item.id} className="flex items-start justify-between gap-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs"><div className="min-w-0"><span className="block font-black text-koma-foreground">{item.quantity}x {item.product.name}</span><OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-koma-muted" />{item.notes && <span className="mt-1 block text-[10px] leading-relaxed text-amber-500">Obs.: {item.notes}</span>}</div><span className="shrink-0 font-black text-koma-foreground">{formatPrice(unitPrice * item.quantity)}</span></div>;
+                    return <div key={item.id} className="flex items-start justify-between gap-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs"><div className="min-w-0"><span className="block font-black text-koma-foreground">{item.quantity}x {item.product.name}</span>{item.promotionParts
+  ? <div className="mt-1 space-y-1.5 text-koma-muted">{item.promotionParts.map((part, index) => (
+      <p key={index}><strong className="text-koma-foreground">{part.product.name}:</strong> {Object.values(part.selectedOptions).flat().map(opt => opt.name).join(', ') || 'Sem adicionais'}{part.notes ? ` · ${part.notes}` : ''}</p>
+    ))}</div>
+  : <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-koma-muted" />}{item.notes && <span className="mt-1 block text-[10px] leading-relaxed text-amber-500">Obs.: {item.notes}</span>}</div><span className="shrink-0 font-black text-koma-foreground">{formatPrice(unitPrice * item.quantity)}</span></div>;
                   })}
                 </div>
               </section>
