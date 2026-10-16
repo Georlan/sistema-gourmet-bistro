@@ -1,11 +1,13 @@
+import { register } from 'node:module';
+register('./helpers/staticAssetsLoader.mjs', import.meta.url);
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { BrandConfig } from '../src/cardapio/CardapioTypes';
-import { CardapioConditionsSummary, CardapioDeliveryInfo } from '../src/cardapio/components/CardapioOrderConditions';
-import CardapioPaymentSummary, { PAYMENT_LABELS } from '../src/cardapio/components/CardapioPaymentSummary';
+const { CardapioConditionsSummary, CardapioDeliveryInfo } = await import('../src/cardapio/components/CardapioOrderConditions');
+const { default: CardapioPaymentSummary, PAYMENT_LABELS } = await import('../src/cardapio/components/CardapioPaymentSummary');
 
 const brand = (extra: Partial<BrandConfig> = {}): BrandConfig => ({
   id: '901', name: 'Loja de teste', slogan: '', logo: '', bannerImage: '', phone: '', address: '',

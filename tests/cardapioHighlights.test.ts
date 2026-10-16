@@ -1,7 +1,9 @@
+import { register } from 'node:module';
+register('./helpers/staticAssetsLoader.mjs', import.meta.url);
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { getCatalogHighlights } from '../src/cardapio/components/CardapioHighlights';
+const { getCatalogHighlights } = await import('../src/cardapio/components/CardapioHighlights');
 import type { Product } from '../src/cardapio/CardapioTypes';
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
