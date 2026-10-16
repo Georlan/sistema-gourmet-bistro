@@ -778,7 +778,7 @@ export function CaixaPanel({
                 {activeTab === 'cardapio' && 'Cardápio'}
                 {activeTab === 'estoque' && 'Estoque'}
                 {activeTab === 'financeiro' && 'Caixa'}
-                {activeTab === 'clientes' && 'Clientes'}
+                {activeTab === 'clientes' && 'Relacionamento'}
                 {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Equipe'}
                 {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações'}
                 {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Conta & assinatura'}

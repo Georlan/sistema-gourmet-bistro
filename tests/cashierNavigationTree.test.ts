@@ -68,7 +68,7 @@ test('navigation tree v2 has the intended product information architecture', () 
       ['cardapio', 'Cardápio'],
       ['cardapio_digital', 'Cardápio online'],
       ['estoque', 'Estoque & compras'],
-      ['clientes', 'Clientes'],
+      ['clientes', 'Relacionamento'],
       ['relatorios', 'Relatórios'],
       ['permissoes_cargos', 'Equipe'],
       ['impressao_salao', 'Configurações'],
@@ -107,11 +107,11 @@ test('cadastros keep sidebar compact while preserving existing workspace owners'
   assert.deepEqual(estoque?.children?.map((child) => child.label), [
     'Ingredientes', 'Compras', 'Inventário', 'Fornecedores',
   ]);
-  assert.deepEqual(clientes?.children?.map(child => child.label), ['Clientes', 'Programa de Fidelidade', 'Cupons & Promoções']);
+  assert.deepEqual(clientes?.children?.map(child => child.label), ['Ações para hoje', 'Clientes', 'Campanhas', 'Fidelidade', 'Cupons', 'Resultados']);
 
   assert.deepEqual(getCashierNavigationTarget('cardapio_preparo'), { tab: 'cardapio', subTab: 'categorias' });
   assert.deepEqual(getCashierNavigationTarget('estoque_fornecedores'), { tab: 'estoque', subTab: 'fornecedores' });
-  assert.deepEqual(getCashierNavigationTarget('clientes'), { tab: 'clientes', subTab: 'clientes' });
+  assert.deepEqual(getCashierNavigationTarget('clientes'), { tab: 'clientes', subTab: 'oportunidades' });
   assert.deepEqual(getCashierNavigationTarget('clientes_cupons'), { tab: 'clientes', subTab: 'cupons' });
 });
 
@@ -499,7 +499,7 @@ test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redu
   assert.deepEqual(pocketKitchen?.target, { tab: 'operacao', subTab: 'preparo' });
 
   const proCustomers = getCashierSidebarGroupsForPlan('pro', proEntitlements).flatMap(group => group.items).find(item => item.id === 'clientes');
-  assert.deepEqual(proCustomers?.children?.map(child => child.id), ['clientes_cadastro']);
+  assert.deepEqual(proCustomers?.children?.map(child => child.id), ['clientes_oportunidades', 'clientes_cadastro', 'clientes_campanhas', 'clientes_resultados']);
   assert.deepEqual(getCashierSidebarGroupsForPlan('premium', premiumEntitlements), CASHIER_SIDEBAR_GROUPS);
 });
 

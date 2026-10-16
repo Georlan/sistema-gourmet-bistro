@@ -150,13 +150,16 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
       },
       {
         id: 'clientes',
-        label: 'Clientes',
+        label: 'Relacionamento',
         icon: Users,
-        target: { tab: 'clientes', subTab: 'clientes' },
+        target: { tab: 'clientes', subTab: 'oportunidades' },
         children: [
+          { id: 'clientes_oportunidades', label: 'Ações para hoje', target: { tab: 'clientes', subTab: 'oportunidades' } },
           { id: 'clientes_cadastro', label: 'Clientes', target: { tab: 'clientes', subTab: 'clientes' } },
-          { id: 'clientes_fidelidade', label: 'Programa de Fidelidade', requiredFeature: 'loyalty', target: { tab: 'clientes', subTab: 'fidelidade' } },
-          { id: 'clientes_cupons', label: 'Cupons & Promoções', requiredFeature: 'coupons', target: { tab: 'clientes', subTab: 'cupons' } },
+          { id: 'clientes_campanhas', label: 'Campanhas', target: { tab: 'clientes', subTab: 'campanhas' } },
+          { id: 'clientes_fidelidade', label: 'Fidelidade', requiredFeature: 'loyalty', target: { tab: 'clientes', subTab: 'fidelidade' } },
+          { id: 'clientes_cupons', label: 'Cupons', requiredFeature: 'coupons', target: { tab: 'clientes', subTab: 'cupons' } },
+          { id: 'clientes_resultados', label: 'Resultados', target: { tab: 'clientes', subTab: 'resultados' } },
         ],
       },
       {

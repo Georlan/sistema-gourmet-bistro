@@ -368,10 +368,10 @@ export function CustomerCampaignsWorkspace({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
-              Fluxo guiado de ação comercial (Sem disparo não oficial em massa)
+              Campanhas
             </span>
             <h3 className="mt-0.5 text-sm font-black text-koma-foreground">
-              1. Objetivo → 2. Público → 3. Abordagem/Benefício → 4. Mensagem → 5. Registro & Acompanhamento
+              Prepare a mensagem e revise cada contato
             </h3>
           </div>
           <button
@@ -676,10 +676,8 @@ export function CustomerCampaignsWorkspace({
               className="w-full rounded-xl border border-koma-border bg-koma-card p-3 text-xs text-koma-foreground leading-relaxed"
             />
 
-            <div className="rounded-xl border border-koma-border bg-koma-card p-2.5 text-[11px] text-koma-muted space-y-1">
-              <strong className="block text-koma-foreground">
-                Alternativas automáticas (fallbacks quando um dado faltar):
-              </strong>
+            <details className="rounded-xl border border-koma-border bg-koma-card p-2.5 text-[11px] text-koma-muted space-y-1">
+              <summary className="cursor-pointer font-bold text-koma-foreground">Como a mensagem é personalizada</summary>
               <ul className="list-disc pl-4 space-y-0.5">
                 <li>
                   <code>{'{nome}'}</code> → Primeiro nome conhecido ou saudação neutra (<em>“Oi, tudo bem?”</em>).
@@ -693,7 +691,7 @@ export function CustomerCampaignsWorkspace({
                   <em>“uma condição especial para o seu próximo pedido”</em>.
                 </li>
               </ul>
-            </div>
+            </details>
 
             <button
               type="button"

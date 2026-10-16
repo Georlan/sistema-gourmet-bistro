@@ -1,15 +1,5 @@
 import React from 'react';
-import {
-  AlertCircle,
-  BarChart3,
-  CheckCircle2,
-  Clock,
-  RefreshCw,
-  ShieldAlert,
-  Ticket,
-  TrendingUp,
-  Users,
-} from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 interface Props {
   crmSummary: any | null;
@@ -51,13 +41,13 @@ export function CustomerResultsWorkspace({
       <div className="rounded-2xl border border-koma-border bg-koma-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
           <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
-            5. Resultados e atribuição honesta
+            Resultados
           </span>
           <h3 className="text-sm font-black text-koma-foreground">
-            O cliente voltou? Qual resultado consigo comprovar?
+            Quantos clientes voltaram e quanto compraram?
           </h3>
           <p className="text-xs text-koma-muted">
-            Cada pedido concluído é atribuído a no máximo 1 campanha/contato. Cancelamentos e estornos são excluídos.
+            Acompanhe as compras após seus contatos.
           </p>
         </div>
 
@@ -78,7 +68,7 @@ export function CustomerResultsWorkspace({
           </label>
 
           <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-koma-muted">
-            Janela pós-abordagem
+            Compras após o contato
             <select
               aria-label="Janela de atribuição pós-abordagem"
               value={janelaDias}
@@ -110,150 +100,67 @@ export function CustomerResultsWorkspace({
         </div>
       )}
 
-      {/* 5 Indicadores Essenciais de Decisão */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {/* 1. Clientes que fizeram a 2ª compra */}
-        <article className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-koma-muted">
-            1. Fizeram a 2ª compra
-          </span>
-          <strong className="block font-mono text-xl font-black text-koma-foreground">
-            {segundaCompra ? segundaCompra.clientes_que_fizeram_segunda_compra : '—'}
-            {segundaCompra?.clientes_com_1_compra_base > 0 && (
-              <span className="ml-1.5 text-xs font-normal text-koma-muted">
-                de {segundaCompra.clientes_com_1_compra_base} ({segundaCompra.taxa_conversao_pct}%)
-              </span>
-            )}
-          </strong>
-          <p className="text-[11px] text-koma-muted leading-snug">
-            {segundaCompra?.explicacao || 'Clientes com 2 ou mais compras concluídas sobre o total com compra.'}
-          </p>
+      {loading && <p role="status" className="text-sm text-koma-muted">Atualizando resultados…</p>}
+      <div className="grid gap-4 md:grid-cols-2">
+        <article className="rounded-2xl border border-koma-border bg-koma-panel p-5 space-y-3">
+          <h4 className="text-sm font-bold text-koma-muted">Clientes que voltaram</h4>
+          <strong className="block text-3xl font-black text-emerald-400">{isMeasured ? retorno.clientes_que_voltaram : '—'}</strong>
+          {isMeasured ? <>
+            <p className="text-sm text-koma-muted">De {retorno.clientes_abordados_no_periodo} clientes contatados</p>
+            <div role="img" aria-label={`${retorno.clientes_que_voltaram} de ${retorno.clientes_abordados_no_periodo} clientes voltaram`} className="h-3 overflow-hidden rounded-full bg-koma-raised">
+              <div className="h-full rounded-full bg-emerald-500" style={{width: `${retorno.clientes_abordados_no_periodo > 0 ? Math.min(100, Math.max(0, retorno.clientes_que_voltaram / retorno.clientes_abordados_no_periodo * 100)) : 0}%`}} />
+            </div>
+          </> : <p className="text-sm text-koma-muted">Registre contatos em Campanhas para acompanhar o retorno.</p>}
         </article>
-
-        {/* 2. Clientes que voltaram após a abordagem */}
-        <article className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-koma-muted">
-            2. Voltaram após abordagem
-          </span>
-          {isMeasured ? (
-            <>
-              <strong className="block font-mono text-xl font-black text-emerald-400">
-                {retorno.clientes_que_voltaram}{' '}
-                <span className="text-xs font-normal text-koma-muted">
-                  de {retorno.clientes_abordados_no_periodo} abordados
-                </span>
-              </strong>
-              <p className="text-[11px] text-koma-muted leading-snug">
-                <strong>{retorno.clientes_retorno_comprovado_cupom}</strong> comprovado(s) por cupom ·{' '}
-                <strong>{retorno.clientes_retorno_estimado_temporal}</strong> estimado(s) na janela de {janelaDias}d.
-              </p>
-            </>
-          ) : (
-            <>
-              <strong className="block font-mono text-base font-black text-amber-300">
-                Não mensurado
-              </strong>
-              <p className="text-[11px] text-koma-muted leading-snug">
-                {retorno?.explicacao || 'Nenhuma abordagem registrada no período para medir retorno.'}
-              </p>
-            </>
-          )}
-        </article>
-
-        {/* 3. Pedidos associados à campanha */}
-        <article className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-koma-muted">
-            3. Pedidos associados
-          </span>
-          {isMeasured ? (
-            <>
-              <strong className="block font-mono text-xl font-black text-koma-foreground">
-                {pedidos?.total ?? 0}
-              </strong>
-              <p className="text-[11px] text-koma-muted leading-snug">
-                <strong>{pedidos?.comprovados_por_cupom ?? 0}</strong> com cupom da ação ·{' '}
-                <strong>{pedidos?.estimados_por_janela_temporal ?? 0}</strong> por janela temporal (sem duplicar pedido).
-              </p>
-            </>
-          ) : (
-            <>
-              <strong className="block font-mono text-base font-black text-amber-300">
-                Não mensurado
-              </strong>
-              <p className="text-[11px] text-koma-muted leading-snug">
-                Registre contatos em Campanhas para acompanhar pedidos posteriores.
-              </p>
-            </>
-          )}
-        </article>
-
-        {/* 4. Valor líquido pago nesses pedidos */}
-        <article className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-koma-muted">
-            4. Valor pago nos pedidos
-          </span>
-          {isMeasured ? (
-            <>
-              <strong className="block font-mono text-xl font-black text-emerald-400">
-                {money(valores?.total_liquido_brl)}
-              </strong>
-              <p className="text-[11px] text-koma-muted leading-snug">
-                Cupom: {money(valores?.comprovado_cupom_brl)} · Janela temporal:{' '}
-                {money(valores?.estimado_temporal_brl)}.
-              </p>
-            </>
-          ) : (
-            <>
-              <strong className="block font-mono text-base font-black text-amber-300">
-                Não mensurado
-              </strong>
-              <p className="text-[11px] text-koma-muted leading-snug">
-                Sem contatos registrados no período (não exibimos R$ 0,00 como substituto de dado ausente).
-              </p>
-            </>
-          )}
-        </article>
-
-        {/* 5. Descontos efetivamente utilizados */}
-        <article className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-koma-muted">
-            5. Descontos utilizados
-          </span>
-          <strong className="block font-mono text-xl font-black text-koma-foreground">
-            {money(descontos?.total_brl)}
-          </strong>
-          <p className="text-[11px] text-koma-muted leading-snug">
-            Cupons: <strong>{money(descontos?.cupom_brl)}</strong> · Fidelidade: {money(descontos?.fidelidade_cashback_brl)}. Apenas pedidos concluídos.
-          </p>
+        <article className="rounded-2xl border border-koma-border bg-koma-panel p-5 space-y-3">
+          <h4 className="text-sm font-bold text-koma-muted">Quanto compraram após o contato</h4>
+          <strong className="block text-3xl font-black text-emerald-400">{isMeasured && valores ? money(valores.total_liquido_brl) : '—'}</strong>
+          {isMeasured && valores ? <>
+            <p className="text-sm text-koma-muted">{pedidos?.total ?? '—'} pedidos associados aos contatos</p>
+            <div className="space-y-2 text-xs">
+              {[{label:'Com cupom da campanha',value:valores.comprovado_cupom_brl,color:'bg-emerald-500'}, {label:`Sem cupom, até ${janelaDias} dias após contato`,value:valores.estimado_temporal_brl,color:'bg-sky-500'}].map(item => <div key={item.label}>
+                <div className="flex justify-between gap-2"><span>{item.label}</span><strong>{money(item.value)}</strong></div>
+                <div aria-hidden="true" className="mt-1 h-2 rounded-full bg-koma-raised"><div className={`h-full rounded-full ${item.color}`} style={{width:`${valores.total_liquido_brl > 0 ? Math.min(100,Math.max(0,item.value / valores.total_liquido_brl * 100)) : 0}%`}} /></div>
+              </div>)}
+            </div>
+          </> : <p className="text-sm text-koma-muted">Ainda sem dados de compras após contatos.</p>}
+          <p className="text-xs text-koma-muted">Compras associadas ao contato; não representam lucro ou vendas adicionais comprovadas.</p>
         </article>
       </div>
-
-      {/* Nota Metodológica e Transparência (Sem ROI Fictício) */}
-      <div className="rounded-2xl border border-koma-border bg-koma-panel p-4 text-xs text-koma-muted space-y-1.5">
-        <strong className="block text-koma-foreground">
-          Critério de associação, denominador e leitura honesta dos números:
-        </strong>
-        <p>
-          {res?.regra_associacao ||
-            `Cada pedido concluído é vinculado a no máximo uma abordagem comercial dentro de ${janelaDias} dias após o contato.`}
-        </p>
-        <p className="text-amber-300/90">
-          {res?.aviso_metodologico ||
-            'Receita associada não comprova receita incremental. Faturamento dividido por desconto não é lucro nem ROI financeiro. Compras sem uso de cupom da campanha são exibidas separadamente como estimativa temporal.'}
-        </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <article className="rounded-2xl border border-koma-border bg-koma-panel p-4">
+          <h4 className="text-xs font-bold text-koma-muted">Clientes com 2 ou mais compras</h4>
+          <strong className="block mt-2 text-xl">{segundaCompra ? segundaCompra.clientes_que_fizeram_segunda_compra : '—'}</strong>
+          <p className="text-xs text-koma-muted">{segundaCompra ? `De ${segundaCompra.clientes_com_1_compra_base} clientes com compra no histórico` : 'Ainda sem dados'}</p>
+        </article>
+        <article className="rounded-2xl border border-koma-border bg-koma-panel p-4">
+          <h4 className="text-xs font-bold text-koma-muted">Descontos utilizados</h4>
+          <strong className="block mt-2 text-xl">{descontos ? money(descontos.total_brl) : '—'}</strong>
+          <p className="text-xs text-koma-muted">Apenas pedidos concluídos</p>
+        </article>
       </div>
+      <details className="rounded-2xl border border-koma-border bg-koma-panel p-4 text-xs text-koma-muted">
+        <summary className="cursor-pointer font-bold text-koma-foreground">Como calculamos os resultados</summary>
+        <div className="mt-3 space-y-2">
+          <p>{res?.regra_associacao || `Cada pedido concluído é vinculado a no máximo uma abordagem dentro de ${janelaDias} dias após o contato. Cancelamentos e estornos são excluídos.`}</p>
+          <p>{res?.aviso_metodologico || 'Compras após contato sem cupom são associações por período, não comprovam que a campanha causou a venda.'}</p>
+          {isMeasured && <p>Clientes que voltaram: {retorno.clientes_retorno_comprovado_cupom} com cupom · {retorno.clientes_retorno_estimado_temporal} por período após contato.</p>}
+          {segundaCompra?.explicacao && <p>{segundaCompra.explicacao}</p>}
+          {descontos && <p>Descontos em cupons: {money(descontos.cupom_brl)} · Fidelidade: {money(descontos.fidelidade_cashback_brl)}</p>}
+        </div>
+      </details>
 
       {/* Tabela de Acompanhamento por Campanha */}
       <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-extrabold uppercase tracking-wider text-koma-foreground">
-            Desempenho observado por campanha registrada ({campanhas.length})
+            Resultados por campanha ({campanhas.length})
           </h4>
         </div>
 
         {campanhas.length === 0 ? (
           <p className="text-xs text-koma-muted">
-            Nenhuma campanha registrada ainda. Inicie uma ação a partir da aba <strong>Oportunidades</strong> ou{' '}
+            Nenhuma campanha registrada ainda. Inicie uma ação a partir da aba <strong>Ações para hoje</strong> ou{' '}
             <strong>Campanhas</strong>.
           </p>
         ) : (

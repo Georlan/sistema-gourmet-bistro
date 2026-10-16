@@ -31,7 +31,8 @@ test('Caixa compartilha clientes entre checkout e tela Clientes', async ({ page 
   expect(before).toBe(1);
   await openCashierSidebar(page);
   const sidebar = page.locator('.cashier-sidebar:visible');
-  await sidebar.getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
+  await sidebar.getByRole('button', { name: /^Relacionamento(?: \d+)?$/ }).click();
+  await page.locator('#clientes-subtab-clientes').click();
   await expect(page.getByText('Cliente E2E', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   expect(requests).toHaveLength(1);
 });
@@ -77,7 +78,8 @@ test('hints próximos de clientes geram uma reconciliação e preservam o snapsh
   await expect(page.locator('.orders-board')).toBeVisible();
   await expect.poll(() => reads).toBe(1);
   await openCashierSidebar(page);
-  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
+  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Relacionamento(?: \d+)?$/ }).click();
+  await page.locator('#clientes-subtab-clientes').click();
   await expect(page.getByText('Cliente E2E', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   await page.evaluate(() => {
     for (let index = 0; index < 4; index++) window.dispatchEvent(new Event('koma_customers_updated'));
@@ -101,7 +103,8 @@ test('falha inicial de clientes não aparece como lista vazia e permite tentar n
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
   await openCashierSidebar(page);
-  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
+  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Relacionamento(?: \d+)?$/ }).click();
+  await page.locator('#clientes-subtab-clientes').click();
   await expect(page.getByText('Não foi possível carregar os clientes')).toBeVisible();
   await expect(page.getByText('Nenhum cliente cadastrado ainda')).toHaveCount(0);
   await page.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
@@ -151,7 +154,8 @@ test('nova sessão de Caixa não reaproveita clientes da sessão anterior', asyn
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
   await openCashierSidebar(page);
-  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
+  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Relacionamento(?: \d+)?$/ }).click();
+  await page.locator('#clientes-subtab-clientes').click();
   await expect(page.getByText('Cliente da sessão antiga', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   await page.evaluate(() => {
     sessionStorage.setItem('koma_caixa_token', 'session-new-fixture');
