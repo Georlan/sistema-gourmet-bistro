@@ -1,3 +1,4 @@
+import CatalogProductImage from './CatalogProductImage';
 import React, { useMemo } from 'react';
 import { Megaphone } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
@@ -55,7 +56,7 @@ export function CardapioHighlights({ brand }: { brand: BrandConfig }) {
             className="relative min-w-[220px] max-w-[280px] overflow-hidden rounded-xl border border-amber-500/20 bg-koma-panel text-left transition hover:border-amber-500/40 hover:bg-koma-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
             aria-label={`Abrir ${product.name}`}
           >
-            <img src={product.image} alt="" loading="lazy" decoding="async" className="h-24 w-full object-cover" />
+            <CatalogProductImage image={product.image} className="h-24 w-full object-cover" />
             <span className="block p-3">
               <span className="text-[9px] font-black uppercase tracking-[0.12em] text-amber-400">{isPromotion(product) ? "Oferta" : "Destaque"}</span>
               <strong className="mt-1 block truncate text-xs text-koma-foreground">{product.name}</strong>
