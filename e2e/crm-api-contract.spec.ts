@@ -7,6 +7,8 @@ test('all CRM workspaces render backend-generated responses without losing the o
   const errors:string[]=[];
   let savedCampaign: Record<string,unknown> | undefined;
   let savedContact: Record<string,unknown> | undefined;
+  let loyaltyWrites=0;
+  await page.route('**/fidelidade/config',route=>{if(route.request().method()!=='GET') loyaltyWrites++; return route.fulfill({json:{ativo:true,tipo_recompensa:'PONTOS',taxa_conversao:1,valor_ponto_em_dinheiro:0.05}});});
   let savedPreference: Record<string,unknown> | undefined;
   page.on('pageerror',error=>errors.push(error.message));
   await mockCashierBackend(page);
@@ -36,6 +38,23 @@ test('all CRM workspaces render backend-generated responses without losing the o
     const button=page.locator(`#clientes-subtab-${subTab}`);
     await button.click();
     await expect(button).toHaveAttribute('aria-current','page');
+    if(subTab === 'fidelidade'){
+      const simulation=page.getByRole('region',{name:'Simulação da fidelidade'});
+      await expect(simulation).toContainText('R$ 5,00');
+      await page.getByLabel('Margem de contribuição na simulação').fill('30');
+      await expect(simulation).toContainText('R$ 25,00');
+      await page.getByLabel('Margem de contribuição na simulação').fill('2');
+      await expect(simulation.getByRole('alert')).toContainText('supera a contribuição');
+      await page.getByLabel('Margem de contribuição na simulação').fill('30');
+      await page.screenshot({path:testInfo.outputPath(`loyalty-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
+      await page.getByRole('region',{name:'Impacto na contribuição por pedido'}).scrollIntoViewIfNeeded();
+      await page.screenshot({path:testInfo.outputPath(`loyalty-impact-${testInfo.project.name}.png`),animations:'disabled'});
+      await page.getByLabel('Ativar programa de fidelidade').uncheck({force:true});
+      await expect(simulation).toContainText('Programa pausado');
+      await expect(simulation).toContainText('R$ 0,00');
+      await page.getByLabel('Ativar programa de fidelidade').check({force:true});
+      expect(loyaltyWrites).toBe(0);
+    }
     await expect(page.getByRole('tablist',{name:'Áreas do CRM'})).toHaveCount(0);
     await expect(page.getByRole('alert').filter({hasText:'Não foi possível abrir'})).toHaveCount(0);
   }
@@ -54,7 +73,13 @@ test('all CRM workspaces render backend-generated responses without losing the o
   const audienceCustomer=contract.customers.find((c:{id:string})=>opportunity.elegiveis_cliente_ids.includes(c.id));
   await expect(opportunityCard).toContainText(audienceCustomer.nome.split(' ')[0]);
   await opportunityCard.getByRole('button',{name:'Abrir público e iniciar ação',exact:true}).click();
+  await expect(page.getByLabel('Modelo de mensagem da campanha')).toBeHidden();
+  await page.getByRole('button',{name:'Continuar para mensagem',exact:true}).click();
+  await expect(page.getByLabel('Modelo de mensagem da campanha')).toBeVisible();
+  await page.screenshot({path:testInfo.outputPath(`campaign-message-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
   await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
+  await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
+  await expect(page.getByRole('region',{name:'Contatos nesta sessão'})).toBeVisible();
   await expect.poll(()=>savedCampaign?.abordagem_tipo).toBe('SEM_DESCONTO');
   await expect.poll(()=>savedCampaign?.segmento_filtro).toBe(opportunity.id);
   await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
