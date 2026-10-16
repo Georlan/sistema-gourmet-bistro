@@ -99,4 +99,8 @@ _root_router.router.include_router(_signups_router)
 _super_admin.router.include_router(_signup_admin_router)
 
 from .subscription_account import router as _subscription_account_router
+from .. import crm_models as _crm_models  # noqa: F401,E402
+from .customer_crm import router as _customer_crm_router  # noqa: E402
+
 _root_router.router.include_router(_subscription_account_router)
+_root_router.router.include_router(_customer_crm_router)

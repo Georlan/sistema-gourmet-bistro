@@ -55,6 +55,25 @@ export interface LoyaltyCustomer {
     | 'ATIVO'
     | 'ATENCAO'
     | 'REATIVAR';
+  telefone_valido_whatsapp?: boolean;
+  opt_out_marketing?: boolean;
+  motivo_opt_out?: string | null;
+  canal_preferido?: string;
+  observacoes_declaradas?: string | null;
+  ultimo_contato_em?: string | null;
+  ultimo_contato_status?: string | null;
+  ultimo_contato_objetivo?: string | null;
+  dias_desde_ultimo_contato?: number | null;
+  total_contatos_crm?: number;
+  contato_recente?: boolean;
+  voltou_apos_ultimo_contato?: boolean;
+  ultima_avaliacao_nota?: number | null;
+  ultima_avaliacao_comentario?: string | null;
+  ocorrencia_aberta?: boolean;
+  beneficio_disponivel?: string;
+  elegivel_resgate?: boolean;
+  valor_resgatavel_brl?: number;
+  status_beneficio?: 'RESGATAVEL' | 'SALDO_EM_FORMACAO' | 'SEM_SALDO' | 'PROGRAMA_INATIVO';
 }
 
 export type CashierNotice = (message: string, type?: 'success' | 'error' | 'info') => void;
