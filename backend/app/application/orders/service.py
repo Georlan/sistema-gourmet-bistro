@@ -473,8 +473,10 @@ class OrderApplicationService:
                 raise OrderValidationError("Promoção inexistente neste restaurante.")
             if cmd.coupon_code or cmd.usar_cashback or cmd.cashback_discount > Decimal("0.00"):
                 raise OrderValidationError("Não é possível combinar promoção com cupom ou cashback.")
-            validated_input = apply_promotion_to_validated(validated_input, promotion)
             validate_exclusive_promotion_parts(exclusive_ids, promotion, validated_input)
+            validated_input = apply_promotion_to_validated(
+                validated_input, promotion, exclusive_ids=exclusive_ids,
+            )
 
         # 3. Cotação Financeira Pura
         subtotal_base = sum(
