@@ -108,6 +108,7 @@ export function normalizeCatalogSnapshot(payload: unknown): CatalogSnapshot {
 
       return {
         id: String(item.id ?? ''),
+        somente_promocao: item.somente_promocao === true,
         marmitaria_tamanho: typeof item.marmitaria_tamanho === 'string' ? item.marmitaria_tamanho : null,
         nome: String(item.nome ?? ''),
         categoria_id: categoriaId,
