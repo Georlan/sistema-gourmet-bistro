@@ -47,6 +47,29 @@ def active_promotions(config: Any, products: list[Any]) -> list[dict]:
     return visible
 
 
+def validate_exclusive_promotion_parts(
+    exclusive_ids: set[str],
+    promotion: dict | None,
+    validated: ValidatedOrderInput,
+) -> None:
+    """Protege SKUs exclusivos inclusive de pedidos forjados e itens extras."""
+    if not exclusive_ids:
+        return
+    if promotion is None or not promotion.get("ativo"):
+        raise OrderValidationError("Item exclusivo disponível somente dentro de uma promoção ativa.")
+    selected: set[str] = set()
+    for slot in promotion.get("componentes") or []:
+        matching = [
+            str(item.product_id) for item in validated.items
+            if str(item.product_id) in {str(pid) for pid in slot}
+        ]
+        if len(matching) != 1 or matching[0] in selected:
+            raise OrderValidationError("Promoção precisa de um produto válido em cada etapa.")
+        selected.add(matching[0])
+    if not exclusive_ids.issubset(selected):
+        raise OrderValidationError("Item exclusivo não pertence à composição escolhida.")
+
+
 def apply_promotion_to_validated(
     validated: ValidatedOrderInput,
     promotion: dict,

@@ -232,6 +232,7 @@ class Produto(Base):
     imagem = Column(String, default="")
     imagens_galeria = Column(JSON, default=list)  # Up to 3 product gallery URLs
     ativo = Column(Boolean, default=True)  # Toggle product availability
+    somente_promocao = Column(Boolean, nullable=False, default=False, server_default='false')
     ordem_exibicao = Column(Integer, nullable=True, default=None)
     
     # Relationships

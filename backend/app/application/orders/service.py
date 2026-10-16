@@ -55,6 +55,7 @@ from ...models import (
     Item,
     ItemModificador,
     Lancamento,
+    Produto,
     Restaurante,
     Usuario,
 )
@@ -449,10 +450,20 @@ class OrderApplicationService:
         )
 
         validated_input = OrderValidationService.validate(val_context)
+        # O servidor impede venda avulsa mesmo via payload manual ou outro canal.
+        exclusive_ids = {
+            str(p.id) for p in db.query(Produto).filter(
+                Produto.restaurante_id == cmd.restaurant_id,
+                Produto.id.in_([str(item.product_id) for item in cmd.items]),
+                Produto.somente_promocao.is_(True),
+            ).all()
+        }
+        if exclusive_ids and not cmd.promotion_id:
+            raise OrderValidationError("Este item está disponível somente dentro de uma promoção.")
         if cmd.promotion_id:
             # A composição canônica já validou estoque lógico, tenant e modificadores.
             from ...models import ConfiguracaoRestaurante
-            from ...promotions import apply_promotion_to_validated
+            from ...promotions import apply_promotion_to_validated, validate_exclusive_promotion_parts
             promotion_config = db.query(ConfiguracaoRestaurante).filter(
                 ConfiguracaoRestaurante.restaurante_id == cmd.restaurant_id,
             ).first()
@@ -463,6 +474,7 @@ class OrderApplicationService:
             if cmd.coupon_code or cmd.usar_cashback or cmd.cashback_discount > Decimal("0.00"):
                 raise OrderValidationError("Não é possível combinar promoção com cupom ou cashback.")
             validated_input = apply_promotion_to_validated(validated_input, promotion)
+            validate_exclusive_promotion_parts(exclusive_ids, promotion, validated_input)
 
         # 3. Cotação Financeira Pura
         subtotal_base = sum(

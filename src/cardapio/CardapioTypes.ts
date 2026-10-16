@@ -111,6 +111,7 @@ export interface BrandConfig {
   categories: string[];
   products: Product[];
   promotions?: CatalogPromotion[];
+  promotionProducts?: Product[];
   socials?: SocialNetwork[];
   about?: string;
   paymentMethods?: PaymentMethodGroup[];

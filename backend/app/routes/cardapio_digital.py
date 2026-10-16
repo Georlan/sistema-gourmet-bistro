@@ -348,7 +348,7 @@ def obter_categorias_cardapio_digital(
         active_category_ids = {
             row[0]
             for row in db.query(Produto.categoria_id)
-            .filter(Produto.restaurante_id == rest_id, Produto.ativo.is_(True))
+            .filter(Produto.restaurante_id == rest_id, Produto.ativo.is_(True), Produto.somente_promocao.is_(False))
             .distinct()
             .all()
         }
@@ -364,11 +364,12 @@ def obter_produtos_cardapio_digital(
     slug: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Retorna produtos ativos com os mesmos complementos efetivos do catálogo operacional."""
+    """Retorna produtos ativos vendidos avulsos, não componentes exclusivos."""
     with public_tenant_scope(restaurante_id, slug, db) as rest_id:
         produtos = db.query(Produto).filter(
             Produto.restaurante_id == rest_id,
             Produto.ativo.is_(True),
+            Produto.somente_promocao.is_(False),
         ).all()
         produtos = _ordered_products(produtos)
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
@@ -413,8 +414,16 @@ def obter_cardapio_publico(
         ).scalar()
         is_marmitaria = profile_key == "marmitaria"
 
-        # Categorias vazias (sem produtos ativos) não aparecem no cardápio online
-        active_category_ids = {product.categoria_id for product in produtos}
+        # Os produtos exclusivos só são disponibilizados às etapas de ofertas ativas.
+        products_regular = [product for product in produtos if not product.somente_promocao]
+        active_offers = active_promotions(configuracao, produtos) if is_marmitaria else []
+        referenced_special_ids = {
+            str(pid) for offer in active_offers for slot in offer['componentes'] for pid in slot
+        }
+        exclusive_parts = [product for product in produtos if product.somente_promocao and str(product.id) in referenced_special_ids]
+
+        # Categorias sem produtos avulsos não aparecem no cardápio online.
+        active_category_ids = {product.categoria_id for product in products_regular}
         categorias_com_produtos = [category for category in categorias if category.id in active_category_ids]
         niche = resolve_restaurant_niche(
             db,
@@ -442,9 +451,14 @@ def obter_cardapio_publico(
                     modifier_payloads.get(str(product.id), []),
                     marmitaria=is_marmitaria,
                 )
-                for product in produtos
+                for product in products_regular
             ],
-            "promocoes": active_promotions(configuracao, produtos) if is_marmitaria else [],
+            "produtos_promocionais": [
+                _public_product_payload(
+                    product, modifier_payloads.get(str(product.id), []), marmitaria=is_marmitaria,
+                ) for product in exclusive_parts
+            ],
+            "promocoes": active_offers,
         }
 
 
@@ -909,8 +923,13 @@ def listar_promocoes_admin(
         "promocoes": config.promocoes or [],
         "produtos": [
             {"id": p.id, "nome": p.nome, "preco": float(p.preco), "ativo": bool(p.ativo),
-             "tamanho": p.marmitaria_tamanho}
+             "tamanho": p.marmitaria_tamanho, "categoria_id": p.categoria_id,
+             "somente_promocao": bool(p.somente_promocao)}
             for p in products
+        ],
+        "categorias": [
+            {"id": category.id, "nome": category.nome}
+            for category in db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
         ],
     }
 

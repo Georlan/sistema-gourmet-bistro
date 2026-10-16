@@ -128,6 +128,7 @@ class ProdutoBase(BaseModel):
     imagem: Optional[str] = ""
     imagens_galeria: Optional[List[str]] = Field(default_factory=list)
     ativo: bool = True
+    somente_promocao: bool = False
     ordem_exibicao: Optional[int] = None
 
     @field_validator("descricao", "imagem", mode="before")
@@ -155,6 +156,7 @@ class ProdutoUpdate(BaseModel):
     imagem: Optional[str] = None
     imagens_galeria: Optional[List[str]] = None
     ativo: Optional[bool] = None
+    somente_promocao: Optional[bool] = None
     ordem_exibicao: Optional[int] = None
 
 class ProdutoResponse(ProdutoBase):
@@ -981,6 +983,7 @@ class CardapioPublicResponse(BaseModel):
     restaurante: CardapioPublicRestaurantResponse
     categorias: List[CardapioPublicCategoryResponse]
     produtos: List[CardapioPublicProductResponse]
+    produtos_promocionais: List[CardapioPublicProductResponse] = Field(default_factory=list)
     promocoes: List[dict] = Field(default_factory=list)
 
 
