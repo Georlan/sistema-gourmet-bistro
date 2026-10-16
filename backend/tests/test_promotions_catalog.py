@@ -118,3 +118,20 @@ def test_pitulinha_pausada_ou_faltando_nunca_recebe_preco_de_combo():
             _validated(_item("g", "14"), _item("pitulinha", "1")),
             {**promo, "ativo": False}, exclusive_ids={"pitulinha"},
         )
+
+@pytest.mark.parametrize('indices', [(0, 1), (1, 2)])
+def test_mixed_cart_discounts_only_marked_parts_with_same_product_and_extras(indices):
+    loose = replace(_item('g', '14', '4'), quantity=Decimal('2'), notes='avulsa')
+    combo = [_item('g', '14', '3'), _item('m', '10', '2')]
+    items = combo + [loose] if indices == (0, 1) else [loose] + combo
+    result = apply_promotion_to_validated(_validated(*items), _campaign(), item_indices=indices)
+    assert result.items[indices[0]].base_price == Decimal('12')
+    loose_index = 2 if indices == (0, 1) else 0
+    assert result.items[loose_index] == loose
+    assert sum((i.base_price + sum(m.price for m in i.modifiers)) * i.quantity for i in result.items) == Decimal('63')
+
+
+@pytest.mark.parametrize('indices', [(0, 0), (-1, 1), (0, 9), (1, 0), (0,), (0, 1, 2)])
+def test_invalid_explicit_composition_never_grants_discount(indices):
+    with pytest.raises(OrderValidationError):
+        apply_promotion_to_validated(_validated(_item('g', '14'), _item('m', '10')), _campaign(), item_indices=indices)

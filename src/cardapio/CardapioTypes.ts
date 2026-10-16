@@ -113,6 +113,7 @@ export interface BrandConfig {
   categories: string[];
   products: Product[];
   promotions?: CatalogPromotion[];
+  explicitPromotionComposition?: boolean;
   promotionProducts?: Product[];
   socials?: SocialNetwork[];
   about?: string;

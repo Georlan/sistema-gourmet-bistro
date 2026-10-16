@@ -62,3 +62,13 @@ def test_exclusive_sku_is_a_regular_tenant_owned_product_by_default():
         somente_promocao=True,
     ).somente_promocao is True
     assert ProdutoUpdate(somente_promocao=True).somente_promocao is True
+
+
+def test_marked_combo_allows_loose_meal_but_never_loose_exclusive_drink():
+    validate_exclusive_promotion_parts(
+        {'pitulinha'}, _campaign(), _order('g', 'pitulinha', 'g'), item_indices=(0, 1),
+    )
+    with pytest.raises(OrderValidationError):
+        validate_exclusive_promotion_parts(
+            {'pitulinha'}, _campaign(), _order('g', 'pitulinha', 'pitulinha'), item_indices=(0, 1),
+        )

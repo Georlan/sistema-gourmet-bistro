@@ -69,6 +69,7 @@ def test_global_offer_real_checkout_replay_expiry_and_tenant_isolation(setup_res
     snapshot = client.get(f'/api/cardapio-digital/public?restaurante_id={RESTAURANTE_ID}')
     assert snapshot.status_code == 200, snapshot.text
     assert snapshot.json()['promocoes'][0]['id'] == offer_id
+    assert snapshot.json()['promocao_composicao_explicita'] is True
     assert next(product for product in snapshot.json()['produtos'] if product['id'] == PRODUTO_ID)['imagem_url'] == 'https://images.example.com/canonical.png'
     assert second_id not in [product['id'] for product in snapshot.json()['produtos']]
     payload = _payload('global-offer-' + uuid.uuid4().hex)
@@ -146,3 +147,38 @@ def test_campaign_cannot_reference_products_of_another_restaurant(setup_restaura
     finally:
         current_restaurante_id.reset(token)
         db.close()
+
+
+def test_mixed_cart_real_checkout_preserves_loose_price_and_replay(setup_restaurant_authority):
+    drink_id = 'mixed-cart-drink'
+    db = SessionLocal()
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    try:
+        db.add(Produto(id=drink_id, restaurante_id=RESTAURANTE_ID, nome='Bebida combo',
+                       categoria_id=CATEGORIA_ID, preco=3, ativo=True, somente_promocao=True))
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=RESTAURANTE_ID).one()
+        config.promocoes = [{'id': 'mixed', 'nome': 'Combo', 'preco': 22,
+                             'componentes': [[PRODUTO_ID], [drink_id]], 'ativo': True}]
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+    payload = _payload('mixed-' + uuid.uuid4().hex)
+    payload.update(promocao_id='mixed', promocao_preco_esperado=22, promocao_item_indices=[1, 2])
+    payload['itens'] = [
+        {'produto_id': PRODUTO_ID, 'quantidade': 2, 'observacao': 'avulsas'},
+        {'produto_id': PRODUTO_ID, 'quantidade': 1, 'observacao': 'combo'},
+        {'produto_id': drink_id, 'quantidade': 1},
+    ]
+    first = client.post('/cardapio/pedidos', json=payload)
+    assert first.status_code == 201, first.text
+    assert first.json()['total'] == 79  # combo 22 + 2 avulsas de 25 + frete 7
+    replay = client.post('/cardapio/pedidos', json=payload)
+    assert replay.json()['comanda_id'] == first.json()['comanda_id']
+    # A mesma chave não aceita trocar quais linhas recebem o preço promocional.
+    changed = client.post('/cardapio/pedidos', json={**payload, 'promocao_item_indices': [0, 2]})
+    assert changed.status_code == 409, changed.text
+    # Quantidade agregada de avulsas não pode ser apresentada como parte unitária.
+    invalid = client.post('/cardapio/pedidos', json={**payload, 'idempotency_key': uuid.uuid4().hex,
+                                                  'promocao_item_indices': [0, 2]})
+    assert invalid.status_code == 400, invalid.text

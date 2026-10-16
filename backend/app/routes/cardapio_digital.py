@@ -461,6 +461,7 @@ def obter_cardapio_publico(
                 ) for product in exclusive_parts
             ],
             "promocoes": active_offers,
+            "promocao_composicao_explicita": True,
         }
 
 

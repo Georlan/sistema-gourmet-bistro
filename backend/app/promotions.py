@@ -76,43 +76,19 @@ def active_promotions(config: Any, products: list[Any]) -> list[dict]:
     return visible
 
 
-def validate_exclusive_promotion_parts(
-    exclusive_ids: set[str],
-    promotion: dict | None,
-    validated: ValidatedOrderInput,
-) -> None:
-    """Protege SKUs exclusivos inclusive de pedidos forjados e itens extras."""
-    if not exclusive_ids:
-        return
-    if promotion is None or promotion_status(promotion) != "ativa":
-        raise OrderValidationError("Item exclusivo disponível somente dentro de uma promoção ativa.")
-    selected: set[str] = set()
-    for slot in promotion.get("componentes") or []:
-        matching = [
-            str(item.product_id) for item in validated.items
-            if str(item.product_id) in {str(pid) for pid in slot}
-        ]
-        if len(matching) != 1 or matching[0] in selected:
-            raise OrderValidationError("Promoção precisa de um produto válido em cada etapa.")
-        selected.add(matching[0])
-    if not exclusive_ids.issubset(selected):
-        raise OrderValidationError("Item exclusivo não pertence à composição escolhida.")
-
-
-def apply_promotion_to_validated(
-    validated: ValidatedOrderInput,
-    promotion: dict,
-    *, exclusive_ids: set[str] | None = None, expected_price: Decimal | None = None,
-) -> ValidatedOrderInput:
-    """Exige 1 unidade real por slot; adicionais mantêm o preço original.
-
-    O cliente nunca envia preço ou desconto. Apenas o id da promoção;
-    o servidor revalida a política ativa no tenant da transação.
-    """
+def _promotion_item_indices(
+    validated: ValidatedOrderInput, promotion: dict, item_indices: tuple[int, ...] | None = None,
+) -> list[int]:
     parts = promotion.get("componentes") or []
-    if promotion_status(promotion) != "ativa" or len(parts) != 2:
-        raise OrderValidationError("Promoção indisponível.")
     items = list(validated.items)
+    if item_indices is not None:
+        if (len(item_indices) != len(parts) or len(set(item_indices)) != len(parts)
+                or any(type(i) is not int or i < 0 or i >= len(items) for i in item_indices)):
+            raise OrderValidationError("Composição de promoção inválida.")
+        for slot, index in zip(parts, item_indices):
+            if str(items[index].product_id) not in {str(pid) for pid in slot} or items[index].quantity != 1:
+                raise OrderValidationError("Monte uma unidade de cada item da promoção.")
+        return list(item_indices)
     selected: list[int] = []
     for choices in parts:
         if not choices:
@@ -124,6 +100,43 @@ def apply_promotion_to_validated(
         if len(matches) != 1 or matches[0] in selected or items[matches[0]].quantity != 1:
             raise OrderValidationError("Monte uma unidade de cada item da promoção.")
         selected.append(matches[0])
+
+    return selected
+
+
+def validate_exclusive_promotion_parts(
+    exclusive_ids: set[str],
+    promotion: dict | None,
+    validated: ValidatedOrderInput,
+    *, item_indices: tuple[int, ...] | None = None,
+) -> None:
+    """Protege SKUs exclusivos inclusive de pedidos forjados e itens extras."""
+    if not exclusive_ids:
+        return
+    if promotion is None or promotion_status(promotion) != "ativa":
+        raise OrderValidationError("Item exclusivo disponível somente dentro de uma promoção ativa.")
+    selected = _promotion_item_indices(validated, promotion, item_indices)
+    if any(str(item.product_id) in exclusive_ids and index not in selected
+           for index, item in enumerate(validated.items)):
+        raise OrderValidationError("Item exclusivo não pertence à composição escolhida.")
+
+
+def apply_promotion_to_validated(
+    validated: ValidatedOrderInput,
+    promotion: dict,
+    *, exclusive_ids: set[str] | None = None, expected_price: Decimal | None = None,
+    item_indices: tuple[int, ...] | None = None,
+) -> ValidatedOrderInput:
+    """Exige 1 unidade real por slot; adicionais mantêm o preço original.
+
+    O cliente nunca envia preço ou desconto. Apenas o id da promoção;
+    o servidor revalida a política ativa no tenant da transação.
+    """
+    parts = promotion.get("componentes") or []
+    if promotion_status(promotion) != "ativa" or len(parts) != 2:
+        raise OrderValidationError("Promoção indisponível.")
+    items = list(validated.items)
+    selected = _promotion_item_indices(validated, promotion, item_indices)
 
     base_total = sum((items[index].base_price for index in selected), Decimal("0.00"))
     promo_price = money(promotion["preco"])
