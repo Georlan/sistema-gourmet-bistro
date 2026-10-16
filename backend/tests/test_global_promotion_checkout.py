@@ -89,3 +89,20 @@ def test_price_review_is_part_of_idempotent_intent_without_changing_legacy_hashe
     assert first.fingerprint == equivalent.fingerprint
     assert first.fingerprint != reviewed.fingerprint
     assert first.fingerprint != other_tenant.fingerprint
+
+
+def test_campaign_cannot_reference_products_of_another_restaurant(setup_restaurant_authority):
+    from fastapi import HTTPException
+    from app.routes.cardapio_digital import PromotionConfigInput, _validate_promotion_input
+    db = SessionLocal()
+    token = current_restaurante_id.set(RESTAURANTE_ID + 1)
+    try:
+        offer = PromotionConfigInput(nome='Outro restaurante', preco=30,
+                                     componentes=[[PRODUTO_ID], ['global-offer-drink']])
+        with pytest.raises(HTTPException) as exc:
+            _validate_promotion_input(db, RESTAURANTE_ID + 1, offer)
+        assert exc.value.status_code == 422
+        assert 'neste restaurante' in exc.value.detail
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
