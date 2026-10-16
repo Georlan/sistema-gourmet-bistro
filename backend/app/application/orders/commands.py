@@ -213,6 +213,7 @@ class CreateOrderCommand:
     check_id: Optional[str | int] = None
     atendimento_id: Optional[str | int] = None
     coupon_code: Optional[str] = None
+    promotion_id: Optional[str] = None
     cashback_discount: Decimal = Decimal("0.00")
     usar_cashback: bool = False
     payment_method: Optional[str] = None
