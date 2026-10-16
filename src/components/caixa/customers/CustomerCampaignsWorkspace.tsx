@@ -116,6 +116,15 @@ export function CustomerCampaignsWorkspace({
   const [recordingByCustomer, setRecordingByCustomer] = useState<Record<string, boolean>>({});
   const [recordedCustomerIds, setRecordedCustomerIds] = useState<Record<string, string>>({});
   const [openedWhatsAppIds, setOpenedWhatsAppIds] = useState<Record<string, boolean>>({});
+  const [awaitingInitialCustomers, setAwaitingInitialCustomers] = useState(false);
+
+  // A campanha já persistida não pode receber contatos de um rascunho alterado.
+  // Editar gera um NOVO registro quando o operador salvar; não atualiza o histórico.
+  const invalidateSavedCampaign = () => {
+    setActiveCampaignId(null);
+    setRecordedCustomerIds({});
+    setOpenedWhatsAppIds({});
+  };
 
   useEffect(() => {
     if (!hasCoupons) return;
@@ -156,14 +165,29 @@ export function CustomerCampaignsWorkspace({
     setTemplateMensagem(nextApproach === 'SEM_DESCONTO' ? tplGroup.semDesconto : tplGroup.comBeneficio);
     const objLabel = OBJECTIVES.find((o) => o.id === nextObj)?.label || 'Ação comercial';
     setNomeCampanha(draftSeed?.titulo || `Ação: ${objLabel}`);
-    setActiveCampaignId(null);
+    setSelectedCupomId(draftSeed?.cupomId || '');
+    setStep(1);
+    invalidateSavedCampaign();
 
     if (draftSeed?.customerIds && draftSeed.customerIds.length > 0) {
       setSelectedCustomerIds(draftSeed.customerIds);
-    } else {
+      setAwaitingInitialCustomers(false);
+    } else if (customers.length > 0) {
       setSelectedCustomerIds(computeEligibleAudienceIds(nextObj));
+      setAwaitingInitialCustomers(false);
+    } else {
+      setSelectedCustomerIds([]);
+      setAwaitingInitialCustomers(true);
     }
-  }, [draftSeed, customers.length]);
+  }, [draftSeed]);
+
+  // Carrega o público automático uma única vez se os clientes chegarem depois
+  // da primeira renderização; refresh posterior não apaga contatos/edições.
+  useEffect(() => {
+    if (!awaitingInitialCustomers || customers.length === 0) return;
+    setSelectedCustomerIds(computeEligibleAudienceIds(objetivo));
+    setAwaitingInitialCustomers(false);
+  }, [awaitingInitialCustomers, customers.length, objetivo]);
 
   const handleObjectiveChange = (nextObj: string) => {
     setObjetivo(nextObj);
@@ -174,14 +198,14 @@ export function CustomerCampaignsWorkspace({
     const objLabel = OBJECTIVES.find((o) => o.id === nextObj)?.label || 'Ação comercial';
     setNomeCampanha(`Ação: ${objLabel}`);
     setSelectedCustomerIds(computeEligibleAudienceIds(nextObj));
-    setActiveCampaignId(null);
+    invalidateSavedCampaign();
   };
 
   const handleApproachChange = (nextApproach: 'SEM_DESCONTO' | 'FIDELIDADE' | 'CUPOM') => {
     setTipoAbordagem(nextApproach);
     const tplGroup = DEFAULT_CRM_TEMPLATES[objetivo] || DEFAULT_CRM_TEMPLATES.SECOND_PURCHASE;
     setTemplateMensagem(nextApproach === 'SEM_DESCONTO' ? tplGroup.semDesconto : tplGroup.comBeneficio);
-    setActiveCampaignId(null);
+    invalidateSavedCampaign();
   };
 
   const activeCoupons = useMemo(() => {
@@ -249,6 +273,7 @@ export function CustomerCampaignsWorkspace({
       const created = await res.json();
       setCupons((prev) => [created, ...prev]);
       setSelectedCupomId(String(created.id));
+      invalidateSavedCampaign();
       setShowQuickCouponDraft(false);
       showToast(`Cupom ${created.codigo} criado e vinculado à campanha!`);
     } catch (err: any) {
@@ -259,11 +284,19 @@ export function CustomerCampaignsWorkspace({
   };
 
   const handleRegisterCampaign = async () => {
+    if (activeCampaignId) {
+      setStep(3);
+      return;
+    }
+    if (selectedCustomers.length === 0) {
+      showToast('Selecione pelo menos um cliente antes de salvar.', 'error');
+      return;
+    }
     if (!nomeCampanha.trim()) {
       showToast('Informe um nome para identificar a campanha.', 'error');
       return;
     }
-    if (tipoAbordagem === 'CUPOM' && !selectedCupomId) {
+    if (tipoAbordagem === 'CUPOM' && !selectedCoupon) {
       showToast('Selecione um cupom ativo ou crie um rascunho antes de salvar.', 'error');
       return;
     }
@@ -288,6 +321,8 @@ export function CustomerCampaignsWorkspace({
       }
       const data = await res.json();
       setActiveCampaignId(data.id);
+      setRecordedCustomerIds({});
+      setOpenedWhatsAppIds({});
       setStep(3);
       showToast('Campanha registrada! Use a fila abaixo para copiar ou abrir o WhatsApp individual e registrar cada ação.');
     } catch (err: any) {
@@ -317,6 +352,10 @@ export function CustomerCampaignsWorkspace({
   };
 
   const handleConfirmManualContact = async (customer: LoyaltyCustomer, renderedMessage: string) => {
+    if (!activeCampaignId) {
+      showToast('Salve a campanha antes de registrar contatos.', 'error');
+      return;
+    }
     try {
       setRecordingByCustomer((prev) => ({ ...prev, [customer.id]: true }));
       const beneficioResumo =
@@ -359,6 +398,7 @@ export function CustomerCampaignsWorkspace({
   };
 
   const toggleCustomerSelection = (id: string) => {
+    invalidateSavedCampaign();
     setSelectedCustomerIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
@@ -419,7 +459,7 @@ export function CustomerCampaignsWorkspace({
                 type="text"
                 aria-label="Identificação da campanha"
                 value={nomeCampanha}
-                onChange={(e) => setNomeCampanha(e.target.value)}
+                onChange={(e) => { invalidateSavedCampaign(); setNomeCampanha(e.target.value); }}
                 className="mt-1 w-full rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-xs text-koma-foreground"
               />
             </div>
@@ -549,7 +589,7 @@ export function CustomerCampaignsWorkspace({
                   <select
                     aria-label="Selecionar cupom da campanha"
                     value={selectedCupomId}
-                    onChange={(e) => setSelectedCupomId(e.target.value)}
+                    onChange={(e) => { invalidateSavedCampaign(); setSelectedCupomId(e.target.value); }}
                     className="w-full rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-xs text-koma-foreground"
                   >
                     <option value="">Selecione um cupom ativo…</option>
@@ -655,7 +695,7 @@ export function CustomerCampaignsWorkspace({
                   <button
                     key={token}
                     type="button"
-                    onClick={() => setTemplateMensagem((prev) => `${prev} ${token}`)}
+                    onClick={() => { invalidateSavedCampaign(); setTemplateMensagem((prev) => `${prev} ${token}`); }}
                     className="rounded-md border border-koma-border bg-koma-card px-2 py-0.5 font-mono text-[10px] text-emerald-400 hover:bg-koma-raised"
                   >
                     + {token}
@@ -668,7 +708,7 @@ export function CustomerCampaignsWorkspace({
               rows={4}
               aria-label="Modelo de mensagem da campanha"
               value={templateMensagem}
-              onChange={(e) => setTemplateMensagem(e.target.value)}
+              onChange={(e) => { invalidateSavedCampaign(); setTemplateMensagem(e.target.value); }}
               className="w-full rounded-xl border border-koma-border bg-koma-card p-3 text-xs text-koma-foreground leading-relaxed"
             />
 
@@ -698,7 +738,7 @@ export function CustomerCampaignsWorkspace({
               {savingCampaign
                 ? 'Salvando campanha…'
                 : activeCampaignId
-                ? 'Atualizar registro da campanha'
+                ? 'Voltar aos contatos da campanha salva'
                 : 'Salvar campanha no histórico e revisar envios'}
             </button>
           </section>
@@ -818,6 +858,7 @@ export function CustomerCampaignsWorkspace({
                           disabled={
                             isRecording ||
                             isRecorded ||
+                            !activeCampaignId ||
                             !waUrl ||
                             Boolean(customer.opt_out_marketing) ||
                             Boolean(customer.contato_recente)
