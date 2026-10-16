@@ -3,16 +3,13 @@ import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import {
   AlertTriangle,
   ArrowRight,
-  BarChart3,
   CheckCircle2,
   Clock,
   Filter,
   Gift,
-  Megaphone,
   Plus,
   Search,
   Sparkles,
-  Target,
   Ticket,
   UserCheck,
   Users,
@@ -97,38 +94,14 @@ export default function CashierCustomers({
   hasLoyalty,
   hasCoupons,
 }: Props) {
-  // Navegação principal das 5 abas do CRM
-  const [crmTab, setCrmTab] = useState<CrmWorkspaceTab>(() => {
-    if (activeSubTab === 'fidelidade' || ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab)) {
-      return 'beneficios';
-    }
-    return 'oportunidades';
-  });
-  const [beneficiosSection, setBeneficiosSection] = useState<'fidelidade' | 'cupons'>(() =>
-    ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab) ? 'cupons' : 'fidelidade',
-  );
-
-  // Sincroniza atalhos da barra lateral (Clientes / Programa de Fidelidade / Cupons & Promoções) sem duplicar funções
-  useEffect(() => {
-    if (activeSubTab === 'fidelidade' && hasLoyalty) {
-      setCrmTab('beneficios');
-      setBeneficiosSection('fidelidade');
-    } else if (['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab) && hasCoupons) {
-      setCrmTab('beneficios');
-      setBeneficiosSection('cupons');
-    } else if (['oportunidades', 'campanhas', 'beneficios', 'resultados'].includes(activeSubTab)) {
-      setCrmTab(activeSubTab as CrmWorkspaceTab);
-    }
-  }, [activeSubTab, hasLoyalty, hasCoupons]);
-
+  // Seleção única para o menu lateral e a barra horizontal compartilhada.
+  const beneficiosSection = ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab) ? 'cupons' : 'fidelidade';
+  const crmTab: CrmWorkspaceTab = ['fidelidade', 'cupons', 'cupom', 'promocoes', 'descontos', 'beneficios'].includes(activeSubTab)
+    ? 'beneficios'
+    : ['clientes', 'campanhas', 'resultados'].includes(activeSubTab)
+      ? activeSubTab as CrmWorkspaceTab : 'oportunidades';
   const handleSelectCrmTab = (nextTab: CrmWorkspaceTab) => {
-    setCrmTab(nextTab);
-    if (nextTab === 'beneficios') {
-      if (beneficiosSection === 'cupons' && hasCoupons) setActiveSubTab('cupons');
-      else if (hasLoyalty) setActiveSubTab('fidelidade');
-    } else if (['fidelidade', 'cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab)) {
-      setActiveSubTab('clientes');
-    }
+    setActiveSubTab(nextTab === 'beneficios' ? (hasLoyalty ? 'fidelidade' : 'cupons') : nextTab);
   };
 
   // Busca e filtros da aba Clientes
@@ -635,9 +608,9 @@ export default function CashierCustomers({
           <OperationalBanner
             id="customers-heading"
             eyebrow="RELACIONAMENTO & RECOMPRA"
-            title="Clientes"
-            accent="e decisões comerciais"
-            description="Quem merece atenção agora, qual abordagem faz sentido, como agir sem trabalho repetitivo e qual retorno foi comprovado."
+            title="Relacionamento"
+            accent="e recompra"
+            description="Escolha quem contatar e acompanhe o retorno."
             metrics={[
               { label: loyaltyUsers.length === 1 ? 'cliente na base' : 'clientes na base', value: loyaltyUsers.length },
               {
@@ -657,80 +630,6 @@ export default function CashierCustomers({
               },
             ]}
           />
-
-          {/* Navegação unificada das 5 Abas do CRM */}
-          <div className="overflow-x-auto">
-            <div
-              role="tablist"
-              aria-label="Áreas do CRM"
-              className="flex w-max min-w-full gap-1.5 rounded-2xl border border-koma-border bg-koma-panel p-1.5"
-            >
-              {(
-                [
-                  {
-                    id: 'oportunidades',
-                    label: '1. Oportunidades',
-                    badge: totalActionableOpportunities,
-                    icon: Target,
-                  },
-                  {
-                    id: 'clientes',
-                    label: '2. Clientes',
-                    badge: loyaltyUsers.length,
-                    icon: Users,
-                  },
-                  {
-                    id: 'campanhas',
-                    label: '3. Campanhas',
-                    badge: null,
-                    icon: Megaphone,
-                  },
-                  {
-                    id: 'beneficios',
-                    label: '4. Benefícios',
-                    badge: relationshipSummary.resgataveis > 0 ? `${relationshipSummary.resgataveis} resgatáveis` : null,
-                    icon: Gift,
-                  },
-                  {
-                    id: 'resultados',
-                    label: '5. Resultados',
-                    badge: null,
-                    icon: BarChart3,
-                  },
-                ] as const
-              ).map((item) => {
-                const Icon = item.icon;
-                const selected = crmTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    id={`crm-workspace-tab-${item.id}`}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() => handleSelectCrmTab(item.id)}
-                    className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer ${
-                      selected
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'text-koma-muted hover:bg-koma-raised hover:text-koma-foreground'
-                    }`}
-                  >
-                    <Icon size={14} />
-                    <span>{item.label}</span>
-                    {item.badge !== null && (
-                      <span
-                        className={`rounded-full px-2 py-0.5 font-mono text-[10px] ${
-                          selected ? 'bg-black/25 text-white' : 'bg-koma-raised text-koma-foreground'
-                        }`}
-                      >
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
 
           {/* =====================================================================
               ABA 1: OPORTUNIDADES (Página inicial orientada a ações)
@@ -782,10 +681,10 @@ export default function CashierCustomers({
                     Quem merece sua atenção agora
                   </span>
                   <h3 className="mt-0.5 text-sm font-black text-koma-foreground">
-                    Oportunidades priorizadas com dados reais (sem contagens ou receitas fictícias)
+                    Quem você pode trazer de volta hoje?
                   </h3>
                   <p className="mt-0.5 text-xs text-koma-muted">
-                    Clientes em opt-out ou abordados nos últimos 7 dias são retidos automaticamente para evitar insistência.
+                    Escolha um grupo, revise a mensagem e inicie o contato.
                   </p>
                 </div>
                 <button
@@ -799,7 +698,7 @@ export default function CashierCustomers({
 
               {/* Grid principal de Oportunidades (Aberto diretamente, nunca escondido em acordeão) */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {opportunitiesCatalog.map((opp: any) => {
+                {opportunitiesCatalog.filter((opp: any) => opp.elegiveis_count > 0).map((opp: any) => {
                   const previewCustomers = loyaltyUsers
                     .filter((u) => (opp.elegiveis_ids || []).includes(u.id))
                     .slice(0, 4);
@@ -827,24 +726,13 @@ export default function CashierCustomers({
                           </div>
                         </div>
 
-                        <div className="rounded-xl border border-koma-border bg-koma-card p-3 space-y-1.5 text-xs">
-                          <div>
-                            <strong className="text-koma-foreground">Por que entraram neste grupo:</strong>{' '}
-                            <span className="text-koma-muted">{opp.motivo_entrada}</span>
-                          </div>
-                          <div>
-                            <strong className="text-emerald-400">Abordagem recomendada (sem desconto):</strong>{' '}
-                            <span className="text-koma-foreground">
-                              {opp.abordagem_sem_desconto || opp.abordagem_recomendada}
-                            </span>
-                          </div>
-                          {opp.abordagem_com_beneficio && (
-                            <div>
-                              <strong className="text-koma-muted">Opção com benefício:</strong>{' '}
-                              <span className="text-koma-muted">{opp.abordagem_com_beneficio}</span>
-                            </div>
-                          )}
-                        </div>
+                        <p className="text-sm text-koma-foreground">{({
+                          SECOND_PURCHASE: 'Pergunte como foi o primeiro pedido e convide para pedir novamente.',
+                          CADENCE_RECOVERY: 'Convide o cliente a repetir seu prato favorito.',
+                          BENEFIT_REMINDER: 'Lembre o cliente do benefício que já pode usar.',
+                          VIP_RECOGNITION: 'Agradeça a preferência e apresente uma novidade da casa.',
+                          OCCURRENCE_RECOVERY: 'Entenda o que aconteceu e ofereça ajuda antes de vender.',
+                        } as Record<string, string>)[opp.id] || 'Revise este público e prepare um convite para voltar.'}</p>
 
                         {previewCustomers.length > 0 ? (
                           <div className="flex flex-wrap items-center gap-1.5">
@@ -873,23 +761,27 @@ export default function CashierCustomers({
                           </p>
                         )}
 
+                        {/* Critérios e limitações acessíveis sem ocupar a tela inteira */}
+                        <details className="rounded-xl border border-koma-border/70 bg-koma-card/60 px-3 py-2 text-[11px] text-koma-muted">
+                          <summary className="cursor-pointer font-bold text-koma-foreground">
+                            Por que este grupo?
+                          </summary>
+                          <div className="mt-2 space-y-1">
+                            <p>{opp.motivo_entrada}</p>
+                            <p>{opp.abordagem_sem_desconto || opp.abordagem_recomendada}</p>
                         {opp.retidos_contato_recente_count > 0 && (
                           <p className="text-[11px] text-amber-300">
                             {opp.retidos_contato_recente_count} cliente(s) deste perfil foram retidos por já terem sido abordados nos últimos 7 dias.
                           </p>
                         )}
 
-                        {/* Critérios e limitações acessíveis sem ocupar a tela inteira */}
-                        <details className="rounded-xl border border-koma-border/70 bg-koma-card/60 px-3 py-2 text-[11px] text-koma-muted">
-                          <summary className="cursor-pointer font-bold text-koma-foreground">
-                            Critérios e limitações desta regra
-                          </summary>
-                          <div className="mt-2 space-y-1">
+
+                            {opp.abordagem_com_beneficio && <p><strong>Opção com benefício:</strong> {opp.abordagem_com_beneficio}</p>}
                             <p>
-                              <strong>Critério técnico:</strong> {opp.criterios}
+                              <strong>Como selecionamos:</strong> {opp.criterios}
                             </p>
                             <p>
-                              <strong>Limitação honesta:</strong> {opp.limitacoes}
+                              <strong>O que considerar:</strong> {opp.limitacoes}
                             </p>
                           </div>
                         </details>
@@ -916,46 +808,22 @@ export default function CashierCustomers({
                 })}
               </div>
 
-              {/* Visão rápida honesta da base (garante transparência para poucos clientes ou cadastros sem compra) */}
-              {loyaltyUsers.length > 0 && (
-                <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-koma-foreground">
-                        Resumo rápido da base ({loyaltyUsers.length}{' '}
-                        {loyaltyUsers.length === 1 ? 'cadastro' : 'cadastros'})
-                      </h4>
-                      <p className="text-[11px] text-koma-muted">
-                        Toque em um cliente para abrir a ficha individual ou acesse a aba <strong>2. Clientes</strong> para filtros completos.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectCrmTab('clientes')}
-                      className="koma-btn-secondary rounded-xl px-3 py-1.5 text-xs font-bold"
-                    >
-                      Ir para 2. Clientes
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {loyaltyUsers.slice(0, 8).map((u) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => setSelectedProfileCustomerId(u.id)}
-                        className="inline-flex items-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-left text-xs hover:border-emerald-500/40"
-                      >
-                        <strong className="text-koma-foreground">{u.cliente}</strong>
-                        <span className="font-mono text-[10px] text-koma-muted">
-                          {(u.pedidos_concluidos ?? 0) > 0
-                            ? `${u.pedidos_concluidos} ped. · ${ultimaCompraLabel(u.dias_sem_comprar)}`
-                            : 'Sem compra identificada'}
-                        </span>
-                      </button>
+              {!crmSummaryLoading && !crmSummaryError && opportunitiesCatalog.every((opp: any) => !opp.elegiveis_count) && (
+                <div className="rounded-2xl border border-koma-border p-5 text-sm text-koma-muted">Nenhum grupo precisa de contato hoje. Consulte sua base em Clientes.</div>
+              )}
+              {opportunitiesCatalog.some((opp: any) => !opp.elegiveis_count) && (
+                <details className="rounded-2xl border border-koma-border bg-koma-panel p-4">
+                  <summary className="cursor-pointer text-sm font-bold text-koma-muted">Outros grupos ({opportunitiesCatalog.filter((opp: any) => !opp.elegiveis_count).length})</summary>
+                  <div className="mt-3 divide-y divide-koma-border">
+                    {opportunitiesCatalog.filter((opp: any) => !opp.elegiveis_count).map((opp: any) => (
+                      <div key={opp.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                        <span>{opp.titulo}</span><span className="shrink-0 text-xs text-koma-muted">Sem clientes hoje</span>
+                      </div>
                     ))}
                   </div>
-                </section>
+                </details>
               )}
+
             </div>
           )}
 
@@ -1488,50 +1356,17 @@ export default function CashierCustomers({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
-                      4. Benefícios unificados (Fidelidade + Cupons)
+                      {beneficiosSection === 'cupons' ? 'Cupons' : 'Fidelidade'}
                     </span>
                     <h3 className="mt-0.5 text-sm font-black text-koma-foreground">
-                      Condições legíveis e separação entre saldo acumulado e saldo resgatável
+                      Benefícios para a próxima compra
                     </h3>
                     <p className="text-xs text-koma-muted">
                       Alterações nas taxas valem para vendas futuras e preservam saldos e benefícios já concedidos.
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    {hasLoyalty && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setBeneficiosSection('fidelidade');
-                          setActiveSubTab('fidelidade');
-                        }}
-                        className={`rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-                          beneficiosSection === 'fidelidade'
-                            ? 'bg-emerald-600 text-white'
-                            : 'border border-koma-border bg-koma-panel text-koma-muted hover:text-koma-foreground'
-                        }`}
-                      >
-                        Programa de Fidelidade
-                      </button>
-                    )}
-                    {hasCoupons && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setBeneficiosSection('cupons');
-                          setActiveSubTab('cupons');
-                        }}
-                        className={`rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-                          beneficiosSection === 'cupons'
-                            ? 'bg-emerald-600 text-white'
-                            : 'border border-koma-border bg-koma-panel text-koma-muted hover:text-koma-foreground'
-                        }`}
-                      >
-                        Cupons & Promoções
-                      </button>
-                    )}
-                  </div>
+
                 </div>
 
                 {/* Resumo honesto de saldos de fidelidade (Acumulado vs. Resgatável) */}
