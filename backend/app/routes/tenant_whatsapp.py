@@ -129,6 +129,7 @@ def register_central_recipient(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     config = _config(db, user)
+    config = wa._locked_whatsapp_config_query(db, user.restaurante_id).populate_existing().one()
     if config.whatsapp_instance_name not in (None, CENTRAL_INSTANCE_MARKER):
         raise HTTPException(
             status_code=409,
@@ -153,6 +154,7 @@ def remove_central_recipient(
     user: Usuario = Depends(require_permission("configuracoes:administrar")),
 ):
     config = _config(db, user)
+    config = wa._locked_whatsapp_config_query(db, user.restaurante_id).populate_existing().one()
     if config.whatsapp_instance_name != CENTRAL_INSTANCE_MARKER:
         raise HTTPException(status_code=409, detail="Nenhum destinatário central cadastrado.")
     config.whatsapp_alerts_enabled = False
