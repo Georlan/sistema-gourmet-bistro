@@ -323,7 +323,7 @@ test('promoções ficam como categoria virtual no catálogo, sem bloco acima dos
   await expect(panel.getByRole('region', { name: 'Cadastrar promoção' })).toBeVisible();
   await expect(panel.getByRole('button', { name: 'G + M · R$ 22' })).toBeVisible();
   await expect(panel.getByText('Cadastrar bebida exclusiva para o combo')).toBeVisible();
-  await expect(panel.getByRole('button', { name: 'Criar bebida apenas para promoções' })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Criar bebida apenas para promoções' })).toBeHidden();
   await panel.getByRole('button', { name: 'G + M · R$ 22' }).click();
   await expect(panel.getByRole('textbox', { name: 'Nome da promoção' })).toHaveValue('Quentinha G + Quentinha M');
   await expect(panel.getByRole('spinbutton', { name: 'Preço do conjunto' })).toHaveValue('22.00');
