@@ -48,7 +48,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
       await page.getByLabel('Margem de contribuição na simulação').fill('30');
       await page.screenshot({path:testInfo.outputPath(`loyalty-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
       await page.getByRole('region',{name:'Impacto na contribuição por pedido'}).scrollIntoViewIfNeeded();
-      await expect(page.getByRole('region',{name:'Impacto na contribuição por pedido'}).locator('.recharts-xAxis .recharts-cartesian-axis-tick-value').first()).toContainText('0,00');
+      await expect(page.getByRole('region',{name:'Impacto na contribuição por pedido'}).getByText(/^R\$\s0,00$/)).toBeVisible();
       await page.screenshot({path:testInfo.outputPath(`loyalty-impact-${testInfo.project.name}.png`),animations:'disabled'});
       await page.getByLabel('Ativar programa de fidelidade').uncheck({force:true});
       await expect(simulation).toContainText('Programa pausado');
