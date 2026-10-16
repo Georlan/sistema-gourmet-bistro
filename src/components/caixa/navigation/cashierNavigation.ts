@@ -35,6 +35,9 @@ export type CashierNavigationChild = {
   searchAliases?: readonly string[];
   plans?: readonly SubscriptionPlanId[];
   requiredFeature?: SubscriptionFeatureId;
+  requiredAnyFeatures?: readonly SubscriptionFeatureId[];
+  /** Kept for legacy routes and function search, but not shown as a sixth destination. */
+  navigationHidden?: boolean;
 };
 
 export type CashierNavigationItem = {
@@ -154,12 +157,14 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         icon: Users,
         target: { tab: 'clientes', subTab: 'oportunidades' },
         children: [
-          { id: 'clientes_oportunidades', label: 'Ações para hoje', target: { tab: 'clientes', subTab: 'oportunidades' } },
+          { id: 'clientes_oportunidades', label: 'Hoje', target: { tab: 'clientes', subTab: 'oportunidades' }, searchAliases: ['ações para hoje'] },
           { id: 'clientes_cadastro', label: 'Clientes', target: { tab: 'clientes', subTab: 'clientes' } },
           { id: 'clientes_campanhas', label: 'Campanhas', target: { tab: 'clientes', subTab: 'campanhas' } },
-          { id: 'clientes_fidelidade', label: 'Fidelidade', requiredFeature: 'loyalty', target: { tab: 'clientes', subTab: 'fidelidade' } },
-          { id: 'clientes_cupons', label: 'Cupons', requiredFeature: 'coupons', target: { tab: 'clientes', subTab: 'cupons' } },
+          { id: 'clientes_beneficios', label: 'Benefícios', requiredAnyFeatures: ['loyalty', 'coupons'], target: { tab: 'clientes', subTab: 'beneficios' } },
           { id: 'clientes_resultados', label: 'Resultados', target: { tab: 'clientes', subTab: 'resultados' } },
+          // Compatibility destinations remain searchable and independently entitlement-gated.
+          { id: 'clientes_fidelidade', label: 'Fidelidade', requiredFeature: 'loyalty', navigationHidden: true, target: { tab: 'clientes', subTab: 'fidelidade' } },
+          { id: 'clientes_cupons', label: 'Cupons', requiredFeature: 'coupons', navigationHidden: true, target: { tab: 'clientes', subTab: 'cupons' } },
         ],
       },
       {
@@ -244,7 +249,8 @@ export function getCashierSidebarGroupsForPlan(
           if (!item.children?.length) return item;
 
           const children = item.children
-            .filter((child) => isNavigationEntryAvailable(child.plans, planId, child.requiredFeature, entitlements))
+            .filter((child) => isNavigationEntryAvailable(child.plans, planId, child.requiredFeature, entitlements)
+              && (!child.requiredAnyFeatures?.length || child.requiredAnyFeatures.some((feature) => operationalEntitlementEnabled(entitlements, feature))))
             .map((child) => {
               if (child.id === 'config_atendimento' && !operationalEntitlementEnabled(entitlements, 'waiter_app')) return { ...child, searchAliases: [] };
               if (child.id === 'cardapio_preparo' && !operationalEntitlementEnabled(entitlements, 'printing')) {
@@ -442,6 +448,7 @@ const SUBTAB_ALIASES: Readonly<Partial<Record<CashierTab, Readonly<Record<string
 const VALID_TABS = new Set<CashierTab>(CASHIER_PARENT_ITEMS.map((item) => item.target.tab));
 
 const CHILD_DETAIL_SUBTABS: Readonly<Record<string, readonly string[]>> = {
+  clientes_beneficios: ['beneficios', 'fidelidade', 'cupons'],
   vendas_cozinha: ['kds', 'preparo'],
   config_atendimento: ['atendimento', 'garcom', 'taxa'],
   relatorios_visao_geral: ['visao_geral', 'metas', 'vendas', 'indicadores', 'relatorio_geral', 'consolidado_vendas'],
@@ -532,6 +539,11 @@ export function normalizeCashierTargetForEntitlements(
   if (target.tab === 'impressao_salao' && target.subTab === 'garcom' && !operationalEntitlementEnabled(entitlements, 'waiter_app')) {
     return { tab: 'impressao_salao', subTab: 'aparencia' };
   }
+  if (target.tab === 'clientes' && target.subTab === 'beneficios'
+    && !operationalEntitlementEnabled(entitlements, 'loyalty')
+    && !operationalEntitlementEnabled(entitlements, 'coupons')) {
+    return { tab: 'clientes', subTab: 'clientes' };
+  }
   if (target.tab === 'clientes' && target.subTab === 'fidelidade' && !operationalEntitlementEnabled(entitlements, 'loyalty')) {
     return { tab: 'clientes', subTab: 'clientes' };
   }
@@ -580,5 +592,5 @@ export function getCashierNavigationAction(id: string): CashierNavigationAction 
 /** Horizontal navigation shares labels, order, capabilities and owners with the sidebar. */
 export function getCashierHorizontalItems(tab: string, planId: SubscriptionPlanId, entitlements?: SubscriptionEntitlements, setupMode = false): readonly CashierNavigationChild[] {
   const groups = setupMode ? getCashierSetupSidebarGroupsForPlan(planId, entitlements) : getCashierSidebarGroupsForPlan(planId, entitlements);
-  return groups.flatMap(group => group.items).find(item => item.id === (tab === 'dashboard' ? 'relatorios' : tab))?.children ?? [];
+  return groups.flatMap(group => group.items).find(item => item.id === (tab === 'dashboard' ? 'relatorios' : tab))?.children.filter(child => !child.navigationHidden) ?? [];
 }
