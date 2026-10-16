@@ -27,10 +27,10 @@ test('CRM ranks buyers, filters inactivity, searches formatted phones and preser
   } else if (testInfo.project.name.startsWith('tablet')) {
     await page.getByRole('button', { name: 'Abrir menu principal' }).click();
   }
-  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
+  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Relacionamento(?: \d+)?$/ }).click();
   // 1. Oportunidades é a página inicial aberta diretamente
-  await expect(page.getByRole('tab', { name: /1\. Oportunidades/ })).toBeVisible();
-  await expect(page.getByRole('tab', { name: /2\. Clientes/ })).toBeVisible();
+  await expect(page.locator('#clientes-subtab-oportunidades')).toBeVisible();
+  await expect(page.locator('#clientes-subtab-clientes')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Recuperar recorrentes fora do ritmo habitual' })).toBeVisible();
 
   // Abrir público da oportunidade direto na lista de clientes
