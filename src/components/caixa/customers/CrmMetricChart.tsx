@@ -17,7 +17,7 @@ export function CrmMetricChart({ title, rows, unit }: Props) {
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} layout="vertical" margin={{ left: 0, right: 16 }}>
             <CartesianGrid {...KOMA_CHART_GRID} />
-            <XAxis {...KOMA_CHART_AXIS} type="number" allowDecimals={unit === 'BRL'} tickFormatter={format} domain={unit === 'BRL' ? [(min: number) => Math.min(0, min), (max: number) => Math.max(1, max)] : [0, (max: number) => Math.max(1, max)]} />
+            <XAxis {...KOMA_CHART_AXIS} type="number" tickCount={2} interval={0} allowDecimals={unit === 'BRL'} tickFormatter={format} domain={unit === 'BRL' ? [(min: number) => Math.min(0, min), (max: number) => Math.max(1, max)] : [0, (max: number) => Math.max(1, max)]} />
             <YAxis {...KOMA_CHART_AXIS} type="category" dataKey="label" width={120} />
             <Tooltip contentStyle={{ background: 'var(--koma-surface-panel)', borderRadius: 12 }} cursor={false} />
             <Bar dataKey="value" name={unit === 'BRL' ? 'Contribuição' : 'Clientes'} fill={KOMA_CHART_COLORS.primary} radius={[0, 5, 5, 0]} isAnimationActive={false} />
