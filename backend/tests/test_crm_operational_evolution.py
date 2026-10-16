@@ -812,3 +812,35 @@ def test_multitenant_isolation_and_unmeasured_results_honesty():
         ).status_code
         == 404
     )
+
+
+def test_missing_crm_schema_preserves_customer_reads_and_never_runs_ddl():
+    from sqlalchemy import event, inspect
+    from app.crm_models import CrmCampanha, CrmClientePreferencia, CrmContatoCliente
+
+    client = TestClient(app)
+    headers = get_auth_headers(client)
+    with TestingSessionLocal() as db:
+        _seed_six_crm_personas(db, datetime.datetime.now(datetime.timezone.utc))
+    for model in (CrmContatoCliente, CrmCampanha, CrmClientePreferencia):
+        model.__table__.drop(engine)
+
+    statements = []
+    def capture(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement.strip().upper())
+    event.listen(engine, 'before_cursor_execute', capture)
+    try:
+        for _ in range(2):
+            response = client.get('/fidelidade/clientes', headers=headers)
+            assert response.status_code == 200, response.text
+            rows = response.json()
+            assert rows
+            assert all(row['opt_out_marketing'] for row in rows)
+            assert all(row['contato_recente'] for row in rows)
+            assert any(row['saldo_pontos'] > 0 for row in rows)
+        unavailable = client.get('/fidelidade/crm/resumo', headers=headers)
+        assert unavailable.status_code == 503, unavailable.text
+        assert not any(s.startswith(('CREATE ', 'ALTER ', 'DROP ', 'INSERT ', 'UPDATE ', 'DELETE ')) for s in statements)
+        assert not {'crm_clientes_preferencias', 'crm_campanhas', 'crm_contatos_clientes'} & set(inspect(engine).get_table_names())
+    finally:
+        event.remove(engine, 'before_cursor_execute', capture)
