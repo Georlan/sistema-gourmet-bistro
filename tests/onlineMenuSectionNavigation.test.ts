@@ -59,6 +59,19 @@ test('Cardápio online prefere o domínio público canônico do tenant', () => {
   assert.match(hostDomain, /return `https:\/\/\$\{clean\}\.komafood\.com\.br\/`/);
 });
 
+test('Links do cardápio não geram IDs nem reutilizam slug de outro restaurante', () => {
+  const menu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
+  const catalog = source('../src/components/caixa/catalog/CashierCatalog.tsx');
+  const hook = source('../src/components/caixa/online-menu/usePublicMenuSlug.ts');
+
+  assert.doesNotMatch(menu, /\/cardapio\?restaurante_id=/);
+  assert.doesNotMatch(catalog, /\/cardapio\?restaurante_id=/);
+  assert.match(menu, /\/c\/\$\{encodeURIComponent\(configuredSlug\)\}/);
+  assert.match(catalog, /usePublicMenuSlug\(/);
+  assert.match(catalog, /\/c\/\$\{encodeURIComponent\(configuredSlug\)\}/);
+  assert.match(hook, /menuIdentity\.restaurantId === restaurantId/);
+});
+
 test('Cardápio online mantém apenas fluxos canônicos sem atalhos paralelos de cupom ou fidelidade', () => {
   const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
   assert.doesNotMatch(onlineMenu, /id="online-menu-growth-shortcuts"/);

@@ -12,6 +12,7 @@ import ComplementosTab from '../../cardapio/ComplementosTab';
 import MoneyInput from '../../MoneyInput';
 import MarmitariaTamanhos from '../../cardapio/MarmitariaTamanhos';
 import { OperationalBanner } from '../../shared/OperationalBanner';
+import { usePublicMenuSlug } from '../online-menu/usePublicMenuSlug';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 
 interface Props {
@@ -55,6 +56,10 @@ export default function CashierCatalog({
   onRefreshCategorias,
 }: Props) {
   const isMarmitaria = restauranteConfig?.operation_profile === 'marmitaria';
+  const authorization = authHeaders.Authorization || authHeaders.authorization;
+  const configuredSlug = usePublicMenuSlug(
+    apiBaseUrl, authorization, restauranteConfig?.restaurante_id ?? null, hasOnlineMenu,
+  );
   const [focusMarmitaId, setFocusMarmitaId] = useState<string | null>(null);
   const [showProductType, setShowProductType] = useState(false);
   const [showMarmitaCreate, setShowMarmitaCreate] = useState(false);
@@ -193,8 +198,8 @@ export default function CashierCatalog({
             promotionsConfig={{ apiBaseUrl, authHeaders }}
             catalogReady={catalogReady || apiProdutos.length > 0 || apiCategorias.length > 0}
             previewUrl={
-              hasOnlineMenu && restauranteConfig?.restaurante_id
-                ? `${window.location.origin}/cardapio?restaurante_id=${encodeURIComponent(String(restauranteConfig.restaurante_id))}`
+              hasOnlineMenu && configuredSlug
+                ? `${window.location.origin}/c/${encodeURIComponent(configuredSlug)}`
                 : undefined
             }
             onCreateProduct={() => isMarmitaria ? setShowProductType(true) : startProduct()}

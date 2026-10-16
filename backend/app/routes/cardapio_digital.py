@@ -19,7 +19,7 @@ from ..promotions import active_promotions, money, promotion_status
 from ..catalog_addons import effective_modifier_payloads_by_product
 from ..marmitaria_catalog import enabled as marmitaria_enabled
 from ..restaurant_profile_models import RestauranteOperationProfile
-from ..services.customer_whatsapp_dispatch import customer_notices_enabled
+from ..services.customer_whatsapp_dispatch import customer_notices_enabled, customer_notice_transport_config
 from ..config import settings
 from ..database import (
     bind_session_to_tenant,
@@ -219,22 +219,30 @@ def _public_benefit_capabilities(db: Session, restaurante_id: int, stored_plan: 
 def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoRestaurante | None:
     # No joined restaurant, integration secrets or internal printing/settings data.
     # raiseload makes any accidental dependency on omitted fields explicit.
+    public_columns = (
+        ConfiguracaoRestaurante.restaurante_id,
+        ConfiguracaoRestaurante.nicho,
+        ConfiguracaoRestaurante.delivery_ativo,
+        ConfiguracaoRestaurante.tipos_pedido_ativos,
+        ConfiguracaoRestaurante.pedido_minimo,
+        ConfiguracaoRestaurante.pedido_minimo_retirada,
+        ConfiguracaoRestaurante.frete_gratis_valor,
+        ConfiguracaoRestaurante.tipo_taxa_entrega,
+        ConfiguracaoRestaurante.taxa_entrega_fixa,
+        ConfiguracaoRestaurante.tabela_taxas_bairros,
+        ConfiguracaoRestaurante.tabela_taxas_km,
+        ConfiguracaoRestaurante.promocoes,
+    )
+    # Somente tenants habilitados ao envio recebem esses campos internos.
+    # Outros tenants mantêm a projeção pública mínima, sem telefone privado.
+    if customer_notice_transport_config(restaurante_id):
+        public_columns += (
+            ConfiguracaoRestaurante.whatsapp_instance_name,
+            ConfiguracaoRestaurante.whatsapp_alerts_enabled,
+            ConfiguracaoRestaurante.whatsapp_recipient_phone,
+        )
     return db.query(ConfiguracaoRestaurante).options(
-        load_only(
-            ConfiguracaoRestaurante.restaurante_id,
-            ConfiguracaoRestaurante.nicho,
-            ConfiguracaoRestaurante.delivery_ativo,
-            ConfiguracaoRestaurante.tipos_pedido_ativos,
-            ConfiguracaoRestaurante.pedido_minimo,
-            ConfiguracaoRestaurante.pedido_minimo_retirada,
-            ConfiguracaoRestaurante.frete_gratis_valor,
-            ConfiguracaoRestaurante.tipo_taxa_entrega,
-            ConfiguracaoRestaurante.taxa_entrega_fixa,
-            ConfiguracaoRestaurante.tabela_taxas_bairros,
-            ConfiguracaoRestaurante.tabela_taxas_km,
-            ConfiguracaoRestaurante.promocoes,
-            raiseload=True,
-        ),
+        load_only(*public_columns, raiseload=True),
         raiseload(ConfiguracaoRestaurante.restaurante),
     ).filter(ConfiguracaoRestaurante.restaurante_id == restaurante_id).first()
 
