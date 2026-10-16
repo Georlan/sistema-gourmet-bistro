@@ -87,6 +87,7 @@ interface PublicMenuPayload {
   restaurante: Record<string, any>;
   categorias: Array<Record<string, any>>;
   produtos: Array<Record<string, any>>;
+  produtos_promocionais?: Array<Record<string, any>>;
   promocoes?: Array<Record<string, any>>;
 }
 
@@ -242,7 +243,7 @@ export default function CardapioPage() {
         categoryMap[String(category.id)] = String(category.nome || "");
       });
 
-      const products: Product[] = payload.produtos.map((product) => ({
+      const mapPublicProduct = (product: Record<string, any>): Product => ({
         marmitaria: product.marmitaria === true,
         id: String(product.id),
         name: String(product.nome || ""),
@@ -274,7 +275,9 @@ export default function CardapioPage() {
           : [],
         isAvailable: true,
         ordem_exibicao: product.ordem_exibicao != null ? Number(product.ordem_exibicao) : null,
-      }));
+      });
+      const products: Product[] = payload.produtos.map(mapPublicProduct);
+      const promotionProducts: Product[] = (payload.produtos_promocionais || []).map(mapPublicProduct);
 
       let socials: SocialNetwork[] = [];
       let whatsappNumber = "";
@@ -338,6 +341,7 @@ export default function CardapioPage() {
         },
         categories: payload.categorias.map((category) => String(category.nome || "")).filter(Boolean),
         products,
+        promotionProducts,
         promotions: Array.isArray(payload.promocoes) ? payload.promocoes
           .filter(p => p && Array.isArray(p.componentes) && p.componentes.length === 2)
           .map(p => ({
@@ -1257,7 +1261,7 @@ export default function CardapioPage() {
           basePrice={selectedPromotion.preco}
           restaurantId={activeBrand.id}
           steps={selectedPromotion.componentes.map(ids => {
-            const product = activeBrand.products.find(candidate => ids.includes(candidate.id));
+            const product = [...activeBrand.products, ...(activeBrand.promotionProducts || [])].find(candidate => ids.includes(candidate.id));
             return product ? { product, label: product.name } : null;
           }).filter((step): step is { product: Product; label: string } => Boolean(step))}
           initialParts={editingPromotionItem?.promotionParts}

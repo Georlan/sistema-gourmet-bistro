@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Gift, LoaderCircle, Plus, Save, ToggleLeft, ToggleRight } from 'lucide-react';
 
-type CatalogProduct = { id: string; nome: string; preco: number; ativo: boolean; tamanho?: string | null };
+type CatalogProduct = { id: string; nome: string; preco: number; ativo: boolean; tamanho?: string | null; somente_promocao?: boolean };
 type Promotion = {
   id: string;
   nome: string;
@@ -11,13 +11,17 @@ type Promotion = {
   ativo: boolean;
 };
 
-const empty = () => ({ nome: '', descricao: '', preco: '22.00', primeiro: '', segundo: '', ativo: false });
+const empty = () => ({ nome: '', descricao: '', preco: '', primeiro: '', segundo: '', ativo: false });
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 export default function MarmitariaPromotionsSettings({
   apiBaseUrl, authHeaders,
 }: { apiBaseUrl: string; authHeaders: Record<string, string> }) {
   const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [categories, setCategories] = useState<Array<{ id: string; nome: string }>>([]);
+  const [drinkName, setDrinkName] = useState('Pitulinha');
+  const [drinkPrice, setDrinkPrice] = useState('');
+  const [creatingDrink, setCreatingDrink] = useState(false);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [form, setForm] = useState(empty);
   const [editing, setEditing] = useState<string | null>(null);
@@ -36,6 +40,7 @@ export default function MarmitariaPromotionsSettings({
       const data = await response.json();
       setAvailable(true);
       setProducts(Array.isArray(data.produtos) ? data.produtos : []);
+      setCategories(Array.isArray(data.categorias) ? data.categorias : []);
       setPromotions(Array.isArray(data.promocoes) ? data.promocoes : []);
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Erro ao carregar as promoções.'); }
     finally { setLoading(false); }
@@ -59,6 +64,52 @@ export default function MarmitariaPromotionsSettings({
       ? 'Confira os componentes: o produto precisa existir e estar ativo antes de publicar.'
       : 'Modelo preparado. Confira e salve para cadastrar a promoção.');
   };
+  const createExclusiveDrink = async () => {
+    const name = drinkName.trim();
+    const price = Number(drinkPrice);
+    if (name.length < 2 || !drinkPrice.trim() || !Number.isFinite(price) || price <= 0) {
+      setNotice('Informe o nome da bebida e seu preço de referência. O preço do combo é configurado separadamente.');
+      return;
+    }
+    if (products.some(p => p.nome.trim().toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'))) {
+      setNotice('Esta bebida já existe. Selecione o produto no combo ou marque-o como exclusivo em Cardápio → Produtos.');
+      return;
+    }
+    setCreatingDrink(true);
+    try {
+      let beveragesCategory = categories.find(category => /^(bebidas?|refrigerantes?)$/i.test(category.nome.trim()));
+      if (!beveragesCategory) {
+        const response = await fetch(`${apiBaseUrl}/produtos/categorias`, {
+          method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: `cat-bebidas-${crypto.randomUUID().slice(0, 8)}`,
+            nome: 'Bebidas',
+            destino_impressao: 'BAR',
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Não foi possível criar a categoria Bebidas.');
+        beveragesCategory = { id: data.id, nome: data.nome };
+      }
+      const response = await fetch(`${apiBaseUrl}/produtos/`, {
+        method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: `bebida-combo-${crypto.randomUUID().slice(0, 12)}`,
+          nome: name, categoria_id: beveragesCategory.id,
+          preco: price, descricao: 'Bebida disponível somente na promoção.',
+          ativo: true, somente_promocao: true,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Não foi possível cadastrar a bebida.');
+      await load();
+      setForm(current => ({ ...current, segundo: String(data.id) }));
+      setNotice(`${name} cadastrada apenas para combos. Revise os itens e o preço antes de publicar a oferta.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Falha ao cadastrar bebida.');
+    } finally { setCreatingDrink(false); }
+  };
+
   const edit = (p: Promotion) => {
     setEditing(p.id);
     setForm({
@@ -140,6 +191,26 @@ export default function MarmitariaPromotionsSettings({
         <button type="button" onClick={() => template('bebida')} className="min-h-11 rounded-xl border border-emerald-500/30 px-3 text-xs font-bold">G + Pitulinha · R$ 16</button>
         <button type="button" onClick={() => { setEditing(null); setForm(empty()); }} className="min-h-11 rounded-xl border border-koma-border px-3 text-xs font-bold"><Plus className="mr-1 inline h-3 w-3" /> Nova oferta</button>
       </div>
+      <section className="space-y-3 rounded-xl border border-koma-border bg-koma-card p-3" aria-label="Cadastrar bebida exclusiva de promoção">
+        <strong className="text-sm text-koma-foreground">Bebida exclusiva do combo</strong>
+        <p className="text-xs text-koma-muted">Cadastre a Pitulinha uma única vez. Ela não aparece como bebida avulsa, mas entra no estoque e na comanda quando vendida na promoção.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="text-xs text-koma-muted">Nome da bebida
+            <input value={drinkName} onChange={event => setDrinkName(event.target.value)} maxLength={90}
+              className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground" />
+          </label>
+          <label className="text-xs text-koma-muted">Preço de referência (R$)
+            <input type="number" min="0.01" step="0.01" value={drinkPrice}
+              onChange={event => setDrinkPrice(event.target.value)}
+              placeholder="Informe o valor"
+              className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground" />
+          </label>
+        </div>
+        <button type="button" disabled={saving || creatingDrink} onClick={() => void createExclusiveDrink()}
+          className="min-h-11 rounded-xl border border-emerald-500/30 px-4 text-xs font-bold text-emerald-400 disabled:opacity-40">
+          {creatingDrink ? 'Cadastrando bebida…' : 'Criar bebida apenas para promoções'}
+        </button>
+      </section>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-xs font-bold text-koma-muted sm:col-span-2">Nome da promoção
           <input value={form.nome} onChange={(e) => setForm(f => ({ ...f, nome: e.target.value }))} maxLength={90} className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-sm text-koma-foreground" placeholder="Ex.: Quentinha G + M" />
@@ -162,6 +233,16 @@ export default function MarmitariaPromotionsSettings({
           <input type="checkbox" checked={form.ativo} onChange={e => setForm(f => ({ ...f, ativo: e.target.checked }))} /> Publicar agora
         </label>
       </div>
+      {form.primeiro && form.segundo && (() => {
+        const first = products.find(p => p.id === form.primeiro);
+        const second = products.find(p => p.id === form.segundo);
+        if (!first || !second) return null;
+        const subtotal = Number(first.preco) + Number(second.preco);
+        const savings = subtotal - Number(form.preco || subtotal);
+        return <p className="text-xs font-bold text-koma-muted">Valor de referência dos dois itens: {money(subtotal)}.
+          {form.preco && savings > 0 ? ` Economia configurada: ${money(savings)}.` : ' Informe o preço final desejado para o combo.'}
+        </p>;
+      })()}
       <p className="text-xs leading-relaxed text-koma-muted">O preço da oferta é confirmado pelo servidor. Adicionais pagos e entrega são cobrados à parte. Ao criar, a oferta pode permanecer pausada até a data desejada.</p>
       {notice && <p role="status" className="text-xs font-bold text-amber-400">{notice}</p>}
       <button type="button" disabled={saving} onClick={() => void submit()} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-black text-white disabled:opacity-50">

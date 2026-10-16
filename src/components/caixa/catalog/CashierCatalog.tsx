@@ -87,6 +87,7 @@ export default function CashierCatalog({
   const productImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [prodFormAtivo, setProdFormAtivo] = useState(true);
+  const [prodFormSomentePromocao, setProdFormSomentePromocao] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const resetProductImageState = (url = '') => {
@@ -146,6 +147,7 @@ export default function CashierCatalog({
     setProdFormDescricao('');
     resetProductImageState('');
     setProdFormAtivo(true);
+    setProdFormSomentePromocao(false);
     setShowProductModal(true);
   };
 
@@ -159,6 +161,7 @@ export default function CashierCatalog({
               const gallery = product.imagens_galeria || [];
               resetProductImageState(product.imagem || gallery[0] || '');
               setProdFormAtivo(product.ativo !== false);
+              setProdFormSomentePromocao(product.somente_promocao === true);
               setShowProductModal(true);
   };
 
@@ -209,6 +212,7 @@ export default function CashierCatalog({
               setProdFormDescricao(product.descricao || '');
               resetProductImageState('');
               setProdFormAtivo(true);
+    setProdFormSomentePromocao(false);
               setShowProductModal(true);
             }}
             onRemoveProduct={async (product) => {
@@ -415,6 +419,7 @@ export default function CashierCatalog({
                     imagem: prodFormImageRemoveRequested ? prodFormOriginalImagem : prodFormImagem.trim(),
                     imagens_galeria: [],
                     ativo: prodFormAtivo,
+                    somente_promocao: isMarmitaria && prodFormSomentePromocao,
                   };
 
                   let res;
@@ -645,6 +650,17 @@ export default function CashierCatalog({
                   {isMarmitaria ? 'Descreva o produto que o cliente vai receber.' : 'Use uma frase curta com os principais ingredientes. Ela também ajuda na busca.'}
                 </p>
               </div>
+
+              {isMarmitaria && !(editingProduct && isMarmita(editingProduct)) && (
+                <label className="flex items-start gap-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs text-koma-foreground">
+                  <input type="checkbox" checked={prodFormSomentePromocao}
+                    onChange={event => setProdFormSomentePromocao(event.target.checked)}
+                    aria-label="Vender somente em promoções" />
+                  <span><strong className="block">Vender somente em promoções</strong>
+                    <span className="mt-1 block text-koma-muted">Para Pitulinha e outros itens de combos. Não aparecerá como produto avulso no cardápio online.</span>
+                  </span>
+                </label>
+              )}
 
               {!editingProduct && (
                 <details className="group overflow-hidden rounded-xl border border-koma-border bg-koma-panel">
