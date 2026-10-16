@@ -97,7 +97,7 @@ export default function CashierCustomers({
   hasCoupons,
 }: Props) {
   // Seleção única para o menu lateral e a barra horizontal compartilhada.
-  const beneficiosSection = ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab) ? 'cupons' : 'fidelidade';
+  const beneficiosSection = ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab) || (!hasLoyalty && hasCoupons) ? 'cupons' : 'fidelidade';
   const crmTab: CrmWorkspaceTab = ['fidelidade', 'cupons', 'cupom', 'promocoes', 'descontos', 'beneficios'].includes(activeSubTab)
     ? 'beneficios'
     : ['clientes', 'campanhas', 'resultados'].includes(activeSubTab)
@@ -105,6 +105,21 @@ export default function CashierCustomers({
   const handleSelectCrmTab = (nextTab: CrmWorkspaceTab) => {
     setActiveSubTab(nextTab === 'beneficios' ? (hasLoyalty ? 'fidelidade' : 'cupons') : nextTab);
   };
+
+  // Keep editable CRM subtrees mounted after first visit. Navigation must not erase drafts.
+  const [visitedCampaigns, setVisitedCampaigns] = useState(false);
+  const [visitedBenefits, setVisitedBenefits] = useState(false);
+  const [visitedFidelity, setVisitedFidelity] = useState(false);
+  const [visitedCoupons, setVisitedCoupons] = useState(false);
+  useEffect(() => {
+    if (activeTab !== 'clientes') return;
+    if (crmTab === 'campanhas') setVisitedCampaigns(true);
+    if (crmTab === 'beneficios') {
+      setVisitedBenefits(true);
+      if (beneficiosSection === 'fidelidade') setVisitedFidelity(true);
+      if (beneficiosSection === 'cupons') setVisitedCoupons(true);
+    }
+  }, [activeTab, crmTab, beneficiosSection]);
 
   // Busca e filtros da aba Clientes
   const [clientesSearch, setClientesSearch] = useState('');
@@ -1330,8 +1345,9 @@ export default function CashierCustomers({
           {/* =====================================================================
               ABA 3: CAMPANHAS (Fluxo guiado objetivo → público → benefício → mensagem → registro)
              ===================================================================== */}
-          {crmTab === 'campanhas' && (
-            <CustomerCampaignsWorkspace
+          {(crmTab === 'campanhas' || visitedCampaigns) && (
+            <div hidden={crmTab !== 'campanhas'} style={{ display: crmTab === 'campanhas' ? undefined : 'none' }}>
+              <CustomerCampaignsWorkspace
               apiBaseUrl={apiBaseUrl}
               authHeaders={authHeaders}
               customers={loyaltyUsers}
@@ -1345,14 +1361,15 @@ export default function CashierCustomers({
               }}
               onOpenResults={() => handleSelectCrmTab('resultados')}
               onInspectCustomer={(customer) => setSelectedProfileCustomerId(customer.id)}
-            />
+              />
+            </div>
           )}
 
           {/* =====================================================================
               ABA 4: BENEFÍCIOS (Reúne Programa de Fidelidade e Cupons com subdivisões claras)
              ===================================================================== */}
-          {crmTab === 'beneficios' && (
-            <div className="space-y-4 animate-fade-in">
+          {(crmTab === 'beneficios' || visitedBenefits) && (
+            <div hidden={crmTab !== 'beneficios'} style={{ display: crmTab === 'beneficios' ? undefined : 'none' }} className="space-y-4 animate-fade-in">
               {/* Subdivisão Clara: Saldo Acumulado vs. Resgatável + Seletor Fidelidade / Cupons */}
               <div className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1370,6 +1387,33 @@ export default function CashierCustomers({
 
 
                 </div>
+
+                {hasLoyalty && hasCoupons && (
+                  <div role="tablist" aria-label="Tipos de benefícios" className="flex flex-wrap gap-2 border-t border-koma-border pt-3"
+                    onKeyDown={(event) => {
+                      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                      const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+                      const selected = tabs.findIndex(tab => tab === document.activeElement);
+                      if (selected < 0) return;
+                      event.preventDefault();
+                      const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+                        : (selected + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+                      setActiveSubTab(tabs[next].dataset.benefitTab || 'fidelidade');
+                      tabs[next].focus();
+                    }}>
+                    {(['fidelidade', 'cupons'] as const).map(section => (
+                      <button key={section} type="button" role="tab" id={`crm-benefit-tab-${section}`}
+                        data-benefit-tab={section}
+                        aria-controls={`crm-benefit-panel-${section}`}
+                        aria-selected={beneficiosSection === section}
+                        tabIndex={beneficiosSection === section ? 0 : -1}
+                        onClick={() => setActiveSubTab(section)}
+                        className={`min-h-11 rounded-lg px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${beneficiosSection === section ? 'bg-koma-raised text-koma-foreground' : 'text-koma-muted hover:bg-koma-raised'}`}>
+                        {section === 'fidelidade' ? 'Fidelidade' : 'Cupons'}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {/* Resumo honesto de saldos de fidelidade (Acumulado vs. Resgatável) */}
                 {hasLoyalty && beneficiosSection === 'fidelidade' && (
@@ -1426,8 +1470,10 @@ export default function CashierCustomers({
               </div>
 
               {/* Subdivisão A: Programa de Fidelidade */}
-              {beneficiosSection === 'fidelidade' && hasLoyalty && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl">
+              {hasLoyalty && (beneficiosSection === 'fidelidade' || visitedFidelity) && (
+                <div id="crm-benefit-panel-fidelidade" role="tabpanel" aria-label="Fidelidade" hidden={beneficiosSection !== 'fidelidade'}
+                  style={{ display: beneficiosSection === 'fidelidade' ? undefined : 'none' }}
+                  className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl">
                   <div className="bg-koma-card border border-koma-border p-5 rounded-2xl space-y-4 h-fit">
                     <div className="border-b border-koma-border pb-3">
                       <div>
@@ -1558,8 +1604,9 @@ export default function CashierCustomers({
               )}
 
               {/* Subdivisão B: Cupons & Promoções */}
-              {beneficiosSection === 'cupons' && hasCoupons && (
-                <div className="space-y-4">
+              {hasCoupons && (beneficiosSection === 'cupons' || visitedCoupons) && (
+                <div id="crm-benefit-panel-cupons" role="tabpanel" aria-label="Cupons" hidden={beneficiosSection !== 'cupons'}
+                  style={{ display: beneficiosSection === 'cupons' ? undefined : 'none' }} className="space-y-4">
                   <CuponsTab
                     apiBaseUrl={apiBaseUrl}
                     authHeaders={authHeaders}
