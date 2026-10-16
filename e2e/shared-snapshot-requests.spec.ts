@@ -1,7 +1,21 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
-test('Caixa compartilha clientes entre checkout e tela Clientes', async ({ page }, testInfo) => {
+
+async function openCashierSidebar(page: Page) {
+  if (await page.locator('.cashier-sidebar:visible').count()) return;
+  const mobileMenu = page.getByRole('button', { name: 'Abrir menu completo', exact: true });
+  if (await mobileMenu.isVisible()) await mobileMenu.click();
+  else await page.getByRole('button', { name: 'Abrir menu principal', exact: true }).click();
+}
+
+async function openSuperAdminSidebar(page: Page) {
+  if (!(await page.locator('#superadmin-sidebar').isVisible())) {
+    await page.getByRole('button', { name: 'Abrir menu lateral', exact: true }).click();
+  }
+}
+
+test('Caixa compartilha clientes entre checkout e tela Clientes', async ({ page }) => {
   await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
   await mockCashierBackend(page);
   await seedCashierSession(page);
@@ -15,14 +29,14 @@ test('Caixa compartilha clientes entre checkout e tela Clientes', async ({ page 
   await expect.poll(() => requests.length).toBeGreaterThanOrEqual(1);
   const before = requests.length;
   expect(before).toBe(1);
-  if (testInfo.project.name.startsWith('mobile')) await page.getByRole('button', { name: 'Abrir menu completo' }).click();
+  await openCashierSidebar(page);
   const sidebar = page.locator('.cashier-sidebar:visible');
   await sidebar.getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
   await expect(page.getByText('Cliente E2E', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   expect(requests).toHaveLength(1);
 });
 
-test('SuperAdmin compartilha tenants entre quatro abas', async ({ page }) => {
+test('SuperAdmin compartilha tenants entre Início e Clientes', async ({ page }) => {
   await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
   await page.addInitScript(() => sessionStorage.setItem('koma_super_admin_token', 'e2e-token'));
   const requests: string[] = [];
@@ -40,13 +54,14 @@ test('SuperAdmin compartilha tenants entre quatro abas', async ({ page }) => {
   await expect.poll(() => requests.length).toBeGreaterThanOrEqual(1);
   const before = requests.length;
   expect(before).toBe(1);
-  for (const tab of ['Restaurantes', 'Pagamentos online', 'Planos e cobrança', 'Visão geral']) {
+  for (const tab of ['Clientes', 'Início', 'Clientes', 'Início']) {
+    await openSuperAdminSidebar(page);
     await page.locator('#superadmin-sidebar').getByRole('button', { name: tab, exact: true }).click();
   }
   expect(requests).toHaveLength(1);
 });
 
-test('hints próximos de clientes geram uma reconciliação e preservam o snapshot durante refresh', async ({ page }, testInfo) => {
+test('hints próximos de clientes geram uma reconciliação e preservam o snapshot durante refresh', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
@@ -61,7 +76,7 @@ test('hints próximos de clientes geram uma reconciliação e preservam o snapsh
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
   await expect.poll(() => reads).toBe(1);
-  if (testInfo.project.name.startsWith('mobile')) await page.getByRole('button', { name: 'Abrir menu completo' }).click();
+  await openCashierSidebar(page);
   await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
   await expect(page.getByText('Cliente E2E', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   await page.evaluate(() => {
@@ -74,7 +89,7 @@ test('hints próximos de clientes geram uma reconciliação e preservam o snapsh
   expect(reads).toBe(2);
 });
 
-test('falha inicial de clientes não aparece como lista vazia e permite tentar novamente', async ({ page }, testInfo) => {
+test('falha inicial de clientes não aparece como lista vazia e permite tentar novamente', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
@@ -85,7 +100,7 @@ test('falha inicial de clientes não aparece como lista vazia e permite tentar n
   });
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
-  if (testInfo.project.name.startsWith('mobile')) await page.getByRole('button', { name: 'Abrir menu completo' }).click();
+  await openCashierSidebar(page);
   await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
   await expect(page.getByText('Não foi possível carregar os clientes')).toBeVisible();
   await expect(page.getByText('Nenhum cliente cadastrado ainda')).toHaveCount(0);
@@ -114,14 +129,16 @@ test('SuperAdmin distingue falha inicial de zero tenants e conserva snapshot ap�
   await expect(page.getByText('Fonte indisponível')).toHaveCount(0);
   await page.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
   await expect(page.getByText('Restaurante E2E')).toBeVisible();
-  await page.locator('#superadmin-sidebar').getByRole('button', { name: 'Restaurantes', exact: true }).click();
+  await openSuperAdminSidebar(page);
+  await page.locator('#superadmin-sidebar').getByRole('button', { name: 'Clientes', exact: true }).click();
+  await page.getByRole('button', { name: 'Restaurantes', exact: true }).click();
   await page.getByTitle('Atualizar lista').click();
   await expect(page.getByText('Mostrando os últimos restaurantes carregados.')).toBeVisible();
   await expect(page.getByText('Restaurante E2E')).toBeVisible();
   expect(reads).toBe(3);
 });
 
-test('nova sessão de Caixa não reaproveita clientes da sessão anterior', async ({ page }, testInfo) => {
+test('nova sessão de Caixa não reaproveita clientes da sessão anterior', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
@@ -133,7 +150,7 @@ test('nova sessão de Caixa não reaproveita clientes da sessão anterior', asyn
   });
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
-  if (testInfo.project.name.startsWith('mobile')) await page.getByRole('button', { name: 'Abrir menu completo' }).click();
+  await openCashierSidebar(page);
   await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
   await expect(page.getByText('Cliente da sessão antiga', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   await page.evaluate(() => {
