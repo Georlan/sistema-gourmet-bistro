@@ -5,6 +5,7 @@ import {
   Edit3,
   Eye,
   GlassWater,
+  Gift,
   ImageIcon,
   Images,
   Info,
@@ -23,6 +24,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { clsx } from 'clsx';
 import type { Product } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
+import MarmitariaPromotionsSettings from './MarmitariaPromotionsSettings';
 import { smartSearchMatch } from '../../domain';
 
 interface CardapioProdutosTabProps {
@@ -42,7 +44,10 @@ interface CardapioProdutosTabProps {
   ) => Promise<boolean>;
   focusCategoryId?: string | null;
   onFocusCategoryHandled?: () => void;
+  promotionsConfig?: { apiBaseUrl: string; authHeaders: Record<string, string> };
 }
+
+const PROMOTIONS_VIRTUAL_CATEGORY = '__KOMA_PROMOTIONS__';
 
 type AvailabilityFilter = 'TODOS' | 'DISPONIVEIS' | 'PAUSADOS';
 type MediaFilter = 'TODAS' | 'SEM_FOTO' | 'UMA_FOTO' | 'GALERIA';
@@ -87,9 +92,12 @@ export function CardapioProdutosTab({
   onBatchEdit,
   focusCategoryId,
   onFocusCategoryHandled,
+  promotionsConfig,
 }: CardapioProdutosTabProps) {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('TODAS');
+  const [promotionCount, setPromotionCount] = useState<number | null>(null);
+  const isPromotionsView = Boolean(promotionsConfig && categoryFilter === PROMOTIONS_VIRTUAL_CATEGORY);
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>('TODOS');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('TODAS');
   const [showPhotoFilters, setShowPhotoFilters] = useState(false);
@@ -310,6 +318,27 @@ export function CardapioProdutosTab({
             <span className="font-black">Todos</span>
             <span className="text-xs font-bold opacity-70">{produtos.length}</span>
           </button>
+          {promotionsConfig && (
+            <button
+              type="button"
+              onClick={() => {
+                if (selectionMode) leaveSelectionMode();
+                setSearch('');
+                setCategoryFilter(PROMOTIONS_VIRTUAL_CATEGORY);
+              }}
+              aria-pressed={isPromotionsView}
+              className={clsx(
+                'flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-left transition-colors',
+                isPromotionsView
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-100'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/5',
+              )}
+            >
+              <Gift size={16} aria-hidden="true" />
+              <span className="font-black">Promoções</span>
+              {promotionCount !== null && <span className="text-xs font-bold opacity-60">{promotionCount}</span>}
+            </button>
+          )}
           {categorias.map((category) => {
             const stats = categoryStats.get(category.id) ?? { total: 0, available: 0, paused: 0 };
             const active = categoryFilter === String(category.id);
@@ -339,6 +368,14 @@ export function CardapioProdutosTab({
         </div>
       </section>
 
+      {isPromotionsView && promotionsConfig ? (
+        <MarmitariaPromotionsSettings
+          apiBaseUrl={promotionsConfig.apiBaseUrl}
+          authHeaders={promotionsConfig.authHeaders}
+          onPromotionsLoaded={setPromotionCount}
+        />
+      ) : (
+        <>
       <section className="cardapio-products-toolbar rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-[#111713]">
         <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
           <label className="relative min-w-0 flex-1">
@@ -762,6 +799,8 @@ export function CardapioProdutosTab({
             })}
           </div>
         </section>
+      )}
+        </>
       )}
     </div>
   );
