@@ -2046,7 +2046,7 @@ class CentralWhatsAppSenderState(Base):
 
 class WhatsAppContactOptOut(Base):
     __tablename__ = "whatsapp_contact_opt_outs"
-    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), primary_key=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), primary_key=True, default=lambda: current_restaurante_id.get())
     phone_hash = Column(String(64), primary_key=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 

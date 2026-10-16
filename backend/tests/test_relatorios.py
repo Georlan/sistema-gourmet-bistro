@@ -154,6 +154,9 @@ def setup_database():
         yield
     finally:
         current_restaurante_id.reset(token_var)
+        # Do not leave HTTP requests pointing at the file deleted below.
+        if app.dependency_overrides.get(get_db) is override_get_db:
+            app.dependency_overrides.pop(get_db, None)
         # Remove DB file for next test run
         import os
         try:
