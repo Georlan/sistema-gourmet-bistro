@@ -150,8 +150,9 @@ export default function CardapioCartDrawer({
     setSelectedFulfillment(method);
     onFulfillmentChange?.(method);
   };
-  const couponsEnabled = brandConfig?.benefits?.coupons === true;
-  const cashbackEnabled = brandConfig?.benefits?.cashback === true;
+  const hasPromotion = cart.some(item => Boolean(item.promotionId));
+  const couponsEnabled = !hasPromotion && brandConfig?.benefits?.coupons === true;
+  const cashbackEnabled = !hasPromotion && brandConfig?.benefits?.cashback === true;
   const showDiscounts = couponsEnabled || cashbackEnabled;
   const [address, setAddress] = useState(user?.address || "");
   const [deliveryAddressDraft, setDeliveryAddressDraft] = useState<DeliveryAddressDraft>(() => (
