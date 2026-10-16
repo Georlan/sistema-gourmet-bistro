@@ -23,9 +23,11 @@ test('cardápio só utiliza produtos exclusivos dentro do assistente de promoç�
 test('o cadastro permite escolher exclusividade sem criar outro tamanho de quentinha', () => {
   const editor = get('../src/components/caixa/catalog/CashierCatalog.tsx');
   const setup = get('../src/components/cardapio/MarmitariaPromotionsSettings.tsx');
+  const listing = get('../src/components/cardapio/CardapioProdutosTab.tsx');
   assert.match(editor, /Vender somente em promoções/);
   assert.match(editor, /somente_promocao: isMarmitaria && prodFormSomentePromocao/);
   assert.match(setup, /Criar bebida apenas para promoções/);
+  assert.match(listing, /Só em promoções/);
   assert.match(setup, /somente_promocao: true/);
   assert.match(setup, /products\.some\(p => p\.nome/);
   assert.match(setup, /preco: price/);
