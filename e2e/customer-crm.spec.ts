@@ -20,18 +20,34 @@ test('CRM ranks buyers, filters inactivity, searches formatted phones and preser
     await page.getByRole('button', { name: 'Abrir menu principal' }).click();
   }
   await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Clientes(?: \d+)?$/ }).click();
+  // 1. Oportunidades é a página inicial aberta diretamente
+  await expect(page.getByRole('tab', { name: /1\. Oportunidades/ })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /2\. Clientes/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Recuperar recorrentes fora do ritmo habitual' })).toBeVisible();
+
+  // Abrir público da oportunidade direto na lista de clientes
+  await page.locator('article', { hasText: 'Recuperar recorrentes fora do ritmo habitual' }).getByRole('button', { name: 'Ver na lista' }).click();
+
   const records = page.locator(testInfo.project.name.startsWith('mobile') ? 'article:visible' : 'tbody:visible tr');
+  await expect(records).toHaveCount(1);
+  await expect(records.first()).toContainText('Bruno Ausente');
+
+  // Volta para todos os clientes
+  await page.getByRole('button', { name: 'Todos', exact: true }).click();
   await expect(records.first()).toContainText('Ana Frequente');
   await expect(records.first()).toContainText('Burger da casa');
   await expect(records.first()).toContainText('600,00');
   await records.first().getByText('Ver hábitos de Ana Frequente', { exact: true }).click();
   await expect(records.first()).toContainText('01/09/2026');
   await expect(records.first()).toContainText('3 dias');
-  await page.getByText('Oportunidades de relacionamento', { exact: true }).click();
-  await page.getByRole('button', { name: /Fora do ritmo habitual/ }).click();
-  await expect(records).toHaveCount(1);
-  await expect(records.first()).toContainText('Bruno Ausente');
-  await page.getByRole('button', { name: 'Todos', exact: true }).click();
+
+  // Abre e testa a Ficha Individual (Perfil Lateral)
+  await records.first().getByRole('button', { name: 'Ver perfil', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: /Ficha individual de Ana Frequente/ })).toBeVisible();
+  await expect(page.getByText('Informação declarada (Cadastro)')).toBeVisible();
+  await expect(page.getByText('Comportamento observado (Inferido)')).toBeVisible();
+  await page.getByRole('button', { name: 'Fechar ficha do cliente' }).click();
+  await expect(page.getByRole('dialog', { name: /Ficha individual de Ana Frequente/ })).toHaveCount(0);
   await expect(page.getByText('Saúde do relacionamento e frequência')).not.toBeVisible();
   await page.getByLabel('Ordenar clientes', { exact: true }).selectOption('absent');
   await expect(records.first()).toContainText('Bruno Ausente');

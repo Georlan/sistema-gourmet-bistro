@@ -10,7 +10,8 @@ from typing import Any, Optional, Sequence
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from ..models import Cliente, Comanda, Item, Produto, Lancamento
+from ..financial_models import PagamentoEstorno
+from ..models import Cliente, Comanda, Item, Pagamento, Produto, Lancamento
 from ..timezone_utils import get_utc_now, to_utc
 from .clientes import cliente_payload
 
@@ -74,7 +75,8 @@ def load_customer_relationship_metrics(
     Garantias:
     - Tenant-scoped: Comanda.restaurante_id == restaurante_id
     - Exclusivamente por Comanda.cliente_id (nunca por telefone, nome ou CPF)
-    - Apenas compras fechadas válidas; recusadas/canceladas não contam
+    - Apenas compras fechadas válidas; recusadas/canceladas/estornadas 100% não contam
+    - Desconta estornos parciais (PagamentoEstorno) do valor pago
     - Pedidos com barreira financeira online só contam quando aprovados
     - Uma consulta de histórico; CRM pode optar por outra para favoritos (sem N+1)
     - Tratamento de timestamp SQLite/Postgres naive como UTC
@@ -88,6 +90,41 @@ def load_customer_relationship_metrics(
     # Data efetiva da compra: prefere fechado_em; aceita criado_em como fallback legado
     data_efetiva = func.coalesce(Comanda.fechado_em, Comanda.criado_em)
 
+    estornos_subq = (
+        db.query(
+            Pagamento.comanda_id.label("comanda_id"),
+            func.sum(PagamentoEstorno.valor).label("valor_estornado"),
+        )
+        .join(
+            PagamentoEstorno,
+            (PagamentoEstorno.pagamento_id == Pagamento.id)
+            & (PagamentoEstorno.restaurante_id == Pagamento.restaurante_id),
+        )
+        .filter(Pagamento.restaurante_id == restaurante_id)
+        .group_by(Pagamento.comanda_id)
+        .subquery()
+    )
+
+    has_any_lancamento = (
+        db.query(Lancamento.id)
+        .filter(
+            Lancamento.comanda_id == Comanda.id,
+            Lancamento.restaurante_id == restaurante_id,
+        )
+        .correlate(Comanda)
+        .exists()
+    )
+    has_valid_lancamento = (
+        db.query(Lancamento.id)
+        .filter(
+            Lancamento.comanda_id == Comanda.id,
+            Lancamento.restaurante_id == restaurante_id,
+            Lancamento.status.notin_(["cancelado", "recusado"]),
+        )
+        .correlate(Comanda)
+        .exists()
+    )
+
     purchase_filters = (
         Comanda.restaurante_id == restaurante_id,
         Comanda.fechada == True,
@@ -100,17 +137,33 @@ def load_customer_relationship_metrics(
             Comanda.online_payment_status.is_(None),
             Comanda.online_payment_status == "approved",
         ),
+        or_(
+            estornos_subq.c.valor_estornado.is_(None),
+            Comanda.valor_pago > estornos_subq.c.valor_estornado,
+        ),
+    )
+
+    valor_pago_liquido = Comanda.valor_pago - func.coalesce(
+        estornos_subq.c.valor_estornado,
+        0,
     )
 
     rows = (
         db.query(
             Comanda.cliente_id,
             func.count(Comanda.id).label("pedidos_concluidos"),
-            func.sum(Comanda.valor_pago).label("valor_pago_total"),
+            func.sum(valor_pago_liquido).label("valor_pago_total"),
             func.max(data_efetiva).label("ultima_compra_em"),
             func.min(data_efetiva).label("primeira_compra_em"),
         )
-        .filter(*purchase_filters)
+        .outerjoin(estornos_subq, estornos_subq.c.comanda_id == Comanda.id)
+        .filter(
+            *purchase_filters,
+            or_(
+                ~has_any_lancamento,
+                has_valid_lancamento,
+            ),
+        )
         .group_by(Comanda.cliente_id)
         .all()
     )
@@ -121,6 +174,7 @@ def load_customer_relationship_metrics(
         # Um Item representa uma unidade. Evitar N+1 e excluir cancelamentos.
         favorite_rows = (
             db.query(Comanda.cliente_id, Produto.id, Produto.nome, func.count(Item.id))
+            .outerjoin(estornos_subq, estornos_subq.c.comanda_id == Comanda.id)
             .join(Item, Item.comanda_id == Comanda.id)
             .join(Produto, (Produto.id == Item.produto_id) & (Produto.restaurante_id == Item.restaurante_id))
             .join(Lancamento, (Lancamento.id == Item.lancamento_id) & (Lancamento.comanda_id == Comanda.id))

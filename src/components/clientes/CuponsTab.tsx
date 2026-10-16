@@ -26,9 +26,10 @@ interface CuponsTabProps {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
   onShowNotification?: (msg: string, type?: 'success' | 'error') => void;
+  onUseCupomInCampaign?: (cupom: CupomData) => void;
 }
 
-export default function CuponsTab({ apiBaseUrl, authHeaders, onShowNotification }: CuponsTabProps) {
+export default function CuponsTab({ apiBaseUrl, authHeaders, onShowNotification, onUseCupomInCampaign }: CuponsTabProps) {
   const [cupons, setCupons] = useState<CupomData[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -284,16 +285,38 @@ export default function CuponsTab({ apiBaseUrl, authHeaders, onShowNotification 
               </div>
 
               <div className="mt-4 pt-3 border-t border-koma-border/60 space-y-1.5 text-[11px] text-koma-muted">
-                {cupom.valor_minimo_pedido > 0 && (
-                  <div className="flex justify-between">
-                    <span>Pedido mínimo:</span>
-                    <span className="font-semibold text-koma-foreground">R$ {cupom.valor_minimo_pedido.toFixed(2)}</span>
-                  </div>
-                )}
+                <div className="flex justify-between">
+                  <span>Pedido mínimo:</span>
+                  <span className="font-semibold text-koma-foreground">
+                    {cupom.valor_minimo_pedido > 0 ? `R$ ${cupom.valor_minimo_pedido.toFixed(2)}` : 'Sem mínimo'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Canais suportados:</span>
+                  <span className="font-semibold text-koma-foreground">Cardápio Digital e Balcão</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Público elegível:</span>
+                  <span className="font-semibold text-koma-foreground">
+                    {cupom.apenas_primeira_compra
+                      ? 'Apenas 1ª compra'
+                      : cupom.cliente_id
+                      ? 'Cliente específico'
+                      : 'Todos os clientes'}
+                  </span>
+                </div>
                 <div className="flex justify-between">
                   <span>Utilizações:</span>
                   <span className="font-semibold text-koma-foreground">
-                    {cupom.usos_atuais} {cupom.limite_usos ? `/ ${cupom.limite_usos}` : 'usos'}
+                    {cupom.usos_atuais} {cupom.limite_usos ? `/ ${cupom.limite_usos}` : 'usos (sem limite)'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[10px]">
+                  <span>Validade:</span>
+                  <span className="font-medium text-koma-foreground">
+                    {cupom.valido_ate
+                      ? new Date(cupom.valido_ate).toLocaleDateString('pt-BR')
+                      : 'Sem data limite'}
                   </span>
                 </div>
                 {!cupom.ativo && (
@@ -306,10 +329,15 @@ export default function CuponsTab({ apiBaseUrl, authHeaders, onShowNotification 
                     Apenas 1ª compra
                   </div>
                 )}
-                {cupom.valido_ate && (
-                  <div className="flex justify-between text-[10px]">
-                    <span>Válido até:</span>
-                    <span className="font-medium">{new Date(cupom.valido_ate).toLocaleDateString('pt-BR')}</span>
+                {cupom.ativo && onUseCupomInCampaign && (
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => onUseCupomInCampaign(cupom)}
+                      className="koma-btn-secondary w-full rounded-xl py-1.5 text-[11px] font-bold"
+                    >
+                      Usar este cupom em campanha
+                    </button>
                   </div>
                 )}
               </div>

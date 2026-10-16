@@ -220,7 +220,10 @@ def get_loyalty_clients(
     current_user: Usuario = Depends(require_permission("clientes:operar"))
 ):
     """Retorna a ficha canônica; o ID não muda quando nome/telefone mudam."""
+    from ..services.customer_crm import enrich_customer_crm_payloads
+
     restaurante_id = require_tenant_id()
+    loyalty_enabled = has_plan_entitlement(db, restaurante_id, ENTITLEMENT_LOYALTY)
     clientes = db.query(Cliente).filter(
         Cliente.restaurante_id == restaurante_id,
     ).order_by(Cliente.criado_em.desc(), Cliente.id.asc()).all()
@@ -231,9 +234,14 @@ def get_loyalty_clients(
         include_products=True,
     )
     payloads = build_customer_relationship_payloads(clientes, metrics)
-    if not has_plan_entitlement(db, restaurante_id, ENTITLEMENT_LOYALTY):
-        return [_hide_loyalty_balances(payload) for payload in payloads]
-    return payloads
+    if not loyalty_enabled:
+        payloads = [_hide_loyalty_balances(payload) for payload in payloads]
+    return enrich_customer_crm_payloads(
+        db,
+        restaurante_id=restaurante_id,
+        payloads=payloads,
+        loyalty_enabled=loyalty_enabled,
+    )
 
 
 @router.get("/fidelidade/clientes/lookup")
