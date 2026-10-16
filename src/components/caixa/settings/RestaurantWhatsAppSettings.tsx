@@ -102,7 +102,7 @@ export function RestaurantWhatsAppSettings({ apiBaseUrl, authHeaders }: {
         você não precisa vincular seu próprio WhatsApp por QR Code nem instalar outro aplicativo.
       </p>
       <p className="mt-3 text-xs text-koma-foreground" role="status">
-        Estado: <strong>{registered ? 'Cadastrado — aguardando liberação' : 'Ainda não cadastrado'}</strong>
+        Estado: <strong>{registered ? (status.enabled ? 'Liberado para teste controlado' : 'Cadastrado — aguardando liberação') : 'Ainda não cadastrado'}</strong>
         {status.phone_ending ? ` · Destinatário final ${status.phone_ending}` : ''}
       </p>
       {!registered && <div className="mt-4 space-y-3">

@@ -942,6 +942,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     pagamento_online_ativo: bool = False
     documento_pix_obrigatorio: bool = False
     conta_cliente_obrigatoria: bool = False
+    avisos_whatsapp_disponiveis: bool = False
     beneficios: CardapioPublicBenefitsResponse = Field(default_factory=CardapioPublicBenefitsResponse)
     tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
 

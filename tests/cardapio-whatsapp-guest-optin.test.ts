@@ -12,7 +12,7 @@ const page = readFileSync(
 );
 
 test('WhatsApp checkbox is optional, unchecked initially and behind a default-off rollout flag', () => {
-  assert.match(checkout, /VITE_CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED === "true"/);
+  assert.match(checkout, /activeBrand.customerWhatsAppStatusEnabled === true/);
   assert.match(checkout, /useState\(false\)/);
   assert.match(checkout, /checked=\{whatsappStatusOptIn\}/);
   assert.match(checkout, /type="checkbox"/);
@@ -22,7 +22,7 @@ test('WhatsApp checkbox is optional, unchecked initially and behind a default-of
 });
 
 test('customer consent is recorded only for the same checkout without adding auth steps', () => {
-  assert.match(checkout, /whatsapp_status_opt_in: CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED && deliveryMethod !== "dine_in" && whatsappStatusOptIn/);
+  assert.match(checkout, /whatsapp_status_opt_in: customerWhatsAppStatusEnabled && deliveryMethod !== "dine_in" && whatsappStatusOptIn/);
   assert.match(checkout, /body: JSON\.stringify\(\{\s*\.\.\.orderRequest,/);
   assert.match(checkout, /whatsapp_status_opt_in: undefined/);
   assert.match(checkout, /customerToken\) headers\["X-Koma-Customer-Token"\]/);

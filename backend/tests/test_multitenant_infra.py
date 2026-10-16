@@ -18,6 +18,7 @@ from app.main import app
 # restaurante_id precisa ser adicionada aqui de forma explícita para não escapar
 # silenciosamente das garantias multi-tenant.
 GLOBAL_MODEL_TABLES = {
+    "central_whatsapp_sender_state",  # Shared technical sender clock/circuit; no PII.
     "restaurantes",
     "fiscal_official_reference_states",
     "fiscal_official_reference_snapshots",

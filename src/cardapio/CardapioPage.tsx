@@ -364,6 +364,7 @@ export default function CardapioPage() {
           cashback: restaurant.beneficios?.cashback === true,
         },
         customerAccountRequired: restaurant.conta_cliente_obrigatoria === true,
+        customerWhatsAppStatusEnabled: restaurant.avisos_whatsapp_disponiveis === true,
         activeOrderTypes: Array.isArray(restaurant.tipos_pedido_ativos)
           ? restaurant.tipos_pedido_ativos.filter((item: unknown): item is "consumo_local" | "retirada" | "delivery" =>
               item === "consumo_local" || item === "retirada" || item === "delivery"

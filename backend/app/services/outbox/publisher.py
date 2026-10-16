@@ -155,4 +155,10 @@ def enqueue_outbox_event_in_session(
 
     db.add(outbox_record)
     db.info["outbox_pending_notification"] = True
+    if isinstance(event, OrderDomainEvent) and ev_name in {
+        "koma.order.created", "koma.order.ready", "koma.order.dispatched",
+        "koma.order.cancelled", "koma.order.rejected",
+    }:
+        from ..customer_whatsapp_dispatch import enqueue_customer_notice
+        enqueue_customer_notice(db, event, ev_name)
     return outbox_record

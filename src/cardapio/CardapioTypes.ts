@@ -122,6 +122,7 @@ export interface BrandConfig {
   pixPayerDocumentRequired?: boolean;
   benefits?: { coupons: boolean; loyalty: boolean; cashback: boolean };
   customerAccountRequired?: boolean;
+  customerWhatsAppStatusEnabled?: boolean;
   activeOrderTypes?: Array<"consumo_local" | "retirada" | "delivery">;
   operatingHours?: OperatingHours[];
   googleMapsUrl?: string;

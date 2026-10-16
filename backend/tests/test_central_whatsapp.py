@@ -19,10 +19,8 @@ from tests.characterization.orders.fixtures import CHAR_RESTAURANT_ID, char_clie
 def _enable(monkeypatch, rid=CHAR_RESTAURANT_ID):
     monkeypatch.setenv("KOMA_CENTRAL_WA_ENABLED", "true")
     monkeypatch.setenv("KOMA_CENTRAL_WA_PILOT_RESTAURANT_ID", str(rid))
-    monkeypatch.setenv("KOMA_CENTRAL_WA_OPERATOR_PHONE", "5511999999999")
     monkeypatch.setenv("KOMA_CENTRAL_WA_SENDER_PHONE", "5511888888888")
     monkeypatch.setenv("KOMA_CENTRAL_WA_INSTANCE_NAME", "koma-business-pilot")
-    monkeypatch.setenv("KOMA_CENTRAL_WA_PILOT_CUSTOMER_PHONE", "5511777777777")
 
 
 def _order(rid=CHAR_RESTAURANT_ID):
@@ -46,7 +44,7 @@ def test_default_off_and_fail_closed(monkeypatch):
     _enable(monkeypatch)
     assert wa.enabled_for(CHAR_RESTAURANT_ID)
     assert not wa.enabled_for(CHAR_RESTAURANT_ID + 1)
-    monkeypatch.setenv("KOMA_CENTRAL_WA_SENDER_PHONE", "5511999999999")
+    monkeypatch.setenv("KOMA_CENTRAL_WA_SENDER_PHONE", "invalid")
     assert wa.pilot_configuration() is None
     monkeypatch.setenv("KOMA_CENTRAL_WA_SENDER_PHONE", "5511888888888")
     monkeypatch.setenv("KOMA_CENTRAL_WA_INSTANCE_NAME", "koma-restaurant-1")
@@ -141,6 +139,11 @@ def test_enqueue_is_gated_deduped_and_contains_no_personal_contact(char_setup, m
     _enable(monkeypatch)
     db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
     try:
+        tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=CHAR_RESTAURANT_ID).one()
+        tenant.whatsapp_instance_name = wa.CENTRAL_INSTANCE_MARKER
+        tenant.whatsapp_recipient_phone = "5511999999999"
+        tenant.whatsapp_alerts_enabled = False
+        db.flush()
         first = wa.enqueue_operator_alert(db, _order())
         second = wa.enqueue_operator_alert(db, _order())
         assert first is second
@@ -148,10 +151,8 @@ def test_enqueue_is_gated_deduped_and_contains_no_personal_contact(char_setup, m
         assert "phone" not in first.payload
         assert "customer_name" not in first.payload
         assert "Não persistir" not in str(first.payload)
-        assert wa.enqueue_operator_alert(db, replace(_order(), customer_phone="5511999000000")) is None
-        monkeypatch.delenv("KOMA_CENTRAL_WA_PILOT_CUSTOMER_PHONE")
-        assert wa.enqueue_operator_alert(db, _order()) is None
-        monkeypatch.setenv("KOMA_CENTRAL_WA_PILOT_CUSTOMER_PHONE", "5511777777777")
+        # Any buyer can trigger the operator alert; buyer is not the destination.
+        assert wa.enqueue_operator_alert(db, replace(_order(), customer_phone="5511999000000")) is first
         tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=CHAR_RESTAURANT_ID).one()
         tenant.whatsapp_alerts_enabled = True
         assert wa.enqueue_operator_alert(db, _order()) is None
@@ -170,6 +171,11 @@ def test_disabled_after_enqueue_skips_provider_entirely(char_setup, monkeypatch)
     _enable(monkeypatch)
     db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
     try:
+        tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=CHAR_RESTAURANT_ID).one()
+        tenant.whatsapp_instance_name = wa.CENTRAL_INSTANCE_MARKER
+        tenant.whatsapp_recipient_phone = "5511999999999"
+        tenant.whatsapp_alerts_enabled = False
+        db.flush()
         row = wa.enqueue_operator_alert(db, _order())
         db.commit()
         event_id = row.id
