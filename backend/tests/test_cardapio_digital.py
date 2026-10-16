@@ -435,6 +435,8 @@ def test_registered_whatsapp_never_breaks_public_menu_snapshot(test_setup, monke
             assert restaurant["slug"] == "sistema-gourmet-bistro"
             assert restaurant["avisos_whatsapp_disponiveis"] is True
             assert "whatsapp_recipient_phone" not in str(payload)
+            assert "whatsapp_instance_name" not in str(payload)
+            assert "whatsapp_alerts_enabled" not in str(payload)
             assert "5511999999999" not in str(payload)
         finally:
             config.whatsapp_instance_name, config.whatsapp_alerts_enabled, config.whatsapp_recipient_phone = old
