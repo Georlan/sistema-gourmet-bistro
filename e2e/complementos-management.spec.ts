@@ -115,3 +115,43 @@ test('catalog search, alphabetical daily choices, add and remove preserve a fail
     await page.screenshot({ path: `${process.env.KOMA_DAILY_SCREENSHOTS}/complementos-compactos-${info.project.name}.png`, fullPage: true });
   }
 });
+
+
+test('marmitaria permite cadastrar sabor obrigatório vinculado somente à bebida', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  await page.route('**/caixa/configuracoes', route => route.fulfill({ json: { ...cashierConfig, operation_profile: 'marmitaria' } }));
+  await page.route('**/produtos/catalogo', route => route.fulfill({ json: { categorias: [{ id: 'drinks', nome: 'Bebidas' }], produtos: [{ id: 'drink', nome: 'Pitchulinha', preco: 1, ativo: true, somente_promocao: true, categoria_id: 'drinks' }] } }));
+  const groups: any[] = [];
+  await page.route('**/cardapio/modificadores/grupos', route => {
+    if (route.request().method() === 'POST') {
+      const payload = route.request().postDataJSON();
+      expect(payload).toMatchObject({ nome: 'Sabor da Pitchulinha', tipo: 'obrigatorio', min_selecoes: 1, max_selecoes: 1, produto_ids: ['drink'], categoria_ids: [], grupo_origem_id: null });
+      expect(payload.opcoes.map((o: any) => o.nome).sort()).toEqual(['Guaraná', 'Laranja', 'Pepsi']);
+      expect(payload.opcoes.every((o: any) => o.preco_adicional === 0 && o.ativo)).toBe(true);
+      groups.push({ ...payload, id: 'flavors' });
+      return route.fulfill({ json: groups[0] });
+    }
+    return route.fulfill({ json: groups });
+  });
+  await page.route('**/cardapio/modificadores/categorias-hierarquia', route => route.fulfill({ json: [] }));
+  await page.addInitScript(() => { sessionStorage.setItem('koma_active_tab', 'cardapio'); sessionStorage.setItem('koma_active_subtab', 'complementos'); });
+  await page.goto('/?view=caixa');
+  await page.getByRole('button', { name: 'Cadastros', exact: true }).click();
+  await page.getByRole('button', { name: 'Novo Grupo', exact: true }).click();
+  await expect(page.getByLabel('Mínimo de seleções do grupo')).not.toBeVisible();
+  await page.getByRole('button', { name: 'Limites e produtos vinculados' }).click();
+  await page.getByPlaceholder('Ex: Queijos e Cremosos, Molhos, Ponto da Carne').fill('Sabor da Pitchulinha');
+  await page.getByLabel('Tipo de seleção do grupo').selectOption('obrigatorio');
+  await page.getByLabel('Mínimo de seleções do grupo').fill('1');
+  await page.getByLabel('Máximo de seleções do grupo').fill('1');
+  await page.getByRole('button', { name: 'Pitchulinha', exact: true }).click();
+  for (const flavor of ['Pepsi', 'Guaraná', 'Laranja']) {
+    await page.getByLabel('Nome da nova opção').fill(flavor);
+    await page.getByRole('button', { name: 'Adicionar à lista', exact: true }).click();
+  }
+  await page.getByRole('button', { name: 'Criar Grupo', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Sabor da Pitchulinha', exact: true })).toBeVisible();
+  expect(groups).toHaveLength(1);
+});
