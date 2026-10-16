@@ -592,5 +592,5 @@ export function getCashierNavigationAction(id: string): CashierNavigationAction 
 /** Horizontal navigation shares labels, order, capabilities and owners with the sidebar. */
 export function getCashierHorizontalItems(tab: string, planId: SubscriptionPlanId, entitlements?: SubscriptionEntitlements, setupMode = false): readonly CashierNavigationChild[] {
   const groups = setupMode ? getCashierSetupSidebarGroupsForPlan(planId, entitlements) : getCashierSidebarGroupsForPlan(planId, entitlements);
-  return groups.flatMap(group => group.items).find(item => item.id === (tab === 'dashboard' ? 'relatorios' : tab))?.children.filter(child => !child.navigationHidden) ?? [];
+  return groups.flatMap(group => group.items).find(item => item.id === (tab === 'dashboard' ? 'relatorios' : tab))?.children?.filter(child => !child.navigationHidden) ?? [];
 }
