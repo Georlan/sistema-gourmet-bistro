@@ -96,6 +96,13 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
             environment = oauth.environment_for_restaurant(rid)
             tokens = oauth.exchange(code, environment=environment,
                                     evidence_restaurant_id=rid, evidence_state=state)
+            # Homologation exception is evidence-only, NOT a connected receiver:
+            # no RestaurantPaymentAccount, Pix activation or token persistence.
+            # The normal owner block stays enforced in production/all other tenants.
+            if oauth.qa9_sandbox_evidence_only(rid):
+                oauth.log_sandbox_oauth_evidence('connection_evidence_only', restaurant_id=rid, state=state)
+                return {'status': 'sandbox_evidence_captured'}
+
             if oauth.is_application_owner(tokens.provider_user_id, environment=environment):
                 oauth.log_sandbox_oauth_evidence('connection_rejected_owner', restaurant_id=rid, state=state)
                 raise HTTPException(409, 'A conta proprietária da aplicação KÔMA não pode receber vendas como restaurante.')

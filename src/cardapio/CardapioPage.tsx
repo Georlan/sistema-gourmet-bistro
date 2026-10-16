@@ -22,6 +22,7 @@ import {
 import clsx from "clsx";
 import {
   BrandConfig,
+  CatalogPromotion,
   OperatingHours,
   PaymentMethodGroup,
   Product,
@@ -35,6 +36,8 @@ import CardapioBenefitsDrawer from "./components/CardapioBenefitsDrawer";
 import CardapioCategoryNav from "./components/CardapioCategoryNav";
 import CardapioProductCard from "./components/CardapioProductCard";
 import CardapioProductModal from "./components/CardapioProductModal";
+import CardapioPromotionWizard from "./components/CardapioPromotionWizard";
+import type { PromotionPartSelection } from "./promotionComposition";
 import CardapioCartDrawer, {
   CardapioCheckoutRequest,
   CartItem,
@@ -84,6 +87,9 @@ interface PublicMenuPayload {
   restaurante: Record<string, any>;
   categorias: Array<Record<string, any>>;
   produtos: Array<Record<string, any>>;
+  produtos_promocionais?: Array<Record<string, any>>;
+  promocoes?: Array<Record<string, any>>;
+  promocao_composicao_explicita?: boolean;
 }
 
 function parseStructuredValue(value: unknown): unknown {
@@ -129,6 +135,8 @@ export default function CardapioPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedPromotion, setSelectedPromotion] = useState<CatalogPromotion | null>(null);
+  const [editingPromotionItem, setEditingPromotionItem] = useState<CartItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -236,7 +244,7 @@ export default function CardapioPage() {
         categoryMap[String(category.id)] = String(category.nome || "");
       });
 
-      const products: Product[] = payload.produtos.map((product) => ({
+      const mapPublicProduct = (product: Record<string, any>): Product => ({
         marmitaria: product.marmitaria === true,
         id: String(product.id),
         name: String(product.nome || ""),
@@ -268,7 +276,9 @@ export default function CardapioPage() {
           : [],
         isAvailable: true,
         ordem_exibicao: product.ordem_exibicao != null ? Number(product.ordem_exibicao) : null,
-      }));
+      });
+      const products: Product[] = payload.produtos.map(mapPublicProduct);
+      const promotionProducts: Product[] = (payload.produtos_promocionais || []).map(mapPublicProduct);
 
       let socials: SocialNetwork[] = [];
       let whatsappNumber = "";
@@ -332,6 +342,17 @@ export default function CardapioPage() {
         },
         categories: payload.categorias.map((category) => String(category.nome || "")).filter(Boolean),
         products,
+        promotionProducts,
+        explicitPromotionComposition: payload.promocao_composicao_explicita === true,
+        promotions: Array.isArray(payload.promocoes) ? payload.promocoes
+          .filter(p => p && Array.isArray(p.componentes) && p.componentes.length === 2)
+          .map(p => ({
+            id: String(p.id), nome: String(p.nome), descricao: String(p.descricao || ''),
+            inicio_em: typeof p.inicio_em === 'string' ? p.inicio_em : null,
+            fim_em: typeof p.fim_em === 'string' ? p.fim_em : null,
+            preco: Number(p.preco), componentes: p.componentes.map((ids: unknown) =>
+              Array.isArray(ids) ? ids.map(String) : []),
+          })) : [],
         socials,
         about: String(restaurant.sobre_nos || ""),
         paymentMethods,
@@ -685,6 +706,33 @@ export default function CardapioPage() {
     });
 
     if (revealCart && window.innerWidth >= 1024) setIsCartOpen(true);
+  };
+
+  const handlePromotionConfirm = (parts: PromotionPartSelection[]) => {
+    if (!selectedPromotion || !activeBrand || !orderingEnabled) return;
+    const campaign = selectedPromotion;
+    // Pacote único na sacola; componentes reais são serializados apenas no checkout.
+    const options: Record<string, ProductOption[]> = {};
+    parts.forEach((part, index) => {
+      Object.entries(part.selectedOptions).forEach(([groupId, selections]) => {
+        options[`${index}:${groupId}`] = selections;
+      });
+    });
+    const virtualProduct: Product = {
+      id: `promotion:${campaign.id}`, name: campaign.nome,
+      description: campaign.descricao, price: campaign.preco,
+      category: "Promoções", image: parts[0]?.product.image || "",
+      isAvailable: true,
+    };
+    setCart(current => [...current.filter(item => !item.promotionId), {
+      id: `promotion:${campaign.id}`, product: virtualProduct, quantity: 1,
+      selectedOptions: options, notes: "", promotionId: campaign.id,
+      promotionParts: parts,
+    }]);
+    setSelectedPromotion(null);
+    setEditingPromotionItem(null);
+    setIsCartOpen(true);
+    showNotification("Promoção adicionada à sacola");
   };
 
   const handleFastAdd = (product: Product) => {
@@ -1078,7 +1126,7 @@ export default function CardapioPage() {
           </button>
         </section>
 
-        <CardapioConditionsSummary brand={activeBrand} onOpen={() => setIsStoreInfoOpen(true)} />
+        <CardapioConditionsSummary brand={activeBrand} onOpen={() => setIsStoreInfoOpen(true)} onPromotionSelect={offer => { setEditingPromotionItem(null); setSelectedPromotion(offer); }} />
 
         {activeBrand.storeStatus === "closed" && (
           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
@@ -1210,6 +1258,22 @@ export default function CardapioPage() {
         </div>
       )}
 
+      {selectedPromotion && (
+        <CardapioPromotionWizard
+          key={selectedPromotion.id}
+          title={selectedPromotion.nome}
+          basePrice={selectedPromotion.preco}
+          restaurantId={activeBrand.id}
+          steps={selectedPromotion.componentes.map(ids => {
+            const product = [...activeBrand.products, ...(activeBrand.promotionProducts || [])].find(candidate => ids.includes(candidate.id));
+            return product ? { product, label: product.name } : null;
+          }).filter((step): step is { product: Product; label: string } => Boolean(step))}
+          initialParts={editingPromotionItem?.promotionParts}
+          onClose={() => { setSelectedPromotion(null); setEditingPromotionItem(null); }}
+          onConfirm={handlePromotionConfirm}
+        />
+      )}
+
       {selectedProduct && (
         <CardapioProductModal
           product={selectedProduct}
@@ -1236,6 +1300,12 @@ export default function CardapioPage() {
           onClose={() => { setIsCartOpen(false); setCouponToApply(""); }}
           onUpdateQty={(itemId, quantity) => setCart((current) => quantity <= 0 ? current.filter((item) => item.id !== itemId) : current.map((item) => item.id === itemId ? { ...item, quantity } : item))}
           onEditItem={item => {
+            if (item.promotionId) {
+              const promotion = activeBrand.promotions?.find(offer => offer.id === item.promotionId);
+              if (promotion) { setEditingPromotionItem(item); setSelectedPromotion(promotion); setIsCartOpen(false); }
+              else showNotification("A promoção não está mais disponível. Remova-a da sacola.");
+              return;
+            }
             const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
             if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para edição."); return; }
             setEditingCartItem(item);
@@ -1343,6 +1413,11 @@ export default function CardapioPage() {
           onClose={() => {
             setIsCheckoutOpen(false);
             setCheckoutRequest(null);
+          }}
+          onEditCart={() => {
+            setIsCheckoutOpen(false);
+            setCheckoutRequest(null);
+            setIsCartOpen(true);
           }}
           onOrderSuccess={() => {
             setCart([]);

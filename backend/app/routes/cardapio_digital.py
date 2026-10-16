@@ -4,13 +4,18 @@ import logging
 from typing import Optional
 from urllib.parse import quote
 import uuid
+from decimal import Decimal
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from pydantic import BaseModel, Field, ConfigDict
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy import text
-from sqlalchemy.orm import Session, load_only, raiseload
+from sqlalchemy.orm import Session, load_only, raiseload, lazyload
 
+from ..promotions import active_promotions, money, promotion_status
 from ..catalog_addons import effective_modifier_payloads_by_product
 from ..marmitaria_catalog import enabled as marmitaria_enabled
 from ..restaurant_profile_models import RestauranteOperationProfile
@@ -226,6 +231,7 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
             ConfiguracaoRestaurante.taxa_entrega_fixa,
             ConfiguracaoRestaurante.tabela_taxas_bairros,
             ConfiguracaoRestaurante.tabela_taxas_km,
+            ConfiguracaoRestaurante.promocoes,
             raiseload=True,
         ),
         raiseload(ConfiguracaoRestaurante.restaurante),
@@ -344,7 +350,7 @@ def obter_categorias_cardapio_digital(
         active_category_ids = {
             row[0]
             for row in db.query(Produto.categoria_id)
-            .filter(Produto.restaurante_id == rest_id, Produto.ativo.is_(True))
+            .filter(Produto.restaurante_id == rest_id, Produto.ativo.is_(True), Produto.somente_promocao.is_(False))
             .distinct()
             .all()
         }
@@ -360,11 +366,12 @@ def obter_produtos_cardapio_digital(
     slug: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Retorna produtos ativos com os mesmos complementos efetivos do catálogo operacional."""
+    """Retorna produtos ativos vendidos avulsos, não componentes exclusivos."""
     with public_tenant_scope(restaurante_id, slug, db) as rest_id:
         produtos = db.query(Produto).filter(
             Produto.restaurante_id == rest_id,
             Produto.ativo.is_(True),
+            Produto.somente_promocao.is_(False),
         ).all()
         produtos = _ordered_products(produtos)
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
@@ -409,8 +416,16 @@ def obter_cardapio_publico(
         ).scalar()
         is_marmitaria = profile_key == "marmitaria"
 
-        # Categorias vazias (sem produtos ativos) não aparecem no cardápio online
-        active_category_ids = {product.categoria_id for product in produtos}
+        # Os produtos exclusivos só são disponibilizados às etapas de ofertas ativas.
+        products_regular = [product for product in produtos if not product.somente_promocao]
+        active_offers = active_promotions(configuracao, produtos)
+        referenced_special_ids = {
+            str(pid) for offer in active_offers for slot in offer['componentes'] for pid in slot
+        }
+        exclusive_parts = [product for product in produtos if product.somente_promocao and str(product.id) in referenced_special_ids]
+
+        # Categorias sem produtos avulsos não aparecem no cardápio online.
+        active_category_ids = {product.categoria_id for product in products_regular}
         categorias_com_produtos = [category for category in categorias if category.id in active_category_ids]
         niche = resolve_restaurant_niche(
             db,
@@ -438,8 +453,15 @@ def obter_cardapio_publico(
                     modifier_payloads.get(str(product.id), []),
                     marmitaria=is_marmitaria,
                 )
-                for product in produtos
+                for product in products_regular
             ],
+            "produtos_promocionais": [
+                _public_product_payload(
+                    product, modifier_payloads.get(str(product.id), []), marmitaria=is_marmitaria,
+                ) for product in exclusive_parts
+            ],
+            "promocoes": active_offers,
+            "promocao_composicao_explicita": True,
         }
 
 
@@ -834,3 +856,137 @@ def atualizar_config_cardapio_digital(
     db.refresh(restaurante)
     notify_cardapio_config_update(background_tasks, int(rest_id))
     return restaurante
+
+
+class PromotionConfigInput(BaseModel):
+    nome: str = Field(min_length=4, max_length=90)
+    descricao: str = Field(default="", max_length=240)
+    preco: Decimal = Field(ge=0, le=100000, max_digits=8, decimal_places=2)
+    # Cada slot contém um ou mais IDs aceitáveis: G + (bebida A ou B).
+    componentes: list[list[str]] = Field(min_length=2, max_length=2)
+    ativo: bool = False
+    inicio_em: datetime | None = None
+    fim_em: datetime | None = None
+    fuso_horario: str = Field(default="America/Fortaleza", max_length=64)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+def _promotion_authorized_config(
+    db: Session, *, for_update: bool = True,
+) -> tuple[int, ConfiguracaoRestaurante]:
+    rest_id = require_tenant_id()
+    # ConfiguracaoRestaurante.restaurante usa lazy='joined' por padrão.
+    # FOR UPDATE sem OF em LEFT OUTER JOIN falha no PostgreSQL (NotSupportedError).
+    # A leitura nunca precisa bloquear; somente a escrita bloqueia a linha do tenant.
+    query = db.query(ConfiguracaoRestaurante).options(
+        lazyload(ConfiguracaoRestaurante.restaurante),
+    ).filter(ConfiguracaoRestaurante.restaurante_id == rest_id)
+    if for_update:
+        query = query.with_for_update(of=ConfiguracaoRestaurante)
+    config = query.first()
+    if config is None:
+        raise HTTPException(status_code=409, detail="Configure o restaurante antes de cadastrar promoções.")
+    return rest_id, config
+
+
+def _validate_promotion_input(db: Session, rest_id: int, offer: PromotionConfigInput) -> dict:
+    try:
+        ZoneInfo(offer.fuso_horario)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(status_code=422, detail="Fuso horário inválido.")
+    for value in (offer.inicio_em, offer.fim_em):
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise HTTPException(status_code=422, detail="Informe data e horário com fuso horário.")
+    if offer.inicio_em and offer.fim_em and offer.fim_em <= offer.inicio_em:
+        raise HTTPException(status_code=422, detail="O encerramento deve ser posterior ao início.")
+    cleaned = []
+    seen: set[str] = set()
+    for ids in offer.componentes:
+        normalized = list(dict.fromkeys(str(pid).strip() for pid in ids))
+        if not normalized or any(not pid for pid in normalized) or len(normalized) > 12:
+            raise HTTPException(status_code=422, detail="Cada etapa precisa de 1 a 12 produtos válidos.")
+        if seen.intersection(normalized):
+            raise HTTPException(status_code=422, detail="Um produto não pode ocupar duas etapas.")
+        seen.update(normalized)
+        cleaned.append(normalized)
+
+    products = db.query(Produto).filter(
+        Produto.restaurante_id == rest_id,
+        Produto.id.in_(list(seen)),
+    ).all()
+    if len(products) != len(seen):
+        raise HTTPException(status_code=422, detail="Todos os produtos devem existir neste restaurante.")
+    by_id = {str(product.id): product for product in products}
+    if offer.ativo and any(not product.ativo for product in products):
+        raise HTTPException(status_code=409, detail="Ative os produtos componentes antes de publicar esta oferta.")
+    return {
+        "nome": " ".join(offer.nome.split()),
+        "descricao": offer.descricao.strip(),
+        "preco": float(money(offer.preco)),
+        "componentes": cleaned,
+        "ativo": offer.ativo,
+        "inicio_em": offer.inicio_em.astimezone(timezone.utc).isoformat() if offer.inicio_em else None,
+        "fim_em": offer.fim_em.astimezone(timezone.utc).isoformat() if offer.fim_em else None,
+        "fuso_horario": offer.fuso_horario,
+    }
+
+
+@router.get("/promocoes")
+def listar_promocoes_admin(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    rest_id, config = _promotion_authorized_config(db, for_update=False)
+    products = db.query(Produto).filter(Produto.restaurante_id == rest_id).all()
+    return {
+        "perfil_marmitaria": marmitaria_enabled(db, rest_id),
+        "promocoes": [{**entry, "status": promotion_status(entry)} for entry in (config.promocoes or [])],
+        "produtos": [
+            {"id": p.id, "nome": p.nome, "preco": float(p.preco), "ativo": bool(p.ativo),
+             "tamanho": p.marmitaria_tamanho, "categoria_id": p.categoria_id,
+             "somente_promocao": bool(p.somente_promocao)}
+            for p in products
+        ],
+        "categorias": [
+            {"id": category.id, "nome": category.nome}
+            for category in db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
+        ],
+    }
+
+
+@router.post("/promocoes", status_code=201)
+def criar_promocao(
+    data: PromotionConfigInput,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    rest_id, config = _promotion_authorized_config(db)
+    saved = _validate_promotion_input(db, rest_id, data)
+    saved["id"] = f"promo-{uuid.uuid4().hex[:12]}"
+    config.promocoes = [*(config.promocoes or []), saved]
+    db.commit()
+    notify_cardapio_config_update(background_tasks, rest_id)
+    return saved
+
+
+@router.put("/promocoes/{promotion_id}")
+def atualizar_promocao(
+    promotion_id: str,
+    data: PromotionConfigInput,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    rest_id, config = _promotion_authorized_config(db)
+    current = config.promocoes or []
+    if not any(entry.get("id") == promotion_id for entry in current):
+        raise HTTPException(status_code=404, detail="Promoção não encontrada.")
+    saved = _validate_promotion_input(db, rest_id, data)
+    saved["id"] = promotion_id
+    config.promocoes = [saved if entry.get("id") == promotion_id else entry for entry in current]
+    db.commit()
+    notify_cardapio_config_update(background_tasks, rest_id)
+    return saved
+

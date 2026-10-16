@@ -165,3 +165,21 @@ test('nomes de alimentos não ativam agrupamento de marmitaria em outros perfis'
   assert.equal(cardapioCompositionSource(item).composicao_agrupada, false);
   assert.deepEqual(itemCompositionPresentation(cardapioCompositionSource(item)).lines, ['COMPLEMENTOS: Ovo']);
 });
+
+test('combo e avulsos mantêm posições distintas mesmo com o mesmo produto', async () => {
+  const { buildCardapioPromotionItemIndices } = await import('../src/cardapio/orderItems');
+  const loose = cartItem({ quantity: 2 });
+  const combo = cartItem({ promotionId: 'offer', promotionParts: [
+    { product: loose.product, quantity: 1, selectedOptions: {}, notes: 'parte combo' },
+    { product: { ...loose.product, id: 'drink' }, quantity: 1, selectedOptions: {}, notes: '' },
+  ] });
+  for (const [cart, expected] of [
+    [[loose, combo], [1, 2]], [[combo, loose], [0, 1]],
+  ] as [CartItem[], number[]][]) {
+    const items = buildCardapioOrderItems(cart, 'Fixture');
+    assert.deepEqual(buildCardapioPromotionItemIndices(cart), expected);
+    assert.equal(items[expected[0]].observacao, 'parte combo');
+    assert.equal(items[expected[1]].produto_id, 'drink');
+  }
+  assert.equal(buildCardapioPromotionItemIndices([loose]), undefined);
+});

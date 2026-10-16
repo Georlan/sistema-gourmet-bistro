@@ -8,6 +8,7 @@ Garante a separação conceitual canônica entre Comanda (Conta) e Order/Lancame
 from __future__ import annotations
 
 import datetime
+from dataclasses import replace
 from decimal import Decimal
 import logging
 from typing import Any, Optional, Sequence
@@ -55,6 +56,7 @@ from ...models import (
     Item,
     ItemModificador,
     Lancamento,
+    Produto,
     Restaurante,
     Usuario,
 )
@@ -448,13 +450,58 @@ class OrderApplicationService:
             usar_cashback=cmd.usar_cashback or cmd.cashback_discount > Decimal("0.00"),
         )
 
-        validated_input = OrderValidationService.validate(val_context)
+        # O mínimo depende do preço efetivo da oferta, que pode ser maior ou
+        # menor que a soma avulsa. Validar componentes agora e o mínimo depois.
+        validated_input = OrderValidationService.validate(
+            replace(val_context, minimum_delivery_subtotal=Decimal("0.00"))
+            if cmd.promotion_id else val_context
+        )
+        # O servidor impede venda avulsa mesmo via payload manual ou outro canal.
+        exclusive_ids = {
+            str(p.id) for p in db.query(Produto).filter(
+                Produto.restaurante_id == cmd.restaurant_id,
+                Produto.id.in_([str(item.product_id) for item in cmd.items]),
+                Produto.somente_promocao.is_(True),
+            ).all()
+        }
+        if exclusive_ids and not cmd.promotion_id:
+            raise OrderValidationError("Este item está disponível somente dentro de uma promoção.")
+        if cmd.promotion_item_indices is not None and not cmd.promotion_id:
+            raise OrderValidationError("Composição de promoção sem promoção selecionada.")
+        if cmd.promotion_id:
+            # A composição canônica já validou estoque lógico, tenant e modificadores.
+            from ...models import ConfiguracaoRestaurante
+            from ...promotions import apply_promotion_to_validated, validate_exclusive_promotion_parts
+            promotion_config = db.query(ConfiguracaoRestaurante).filter(
+                ConfiguracaoRestaurante.restaurante_id == cmd.restaurant_id,
+            ).first()
+            promotion = next((entry for entry in (promotion_config.promocoes or [])
+                              if entry.get("id") == cmd.promotion_id), None) if promotion_config else None
+            if promotion is None:
+                raise OrderValidationError("Promoção inexistente neste restaurante.")
+            if cmd.coupon_code or cmd.usar_cashback or cmd.cashback_discount > Decimal("0.00"):
+                raise OrderValidationError("Não é possível combinar promoção com cupom ou cashback.")
+            validate_exclusive_promotion_parts(
+                exclusive_ids, promotion, validated_input, item_indices=cmd.promotion_item_indices,
+            )
+            validated_input = apply_promotion_to_validated(
+                validated_input, promotion, exclusive_ids=exclusive_ids,
+                expected_price=cmd.expected_promotion_price,
+                item_indices=cmd.promotion_item_indices,
+            )
 
         # 3. Cotação Financeira Pura
         subtotal_base = sum(
             (it.base_price + sum(m.price for m in it.modifiers)) * it.quantity
             for it in validated_input.items
         )
+        if cmd.promotion_id:
+            minimum = to_money_decimal(val_context.minimum_delivery_subtotal)
+            applies = cmd.fulfillment == FulfillmentType.DELIVERY or (
+                cmd.fulfillment == FulfillmentType.PICKUP and val_context.enforce_minimum_for_pickup
+            )
+            if applies and subtotal_base < minimum:
+                raise OrderValidationError("O valor promocional ficou abaixo do pedido mínimo.")
         authoritative_delivery_fee = cls.resolve_server_delivery_fee(
             db=db,
             restaurante_id=cmd.restaurant_id,

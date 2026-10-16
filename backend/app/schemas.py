@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Any, List, Literal, Optional, Union
 from datetime import datetime
@@ -128,6 +129,7 @@ class ProdutoBase(BaseModel):
     imagem: Optional[str] = ""
     imagens_galeria: Optional[List[str]] = Field(default_factory=list)
     ativo: bool = True
+    somente_promocao: bool = False
     ordem_exibicao: Optional[int] = None
 
     @field_validator("descricao", "imagem", mode="before")
@@ -155,6 +157,7 @@ class ProdutoUpdate(BaseModel):
     imagem: Optional[str] = None
     imagens_galeria: Optional[List[str]] = None
     ativo: Optional[bool] = None
+    somente_promocao: Optional[bool] = None
     ordem_exibicao: Optional[int] = None
 
 class ProdutoResponse(ProdutoBase):
@@ -981,6 +984,9 @@ class CardapioPublicResponse(BaseModel):
     restaurante: CardapioPublicRestaurantResponse
     categorias: List[CardapioPublicCategoryResponse]
     produtos: List[CardapioPublicProductResponse]
+    produtos_promocionais: List[CardapioPublicProductResponse] = Field(default_factory=list)
+    promocoes: List[dict] = Field(default_factory=list)
+    promocao_composicao_explicita: bool = False
 
 
 class DeliveryFeeQuoteRequest(BaseModel):
@@ -1156,6 +1162,9 @@ class CardapioItemPedido(BaseModel):
 
 class CardapioPedidoCreate(BaseModel):
     restaurante_id: int = Field(gt=0)
+    promocao_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    promocao_item_indices: Optional[List[int]] = Field(default=None, min_length=2, max_length=2)
+    promocao_preco_esperado: Optional[Decimal] = Field(default=None, ge=0, le=100000, max_digits=8, decimal_places=2)
     itens: List[CardapioItemPedido] = Field(min_length=1, max_length=100)
     cliente_nome: str = Field(min_length=2, max_length=100)
     cliente_telefone: str = Field(min_length=10, max_length=20)

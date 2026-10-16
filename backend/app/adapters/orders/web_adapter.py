@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 import logging
+import json
 import unicodedata
 from typing import Any, Optional
 from fastapi import BackgroundTasks, HTTPException, Request, status
@@ -227,6 +228,18 @@ def _configured_payment_methods(raw_methods: Any) -> set[str]:
         if method:
             configured.add(method)
     return configured
+
+
+def _log_validation_rejection(request: Request, restaurante_id: int, modalidade: str, error: Exception) -> None:
+    # Never log the payload or exception text: either may contain customer PII.
+    logger.info(json.dumps({
+        "event": "public_order_validation_rejected",
+        "restaurante_id": restaurante_id,
+        "request_id": getattr(request.state, "request_id", None),
+        "status_code": 400,
+        "validation_type": type(error).__name__,
+        "fulfillment": modalidade,
+    }, separators=(",", ":")))
 
 
 class CardapioWebAdapter:
@@ -529,6 +542,9 @@ class CardapioWebAdapter:
                 ),
                 delivery=delivery_input,
                 coupon_code=payload.cupom_codigo,
+                promotion_id=payload.promocao_id,
+                promotion_item_indices=tuple(payload.promocao_item_indices) if payload.promocao_item_indices is not None else None,
+                expected_promotion_price=payload.promocao_preco_esperado,
                 usar_cashback=bool(payload.usar_cashback),
                 payment_method=payload.forma_pagamento_detalhe,
                 change_for=str(payload.troco_para) if payload.troco_para is not None else None,
@@ -640,6 +656,7 @@ class CardapioWebAdapter:
             )
         except MinimumOrderAmountNotMetError as err:
             db.rollback()
+            _log_validation_rejection(request, rest_id, modalidade, err)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(err),
@@ -652,6 +669,7 @@ class CardapioWebAdapter:
             )
         except (InvalidFulfillmentDetailsError, OrderValidationError) as err:
             db.rollback()
+            _log_validation_rejection(request, rest_id, modalidade, err)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(err),

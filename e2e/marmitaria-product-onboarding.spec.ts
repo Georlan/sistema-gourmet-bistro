@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { cashierConfig, mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
-test('Produtos define limites próprios por quentinha e Complementos mantém somente grupos e opções', async ({ page }) => {
+test('Produtos define limites próprios por quentinha e Complementos oferece vínculos de outros produtos', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.addInitScript(() => { sessionStorage.setItem('koma_active_tab', 'cardapio'); sessionStorage.setItem('koma_active_subtab', 'produtos'); });
@@ -113,7 +113,7 @@ test('Produtos define limites próprios por quentinha e Complementos mantém som
   await expect(page.getByText('Mínimo', { exact: true })).toBeHidden();
   await expect(page.getByText('Máximo', { exact: true })).toBeHidden();
   await expect(page.getByText('Tipo', { exact: true })).toBeHidden();
-  await expect(page.getByText(/O mínimo e o máximo pertencem a cada Quentinha P, M ou G e são configurados em Produtos/)).toBeVisible();
+  await expect(page.getByText(/Para quentinhas, configure o mínimo e o máximo em cada tamanho na aba Produtos/)).toBeVisible();
 });
 test('novo tamanho inicia à venda e ainda pode ser salvo pausado sem grupos', async ({ page }) => {
   await mockCashierBackend(page);
@@ -251,4 +251,126 @@ test('adiciona sobremesa e suco na lista das marmitas e reaproveita categorias',
   await expect(row('Pudim caseiro')).toHaveCount(1);
   const widths = await page.evaluate(() => [window.innerWidth, document.documentElement.scrollWidth]);
   expect(widths[1]).toBeLessThanOrEqual(widths[0] + 1);
+});
+
+
+test('promoções ficam como categoria virtual no catálogo, sem bloco acima dos produtos', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'cardapio');
+    sessionStorage.setItem('koma_active_subtab', 'produtos');
+  });
+  const categories = [
+    { id: 'quentinhas', nome: 'Quentinhas', destino_impressao: 'COZINHA' },
+    { id: 'bebidas', nome: 'Bebidas', destino_impressao: 'BAR' },
+  ];
+  const products = [
+    { id: 'g', nome: 'Quentinha G', categoria_id: 'quentinhas', preco: 14, ativo: true, marmitaria_tamanho: 'g' },
+    { id: 'm', nome: 'Quentinha M', categoria_id: 'quentinhas', preco: 10, ativo: true, marmitaria_tamanho: 'm' },
+    { id: 'pitulinha', nome: 'Pitulinha', categoria_id: 'bebidas', preco: 1, ativo: true, somente_promocao: true },
+  ];
+  let promotions = [
+    { id: 'gm', nome: 'Quentinha G + Quentinha M', descricao: 'Duas quentinhas', preco: 22, componentes: [['g'], ['m']], ativo: true },
+    { id: 'gb', nome: 'Quentinha G + Pitulinha', descricao: 'Bebida exclusiva', preco: 16, componentes: [['g'], ['pitulinha']], ativo: false },
+  ];
+  await page.route('**/caixa/configuracoes', route => route.fulfill({ json: { ...cashierConfig, operation_profile: 'marmitaria' } }));
+  await page.route('**/produtos/catalogo', route => route.fulfill({ json: { categorias: categories, produtos: products } }));
+  await page.route('**/api/cardapio-digital/promocoes**', async route => {
+    const request = route.request();
+    const id = new URL(request.url()).pathname.split('/').at(-1);
+    if (request.method() === 'PUT') {
+      const index = promotions.findIndex(promotion => promotion.id === id);
+      expect(index).toBeGreaterThanOrEqual(0);
+      promotions[index] = { ...promotions[index], ...request.postDataJSON() };
+      await route.fulfill({ json: promotions[index] });
+      return;
+    }
+    if (request.method() === 'POST') {
+      const created = { ...request.postDataJSON(), id: 'new-promotion' };
+      promotions = [...promotions, created];
+      await route.fulfill({ status: 201, json: created });
+      return;
+    }
+    await route.fulfill({ json: { produtos: products, categorias: categories, promocoes: promotions, perfil_marmitaria: true } });
+  });
+
+  await page.goto('/?view=caixa');
+  const categoriesBar = page.getByLabel('Categorias do cardápio');
+  await expect(categoriesBar.getByRole('button', { name: /Promoções/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Novo produto', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Gerenciar promoções' })).toHaveCount(0);
+
+  await categoriesBar.getByRole('button', { name: /Promoções/ }).click();
+  const panel = page.getByRole('region', { name: 'Gerenciar promoções' });
+  await expect(panel).toBeVisible();
+  await expect(categoriesBar.getByRole('button', { name: /Promoções 2/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Novo produto', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Buscar produtos' })).toHaveCount(0);
+  await expect(panel.getByText('Quentinha G + Quentinha M', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Quentinha G + Pitulinha', { exact: true })).toBeVisible();
+  await expect(panel.getByText('R$ 22,00')).toBeVisible();
+  await expect(panel.getByText('R$ 16,00')).toBeVisible();
+  await expect(panel.getByText('Bebida exclusiva do combo')).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'G + M · R$ 22' })).toHaveCount(0);
+
+  await panel.getByRole('button', { name: 'Pausar Quentinha G + Quentinha M' }).click();
+  await expect(panel.getByText('Pausada', { exact: true })).toHaveCount(2);
+  await panel.getByRole('button', { name: 'Publicar Quentinha G + Pitulinha' }).click();
+  await expect(panel.getByText('Ativa', { exact: true })).toHaveCount(1);
+
+  await panel.getByRole('button', { name: 'Nova oferta' }).click();
+  await expect(panel.getByRole('region', { name: 'Cadastrar promoção' })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'G + M · R$ 22' })).toBeVisible();
+  await expect(panel.getByText('Cadastrar bebida exclusiva para o combo')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Criar bebida apenas para promoções' })).toBeHidden();
+  await panel.getByRole('button', { name: 'G + M · R$ 22' }).click();
+  await expect(panel.getByRole('textbox', { name: 'Nome da promoção' })).toHaveValue('Quentinha G + Quentinha M');
+  await expect(panel.getByRole('spinbutton', { name: 'Preço do conjunto' })).toHaveValue('22.00');
+  await panel.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(panel.getByRole('region', { name: 'Cadastrar promoção' })).toHaveCount(0);
+
+  const scheduledCard = panel.locator('article').filter({ hasText: 'Quentinha G + Quentinha M' });
+  await scheduledCard.getByRole('button', { name: 'Editar', exact: true }).click();
+  await panel.getByLabel('Início programado (opcional)').fill('2099-10-16T12:00');
+  await panel.getByLabel('Encerramento (opcional)').fill('2099-10-16T14:00');
+  await panel.getByLabel('Habilitar oferta').check();
+  const savedSchedule = page.waitForRequest(request => request.method() === 'PUT' && request.url().endsWith('/promocoes/gm'));
+  await panel.getByRole('button', { name: 'Salvar alterações' }).click();
+  const scheduled = (await savedSchedule).postDataJSON();
+  expect(scheduled.inicio_em).toBe('2099-10-16T15:00:00.000Z');
+  expect(scheduled.fim_em).toBe('2099-10-16T17:00:00.000Z');
+  expect(scheduled.fuso_horario).toBe('America/Fortaleza');
+  await scheduledCard.getByRole('button', { name: 'Editar', exact: true }).click();
+  await expect(panel.getByLabel('Início programado (opcional)')).toHaveValue('2099-10-16T12:00');
+  await panel.getByRole('button', { name: 'Cancelar', exact: true }).click();
+
+  await categoriesBar.getByRole('button', { name: /Todos/ }).click();
+  await expect(page.getByRole('button', { name: 'Novo produto', exact: true })).toBeVisible();
+  await expect(page.locator('article').filter({ has: page.getByRole('heading', { name: 'Quentinha G', exact: true }) })).toHaveCount(1);
+});
+
+test('promoções estão disponíveis globalmente sem modelos de marmitaria', async ({ page }, testInfo) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'cardapio');
+    sessionStorage.setItem('koma_active_subtab', 'produtos');
+  });
+  await page.route('**/caixa/configuracoes', route => route.fulfill({ json: { ...cashierConfig, operation_profile: 'generic' } }));
+  await page.goto('/?view=caixa');
+  await expect(page.getByLabel('Categorias do cardápio')).toBeVisible();
+  await expect(page.getByLabel('Categorias do cardápio').getByRole('button', { name: /Promoções/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Novo produto', exact: true })).toBeVisible();
+  await page.route('**/api/cardapio-digital/promocoes**', route => route.fulfill({ json: {
+    produtos: [], categorias: [], promocoes: [], perfil_marmitaria: false,
+  } }));
+  await page.getByLabel('Categorias do cardápio').getByRole('button', { name: /Promoções/ }).click();
+  const panel = page.getByRole('region', { name: 'Gerenciar promoções' });
+  await expect(panel.getByText('Nenhuma promoção cadastrada')).toBeVisible();
+  await panel.getByRole('button', { name: 'Nova oferta' }).click();
+  await expect(panel.getByRole('textbox', { name: 'Nome da promoção' })).toBeVisible();
+  await expect(panel.getByLabel('Modelos de ofertas')).toHaveCount(0);
+  await expect(panel.getByText('Pitulinha')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('promotions-global.png'), fullPage: true });
 });

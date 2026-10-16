@@ -59,6 +59,7 @@ export default function ComplementosTab({
   const [newOptionError, setNewOptionError] = useState('');
   const [dailyMode, setDailyMode] = useState(true);
   const [dailyPending, setDailyPending] = useState(false);
+  const [showGroupRules, setShowGroupRules] = useState(false);
   const [catalogError, setCatalogError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGrupo, setEditingGrupo] = useState<GrupoModificador | null>(null);
@@ -150,6 +151,7 @@ export default function ComplementosTab({
   };
 
   const handleOpenModal = (grupo?: GrupoModificador) => {
+    setShowGroupRules(false);
     setOptionSearch('');
     setNewOptionName('');
     setNewOptionPrice('0');
@@ -390,16 +392,16 @@ export default function ComplementosTab({
       {catalogError && <div role="alert" className="rounded-2xl border border-rose-500/40 p-5 text-sm text-koma-foreground">Não foi possível conferir o cadastro atual. <button onClick={() => void fetchCatalogBindings()} className="underline">Tentar novamente</button></div>}
       {marmitariaCadastro && dailyMode && !catalogError && (loading ? <p role="status" className="p-6 text-koma-muted">Carregando cardápio do dia…</p> : <CardapioDiarioEditor grupos={grupos} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onEditGroup={handleOpenModal} onDirtyChange={setDailyPending} onReload={fetchCatalogBindings} onSaved={async () => { onShowNotification?.('Cardápio do dia salvo.', 'success'); await fetchCatalogBindings(); }} />)}
       {(!marmitariaCadastro || !dailyMode) && !catalogError && <details open className="space-y-4">
-        <summary className="cursor-pointer font-bold text-koma-foreground">{marmitariaCadastro ? 'Proteínas, guarnições e saladas' : 'Complementos e adicionais'}</summary>
+        <summary className="cursor-pointer font-bold text-koma-foreground">Complementos e adicionais</summary>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-koma-card border border-koma-border p-5 rounded-2xl">
         <div>
           <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm">
             <Layers className="w-5 h-5" />
-            <span>{marmitariaCadastro ? 'Grupos da quentinha' : 'Grupos de Complementos & Adicionais'}</span>
+            <span>Grupos de Complementos & Adicionais</span>
           </div>
           <p className="text-xs text-koma-muted mt-1 max-w-2xl">
             {marmitariaCadastro
-              ? 'Cadastre aqui apenas o que pode ir na quentinha, como Proteínas, Guarnições e Saladas. Os limites mínimo e máximo são definidos em cada quentinha na aba Produtos.'
+              ? 'Cadastre proteínas, acompanhamentos e escolhas de outros produtos, como sabores de bebidas. Os limites das quentinhas são definidos em cada tamanho na aba Produtos.'
               : 'Vincule grupos às categorias e subcategorias, ou a produtos específicos. Pause as opções que não serão servidas hoje.'}
           </p>
         </div>
@@ -500,7 +502,7 @@ export default function ComplementosTab({
 
               {marmitariaCadastro ? (
                 <div className="mt-4 pt-3 border-t border-koma-border/60 text-[11px] text-koma-muted">
-                  Os limites de escolha são configurados separadamente em cada quentinha na aba Produtos.
+                  Confira limites e produtos vinculados em Editar. Nas quentinhas, configure os limites de cada tamanho em Produtos.
                 </div>
               ) : (
               <div className="mt-4 pt-3 border-t border-koma-border/60 text-[11px] text-koma-muted space-y-1">
@@ -553,10 +555,13 @@ export default function ComplementosTab({
                 />
               </div>
 
-              <div className={marmitariaCadastro ? 'hidden' : 'grid grid-cols-3 gap-3'}>
+              {marmitariaCadastro && <button type="button" aria-expanded={showGroupRules} onClick={() => setShowGroupRules(value => !value)} className="text-xs font-bold text-emerald-700 dark:text-emerald-300 underline">Limites e produtos vinculados</button>}
+              {marmitariaCadastro && showGroupRules && <p className="text-xs text-koma-muted">Para sabores e escolhas de outros produtos, defina os limites e vincule somente os produtos correspondentes. Nas quentinhas, os limites definidos em Produtos continuam valendo.</p>}
+              <div className={marmitariaCadastro && !showGroupRules ? 'hidden' : 'grid grid-cols-3 gap-3'}>
                 <div>
                   <label className="block text-xs font-bold text-koma-muted mb-1">Tipo</label>
                   <select
+                    aria-label="Tipo de seleção do grupo"
                     value={tipo}
                     onChange={(event) => setTipo(event.target.value as typeof tipo)}
                     className="w-full px-3 py-2 bg-koma-card border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
@@ -569,6 +574,7 @@ export default function ComplementosTab({
                 <div>
                   <label className="block text-xs font-bold text-koma-muted mb-1">Mínimo</label>
                   <input
+                    aria-label="Mínimo de seleções do grupo"
                     type="number"
                     min="0"
                     value={minSelecoes}
@@ -580,6 +586,7 @@ export default function ComplementosTab({
                 <div>
                   <label className="block text-xs font-bold text-koma-muted mb-1">Máximo</label>
                   <input
+                    aria-label="Máximo de seleções do grupo"
                     type="number"
                     min="1"
                     value={maxSelecoes}
@@ -590,9 +597,9 @@ export default function ComplementosTab({
                 </div>
               </div>
 
-              {marmitariaCadastro && (
+              {marmitariaCadastro && !showGroupRules && (
                 <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-koma-muted">
-                  Este grupo define apenas os itens disponíveis. O mínimo e o máximo pertencem a cada Quentinha P, M ou G e são configurados em Produtos.
+                  Para quentinhas, configure o mínimo e o máximo em cada tamanho na aba Produtos. Para outros produtos, abra Limites e produtos vinculados.
                 </div>
               )}
               {marmitariaCadastro && <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
@@ -683,7 +690,7 @@ export default function ComplementosTab({
                 </details>
               )}
 
-              <div className={marmitariaCadastro ? 'hidden' : 'space-y-2 pt-2 border-t border-koma-border'}>
+              <div className={marmitariaCadastro && !showGroupRules ? 'hidden' : 'space-y-2 pt-2 border-t border-koma-border'}>
                 <div>
                   <label className="text-xs font-bold text-koma-muted">Vincular por Categoria</label>
                   <p className="text-[11px] text-koma-subtle mt-0.5">
@@ -738,7 +745,7 @@ export default function ComplementosTab({
                 </label>
               </div>
 
-              <div className={marmitariaCadastro ? 'hidden' : 'space-y-2 pt-2 border-t border-koma-border'}>
+              <div className={marmitariaCadastro && !showGroupRules ? 'hidden' : 'space-y-2 pt-2 border-t border-koma-border'}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <label className="text-xs font-bold text-koma-muted">Produtos específicos</label>
@@ -760,6 +767,7 @@ export default function ComplementosTab({
                       <button
                         key={product.id}
                         type="button"
+                        aria-pressed={selected}
                         onClick={() => toggleProductSelection(product.id)}
                         className={clsx(
                           'flex items-center gap-2 p-2 rounded-lg text-left text-xs transition border',

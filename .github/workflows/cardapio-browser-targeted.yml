@@ -68,6 +68,10 @@ jobs:
           npm run test:e2e --
           e2e/image-upload-optimization.spec.ts
           e2e/cardapio-canonical-modal-entrypoints.spec.ts
+          e2e/cardapio-catalog-images.spec.ts
+          e2e/cardapio-exclusive-edit.spec.ts
+          e2e/cardapio-promotions.spec.ts
+          e2e/cardapio-combo-only-drink.spec.ts
           e2e/cardapio-benefits.spec.ts
           e2e/cardapio-marmitaria-complements.spec.ts
           e2e/marmitaria-product-onboarding.spec.ts
@@ -81,6 +85,7 @@ jobs:
           e2e/order-tracking-chat.spec.ts
           e2e/cardapio-chat-viewports.spec.ts
           e2e/cardapio-payment-polling.spec.ts
+          e2e/cardapio-checkout-rejection.spec.ts
           --project=mobile-390
           --project=desktop-1366
           --workers=2

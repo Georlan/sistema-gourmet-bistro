@@ -101,7 +101,11 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders }: Props) {
           });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload.detail || 'Não foi possível concluir a conexão PagBank.');
-          setFeedback({ type: 'success', text: 'PagBank conectado. A conta do restaurante receberá os novos Pix.' });
+          if (payload.status === 'sandbox_evidence_captured') {
+            setFeedback({ type: 'success', text: 'OAuth Sandbox validado e evidência registrada. Nenhuma conta foi conectada para receber Pix.' });
+          } else {
+            setFeedback({ type: 'success', text: 'PagBank conectado. A conta do restaurante receberá os novos Pix.' });
+          }
         } catch (error) {
           setFeedback({ type: 'error', text: authRequestErrorMessage(error, 'Não foi possível concluir a conexão PagBank.') });
         } finally {

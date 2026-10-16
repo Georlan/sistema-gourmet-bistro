@@ -1,8 +1,11 @@
+import CatalogProductImage from './CatalogProductImage';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Flame, Truck } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
 import { CardapioHighlights } from './CardapioHighlights';
 import { CardapioRecommendations } from './CardapioRecommendations';
+import CardapioPromotions from './CardapioPromotions';
+import type { CatalogPromotion } from '../CardapioTypes';
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -93,11 +96,8 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
             className="flex min-w-[210px] max-w-[250px] items-center gap-3 rounded-xl border border-koma-border bg-koma-panel p-2.5 text-left transition hover:border-emerald-500/30 hover:bg-koma-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
             aria-label={`Abrir ${product.name}`}
           >
-            <img
-              src={product.image}
-              alt=""
-              loading="lazy"
-              decoding="async"
+            <CatalogProductImage
+              image={product.image}
               className="h-12 w-12 shrink-0 rounded-lg object-cover"
             />
             <span className="min-w-0">
@@ -111,7 +111,7 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
   );
 }
 
-export function CardapioConditionsSummary({ brand, onOpen }: { brand: BrandConfig; onOpen: () => void }) {
+export function CardapioConditionsSummary({ brand, onOpen, onPromotionSelect }: { brand: BrandConfig; onOpen: () => void; onPromotionSelect?: (promotion: CatalogPromotion) => void }) {
   const deliveryEnabled = brand.deliveryEnabled !== false;
   return (
     <section aria-label="Condições do pedido" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border border-koma-border bg-koma-card px-4 py-2">
@@ -123,6 +123,7 @@ export function CardapioConditionsSummary({ brand, onOpen }: { brand: BrandConfi
       <button type="button" aria-label="Ver condições de entrega" onClick={onOpen} className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-1 text-left text-xs font-bold text-emerald-500 transition hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
         <span>{deliveryEnabled ? 'Taxas de entrega' : 'Ver detalhes'}</span><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
       </button>
+      {onPromotionSelect && <CardapioPromotions brand={brand} onSelect={onPromotionSelect} />}
       <CardapioHighlights brand={brand} />
       <PopularProductsPreview brand={brand} />
       <CardapioRecommendations brand={brand} />

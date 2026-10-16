@@ -52,6 +52,16 @@ export interface Product {
   ordem_exibicao?: number | null;
 }
 
+export interface CatalogPromotion {
+  id: string;
+  nome: string;
+  descricao: string;
+  preco: number;
+  componentes: string[][];
+  inicio_em?: string | null;
+  fim_em?: string | null;
+}
+
 export interface BairroTaxa {
   bairro: string;
   taxa: number;
@@ -102,6 +112,9 @@ export interface BrandConfig {
   };
   categories: string[];
   products: Product[];
+  promotions?: CatalogPromotion[];
+  explicitPromotionComposition?: boolean;
+  promotionProducts?: Product[];
   socials?: SocialNetwork[];
   about?: string;
   paymentMethods?: PaymentMethodGroup[];

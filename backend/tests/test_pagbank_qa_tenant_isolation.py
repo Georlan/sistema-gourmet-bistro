@@ -71,3 +71,83 @@ def test_application_owner_protection_for_restaurant_9(monkeypatch):
     monkeypatch.setenv('PAGBANK_APPLICATION_OWNER_ACCOUNT_ID', 'ACCO_PLATFORM_OWNER')
     assert oauth.is_application_owner('ACCO_PLATFORM_OWNER', environment='sandbox')
     assert not oauth.is_application_owner('ACCO_SELLER_DIFFERENT', environment='sandbox')
+
+
+def test_qa9_owner_oauth_evidence_only_requires_two_flags_and_sandbox(monkeypatch):
+    monkeypatch.setenv('PAGBANK_ENV', 'sandbox')
+    monkeypatch.setenv('PAGBANK_PRODUCTION_RESTAURANT_IDS', '8')
+    monkeypatch.setenv('PAGBANK_SANDBOX_OAUTH_EVIDENCE_RESTAURANT_IDS', '9')
+    monkeypatch.delenv('PAGBANK_SANDBOX_QA9_OAUTH_EVIDENCE_ONLY', raising=False)
+    assert not oauth.qa9_sandbox_evidence_only(9)
+    monkeypatch.setenv('PAGBANK_SANDBOX_QA9_OAUTH_EVIDENCE_ONLY', 'true')
+    assert oauth.qa9_sandbox_evidence_only(9)
+    assert not oauth.qa9_sandbox_evidence_only(8)
+    assert not oauth.qa9_sandbox_evidence_only(6)
+    monkeypatch.setenv('PAGBANK_PRODUCTION_RESTAURANT_IDS', '8,9')
+    assert not oauth.qa9_sandbox_evidence_only(9)
+    monkeypatch.setenv('PAGBANK_PRODUCTION_RESTAURANT_IDS', '8')
+    monkeypatch.setenv('PAGBANK_SANDBOX_OAUTH_EVIDENCE_RESTAURANT_IDS', '8')
+    assert not oauth.qa9_sandbox_evidence_only(9)
+    monkeypatch.setenv('PAGBANK_SANDBOX_OAUTH_EVIDENCE_RESTAURANT_IDS', '9')
+    monkeypatch.setenv('PAGBANK_SANDBOX_QA9_OAUTH_EVIDENCE_ONLY', 'TRUE')
+    assert not oauth.qa9_sandbox_evidence_only(9)
+
+
+@pytest.mark.parametrize('rid,production,flag,expected_evidence', [
+    (9, False, True, True),
+    (9, False, False, False),
+    (9, True, True, False),
+    (8, False, True, False),
+])
+def test_owner_oauth_exchange_is_evidence_only_only_for_sandbox_qa9(
+    monkeypatch, rid, production, flag, expected_evidence
+):
+    """Even in QA evidence mode, never persist the owner's Pix receiver tokens."""
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    from fastapi import HTTPException
+    from app.routes import pagbank_payments
+    from app.services.online_payments.oauth import MercadoPagoOAuthTokens
+
+    monkeypatch.setenv('PAGBANK_ENV', 'sandbox')
+    monkeypatch.setenv('PAGBANK_PRODUCTION_RESTAURANT_IDS', str(rid) if production else '')
+    monkeypatch.setenv('PAGBANK_SANDBOX_OAUTH_EVIDENCE_RESTAURANT_IDS', '9')
+    monkeypatch.setenv('PAGBANK_SANDBOX_QA9_OAUTH_EVIDENCE_ONLY', 'true' if flag else 'false')
+    monkeypatch.setenv('PAGBANK_APPLICATION_OWNER_ACCOUNT_ID', 'ACCO_OWNER_TEST')
+    monkeypatch.setenv('PAGBANK_PRODUCTION_APPLICATION_OWNER_ACCOUNT_ID', 'ACCO_OWNER_TEST')
+    monkeypatch.setattr(pagbank_payments, 'require_tenant_id', lambda: rid)
+    monkeypatch.setattr(pagbank_payments, 'tenant_session_scope', lambda db, tenant_id: nullcontext())
+    monkeypatch.setattr(pagbank_payments, 'ensure_permission', lambda *args: None)
+    monkeypatch.setattr(oauth, 'decode_state', lambda state, cookie: (rid, 'qa-admin'))
+    captured_exchanges = []
+    def fake_exchange(code, **kwargs):
+        captured_exchanges.append((code, kwargs))
+        return MercadoPagoOAuthTokens('private-access-token', 'private-refresh-token',
+                                     None, 'ACCO_OWNER_TEST', 3600)
+    monkeypatch.setattr(oauth, 'exchange', fake_exchange)
+    stages = []
+    monkeypatch.setattr(oauth, 'log_sandbox_oauth_evidence', lambda stage, **kwargs: stages.append(stage))
+
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = SimpleNamespace(
+        id='qa-admin', restaurante_id=rid, role='admin'
+    )
+    user = SimpleNamespace(id='qa-admin', restaurante_id=rid, role='admin')
+    request = pagbank_payments.AuthorizationCompletion(code='one-time-code', state='signed-state')
+
+    if expected_evidence:
+        result = pagbank_payments.complete(request, db=db, user=user)
+        assert result == {'status': 'sandbox_evidence_captured'}
+        assert stages == ['connection_evidence_only']
+    else:
+        with pytest.raises(HTTPException) as rejected:
+            pagbank_payments.complete(request, db=db, user=user)
+        assert rejected.value.status_code == 409
+        assert stages == ['connection_rejected_owner']
+
+    assert len(captured_exchanges) == 1
+    assert captured_exchanges[0][1]['environment'] == ('production' if production else 'sandbox')
+    db.add.assert_not_called()
+    db.commit.assert_not_called()
+    db.query.return_value.filter.return_value.update.assert_not_called()
