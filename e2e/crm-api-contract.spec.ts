@@ -150,3 +150,79 @@ test('relationship keeps missing results distinct from zero and empty audiences 
   await expect(revenue).not.toContainText('R$ 0,00');
   await page.screenshot({path:testInfo.outputPath(`relationship-no-contacts-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
 });
+
+
+test('campaign responses cannot unlock edited drafts or carry late contact confirmations forward', async ({page}) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.routeWebSocket(/[/]ws[/]/, socket => socket.onMessage(() => {}));
+  await page.route('**/caixa/configuracoes', route => route.fulfill({json:{
+    ...cashierConfig, plano:'premium', plano_efetivo:'premium',
+    entitlements:{...cashierConfig.entitlements,loyalty:true,coupons:true},
+  }}));
+  await page.route('**/fidelidade/clientes', route => route.fulfill({json:contract.customers}));
+  await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json:contract.summary}));
+  await page.route('**/caixa/cupons', route => route.fulfill({json:[]}));
+
+  let releaseFirstSave!: () => void;
+  const firstSaveGate = new Promise<void>(resolve => { releaseFirstSave = resolve; });
+  let campaignCreates = 0;
+  await page.route('**/fidelidade/crm/campanhas', async route => {
+    campaignCreates++;
+    const current = campaignCreates;
+    if (current === 1) await firstSaveGate;
+    await route.fulfill({json:{id:`campaign-fixture-${current}`}});
+  });
+
+  let releaseFirstContact!: () => void;
+  const firstContactGate = new Promise<void>(resolve => { releaseFirstContact = resolve; });
+  const contactCampaignIds: string[] = [];
+  await page.route('**/fidelidade/crm/contatos', async route => {
+    const payload = route.request().postDataJSON();
+    contactCampaignIds.push(payload.campanha_id);
+    if (contactCampaignIds.length === 1) await firstContactGate;
+    await route.fulfill({json:{id:`contact-fixture-${contactCampaignIds.length}`}});
+  });
+
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  if (!(await page.locator('.cashier-sidebar:visible').count())) {
+    const menu = page.getByRole('button',{name:'Abrir menu completo',exact:true});
+    if (await menu.isVisible()) await menu.click();
+    else await page.getByRole('button',{name:'Abrir menu principal',exact:true}).click();
+  }
+  await page.locator('.cashier-sidebar:visible').getByRole('button',{name:/^Relacionamento(?: [0-9]+)?$/}).click();
+  const opportunity = contract.summary.oportunidades.find((op:{elegiveis_count:number}) => op.elegiveis_count > 0);
+  const opportunityCard = page.locator('article').filter({has:page.getByRole('heading',{name:opportunity.titulo,exact:true})});
+  await opportunityCard.getByRole('button',{name:'Abrir público e iniciar ação',exact:true}).click();
+  await page.getByRole('button',{name:'Continuar para mensagem',exact:true}).click();
+  await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
+  await expect.poll(() => campaignCreates).toBe(1);
+
+  // The operator can move back and change the draft while the POST is in flight.
+  await page.getByRole('button',{name:'1. Público',exact:true}).click();
+  await page.getByLabel('Identificação da campanha').fill('Campanha editada durante o salvamento');
+  releaseFirstSave();
+  await expect(page.getByText(/alterou o rascunho durante o salvamento/)).toBeVisible();
+  await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'2. Mensagem',exact:true}).click();
+  await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
+  await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
+  expect(campaignCreates).toBe(2);
+
+  // A late confirmation for the old campaign must not mark the newly edited draft.
+  await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
+  await expect.poll(() => contactCampaignIds.length).toBe(1);
+  await page.getByRole('button',{name:'1. Público',exact:true}).click();
+  await page.getByLabel('Identificação da campanha').fill('Terceira campanha');
+  releaseFirstContact();
+  await expect(page.getByText(/Contato registrado na campanha anterior/)).toBeVisible();
+  await page.getByRole('button',{name:'2. Mensagem',exact:true}).click();
+  await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
+  await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
+  await expect(page.getByRole('button',{name:'Registrar contato manual',exact:true}).first()).toBeEnabled();
+  await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
+  await expect.poll(() => contactCampaignIds.length).toBe(2);
+  expect(contactCampaignIds).toEqual(['campaign-fixture-2','campaign-fixture-3']);
+  expect(campaignCreates).toBe(3);
+});
