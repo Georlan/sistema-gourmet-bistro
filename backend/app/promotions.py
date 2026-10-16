@@ -73,6 +73,7 @@ def validate_exclusive_promotion_parts(
 def apply_promotion_to_validated(
     validated: ValidatedOrderInput,
     promotion: dict,
+    *, exclusive_ids: set[str] | None = None,
 ) -> ValidatedOrderInput:
     """Exige 1 unidade real por slot; adicionais mantêm o preço original.
 
@@ -98,7 +99,21 @@ def apply_promotion_to_validated(
     base_total = sum((items[index].base_price for index in selected), Decimal("0.00"))
     promo_price = money(promotion["preco"])
     if promo_price > base_total:
-        raise OrderValidationError("Promoção incompatível com os preços atuais.")
+        # A referência de um item exclusivo pode ser simbólica (ex.: R$ 1).
+        # A diferença pertence ao componente exclusivo da oferta, sem mexer
+        # no preço da quentinha ou nos adicionais escolhidos.
+        eligible = [
+            index for index in selected
+            if str(items[index].product_id) in (exclusive_ids or set())
+        ]
+        if not eligible:
+            raise OrderValidationError("Promoção incompatível com os preços atuais.")
+        target = eligible[0]
+        items[target] = replace(
+            items[target],
+            base_price=items[target].base_price + promo_price - base_total,
+        )
+        return replace(validated, items=tuple(items))
     # Distribuir a diferença em um item real mantém estoque e comanda canônicos.
     discount = base_total - promo_price
     first = selected[0]
