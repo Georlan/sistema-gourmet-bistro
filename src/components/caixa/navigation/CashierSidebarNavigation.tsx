@@ -65,7 +65,7 @@ export function CashierSidebarNavigation({
                         className="cashier-nav-children ml-6 mt-1 space-y-0.5 border-l border-koma-border pl-2 group-data-[collapsible=icon]:hidden"
                         aria-label={`Atalhos de ${item.label}`}
                       >
-                        {item.children.map((child) => {
+                        {item.children.filter((child) => !child.navigationHidden).map((child) => {
                           const childActive = isSidebarTabActive(child.id);
                           const childCount = child.badge === 'orders' ? sidebarOrderCount : 0;
                           return (
