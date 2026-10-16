@@ -69,6 +69,7 @@ def test_global_offer_real_checkout_replay_expiry_and_tenant_isolation(setup_res
     snapshot = client.get(f'/api/cardapio-digital/public?restaurante_id={RESTAURANTE_ID}')
     assert snapshot.status_code == 200, snapshot.text
     assert snapshot.json()['promocoes'][0]['id'] == offer_id
+    assert snapshot.json()['promocao_composicao_explicita'] is True
     assert next(product for product in snapshot.json()['produtos'] if product['id'] == PRODUTO_ID)['imagem_url'] == 'https://images.example.com/canonical.png'
     assert second_id not in [product['id'] for product in snapshot.json()['produtos']]
     payload = _payload('global-offer-' + uuid.uuid4().hex)

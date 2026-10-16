@@ -29,6 +29,7 @@ test('combo e quentinha avulsa enviam composição separada no checkout', async 
               max_selecoes: 1, modo_selecao: 'tipos', tipo: 'obrigatorio',
               opcoes: [{ id: 'lettuce', nome: 'Alface', preco_adicional: 0, ativo: true }] }] },
         ],
+        promocao_composicao_explicita: true,
         promocoes: [{
           id: 'promo-gm', nome: 'Quentinha G + Quentinha M', descricao: 'Duas quentinhas',
           preco: 22, componentes: [['g'], ['m']], fim_em: '2026-10-16T15:01:00Z',

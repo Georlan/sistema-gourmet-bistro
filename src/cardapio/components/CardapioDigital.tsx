@@ -378,7 +378,7 @@ export default function CardapioDigital({
     const orderRequest = {
       restaurante_id: targetRestauranteId,
       itens: cleanedItems,
-      promocao_item_indices: buildCardapioPromotionItemIndices(cart),
+      promocao_item_indices: activeBrand.explicitPromotionComposition ? buildCardapioPromotionItemIndices(cart) : undefined,
       promocao_id: cart.find(item => item.promotionId)?.promotionId || undefined,
       promocao_preco_esperado: cart.find(item => item.promotionId)?.product.price,
       cliente_nome: normalizedName,

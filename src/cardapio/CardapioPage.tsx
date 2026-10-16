@@ -89,6 +89,7 @@ interface PublicMenuPayload {
   produtos: Array<Record<string, any>>;
   produtos_promocionais?: Array<Record<string, any>>;
   promocoes?: Array<Record<string, any>>;
+  promocao_composicao_explicita?: boolean;
 }
 
 function parseStructuredValue(value: unknown): unknown {
@@ -342,6 +343,7 @@ export default function CardapioPage() {
         categories: payload.categorias.map((category) => String(category.nome || "")).filter(Boolean),
         products,
         promotionProducts,
+        explicitPromotionComposition: payload.promocao_composicao_explicita === true,
         promotions: Array.isArray(payload.promocoes) ? payload.promocoes
           .filter(p => p && Array.isArray(p.componentes) && p.componentes.length === 2)
           .map(p => ({
