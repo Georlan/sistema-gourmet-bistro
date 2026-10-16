@@ -65,6 +65,8 @@ export interface CartItem {
   quantity: number;
   selectedOptions: Record<string, ProductOption[]>;
   notes: string;
+  promotionId?: string;
+  promotionParts?: import('../promotionComposition').PromotionPartSelection[];
 }
 
 export type { CardapioFulfillment } from "../fulfillment";
@@ -777,8 +779,9 @@ export default function CardapioCartDrawer({
                         <div className="min-w-0 flex-1">
                           <h4 className="text-sm font-bold text-koma-foreground">{item.quantity}× {item.product.name}</h4>
                           <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-koma-muted" />
+                          {item.promotionParts && <p className="mt-2 text-xs text-koma-muted">{item.promotionParts.map(part => part.product.name).join(' + ')}</p>}
                           {onEditItem && <button type="button" onClick={() => onEditItem(item)} className="mt-2 min-h-11 text-xs font-bold text-emerald-400" aria-label={`Editar montagem de ${item.product.name}`}>Editar montagem</button>}
-                          {onComposeAnother && Boolean(item.product.modifiers?.length || item.product.modifierGroups?.length) && <button type="button" onClick={() => onComposeAnother(item)} className="mt-2 block min-h-11 text-xs font-bold text-emerald-400" aria-label={`Montar outra diferente de ${item.product.name}`}>Montar outra diferente</button>}
+                          {onComposeAnother && !item.promotionId && Boolean(item.product.modifiers?.length || item.product.modifierGroups?.length) && <button type="button" onClick={() => onComposeAnother(item)} className="mt-2 block min-h-11 text-xs font-bold text-emerald-400" aria-label={`Montar outra diferente de ${item.product.name}`}>Montar outra diferente</button>}
                           {item.notes && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-amber-400">Obs.: {item.notes}</p>}
                           {item.quantity > 1 && <p className="mt-1 text-xs text-koma-muted">{formatPrice(unitPrice)} cada · Mesma montagem</p>}
                           <strong className="mt-2 block text-sm font-black text-emerald-400">{formatPrice(unitPrice * item.quantity)}</strong>
@@ -787,7 +790,7 @@ export default function CardapioCartDrawer({
                           <button type="button" onClick={() => onRemoveItem(item.id)} className="grid h-8 w-8 place-items-center rounded-lg text-koma-subtle transition hover:bg-rose-500/10 hover:text-rose-400" aria-label={`Remover ${item.product.name}`}>
                             <Trash2 className="h-4 w-4" />
                           </button>
-                          <div className="flex items-center rounded-xl border border-koma-border bg-koma-panel p-0.5">
+                          {!item.promotionId && <div className="flex items-center rounded-xl border border-koma-border bg-koma-panel p-0.5">
                             <button type="button" onClick={() => onUpdateQty(item.id, item.quantity - 1)} className="grid h-8 w-8 place-items-center rounded-lg text-koma-secondary transition hover:bg-koma-raised" aria-label={`Diminuir ${item.product.name}`}>
                               <Minus className="h-3.5 w-3.5" />
                             </button>
@@ -795,7 +798,7 @@ export default function CardapioCartDrawer({
                             <button type="button" onClick={() => onUpdateQty(item.id, item.quantity + 1)} className="grid h-8 w-8 place-items-center rounded-lg text-koma-secondary transition hover:bg-koma-raised" aria-label={`Aumentar ${item.product.name}`}>
                               <Plus className="h-3.5 w-3.5" />
                             </button>
-                          </div>
+                          </div>}
                         </div>
                       </div>
                     );
