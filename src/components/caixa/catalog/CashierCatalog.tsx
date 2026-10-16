@@ -190,7 +190,7 @@ export default function CashierCatalog({
           <CardapioProdutosTab
             produtos={apiProdutos}
             categorias={apiCategorias}
-            promotionsConfig={isMarmitaria ? { apiBaseUrl, authHeaders } : undefined}
+            promotionsConfig={{ apiBaseUrl, authHeaders }}
             catalogReady={catalogReady || apiProdutos.length > 0 || apiCategorias.length > 0}
             previewUrl={
               hasOnlineMenu && restauranteConfig?.restaurante_id
@@ -418,7 +418,7 @@ export default function CashierCatalog({
                     imagem: prodFormImageRemoveRequested ? prodFormOriginalImagem : prodFormImagem.trim(),
                     imagens_galeria: [],
                     ativo: prodFormAtivo,
-                    somente_promocao: isMarmitaria && prodFormSomentePromocao,
+                    somente_promocao: prodFormSomentePromocao,
                   };
 
                   let res;
@@ -650,13 +650,13 @@ export default function CashierCatalog({
                 </p>
               </div>
 
-              {isMarmitaria && !(editingProduct && isMarmita(editingProduct)) && (
+              {!(isMarmitaria && editingProduct && isMarmita(editingProduct)) && (
                 <label className="flex items-start gap-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs text-koma-foreground">
                   <input type="checkbox" checked={prodFormSomentePromocao}
                     onChange={event => setProdFormSomentePromocao(event.target.checked)}
                     aria-label="Vender somente em promoções" />
                   <span><strong className="block">Vender somente em promoções</strong>
-                    <span className="mt-1 block text-koma-muted">Para Pitulinha e outros itens de combos. Não aparecerá como produto avulso no cardápio online.</span>
+                    <span className="mt-1 block text-koma-muted">Para itens disponíveis apenas em conjuntos. Não aparecerá como produto avulso no cardápio online.</span>
                   </span>
                 </label>
               )}

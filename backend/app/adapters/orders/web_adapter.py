@@ -530,6 +530,7 @@ class CardapioWebAdapter:
                 delivery=delivery_input,
                 coupon_code=payload.cupom_codigo,
                 promotion_id=payload.promocao_id,
+                expected_promotion_price=payload.promocao_preco_esperado,
                 usar_cashback=bool(payload.usar_cashback),
                 payment_method=payload.forma_pagamento_detalhe,
                 change_for=str(payload.troco_para) if payload.troco_para is not None else None,

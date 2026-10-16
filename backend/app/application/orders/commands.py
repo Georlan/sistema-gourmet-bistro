@@ -214,6 +214,7 @@ class CreateOrderCommand:
     atendimento_id: Optional[str | int] = None
     coupon_code: Optional[str] = None
     promotion_id: Optional[str] = None
+    expected_promotion_price: Optional[Decimal] = None
     cashback_discount: Decimal = Decimal("0.00")
     usar_cashback: bool = False
     payment_method: Optional[str] = None

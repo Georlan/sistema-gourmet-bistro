@@ -1,3 +1,4 @@
+import { buildMarmitariaOffer, MarmitariaOfferTemplates } from './MarmitariaOfferTemplates';
 import { campaignLocalTime, campaignInstant } from '../../utils/promotionSchedule';
 import { useEffect, useState } from 'react';
 import { Gift, LoaderCircle, Plus, Save, ToggleLeft, ToggleRight } from 'lucide-react';
@@ -19,12 +20,13 @@ type Promotion = {
 const empty = () => ({ nome: '', descricao: '', preco: '', primeiro: '', segundo: '', ativo: false, inicio: '', fim: '', fuso: 'America/Fortaleza' });
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-export default function MarmitariaPromotionsSettings({
+export default function PromotionsSettings({
   apiBaseUrl, authHeaders, onPromotionsLoaded,
 }: { apiBaseUrl: string; authHeaders: Record<string, string>; onPromotionsLoaded?: (count: number) => void }) {
+  const [isMarmitaria, setIsMarmitaria] = useState(false);
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [categories, setCategories] = useState<Array<{ id: string; nome: string }>>([]);
-  const [drinkName, setDrinkName] = useState('Pitulinha');
+  const [drinkName, setDrinkName] = useState('');
   const [drinkPrice, setDrinkPrice] = useState('');
   const [creatingDrink, setCreatingDrink] = useState(false);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
@@ -47,6 +49,7 @@ export default function MarmitariaPromotionsSettings({
       const data = await response.json();
       setForbidden(false);
       setAvailable(true);
+      setIsMarmitaria(Boolean(data.perfil_marmitaria));
       setProducts(Array.isArray(data.produtos) ? data.produtos : []);
       setCategories(Array.isArray(data.categorias) ? data.categorias : []);
       const loadedPromotions = Array.isArray(data.promocoes) ? data.promocoes : [];
@@ -58,20 +61,11 @@ export default function MarmitariaPromotionsSettings({
   useEffect(() => { void load(); }, [api, authHeaders.Authorization, authHeaders.authorization]);
 
   const template = (kind: 'duas' | 'bebida') => {
-    const g = products.find((p) => p.tamanho?.toLowerCase() === 'g' && p.ativo);
-    const m = products.find((p) => p.tamanho?.toLowerCase() === 'm' && p.ativo);
-    const drink = products.find((p) => /pitulinha|pithulinha|pituchulinha|pitchulinha/i.test(p.nome) && p.ativo);
+    const prepared = buildMarmitariaOffer(kind, products);
     setEditing(null);
     setShowEditor(true);
-    setForm({
-      nome: kind === 'duas' ? 'Quentinha G + Quentinha M' : 'Quentinha G + Pitulinha',
-      descricao: kind === 'duas' ? 'Monte uma quentinha G e outra M.' : 'Monte sua quentinha G e escolha a bebida.',
-      preco: kind === 'duas' ? '22.00' : '16.00',
-      primeiro: g?.id ?? '',
-      segundo: (kind === 'duas' ? m : drink)?.id ?? '',
-      ativo: false, inicio: '', fim: '', fuso: 'America/Fortaleza',
-    });
-    setNotice(!g || !(kind === 'duas' ? m : drink)
+    setForm(prepared);
+    setNotice(!prepared.primeiro || !prepared.segundo
       ? 'Confira os componentes: o produto precisa existir e estar ativo antes de publicar.'
       : 'Modelo preparado. Confira e salve para cadastrar a promoção.');
   };
@@ -148,7 +142,10 @@ export default function MarmitariaPromotionsSettings({
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nome: form.nome, descricao: form.descricao, preco: Number(form.preco),
-          componentes: [[form.primeiro], [form.segundo]], ativo: form.ativo,
+          componentes: [form.primeiro, form.segundo].map((id, index) => {
+            const previous = promotions.find(p => p.id === editing)?.componentes[index];
+            return previous?.[0] === id ? previous : [id];
+          }), ativo: form.ativo,
           inicio_em: campaignInstant(form.inicio, form.fuso),
           fim_em: campaignInstant(form.fim, form.fuso), fuso_horario: form.fuso,
         }),
@@ -198,7 +195,7 @@ export default function MarmitariaPromotionsSettings({
   if (loading && !available) return <div className="rounded-xl border border-koma-border bg-koma-panel p-4 text-sm text-koma-muted">Carregando promoções...</div>;
   if (forbidden) return null;
   if (!available) return (
-    <section className="rounded-2xl border border-koma-border bg-koma-panel p-4" aria-label="Promoções da marmitaria">
+    <section className="rounded-2xl border border-koma-border bg-koma-panel p-4" aria-label="Gerenciar promoções">
       <h2 className="text-base font-black text-koma-foreground">Promoções</h2>
       <p role="alert" className="mt-2 text-sm text-amber-400">{notice || 'Não foi possível carregar as promoções.'}</p>
       <button type="button" onClick={() => void load()} className="mt-3 min-h-11 rounded-xl border border-koma-border px-4 text-sm font-bold text-koma-foreground">Tentar novamente</button>
@@ -206,7 +203,7 @@ export default function MarmitariaPromotionsSettings({
   );
 
   return (
-    <section className="space-y-4 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5" aria-label="Promoções da marmitaria">
+    <section className="space-y-4 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5" aria-label="Gerenciar promoções">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -232,16 +229,11 @@ export default function MarmitariaPromotionsSettings({
             <h3 className="text-sm font-black text-koma-foreground">{editing ? 'Editar promoção' : 'Nova promoção'}</h3>
             <button type="button" onClick={cancelEditor} className="min-h-10 rounded-xl border border-koma-border px-3 text-xs font-bold text-koma-muted">Cancelar</button>
           </div>
-          {!editing && (
-            <div className="flex flex-wrap gap-2" aria-label="Modelos de ofertas">
-              <button type="button" onClick={() => template('duas')} className="min-h-10 rounded-xl border border-koma-border px-3 text-xs font-bold text-koma-foreground">G + M · R$ 22</button>
-              <button type="button" onClick={() => template('bebida')} className="min-h-10 rounded-xl border border-koma-border px-3 text-xs font-bold text-koma-foreground">G + Pitulinha · R$ 16</button>
-            </div>
-          )}
+          {!editing && isMarmitaria && <MarmitariaOfferTemplates onSelect={template} />}
 
           <details className="rounded-xl border border-koma-border bg-koma-panel p-3">
             <summary className="min-h-10 cursor-pointer text-sm font-bold text-koma-foreground">Cadastrar bebida exclusiva para o combo</summary>
-            <p className="mt-2 text-xs text-koma-muted">Cadastre a Pitulinha uma vez. Ela não será vendida avulsa, mas continuará vinculada ao estoque e à comanda.</p>
+            <p className="mt-2 text-xs text-koma-muted">O produto exclusivo fica disponível apenas na montagem das ofertas e mantém estoque e comanda.</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="text-xs font-bold text-koma-muted">Nome da bebida
                 <input value={drinkName} onChange={event => setDrinkName(event.target.value)} maxLength={90}
@@ -263,7 +255,7 @@ export default function MarmitariaPromotionsSettings({
             <label className="text-xs font-bold text-koma-muted sm:col-span-2">Nome da promoção
               <input value={form.nome} onChange={(e) => setForm(f => ({ ...f, nome: e.target.value }))} maxLength={90}
                 className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground"
-                placeholder="Ex.: Quentinha G + M" />
+                placeholder="Nome que aparecerá no cardápio" />
             </label>
             <label className="text-xs font-bold text-koma-muted sm:col-span-2">Descrição
               <input value={form.descricao} onChange={(e) => setForm(f => ({ ...f, descricao: e.target.value }))} maxLength={240}
@@ -275,7 +267,7 @@ export default function MarmitariaPromotionsSettings({
                 <select value={form[key]} onChange={(e) => setForm(f => ({ ...f, [key]: e.target.value }))}
                   className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground">
                   <option value="">Selecione</option>
-                  {products.filter(p => p.ativo).map(p => <option key={p.id} value={p.id}>{p.nome} · {money(p.preco)}</option>)}
+                  {products.filter(p => p.ativo || p.id === form[key]).map(p => <option key={p.id} value={p.id} disabled={!p.ativo}>{p.nome} · {money(p.preco)}{!p.ativo ? ' · pausado' : ''}</option>)}
                 </select>
               </label>
             ))}
@@ -310,11 +302,10 @@ export default function MarmitariaPromotionsSettings({
             if (!first || !second) return null;
             const subtotal = Number(first.preco) + Number(second.preco);
             const savings = subtotal - Number(form.preco || subtotal);
-            const symbolic = first.somente_promocao || second.somente_promocao;
             return <p className="text-xs text-koma-muted">Valor de referência: {money(subtotal)}.
               {form.preco && savings > 0 ? ' Economia: ' + money(savings) + '.'
-                : form.preco && savings < 0 && symbolic
-                  ? ' Um componente exclusivo tem preço simbólico; vale o preço configurado do conjunto.'
+                : form.preco && savings < 0
+                  ? ' Vale o preço escolhido para o conjunto, independente dos valores avulsos.'
                   : form.preco ? ' Preço do conjunto conferido.' : ' Informe o preço do conjunto.'}
             </p>;
           })()}
