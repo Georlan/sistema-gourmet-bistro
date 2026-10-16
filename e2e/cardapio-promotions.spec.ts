@@ -45,7 +45,7 @@ test('promoção G + M monta cada quentinha separadamente antes da sacola', asyn
   await modal.getByRole('checkbox', { name: 'Selecionar Alface' }).check();
   await modal.getByRole('button', { name: 'Revisar promoção' }).click();
   await expect(page.getByRole('heading', { name: 'Quentinha G + Quentinha M' })).toBeVisible();
-  await expect(page.getByText('R$ 22,00', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Quentinha G + Quentinha M' })).toContainText('R$ 22,00');
   await page.getByRole('button', { name: 'Adicionar promoção' }).click();
   const cart = page.locator('#cart-drawer-container');
   if (!await cart.isVisible()) await page.locator('#btn-cart-header').click();
