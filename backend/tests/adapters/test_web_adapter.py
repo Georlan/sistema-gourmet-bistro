@@ -407,3 +407,41 @@ class TestCardapioWebAdapter:
         res_mismatch = char_client.post("/cardapio/pedidos", json=mismatch_payload)
         assert res_mismatch.status_code == 404
         assert "Modificador não encontrado" in res_mismatch.json()["detail"]
+
+
+@pytest.mark.parametrize('error_kind', ['minimum', 'modifiers', 'generic'])
+def test_public_validation_rejection_is_correlated_without_customer_data(char_client, char_setup, caplog, error_kind):
+    import json
+    import logging
+    from app.domain.orders.errors import MinimumOrderAmountNotMetError, ModifierSelectionLimitError, OrderValidationError
+    error = {
+        'minimum': MinimumOrderAmountNotMetError(Decimal('7'), Decimal('10')),
+        'modifiers': ModifierSelectionLimitError('private-product-note', 1, 2),
+        'generic': OrderValidationError('private-address-and-phone'),
+    }[error_kind]
+    payload = {
+        'restaurante_id': CHAR_RESTAURANT_ID,
+        'cliente_nome': 'private-customer-name',
+        'cliente_telefone': '11999990007',
+        'tipo_pedido': 'retirada',
+        'forma_pagamento': 'na_entrega',
+        'forma_pagamento_detalhe': 'dinheiro',
+        'itens': [{'produto_id': 'prod-char-simples', 'quantidade': 1, 'modificador_ids': []}],
+    }
+    with caplog.at_level(logging.INFO, logger='koma.adapters.web'), patch(
+        'app.adapters.orders.web_adapter._enforce_public_order_rate_limits'
+    ), patch.object(OrderApplicationService, 'create_order', side_effect=error):
+        response = char_client.post('/cardapio/pedidos', json=payload, headers={'X-Request-ID': 'validation-test-123'})
+    assert response.status_code == 400
+    assert response.json()['detail'] == str(error)
+    entries = [json.loads(record.message) for record in caplog.records
+               if record.name == 'koma.adapters.web' and 'public_order_validation_rejected' in record.message]
+    assert len(entries) == 1
+    assert entries[0] == {
+        'event': 'public_order_validation_rejected', 'restaurante_id': CHAR_RESTAURANT_ID,
+        'request_id': response.headers['X-Request-ID'], 'status_code': 400,
+        'validation_type': type(error).__name__, 'fulfillment': 'retirada',
+    }
+    diagnostic = json.dumps(entries)
+    for private in ['private-customer-name', '11999990007', 'private-product-note', 'private-address-and-phone']:
+        assert private not in diagnostic

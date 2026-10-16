@@ -86,6 +86,7 @@ interface CardapioDigitalProps {
   usarCashback?: boolean;
   descontoCashback?: number;
   onClose: () => void;
+  onEditCart?: () => void;
   onOrderSuccess: (order: CreatedOrder) => void;
   onSessionExpired?: () => void;
 }
@@ -162,11 +163,14 @@ export default function CardapioDigital({
   usarCashback = false,
   descontoCashback = 0,
   onClose,
+  onEditCart,
   onOrderSuccess,
   onSessionExpired,
 }: CardapioDigitalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [supportCode, setSupportCode] = useState("");
+  const [canCorrectSubmission, setCanCorrectSubmission] = useState(true);
   const [orderingBlocked, setOrderingBlocked] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
   const [whatsappStatusOptIn, setWhatsappStatusOptIn] = useState(false);
@@ -407,6 +411,8 @@ export default function CardapioDigital({
     isSubmittingRef.current = true;
     setIsSubmitting(true);
     setErrorMessage("");
+    setSupportCode("");
+    setCanCorrectSubmission(false);
 
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), ORDER_REQUEST_TIMEOUT_MS);
@@ -429,6 +435,11 @@ export default function CardapioDigital({
       });
 
       const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        setCanCorrectSubmission([400, 404, 422].includes(response.status));
+        const requestId = response.headers.get("X-Request-ID") || "";
+        if (/^[a-zA-Z0-9_-]{1,64}$/.test(requestId)) setSupportCode(requestId.slice(0, 12));
+      }
       if (response.status === 401 && customerToken) {
         onSessionExpired?.();
         throw new Error("Sua identificação expirou. Você pode tentar novamente sem perder a sacola.");
@@ -707,7 +718,7 @@ export default function CardapioDigital({
               )}
 
               <section>
-                <div className="mb-2.5 flex items-center justify-between"><h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">Itens do pedido</h3><button type="button" onClick={onClose} className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-500 hover:text-emerald-400"><ArrowLeft className="h-3 w-3" /> Editar sacola</button></div>
+                <div className="mb-2.5 flex items-center justify-between"><h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">Itens do pedido</h3><button type="button" onClick={onEditCart || onClose} className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-500 hover:text-emerald-400"><ArrowLeft className="h-3 w-3" /> Editar sacola</button></div>
                 <div className="space-y-2">
                   {cart.map((item) => {
                     let unitPrice = item.product.price;
@@ -733,13 +744,20 @@ export default function CardapioDigital({
                 <p className="pt-1 text-[9px] leading-relaxed text-koma-subtle">O valor definitivo é confirmado pelo sistema do restaurante ao registrar o pedido.</p>
               </section>
 
-              {errorMessage && <div className="flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs font-bold text-rose-400" role="alert"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{errorMessage}</span></div>}
             </div>
           )}
         </div>
 
         {!createdOrder && !orderingBlocked && (
           <footer className="shrink-0 border-t border-koma-border bg-koma-panel p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-5">
+            {errorMessage && <div className="mb-3 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-400" role="alert" id="checkout-submit-error">
+              <div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><div>
+                <p className="font-black">Não foi possível confirmar o pedido</p>
+                <p className="mt-1 max-h-[15dvh] overflow-y-auto font-semibold">{errorMessage}</p>
+                {supportCode && <p className="mt-1 text-[10px]">Código de suporte: {supportCode}</p>}
+              </div></div>
+              {canCorrectSubmission && <button type="button" onClick={onEditCart || onClose} className="mt-2 min-h-11 w-full rounded-lg border border-rose-500/30 px-3 font-bold">Voltar à sacola e corrigir</button>}
+            </div>}
             <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || Boolean(paymentError || schedulePaymentError)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : paymentError || schedulePaymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : scheduleMode === "scheduled" ? "Agendar pedido" : "Fazer pedido"}</span></button>
             <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados são enviados agora ao restaurante com a data e o horário escolhidos." : "Pix só entra no painel após o pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente."}</p>
           </footer>
