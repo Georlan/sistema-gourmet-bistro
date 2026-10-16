@@ -466,6 +466,8 @@ class OrderApplicationService:
         }
         if exclusive_ids and not cmd.promotion_id:
             raise OrderValidationError("Este item está disponível somente dentro de uma promoção.")
+        if cmd.promotion_item_indices is not None and not cmd.promotion_id:
+            raise OrderValidationError("Composição de promoção sem promoção selecionada.")
         if cmd.promotion_id:
             # A composição canônica já validou estoque lógico, tenant e modificadores.
             from ...models import ConfiguracaoRestaurante
@@ -479,10 +481,13 @@ class OrderApplicationService:
                 raise OrderValidationError("Promoção inexistente neste restaurante.")
             if cmd.coupon_code or cmd.usar_cashback or cmd.cashback_discount > Decimal("0.00"):
                 raise OrderValidationError("Não é possível combinar promoção com cupom ou cashback.")
-            validate_exclusive_promotion_parts(exclusive_ids, promotion, validated_input)
+            validate_exclusive_promotion_parts(
+                exclusive_ids, promotion, validated_input, item_indices=cmd.promotion_item_indices,
+            )
             validated_input = apply_promotion_to_validated(
                 validated_input, promotion, exclusive_ids=exclusive_ids,
                 expected_price=cmd.expected_promotion_price,
+                item_indices=cmd.promotion_item_indices,
             )
 
         # 3. Cotação Financeira Pura

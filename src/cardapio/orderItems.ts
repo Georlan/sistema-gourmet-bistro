@@ -60,3 +60,17 @@ export function cardapioCompositionSource(item: CartItem) {
     }),
   };
 }
+
+/** Positions of the actual combo parts in the flattened order, never loose extras. */
+export function buildCardapioPromotionItemIndices(cart: readonly CartItem[]): number[] | undefined {
+  let offset = 0;
+  const indices: number[] = [];
+  for (const item of cart) {
+    const count = item.promotionParts?.length ?? 1;
+    if (item.promotionId && item.promotionParts) {
+      indices.push(...item.promotionParts.map((_, index) => offset + index));
+    }
+    offset += count;
+  }
+  return indices.length ? indices : undefined;
+}

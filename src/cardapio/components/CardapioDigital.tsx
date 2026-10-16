@@ -30,7 +30,7 @@ import { createSecureIdempotencyKey } from "../../utils/secureIdempotency";
 import { authRequestErrorMessage } from "../../utils/authRequest";
 import { formatCardapioApiError } from "../orderApiErrors";
 import { saveStoredOrder } from "../orderTracking";
-import { buildCardapioOrderItems } from "../orderItems";
+import { buildCardapioOrderItems, buildCardapioPromotionItemIndices } from "../orderItems";
 import { isOrderingBlockConflict } from "../orderingBlockUi";
 import CardapioPaymentSummary from "./CardapioPaymentSummary";
 import { getCheckoutPaymentMethods, getPaymentSelectionError, PAYMENT_LABELS } from "../paymentMethods";
@@ -378,6 +378,7 @@ export default function CardapioDigital({
     const orderRequest = {
       restaurante_id: targetRestauranteId,
       itens: cleanedItems,
+      promocao_item_indices: buildCardapioPromotionItemIndices(cart),
       promocao_id: cart.find(item => item.promotionId)?.promotionId || undefined,
       promocao_preco_esperado: cart.find(item => item.promotionId)?.product.price,
       cliente_nome: normalizedName,

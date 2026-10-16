@@ -1162,6 +1162,7 @@ class CardapioItemPedido(BaseModel):
 class CardapioPedidoCreate(BaseModel):
     restaurante_id: int = Field(gt=0)
     promocao_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    promocao_item_indices: Optional[List[int]] = Field(default=None, min_length=2, max_length=2)
     promocao_preco_esperado: Optional[Decimal] = Field(default=None, ge=0, le=100000, max_digits=8, decimal_places=2)
     itens: List[CardapioItemPedido] = Field(min_length=1, max_length=100)
     cliente_nome: str = Field(min_length=2, max_length=100)
