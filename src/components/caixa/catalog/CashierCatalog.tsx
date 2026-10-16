@@ -11,6 +11,7 @@ import { CategoriaModal } from '../../cardapio/CategoriaModal';
 import ComplementosTab from '../../cardapio/ComplementosTab';
 import MoneyInput from '../../MoneyInput';
 import MarmitariaTamanhos from '../../cardapio/MarmitariaTamanhos';
+import MarmitariaPromotionsSettings from '../../cardapio/MarmitariaPromotionsSettings';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 
@@ -184,6 +185,7 @@ export default function CashierCatalog({
               { label: 'categorias', value: apiCategorias.length },
             ]}
           />
+          {isMarmitaria && <MarmitariaPromotionsSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />}
           <CardapioProdutosTab
             produtos={apiProdutos}
             categorias={apiCategorias}

@@ -1009,6 +1009,8 @@ class ConfiguracaoRestaurante(Base):
     taxa_entrega_fixa = Column(Numeric(14, 2, asdecimal=False), default=7.0, nullable=False)
     tabela_taxas_bairros = Column(JSON, default=list)
     tabela_taxas_km = Column(JSON, default=list)
+    # Campanhas por restaurante; componentes referenciam os produtos reais.
+    promocoes = Column(JSON, nullable=False, default=list, server_default="[]")
     taxa_servico_ativa = Column(Boolean, default=True)
     taxa_servico_padrao = Column(Float, default=10.0)
     meta_mensal = Column(Numeric(14, 2, asdecimal=False), default=0.0)
