@@ -69,6 +69,7 @@ jobs:
           e2e/image-upload-optimization.spec.ts
           e2e/cardapio-canonical-modal-entrypoints.spec.ts
           e2e/cardapio-catalog-images.spec.ts
+          e2e/cardapio-exclusive-edit.spec.ts
           e2e/cardapio-promotions.spec.ts
           e2e/cardapio-combo-only-drink.spec.ts
           e2e/cardapio-benefits.spec.ts
