@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { cashierConfig, mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
-test('Produtos define limites próprios por quentinha e Complementos mantém somente grupos e opções', async ({ page }) => {
+test('Produtos define limites próprios por quentinha e Complementos oferece vínculos de outros produtos', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.addInitScript(() => { sessionStorage.setItem('koma_active_tab', 'cardapio'); sessionStorage.setItem('koma_active_subtab', 'produtos'); });
@@ -113,7 +113,7 @@ test('Produtos define limites próprios por quentinha e Complementos mantém som
   await expect(page.getByText('Mínimo', { exact: true })).toBeHidden();
   await expect(page.getByText('Máximo', { exact: true })).toBeHidden();
   await expect(page.getByText('Tipo', { exact: true })).toBeHidden();
-  await expect(page.getByText(/O mínimo e o máximo pertencem a cada Quentinha P, M ou G e são configurados em Produtos/)).toBeVisible();
+  await expect(page.getByText(/Para quentinhas, configure o mínimo e o máximo em cada tamanho na aba Produtos/)).toBeVisible();
 });
 test('novo tamanho inicia à venda e ainda pode ser salvo pausado sem grupos', async ({ page }) => {
   await mockCashierBackend(page);
