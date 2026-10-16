@@ -168,9 +168,13 @@ export default function CashierCustomers({
         `${apiBaseUrl}/fidelidade/crm/resumo?periodo_dias=${periodoDias}&janela_atribuicao_dias=${janelaDias}`,
         { headers: authHeaders },
       );
-      if (res.ok) {
+      if (!res.ok) throw new Error('CRM summary unavailable');
+      {
         const data = await res.json();
-        setCrmSummary(data);
+        setCrmSummary({...data, oportunidades: Array.isArray(data?.oportunidades) ? data.oportunidades.map((op: any) => ({
+          ...op, elegiveis_ids: op.elegiveis_cliente_ids ?? op.elegiveis_ids ?? [],
+          motivo_entrada: op.por_que_entraram ?? op.motivo_entrada ?? '',
+        })) : []});
       }
     } catch {
       setCrmSummaryError('Não foi possível atualizar os indicadores consolidados do CRM.');

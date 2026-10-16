@@ -36,11 +36,12 @@ export function CustomerResultsWorkspace({
   onRefresh,
 }: Props) {
   const res = crmSummary?.resultados;
-  const segundaCompra = res?.segunda_compra;
+  const segundaCompra = res?.conversao_segunda_compra;
   const retorno = res?.retorno_apos_abordagem;
   const pedidos = res?.pedidos_associados;
-  const descontos = res?.descontos_utilizados;
-  const campanhas: any[] = res?.campanhas || [];
+  const descontos = res?.descontos_efetivamente_utilizados;
+  const valores = res?.valor_pago_pedidos_associados;
+  const campanhas: any[] = crmSummary?.campanhas || [];
 
   const isMeasured = retorno?.status_mensuracao === 'MENSURADO';
 
@@ -118,9 +119,9 @@ export function CustomerResultsWorkspace({
           </span>
           <strong className="block font-mono text-xl font-black text-koma-foreground">
             {segundaCompra ? segundaCompra.clientes_que_fizeram_segunda_compra : '—'}
-            {segundaCompra?.denominador_clientes_com_compra > 0 && (
+            {segundaCompra?.clientes_com_1_compra_base > 0 && (
               <span className="ml-1.5 text-xs font-normal text-koma-muted">
-                de {segundaCompra.denominador_clientes_com_compra} ({segundaCompra.taxa_conversao_pct}%)
+                de {segundaCompra.clientes_com_1_compra_base} ({segundaCompra.taxa_conversao_pct}%)
               </span>
             )}
           </strong>
@@ -143,8 +144,8 @@ export function CustomerResultsWorkspace({
                 </span>
               </strong>
               <p className="text-[11px] text-koma-muted leading-snug">
-                <strong>{retorno.clientes_comprovados_por_cupom}</strong> comprovado(s) por cupom ·{' '}
-                <strong>{retorno.clientes_estimados_janela_temporal}</strong> estimado(s) na janela de {janelaDias}d.
+                <strong>{retorno.clientes_retorno_comprovado_cupom}</strong> comprovado(s) por cupom ·{' '}
+                <strong>{retorno.clientes_retorno_estimado_temporal}</strong> estimado(s) na janela de {janelaDias}d.
               </p>
             </>
           ) : (
@@ -167,11 +168,11 @@ export function CustomerResultsWorkspace({
           {isMeasured ? (
             <>
               <strong className="block font-mono text-xl font-black text-koma-foreground">
-                {pedidos?.total_pedidos ?? 0}
+                {pedidos?.total ?? 0}
               </strong>
               <p className="text-[11px] text-koma-muted leading-snug">
-                <strong>{pedidos?.pedidos_comprovados_por_cupom ?? 0}</strong> com cupom da ação ·{' '}
-                <strong>{pedidos?.pedidos_estimados_janela_temporal ?? 0}</strong> por janela temporal (sem duplicar pedido).
+                <strong>{pedidos?.comprovados_por_cupom ?? 0}</strong> com cupom da ação ·{' '}
+                <strong>{pedidos?.estimados_por_janela_temporal ?? 0}</strong> por janela temporal (sem duplicar pedido).
               </p>
             </>
           ) : (
@@ -194,11 +195,11 @@ export function CustomerResultsWorkspace({
           {isMeasured ? (
             <>
               <strong className="block font-mono text-xl font-black text-emerald-400">
-                {money(pedidos?.valor_pago_liquido_total)}
+                {money(valores?.total_liquido_brl)}
               </strong>
               <p className="text-[11px] text-koma-muted leading-snug">
-                Cupom: {money(pedidos?.valor_pago_comprovado_cupom)} · Janela temporal:{' '}
-                {money(pedidos?.valor_pago_estimado_janela)}.
+                Cupom: {money(valores?.comprovado_cupom_brl)} · Janela temporal:{' '}
+                {money(valores?.estimado_temporal_brl)}.
               </p>
             </>
           ) : (
@@ -219,10 +220,10 @@ export function CustomerResultsWorkspace({
             5. Descontos utilizados
           </span>
           <strong className="block font-mono text-xl font-black text-koma-foreground">
-            {money(descontos?.total_desconto_com_cupom_no_periodo)}
+            {money(descontos?.total_brl)}
           </strong>
           <p className="text-[11px] text-koma-muted leading-snug">
-            Em ações de CRM: <strong>{money(descontos?.desconto_em_pedidos_associados_campanha)}</strong>. Apenas pedidos concluídos.
+            Cupons: <strong>{money(descontos?.cupom_brl)}</strong> · Fidelidade: {money(descontos?.fidelidade_cashback_brl)}. Apenas pedidos concluídos.
           </p>
         </article>
       </div>
@@ -278,20 +279,20 @@ export function CustomerResultsWorkspace({
                     </td>
                     <td className="p-3">
                       <span className="rounded-md bg-koma-raised px-2 py-0.5 font-mono text-[10px] text-koma-foreground">
-                        {camp.tipo_abordagem}
+                        {camp.abordagem_tipo}
                         {camp.cupom_codigo ? ` (${camp.cupom_codigo})` : ''}
                       </span>
                     </td>
                     <td className="p-3 font-mono text-koma-foreground">
-                      {camp.contatos_registrados} / {camp.total_elegiveis}
+                      {camp.clientes_abordados}
                     </td>
                     <td className="p-3 font-mono text-koma-foreground">
-                      {camp.contatos_registrados > 0 ? camp.clientes_que_voltaram : 'Não mensurado'}
+                      {camp.clientes_abordados > 0 ? camp.clientes_que_voltaram : 'Não mensurado'}
                     </td>
                     <td className="p-3 font-mono text-koma-foreground">
-                      {camp.contatos_registrados > 0 ? (
+                      {camp.clientes_abordados > 0 ? (
                         <span>
-                          {camp.pedidos_associados} ({camp.pedidos_comprovados_cupom} cupom ·{' '}
+                          {(camp.pedidos_comprovados_cupom ?? 0) + (camp.pedidos_estimados_janela ?? 0)} ({camp.pedidos_comprovados_cupom} cupom ·{' '}
                           {camp.pedidos_estimados_janela} janela)
                         </span>
                       ) : (
@@ -299,10 +300,10 @@ export function CustomerResultsWorkspace({
                       )}
                     </td>
                     <td className="p-3 font-mono font-bold text-emerald-400">
-                      {camp.contatos_registrados > 0 ? money(camp.valor_pago_associado) : 'Não mensurado'}
+                      {camp.clientes_abordados > 0 ? money(camp.valor_pago_liquido_brl) : 'Não mensurado'}
                     </td>
                     <td className="p-3 font-mono text-koma-foreground">
-                      {money(camp.descontos_utilizados)}
+                      {money(camp.desconto_utilizado_brl)}
                     </td>
                   </tr>
                 ))}
