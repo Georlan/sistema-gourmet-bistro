@@ -1,3 +1,4 @@
+import CatalogProductImage from './CatalogProductImage';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Flame, Truck } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
@@ -95,11 +96,8 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
             className="flex min-w-[210px] max-w-[250px] items-center gap-3 rounded-xl border border-koma-border bg-koma-panel p-2.5 text-left transition hover:border-emerald-500/30 hover:bg-koma-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
             aria-label={`Abrir ${product.name}`}
           >
-            <img
-              src={product.image}
-              alt=""
-              loading="lazy"
-              decoding="async"
+            <CatalogProductImage
+              image={product.image}
               className="h-12 w-12 shrink-0 rounded-lg object-cover"
             />
             <span className="min-w-0">

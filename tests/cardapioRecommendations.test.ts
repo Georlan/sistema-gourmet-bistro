@@ -1,3 +1,5 @@
+import { register } from 'node:module';
+register('./helpers/staticAssetsLoader.mjs', import.meta.url);
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
