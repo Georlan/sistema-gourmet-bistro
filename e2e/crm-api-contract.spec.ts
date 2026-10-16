@@ -2,6 +2,7 @@ import {expect,test} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 const contract = JSON.parse(readFileSync(new URL('./fixtures/crm-api-contract.json', import.meta.url), 'utf8'));
 import {mockCashierBackend,seedCashierSession,cashierConfig} from './fixtures/cashier';
+import {navigateRelationship,expectRelationshipSelected} from './fixtures/relationshipNavigation';
 
 test('all CRM workspaces render backend-generated responses without losing the operational shell',async ({page},testInfo)=>{
   const errors:string[]=[];
@@ -35,10 +36,9 @@ test('all CRM workspaces render backend-generated responses without losing the o
     else await page.getByRole('button',{name:'Abrir menu principal',exact:true}).click();
   }
   await page.locator('.cashier-sidebar:visible').getByRole('button',{name:/^Relacionamento(?: \d+)?$/}).click();
-  for(const subTab of ['oportunidades','clientes','campanhas','fidelidade','cupons','resultados']){
-    const button=page.locator(`#clientes-subtab-${subTab}`);
-    await button.click();
-    await expect(button).toHaveAttribute('aria-current','page');
+  for(const subTab of ['oportunidades','clientes','campanhas','fidelidade','cupons','resultados'] as const){
+    await navigateRelationship(page,subTab);
+    await expectRelationshipSelected(page,subTab);
     if(subTab === 'fidelidade'){
       const simulation=page.getByRole('region',{name:'Simulação da fidelidade'});
       await expect(simulation).toContainText('R$ 5,00');
@@ -64,7 +64,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await expect(page.getByRole('heading',{name:'Quantos clientes voltaram e quanto compraram?'})).toBeVisible();
   await page.screenshot({path:testInfo.outputPath(`relationship-results-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
   const opportunity = contract.summary.oportunidades.find((op: {elegiveis_count:number})=>op.elegiveis_count>0);
-  await page.locator('#clientes-subtab-oportunidades').click();
+  await navigateRelationship(page,'oportunidades');
   await page.screenshot({path:testInfo.outputPath(`relationship-actions-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
   const emptyGroup=contract.summary.oportunidades.find((op:{elegiveis_count:number})=>op.elegiveis_count===0);
   await expect(page.getByText(emptyGroup.titulo,{exact:true})).toBeHidden();
@@ -108,7 +108,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await page.getByRole('button',{name:'Voltar aos contatos da campanha salva',exact:true}).click();
   await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
   expect(campaignCreates).toBe(2);
-  await page.locator('#clientes-subtab-clientes').click();
+  await navigateRelationship(page,'clientes');
   await page.getByRole('button',{name:'Ver perfil',exact:true}).filter({visible:true}).first().click();
   const dialog=page.getByRole('dialog');
   await expect(dialog).toBeVisible();
