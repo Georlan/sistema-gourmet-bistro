@@ -8,7 +8,7 @@ const contract = JSON.parse(readFileSync(new URL('./fixtures/crm-api-contract.js
 async function setupRelationship(page: Page, loyalty: boolean, coupons: boolean) {
   await mockCashierBackend(page);
   await seedCashierSession(page);
-  await page.routeWebSocket(/\\/ws\\//, socket => socket.onMessage(() => {}));
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
   await page.route('**/caixa/configuracoes', route => route.fulfill({
     json: {
       ...cashierConfig, plano: 'premium', plano_efetivo: 'premium',
@@ -32,7 +32,7 @@ async function openSidebar(page: Page) {
 
 async function enterRelationship(page: Page) {
   await openSidebar(page);
-  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Relacionamento(?: \\d+)?$/ }).click();
+  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Relacionamento(?: \d+)?$/ }).click();
 }
 
 test('five destinations, benefit tabs, legacy restoration and module return share one active location', async ({ page }, testInfo) => {
