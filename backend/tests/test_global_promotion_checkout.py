@@ -15,6 +15,28 @@ from test_online_order_server_authority import (
 )
 
 
+@pytest.fixture(autouse=True)
+def restore_campaign_configuration(setup_restaurant_authority):
+    db = SessionLocal()
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=RESTAURANTE_ID).one()
+    previous = (config.promocoes, config.pedido_minimo)
+    db.close()
+    current_restaurante_id.reset(token)
+    try:
+        yield
+    finally:
+        db = SessionLocal()
+        token = current_restaurante_id.set(RESTAURANTE_ID)
+        try:
+            config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=RESTAURANTE_ID).one()
+            config.promocoes, config.pedido_minimo = previous
+            db.commit()
+        finally:
+            current_restaurante_id.reset(token)
+            db.close()
+
+
 def test_changed_price_requires_review_and_never_trusts_customer_amount():
     validated = _validated(_item('g', '14', '2.50'), _item('m', '10'))
     with pytest.raises(OrderValidationError, match='preço desta oferta mudou'):
@@ -37,6 +59,7 @@ def test_global_offer_real_checkout_replay_expiry_and_tenant_isolation(setup_res
             db.add(second)
         db.query(Produto).filter_by(restaurante_id=RESTAURANTE_ID, id=PRODUTO_ID).one().imagem = 'https://images.example.com/canonical.png'
         config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=RESTAURANTE_ID).one()
+        config.pedido_minimo = 30
         config.promocoes = [{'id': offer_id, 'nome': 'Prato e bebida', 'preco': 30,
                              'componentes': [[PRODUTO_ID], [second_id]], 'ativo': True}]
         db.commit()
@@ -68,6 +91,23 @@ def test_global_offer_real_checkout_replay_expiry_and_tenant_isolation(setup_res
         assert db.query(Produto).filter_by(restaurante_id=RESTAURANTE_ID, id=second_id).one().preco == 1
         config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=RESTAURANTE_ID).one()
         config.promocoes = [{**config.promocoes[0], 'fim_em': '2000-01-01T00:00:00Z'}]
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+    # Reavaliar o mínimo também para preço promocional abaixo do limite.
+    db = SessionLocal()
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    try:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=RESTAURANTE_ID).one()
+        expired_offer = config.promocoes[0]
+        config.promocoes = [{**expired_offer, 'fim_em': None, 'preco': 22}]
+        db.commit()
+        too_low = client.post('/cardapio/pedidos', json={**payload, 'idempotency_key': uuid.uuid4().hex,
+                                                       'promocao_preco_esperado': 22})
+        assert too_low.status_code in (400, 409, 422), too_low.text
+        assert 'mínimo' in too_low.text
+        config.promocoes = [expired_offer]
         db.commit()
     finally:
         current_restaurante_id.reset(token)

@@ -1,5 +1,5 @@
 import CatalogProductImage from './CatalogProductImage';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Gift, ArrowRight } from 'lucide-react';
 import { LOCAL_PRODUCT_PLACEHOLDER, type BrandConfig, type CatalogPromotion } from '../CardapioTypes';
 const money = (v: number) => new Intl.NumberFormat('pt-BR', {style:'currency',currency:'BRL'}).format(v);
@@ -8,7 +8,15 @@ const money = (v: number) => new Intl.NumberFormat('pt-BR', {style:'currency',cu
 export default function CardapioPromotions({
   brand, onSelect,
 }: {brand: BrandConfig; onSelect: (promotion: CatalogPromotion) => void}) {
-  const offers = brand.promotions || [];
+  const [now, setNow] = useState(Date.now);
+  const campaigns = brand.promotions;
+  useEffect(() => {
+    const nextEnd = Math.min(...(campaigns || []).map(offer => Date.parse(offer.fim_em || '')).filter(end => end > Date.now()));
+    if (!Number.isFinite(nextEnd)) return;
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.min(nextEnd - Date.now() + 1, 2_147_483_647));
+    return () => window.clearTimeout(timer);
+  }, [campaigns, now]);
+  const offers = (campaigns || []).filter(offer => !offer.fim_em || Date.parse(offer.fim_em) > Date.now());
   if (!offers.length) return null;
   return (
     <section aria-label="Promoções" className="w-full basis-full border-t border-koma-border pt-3" id="cardapio-promotions-home">

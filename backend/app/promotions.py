@@ -70,6 +70,8 @@ def active_promotions(config: Any, products: list[Any]) -> list[dict]:
             "descricao": promotion.get("descricao", ""),
             "preco": float(money(promotion["preco"])),
             "componentes": parts,
+            "inicio_em": promotion.get("inicio_em"),
+            "fim_em": promotion.get("fim_em"),
         })
     return visible
 

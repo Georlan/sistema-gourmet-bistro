@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('promoção G + M monta cada quentinha separadamente antes da sacola', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-16T15:00:00Z') });
   await page.route('http://127.0.0.1:8000/**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/api/cardapio-digital/public') {
@@ -23,7 +24,7 @@ test('promoção G + M monta cada quentinha separadamente antes da sacola', asyn
         ],
         promocoes: [{
           id: 'promo-gm', nome: 'Quentinha G + Quentinha M', descricao: 'Duas quentinhas',
-          preco: 22, componentes: [['g'], ['m']],
+          preco: 22, componentes: [['g'], ['m']], fim_em: '2026-10-16T15:01:00Z',
         }],
       } });
       return;
@@ -51,4 +52,6 @@ test('promoção G + M monta cada quentinha separadamente antes da sacola', asyn
   if (!await cart.isVisible()) await page.locator('#btn-cart-header').click();
   await expect(cart).toContainText('Quentinha G + Quentinha M');
   await expect(cart).toContainText('R$ 22,00');
+  await page.clock.fastForward(60_001);
+  await expect(page.locator('#cardapio-promotions-home')).toHaveCount(0);
 });

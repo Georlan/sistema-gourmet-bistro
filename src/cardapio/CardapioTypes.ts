@@ -58,6 +58,8 @@ export interface CatalogPromotion {
   descricao: string;
   preco: number;
   componentes: string[][];
+  inicio_em?: string | null;
+  fim_em?: string | null;
 }
 
 export interface BairroTaxa {
