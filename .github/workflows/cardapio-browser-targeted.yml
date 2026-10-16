@@ -85,6 +85,7 @@ jobs:
           e2e/order-tracking-chat.spec.ts
           e2e/cardapio-chat-viewports.spec.ts
           e2e/cardapio-payment-polling.spec.ts
+          e2e/cardapio-checkout-rejection.spec.ts
           --project=mobile-390
           --project=desktop-1366
           --workers=2

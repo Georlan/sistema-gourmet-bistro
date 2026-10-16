@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 import logging
+import json
 import unicodedata
 from typing import Any, Optional
 from fastapi import BackgroundTasks, HTTPException, Request, status
@@ -227,6 +228,18 @@ def _configured_payment_methods(raw_methods: Any) -> set[str]:
         if method:
             configured.add(method)
     return configured
+
+
+def _log_validation_rejection(request: Request, restaurante_id: int, modalidade: str, error: Exception) -> None:
+    # Never log the payload or exception text: either may contain customer PII.
+    logger.info(json.dumps({
+        "event": "public_order_validation_rejected",
+        "restaurante_id": restaurante_id,
+        "request_id": getattr(request.state, "request_id", None),
+        "status_code": 400,
+        "validation_type": type(error).__name__,
+        "fulfillment": modalidade,
+    }, separators=(",", ":")))
 
 
 class CardapioWebAdapter:
@@ -642,6 +655,7 @@ class CardapioWebAdapter:
             )
         except MinimumOrderAmountNotMetError as err:
             db.rollback()
+            _log_validation_rejection(request, rest_id, modalidade, err)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(err),
@@ -654,6 +668,7 @@ class CardapioWebAdapter:
             )
         except (InvalidFulfillmentDetailsError, OrderValidationError) as err:
             db.rollback()
+            _log_validation_rejection(request, rest_id, modalidade, err)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(err),

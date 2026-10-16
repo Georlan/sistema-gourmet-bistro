@@ -1412,6 +1412,11 @@ export default function CardapioPage() {
             setIsCheckoutOpen(false);
             setCheckoutRequest(null);
           }}
+          onEditCart={() => {
+            setIsCheckoutOpen(false);
+            setCheckoutRequest(null);
+            setIsCartOpen(true);
+          }}
           onOrderSuccess={() => {
             setCart([]);
             setFulfillmentChoice(null);
