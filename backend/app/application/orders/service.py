@@ -469,6 +469,13 @@ class OrderApplicationService:
             (it.base_price + sum(m.price for m in it.modifiers)) * it.quantity
             for it in validated_input.items
         )
+        if cmd.promotion_id:
+            minimum = to_money_decimal(val_context.minimum_delivery_subtotal)
+            applies = cmd.fulfillment == FulfillmentType.DELIVERY or (
+                cmd.fulfillment == FulfillmentType.PICKUP and val_context.enforce_minimum_for_pickup
+            )
+            if applies and subtotal_base < minimum:
+                raise OrderValidationError("O valor promocional ficou abaixo do pedido mínimo.")
         authoritative_delivery_fee = cls.resolve_server_delivery_fee(
             db=db,
             restaurante_id=cmd.restaurant_id,
