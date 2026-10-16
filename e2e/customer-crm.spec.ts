@@ -12,6 +12,14 @@ test('CRM ranks buyers, filters inactivity, searches formatted phones and preser
     { id: 'absent', nome: 'Bruno Ausente', telefone: '85911112222', saldo_pontos: 10, saldo_cashback: 0, intervalo_medio_dias: 10, pedidos_concluidos: 3, dias_sem_comprar: 75, segmento_relacionamento: 'REATIVAR', valor_pago_total: 120, ticket_medio_pago: 40 },
     ...Array.from({ length: 27 }, (_, i) => ({ id: `empty-${i}`, nome: `Cadastro ${i}`, telefone: '85900000000', saldo_pontos: 0, saldo_cashback: 0, pedidos_concluidos: 0, dias_sem_comprar: null, segmento_relacionamento: 'SEM_COMPRA' })),
   ] }));
+  // The real API returns a benefit object, not the empty object used by generic mocks.
+  const benefit = {tipo_recompensa:'PONTOS',saldo_acumulado_pontos:120,saldo_acumulado_cashback:0,valor_equivalente_pontos_brl:6,valor_resgatavel_brl:6,elegivel_resgate:true,status_beneficio:'RESGATAVEL',explicacao:'Regra real fixture: 120 pontos disponíveis.'};
+  await page.route('**/fidelidade/clientes/*/perfil', route => route.fulfill({json:{
+    cliente:{contato_recente:false},dados_declarados:{nome:'Ana Frequente',avaliacoes:[]},
+    comportamento_observado:{pedidos_concluidos:8,valor_pago_liquido_total:600,produtos_favoritos:[]},
+    beneficio:benefit,historico_contatos:[{id:'contact-fixture',objetivo:'SECOND_PURCHASE',acao_executada:'MENSAGEM_COPIADA',mensagem_personalizada:'Mensagem fixture',criado_em:'2026-10-01T12:00:00Z'}],
+    historico_pedidos:[{id:'order-fixture',numero_pedido:4321,tipo:'Delivery',data:'2026-10-01T12:00:00Z',contabilizado_no_crm:true,valor_pago_liquido:75,itens_resumo:['1x Prato fixture']}],
+  }}));
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
   if (testInfo.project.name.startsWith('mobile')) {
@@ -46,6 +54,10 @@ test('CRM ranks buyers, filters inactivity, searches formatted phones and preser
   await expect(page.getByRole('dialog', { name: /Ficha individual de Ana Frequente/ })).toBeVisible();
   await expect(page.getByText('Informação declarada (Cadastro)')).toBeVisible();
   await expect(page.getByText('Comportamento observado (Inferido)')).toBeVisible();
+  await expect(page.getByText('Regra real fixture: 120 pontos disponíveis.')).toBeVisible();
+  await expect(page.getByText('Pedido #4321', {exact:true})).toBeVisible();
+  await expect(page.getByText('Mensagem copiada — envio não comprovado', {exact:true})).toBeVisible();
+  await expect(page.getByText('120 pts (equiv. R$ 6,00)', {exact:true})).toBeVisible();
   await page.getByRole('button', { name: 'Fechar ficha do cliente' }).click();
   await expect(page.getByRole('dialog', { name: /Ficha individual de Ana Frequente/ })).toHaveCount(0);
   await expect(page.getByText('Saúde do relacionamento e frequência')).not.toBeVisible();

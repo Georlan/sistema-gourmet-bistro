@@ -1,0 +1,36 @@
+name: CRM browser contract
+on:
+  pull_request:
+    paths:
+      - 'src/components/caixa/customers/**'
+      - 'src/domain/customerBenefit.ts'
+      - 'backend/app/services/customer_crm.py'
+      - 'e2e/customer-crm.spec.ts'
+      - 'e2e/crm-api-contract.spec.ts'
+      - 'e2e/fixtures/crm-api-contract.json'
+      - '.github/workflows/crm-browser-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  crm-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Render canonical CRM payloads and profile benefits on eight viewports
+        env:
+          KOMA_E2E_PORT: '4299'
+        run: npm run test:e2e -- --workers=2 e2e/customer-crm.spec.ts e2e/crm-api-contract.spec.ts
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: crm-browser-failure
+          path: test-results/
+          retention-days: 3

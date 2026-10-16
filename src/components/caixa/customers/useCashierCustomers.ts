@@ -1,3 +1,4 @@
+import { customerBenefitDescription } from '../../../domain/customerBenefit';
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LoyaltyCustomer } from '../cashierContracts';
@@ -87,7 +88,7 @@ export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
             ultima_avaliacao_nota: typeof c.ultima_avaliacao_nota === 'number' ? c.ultima_avaliacao_nota : null,
             ultima_avaliacao_comentario: c.ultima_avaliacao_comentario ?? null,
             ocorrencia_aberta: Boolean(c.ocorrencia_aberta),
-            beneficio_disponivel: c.beneficio_disponivel || 'Sem benefício disponível',
+            beneficio_disponivel: customerBenefitDescription(c.beneficio_disponivel),
             elegivel_resgate: Boolean(c.elegivel_resgate),
             valor_resgatavel_brl: typeof c.valor_resgatavel_brl === 'number' ? c.valor_resgatavel_brl : 0,
             status_beneficio: c.status_beneficio || 'SEM_SALDO',
