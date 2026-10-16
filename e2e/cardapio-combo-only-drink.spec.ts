@@ -19,7 +19,7 @@ test('Pitulinha exclusiva não aparece avulsa, mas é montável no combo G + Pit
         }],
         produtos_promocionais: [{
           id: 'pitulinha', nome: 'Pitulinha', preco: 3, categoria_id: 'bebidas',
-          grupos_modificadores: [],
+          grupos_modificadores: [{ id: 'flavors', nome: 'Sabor da Pitchulinha', min_selecoes: 1, max_selecoes: 1, tipo: 'obrigatorio', opcoes: ['Pepsi', 'Guaraná', 'Laranja'].map((nome, index) => ({ id: `flavor-${index}`, nome, preco_adicional: 0, ativo: true })) }],
         }],
         promocoes: [{
           id: 'promo-g-pit', nome: 'Quentinha G + Pitulinha', descricao: 'Bebida no combo',
@@ -49,6 +49,11 @@ test('Pitulinha exclusiva não aparece avulsa, mas é montável no combo G + Pit
   await modal.getByRole('button', { name: 'Continuar para Pitulinha' }).click();
   await expect(modal.locator('#modal-product-name')).toHaveText('Pitulinha');
   await modal.getByRole('button', { name: 'Revisar promoção' }).click();
+  await expect(modal.getByRole('alert')).toContainText('Confira as escolhas em Sabor da Pitchulinha');
+  await expect(page.getByRole('dialog', { name: 'Quentinha G + Pitulinha' })).toHaveCount(0);
+  for (const flavor of ['Pepsi', 'Guaraná', 'Laranja']) await expect(modal.getByRole('checkbox', { name: `Selecionar ${flavor}`, exact: true })).toBeVisible();
+  await modal.getByRole('checkbox', { name: 'Selecionar Guaraná', exact: true }).check();
+  await modal.getByRole('button', { name: 'Revisar promoção' }).click();
   const review = page.getByRole('dialog', { name: 'Quentinha G + Pitulinha' });
   await expect(review).toContainText('R$ 16,00');
   await review.getByRole('button', { name: 'Adicionar promoção' }).click();
@@ -56,4 +61,5 @@ test('Pitulinha exclusiva não aparece avulsa, mas é montável no combo G + Pit
   if (!await cart.isVisible()) await page.locator('#btn-cart-header').click();
   await expect(cart).toContainText('Quentinha G + Pitulinha');
   await expect(cart).toContainText('R$ 16,00');
+  await expect(cart).toContainText('Guaraná');
 });
