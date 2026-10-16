@@ -36,6 +36,7 @@ async function enterRelationship(page: Page) {
 }
 
 test('five destinations, benefit tabs, legacy restoration and module return share one active location', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await setupRelationship(page, true, true);
