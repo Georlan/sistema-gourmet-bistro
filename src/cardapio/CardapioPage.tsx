@@ -723,6 +723,7 @@ export default function CardapioPage() {
     }]);
     setSelectedPromotion(null);
     setEditingPromotionItem(null);
+    setIsCartOpen(true);
     showNotification("Promoção adicionada à sacola");
   };
 
