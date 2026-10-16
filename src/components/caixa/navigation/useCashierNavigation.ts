@@ -6,6 +6,7 @@ import {
   type SubscriptionPlanId,
 } from '../../../config/subscriptionPlans';
 import './cashierSetupMode.css';
+import { operationalEntitlementEnabled } from '../../../config/subscriptionPlans';
 import {
   getCashierNavigationAction,
   getCashierNavigationTarget,
@@ -34,6 +35,9 @@ function readSetupMode(): boolean {
     return false;
   }
 }
+
+const LAST_RELATIONSHIP_KEY = 'koma_relationship_last_subtab';
+const LAST_BENEFIT_KEY = 'koma_relationship_last_benefit';
 
 /** Owns persisted navigation and mobile drawer lifecycle, independent of operational controllers. */
 export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, showToast }: BoundaryProps) {
@@ -94,13 +98,33 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
     if (normalized.subTab !== activeSubTab) setActiveSubTab(normalized.subTab);
     sessionStorage.setItem('koma_active_tab', normalized.tab);
     sessionStorage.setItem('koma_active_subtab', normalized.subTab);
+    if (normalized.tab === 'clientes') {
+      sessionStorage.setItem(LAST_RELATIONSHIP_KEY, normalized.subTab);
+      if (normalized.subTab === 'fidelidade' || normalized.subTab === 'cupons') {
+        sessionStorage.setItem(LAST_BENEFIT_KEY, normalized.subTab);
+      }
+    }
   }, [activeSubTab, activeTab, setupMode, planId, entitlements]);
 
   const setupAllowsTarget = (tab: CashierTab, subTab: string) =>
     !setupMode || isCashierSetupTargetAllowed(tab, subTab);
 
   const applyNavigationTarget = (navigationId: string) => {
-    const rawTarget = getCashierNavigationTarget(navigationId);
+    let rawTarget = getCashierNavigationTarget(navigationId);
+    // The parent is an entry point, not a reset button. Preserve the last workspace.
+    if (navigationId === 'clientes' && activeTab !== 'clientes') {
+      rawTarget = normalizeCashierNavigationState('clientes', sessionStorage.getItem(LAST_RELATIONSHIP_KEY) || 'oportunidades');
+    }
+    if (navigationId === 'clientes_beneficios') {
+      const last = activeTab === 'clientes' && (activeSubTab === 'fidelidade' || activeSubTab === 'cupons')
+        ? activeSubTab : sessionStorage.getItem(LAST_BENEFIT_KEY);
+      const loyalty = operationalEntitlementEnabled(entitlements, 'loyalty');
+      const coupons = operationalEntitlementEnabled(entitlements, 'coupons');
+      const benefit = last === 'cupons' && coupons ? 'cupons'
+        : last === 'fidelidade' && loyalty ? 'fidelidade'
+        : loyalty ? 'fidelidade' : coupons ? 'cupons' : 'clientes';
+      rawTarget = { tab: 'clientes', subTab: benefit };
+    }
     if (rawTarget) {
       const target = normalizePlanTarget(rawTarget);
       if (!setupAllowsTarget(target.tab, target.subTab)) {
