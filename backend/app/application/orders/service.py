@@ -449,6 +449,20 @@ class OrderApplicationService:
         )
 
         validated_input = OrderValidationService.validate(val_context)
+        if cmd.promotion_id:
+            # A composição canônica já validou estoque lógico, tenant e modificadores.
+            from ...models import ConfiguracaoRestaurante
+            from ...promotions import apply_promotion_to_validated
+            promotion_config = db.query(ConfiguracaoRestaurante).filter(
+                ConfiguracaoRestaurante.restaurante_id == cmd.restaurant_id,
+            ).first()
+            promotion = next((entry for entry in (promotion_config.promocoes or [])
+                              if entry.get("id") == cmd.promotion_id), None) if promotion_config else None
+            if promotion is None:
+                raise OrderValidationError("Promoção inexistente neste restaurante.")
+            if cmd.coupon_code or cmd.usar_cashback or cmd.cashback_discount > Decimal("0.00"):
+                raise OrderValidationError("Não é possível combinar promoção com cupom ou cashback.")
+            validated_input = apply_promotion_to_validated(validated_input, promotion)
 
         # 3. Cotação Financeira Pura
         subtotal_base = sum(
