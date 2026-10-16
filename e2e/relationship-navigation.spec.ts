@@ -23,6 +23,29 @@ async function setupRelationship(page: Page, loyalty: boolean, coupons: boolean)
   }));
 }
 
+async function traceRelationshipStateOnMissing(page: Page, element: string) {
+  const target = page.locator(element);
+  if (await target.isVisible()) return;
+  const state = await page.evaluate(() => ({
+    activeTab: sessionStorage.getItem('koma_active_tab'),
+    activeSubTab: sessionStorage.getItem('koma_active_subtab'),
+    selected: Array.from(document.querySelectorAll<HTMLElement>('[aria-current="page"]')).map(el => ({
+      name: el.textContent?.trim().slice(0, 35),
+      navId: el.dataset.navigationId,
+    })),
+    crmSection: Array.from(document.querySelectorAll<HTMLElement>('[data-cashier-section="Clientes"]')).map(el => ({
+      hidden: el.hidden,
+      text: el.textContent?.trim().slice(0, 160),
+    })),
+    benefitsTablist: document.querySelector('[aria-label="Tipos de benefícios"]')?.outerHTML.slice(0, 350),
+    campaignDraftInputs: document.querySelectorAll('[aria-label="Identificação da campanha"]').length,
+    loyaltyPanels: document.querySelectorAll('#crm-benefit-panel-fidelidade').length,
+    couponPanels: document.querySelectorAll('#crm-benefit-panel-cupons').length,
+  }));
+  // Fixture-only DOM details to diagnose mismatched navigation/entitlement state in CI.
+  console.log('[relationship-navigation-diagnostic]', JSON.stringify(state));
+}
+
 async function openSidebar(page: Page) {
   if (await page.locator('.cashier-sidebar:visible').count()) return;
   const full = page.getByRole('button', { name: 'Abrir menu completo', exact: true });
@@ -60,12 +83,14 @@ test('five destinations, benefit tabs, legacy restoration and module return shar
 
   await navigateRelationship(page, 'campanhas');
   const campaignDraft = page.getByLabel('Identificação da campanha');
+  await traceRelationshipStateOnMissing(page, '[aria-label="Identificação da campanha"]');
   await campaignDraft.fill('Rascunho preservado entre áreas');
   await navigateRelationship(page, 'clientes');
   await navigateRelationship(page, 'campanhas');
   await expect(campaignDraft).toHaveValue('Rascunho preservado entre áreas');
 
   await navigateRelationship(page, 'beneficios');
+  await traceRelationshipStateOnMissing(page, '[aria-label="Tipos de benefícios"]');
   await expect(page.getByRole('tablist', { name: 'Tipos de benefícios' })).toBeVisible();
   const fidelity = page.getByRole('tab', { name: 'Fidelidade', exact: true });
   await fidelity.focus();
@@ -114,6 +139,7 @@ for (const [loyalty, coupons] of [[true, false], [false, true], [false, false]] 
       await navigateRelationship(page, 'beneficios');
       await expectRelationshipSelected(page, 'beneficios');
       await expect(page.getByRole('tablist', { name: 'Tipos de benefícios' })).toHaveCount(0);
+      await traceRelationshipStateOnMissing(page, loyalty ? '#crm-benefit-panel-fidelidade' : '#crm-benefit-panel-cupons');
       await expect(page.getByRole('tabpanel', { name: loyalty ? 'Fidelidade' : 'Cupons' })).toBeVisible();
       await expect(page.getByRole('tabpanel', { name: loyalty ? 'Cupons' : 'Fidelidade' })).toHaveCount(0);
     } else {
