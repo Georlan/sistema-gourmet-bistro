@@ -402,6 +402,48 @@ def test_get_whitelabel_config_by_slug_success(test_setup):
     assert "cor_primaria" in data
 
 
+@pytest.mark.parametrize("endpoint", ["public", "config"])
+@pytest.mark.parametrize("identifier", ["restaurante_id=999", "slug=sistema-gourmet-bistro"])
+def test_registered_whatsapp_never_breaks_public_menu_snapshot(test_setup, monkeypatch, endpoint, identifier):
+    """Regressão: tenant habilitado lê campos de WhatsApp de projeção restrita."""
+    from app.services.central_whatsapp import CENTRAL_INSTANCE_MARKER
+
+    monkeypatch.setenv("KOMA_CENTRAL_WA_ENABLED", "true")
+    monkeypatch.setenv("KOMA_CENTRAL_WA_ALLOWED_RESTAURANT_IDS", "999")
+    monkeypatch.setenv("KOMA_CENTRAL_WA_INSTANCE_NAME", "business-test")
+    monkeypatch.setenv("KOMA_CENTRAL_WA_SENDER_PHONE", "5511888888888")
+    monkeypatch.setenv("KOMA_CUSTOMER_WA_ENABLED", "true")
+    monkeypatch.setenv("KOMA_CUSTOMER_WA_ALLOWED_RESTAURANT_IDS", "999")
+    monkeypatch.setenv("KOMA_CUSTOMER_WA_MONTHLY_MESSAGE_LIMIT", "10")
+    monkeypatch.setenv("KOMA_CUSTOMER_WA_UNIT_COST_BRL", "0.035")
+
+    db = SessionLocal()
+    tenant_context = current_restaurante_id.set(999)
+    try:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=999).one()
+        old = (config.whatsapp_instance_name, config.whatsapp_alerts_enabled, config.whatsapp_recipient_phone)
+        config.whatsapp_instance_name = CENTRAL_INSTANCE_MARKER
+        config.whatsapp_alerts_enabled = False
+        config.whatsapp_recipient_phone = "5511999999999"
+        db.commit()
+        try:
+            response = client.get(f"/api/cardapio-digital/{endpoint}?{identifier}")
+            assert response.status_code == 200, response.text
+            payload = response.json()
+            restaurant = payload["restaurante"] if endpoint == "public" else payload
+            assert restaurant["id"] == 999
+            assert restaurant["slug"] == "sistema-gourmet-bistro"
+            assert restaurant["avisos_whatsapp_disponiveis"] is True
+            assert "whatsapp_recipient_phone" not in str(payload)
+            assert "5511999999999" not in str(payload)
+        finally:
+            config.whatsapp_instance_name, config.whatsapp_alerts_enabled, config.whatsapp_recipient_phone = old
+            db.commit()
+    finally:
+        current_restaurante_id.reset(tenant_context)
+        db.close()
+
+
 def test_public_menu_exposes_server_order_availability(test_setup):
     db = SessionLocal()
     token_var = current_restaurante_id.set(test_setup["rest_id"])
