@@ -247,7 +247,7 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
     source = db.query(Lancamento).filter_by(restaurante_id=rid,
         id=str(snapshot["payload"].get("order_id")), comanda_id=check.id if check else "",
         origem="cardapio").one_or_none()
-    if check is None or source is None or check.fechada or source.status in {"cancelado", "recusado"}:
+    if check is None or source is None or check.delivery_status in {"cancelado", "recusado", "finalizado"} or source.status in {"cancelado", "recusado"}:
         return settle("dead_letter", "Pedido ausente, encerrado ou divergente do restaurante.")
     from .customer_whatsapp_dispatch import snapshot_time
     age = dt.datetime.now(dt.timezone.utc) - snapshot_time(snapshot)

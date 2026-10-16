@@ -332,3 +332,16 @@ def test_allowlist_cannot_implicitly_enable_all_tenants(flow,value):
     _, patch=flow
     patch.setenv('KOMA_CENTRAL_WA_ALLOWED_RESTAURANT_IDS',value)
     assert central.pilot_configuration() is None
+
+
+
+def test_financially_closed_check_still_alerts_for_active_production(flow):
+    db, patch = flow
+    check, source, event = order(db,consent=False)
+    check.fechada = True  # Financial closure is independent of kitchen state.
+    check.delivery_status = 'producao'
+    row=central.enqueue_operator_alert(db,event)
+    db.commit()
+    calls=provider(patch)
+    assert dispatch_single_outbox_event(db,row)
+    assert len(calls) == 1
