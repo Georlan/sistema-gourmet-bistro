@@ -60,7 +60,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
     await expect(page.getByRole('tablist',{name:'Áreas do CRM'})).toHaveCount(0);
     await expect(page.getByRole('alert').filter({hasText:'Não foi possível abrir'})).toHaveCount(0);
   }
-  await expect(page.getByText('Campanha fixture de contrato',{exact:true})).toBeVisible();
+  await expect(page.getByText('Campanha fixture de contrato',{exact:true}).filter({visible:true})).toBeVisible();
   await expect(page.getByRole('heading',{name:'Quantos clientes voltaram e quanto compraram?'})).toBeVisible();
   await page.screenshot({path:testInfo.outputPath(`relationship-results-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
   const opportunity = contract.summary.oportunidades.find((op: {elegiveis_count:number})=>op.elegiveis_count>0);
