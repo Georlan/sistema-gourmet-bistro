@@ -16,6 +16,7 @@ interface Props {
   restaurantId: string | number;
   onClose: () => void;
   onConfirm: (parts: PromotionPartSelection[]) => void;
+  initialParts?: PromotionPartSelection[];
 }
 
 const formatMoney = (amount: number) => new Intl.NumberFormat('pt-BR', {
@@ -23,10 +24,10 @@ const formatMoney = (amount: number) => new Intl.NumberFormat('pt-BR', {
 }).format(amount);
 
 export default function CardapioPromotionWizard({
-  title, basePrice, steps, restaurantId, onClose, onConfirm,
+  title, basePrice, steps, restaurantId, onClose, onConfirm, initialParts,
 }: Props) {
   const [stepIndex, setStepIndex] = useState(0);
-  const [parts, setParts] = useState<Array<PromotionPartSelection | null>>([]);
+  const [parts, setParts] = useState<Array<PromotionPartSelection | null>>(initialParts || []);
   const review = stepIndex >= steps.length;
   const hasUnavailableProduct = steps.length === 0 || steps.some((step) => step.product.isAvailable === false);
   const complete = isValidPromotionParts(steps, parts);
