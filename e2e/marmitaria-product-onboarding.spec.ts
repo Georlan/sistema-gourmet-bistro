@@ -292,17 +292,17 @@ test('promoções ficam como categoria virtual no catálogo, sem bloco acima dos
       await route.fulfill({ status: 201, json: created });
       return;
     }
-    await route.fulfill({ json: { produtos: products, categorias: categories, promocoes: promotions } });
+    await route.fulfill({ json: { produtos: products, categorias: categories, promocoes: promotions, perfil_marmitaria: true } });
   });
 
   await page.goto('/?view=caixa');
   const categoriesBar = page.getByLabel('Categorias do cardápio');
   await expect(categoriesBar.getByRole('button', { name: /Promoções/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Novo produto', exact: true })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Promoções da marmitaria' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Gerenciar promoções' })).toHaveCount(0);
 
   await categoriesBar.getByRole('button', { name: /Promoções/ }).click();
-  const panel = page.getByRole('region', { name: 'Promoções da marmitaria' });
+  const panel = page.getByRole('region', { name: 'Gerenciar promoções' });
   await expect(panel).toBeVisible();
   await expect(categoriesBar.getByRole('button', { name: /Promoções 2/ })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Novo produto', exact: true })).toHaveCount(0);
@@ -350,7 +350,7 @@ test('promoções ficam como categoria virtual no catálogo, sem bloco acima dos
   await expect(page.locator('article').filter({ has: page.getByRole('heading', { name: 'Quentinha G', exact: true }) })).toHaveCount(1);
 });
 
-test('promoções não aparecem como categoria em restaurante sem perfil marmitaria', async ({ page }) => {
+test('promoções estão disponíveis globalmente sem modelos de marmitaria', async ({ page }, testInfo) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.addInitScript(() => {
@@ -360,6 +360,17 @@ test('promoções não aparecem como categoria em restaurante sem perfil marmita
   await page.route('**/caixa/configuracoes', route => route.fulfill({ json: { ...cashierConfig, operation_profile: 'generic' } }));
   await page.goto('/?view=caixa');
   await expect(page.getByLabel('Categorias do cardápio')).toBeVisible();
-  await expect(page.getByLabel('Categorias do cardápio').getByRole('button', { name: /Promoções/ })).toHaveCount(0);
+  await expect(page.getByLabel('Categorias do cardápio').getByRole('button', { name: /Promoções/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Novo produto', exact: true })).toBeVisible();
+  await page.route('**/api/cardapio-digital/promocoes**', route => route.fulfill({ json: {
+    produtos: [], categorias: [], promocoes: [], perfil_marmitaria: false,
+  } }));
+  await page.getByLabel('Categorias do cardápio').getByRole('button', { name: /Promoções/ }).click();
+  const panel = page.getByRole('region', { name: 'Gerenciar promoções' });
+  await expect(panel.getByText('Nenhuma promoção cadastrada')).toBeVisible();
+  await panel.getByRole('button', { name: 'Nova oferta' }).click();
+  await expect(panel.getByRole('textbox', { name: 'Nome da promoção' })).toBeVisible();
+  await expect(panel.getByLabel('Modelos de ofertas')).toHaveCount(0);
+  await expect(panel.getByText('Pitulinha')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('promotions-global.png'), fullPage: true });
 });

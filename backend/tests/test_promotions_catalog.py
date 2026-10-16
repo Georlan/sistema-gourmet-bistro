@@ -50,12 +50,12 @@ def test_faltando_componente_e_duplicacao_falham_fechado():
             apply_promotion_to_validated(case, _campaign())
 
 
-def test_pausa_na_regra_e_preco_maior_falham():
+def test_pausa_falha_e_preco_independente_e_aceito():
     v = _validated(_item("g", "14"), _item("m", "10"))
     with pytest.raises(OrderValidationError):
         apply_promotion_to_validated(v, {**_campaign(), "ativo": False})
-    with pytest.raises(OrderValidationError):
-        apply_promotion_to_validated(v, {**_campaign(), "preco": 30})
+    result = apply_promotion_to_validated(v, {**_campaign(), "preco": 30})
+    assert sum(item.base_price for item in result.items) == Decimal("30.00")
 
 
 def test_bebida_alternativa_usa_produto_real():
@@ -93,20 +93,14 @@ def test_pitulinha_preco_simbolico_um_real_combo_dezesseis_revalida_no_servidor(
     assert original.items[1].base_price == Decimal("1")
 
 
-def test_combo_preco_maior_sem_item_exclusivo_continua_bloqueado():
-    promo = {
-        "id": "promo-g-m", "nome": "G + M", "preco": 25.0,
-        "componentes": [["g"], ["m"]], "ativo": True,
-    }
-    with pytest.raises(OrderValidationError):
-        apply_promotion_to_validated(
-            _validated(_item("g", "14"), _item("m", "10")), promo,
-        )
-    with pytest.raises(OrderValidationError):
-        apply_promotion_to_validated(
-            _validated(_item("g", "14"), _item("m", "10")), promo,
-            exclusive_ids={"pitulinha"},
-        )
+def test_preco_independente_nao_exige_componente_exclusivo():
+    promo = {**_campaign(), "preco": 25}
+    for exclusive in (set(), {"pitulinha"}):
+        original = _validated(_item("g", "14", "3"), _item("m", "10"))
+        result = apply_promotion_to_validated(original, promo, exclusive_ids=exclusive)
+        assert sum(item.base_price for item in result.items) == Decimal("25.00")
+        assert result.items[0].modifiers[0].price == Decimal("3")
+        assert original.items[0].base_price == Decimal("14")
 
 
 def test_pitulinha_pausada_ou_faltando_nunca_recebe_preco_de_combo():

@@ -476,6 +476,7 @@ class OrderApplicationService:
             validate_exclusive_promotion_parts(exclusive_ids, promotion, validated_input)
             validated_input = apply_promotion_to_validated(
                 validated_input, promotion, exclusive_ids=exclusive_ids,
+                expected_price=cmd.expected_promotion_price,
             )
 
         # 3. Cotação Financeira Pura

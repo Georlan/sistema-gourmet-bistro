@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { usePublicMenuSlug } from './usePublicMenuSlug';
 import { ChevronDown, Gift, Lock } from 'lucide-react';
 import { CardapioDigitalSettingsPanel } from '../../cardapio/CardapioDigitalSettingsPanel';
-import MarmitariaPromotionsSettings from '../../cardapio/MarmitariaPromotionsSettings';
+import PromotionsSettings from '../../cardapio/PromotionsSettings';
 import type { CashierTab } from '../cashierContracts';
 import { getTenantPublicMenuUrl, resolveKomaHost } from '../../../domain/komaHost';
 import { OnlineMenuDeliverySettings } from './OnlineMenuDeliverySettings';
@@ -163,7 +163,7 @@ export default function CashierOnlineMenu({
             );
           }}
         />
-        {activeSection === 'perfil' && <MarmitariaPromotionsSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />}
+        {activeSection === 'perfil' && <PromotionsSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />}
         {activeSection === 'perfil' && (hasLoyalty || hasCoupons) && (
           <section className="mt-4 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5" aria-labelledby="online-menu-benefits-settings-title">
             <div className="flex items-start gap-3">
