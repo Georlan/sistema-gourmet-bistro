@@ -91,8 +91,6 @@ interface CardapioDigitalProps {
   onSessionExpired?: () => void;
 }
 
-// Kept off until WhatsApp status dispatch, revocation and cost limits are homologated.
-const CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED = import.meta.env?.VITE_CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED === "true";
 
 const PENDING_ORDER_STORAGE_KEY = "koma_pending_order_submission";
 const PENDING_ORDER_TTL_MS = 15 * 60 * 1000;
@@ -173,6 +171,7 @@ export default function CardapioDigital({
   const [canCorrectSubmission, setCanCorrectSubmission] = useState(true);
   const [orderingBlocked, setOrderingBlocked] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
+  const customerWhatsAppStatusEnabled = activeBrand.customerWhatsAppStatusEnabled === true;
   const [whatsappStatusOptIn, setWhatsappStatusOptIn] = useState(false);
   const [scheduledOrdersEnabled, setScheduledOrdersEnabled] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<"now" | "scheduled">("now");
@@ -383,7 +382,7 @@ export default function CardapioDigital({
       promocao_preco_esperado: cart.find(item => item.promotionId)?.product.price,
       cliente_nome: normalizedName,
       cliente_telefone: normalizedPhone,
-      whatsapp_status_opt_in: CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED && deliveryMethod !== "dine_in" && whatsappStatusOptIn,
+      whatsapp_status_opt_in: customerWhatsAppStatusEnabled && deliveryMethod !== "dine_in" && whatsappStatusOptIn,
       endereco_entrega: deliveryMethod === "delivery" ? normalizedAddress : "",
       address_snapshot: deliveryMethod === "delivery" ? addressSnapshot || undefined : undefined,
       taxa_entrega: deliveryMethod === "delivery" ? deliveryFee : 0,
@@ -683,7 +682,7 @@ export default function CardapioDigital({
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><MapPin className="h-3.5 w-3.5 text-emerald-500" /> {checkoutFulfillmentLabel(deliveryMethod)}</div><p className="mt-2 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? address : deliveryMethod === "dine_in" ? activeBrand.address || "Consumo no estabelecimento" : activeBrand.address || "Retirada no balcão do restaurante"}</p></div>
               </div>
 
-              {CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED && deliveryMethod !== "dine_in" && (
+              {customerWhatsAppStatusEnabled && deliveryMethod !== "dine_in" && (
                 <label htmlFor="checkout-whatsapp-status-opt-in" className="flex cursor-pointer items-start gap-3 rounded-2xl border border-koma-border bg-koma-card px-4 py-3.5">
                   <input
                     id="checkout-whatsapp-status-opt-in"

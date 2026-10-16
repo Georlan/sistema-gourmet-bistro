@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import "./cardapio/whatsappOptOutToken";
 import "./components/auth/passwordRecoveryToken";
 import "./components/auth/customerRegistrationToken";
 import React from "react";
@@ -50,7 +51,8 @@ function isPublicCommercialRoute(): boolean {
 
 function isOperationalUtilityRoute(): boolean {
   const pathname = window.location.pathname;
-  return pathname === "/recuperar-senha"
+  return pathname === "/whatsapp/avisos"
+    || pathname === "/recuperar-senha"
     || pathname === "/confirmar-cadastro"
     || pathname.startsWith("/ferramentas/simulador-impressao")
     || pathname.startsWith("/smartpos")
@@ -249,7 +251,9 @@ if (
 }
 
 const RootApp = React.lazy(
-  pathname === "/recuperar-senha"
+  pathname === "/whatsapp/avisos"
+    ? () => import("./cardapio/WhatsAppOptOutPage")
+    : pathname === "/recuperar-senha"
     ? () => import("./components/auth/PasswordResetPage")
     : pathname === "/confirmar-cadastro"
       ? () => import("./components/auth/CustomerRegistrationConfirmPage")

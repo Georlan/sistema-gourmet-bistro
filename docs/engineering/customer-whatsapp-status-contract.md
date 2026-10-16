@@ -1,3 +1,5 @@
+> Atualização: o contrato de roteamento cadastrado, descadastro e rollout controlado está em [whatsapp-registered-routing.md](./whatsapp-registered-routing.md). O texto abaixo registra a preparação anterior; não usar as antigas variáveis de destinatário para o novo sender.
+
 # WhatsApp para o cliente — opt-in simples por pedido, sem cadastro obrigatório
 
 ## Decisão de produto

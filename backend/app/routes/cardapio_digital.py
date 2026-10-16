@@ -19,6 +19,7 @@ from ..promotions import active_promotions, money, promotion_status
 from ..catalog_addons import effective_modifier_payloads_by_product
 from ..marmitaria_catalog import enabled as marmitaria_enabled
 from ..restaurant_profile_models import RestauranteOperationProfile
+from ..services.customer_whatsapp_dispatch import customer_notices_enabled
 from ..config import settings
 from ..database import (
     bind_session_to_tenant,
@@ -279,6 +280,7 @@ def _public_restaurant_payload(
         "documento_pix_obrigatorio": documento_pix_obrigatorio,
         "beneficios": beneficios or {"coupons": False, "loyalty": False, "cashback": False},
         "conta_cliente_obrigatoria": bool(settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS),
+        "avisos_whatsapp_disponiveis": customer_notices_enabled(restaurante.id, configuracao),
         "tipos_pedido_ativos": configuracao.tipos_pedido_ativos if configuracao else None,
         "delivery_ativo": configuracao.delivery_ativo is not False if configuracao else True,
         "cor_primaria": restaurante.cor_primaria,

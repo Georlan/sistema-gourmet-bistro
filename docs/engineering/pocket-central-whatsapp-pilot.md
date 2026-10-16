@@ -1,3 +1,5 @@
+> Atualização: o contrato de roteamento cadastrado, descadastro e rollout controlado está em [whatsapp-registered-routing.md](./whatsapp-registered-routing.md). O texto abaixo registra a preparação anterior; não usar as antigas variáveis de destinatário para o novo sender.
+
 # KÔMA Pocket — WhatsApp central (piloto controlado)
 
 ## Estado desta entrega

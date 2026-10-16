@@ -1047,6 +1047,10 @@ class ConfiguracaoRestaurante(Base):
     whatsapp_instance_name = Column(String(100), nullable=True)
     whatsapp_recipient_phone = Column(String(16), nullable=True)
     whatsapp_next_send_at = Column(DateTime(timezone=True), nullable=True)
+    # Durable monthly reservation accounting survives outbox retention/cleanup.
+    whatsapp_budget_month = Column(String(7), nullable=True)
+    whatsapp_budget_attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    whatsapp_budget_cost = Column(Numeric(14, 4), nullable=False, default=0, server_default="0")
     whatsapp_consecutive_failures = Column(Integer, default=0, nullable=False)
     whatsapp_circuit_open_until = Column(DateTime(timezone=True), nullable=True)
 
@@ -2028,6 +2032,23 @@ class NotificacaoWhatsApp(Base):
     raw_payload = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc), onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+
+class CentralWhatsAppSenderState(Base):
+    # Global technical state: intentionally shared by all released tenants.
+    # Contains neither phone numbers nor credentials or message content.
+    __tablename__ = "central_whatsapp_sender_state"
+    sender_key = Column(String(64), primary_key=True)
+    next_send_at = Column(DateTime(timezone=True), nullable=True)
+    circuit_open_until = Column(DateTime(timezone=True), nullable=True)
+    failures = Column(Integer, nullable=False, default=0, server_default="0")
+
+
+class WhatsAppContactOptOut(Base):
+    __tablename__ = "whatsapp_contact_opt_outs"
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), primary_key=True, default=lambda: current_restaurante_id.get())
+    phone_hash = Column(String(64), primary_key=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 
 class IntegrationOutbox(Base):

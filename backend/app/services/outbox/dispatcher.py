@@ -8,7 +8,7 @@ import logging
 import uuid
 from typing import Any, Optional
 import httpx
-from sqlalchemy import or_
+from sqlalchemy import and_, case, or_
 from sqlalchemy.orm import Session
 
 from ...database import tenant_session_scope
@@ -54,7 +54,7 @@ def recover_stale_outbox_claims(
     count = len(stale_events)
     if count > 0:
         for ev in stale_events:
-            if ev.event_name in {"koma.whatsapp.order_created", "koma.whatsapp.central_operator_order"} and ev.attempts > 0:
+            if ev.event_name in {"koma.whatsapp.order_created", "koma.whatsapp.central_operator_order", "koma.whatsapp.customer_status"} and ev.attempts > 0:
                 ev.status = "dead_letter"
                 ev.last_error = "Tentativa incerta após interrupção; reenvio automático bloqueado."
                 ev.locked_at = None
@@ -114,7 +114,15 @@ def claim_outbox_batch(
     if restaurant_id is not None:
         query = query.filter(IntegrationOutbox.restaurante_id == restaurant_id)
 
-    query = query.order_by(IntegrationOutbox.created_at.asc()).limit(batch_size)
+    # Keep the restaurant alert ahead of its optional customer notices.
+    customer_notice = IntegrationOutbox.event_name == "koma.whatsapp.customer_status"
+    priority = case(
+        (IntegrationOutbox.event_name == "koma.whatsapp.central_operator_order", 0),
+        (and_(customer_notice, IntegrationOutbox.payload["kind"].as_string() == "customer_cancelled"), 1),
+        (and_(customer_notice, IntegrationOutbox.payload["kind"].as_string() == "customer_received"), 3),
+        else_=2,
+    )
+    query = query.order_by(priority, IntegrationOutbox.created_at.asc()).limit(batch_size)
 
     try:
         events = query.with_for_update(skip_locked=True).all()
@@ -136,6 +144,7 @@ def claim_outbox_batch(
             "payload": ev.payload,
             "attempts": ev.attempts,
             "max_attempts": ev.max_attempts,
+            "created_at": ev.created_at,
             "locked_by": wid,
         })
         ev.status = "processing"
@@ -275,6 +284,11 @@ def dispatch_single_claimed_snapshot(
         with tenant_session_scope(db, int(rid)):
             return dispatch_operator_alert(db, snapshot)
 
+    if snapshot.get("event_name") == "koma.whatsapp.customer_status":
+        from ..customer_whatsapp_dispatch import dispatch_customer_notice
+        with tenant_session_scope(db, int(rid)):
+            return dispatch_customer_notice(db, snapshot)
+
     # Web Push é transporte interno do KÔMA: não deve cair no webhook configurado
     # pelo restaurante. FORCE RLS exige que o worker entre explicitamente no
     # tenant do evento antes de ler/decriptar as subscriptions.
@@ -394,6 +408,7 @@ def dispatch_single_outbox_event(
         "payload": event_record.payload,
         "attempts": event_record.attempts,
         "max_attempts": event_record.max_attempts,
+        "created_at": event_record.created_at,
         "locked_by": wid,
     }
     result = dispatch_single_claimed_snapshot(db, snapshot, client=client, timeout_seconds=timeout_seconds)
