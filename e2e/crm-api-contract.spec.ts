@@ -155,7 +155,7 @@ test('relationship keeps missing results distinct from zero and empty audiences 
 test('campaign responses cannot unlock edited drafts or carry late contact confirmations forward', async ({page}) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
-  await page.routeWebSocket(/\\/ws\\//, socket => socket.onMessage(() => {}));
+  await page.routeWebSocket(/[/]ws[/]/, socket => socket.onMessage(() => {}));
   await page.route('**/caixa/configuracoes', route => route.fulfill({json:{
     ...cashierConfig, plano:'premium', plano_efetivo:'premium',
     entitlements:{...cashierConfig.entitlements,loyalty:true,coupons:true},
@@ -191,7 +191,7 @@ test('campaign responses cannot unlock edited drafts or carry late contact confi
     if (await menu.isVisible()) await menu.click();
     else await page.getByRole('button',{name:'Abrir menu principal',exact:true}).click();
   }
-  await page.locator('.cashier-sidebar:visible').getByRole('button',{name:/^Relacionamento(?: \\d+)?$/}).click();
+  await page.locator('.cashier-sidebar:visible').getByRole('button',{name:/^Relacionamento(?: [0-9]+)?$/}).click();
   const opportunity = contract.summary.oportunidades.find((op:{elegiveis_count:number}) => op.elegiveis_count > 0);
   const opportunityCard = page.locator('article').filter({has:page.getByRole('heading',{name:opportunity.titulo,exact:true})});
   await opportunityCard.getByRole('button',{name:'Abrir público e iniciar ação',exact:true}).click();
