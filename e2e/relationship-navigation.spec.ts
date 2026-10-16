@@ -57,6 +57,13 @@ test('five destinations, benefit tabs, legacy restoration and module return shar
     await expectRelationshipSelected(page, target);
   }
 
+  await navigateRelationship(page, 'campanhas');
+  const campaignDraft = page.getByLabel('Identificação da campanha');
+  await campaignDraft.fill('Rascunho preservado entre áreas');
+  await navigateRelationship(page, 'clientes');
+  await navigateRelationship(page, 'campanhas');
+  await expect(campaignDraft).toHaveValue('Rascunho preservado entre áreas');
+
   await navigateRelationship(page, 'beneficios');
   await expect(page.getByRole('tablist', { name: 'Tipos de benefícios' })).toBeVisible();
   const fidelity = page.getByRole('tab', { name: 'Fidelidade', exact: true });
@@ -74,6 +81,9 @@ test('five destinations, benefit tabs, legacy restoration and module return shar
   await page.locator('.cashier-sidebar:visible').getByRole('button', { name: 'Vendas', exact: true }).click();
   await enterRelationship(page);
   await expectRelationshipSelected(page, 'resultados');
+  await navigateRelationship(page, 'campanhas');
+  await expect(campaignDraft).toHaveValue('Rascunho preservado entre áreas');
+  await navigateRelationship(page, 'resultados');
   await page.reload();
   await expectRelationshipSelected(page, 'resultados');
 
