@@ -7,6 +7,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
   const errors:string[]=[];
   let savedCampaign: Record<string,unknown> | undefined;
   let savedContact: Record<string,unknown> | undefined;
+  let campaignCreates=0;
   let loyaltyWrites=0;
   await page.route('**/fidelidade/config',route=>{if(route.request().method()!=='GET') loyaltyWrites++; return route.fulfill({json:{ativo:true,tipo_recompensa:'PONTOS',taxa_conversao:1,valor_ponto_em_dinheiro:0.05}});});
   let savedPreference: Record<string,unknown> | undefined;
@@ -24,7 +25,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
     savedPreference=route.request().postDataJSON();
     await route.fulfill({json:{ok:true}});
   });
-  await page.route('**/fidelidade/crm/campanhas', async route=>{savedCampaign=route.request().postDataJSON(); await route.fulfill({json:{id:'created-fixture'}});});
+  await page.route('**/fidelidade/crm/campanhas', async route=>{savedCampaign=route.request().postDataJSON(); campaignCreates++; await route.fulfill({json:{id:`created-fixture-${campaignCreates}`}});});
   await page.route('**/fidelidade/crm/contatos', async route=>{savedContact=route.request().postDataJSON(); await route.fulfill({json:{id:'contact-fixture'}});});
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
@@ -87,6 +88,26 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await expect.poll(()=>savedContact?.canal).toBe('WHATSAPP_MANUAL');
   await expect.poll(()=>savedContact?.acao_executada).toBe('CONTATO_MANUAL_CONFIRMADO');
   expect(savedContact?.mensagem_personalizada).toEqual(expect.any(String));
+  expect(savedContact?.campanha_id).toBe('created-fixture-1');
+
+  // Editing after a recorded contact must not attach new contacts to the old campaign.
+  await page.getByRole('button',{name:'1. Público',exact:true}).click();
+  await page.getByLabel('Identificação da campanha').fill('Nova campanha de retorno');
+  await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'2. Mensagem',exact:true}).click();
+  await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
+  await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
+  await expect.poll(()=>campaignCreates).toBe(2);
+  expect(savedCampaign?.nome).toBe('Nova campanha de retorno');
+  await expect(page.getByRole('button',{name:'Registrar contato manual',exact:true}).first()).toBeEnabled();
+  await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
+  await expect.poll(()=>savedContact?.campanha_id).toBe('created-fixture-2');
+
+  // Returning to the saved message without edits must not create a duplicate campaign.
+  await page.getByRole('button',{name:'2. Mensagem',exact:true}).click();
+  await page.getByRole('button',{name:'Voltar aos contatos da campanha salva',exact:true}).click();
+  await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
+  expect(campaignCreates).toBe(2);
   await page.locator('#clientes-subtab-clientes').click();
   await page.getByRole('button',{name:'Ver perfil',exact:true}).filter({visible:true}).first().click();
   const dialog=page.getByRole('dialog');
