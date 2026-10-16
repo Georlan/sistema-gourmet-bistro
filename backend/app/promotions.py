@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal, InvalidOperation
+from datetime import datetime, timezone
 from typing import Any
 
 from .domain.orders.validation import ValidatedOrderInput
@@ -23,12 +24,38 @@ def money(value: Any) -> Decimal:
         raise ValueError("Preço de promoção inválido.") from exc
 
 
+def promotion_status(promotion: dict, *, now: datetime | None = None) -> str:
+    """Elegibilidade calculada em leitura e checkout, sem job ou escrita periódica."""
+    now = now or datetime.now(timezone.utc)
+    try:
+        def timestamp(key: str):
+            value = promotion.get(key)
+            if not value:
+                return None
+            result = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if result.tzinfo is None:
+                raise ValueError("Data sem fuso horário")
+            return result
+        start, end = timestamp("inicio_em"), timestamp("fim_em")
+        if start and end and end <= start:
+            return "encerrada"
+        if end and now >= end:
+            return "encerrada"
+        if not promotion.get("ativo"):
+            return "pausada"
+        if start and now < start:
+            return "agendada"
+        return "ativa"
+    except (ValueError, TypeError, AttributeError):
+        return "encerrada"  # Configuração inválida nunca concede preço promocional.
+
+
 def active_promotions(config: Any, products: list[Any]) -> list[dict]:
     """Exibe somente ofertas ativas cujos componentes são vendáveis."""
     products_by_id = {str(product.id): product for product in products if product.ativo}
     visible: list[dict] = []
     for promotion in getattr(config, "promocoes", None) or []:
-        if not promotion.get("ativo"):
+        if promotion_status(promotion) != "ativa":
             continue
         parts = promotion.get("componentes") or []
         if len(parts) != 2 or any(
@@ -55,7 +82,7 @@ def validate_exclusive_promotion_parts(
     """Protege SKUs exclusivos inclusive de pedidos forjados e itens extras."""
     if not exclusive_ids:
         return
-    if promotion is None or not promotion.get("ativo"):
+    if promotion is None or promotion_status(promotion) != "ativa":
         raise OrderValidationError("Item exclusivo disponível somente dentro de uma promoção ativa.")
     selected: set[str] = set()
     for slot in promotion.get("componentes") or []:
@@ -81,7 +108,7 @@ def apply_promotion_to_validated(
     o servidor revalida a política ativa no tenant da transação.
     """
     parts = promotion.get("componentes") or []
-    if not promotion.get("ativo") or len(parts) != 2:
+    if promotion_status(promotion) != "ativa" or len(parts) != 2:
         raise OrderValidationError("Promoção indisponível.")
     items = list(validated.items)
     selected: list[int] = []

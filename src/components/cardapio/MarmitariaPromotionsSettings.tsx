@@ -1,3 +1,4 @@
+import { campaignLocalTime, campaignInstant } from '../../utils/promotionSchedule';
 import { useEffect, useState } from 'react';
 import { Gift, LoaderCircle, Plus, Save, ToggleLeft, ToggleRight } from 'lucide-react';
 
@@ -9,9 +10,13 @@ type Promotion = {
   preco: number;
   componentes: string[][];
   ativo: boolean;
+  inicio_em?: string | null;
+  fim_em?: string | null;
+  fuso_horario?: string;
+  status?: 'agendada' | 'ativa' | 'pausada' | 'encerrada';
 };
 
-const empty = () => ({ nome: '', descricao: '', preco: '', primeiro: '', segundo: '', ativo: false });
+const empty = () => ({ nome: '', descricao: '', preco: '', primeiro: '', segundo: '', ativo: false, inicio: '', fim: '', fuso: 'America/Fortaleza' });
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 export default function MarmitariaPromotionsSettings({
@@ -64,7 +69,7 @@ export default function MarmitariaPromotionsSettings({
       preco: kind === 'duas' ? '22.00' : '16.00',
       primeiro: g?.id ?? '',
       segundo: (kind === 'duas' ? m : drink)?.id ?? '',
-      ativo: false,
+      ativo: false, inicio: '', fim: '', fuso: 'America/Fortaleza',
     });
     setNotice(!g || !(kind === 'duas' ? m : drink)
       ? 'Confira os componentes: o produto precisa existir e estar ativo antes de publicar.'
@@ -124,6 +129,9 @@ export default function MarmitariaPromotionsSettings({
       primeiro: p.componentes?.[0]?.[0] || '',
       segundo: p.componentes?.[1]?.[0] || '',
       ativo: p.ativo,
+      inicio: campaignLocalTime(p.inicio_em, p.fuso_horario || 'America/Fortaleza'),
+      fim: campaignLocalTime(p.fim_em, p.fuso_horario || 'America/Fortaleza'),
+      fuso: p.fuso_horario || 'America/Fortaleza',
     });
   };
   const submit = async () => {
@@ -141,6 +149,8 @@ export default function MarmitariaPromotionsSettings({
         body: JSON.stringify({
           nome: form.nome, descricao: form.descricao, preco: Number(form.preco),
           componentes: [[form.primeiro], [form.segundo]], ativo: form.ativo,
+          inicio_em: campaignInstant(form.inicio, form.fuso),
+          fim_em: campaignInstant(form.fim, form.fuso), fuso_horario: form.fuso,
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -159,11 +169,13 @@ export default function MarmitariaPromotionsSettings({
       const response = await fetch(`${api}/${encodeURIComponent(p.id)}`, {
         method: 'PUT', headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome: p.nome, descricao: p.descricao || '', preco: p.preco,
-          componentes: p.componentes, ativo: !p.ativo }),
+          componentes: p.componentes, ativo: !p.ativo,
+          inicio_em: p.inicio_em || null, fim_em: p.fim_em || null,
+          fuso_horario: p.fuso_horario || 'America/Fortaleza'  }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Não foi possível alterar.');
-      setNotice(p.ativo ? 'Promoção pausada no cardápio.' : 'Promoção publicada no cardápio.');
+      setNotice(p.ativo ? 'Promoção pausada no cardápio.' : 'Oferta habilitada. A publicação respeita o período programado.');
       await load();
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Erro ao alterar.'); }
     finally { setSaving(false); }
@@ -272,9 +284,26 @@ export default function MarmitariaPromotionsSettings({
                 className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground" />
             </label>
             <label className="flex min-h-11 items-center gap-2 self-end text-xs font-bold text-koma-foreground">
-              <input type="checkbox" checked={form.ativo} onChange={e => setForm(f => ({ ...f, ativo: e.target.checked }))} /> Publicar agora
+              <input type="checkbox" checked={form.ativo} onChange={e => setForm(f => ({ ...f, ativo: e.target.checked }))} /> Habilitar oferta
             </label>
           </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-bold text-koma-muted">Início programado (opcional)
+              <input type="datetime-local" value={form.inicio} onChange={e => setForm(f => ({ ...f, inicio: e.target.value }))}
+                className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground" />
+            </label>
+            <label className="text-xs font-bold text-koma-muted">Encerramento (opcional)
+              <input type="datetime-local" value={form.fim} onChange={e => setForm(f => ({ ...f, fim: e.target.value }))}
+                className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground" />
+            </label>
+            <label className="text-xs font-bold text-koma-muted sm:col-span-2">Fuso horário da campanha
+              <select value={form.fuso} onChange={e => setForm(f => ({ ...f, fuso: e.target.value }))}
+                className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground">
+                {Array.from(new Set([form.fuso, 'America/Fortaleza', 'America/Sao_Paulo', 'America/Manaus', 'America/Rio_Branco'])).map(zone => <option key={zone} value={zone}>{zone}</option>)}
+              </select>
+            </label>
+          </div>
+          <p className="text-xs text-koma-muted">Sem início, a oferta habilitada entra no ar ao salvar. Sem encerramento, permanece válida até ser pausada. Ofertas encerradas ficam somente neste histórico.</p>
           {form.primeiro && form.segundo && (() => {
             const first = products.find(p => p.id === form.primeiro);
             const second = products.find(p => p.id === form.segundo);
@@ -310,16 +339,17 @@ export default function MarmitariaPromotionsSettings({
               <div className="flex items-start justify-between gap-2">
                 <h3 className="min-w-0 text-sm font-black text-koma-foreground">{p.nome}</h3>
                 <span className={p.ativo ? 'shrink-0 text-[11px] font-bold text-emerald-400' : 'shrink-0 text-[11px] font-bold text-koma-muted'}>
-                  {p.ativo ? 'Publicada' : 'Pausada'}
+                  {({ agendada: 'Agendada', ativa: 'Ativa', pausada: 'Pausada', encerrada: 'Encerrada' })[p.status || (p.ativo ? 'ativa' : 'pausada')]}
                 </span>
               </div>
+              {(p.inicio_em || p.fim_em) && <p className="text-xs text-koma-muted">{p.inicio_em ? 'De ' + campaignLocalTime(p.inicio_em, p.fuso_horario || 'America/Fortaleza').replace('T', ' ') : 'Sem início definido'}{p.fim_em ? ' até ' + campaignLocalTime(p.fim_em, p.fuso_horario || 'America/Fortaleza').replace('T', ' ') : ' · sem término'}</p>}
               {p.descricao && <p className="line-clamp-2 text-xs text-koma-muted">{p.descricao}</p>}
               <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-koma-border pt-3">
                 <strong className="font-mono text-base font-black text-emerald-400">{money(p.preco)}</strong>
                 <div className="flex gap-2">
                   <button type="button" disabled={saving} onClick={() => edit(p)}
                     className="min-h-10 rounded-xl border border-koma-border px-3 text-xs font-bold text-koma-foreground disabled:opacity-50">Editar</button>
-                  <button type="button" disabled={saving} onClick={() => void toggle(p)}
+                  <button type="button" disabled={saving || p.status === 'encerrada'} onClick={() => void toggle(p)}
                     aria-label={p.ativo ? 'Pausar ' + p.nome : 'Publicar ' + p.nome}
                     className="inline-flex min-h-10 items-center gap-1 rounded-xl border border-koma-border px-3 text-xs font-bold text-koma-foreground disabled:opacity-50">
                     {p.ativo ? <ToggleRight size={18} className="text-emerald-400" /> : <ToggleLeft size={18} />}
