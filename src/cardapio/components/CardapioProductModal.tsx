@@ -43,6 +43,14 @@ interface CardapioProductModalProps {
     notes: string,
   ) => void;
   restaurantId?: string | number;
+  // Reutiliza a montagem existente quando um pacote exige produtos em sequência.
+  compositionStep?: {
+    current: number;
+    total: number;
+    actionLabel: string;
+    stepLabel: string;
+    onBack?: () => void;
+  };
 }
 
 type QuantityModifier = ProductModifier & { minSelection?: number };
@@ -65,6 +73,7 @@ export default function CardapioProductModal({
   onClose,
   onAddToCart,
   restaurantId,
+  compositionStep,
 }: CardapioProductModalProps) {
   const groupRefs = useRef(new Map<string, HTMLElement>());
   const [quantity, setQuantity] = useState(1);
@@ -223,7 +232,7 @@ export default function CardapioProductModal({
     });
 
     if (unsatisfied.length > 0) {
-      setFeedback(`Confira as escolhas em ${unsatisfied.map((m) => m.title).join(", ")} antes de ${initialItem ? "salvar" : "adicionar"}.`);
+      setFeedback(`Confira as escolhas em ${unsatisfied.map((m) => m.title).join(", ")} antes de ${compositionStep ? "continuar" : initialItem ? "salvar" : "adicionar"}.`);
       setExpandedExtras(current => ({ ...current, [unsatisfied[0].id]: true }));
       const group = groupRefs.current.get(unsatisfied[0].id);
       group?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -231,8 +240,10 @@ export default function CardapioProductModal({
       return;
     }
 
-    onAddToCart(product, quantity, selectedOptions, notes.trim());
-    onClose();
+    onAddToCart(product, compositionStep ? 1 : quantity, selectedOptions, notes.trim());
+    // Um passo de promoção só coleta as escolhas: não fecha nem grava na sacola.
+    // Quem coordena o pacote controla o próximo passo e o envio atômico ao backend.
+    if (!compositionStep) onClose();
   };
 
   return (
@@ -322,6 +333,16 @@ export default function CardapioProductModal({
         )}
 
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 no-scrollbar">
+          {compositionStep && (
+            <div className="mb-3" aria-label={`Etapa ${compositionStep.current} de ${compositionStep.total}`}>
+              <p className="text-xs font-bold text-emerald-400">
+                Etapa {compositionStep.current} de {compositionStep.total} · {compositionStep.stepLabel}
+              </p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-koma-raised" aria-hidden="true">
+                <div className="h-full rounded-full bg-emerald-500" style={{ width: `${(compositionStep.current / compositionStep.total) * 100}%` }} />
+              </div>
+            </div>
+          )}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h2 className="font-display text-xl font-black tracking-tight text-koma-foreground sm:text-2xl" id="modal-product-name">{product.name}</h2>
@@ -329,7 +350,7 @@ export default function CardapioProductModal({
                 <p className="mt-2 text-sm leading-relaxed text-koma-muted">{product.description}</p>
               )}
             </div>
-            <strong className="shrink-0 text-lg font-black text-emerald-400">{formatPrice(product.price)}</strong>
+            <strong className="shrink-0 text-sm font-black text-emerald-400">{compositionStep ? "Incluso na promoção" : formatPrice(product.price)}</strong>
           </div>
 
           {product.marmitaria === true && allModifiers.some(modifier => (modifier.minSelection ?? 0) > 0) && (
@@ -494,6 +515,24 @@ export default function CardapioProductModal({
         </div>
 
         <div className="shrink-0 border-t border-koma-border bg-koma-panel p-4 sm:px-6">
+          {compositionStep ? (
+            <div className="flex items-center gap-2">
+              {compositionStep.onBack && (
+                <button type="button" onClick={compositionStep.onBack} className="min-h-12 rounded-xl border border-koma-border px-4 text-sm font-bold text-koma-foreground">
+                  Voltar
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleAdd}
+                className="min-h-12 min-w-0 flex-1 rounded-xl bg-emerald-500 px-4 text-sm font-black text-white hover:bg-emerald-600"
+                aria-label={compositionStep.actionLabel}
+              >
+                {compositionStep.actionLabel}
+              </button>
+            </div>
+          ) : (
+          <>
           <p className="mb-2 text-xs text-koma-muted">Quantidade de itens{quantity > 1 ? " · Mesma montagem para todas as unidades" : ""}</p>
           <div className="flex items-center gap-3">
           <div className="flex shrink-0 items-center rounded-xl border border-koma-border bg-koma-card p-1">
@@ -532,6 +571,8 @@ export default function CardapioProductModal({
             <strong className="text-sm font-black">{formatPrice(totalPrice)}</strong>
           </button>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>
