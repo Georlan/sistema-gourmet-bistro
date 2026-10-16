@@ -50,7 +50,7 @@ export default function MarmitariaPromotionsSettings({
   const template = (kind: 'duas' | 'bebida') => {
     const g = products.find((p) => p.tamanho?.toLowerCase() === 'g' && p.ativo);
     const m = products.find((p) => p.tamanho?.toLowerCase() === 'm' && p.ativo);
-    const drink = products.find((p) => /pitulinha|pituchulinha/i.test(p.nome) && p.ativo);
+    const drink = products.find((p) => /pitulinha|pithulinha|pituchulinha|pitchulinha/i.test(p.nome) && p.ativo);
     setEditing(null);
     setForm({
       nome: kind === 'duas' ? 'Quentinha G + Quentinha M' : 'Quentinha G + Pitulinha',
@@ -239,8 +239,12 @@ export default function MarmitariaPromotionsSettings({
         if (!first || !second) return null;
         const subtotal = Number(first.preco) + Number(second.preco);
         const savings = subtotal - Number(form.preco || subtotal);
+        const symbolic = first.somente_promocao || second.somente_promocao;
         return <p className="text-xs font-bold text-koma-muted">Valor de referência dos dois itens: {money(subtotal)}.
-          {form.preco && savings > 0 ? ` Economia configurada: ${money(savings)}.` : ' Informe o preço final desejado para o combo.'}
+          {form.preco && savings > 0 ? ` Economia configurada: ${money(savings)}.`
+            : form.preco && savings < 0 && symbolic
+              ? ' Um componente é exclusivo e pode ter preço simbólico; vale o preço configurado para o conjunto.'
+              : form.preco ? ' Valor do conjunto conferido.' : ' Informe o preço final desejado para o combo.'}
         </p>;
       })()}
       <p className="text-xs leading-relaxed text-koma-muted">O preço da oferta é confirmado pelo servidor. Adicionais pagos e entrega são cobrados à parte. Ao criar, a oferta pode permanecer pausada até a data desejada.</p>
