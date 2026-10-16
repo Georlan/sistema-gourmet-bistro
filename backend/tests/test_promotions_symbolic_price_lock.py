@@ -58,7 +58,7 @@ def test_preco_dezesseis_admite_g14_mais_pitulinha_exclusiva_de_um_real():
     assert saved["componentes"] == [["g"], ["pitulinha"]]
 
 
-def test_preco_maior_exige_slot_inteiramente_exclusivo():
+def test_preco_maior_pode_ser_escolhido_sem_slot_exclusivo():
     db = _fake_db(
         SimpleNamespace(id="g", preco=14, ativo=True, somente_promocao=False),
         SimpleNamespace(id="m", preco=1, ativo=True, somente_promocao=False),
@@ -69,12 +69,10 @@ def test_preco_maior_exige_slot_inteiramente_exclusivo():
         componentes=[["g"], ["m"]],
         ativo=False,
     )
-    with pytest.raises(HTTPException) as exc:
-        _validate_promotion_input(db, 6, offer)
-    assert exc.value.status_code == 422
+    assert _validate_promotion_input(db, 6, offer)["preco"] == 16
 
 
-def test_opcao_mista_de_bebida_nao_pode_contornar_preco_avulso():
+def test_opcao_mista_de_bebida_admite_preco_independente():
     db = _fake_db(
         SimpleNamespace(id="g", preco=14, ativo=True, somente_promocao=False),
         SimpleNamespace(id="pitulinha", preco=1, ativo=True, somente_promocao=True),
@@ -86,6 +84,4 @@ def test_opcao_mista_de_bebida_nao_pode_contornar_preco_avulso():
         componentes=[["g"], ["pitulinha", "cajuina"]],
         ativo=False,
     )
-    with pytest.raises(HTTPException) as exc:
-        _validate_promotion_input(db, 6, offer)
-    assert exc.value.status_code == 422
+    assert _validate_promotion_input(db, 6, offer)["preco"] == 16

@@ -346,6 +346,8 @@ export default function CardapioPage() {
           .filter(p => p && Array.isArray(p.componentes) && p.componentes.length === 2)
           .map(p => ({
             id: String(p.id), nome: String(p.nome), descricao: String(p.descricao || ''),
+            inicio_em: typeof p.inicio_em === 'string' ? p.inicio_em : null,
+            fim_em: typeof p.fim_em === 'string' ? p.fim_em : null,
             preco: Number(p.preco), componentes: p.componentes.map((ids: unknown) =>
               Array.isArray(ids) ? ids.map(String) : []),
           })) : [],

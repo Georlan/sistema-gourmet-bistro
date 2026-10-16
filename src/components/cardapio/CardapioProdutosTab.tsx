@@ -24,7 +24,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { clsx } from 'clsx';
 import type { Product } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
-import MarmitariaPromotionsSettings from './MarmitariaPromotionsSettings';
+import PromotionsSettings from './PromotionsSettings';
 import { smartSearchMatch } from '../../domain';
 
 interface CardapioProdutosTabProps {
@@ -369,7 +369,7 @@ export function CardapioProdutosTab({
       </section>
 
       {isPromotionsView && promotionsConfig ? (
-        <MarmitariaPromotionsSettings
+        <PromotionsSettings
           apiBaseUrl={promotionsConfig.apiBaseUrl}
           authHeaders={promotionsConfig.authHeaders}
           onPromotionsLoaded={setPromotionCount}

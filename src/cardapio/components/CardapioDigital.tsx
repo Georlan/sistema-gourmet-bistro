@@ -375,6 +375,7 @@ export default function CardapioDigital({
       restaurante_id: targetRestauranteId,
       itens: cleanedItems,
       promocao_id: cart.find(item => item.promotionId)?.promotionId || undefined,
+      promocao_preco_esperado: cart.find(item => item.promotionId)?.product.price,
       cliente_nome: normalizedName,
       cliente_telefone: normalizedPhone,
       whatsapp_status_opt_in: CUSTOMER_WHATSAPP_STATUS_OPT_IN_ENABLED && deliveryMethod !== "dine_in" && whatsappStatusOptIn,

@@ -516,8 +516,6 @@ def create_produto(
 
     if marmitaria_enabled(db, rest_id) and (size_category(categoria) or size_key(produto_data.nome) in {'p', 'm', 'g'}):
         raise HTTPException(409, "Cadastre ou edite este tamanho em Marmitas, junto com o preço e as escolhas.")
-    if produto_data.somente_promocao and not marmitaria_enabled(db, rest_id):
-        raise HTTPException(409, "Itens exclusivos de promoção estão disponíveis somente para marmitarias.")
 
     existente = db.query(Produto).filter(
         Produto.restaurante_id == rest_id,
@@ -597,7 +595,7 @@ def update_produto(
         category_to_check = categoria if 'categoria_id' in data else db.query(Categoria).filter_by(
             restaurante_id=rest_id, id=db_produto.categoria_id,
         ).first()
-        if not marmitaria_enabled(db, rest_id) or db_produto.marmitaria_tamanho or size_category(category_to_check):
+        if marmitaria_enabled(db, rest_id) and (db_produto.marmitaria_tamanho or size_category(category_to_check)):
             raise HTTPException(409, "Somente produtos comuns da marmitaria podem ser exclusivos de promoção.")
     if data.get('ativo'):
         ensure_marmitas_available(db, rest_id, [db_produto])

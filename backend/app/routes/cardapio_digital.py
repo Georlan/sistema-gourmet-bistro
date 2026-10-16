@@ -418,7 +418,7 @@ def obter_cardapio_publico(
 
         # Os produtos exclusivos só são disponibilizados às etapas de ofertas ativas.
         products_regular = [product for product in produtos if not product.somente_promocao]
-        active_offers = active_promotions(configuracao, produtos) if is_marmitaria else []
+        active_offers = active_promotions(configuracao, produtos)
         referenced_special_ids = {
             str(pid) for offer in active_offers for slot in offer['componentes'] for pid in slot
         }
@@ -875,8 +875,6 @@ def _promotion_authorized_config(
     db: Session, *, for_update: bool = True,
 ) -> tuple[int, ConfiguracaoRestaurante]:
     rest_id = require_tenant_id()
-    if not marmitaria_enabled(db, rest_id):
-        raise HTTPException(status_code=403, detail="Promoções disponíveis inicialmente para marmitarias.")
     # ConfiguracaoRestaurante.restaurante usa lazy='joined' por padrão.
     # FOR UPDATE sem OF em LEFT OUTER JOIN falha no PostgreSQL (NotSupportedError).
     # A leitura nunca precisa bloquear; somente a escrita bloqueia a linha do tenant.
@@ -919,19 +917,6 @@ def _validate_promotion_input(db: Session, rest_id: int, offer: PromotionConfigI
     if len(products) != len(seen):
         raise HTTPException(status_code=422, detail="Todos os produtos devem existir neste restaurante.")
     by_id = {str(product.id): product for product in products}
-    # Normalmente o conjunto não deve superar a soma avulsa. Produtos
-    # exclusivos (como Pitulinha de referência R$ 1) podem compor um combo com
-    # preço próprio: um slot inteiro de itens exclusivos é obrigatório para
-    # evitar combinações avulsas com valores que o checkout recusaria.
-    minimum_base = sum(min(Decimal(str(by_id[pid].preco)) for pid in ids) for ids in cleaned)
-    has_exclusive_slot = any(
-        all(by_id[pid].somente_promocao for pid in ids) for ids in cleaned
-    )
-    if money(offer.preco) > money(minimum_base) and not has_exclusive_slot:
-        raise HTTPException(
-            status_code=422,
-            detail="Preço acima da soma avulsa exige ao menos uma etapa exclusiva de promoção.",
-        )
     if offer.ativo and any(not product.ativo for product in products):
         raise HTTPException(status_code=409, detail="Ative os produtos componentes antes de publicar esta oferta.")
     return {
@@ -954,6 +939,7 @@ def listar_promocoes_admin(
     rest_id, config = _promotion_authorized_config(db, for_update=False)
     products = db.query(Produto).filter(Produto.restaurante_id == rest_id).all()
     return {
+        "perfil_marmitaria": marmitaria_enabled(db, rest_id),
         "promocoes": [{**entry, "status": promotion_status(entry)} for entry in (config.promocoes or [])],
         "produtos": [
             {"id": p.id, "nome": p.nome, "preco": float(p.preco), "ativo": bool(p.ativo),

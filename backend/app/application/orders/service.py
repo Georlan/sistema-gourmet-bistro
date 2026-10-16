@@ -8,6 +8,7 @@ Garante a separação conceitual canônica entre Comanda (Conta) e Order/Lancame
 from __future__ import annotations
 
 import datetime
+from dataclasses import replace
 from decimal import Decimal
 import logging
 from typing import Any, Optional, Sequence
@@ -449,7 +450,12 @@ class OrderApplicationService:
             usar_cashback=cmd.usar_cashback or cmd.cashback_discount > Decimal("0.00"),
         )
 
-        validated_input = OrderValidationService.validate(val_context)
+        # O mínimo depende do preço efetivo da oferta, que pode ser maior ou
+        # menor que a soma avulsa. Validar componentes agora e o mínimo depois.
+        validated_input = OrderValidationService.validate(
+            replace(val_context, minimum_delivery_subtotal=Decimal("0.00"))
+            if cmd.promotion_id else val_context
+        )
         # O servidor impede venda avulsa mesmo via payload manual ou outro canal.
         exclusive_ids = {
             str(p.id) for p in db.query(Produto).filter(
@@ -476,6 +482,7 @@ class OrderApplicationService:
             validate_exclusive_promotion_parts(exclusive_ids, promotion, validated_input)
             validated_input = apply_promotion_to_validated(
                 validated_input, promotion, exclusive_ids=exclusive_ids,
+                expected_price=cmd.expected_promotion_price,
             )
 
         # 3. Cotação Financeira Pura

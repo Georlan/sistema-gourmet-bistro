@@ -122,6 +122,7 @@ def build_order_intent_canonical_dict(
     usar_cashback: bool = False,
     scheduled_for: Optional[datetime.datetime | str] = None,
     promocao_id: Optional[str] = None,
+    promocao_preco_esperado: Optional[object] = None,
 ) -> dict[str, Any]:
     """Monta a representação canônica da intenção do pedido público."""
     normalized_modalidade = str(tipo_pedido or "").strip().lower()
@@ -194,6 +195,8 @@ def build_order_intent_canonical_dict(
         canonical["address_snapshot"] = clean_snapshot
     if promocao_id:
         canonical["promocao_id"] = str(promocao_id).strip()
+    if promocao_id and promocao_preco_esperado is not None:
+        canonical["promocao_preco_esperado"] = _normalize_monetary_amount(promocao_preco_esperado)
     return canonical
 
 
@@ -215,6 +218,7 @@ def compute_order_intent_fingerprint(
     usar_cashback: bool = False,
     scheduled_for: Optional[datetime.datetime | str] = None,
     promocao_id: Optional[str] = None,
+    promocao_preco_esperado: Optional[object] = None,
     version: int = CURRENT_FINGERPRINT_VERSION,
 ) -> OrderIntentFingerprint:
     """Calcula o fingerprint SHA-256 determinístico para uma intenção de pedido."""
@@ -235,6 +239,7 @@ def compute_order_intent_fingerprint(
         usar_cashback=usar_cashback,
         scheduled_for=scheduled_for,
         promocao_id=promocao_id,
+        promocao_preco_esperado=promocao_preco_esperado,
     )
     canonical_json = json.dumps(
         canonical_dict,
@@ -279,5 +284,6 @@ def compute_fingerprint_for_public_payload(
         usar_cashback=payload.usar_cashback,
         scheduled_for=target_schedule,
         promocao_id=getattr(payload, "promocao_id", None),
+        promocao_preco_esperado=getattr(payload, "promocao_preco_esperado", None),
         version=version,
     )
