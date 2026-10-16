@@ -1,5 +1,5 @@
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -117,10 +117,16 @@ export function CustomerCampaignsWorkspace({
   const [recordedCustomerIds, setRecordedCustomerIds] = useState<Record<string, string>>({});
   const [openedWhatsAppIds, setOpenedWhatsAppIds] = useState<Record<string, boolean>>({});
   const [awaitingInitialCustomers, setAwaitingInitialCustomers] = useState(false);
+  // Refs are synchronous guards: React state alone does not prevent double clicks
+  // or late responses from an older draft from unlocking the current contact queue.
+  const draftGenerationRef = useRef(0);
+  const savingCampaignRef = useRef(false);
+  const pendingContactIdsRef = useRef(new Set<string>());
 
   // A campanha já persistida não pode receber contatos de um rascunho alterado.
   // Editar gera um NOVO registro quando o operador salvar; não atualiza o histórico.
   const invalidateSavedCampaign = () => {
+    draftGenerationRef.current += 1;
     setActiveCampaignId(null);
     setRecordedCustomerIds({});
     setOpenedWhatsAppIds({});
@@ -284,6 +290,7 @@ export function CustomerCampaignsWorkspace({
   };
 
   const handleRegisterCampaign = async () => {
+    if (savingCampaignRef.current) return;
     if (activeCampaignId) {
       setStep(3);
       return;
@@ -300,6 +307,8 @@ export function CustomerCampaignsWorkspace({
       showToast('Selecione um cupom ativo ou crie um rascunho antes de salvar.', 'error');
       return;
     }
+    const draftGeneration = draftGenerationRef.current;
+    savingCampaignRef.current = true;
     try {
       setSavingCampaign(true);
       const res = await fetch(`${apiBaseUrl}/fidelidade/crm/campanhas`, {
@@ -320,6 +329,13 @@ export function CustomerCampaignsWorkspace({
         throw new Error(err.detail || 'Não foi possível registrar a campanha.');
       }
       const data = await res.json();
+      if (draftGenerationRef.current !== draftGeneration) {
+        showToast(
+          'A versão anterior da campanha foi salva no histórico, mas você alterou o rascunho durante o salvamento. Salve a versão atual antes de registrar contatos.',
+          'info',
+        );
+        return;
+      }
       setActiveCampaignId(data.id);
       setRecordedCustomerIds({});
       setOpenedWhatsAppIds({});
@@ -328,6 +344,7 @@ export function CustomerCampaignsWorkspace({
     } catch (err: any) {
       showToast(err.message || 'Erro ao salvar campanha.', 'error');
     } finally {
+      savingCampaignRef.current = false;
       setSavingCampaign(false);
     }
   };
@@ -352,10 +369,14 @@ export function CustomerCampaignsWorkspace({
   };
 
   const handleConfirmManualContact = async (customer: LoyaltyCustomer, renderedMessage: string) => {
-    if (!activeCampaignId) {
+    const campaignId = activeCampaignId;
+    if (!campaignId) {
       showToast('Salve a campanha antes de registrar contatos.', 'error');
       return;
     }
+    if (pendingContactIdsRef.current.has(customer.id) || recordedCustomerIds[customer.id]) return;
+    const draftGeneration = draftGenerationRef.current;
+    pendingContactIdsRef.current.add(customer.id);
     try {
       setRecordingByCustomer((prev) => ({ ...prev, [customer.id]: true }));
       const beneficioResumo =
@@ -370,7 +391,7 @@ export function CustomerCampaignsWorkspace({
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cliente_id: customer.id,
-          campanha_id: activeCampaignId,
+          campanha_id: campaignId,
           objetivo,
           canal: 'WHATSAPP_MANUAL',
           abordagem_tipo: tipoAbordagem,
@@ -387,12 +408,17 @@ export function CustomerCampaignsWorkspace({
         throw new Error(err.detail || 'Não foi possível registrar o contato.');
       }
       const saved = await res.json();
-      setRecordedCustomerIds((prev) => ({ ...prev, [customer.id]: saved.id }));
-      showToast(`Contato manual com ${customer.cliente} registrado no histórico!`);
+      if (draftGenerationRef.current === draftGeneration) {
+        setRecordedCustomerIds((prev) => ({ ...prev, [customer.id]: saved.id }));
+        showToast(`Contato manual com ${customer.cliente} registrado no histórico!`);
+      } else {
+        showToast('Contato registrado na campanha anterior; o novo rascunho continua sem esse registro.', 'info');
+      }
       await onRefreshCustomers();
     } catch (err: any) {
       showToast(err.message || 'Falha ao registrar contato.', 'error');
     } finally {
+      pendingContactIdsRef.current.delete(customer.id);
       setRecordingByCustomer((prev) => ({ ...prev, [customer.id]: false }));
     }
   };
