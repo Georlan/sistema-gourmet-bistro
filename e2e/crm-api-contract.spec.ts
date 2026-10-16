@@ -7,6 +7,9 @@ test('all CRM workspaces render backend-generated responses without losing the o
   const errors:string[]=[];
   let savedCampaign: Record<string,unknown> | undefined;
   let savedContact: Record<string,unknown> | undefined;
+  let campaignCreates=0;
+  let loyaltyWrites=0;
+  await page.route('**/fidelidade/config',route=>{if(route.request().method()!=='GET') loyaltyWrites++; return route.fulfill({json:{ativo:true,tipo_recompensa:'PONTOS',taxa_conversao:1,valor_ponto_em_dinheiro:0.05}});});
   let savedPreference: Record<string,unknown> | undefined;
   page.on('pageerror',error=>errors.push(error.message));
   await mockCashierBackend(page);
@@ -22,7 +25,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
     savedPreference=route.request().postDataJSON();
     await route.fulfill({json:{ok:true}});
   });
-  await page.route('**/fidelidade/crm/campanhas', async route=>{savedCampaign=route.request().postDataJSON(); await route.fulfill({json:{id:'created-fixture'}});});
+  await page.route('**/fidelidade/crm/campanhas', async route=>{savedCampaign=route.request().postDataJSON(); campaignCreates++; await route.fulfill({json:{id:`created-fixture-${campaignCreates}`}});});
   await page.route('**/fidelidade/crm/contatos', async route=>{savedContact=route.request().postDataJSON(); await route.fulfill({json:{id:'contact-fixture'}});});
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
@@ -36,6 +39,24 @@ test('all CRM workspaces render backend-generated responses without losing the o
     const button=page.locator(`#clientes-subtab-${subTab}`);
     await button.click();
     await expect(button).toHaveAttribute('aria-current','page');
+    if(subTab === 'fidelidade'){
+      const simulation=page.getByRole('region',{name:'Simulação da fidelidade'});
+      await expect(simulation).toContainText('R$ 5,00');
+      await page.getByLabel('Margem de contribuição na simulação').fill('30');
+      await expect(simulation).toContainText('R$ 25,00');
+      await page.getByLabel('Margem de contribuição na simulação').fill('2');
+      await expect(simulation.getByRole('alert')).toContainText('supera a contribuição');
+      await page.getByLabel('Margem de contribuição na simulação').fill('30');
+      await page.screenshot({path:testInfo.outputPath(`loyalty-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
+      await page.getByRole('region',{name:'Impacto na contribuição por pedido'}).scrollIntoViewIfNeeded();
+      await expect(page.getByRole('region',{name:'Impacto na contribuição por pedido'}).getByText(/^R\$\s0,00$/)).toBeVisible();
+      await page.screenshot({path:testInfo.outputPath(`loyalty-impact-${testInfo.project.name}.png`),animations:'disabled'});
+      await page.getByLabel('Ativar programa de fidelidade').uncheck({force:true});
+      await expect(simulation).toContainText('Programa pausado');
+      await expect(simulation).toContainText('R$ 0,00');
+      await page.getByLabel('Ativar programa de fidelidade').check({force:true});
+      expect(loyaltyWrites).toBe(0);
+    }
     await expect(page.getByRole('tablist',{name:'Áreas do CRM'})).toHaveCount(0);
     await expect(page.getByRole('alert').filter({hasText:'Não foi possível abrir'})).toHaveCount(0);
   }
@@ -54,13 +75,39 @@ test('all CRM workspaces render backend-generated responses without losing the o
   const audienceCustomer=contract.customers.find((c:{id:string})=>opportunity.elegiveis_cliente_ids.includes(c.id));
   await expect(opportunityCard).toContainText(audienceCustomer.nome.split(' ')[0]);
   await opportunityCard.getByRole('button',{name:'Abrir público e iniciar ação',exact:true}).click();
+  await expect(page.getByLabel('Modelo de mensagem da campanha')).toBeHidden();
+  await page.getByRole('button',{name:'Continuar para mensagem',exact:true}).click();
+  await expect(page.getByLabel('Modelo de mensagem da campanha')).toBeVisible();
+  await page.screenshot({path:testInfo.outputPath(`campaign-message-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
   await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
+  await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
+  await expect(page.getByRole('region',{name:'Contatos nesta sessão'})).toBeVisible();
   await expect.poll(()=>savedCampaign?.abordagem_tipo).toBe('SEM_DESCONTO');
   await expect.poll(()=>savedCampaign?.segmento_filtro).toBe(opportunity.id);
   await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
   await expect.poll(()=>savedContact?.canal).toBe('WHATSAPP_MANUAL');
   await expect.poll(()=>savedContact?.acao_executada).toBe('CONTATO_MANUAL_CONFIRMADO');
   expect(savedContact?.mensagem_personalizada).toEqual(expect.any(String));
+  expect(savedContact?.campanha_id).toBe('created-fixture-1');
+
+  // Editing after a recorded contact must not attach new contacts to the old campaign.
+  await page.getByRole('button',{name:'1. Público',exact:true}).click();
+  await page.getByLabel('Identificação da campanha').fill('Nova campanha de retorno');
+  await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'2. Mensagem',exact:true}).click();
+  await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
+  await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
+  await expect.poll(()=>campaignCreates).toBe(2);
+  expect(savedCampaign?.nome).toBe('Nova campanha de retorno');
+  await expect(page.getByRole('button',{name:'Registrar contato manual',exact:true}).first()).toBeEnabled();
+  await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
+  await expect.poll(()=>savedContact?.campanha_id).toBe('created-fixture-2');
+
+  // Returning to the saved message without edits must not create a duplicate campaign.
+  await page.getByRole('button',{name:'2. Mensagem',exact:true}).click();
+  await page.getByRole('button',{name:'Voltar aos contatos da campanha salva',exact:true}).click();
+  await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
+  expect(campaignCreates).toBe(2);
   await page.locator('#clientes-subtab-clientes').click();
   await page.getByRole('button',{name:'Ver perfil',exact:true}).filter({visible:true}).first().click();
   const dialog=page.getByRole('dialog');

@@ -21,6 +21,7 @@ import {
   matchesCustomerSegment,
   type CustomerSegment,
 } from '../../../domain/customerCrm';
+import { CrmMetricChart } from './CrmMetricChart';
 import type { CupomData } from '../../clientes/CuponsTab';
 import type { CashierNotice, LoyaltyCustomer } from '../cashierContracts';
 
@@ -85,6 +86,7 @@ export function CustomerCampaignsWorkspace({
   onOpenResults,
   onInspectCustomer,
 }: Props) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [objetivo, setObjetivo] = useState<string>(draftSeed?.objetivo || 'SECOND_PURCHASE');
   const [nomeCampanha, setNomeCampanha] = useState<string>(
     draftSeed?.titulo || 'Ação comercial: Incentivar a 2ª compra',
@@ -114,6 +116,15 @@ export function CustomerCampaignsWorkspace({
   const [recordingByCustomer, setRecordingByCustomer] = useState<Record<string, boolean>>({});
   const [recordedCustomerIds, setRecordedCustomerIds] = useState<Record<string, string>>({});
   const [openedWhatsAppIds, setOpenedWhatsAppIds] = useState<Record<string, boolean>>({});
+  const [awaitingInitialCustomers, setAwaitingInitialCustomers] = useState(false);
+
+  // A campanha já persistida não pode receber contatos de um rascunho alterado.
+  // Editar gera um NOVO registro quando o operador salvar; não atualiza o histórico.
+  const invalidateSavedCampaign = () => {
+    setActiveCampaignId(null);
+    setRecordedCustomerIds({});
+    setOpenedWhatsAppIds({});
+  };
 
   useEffect(() => {
     if (!hasCoupons) return;
@@ -154,14 +165,29 @@ export function CustomerCampaignsWorkspace({
     setTemplateMensagem(nextApproach === 'SEM_DESCONTO' ? tplGroup.semDesconto : tplGroup.comBeneficio);
     const objLabel = OBJECTIVES.find((o) => o.id === nextObj)?.label || 'Ação comercial';
     setNomeCampanha(draftSeed?.titulo || `Ação: ${objLabel}`);
-    setActiveCampaignId(null);
+    setSelectedCupomId(draftSeed?.cupomId || '');
+    setStep(1);
+    invalidateSavedCampaign();
 
     if (draftSeed?.customerIds && draftSeed.customerIds.length > 0) {
       setSelectedCustomerIds(draftSeed.customerIds);
-    } else {
+      setAwaitingInitialCustomers(false);
+    } else if (customers.length > 0) {
       setSelectedCustomerIds(computeEligibleAudienceIds(nextObj));
+      setAwaitingInitialCustomers(false);
+    } else {
+      setSelectedCustomerIds([]);
+      setAwaitingInitialCustomers(true);
     }
-  }, [draftSeed, customers.length]);
+  }, [draftSeed]);
+
+  // Carrega o público automático uma única vez se os clientes chegarem depois
+  // da primeira renderização; refresh posterior não apaga contatos/edições.
+  useEffect(() => {
+    if (!awaitingInitialCustomers || customers.length === 0) return;
+    setSelectedCustomerIds(computeEligibleAudienceIds(objetivo));
+    setAwaitingInitialCustomers(false);
+  }, [awaitingInitialCustomers, customers.length, objetivo]);
 
   const handleObjectiveChange = (nextObj: string) => {
     setObjetivo(nextObj);
@@ -172,14 +198,14 @@ export function CustomerCampaignsWorkspace({
     const objLabel = OBJECTIVES.find((o) => o.id === nextObj)?.label || 'Ação comercial';
     setNomeCampanha(`Ação: ${objLabel}`);
     setSelectedCustomerIds(computeEligibleAudienceIds(nextObj));
-    setActiveCampaignId(null);
+    invalidateSavedCampaign();
   };
 
   const handleApproachChange = (nextApproach: 'SEM_DESCONTO' | 'FIDELIDADE' | 'CUPOM') => {
     setTipoAbordagem(nextApproach);
     const tplGroup = DEFAULT_CRM_TEMPLATES[objetivo] || DEFAULT_CRM_TEMPLATES.SECOND_PURCHASE;
     setTemplateMensagem(nextApproach === 'SEM_DESCONTO' ? tplGroup.semDesconto : tplGroup.comBeneficio);
-    setActiveCampaignId(null);
+    invalidateSavedCampaign();
   };
 
   const activeCoupons = useMemo(() => {
@@ -247,6 +273,7 @@ export function CustomerCampaignsWorkspace({
       const created = await res.json();
       setCupons((prev) => [created, ...prev]);
       setSelectedCupomId(String(created.id));
+      invalidateSavedCampaign();
       setShowQuickCouponDraft(false);
       showToast(`Cupom ${created.codigo} criado e vinculado à campanha!`);
     } catch (err: any) {
@@ -257,11 +284,19 @@ export function CustomerCampaignsWorkspace({
   };
 
   const handleRegisterCampaign = async () => {
+    if (activeCampaignId) {
+      setStep(3);
+      return;
+    }
+    if (selectedCustomers.length === 0) {
+      showToast('Selecione pelo menos um cliente antes de salvar.', 'error');
+      return;
+    }
     if (!nomeCampanha.trim()) {
       showToast('Informe um nome para identificar a campanha.', 'error');
       return;
     }
-    if (tipoAbordagem === 'CUPOM' && !selectedCupomId) {
+    if (tipoAbordagem === 'CUPOM' && !selectedCoupon) {
       showToast('Selecione um cupom ativo ou crie um rascunho antes de salvar.', 'error');
       return;
     }
@@ -286,6 +321,9 @@ export function CustomerCampaignsWorkspace({
       }
       const data = await res.json();
       setActiveCampaignId(data.id);
+      setRecordedCustomerIds({});
+      setOpenedWhatsAppIds({});
+      setStep(3);
       showToast('Campanha registrada! Use a fila abaixo para copiar ou abrir o WhatsApp individual e registrar cada ação.');
     } catch (err: any) {
       showToast(err.message || 'Erro ao salvar campanha.', 'error');
@@ -314,6 +352,10 @@ export function CustomerCampaignsWorkspace({
   };
 
   const handleConfirmManualContact = async (customer: LoyaltyCustomer, renderedMessage: string) => {
+    if (!activeCampaignId) {
+      showToast('Salve a campanha antes de registrar contatos.', 'error');
+      return;
+    }
     try {
       setRecordingByCustomer((prev) => ({ ...prev, [customer.id]: true }));
       const beneficioResumo =
@@ -356,6 +398,7 @@ export function CustomerCampaignsWorkspace({
   };
 
   const toggleCustomerSelection = (id: string) => {
+    invalidateSavedCampaign();
     setSelectedCustomerIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
@@ -384,38 +427,29 @@ export function CustomerCampaignsWorkspace({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+      <nav aria-label="Etapas da campanha" className="grid grid-cols-3 gap-2">
+        {([{id:1,label:'Público'},{id:2,label:'Mensagem'},{id:3,label:'Contatos'}] as const).map(item => (
+          <button key={item.id} type="button" aria-current={step === item.id ? 'step' : undefined}
+            disabled={item.id > 1 && selectedCustomers.length === 0 || item.id === 3 && !activeCampaignId}
+            onClick={() => setStep(item.id)}
+            className={`min-h-11 rounded-xl border px-2 py-3 text-sm font-bold disabled:opacity-40 ${step === item.id ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-koma-border text-koma-muted'}`}>
+            {item.id}. {item.label}
+          </button>
+        ))}
+      </nav>
+      <p className="text-sm text-koma-muted">{selectedCustomers.length} clientes selecionados · {tipoAbordagem === 'SEM_DESCONTO' ? 'Sem novo desconto' : tipoAbordagem === 'CUPOM' ? 'Com cupom' : 'Usando saldo de fidelidade'}</p>
+      <div className="space-y-4">
         {/* Coluna Esquerda: Configuração da Ação (Etapas 1 a 4) */}
-        <div className="space-y-4 lg:col-span-6">
+        <div className="space-y-4">
           {/* Etapa 1: Objetivo */}
-          <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
+          <section hidden={step !== 1} className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-koma-foreground">
-              1. Objetivo da abordagem
+              Quem você quer trazer de volta?
             </h4>
-            <div className="grid grid-cols-1 gap-2">
-              {OBJECTIVES.map((obj) => (
-                <button
-                  key={obj.id}
-                  type="button"
-                  onClick={() => handleObjectiveChange(obj.id)}
-                  className={`rounded-xl border p-3 text-left transition-all ${
-                    objetivo === obj.id
-                      ? 'border-emerald-500 bg-emerald-500/10 text-koma-foreground'
-                      : 'border-koma-border bg-koma-card text-koma-muted hover:border-koma-border/80'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <strong className="text-xs text-koma-foreground">{obj.label}</strong>
-                    {objetivo === obj.id && (
-                      <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-                        Selecionado
-                      </span>
-                    )}
-                  </div>
-                  <span className="mt-1 block text-[11px] text-koma-muted">{obj.shortRule}</span>
-                </button>
-              ))}
-            </div>
+            <select aria-label="Objetivo da campanha" value={objetivo} onChange={e => handleObjectiveChange(e.target.value)} className="min-h-11 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-sm text-koma-foreground">
+              {OBJECTIVES.map(obj => <option key={obj.id} value={obj.id}>{obj.label}</option>)}
+            </select>
+            <details className="text-xs text-koma-muted"><summary className="cursor-pointer">Como este público é selecionado</summary><p className="mt-2">{OBJECTIVES.find(obj => obj.id === objetivo)?.shortRule}</p></details>
 
             <div className="pt-1">
               <label className="block text-[10px] font-bold uppercase tracking-wider text-koma-muted">
@@ -425,21 +459,21 @@ export function CustomerCampaignsWorkspace({
                 type="text"
                 aria-label="Identificação da campanha"
                 value={nomeCampanha}
-                onChange={(e) => setNomeCampanha(e.target.value)}
+                onChange={(e) => { invalidateSavedCampaign(); setNomeCampanha(e.target.value); }}
                 className="mt-1 w-full rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-xs text-koma-foreground"
               />
             </div>
           </section>
 
           {/* Etapa 2: Público */}
-          <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
+          <section hidden={step !== 1} className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <h4 className="text-xs font-extrabold uppercase tracking-wider text-koma-foreground">
-                2. Público selecionado ({selectedCustomers.length}{' '}
+                Público selecionado ({selectedCustomers.length}{' '}
                 {selectedCustomers.length === 1 ? 'cliente' : 'clientes'})
               </h4>
               <span className="text-[11px] text-koma-muted">
-                Opt-outs e contatos nos últimos 7 dias são retidos por padrão
+                Respeitamos as preferências e evitamos contatos repetidos
               </span>
             </div>
 
@@ -476,10 +510,12 @@ export function CustomerCampaignsWorkspace({
             )}
           </section>
 
+          {step === 1 && <button type="button" disabled={!selectedCustomers.length} onClick={() => setStep(2)} className="koma-btn-success min-h-11 w-full rounded-xl px-4 py-3 text-sm font-bold disabled:opacity-40">Continuar para mensagem</button>}
+
           {/* Etapa 3: Abordagem / Benefício Opcional */}
-          <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
+          <section hidden={step !== 2} className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-koma-foreground">
-              3. Abordagem comercial e benefício opcional
+              Quer oferecer algum benefício?
             </h4>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <button
@@ -493,7 +529,7 @@ export function CustomerCampaignsWorkspace({
               >
                 <strong className="block text-koma-foreground">Sem desconto</strong>
                 <span className="mt-1 block text-[10px]">
-                  Convite pelo prato favorito e hospitalidade. Preserva 100% da margem.
+                  Convite pelo prato favorito, sem novo desconto.
                 </span>
               </button>
 
@@ -553,7 +589,7 @@ export function CustomerCampaignsWorkspace({
                   <select
                     aria-label="Selecionar cupom da campanha"
                     value={selectedCupomId}
-                    onChange={(e) => setSelectedCupomId(e.target.value)}
+                    onChange={(e) => { invalidateSavedCampaign(); setSelectedCupomId(e.target.value); }}
                     className="w-full rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-xs text-koma-foreground"
                   >
                     <option value="">Selecione um cupom ativo…</option>
@@ -649,17 +685,17 @@ export function CustomerCampaignsWorkspace({
           </section>
 
           {/* Etapa 4: Mensagem editável com variáveis seguras */}
-          <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
+          <section hidden={step !== 2} className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h4 className="text-xs font-extrabold uppercase tracking-wider text-koma-foreground">
-                4. Modelo de mensagem editável
+                Revise a mensagem
               </h4>
               <div className="flex flex-wrap gap-1">
                 {(['{nome}', '{produto_favorito}', '{beneficio}'] as const).map((token) => (
                   <button
                     key={token}
                     type="button"
-                    onClick={() => setTemplateMensagem((prev) => `${prev} ${token}`)}
+                    onClick={() => { invalidateSavedCampaign(); setTemplateMensagem((prev) => `${prev} ${token}`); }}
                     className="rounded-md border border-koma-border bg-koma-card px-2 py-0.5 font-mono text-[10px] text-emerald-400 hover:bg-koma-raised"
                   >
                     + {token}
@@ -672,7 +708,7 @@ export function CustomerCampaignsWorkspace({
               rows={4}
               aria-label="Modelo de mensagem da campanha"
               value={templateMensagem}
-              onChange={(e) => setTemplateMensagem(e.target.value)}
+              onChange={(e) => { invalidateSavedCampaign(); setTemplateMensagem(e.target.value); }}
               className="w-full rounded-xl border border-koma-border bg-koma-card p-3 text-xs text-koma-foreground leading-relaxed"
             />
 
@@ -702,19 +738,20 @@ export function CustomerCampaignsWorkspace({
               {savingCampaign
                 ? 'Salvando campanha…'
                 : activeCampaignId
-                ? 'Atualizar registro da campanha'
+                ? 'Voltar aos contatos da campanha salva'
                 : 'Salvar campanha no histórico e revisar envios'}
             </button>
           </section>
         </div>
 
         {/* Coluna Direita: Etapa 5 — Revisão, Prévia Individual e Registro Manual */}
-        <div className="space-y-4 lg:col-span-6">
+        <div hidden={step !== 3} className="space-y-4">
+          <CrmMetricChart title="Contatos nesta sessão" rows={[{label:'Selecionados',value:selectedCustomers.length},{label:'WhatsApp aberto',value:selectedCustomers.filter(c=>openedWhatsAppIds[c.id]).length},{label:'Contato registrado',value:selectedCustomers.filter(c=>recordedCustomerIds[c.id]).length}]} />
           <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
             <div className="border-b border-koma-border pb-3">
               <div className="flex items-center justify-between gap-2">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-koma-foreground">
-                  5. Revisão individual, WhatsApp manual e registro da ação
+                  Revise e contate cada cliente
                 </h4>
                 {activeCampaignId && (
                   <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-bold text-emerald-300">
@@ -730,7 +767,7 @@ export function CustomerCampaignsWorkspace({
 
             {selectedCustomers.length === 0 ? (
               <div className="rounded-xl border border-koma-border bg-koma-card p-6 text-center text-xs text-koma-muted">
-                Selecione uma oportunidade na aba <strong>Oportunidades</strong> ou escolha um objetivo com clientes elegíveis para liberar a fila individual.
+                Selecione uma oportunidade na aba <strong>Ações para hoje</strong> ou escolha um objetivo com clientes elegíveis para liberar a fila individual.
               </div>
             ) : (
               <div className="space-y-3 max-h-[620px] overflow-y-auto pr-1">
@@ -821,6 +858,7 @@ export function CustomerCampaignsWorkspace({
                           disabled={
                             isRecording ||
                             isRecorded ||
+                            !activeCampaignId ||
                             !waUrl ||
                             Boolean(customer.opt_out_marketing) ||
                             Boolean(customer.contato_recente)

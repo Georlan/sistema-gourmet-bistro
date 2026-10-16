@@ -41,6 +41,8 @@ import { CustomerCampaignsWorkspace, type CrmCampaignDraftSeed } from './Custome
 import { CustomerHabits } from './CustomerHabits';
 import { CustomerProfileDrawer } from './CustomerProfileDrawer';
 import { CustomerRelationshipPanel } from './CustomerRelationshipPanel';
+import { CrmMetricChart } from './CrmMetricChart';
+import { LoyaltyImpactPanel } from './LoyaltyImpactPanel';
 import { CustomerResultsWorkspace } from './CustomerResultsWorkspace';
 import { CustomerSatisfactionPanel } from './CustomerSatisfactionPanel';
 import { useCustomerSatisfaction } from './useCustomerSatisfaction';
@@ -1370,23 +1372,23 @@ export default function CashierCustomers({
                 </div>
 
                 {/* Resumo honesto de saldos de fidelidade (Acumulado vs. Resgatável) */}
-                {hasLoyalty && (
+                {hasLoyalty && beneficiosSection === 'fidelidade' && (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-1 text-xs">
                     <div className="rounded-xl border border-koma-border bg-koma-panel p-3">
                       <span className="text-[10px] text-koma-muted block">
-                        Clientes com saldo resgatável agora (&gt;= R$ 1,00)
+                        Já podem usar o benefício
                       </span>
                       <strong className="mt-1 block font-mono text-base text-emerald-400">
                         {relationshipSummary.resgataveis}{' '}
                         {relationshipSummary.resgataveis === 1 ? 'cliente' : 'clientes'}
                       </strong>
                       <span className="text-[10px] text-koma-muted">
-                        Elegíveis para abordagem de lembrete de benefício.
+                        Prontos para um lembrete de retorno.
                       </span>
                     </div>
                     <div className="rounded-xl border border-koma-border bg-koma-panel p-3">
                       <span className="text-[10px] text-koma-muted block">
-                        Clientes com saldo em formação (&lt; R$ 1,00)
+                        Ainda acumulando
                       </span>
                       <strong className="mt-1 block font-mono text-base text-amber-300">
                         {relationshipSummary.emFormacao}{' '}
@@ -1398,13 +1400,9 @@ export default function CashierCustomers({
                     </div>
                     <div className="rounded-xl border border-koma-border bg-koma-panel p-3 flex flex-col justify-between">
                       <div>
-                        <span className="text-[10px] text-koma-muted block">Regra ativa de conversão</span>
+                        <span className="text-[10px] text-koma-muted block">Benefício por pedido</span>
                         <strong className="mt-1 block font-mono text-xs text-koma-foreground">
-                          {fidelidadeConfig.tipo_recompensa === 'PONTOS'
-                            ? `${fidelidadeConfig.taxa_conversao} pt/R$ 1 · 1 pt = R$ ${Number(
-                                fidelidadeConfig.valor_ponto_em_dinheiro || 0,
-                              ).toFixed(4)}`
-                            : `${fidelidadeConfig.taxa_conversao}% de cashback em vendas identificadas`}
+                          {fidelidadeConfig.ativo ? `${(fidelidadeConfig.tipo_recompensa === 'PONTOS' ? fidelidadeConfig.taxa_conversao * Number(fidelidadeConfig.valor_ponto_em_dinheiro || 0) * 100 : fidelidadeConfig.taxa_conversao).toLocaleString('pt-BR', {style:'currency',currency:'BRL'})} em benefício a cada R$ 100` : 'Programa pausado'}
                         </strong>
                       </div>
                       <button
@@ -1450,6 +1448,7 @@ export default function CashierCustomers({
                         <label className="relative inline-flex items-center cursor-pointer shrink-0">
                           <input
                             type="checkbox"
+                            aria-label="Ativar programa de fidelidade"
                             checked={fidelidadeConfig.ativo}
                             onChange={(e) =>
                               setFidelidadeConfig((prev) => ({ ...prev, ativo: e.target.checked }))
@@ -1491,6 +1490,8 @@ export default function CashierCustomers({
                         />
                       )}
 
+                      <details className="rounded-xl border border-koma-border p-3 space-y-3">
+                        <summary className="cursor-pointer text-xs font-bold">Ajustar a taxa manualmente</summary>
                       <div className="space-y-1">
                         <label className="text-[9px] font-bold text-koma-secondary uppercase tracking-wider block">
                           {fidelidadeConfig.tipo_recompensa === 'PONTOS'
@@ -1533,6 +1534,8 @@ export default function CashierCustomers({
                         </div>
                       )}
 
+                      </details>
+
                       <button
                         type="submit"
                         className="koma-btn-success flex min-h-10 w-full items-center justify-center rounded-xl text-[10px] font-bold"
@@ -1542,43 +1545,14 @@ export default function CashierCustomers({
                     </form>
                   </div>
 
-                  <div className="bg-koma-panel border border-koma-border rounded-2xl p-5 space-y-4 h-fit">
-                    <div className="border-b border-koma-border pb-3">
-                      <span className="block text-sm font-bold text-koma-foreground">Como funciona</span>
-                      <span className="mt-0.5 block text-[10px] text-koma-muted">
-                        Uma visão simples da regra aplicada nas próximas vendas identificadas.
-                      </span>
-                    </div>
-                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
-                        Exemplo em uma compra de R$ 100
-                      </span>
-                      <strong className="mt-2 block font-mono text-xl text-koma-foreground">
-                        {fidelidadeConfig.tipo_recompensa === 'PONTOS'
-                          ? `${Math.max(0, fidelidadeConfig.taxa_conversao * 100).toFixed(0)} pontos`
-                          : `R$ ${Math.max(0, fidelidadeConfig.taxa_conversao).toFixed(2)} de cashback`}
-                      </strong>
-                      <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
-                        {fidelidadeConfig.tipo_recompensa === 'PONTOS'
-                          ? `Cada ponto vale R$ ${Number(
-                              fidelidadeConfig.valor_ponto_em_dinheiro || 0,
-                            ).toFixed(4)} no resgate (resgate liberado a partir de R$ 1,00 equivalente).`
-                          : `O cliente recebe ${Number(fidelidadeConfig.taxa_conversao || 0).toFixed(
-                              2,
-                            )}% do valor da compra (resgate liberado a partir de R$ 1,00).`}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between rounded-xl border border-koma-border bg-koma-raised px-3 py-2.5">
-                      <span className="text-[10px] text-koma-muted">Clientes participantes</span>
-                      <strong className="font-mono text-sm text-koma-foreground">{loyaltyUsers.length}</strong>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectCrmTab('clientes')}
-                      className="koma-btn-secondary inline-flex min-h-9 items-center justify-center px-3 text-[10px] font-bold"
-                    >
-                      Ver pontos dos clientes
-                    </button>
+                  <div className="space-y-4">
+                    <LoyaltyImpactPanel active={fidelidadeConfig.ativo} rewardPercent={fidelidadeConfig.tipo_recompensa === 'PONTOS' ? fidelidadeConfig.taxa_conversao * Number(fidelidadeConfig.valor_ponto_em_dinheiro || 0) * 100 : fidelidadeConfig.taxa_conversao} />
+                    <CrmMetricChart title="Benefícios na sua base" rows={[
+                      {label:'Podem resgatar',value:relationshipSummary.resgataveis},
+                      {label:'Acumulando',value:relationshipSummary.emFormacao},
+                      {label:'Sem saldo',value:Math.max(0,loyaltyUsers.length - relationshipSummary.resgataveis - relationshipSummary.emFormacao)},
+                    ]} />
+                    <button type="button" onClick={() => handleSelectCrmTab('clientes')} className="koma-btn-secondary min-h-11 rounded-xl px-4 text-sm">Ver benefícios por cliente</button>
                   </div>
                 </div>
               )}
