@@ -107,12 +107,14 @@ export default function CashierCustomers({
   };
 
   // Keep editable CRM subtrees mounted after first visit. Navigation must not erase drafts.
+  const [visitedRelationship, setVisitedRelationship] = useState(activeTab === 'clientes');
   const [visitedCampaigns, setVisitedCampaigns] = useState(false);
   const [visitedBenefits, setVisitedBenefits] = useState(false);
   const [visitedFidelity, setVisitedFidelity] = useState(false);
   const [visitedCoupons, setVisitedCoupons] = useState(false);
   useEffect(() => {
     if (activeTab !== 'clientes') return;
+    setVisitedRelationship(true);
     if (crmTab === 'campanhas') setVisitedCampaigns(true);
     if (crmTab === 'beneficios') {
       setVisitedBenefits(true);
@@ -619,8 +621,9 @@ export default function CashierCustomers({
         </div>
       )}
 
-      {activeTab === 'clientes' && (
-        <div className="space-y-4 text-left animate-fade-in">
+      {(activeTab === 'clientes' || visitedRelationship) && (
+        <div hidden={activeTab !== 'clientes'} style={{ display: activeTab === 'clientes' ? undefined : 'none' }}
+          className="space-y-4 text-left animate-fade-in">
           {/* Banner Operacional com até 4 indicadores essenciais */}
           <OperationalBanner
             id="customers-heading"
