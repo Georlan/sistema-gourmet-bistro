@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { Coffee, Flame, IceCreamBowl, PlusCircle, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
+import CatalogProductImage from './CatalogProductImage';
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -23,14 +24,6 @@ const COMBO_MATCHER = /(^|\b)(combo|combos|promocional|promocionais|oferta|ofert
 const UPSELL_MATCHER = /(^|\b)(porcao|porcoes|petisco|petiscos|fritas|batata|batatas|onion|anel|aneis|nuggets|acompanhamento|acompanhamentos|entrada|entradas|adicional|adicionais|guarnicao|guarnicoes)(\b|$)/;
 const BEBIDA_MATCHER = /(^|\b)(bebida|bebidas|drink|drinks|refrigerante|refrigerantes|suco|sucos|cerveja|cervejas|chopp|agua|aguas)(\b|$)/;
 const SOBREMESA_MATCHER = /(^|\b)(sobremesa|sobremesas|doce|doces|dessert|desserts|sorvete|sorvetes|milkshake|milk-shake|acai|brownie)(\b|$)/;
-
-const iconByKind = {
-  destaque: Sparkles,
-  combo: Flame,
-  upsell: PlusCircle,
-  bebida: Coffee,
-  sobremesa: IceCreamBowl,
-} as const;
 
 export function buildCatalogRecommendations(
   products: Product[],
@@ -147,7 +140,6 @@ export function CardapioRecommendations({ brand }: { brand: BrandConfig }) {
 
       <div className="grid gap-2 sm:grid-cols-3" role="list">
         {recommendations.map(({ kind, label, product }) => {
-          const Icon = iconByKind[kind];
           return (
             <button
               key={`${kind}-${product.id}`}
@@ -157,9 +149,7 @@ export function CardapioRecommendations({ brand }: { brand: BrandConfig }) {
               className="flex min-w-0 items-center gap-3 rounded-xl border border-koma-border bg-koma-panel p-2.5 text-left transition hover:border-emerald-500/30 hover:bg-koma-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
               aria-label={`Abrir ${label.toLowerCase()} ${product.name}`}
             >
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-koma-card text-emerald-400">
-                <Icon className="h-4 w-4" aria-hidden="true" />
-              </span>
+              <CatalogProductImage image={product.image} className="h-14 w-14 shrink-0 rounded-lg bg-koma-card object-cover" />
               <span className="min-w-0">
                 <span className="block text-[9px] font-black uppercase tracking-wide text-koma-muted">{label}</span>
                 <strong className="block truncate text-xs text-koma-foreground">{product.name}</strong>

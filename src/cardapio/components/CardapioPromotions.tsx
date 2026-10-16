@@ -1,6 +1,7 @@
+import CatalogProductImage from './CatalogProductImage';
 import React from 'react';
 import { Gift, ArrowRight } from 'lucide-react';
-import type { BrandConfig, CatalogPromotion } from '../CardapioTypes';
+import { LOCAL_PRODUCT_PLACEHOLDER, type BrandConfig, type CatalogPromotion } from '../CardapioTypes';
 const money = (v: number) => new Intl.NumberFormat('pt-BR', {style:'currency',currency:'BRL'}).format(v);
 
 /** Ofertas explícitas: nunca confundidas com sugestões automáticas. */
@@ -22,6 +23,9 @@ export default function CardapioPromotions({
           <button key={offer.id} type="button" onClick={() => onSelect(offer)}
             className="flex min-w-[230px] max-w-[310px] flex-col gap-2 rounded-xl border border-amber-500/30 bg-koma-panel p-3 text-left transition hover:border-amber-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
             aria-label={`Montar promoção ${offer.nome} por ${money(offer.preco)}`}>
+            <CatalogProductImage image={offer.componentes.flat().map(id =>
+              [...brand.products, ...(brand.promotionProducts || [])].find(product => product.id === id)?.image
+            ).find(image => image && image !== LOCAL_PRODUCT_PLACEHOLDER)} className="h-28 w-full rounded-lg bg-koma-card object-cover" />
             <span className="text-[10px] font-black uppercase tracking-wide text-amber-400">Oferta da casa</span>
             <strong className="text-sm text-koma-foreground">{offer.nome}</strong>
             <span className="text-xs text-koma-muted">{offer.descricao}</span>

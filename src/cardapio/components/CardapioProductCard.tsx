@@ -1,3 +1,4 @@
+import CatalogProductImage from './CatalogProductImage';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -5,7 +6,7 @@
 
 import React from "react";
 import { Minus, Plus } from "lucide-react";
-import { Product, getProductImageUrl, LOCAL_PRODUCT_PLACEHOLDER } from "../CardapioTypes";
+import { Product } from "../CardapioTypes";
 import { getProductCatalogSignalLabel } from "../cardapioMerchandising";
 import "../cardapioTone.css";
 
@@ -150,19 +151,8 @@ export default function CardapioProductCard({
         </div>
 
         <div className="cardapio-product-card__media shrink-0 overflow-hidden rounded-xl bg-white/5 border border-white/10 relative">
-          <img
-            src={getProductImageUrl(product.image)}
-            alt={product.name}
-            loading="lazy"
-            decoding="async"
-            crossOrigin="anonymous"
-            referrerPolicy="no-referrer"
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-            onError={(event) => {
-              event.currentTarget.onerror = null;
-              event.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
-            }}
-          />
+          <CatalogProductImage image={product.image} alt={product.name}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
         </div>
       </div>
     </article>
