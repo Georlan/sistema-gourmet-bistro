@@ -221,17 +221,17 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
     # raiseload makes any accidental dependency on omitted fields explicit.
     public_columns = (
         ConfiguracaoRestaurante.restaurante_id,
-            ConfiguracaoRestaurante.nicho,
-            ConfiguracaoRestaurante.delivery_ativo,
-            ConfiguracaoRestaurante.tipos_pedido_ativos,
-            ConfiguracaoRestaurante.pedido_minimo,
-            ConfiguracaoRestaurante.pedido_minimo_retirada,
-            ConfiguracaoRestaurante.frete_gratis_valor,
-            ConfiguracaoRestaurante.tipo_taxa_entrega,
-            ConfiguracaoRestaurante.taxa_entrega_fixa,
-            ConfiguracaoRestaurante.tabela_taxas_bairros,
-            ConfiguracaoRestaurante.tabela_taxas_km,
-            ConfiguracaoRestaurante.promocoes,
+        ConfiguracaoRestaurante.nicho,
+        ConfiguracaoRestaurante.delivery_ativo,
+        ConfiguracaoRestaurante.tipos_pedido_ativos,
+        ConfiguracaoRestaurante.pedido_minimo,
+        ConfiguracaoRestaurante.pedido_minimo_retirada,
+        ConfiguracaoRestaurante.frete_gratis_valor,
+        ConfiguracaoRestaurante.tipo_taxa_entrega,
+        ConfiguracaoRestaurante.taxa_entrega_fixa,
+        ConfiguracaoRestaurante.tabela_taxas_bairros,
+        ConfiguracaoRestaurante.tabela_taxas_km,
+        ConfiguracaoRestaurante.promocoes,
     )
     # Somente tenants habilitados ao envio recebem esses campos internos.
     # Outros tenants mantêm a projeção pública mínima, sem telefone privado.
