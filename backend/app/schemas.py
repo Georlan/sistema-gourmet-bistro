@@ -981,6 +981,7 @@ class CardapioPublicResponse(BaseModel):
     restaurante: CardapioPublicRestaurantResponse
     categorias: List[CardapioPublicCategoryResponse]
     produtos: List[CardapioPublicProductResponse]
+    promocoes: List[dict] = Field(default_factory=list)
 
 
 class DeliveryFeeQuoteRequest(BaseModel):
@@ -1156,6 +1157,7 @@ class CardapioItemPedido(BaseModel):
 
 class CardapioPedidoCreate(BaseModel):
     restaurante_id: int = Field(gt=0)
+    promocao_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
     itens: List[CardapioItemPedido] = Field(min_length=1, max_length=100)
     cliente_nome: str = Field(min_length=2, max_length=100)
     cliente_telefone: str = Field(min_length=10, max_length=20)
