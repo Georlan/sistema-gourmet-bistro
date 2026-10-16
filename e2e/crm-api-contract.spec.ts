@@ -67,9 +67,9 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await navigateRelationship(page,'oportunidades');
   await page.screenshot({path:testInfo.outputPath(`relationship-actions-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
   const emptyGroup=contract.summary.oportunidades.find((op:{elegiveis_count:number})=>op.elegiveis_count===0);
-  await expect(page.getByText(emptyGroup.titulo,{exact:true})).toBeHidden();
+  await expect(page.getByText(emptyGroup.titulo,{exact:true}).filter({visible:true})).toHaveCount(0);
   await page.getByText(/^Outros grupos/).click();
-  await expect(page.getByText(emptyGroup.titulo,{exact:true})).toBeVisible();
+  await expect(page.getByText(emptyGroup.titulo,{exact:true}).filter({visible:true})).toBeVisible();
   await page.getByText(/^Outros grupos/).click();
   const opportunityCard=page.locator('article').filter({has:page.getByRole('heading',{name:opportunity.titulo,exact:true})});
   const audienceCustomer=contract.customers.find((c:{id:string})=>opportunity.elegiveis_cliente_ids.includes(c.id));
@@ -117,7 +117,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await dialog.getByRole('button',{name:'Salvar preferências declaradas',exact:true}).click();
   await expect.poll(()=>savedPreference?.canal_preferido).toBe('telefone');
   await page.getByRole('button',{name:'Fechar ficha do cliente',exact:true}).click();
-  await expect(page.locator('#clientes-subtab-clientes')).toBeVisible();
+  await expectRelationshipSelected(page, 'clientes');
   expect(errors).toEqual([]);
 });
 
@@ -140,9 +140,8 @@ test('relationship keeps missing results distinct from zero and empty audiences 
   await page.locator('.cashier-sidebar:visible').getByRole('button',{name:/^Relacionamento(?: \d+)?$/}).click();
   await expect(page.getByText('Nenhum grupo precisa de contato hoje. Consulte sua base em Clientes.')).toBeVisible();
   await expect(page.getByText(/^Outros grupos/)).toBeVisible();
-  await expect(page.locator('#clientes-subtab-fidelidade')).toHaveCount(0);
-  await expect(page.locator('#clientes-subtab-cupons')).toHaveCount(0);
-  await page.locator('#clientes-subtab-resultados').click();
+  await expect(page.locator('#clientes-subtab-beneficios')).toHaveCount(0);
+  await navigateRelationship(page, 'resultados');
   const returning=page.locator('article').filter({has:page.getByRole('heading',{name:'Clientes que voltaram',exact:true})});
   const revenue=page.locator('article').filter({has:page.getByRole('heading',{name:'Quanto compraram após o contato',exact:true})});
   await expect(returning.locator('strong')).toHaveText('—');
