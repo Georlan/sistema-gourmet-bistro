@@ -84,6 +84,7 @@ interface PublicMenuPayload {
   restaurante: Record<string, any>;
   categorias: Array<Record<string, any>>;
   produtos: Array<Record<string, any>>;
+  promocoes?: Array<Record<string, any>>;
 }
 
 function parseStructuredValue(value: unknown): unknown {
@@ -332,6 +333,13 @@ export default function CardapioPage() {
         },
         categories: payload.categorias.map((category) => String(category.nome || "")).filter(Boolean),
         products,
+        promotions: Array.isArray(payload.promocoes) ? payload.promocoes
+          .filter(p => p && Array.isArray(p.componentes) && p.componentes.length === 2)
+          .map(p => ({
+            id: String(p.id), nome: String(p.nome), descricao: String(p.descricao || ''),
+            preco: Number(p.preco), componentes: p.componentes.map((ids: unknown) =>
+              Array.isArray(ids) ? ids.map(String) : []),
+          })) : [],
         socials,
         about: String(restaurant.sobre_nos || ""),
         paymentMethods,
