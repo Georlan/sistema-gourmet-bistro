@@ -47,14 +47,21 @@ def limits() -> tuple[int, Decimal, Decimal] | None:
         return None
 
 
-def customer_notices_enabled(restaurant_id: int, tenant: ConfiguracaoRestaurante | None) -> bool:
+def customer_notice_transport_config(restaurant_id: int):
+    """Configuração autorizada para avisos ao cliente, sem consultar nenhum dado de tenant."""
+    if os.getenv("KOMA_CUSTOMER_WA_ENABLED", "false").strip().lower() != "true":
+        return None
+    if restaurant_id not in allowed_restaurants("KOMA_CUSTOMER_WA_ALLOWED_RESTAURANT_IDS"):
+        return None
     config = pilot_configuration()
-    return bool(
-        os.getenv("KOMA_CUSTOMER_WA_ENABLED", "false").strip().lower() == "true"
-        and restaurant_id in allowed_restaurants("KOMA_CUSTOMER_WA_ALLOWED_RESTAURANT_IDS")
-        and enabled_for(restaurant_id) and config and limits()
-        and registered_operator_phone(tenant, config.sender)
-    )
+    if config is None or restaurant_id not in config.restaurant_ids or limits() is None:
+        return None
+    return config
+
+
+def customer_notices_enabled(restaurant_id: int, tenant: ConfiguracaoRestaurante | None) -> bool:
+    config = customer_notice_transport_config(restaurant_id)
+    return bool(config and registered_operator_phone(tenant, config.sender))
 
 
 def opted_out(db: Session, rid: int, digest: str) -> bool:
