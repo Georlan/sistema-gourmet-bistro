@@ -29,7 +29,7 @@ export default function CardapioPromotionWizard({
   const [stepIndex, setStepIndex] = useState(0);
   const [parts, setParts] = useState<Array<PromotionPartSelection | null>>(initialParts || []);
   const review = stepIndex >= steps.length;
-  const hasUnavailableProduct = steps.length === 0 || steps.some((step) => step.product.isAvailable === false);
+  const hasUnavailableProduct = steps.length !== 2 || steps.some((step) => step.product.isAvailable === false);
   const complete = isValidPromotionParts(steps, parts);
   const extras = selectedPromotionExtras(parts);
 
