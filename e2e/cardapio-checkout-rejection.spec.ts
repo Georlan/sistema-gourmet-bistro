@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-for (const rejection of [400, 503]) {
+for (const rejection of [400, 404, 503]) {
   test(`rejeição ${rejection} fica visível e permite corrigir ou repetir sem perder a sacola`, async ({ page }, testInfo) => {
     const keys: string[] = [];
     const quantities: number[] = [];
@@ -20,7 +20,7 @@ for (const rejection of [400, 503]) {
         await route.fulfill(keys.length === 1 ? {
           status: rejection,
           headers: { 'X-Request-ID': 'abc123def4567890', 'Access-Control-Expose-Headers': 'X-Request-ID' },
-          json: { detail: rejection === 400 ? 'Confira as escolhas dos complementos.' : 'Serviço temporariamente indisponível.' },
+          json: { detail: rejection === 400 ? 'Confira as escolhas dos complementos.' : rejection === 404 ? 'Um complemento escolhido não está mais disponível para este produto. Volte à sacola, confira as opções e tente novamente.' : 'Serviço temporariamente indisponível.' },
         } : { status: 201, json: { comanda_id: 'local-order', numero_pedido: 101, total: 10 } });
       } else {
         await route.fulfill({ json: path.includes('populares') ? { produtos: [] } : {} });
@@ -42,15 +42,21 @@ for (const rejection of [400, 503]) {
     await submit.click();
     const error = page.locator('#checkout-submit-error');
     await expect(error).toContainText('Não foi possível confirmar o pedido');
-    await expect(error).toContainText('abc123def456');
+    await expect(error).not.toContainText('Código de suporte');
+    await expect(error).not.toContainText('abc123def456');
+    if (rejection === 404) {
+      await expect(error).toContainText('acabou de alterar a disponibilidade');
+      await expect(submit).toContainText('Revisar sacola');
+    }
     const box = await error.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.y).toBeGreaterThanOrEqual(0);
     expect(box!.y + box!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
     await expect(page.getByText('Pedido recebido', { exact: true })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('checkout-error-visible.png') });
-    if (rejection === 400) {
-      await error.getByRole('button', { name: 'Voltar à sacola e corrigir' }).click();
+    if (rejection !== 503) {
+      if (rejection === 404) await submit.click();
+      else await error.getByRole('button', { name: 'Voltar à sacola e corrigir' }).click();
       await expect(cart).toBeVisible();
       await expect(cart).toContainText('Lanche local');
       await expect(cart.locator('#input-guest-name')).toHaveValue('Fixture local');
