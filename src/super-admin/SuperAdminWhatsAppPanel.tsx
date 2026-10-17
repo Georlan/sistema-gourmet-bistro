@@ -26,6 +26,7 @@ type Queue = {
   oldest_seconds: number | null;
   groups_near_expiry: number;
   ttl_risk: boolean;
+  http429_last_24h_in_outbox: number;
 };
 type Tenant = {
   restaurant_id: number;
@@ -149,7 +150,12 @@ export function SuperAdminWhatsAppPanel() {
           <div className="rounded-lg border border-koma-border p-3 text-xs">
             <div className="text-koma-muted">Canal</div>
             <strong>{data.sender.state === "configured" ? "Configurado" : "Desligado / indisponível"}</strong>
-            <p className="mt-1 text-koma-muted">Sessão: {data.sender.connection === "matched" ? "Identidade confirmada" : data.sender.connection === "not_verified" ? "Não verificada nesta consulta" : data.sender.connection}</p>
+            <p className="mt-1 text-koma-muted">Sessão: {data.sender.connection === "matched" ? "Identidade confirmada"
+              : data.sender.connection === "not_verified" ? "Não verificada nesta consulta"
+              : data.sender.connection === "mismatch" ? "Remetente divergente: bloqueie envios e confira a sessão"
+              : data.sender.connection === "not_open" ? "Evolution desconectada"
+              : data.sender.connection === "unavailable" ? "Evolution indisponível"
+              : data.sender.connection}</p>
           </div>
           <div className="rounded-lg border border-koma-border p-3 text-xs">
             <div className="text-koma-muted">Vazão central</div>
@@ -203,6 +209,7 @@ export function SuperAdminWhatsAppPanel() {
                 {tenant.usage.attempts} tentativas · {tenant.usage.accepted} aceites HTTP · {tenant.usage.failed} falhas · {tenant.usage.discarded} descartes · {tenant.usage.deferred} adiamentos
                 <span className="ml-2">· {tenant.queue.total} aguardando</span>
                 {tenant.queue.ttl_risk && <span className="ml-2 text-amber-400"><AlertTriangle className="mr-1 inline h-3 w-3" />Fila próxima de expirar</span>}
+                {tenant.queue.http429_last_24h_in_outbox > 0 && <span className="ml-2 text-amber-400">· {tenant.queue.http429_last_24h_in_outbox} eventos com HTTP 429 nas últimas 24h (outbox retida)</span>}
                 <p className="mt-1">Fila mais antiga: {tenant.queue.oldest_seconds == null ? "—" : `${tenant.queue.oldest_seconds}s`}; espera média de tentativas: {tenant.usage.average_queue_ms == null ? "—" : `${tenant.usage.average_queue_ms}ms`}. Não equivale a entrega no aparelho.</p>
                 <p className="mt-1">Estimativa de custo das notificações ao cliente: {tenant.usage.estimated_customer_cost_brl == null ? "indisponível" : `R$ ${tenant.usage.estimated_customer_cost_brl}`}.</p>
               </div>
