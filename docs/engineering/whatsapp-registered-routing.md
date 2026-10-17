@@ -2,7 +2,7 @@
 
 ## Bloco 3 — autorização de plataforma e operação central
 
-O Super Admin utiliza **Plataforma → Operações → WhatsApp Business compartilhado**.
+O Super Admin utiliza **Plataforma → Saúde → WhatsApp Business compartilhado**.
 Uma nova permissão de plataforma vive em `configuracoes_restaurante`, protegida pelo RLS existente:
 
 - `whatsapp_platform_managed=false`: mantém a política anterior das allowlists do Railway. A migration não autoriza nenhum restaurante novo, não escreve telefones e não altera as escolhas do dono.
