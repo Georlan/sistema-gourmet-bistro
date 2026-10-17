@@ -124,12 +124,22 @@ def _queue_summary(db, rid: int, now: dt.datetime) -> dict:
         if age >= int(ttl * 0.8):
             # Lower bound: grouping retains the oldest timestamp, not each age.
             near_expiry += 1
+    recent_429 = (
+        db.query(func.count(IntegrationOutbox.id))
+        .filter(
+            IntegrationOutbox.restaurante_id == rid,
+            IntegrationOutbox.event_name.in_(_EVENTS),
+            IntegrationOutbox.response_status_code == 429,
+            IntegrationOutbox.created_at >= now - dt.timedelta(days=1),
+        ).scalar() or 0
+    )
     return {
         "total": pending,
         "by_kind": by_kind,
         "oldest_seconds": oldest_seconds if pending else None,
         "groups_near_expiry": near_expiry,
         "ttl_risk": near_expiry > 0,
+        "http429_last_24h_in_outbox": int(recent_429),
     }
 
 
