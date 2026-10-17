@@ -32,7 +32,7 @@ import {
   type CustomerSort,
 } from '../../../domain/customerCrm';
 import CuponsTab, { type CupomData } from '../../clientes/CuponsTab';
-import GrowthEconomicsCalculator, { type GrowthEconomicsOption } from '../../clientes/GrowthEconomicsCalculator';
+import type { GrowthEconomicsOption } from '../../clientes/GrowthEconomicsCalculator';
 import MoneyInput from '../../MoneyInput';
 import { KomaEmptyState } from '../../shared/KomaEmptyState';
 import { OperationalBanner } from '../../shared/OperationalBanner';
@@ -41,9 +41,8 @@ import { CustomerCampaignsWorkspace, type CrmCampaignDraftSeed } from './Custome
 import { CustomerHabits } from './CustomerHabits';
 import { CustomerProfileDrawer } from './CustomerProfileDrawer';
 import { CustomerRelationshipPanel } from './CustomerRelationshipPanel';
-import { CrmMetricChart } from './CrmMetricChart';
-import { LoyaltyImpactPanel } from './LoyaltyImpactPanel';
-import { DEFAULT_LOYALTY_CONFIG, effectiveLoyaltyPercent, useLoyaltyConfiguration } from './useLoyaltyConfiguration';
+import { LoyaltyProgramPanel } from './LoyaltyProgramPanel';
+import { DEFAULT_LOYALTY_CONFIG, useLoyaltyConfiguration } from './useLoyaltyConfiguration';
 import { CustomerResultsWorkspace } from './CustomerResultsWorkspace';
 import { CustomerSatisfactionPanel } from './CustomerSatisfactionPanel';
 import { useCustomerSatisfaction } from './useCustomerSatisfaction';
@@ -368,16 +367,7 @@ export default function CashierCustomers({
   const savedLoyaltyConfig = loyalty.saved;
   const fidelidadeConfig = loyalty.draft ?? DEFAULT_LOYALTY_CONFIG;
   const setFidelidadeConfig = loyalty.setDraft;
-  const [showLoyaltySaveConfirmation, setShowLoyaltySaveConfirmation] = useState(false);
-  const [loyaltySimulationMode, setLoyaltySimulationMode] = useState<'vigente' | 'rascunho'>('vigente');
-
-  const handleSaveFidelidadeConfig = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loyalty.dirty && !loyalty.saving) setShowLoyaltySaveConfirmation(true);
-  };
-
   const confirmSaveFidelidadeConfig = async () => {
-    setShowLoyaltySaveConfirmation(false);
     if (await loyalty.save()) {
       showToast('Programa de fidelidade atualizado e confirmado pelo servidor.');
       await refreshLoyaltyUsers();
@@ -1396,7 +1386,7 @@ export default function CashierCustomers({
                       Benefícios para a próxima compra
                     </h3>
                     <p className="text-xs text-koma-muted">
-                      Alterações nas taxas valem para vendas futuras e preservam saldos e benefícios já concedidos.
+                      Alterações são revisadas antes de serem salvas. Os saldos concedidos permanecem registrados.
                     </p>
                   </div>
 
@@ -1430,191 +1420,23 @@ export default function CashierCustomers({
                   </div>
                 )}
 
-                {/* Resumo honesto de saldos de fidelidade (Acumulado vs. Resgatável) */}
-                {hasLoyalty && beneficiosSection === 'fidelidade' && (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-1 text-xs">
-                    <div className="rounded-xl bg-koma-panel p-3">
-                      <span className="text-xs text-koma-muted block">
-                        Já podem usar o benefício
-                      </span>
-                      <strong className="mt-1 block font-mono text-base text-emerald-400">
-                        {relationshipSummary.resgataveis}{' '}
-                        {relationshipSummary.resgataveis === 1 ? 'cliente' : 'clientes'}
-                      </strong>
-                      <span className="text-xs text-koma-muted">
-                        Prontos para um lembrete de retorno.
-                      </span>
-                    </div>
-                    <div className="rounded-xl bg-koma-panel p-3">
-                      <span className="text-xs text-koma-muted block">
-                        Ainda acumulando
-                      </span>
-                      <strong className="mt-1 block font-mono text-base text-amber-300">
-                        {relationshipSummary.emFormacao}{' '}
-                        {relationshipSummary.emFormacao === 1 ? 'cliente' : 'clientes'}
-                      </strong>
-                      <span className="text-xs text-koma-muted">
-                        Possuem pontos acumulados, mas ainda não atingiram o mínimo de resgate.
-                      </span>
-                    </div>
-                    <div className="rounded-xl bg-koma-panel p-3 flex flex-col justify-between">
-                      <div>
-                        <span className="text-xs text-koma-muted block">Benefício por pedido</span>
-                        <strong className="mt-1 block font-mono text-xs text-koma-foreground">
-                          {fidelidadeConfig.ativo ? `${(fidelidadeConfig.tipo_recompensa === 'PONTOS' ? fidelidadeConfig.taxa_conversao * Number(fidelidadeConfig.valor_ponto_em_dinheiro || 0) * 100 : fidelidadeConfig.taxa_conversao).toLocaleString('pt-BR', {style:'currency',currency:'BRL'})} em benefício a cada R$ 100` : 'Programa pausado'}
-                        </strong>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleLaunchOpportunityAction(
-                            opportunitiesCatalog.find((o: any) => o.id === 'BENEFIT_REMINDER') || {
-                              id: 'BENEFIT_REMINDER',
-                              titulo: 'Lembrar benefícios disponíveis',
-                            },
-                            'FIDELIDADE',
-                          )
-                        }
-                        className="mt-2 text-left text-xs font-bold text-emerald-400 hover:underline"
-                      >
-                        Lembrar clientes com saldo resgatável em Campanhas →
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Subdivisão A: Programa de Fidelidade */}
               {hasLoyalty && (beneficiosSection === 'fidelidade' || visitedFidelity) && (
-                <div id="crm-benefit-panel-fidelidade" role="tabpanel" aria-label="Fidelidade" hidden={beneficiosSection !== 'fidelidade'}
-                  style={{ display: beneficiosSection === 'fidelidade' ? undefined : 'none' }}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl">
-                  <div className="bg-koma-card border border-koma-border p-5 rounded-2xl space-y-4 h-fit">
-                    <div className="border-b border-koma-border pb-3">
-                      <div>
-                        <span className="block text-sm font-bold text-koma-foreground">
-                          Configuração do programa
-                        </span>
-                        <span className="mt-0.5 block text-xs text-koma-muted">
-                          Defina como os clientes acumulam e resgatam benefícios.
-                        </span>
-                      </div>
-                    </div>
-
-                    <form onSubmit={handleSaveFidelidadeConfig} className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-koma-secondary">
-                          {fidelidadeConfig.ativo ? 'Programa ativo' : 'Programa pausado'}
-                        </span>
-                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                          <input
-                            type="checkbox"
-                            aria-label="Ativar programa de fidelidade"
-                            checked={fidelidadeConfig.ativo}
-                            onChange={(e) =>
-                              setFidelidadeConfig((prev) => ({ ...prev, ativo: e.target.checked }))
-                            }
-                            className="sr-only peer"
-                          />
-                          <div className="w-8 h-4.5 bg-koma-raised peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"></div>
-                        </label>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium text-koma-muted block">
-                          Benefício oferecido
-                        </label>
-                        <select
-                          value={fidelidadeConfig.tipo_recompensa}
-                          onChange={(e) =>
-                            setFidelidadeConfig((prev) => ({ ...prev, tipo_recompensa: e.target.value }))
-                          }
-                          disabled={!fidelidadeConfig.ativo}
-                          className="w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground text-xs disabled:opacity-50"
-                        >
-                          <option value="PONTOS">Pontos</option>
-                          <option value="CASHBACK">Dinheiro de volta</option>
-                        </select>
-                      </div>
-
-                      {fidelidadeConfig.ativo && (
-                        <GrowthEconomicsCalculator
-                          apiBaseUrl={apiBaseUrl}
-                          authHeaders={authHeaders}
-                          onApplyOption={handleApplyGrowthOptionToLoyalty}
-                          applyLabel={
-                            fidelidadeConfig.tipo_recompensa === 'CASHBACK'
-                              ? 'Usar no cashback'
-                              : 'Usar nos pontos'
-                          }
-                          compact
-                        />
-                      )}
-
-                      <details className="rounded-xl border border-koma-border p-3 space-y-3">
-                        <summary className="cursor-pointer text-xs font-bold">Ajustar a taxa manualmente</summary>
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium text-koma-muted block">
-                          {fidelidadeConfig.tipo_recompensa === 'PONTOS'
-                            ? 'Pontos ganhos a cada R$ 1'
-                            : 'Percentual devolvido ao cliente'}
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={fidelidadeConfig.taxa_conversao}
-                          onChange={(e) =>
-                            setFidelidadeConfig((prev) => ({
-                              ...prev,
-                              taxa_conversao: Number(e.target.value),
-                            }))
-                          }
-                          disabled={!fidelidadeConfig.ativo}
-                          className="w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground font-mono text-xs disabled:opacity-50"
-                        />
-                      </div>
-
-                      {fidelidadeConfig.tipo_recompensa === 'PONTOS' && (
-                        <div className="space-y-1">
-                          <label className="text-sm font-medium text-koma-muted block">
-                            Valor de cada ponto
-                          </label>
-                          <input
-                            type="number"
-                            step="0.0001"
-                            value={fidelidadeConfig.valor_ponto_em_dinheiro}
-                            onChange={(e) =>
-                              setFidelidadeConfig((prev) => ({
-                                ...prev,
-                                valor_ponto_em_dinheiro: Number(e.target.value),
-                              }))
-                            }
-                            disabled={!fidelidadeConfig.ativo}
-                            className="w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground font-mono text-xs disabled:opacity-50"
-                          />
-                        </div>
-                      )}
-
-                      </details>
-
-                      <button
-                        type="submit"
-                        className="koma-btn-success flex min-h-10 w-full items-center justify-center rounded-xl text-xs font-bold"
-                      >
-                        Salvar programa
-                      </button>
-                    </form>
-                  </div>
-
-                  <div className="space-y-4">
-                    <LoyaltyImpactPanel active={fidelidadeConfig.ativo} rewardPercent={fidelidadeConfig.tipo_recompensa === 'PONTOS' ? fidelidadeConfig.taxa_conversao * Number(fidelidadeConfig.valor_ponto_em_dinheiro || 0) * 100 : fidelidadeConfig.taxa_conversao} />
-                    <CrmMetricChart title="Benefícios na sua base" rows={[
-                      {label:'Podem resgatar',value:relationshipSummary.resgataveis},
-                      {label:'Acumulando',value:relationshipSummary.emFormacao},
-                      {label:'Sem saldo',value:Math.max(0,loyaltyUsers.length - relationshipSummary.resgataveis - relationshipSummary.emFormacao)},
-                    ]} />
-                    <button type="button" onClick={() => handleSelectCrmTab('clientes')} className="koma-btn-secondary min-h-11 rounded-xl px-4 text-sm">Ver benefícios por cliente</button>
-                  </div>
+                <div id="crm-benefit-panel-fidelidade" role="tabpanel" aria-label="Fidelidade"
+                  hidden={beneficiosSection !== 'fidelidade'}
+                  style={{ display: beneficiosSection === 'fidelidade' ? undefined : 'none' }}>
+                  <LoyaltyProgramPanel
+                    apiBaseUrl={apiBaseUrl} authHeaders={authHeaders}
+                    saved={savedLoyaltyConfig} draft={fidelidadeConfig}
+                    dirty={loyalty.dirty} loading={loyalty.loading} saving={loyalty.saving}
+                    error={loyalty.error} onRetry={loyalty.reload}
+                    onEdit={setFidelidadeConfig} onDiscard={loyalty.discard}
+                    onSave={confirmSaveFidelidadeConfig}
+                    onApplyOption={handleApplyGrowthOptionToLoyalty}
+                    canRedeem={relationshipSummary.resgataveis} accumulating={relationshipSummary.emFormacao}
+                    onOpenCustomers={() => handleSelectCrmTab('clientes')}
+                  />
                 </div>
               )}
 
