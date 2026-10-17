@@ -5,8 +5,10 @@ on:
     paths:
       - 'src/components/caixa/navigation/**'
       - 'src/components/caixa/customers/**'
+      - 'src/components/clientes/GrowthEconomicsCalculator.tsx'
       - 'src/utils/storeSwitch.ts'
       - 'e2e/relationship-navigation.spec.ts'
+      - 'e2e/loyalty-stage3.spec.ts'
       - 'e2e/crm-api-contract.spec.ts'
       - 'e2e/customer-crm.spec.ts'
       - 'e2e/shared-snapshot-requests.spec.ts'
@@ -32,6 +34,7 @@ jobs:
         run: >-
           KOMA_E2E_PORT=4283 npm run test:e2e --
           e2e/relationship-navigation.spec.ts
+          e2e/loyalty-stage3.spec.ts
           e2e/crm-api-contract.spec.ts
           e2e/customer-crm.spec.ts
           e2e/shared-snapshot-requests.spec.ts
