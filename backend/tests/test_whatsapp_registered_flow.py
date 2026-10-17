@@ -38,7 +38,8 @@ def flow(tmp_path, monkeypatch):
             db.add(Restaurante(id=rid, nome=f'Loja teste {rid}', slug=f'test-{rid}'))
             db.add(Usuario(id=f'operator-{rid}', restaurante_id=rid, nome='Operador', senha_hash='test-only', cargo='admin'))
             db.add(ConfiguracaoRestaurante(restaurante_id=rid, whatsapp_instance_name=central.CENTRAL_INSTANCE_MARKER,
-                whatsapp_recipient_phone='5511999999999' if rid == 701 else '5521999999999', whatsapp_alerts_enabled=False))
+                whatsapp_recipient_phone='5511999999999' if rid == 701 else '5521999999999',
+                whatsapp_alerts_enabled=False, whatsapp_customer_notices_enabled=(rid == 701)))
         db.commit()
         yield db, monkeypatch
     engine.dispose()
@@ -345,3 +346,70 @@ def test_financially_closed_check_still_alerts_for_active_production(flow):
     calls=provider(patch)
     assert dispatch_single_outbox_event(db,row)
     assert len(calls) == 1
+
+
+def test_customer_permission_default_off_is_independent_from_registered_operator(flow):
+    db, patch = flow
+    cfg = config(db)
+    # Customer messages remain available even if no operator has registered a phone.
+    cfg.whatsapp_instance_name = None
+    cfg.whatsapp_recipient_phone = None
+    db.commit()
+    assert central.registered_operator_phone(cfg, central.pilot_configuration().sender) is None
+    assert customer.customer_notices_enabled(701, cfg)
+    _, _, event = order(db)
+    rows = publish(db, event)
+    assert len(rows) == 1
+    calls = provider(patch)
+    assert dispatch_single_outbox_event(db, rows[0])
+    assert len(calls) == 1
+    assert calls[0]['number'] == '5511777777777'
+    assert '*KÔMA | Avisos de pedidos*' in calls[0]['text']
+    assert 'não é o WhatsApp do restaurante' in calls[0]['text']
+    assert 'Não quer mais receber avisos deste restaurante?' in calls[0]['text']
+
+
+def test_customer_notices_admin_permission_revokes_pending_without_affecting_operator(flow):
+    from app.routes.tenant_whatsapp import CustomerNoticesRequest, set_customer_notices
+    db, patch = flow
+    check, source, event = order(db)
+    notices = publish(db, event)
+    assert len(notices) == 1
+    admin = SimpleNamespace(restaurante_id=701)
+    response = set_customer_notices(CustomerNoticesRequest(enabled=False), db, admin)
+    assert response['customer_notices_enabled'] is False
+    db.refresh(notices[0])
+    assert notices[0].status == 'dead_letter'
+    assert customer.customer_notices_enabled(701, config(db)) is False
+    calls = provider(patch)
+    assert not dispatch_single_outbox_event(db, notices[0])
+    assert calls == []
+    # Operator still has an independent destination and may receive orders.
+    assert central.enqueue_operator_alert(db, event) is not None
+    db.commit()
+    assert set_customer_notices(CustomerNoticesRequest(enabled=True), db, admin)['customer_notices_enabled'] is True
+    assert customer.customer_notices_enabled(701, config(db)) is True
+
+
+def test_customer_notices_admin_does_not_expand_platform_rollout_or_tenants(flow):
+    from app.routes.tenant_whatsapp import CustomerNoticesRequest, set_customer_notices
+    from fastapi import HTTPException
+    db, patch = flow
+    assert customer.customer_notices_enabled(702, config(db, 702)) is False
+    with pytest.raises(HTTPException) as exc:
+        set_customer_notices(CustomerNoticesRequest(enabled=True), db, SimpleNamespace(restaurante_id=702))
+    assert exc.value.status_code == 409
+    assert config(db, 702).whatsapp_customer_notices_enabled is False
+    # Disable is always allowed; no new permission is inferred from another tenant.
+    set_customer_notices(CustomerNoticesRequest(enabled=False), db, SimpleNamespace(restaurante_id=702))
+    assert customer.customer_notices_enabled(701, config(db)) is True
+
+
+def test_unregistered_tenant_is_default_off_even_when_platform_allows_customer_notices(flow):
+    db, patch = flow
+    patch.setenv('KOMA_CENTRAL_WA_ALLOWED_RESTAURANT_IDS', '701,702')
+    patch.setenv('KOMA_CUSTOMER_WA_ALLOWED_RESTAURANT_IDS', '701,702')
+    assert customer.customer_notices_enabled(702, config(db, 702)) is False
+    _, _, event = order(db, rid=702)
+    assert publish(db, event) == []
+
