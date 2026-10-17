@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import logging
 import os
+import re
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -83,6 +84,18 @@ class SaasMercadoPagoService:
         }
 
     def _ensure_provider_ready(self) -> None:
+        # No modo com token estático, o APP_USR incorpora o identificador da
+        # aplicação. Validá-lo antes do POST impede criar cobranças na aplicação
+        # OAuth dos restaurantes por engano. No modo runtime, a validação ocorre
+        # no resolvedor que emite o token específico do SaaS.
+        if self.environment == "production" and not _env_flag("KOMA_SAAS_MP_RUNTIME_TOKEN_ENABLED"):
+            expected_app = os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "").strip()
+            match = re.match(r"^APP_USR-([0-9]+)-", self.access_token)
+            if expected_app and match and match.group(1) != expected_app:
+                raise SaasMercadoPagoError(
+                    "O token estático não pertence à aplicação Mercado Pago configurada para a assinatura KÔMA.",
+                    status_code=409,
+                )
         if self.environment == "production" and self.is_test_credentials:
             raise SaasMercadoPagoError(
                 "Credenciais de teste do Mercado Pago (TEST-) são estritamente proibidas em ambiente de produção.",

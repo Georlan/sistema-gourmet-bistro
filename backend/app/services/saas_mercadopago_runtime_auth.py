@@ -52,7 +52,9 @@ def _configured_credentials() -> tuple[str, str, str]:
     client_id = saas_id or os.getenv("MERCADO_PAGO_CLIENT_ID", "").strip()
     client_secret = saas_secret or os.getenv("MERCADO_PAGO_CLIENT_SECRET", "").strip()
     expected_app = os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "").strip()
-    if saas_id and expected_app and saas_id != expected_app:
+    # Também validar o fallback legado: usar as credenciais OAuth dos
+    # restaurantes não pode substituir silenciosamente a aplicação SaaS.
+    if expected_app and client_id and client_id != expected_app:
         raise _auth_error(
             "A aplicação OAuth SaaS não corresponde à aplicação de faturamento KÔMA esperada.",
             reason="configured_application_mismatch",
@@ -181,11 +183,9 @@ def _validate_oauth_identity(
             reason="missing_provider_user",
             status_code=502,
         )
-    dedicated_saas_id = os.getenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_ID", "").strip()
     expected_collector = os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID", "").strip()
-    # Quando o faturamento usa credenciais SaaS específicas, não aceitar
-    # tokens de outra conta: os valores recebidos devem ser do titular KÔMA.
-    if dedicated_saas_id and expected_collector and provider_user_id != expected_collector:
+    # Proteger o titular KÔMA tanto em credenciais dedicadas quanto no fallback.
+    if expected_collector and provider_user_id != expected_collector:
         raise _auth_error(
             "A credencial SaaS pertence a uma conta recebedora diferente da conta KÔMA esperada.",
             reason="token_collector_mismatch",
