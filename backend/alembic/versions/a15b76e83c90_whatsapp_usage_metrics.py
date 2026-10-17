@@ -47,5 +47,10 @@ def upgrade():
 
 
 def downgrade():
-    # Do not accidentally erase durable historical counters.
-    raise RuntimeError("WhatsApp usage metrics downgrade would destroy historical usage counters.")
+    # CI exercises empty-schema roundtrips; never delete production counters.
+    remaining = op.get_bind().execute(
+        sa.text("SELECT count(*) FROM whatsapp_usage_metrics")
+    ).scalar_one()
+    if remaining:
+        raise RuntimeError("Recusa downgrade destrutivo: existem métricas de WhatsApp persistidas.")
+    op.drop_table("whatsapp_usage_metrics")
