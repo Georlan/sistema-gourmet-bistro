@@ -20,6 +20,7 @@ def test_production_kitchen_uses_real_finish_handler_and_marketing_stays_read_on
 def test_cashier_operational_forms_use_canonical_clients_without_local_stubs():
     panel = _source("src/components/CaixaPanel.tsx")
     customers = _source("src/components/caixa/customers/CashierCustomers.tsx")
+    loyalty_owner = _source("src/components/caixa/customers/useLoyaltyConfiguration.ts")
     orders = _source("src/components/caixa/orders/useCashierOrders.ts")
     couriers = _source("src/components/caixa/orders/CashierCouriers.tsx")
 
@@ -33,8 +34,11 @@ def test_cashier_operational_forms_use_canonical_clients_without_local_stubs():
     # Protege contratos de API observáveis. O clique/fluxo de despacho é
     # exercitado pelo E2E de fulfillment, portanto este teste não depende do
     # nome do handler ou da forma exata do JSX.
-    assert "${apiBaseUrl}/fidelidade/config" in customers
-    assert "/fidelidade/configuracao" not in customers
+    assert "useLoyaltyConfiguration" in customers
+    assert "${apiBaseUrl}/fidelidade/config" in loyalty_owner
+    assert "method: 'POST'" in loyalty_owner
+    assert "parseLoyaltyConfig(await response.json())" in loyalty_owner
+    assert "/fidelidade/configuracao" not in customers + loyalty_owner
     assert "/delivery/despachar" in orders
     assert "/comandas/motoboys/cadastro" in orders
     assert "parseInt(motoboyId)" not in panel + couriers

@@ -132,3 +132,34 @@ def test_recommendation_endpoint_rejects_invalid_cost_assumptions():
         },
     )
     assert response.status_code == 422
+
+
+def test_automatic_loyalty_recommendation_does_not_require_coupon_entitlement(monkeypatch):
+    from app.services.plan_entitlements import ENTITLEMENT_LOYALTY
+    monkeypatch.setattr(
+        "app.routes.cupons.has_plan_entitlement",
+        lambda _db, _tenant, feature: feature == ENTITLEMENT_LOYALTY,
+    )
+    client = TestClient(app)
+    result = client.post(
+        "/caixa/cupons/economia/recomendacao",
+        headers=_headers(client),
+        json={"mode": "automatico"},
+    )
+    assert result.status_code == 200
+    assert result.json()["source"] == "conservative_default"
+    assert result.json()["suggestion"]["effective_reward_percent"] == 2.0
+
+
+def test_automatic_loyalty_recommendation_requires_at_least_one_entitlement(monkeypatch):
+    monkeypatch.setattr(
+        "app.routes.cupons.has_plan_entitlement",
+        lambda _db, _tenant, _feature: False,
+    )
+    client = TestClient(app)
+    result = client.post(
+        "/caixa/cupons/economia/recomendacao",
+        headers=_headers(client),
+        json={"mode": "automatico"},
+    )
+    assert result.status_code == 403

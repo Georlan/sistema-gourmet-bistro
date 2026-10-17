@@ -319,12 +319,21 @@ def recomendar_incentivos(
     sem pedir CMV, ticket ou margem ao dono do restaurante.
     """
     rest_id = require_tenant_id()
-    require_plan_entitlement(
-        db,
-        rest_id,
-        ENTITLEMENT_COUPONS,
-        detail="Cupons estão disponíveis apenas para restaurantes com esse benefício contratado.",
-    )
+    if payload.mode == "automatico":
+        # Esta rota é compartilhada: fidelidade automática não depende de Cupons.
+        if not (
+            has_plan_entitlement(db, rest_id, ENTITLEMENT_LOYALTY)
+            or has_plan_entitlement(db, rest_id, ENTITLEMENT_COUPONS)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Recomendação indisponível no plano atual.",
+            )
+    else:
+        require_plan_entitlement(
+            db, rest_id, ENTITLEMENT_COUPONS,
+            detail="Cupons estão disponíveis apenas para restaurantes com esse benefício contratado.",
+        )
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado.")

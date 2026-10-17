@@ -48,7 +48,9 @@ def test_stage3d_hybrid_fields_distinguish_money_from_points_without_local_coupo
 
     # Novo cliente: pontos são quantidade inteira; cashback é dinheiro.
     assert "const [newCrmSaldo, setNewCrmSaldo] = useState<number | ''>(0);" in panel
-    assert "fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (" in panel
+    # Os inputs de saldo usam a modalidade confirmada pelo servidor, não o rascunho.
+    assert "(savedLoyaltyConfig ?? DEFAULT_LOYALTY_CONFIG).tipo_recompensa === 'PONTOS' ? (" in panel
+    assert "saved={savedLoyaltyConfig} draft={fidelidadeConfig}" in panel
     assert "onValueChange={setNewCrmSaldo}" in panel
     assert "step={fidelidadeConfig.tipo_recompensa === 'PONTOS' ? '1' : '0.01'}" not in panel
     assert "setNewCrmSaldo('0')" not in panel
