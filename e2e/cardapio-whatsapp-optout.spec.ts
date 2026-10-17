@@ -31,7 +31,7 @@ test('link compacto continua no fragmento e exige POST explícito', async ({ pag
     await route.fulfill({ status: 200, contentType: 'application/json', body: '{"disabled":true}' });
   });
   await page.goto(`/whatsapp/avisos#token=${compact}`);
-  await expect(page).toHaveURL(/\\/whatsapp\\/avisos$/);
+  await expect(page).toHaveURL(/\/whatsapp\/avisos$/);
   expect(seen).toEqual([]);
   await page.getByRole('button', { name: 'Parar avisos deste restaurante' }).click();
   await expect(page.getByRole('heading', { name: 'Avisos desativados' })).toBeVisible();

@@ -151,7 +151,7 @@ def test_customer_message_identifies_public_restaurant_not_platform(flow):
     calls = provider(patch)
     assert dispatch_single_outbox_event(db, row)
     text = calls[0]["text"]
-    assert text.startswith("*KÔMA | D8 Burger*\\nPedido #")
+    assert text.startswith("*KÔMA | D8 Burger*\nPedido #")
     assert "Este número não é o WhatsApp do restaurante" in text
     import re
     match = re.search(r"/whatsapp/avisos#token=([A-Za-z0-9_-]+)", text)

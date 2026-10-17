@@ -174,7 +174,7 @@ def resolve_customer_notice(db: Session, snapshot: dict) -> tuple[str, str] | No
         public_slug = str(restaurant.slug).strip()
         if re.fullmatch(r"[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*", public_slug):
             label = public_slug.replace("-", " ").title()[:60]
-    safe_label = re.sub(r"[*_~\x60\\r\\n]", "", label).strip() or "Restaurante"
+    safe_label = re.sub(r"[*_~`\r\n]", "", label).strip() or "Restaurante"
     description = {
         NoticeKind.CUSTOMER_RECEIVED: "Pedido recebido pelo restaurante.",
         NoticeKind.CUSTOMER_READY_PICKUP: "Seu pedido está pronto para retirada.",
@@ -187,11 +187,11 @@ def resolve_customer_notice(db: Session, snapshot: dict) -> tuple[str, str] | No
     # Native WhatsApp bold, one clear header, minimal transactional content.
     # No buyer name: voluntary checkout consent is not phone ownership proof.
     message = (
-        f"*KÔMA | {safe_label}*\\n"
-        f"Pedido #{order.numero_pedido}\\n\\n"
-        f"*{description}*\\n\\n"
-        "Aviso automático. Este número não é o WhatsApp do restaurante.\\n\\n"
-        "Não quer mais receber avisos deste restaurante?\\n"
+        f"*KÔMA | {safe_label}*\n"
+        f"Pedido #{order.numero_pedido}\n\n"
+        f"*{description}*\n\n"
+        "Aviso automático. Este número não é o WhatsApp do restaurante.\n\n"
+        "Não quer mais receber avisos deste restaurante?\n"
         f"Desative: {opt_out_url(rid, target)}"
     )
     return target, message
