@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from ..domain.orders.events import OrderCreated
 from ..domain.orders.types import OrderChannel
 from ..models import Cliente, Comanda, ConfiguracaoRestaurante, IntegrationOutbox, Lancamento, Restaurante, WhatsAppContactOptOut
-from .central_whatsapp import allowed_restaurants, pilot_configuration, recipient_fingerprint
+from .central_whatsapp import allowed_restaurants, transport_configuration, recipient_fingerprint
 from .customer_status_whatsapp import eligible_order_status_recipient
 from .whatsapp_notice_policy import NoticeKind, customer_notice_for_event, still_relevant
 
@@ -40,7 +40,7 @@ def customer_notice_transport_config(
     """Global kill switch plus explicit tenant-scoped platform rollout."""
     if os.getenv("KOMA_CUSTOMER_WA_ENABLED", "false").strip().lower() != "true":
         return None
-    config = pilot_configuration()
+    config = transport_configuration()
     if config is None:
         return None
     if tenant is not None and tenant.whatsapp_platform_managed is True:
@@ -215,4 +215,4 @@ def dispatch_customer_notice(db: Session, snapshot: dict) -> bool:
             last_error="Aviso expirado, revogado, não liberado ou contato/estado divergente.", worker_id=snapshot.get("locked_by"))
         return False
     from .central_whatsapp import dispatch_registered_message
-    return dispatch_registered_message(db, snapshot, pilot_configuration(), *resolved, customer=True)
+    return dispatch_registered_message(db, snapshot, transport_configuration(), *resolved, customer=True)
