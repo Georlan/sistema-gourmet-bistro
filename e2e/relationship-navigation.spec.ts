@@ -55,13 +55,22 @@ test('five destinations, benefit tabs, legacy restoration and module return shar
   await enterRelationship(page);
   await expectRelationshipSelected(page, 'oportunidades');
 
+  // Both presentations consume the same destinations: on desktop the expanded
+  // sidebar and the horizontal strip are intentionally redundant, like Vendas.
   const horizontal = page.locator('#clientes-subtab-oportunidades:visible');
-  if (await horizontal.isVisible()) {
-    await expect(page.locator('.cashier-subnav__button:visible')).toHaveCount(5);
-  } else {
-    await expect(page.locator('.cashier-sidebar:visible .cashier-nav-child:visible')).toHaveCount(5);
-    await expect(page.getByLabel('Localização no Relacionamento')).toContainText('Hoje');
+  await expect(horizontal).toBeVisible();
+  await expect(page.locator('.cashier-subnav__button:visible')).toHaveCount(5);
+  await expect(page.getByLabel('Localização no Relacionamento')).toHaveCount(0);
+  const visibleSidebarChildren = page.locator('.cashier-sidebar:visible .cashier-nav-child:visible');
+  if (await visibleSidebarChildren.count()) {
+    await expect(visibleSidebarChildren).toHaveCount(5);
+    await expect(visibleSidebarChildren.first()).toHaveAttribute('aria-current', 'page');
   }
+  // Disabled scroll arrows must not reserve a blank column at the start.
+  const navLeft = await page.getByRole('navigation', { name: 'Telas desta área' })
+    .evaluate(element => element.getBoundingClientRect().left);
+  const firstTabLeft = await horizontal.evaluate(element => element.getBoundingClientRect().left);
+  expect(firstTabLeft - navLeft).toBeLessThanOrEqual(20);
 
   for (const target of ['clientes', 'campanhas', 'beneficios', 'resultados', 'oportunidades'] as const) {
     await navigateRelationship(page, target);

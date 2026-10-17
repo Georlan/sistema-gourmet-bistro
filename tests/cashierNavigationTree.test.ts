@@ -156,8 +156,8 @@ test('CRM remembers the last tab without sharing it across restaurant switches',
     assert.ok(switchSource.includes(key));
   }
   const subnav = readFileSync(new URL('../src/components/caixa/navigation/CashierSubNavigation.tsx', import.meta.url), 'utf8');
-  assert.match(subnav, /relationshipWithExpandedSidebar/);
-  assert.match(subnav, /lg:hidden/);
+  assert.match(subnav, /cashier-subnav--shared/);
+  assert.doesNotMatch(subnav, /relationshipWithExpandedSidebar|Localização no Relacionamento|lg:hidden/);
 });
 
 test('gestão expõe relatórios e equipe como destinos canônicos', () => {

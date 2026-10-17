@@ -811,7 +811,7 @@ body {
 /* Unified management navigation and toolbars */
 .cashier-subnav {
   gap: 0.25rem !important;
-  padding: 0.45rem 1.25rem !important;
+  padding: 0.45rem 0.5rem !important;
 }
 
 .cashier-subnav__button {
@@ -3420,7 +3420,7 @@ body {
 .cashier-subnav--shared { min-width: 0; width: 100%; align-items: center; }
 .cashier-subnav__scroll { display: flex; gap: .25rem; min-width: 0; flex: 1; overflow-x: auto; position: relative; scrollbar-width: thin; }
 .cashier-subnav .cashier-subnav__arrow { display: grid; place-items: center; flex: 0 0 28px; color: var(--koma-text-muted); }
-.cashier-subnav__arrow:disabled { visibility: hidden; }
+.cashier-subnav__arrow:disabled { display: none; }
 @media (max-width: 767px) {
   .cashier-subnav--shared .cashier-subnav__button,
   .cashier-subnav--shared .cashier-subnav__arrow { min-height: 44px; }
