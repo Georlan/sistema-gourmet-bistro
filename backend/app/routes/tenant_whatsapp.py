@@ -73,7 +73,7 @@ def get_status(
 ):
     config = _config(db, user)
     customer_fields = {
-        "customer_notices_available": customer_notice_transport_config(user.restaurante_id) is not None,
+        "customer_notices_available": customer_notice_transport_config(user.restaurante_id, config) is not None,
         "customer_notices_enabled": customer_notices_enabled(user.restaurante_id, config),
         "customer_notices_requested": config.whatsapp_customer_notices_enabled is True,
     }
@@ -84,7 +84,7 @@ def get_status(
         phone = config.whatsapp_recipient_phone or ""
         return {
             "state": "registered" if phone else "not_configured",
-            "enabled": bool(enabled_for(user.restaurante_id) and (transport := pilot_configuration()) and registered_operator_phone(config, transport.sender)),
+            "enabled": bool(enabled_for(user.restaurante_id, config) and (transport := pilot_configuration()) and registered_operator_phone(config, transport.sender)),
             "phone_ending": phone[-4:] or None,
             "mode": "central", **customer_fields,
         }
@@ -144,7 +144,7 @@ def set_customer_notices(
     # Disabling must always work, even if the shared Business is offline.
     config = _config(db, user)
     config = wa._locked_whatsapp_config_query(db, user.restaurante_id).populate_existing().one()
-    if body.enabled and customer_notice_transport_config(user.restaurante_id) is None:
+    if body.enabled and customer_notice_transport_config(user.restaurante_id, config) is None:
         raise HTTPException(status_code=409, detail="Avisos ao cliente indisponíveis para este restaurante.")
     config.whatsapp_customer_notices_enabled = body.enabled
     if not body.enabled:
