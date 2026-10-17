@@ -1,5 +1,31 @@
 # WhatsApp central com destinatários do cadastro
 
+## Consentimento administrativo por restaurante (Bloco 1)
+
+O restaurante agora autoriza **separadamente** duas funções em Configurações → Integrações → WhatsApp:
+receber comandas em um telefone cadastrado e permitir que seus compradores escolham receber
+avisos no WhatsApp pelo Business KÔMA. O segundo serviço não exige pareamento nem cadastro
+de um telefone operacional. Usa `ConfiguracaoRestaurante.whatsapp_customer_notices_enabled`,
+default `false`, com POST autenticado `/caixa/configuracoes/whatsapp/customer-notices` restrito
+a `configuracoes:administrar`. Somente um restaurante já allowlisted na plataforma pode ativá-lo.
+
+O catálogo público publica somente `avisos_whatsapp_disponiveis` quando há autorização
+persistida **e** transporte/cota da plataforma válidos. Não carrega nem expõe telefone ou
+identidade da instância operacional. Revogar a autorização invalida imediatamente eventos
+pendentes/claimed do cliente daquele tenant e impede novas publicações e despachos. Não
+interfere nos avisos ao operador nem apaga histórico/descadastros. Um aviso já aceito por
+uma chamada de rede concluída não pode ser revogado retroativamente.
+
+Mensagens utilizam negrito nativo do WhatsApp, identificam o KÔMA como canal de avisos,
+não como o restaurante, e explicam o link de descadastro. Não incluir nome de um
+comprador em aviso ao cliente sem prova de titularidade do telefone; o operador pode
+receber nome da comanda já no contexto autorizado da sua própria loja.
+
+A migration de consentimento é default-off para **todos** os restaurantes, inclusive o
+piloto ID 8. O responsável pelo restaurante precisa ativar a nova chave após o deploy
+para voltar a oferecer a caixa no checkout. O limite mensal de tentativas e a vazão
+globais permanecem como estavam; sua revisão está reservada ao Bloco 2.
+
 ## Contrato
 
 Uma conexão Business KÔMA na Evolution atende os tenants explicitamente liberados. Nenhum número de restaurante/comprador é hardcoded ou configurado por variável de deploy. O remetente e a instância são configuração protegida do transporte; os destinos vêm do banco:

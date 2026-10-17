@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictBool
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -12,6 +12,7 @@ from ..models import ConfiguracaoRestaurante, Usuario, IntegrationOutbox
 from ..security import require_permission
 from ..services import tenant_order_whatsapp as wa
 from ..services.central_whatsapp import CENTRAL_INSTANCE_MARKER, enabled_for, pilot_configuration, registered_operator_phone
+from ..services.customer_whatsapp_dispatch import customer_notice_transport_config, customer_notices_enabled
 
 router = APIRouter(prefix="/caixa/configuracoes/whatsapp", tags=["WhatsApp operacional"])
 
@@ -24,6 +25,10 @@ class ConfigureRequest(BaseModel):
 class RecipientRegistrationRequest(BaseModel):
     phone: str
     confirm_receiving: bool = False
+
+
+class CustomerNoticesRequest(BaseModel):
+    enabled: StrictBool
 
 
 def _config(db: Session, user: Usuario) -> ConfiguracaoRestaurante:
@@ -67,16 +72,21 @@ def get_status(
     user: Usuario = Depends(require_permission("configuracoes:administrar")),
 ):
     config = _config(db, user)
+    customer_fields = {
+        "customer_notices_available": customer_notice_transport_config(user.restaurante_id) is not None,
+        "customer_notices_enabled": customer_notices_enabled(user.restaurante_id, config),
+        "customer_notices_requested": config.whatsapp_customer_notices_enabled is True,
+    }
     if not config.whatsapp_instance_name:
         return {"state": "not_configured", "enabled": False, "phone_ending": None,
-                "mode": "central"}
+                "mode": "central", **customer_fields}
     if config.whatsapp_instance_name == CENTRAL_INSTANCE_MARKER:
         phone = config.whatsapp_recipient_phone or ""
         return {
             "state": "registered" if phone else "not_configured",
             "enabled": bool(enabled_for(user.restaurante_id) and (transport := pilot_configuration()) and registered_operator_phone(config, transport.sender)),
             "phone_ending": phone[-4:] or None,
-            "mode": "central",
+            "mode": "central", **customer_fields,
         }
     _release_before_provider(db, config)
     state = "error"
@@ -94,16 +104,49 @@ def get_status(
     except Exception:
         state = "error"
     phone = config.whatsapp_recipient_phone or ""
-    return {"state": state, "enabled": bool(config.whatsapp_alerts_enabled), "phone_ending": phone[-4:] or None, "mode": "individual"}
+    return {"state": state, "enabled": bool(config.whatsapp_alerts_enabled), "phone_ending": phone[-4:] or None, "mode": "individual", **customer_fields}
 
 
 def _cancel_pending_central_notices(db: Session, restaurant_id: int) -> None:
     db.query(IntegrationOutbox).filter(
         IntegrationOutbox.restaurante_id == restaurant_id,
-        IntegrationOutbox.event_name.in_(["koma.whatsapp.central_operator_order", "koma.whatsapp.customer_status"]),
+        IntegrationOutbox.event_name == "koma.whatsapp.central_operator_order",
         IntegrationOutbox.status.in_(["pending", "failed", "processing"]),
     ).update({"status": "dead_letter", "locked_by": None, "locked_at": None,
         "last_error": "Cadastro de recebimento alterado; aguardando novos pedidos."}, synchronize_session=False)
+
+
+def _cancel_pending_customer_notices(db: Session, restaurant_id: int) -> None:
+    # Already claimed attempts must also be invalidated before the sender's
+    # final ownership check; history and opt-outs remain intact.
+    db.query(IntegrationOutbox).filter(
+        IntegrationOutbox.restaurante_id == restaurant_id,
+        IntegrationOutbox.event_name == "koma.whatsapp.customer_status",
+        IntegrationOutbox.status.in_(["pending", "failed", "processing"]),
+    ).update({"status": "dead_letter", "locked_by": None, "locked_at": None,
+              "last_error": "Restaurante desativou avisos ao cliente; sem envio."}, synchronize_session=False)
+
+
+@router.post("/customer-notices")
+def set_customer_notices(
+    body: CustomerNoticesRequest,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    # Platform/transport permission and tenant owner's permission are separate.
+    # Disabling must always work, even if the shared Business is offline.
+    config = _config(db, user)
+    config = wa._locked_whatsapp_config_query(db, user.restaurante_id).populate_existing().one()
+    if body.enabled and customer_notice_transport_config(user.restaurante_id) is None:
+        raise HTTPException(status_code=409, detail="Avisos ao cliente indisponíveis para este restaurante.")
+    config.whatsapp_customer_notices_enabled = body.enabled
+    if not body.enabled:
+        _cancel_pending_customer_notices(db, user.restaurante_id)
+    db.commit()
+    return {
+        "customer_notices_enabled": customer_notices_enabled(user.restaurante_id, config),
+        "customer_notices_requested": config.whatsapp_customer_notices_enabled is True,
+    }
 
 
 @router.post("/recipient")

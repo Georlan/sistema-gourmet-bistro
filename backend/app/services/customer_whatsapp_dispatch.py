@@ -61,7 +61,7 @@ def customer_notice_transport_config(restaurant_id: int):
 
 def customer_notices_enabled(restaurant_id: int, tenant: ConfiguracaoRestaurante | None) -> bool:
     config = customer_notice_transport_config(restaurant_id)
-    return bool(config and registered_operator_phone(tenant, config.sender))
+    return bool(config and tenant is not None and tenant.whatsapp_customer_notices_enabled is True)
 
 
 def opted_out(db: Session, rid: int, digest: str) -> bool:
@@ -180,7 +180,18 @@ def resolve_customer_notice(db: Session, snapshot: dict) -> tuple[str, str] | No
     if description is None:
         return None
     from .whatsapp_opt_out import opt_out_url
-    message = f"KÔMA | {label}\nPedido #{order.numero_pedido}\n{description}\n\nParar avisos deste restaurante: {opt_out_url(rid, target)}"
+    # Use native WhatsApp bold. Do not expose a customer name without identity proof.
+    # Restaurant label is normalized to avoid user-supplied line breaks or markup.
+    import re
+    safe_label = re.sub(r"[*_~`]", "", label).strip()
+    message = (
+        "*KÔMA | Avisos de pedidos*\n"
+        f"*{safe_label} · Pedido #{order.numero_pedido}*\n\n"
+        f"*{description}*\n\n"
+        "Este é um aviso automático do KÔMA. Este número não é o WhatsApp do restaurante.\n\n"
+        "Não quer mais receber avisos deste restaurante? Desative aqui:\n"
+        f"{opt_out_url(rid, target)}"
+    )
     return target, message
 
 

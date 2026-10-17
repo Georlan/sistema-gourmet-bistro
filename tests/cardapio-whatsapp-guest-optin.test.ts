@@ -35,3 +35,25 @@ test('existing realtime tracking remains mounted independent of checkout WhatsAp
   assert.match(page, /handleRealtimeOrderStatus/);
   assert.match(checkout, /Acompanhar pedido ao vivo/);
 });
+
+test('checkout opt-in has a prominent accessible area without implied consent', () => {
+  assert.match(checkout, /min-h-24/);
+  assert.match(checkout, /focus-within:ring-2/);
+  assert.match(checkout, /Receba atualizações deste pedido pelo WhatsApp/);
+  assert.match(checkout, /É grátis e opcional, sem promoções/);
+});
+
+test('integration settings separate operator number from independent customer permission', () => {
+  const settings = readFileSync(
+    new URL('../src/components/caixa/settings/CashierIntegrationsSettings.tsx', import.meta.url), 'utf8',
+  );
+  const control = readFileSync(
+    new URL('../src/components/caixa/settings/CashierCustomerWhatsAppSettings.tsx', import.meta.url), 'utf8',
+  );
+  assert.match(settings, /role="tablist"/);
+  assert.match(settings, /Pagamentos/);
+  assert.match(settings, /WhatsApp/);
+  assert.match(settings, /CashierCustomerWhatsAppSettings/);
+  assert.match(control, /customer-notices/);
+  assert.match(control, /não o telefone do restaurante/);
+});
