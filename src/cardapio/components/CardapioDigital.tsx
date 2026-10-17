@@ -31,6 +31,7 @@ import { authRequestErrorMessage } from "../../utils/authRequest";
 import { formatCardapioApiError } from "../orderApiErrors";
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems, buildCardapioPromotionItemIndices } from "../orderItems";
+import { findOutdatedCartProducts } from "../cartCatalogConsistency";
 import { isOrderingBlockConflict } from "../orderingBlockUi";
 import CardapioPaymentSummary from "./CardapioPaymentSummary";
 import { getCheckoutPaymentMethods, getPaymentSelectionError, PAYMENT_LABELS } from "../paymentMethods";
@@ -424,6 +425,26 @@ export default function CardapioDigital({
       };
       if (customerToken) headers["X-Koma-Customer-Token"] = customerToken;
 
+      // Validate against a fresh public snapshot before attempting to create an order.
+      // The cart is a draft; a daily-menu change must not be silently discarded.
+      const catalogResponse = await fetch(
+        `${API_BASE_URL}/api/cardapio-digital/public?restaurante_id=${targetRestauranteId}`,
+        { cache: "no-store", signal: controller.signal },
+      );
+      if (!catalogResponse.ok) {
+        throw new Error("Não foi possível atualizar o cardápio para confirmar a sacola. Tente novamente.");
+      }
+      const latestCatalog = await catalogResponse.json();
+      const outdatedProducts = findOutdatedCartProducts(cart, latestCatalog);
+      if (outdatedProducts.length) {
+        setCanCorrectSubmission(true);
+        throw new Error(
+          "O cardápio mudou desde a montagem. Revise os itens " +
+          outdatedProducts.join(", ") +
+          " na sacola antes de enviar. Nenhum pedido foi criado.",
+        );
+      }
+
       const response = await fetch(`${API_BASE_URL}/cardapio/pedidos`, {
         method: "POST",
         headers,
@@ -452,7 +473,11 @@ export default function CardapioDigital({
         return;
       }
       if (!response.ok || !(data?.comanda_id || data?.id) || data?.numero_pedido == null) {
-        throw new Error(formatCardapioApiError(data));
+        throw new Error(
+          response.status === 404 && data?.detail === "Modificador não encontrado ou inativo."
+            ? "Um complemento da sacola não está mais disponível. Volte à sacola, confira as opções atualizadas e tente novamente."
+            : formatCardapioApiError(data),
+        );
       }
 
       const comandaId = String(data.comanda_id || data.id);
