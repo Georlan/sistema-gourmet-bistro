@@ -22,7 +22,7 @@ def upgrade():
         sa.Column("failed", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("discarded", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("deferred", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("queue_latency_total_ms", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("queue_latency_total_ms", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("queue_latency_samples", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("estimated_customer_cost_brl", sa.Numeric(14, 4), nullable=False, server_default="0"),
     )
