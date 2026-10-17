@@ -210,7 +210,11 @@ def _sanitize_audit_data(data: Any) -> Any:
 
 
 @router.get("/restaurantes")
-def list_tenants(admin: dict = Depends(get_current_admin)):
+def list_tenants(
+    limit: Optional[int] = Query(default=None, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    admin: dict = Depends(get_current_admin),
+):
     """Retorna uma projeção cross-tenant real sem desativar RLS.
 
     A descoberta dos IDs usa o helper SECURITY DEFINER já existente no PostgreSQL.
@@ -218,50 +222,90 @@ def list_tenants(admin: dict = Depends(get_current_admin)):
     que plano, pagamentos e métricas continuam obedecendo ao isolamento RLS.
     Nenhum token, segredo ou dado pessoal é retornado.
     """
+    from ..saas_billing_models import SaaSSubscription
+    from ..services.direct_pix_billing import billing_summary
+
     db = SessionLocal()
     now = datetime.datetime.now(datetime.timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     result: list[dict[str, Any]] = []
+    eff_limit = limit if isinstance(limit, int) else None
+    eff_offset = offset if isinstance(offset, int) else 0
 
     try:
         restaurant_ids = _discover_restaurant_ids(db)
+        if eff_offset > 0 or eff_limit is not None:
+            end_idx = (eff_offset + eff_limit) if eff_limit is not None else None
+            restaurant_ids = restaurant_ids[eff_offset:end_idx]
+
         for restaurant_id in restaurant_ids:
             with tenant_session_scope(db, restaurant_id):
-                restaurante = (
-                    db.query(Restaurante)
+                monthly_orders_sq = (
+                    db.query(func.count(Lancamento.id))
+                    .filter(
+                        Lancamento.restaurante_id == restaurant_id,
+                        Lancamento.timestamp >= month_start,
+                    )
+                    .correlate(None)
+                    .scalar_subquery()
+                )
+                monthly_billing_sq = (
+                    db.query(func.coalesce(func.sum(Pagamento.valor), 0))
+                    .filter(
+                        Pagamento.restaurante_id == restaurant_id,
+                        Pagamento.status == "aprovado",
+                        Pagamento.criado_em >= month_start,
+                    )
+                    .correlate(None)
+                    .scalar_subquery()
+                )
+                last_activity_sq = (
+                    db.query(func.max(Lancamento.timestamp))
+                    .filter(Lancamento.restaurante_id == restaurant_id)
+                    .correlate(None)
+                    .scalar_subquery()
+                )
+                row = (
+                    db.query(
+                        Restaurante,
+                        SaaSSubscription,
+                        RestaurantPaymentAccount,
+                        monthly_orders_sq,
+                        monthly_billing_sq,
+                        last_activity_sq,
+                    )
+                    .outerjoin(
+                        SaaSSubscription,
+                        SaaSSubscription.restaurante_id == Restaurante.id,
+                    )
+                    .outerjoin(
+                        RestaurantPaymentAccount,
+                        (RestaurantPaymentAccount.restaurante_id == Restaurante.id)
+                        & (RestaurantPaymentAccount.provider == "mercado_pago"),
+                    )
                     .filter(Restaurante.id == restaurant_id)
                     .one_or_none()
                 )
-                if restaurante is None:
+                if row is None or row[0] is None:
                     raise RuntimeError(
                         f"Restaurante {restaurant_id} foi descoberto, mas não pôde ser lido no próprio escopo RLS."
                     )
 
-                monthly_orders = (
-                    db.query(func.count(Lancamento.id))
-                    .filter(Lancamento.timestamp >= month_start)
-                    .scalar()
-                    or 0
-                )
-                monthly_billing = (
-                    db.query(func.coalesce(func.sum(Pagamento.valor), 0))
-                    .filter(
-                        Pagamento.status == "aprovado",
-                        Pagamento.criado_em >= month_start,
-                    )
-                    .scalar()
-                    or 0
-                )
-                last_activity = db.query(func.max(Lancamento.timestamp)).scalar()
-                payment_account = (
-                    db.query(RestaurantPaymentAccount)
-                    .filter(RestaurantPaymentAccount.provider == "mercado_pago")
-                    .one_or_none()
-                )
+                restaurante, saas_sub, payment_account, monthly_orders, monthly_billing, last_activity = row
+                if isinstance(last_activity, str):
+                    try:
+                        last_activity = datetime.datetime.fromisoformat(last_activity)
+                    except ValueError:
+                        pass
 
                 saas_status = str(getattr(restaurante, "saas_status", "active") or "active").upper()
-                from ..services.direct_pix_billing import billing_summary
-                billing = billing_summary(db, restaurante.id)
+                sub_pair = (saas_sub, restaurante.billing_mode) if saas_sub is not None else None
+                billing = billing_summary(
+                    db,
+                    restaurante.id,
+                    now=now,
+                    subscription_row=sub_pair,
+                )
                 result.append(
                     {
                         "id": str(restaurante.id),
@@ -269,13 +313,13 @@ def list_tenants(admin: dict = Depends(get_current_admin)):
                         "subdomain": restaurante.slug,
                         "plan": restaurante.plano,
                         "status": saas_status,
-                        "monthlyOrders": int(monthly_orders),
-                        "monthlyBilling": float(monthly_billing),
+                        "monthlyOrders": int(monthly_orders or 0),
+                        "monthlyBilling": float(monthly_billing or 0),
                         "createdAt": None,
                         "lastActivity": (
                             last_activity.isoformat()
-                            if last_activity is not None
-                            else None
+                            if hasattr(last_activity, "isoformat")
+                            else (str(last_activity) if last_activity is not None else None)
                         ),
                         "onlinePaymentStatus": _payment_status(payment_account),
                         "billing": billing,
