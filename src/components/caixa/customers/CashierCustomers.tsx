@@ -43,6 +43,7 @@ import { CustomerProfileDrawer } from './CustomerProfileDrawer';
 import { CustomerRelationshipPanel } from './CustomerRelationshipPanel';
 import { CrmMetricChart } from './CrmMetricChart';
 import { LoyaltyImpactPanel } from './LoyaltyImpactPanel';
+import { DEFAULT_LOYALTY_CONFIG, effectiveLoyaltyPercent, useLoyaltyConfiguration } from './useLoyaltyConfiguration';
 import { CustomerResultsWorkspace } from './CustomerResultsWorkspace';
 import { CustomerSatisfactionPanel } from './CustomerSatisfactionPanel';
 import { useCustomerSatisfaction } from './useCustomerSatisfaction';
@@ -360,30 +361,31 @@ export default function CashierCustomers({
     ];
   }, [crmSummary, loyaltyUsers]);
 
-  const handleSaveFidelidadeConfig = async (e: React.FormEvent) => {
+  // Authoritative snapshot is never overwritten by an unsaved suggestion or input.
+  const loyalty = useLoyaltyConfiguration({
+    apiBaseUrl, authHeaders, hasLoyalty, visible: activeTab === 'clientes',
+  });
+  const savedLoyaltyConfig = loyalty.saved;
+  const fidelidadeConfig = loyalty.draft ?? DEFAULT_LOYALTY_CONFIG;
+  const setFidelidadeConfig = loyalty.setDraft;
+  const [showLoyaltySaveConfirmation, setShowLoyaltySaveConfirmation] = useState(false);
+  const [loyaltySimulationMode, setLoyaltySimulationMode] = useState<'vigente' | 'rascunho'>('vigente');
+
+  const handleSaveFidelidadeConfig = (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const res = await fetch(`${apiBaseUrl}/fidelidade/config`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify(fidelidadeConfig),
-      });
-      if (res.ok) {
-        showToast('Configurações do Programa de Fidelidade salvas com sucesso!');
-      } else {
-        showToast('Falha ao salvar as configurações.', 'error');
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    if (loyalty.dirty && !loyalty.saving) setShowLoyaltySaveConfirmation(true);
   };
 
-  const [fidelidadeConfig, setFidelidadeConfig] = useState({
-    ativo: true,
-    tipo_recompensa: 'PONTOS', // PONTOS | CASHBACK
-    taxa_conversao: 1.0,
-    valor_ponto_em_dinheiro: 0.05,
-  });
+  const confirmSaveFidelidadeConfig = async () => {
+    setShowLoyaltySaveConfirmation(false);
+    if (await loyalty.save()) {
+      showToast('Programa de fidelidade atualizado e confirmado pelo servidor.');
+      await refreshLoyaltyUsers();
+      await loadCrmSummary();
+    } else {
+      showToast('O programa não foi alterado. Verifique os detalhes e tente novamente.', 'error');
+    }
+  };
 
   const handleApplyGrowthOptionToLoyalty = (option: GrowthEconomicsOption) => {
     setFidelidadeConfig((prev) => {
@@ -478,7 +480,7 @@ export default function CashierCustomers({
         telefone: newPhone.replace(/\D/g, ''),
       };
       if (hasLoyalty && newSaldo !== undefined && !isNaN(newSaldo)) {
-        if (fidelidadeConfig.tipo_recompensa === 'PONTOS') {
+        if ((savedLoyaltyConfig ?? DEFAULT_LOYALTY_CONFIG).tipo_recompensa === 'PONTOS') {
           body.saldo_pontos = Math.round(newSaldo);
         } else {
           body.saldo_cashback = newSaldo;
@@ -514,7 +516,7 @@ export default function CashierCustomers({
         telefone: telefone.replace(/\D/g, ''),
       };
       if (hasLoyalty && !isNaN(saldoInicial)) {
-        if (fidelidadeConfig.tipo_recompensa === 'PONTOS') {
+        if ((savedLoyaltyConfig ?? DEFAULT_LOYALTY_CONFIG).tipo_recompensa === 'PONTOS') {
           body.saldo_pontos = Math.round(saldoInicial);
         } else {
           body.saldo_cashback = saldoInicial;
@@ -542,19 +544,6 @@ export default function CashierCustomers({
     }
     return false;
   };
-
-  useEffect(() => {
-    if (activeTab === 'clientes') {
-      if (hasLoyalty) {
-        fetch(`${apiBaseUrl}/fidelidade/config`, { headers: authHeaders })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data && data.tipo_recompensa) setFidelidadeConfig(data);
-          })
-          .catch((err) => console.error('Error fetching fidelity config:', err));
-      }
-    }
-  }, [activeTab, activeSubTab, apiBaseUrl, authHeaders.Authorization, hasLoyalty]);
 
   const handleLaunchOpportunityAction = (opp: any, approach: 'SEM_DESCONTO' | 'FIDELIDADE' | 'CUPOM' = 'SEM_DESCONTO') => {
     setCampaignDraftSeed({
@@ -1153,7 +1142,7 @@ export default function CashierCustomers({
                               <div className="col-span-full">
                                 <dt className="text-[10px] text-koma-muted">Benefício (Acumulado vs. Resgatável)</dt>
                                 <dd className="mt-1 break-words font-mono font-extrabold text-emerald-700 dark:text-emerald-400">
-                                  {fidelidadeConfig.tipo_recompensa === 'PONTOS'
+                                  {(savedLoyaltyConfig ?? DEFAULT_LOYALTY_CONFIG).tipo_recompensa === 'PONTOS'
                                     ? `${user.pontos} pts`
                                     : `R$ ${user.saldoCashback.toFixed(2)}`}
                                   {user.status_beneficio === 'SALDO_EM_FORMACAO' && (
@@ -1241,7 +1230,7 @@ export default function CashierCustomers({
                               {hasLoyalty && (
                                 <td className="p-3.5 font-mono text-xs">
                                   <span className="font-extrabold text-emerald-700 dark:text-emerald-400 block">
-                                    {fidelidadeConfig.tipo_recompensa === 'PONTOS'
+                                    {(savedLoyaltyConfig ?? DEFAULT_LOYALTY_CONFIG).tipo_recompensa === 'PONTOS'
                                       ? `${user.pontos} pts`
                                       : `R$ ${user.saldoCashback.toFixed(2)}`}
                                   </span>
@@ -1716,7 +1705,7 @@ export default function CashierCustomers({
                   return;
                 }
                 const newSaldo = hasLoyalty
-                  ? fidelidadeConfig.tipo_recompensa === 'PONTOS'
+                  ? (savedLoyaltyConfig ?? DEFAULT_LOYALTY_CONFIG).tipo_recompensa === 'PONTOS'
                     ? crmFormPontos
                     : crmFormCashback
                   : undefined;
@@ -1761,7 +1750,7 @@ export default function CashierCustomers({
 
               {hasLoyalty && (
                 <div className="grid grid-cols-2 gap-4">
-                  {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
+                  {(savedLoyaltyConfig ?? DEFAULT_LOYALTY_CONFIG).tipo_recompensa === 'PONTOS' ? (
                     <div className="space-y-1 col-span-2">
                       <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
                         Saldo de Pontos (Ajuste):
@@ -1877,9 +1866,9 @@ export default function CashierCustomers({
               {hasLoyalty && (
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
-                    {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? 'Pontos Iniciais:' : 'Cashback Inicial R$:'}
+                    {(savedLoyaltyConfig ?? DEFAULT_LOYALTY_CONFIG).tipo_recompensa === 'PONTOS' ? 'Pontos Iniciais:' : 'Cashback Inicial R$:'}
                   </label>
-                  {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
+                  {(savedLoyaltyConfig ?? DEFAULT_LOYALTY_CONFIG).tipo_recompensa === 'PONTOS' ? (
                     <input
                       type="number"
                       step="1"
