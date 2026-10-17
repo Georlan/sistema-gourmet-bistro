@@ -44,6 +44,7 @@ def test_opt_out_rls_and_browser_roles(pg):
         for role in ('anon','authenticated'):
             assert not conn.execute(text("SELECT has_table_privilege(:role,'public.whatsapp_contact_opt_outs','SELECT')"), {'role':role}).scalar()
             assert not conn.execute(text("SELECT has_table_privilege(:role,'public.central_whatsapp_sender_state','SELECT')"), {'role':role}).scalar()
+            assert not conn.execute(text("SELECT has_table_privilege(:role,'public.whatsapp_usage_metrics','SELECT')"), {'role':role}).scalar()
         tx.rollback()
 
 
@@ -67,3 +68,35 @@ def test_two_tenants_share_one_atomic_business_slot(pg):
         from app.services.whatsapp_sender_gate import _key
         with pg.begin() as conn:
             conn.execute(text('DELETE FROM central_whatsapp_sender_state WHERE sender_key=:key'), {'key':_key(cfg)})
+
+
+def test_whatsapp_usage_counters_force_tenant_rls(pg):
+    with pg.connect() as conn:
+        tx = conn.begin()
+        try:
+            for rid in (991701, 991702):
+                conn.execute(text(
+                    "INSERT INTO restaurantes(id,nome,plano,billing_mode,saas_status) "
+                    "VALUES (:rid,'Synthetic usage RLS','pocket','legacy','active')"
+                ), {"rid": rid})
+                conn.execute(text(
+                    "INSERT INTO whatsapp_usage_metrics(restaurante_id, month_utc, attempts) "
+                    "VALUES (:rid,'2026-10',1)"
+                ), {"rid": rid})
+            conn.execute(text("SET LOCAL ROLE koma_app"))
+            conn.execute(text("SELECT set_config('app.current_restaurante_id','991701',true)"))
+            assert conn.execute(text("SELECT restaurante_id FROM whatsapp_usage_metrics")).scalars().all() == [991701]
+            with pytest.raises(Exception):
+                with conn.begin_nested():
+                    conn.execute(text(
+                        "UPDATE whatsapp_usage_metrics SET attempts=99 WHERE restaurante_id=991702"
+                    ))
+                    # UPDATE hidden by RLS; no leaked rows.
+                    raise RuntimeError("Protected tenant never becomes visible")
+            assert conn.execute(text(
+                "SELECT count(*) FROM whatsapp_usage_metrics WHERE restaurante_id=991702"
+            )).scalar() == 0
+            conn.execute(text("SELECT set_config('app.current_restaurante_id','',true)"))
+            assert conn.execute(text("SELECT count(*) FROM whatsapp_usage_metrics")).scalar() == 0
+        finally:
+            tx.rollback()
