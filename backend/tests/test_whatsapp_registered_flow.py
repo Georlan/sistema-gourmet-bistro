@@ -386,6 +386,7 @@ def test_customer_notices_admin_permission_revokes_pending_without_affecting_ope
     assert response['customer_notices_enabled'] is False
     db.refresh(notices[0])
     assert notices[0].status == 'dead_letter'
+    assert db.query(WhatsAppUsageMetric).filter_by(restaurante_id=701).one().discarded == 1
     assert customer.customer_notices_enabled(701, config(db)) is False
     calls = provider(patch)
     assert not dispatch_single_outbox_event(db, notices[0])
