@@ -9,7 +9,7 @@ import datetime as dt
 import os
 import uuid
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_UP
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -34,19 +34,6 @@ class CustomerNotice:
     event_id: str
 
 
-def limits() -> tuple[int, Decimal, Decimal] | None:
-    """Tariff must be supplied explicitly; message ceiling also applies at zero tariff."""
-    try:
-        count = int(os.getenv("KOMA_CUSTOMER_WA_MONTHLY_MESSAGE_LIMIT", "0"))
-        unit = Decimal(os.environ["KOMA_CUSTOMER_WA_UNIT_COST_BRL"])
-        budget = Decimal(os.getenv("KOMA_CUSTOMER_WA_MONTHLY_BUDGET_BRL", "10"))
-        if count < 1 or not unit.is_finite() or not budget.is_finite() or unit < 0 or budget <= 0:
-            return None
-        return count, unit.quantize(Decimal("0.0001"), rounding=ROUND_UP), budget
-    except (KeyError, ValueError, InvalidOperation):
-        return None
-
-
 def customer_notice_transport_config(restaurant_id: int):
     """Configuração autorizada para avisos ao cliente, sem consultar nenhum dado de tenant."""
     if os.getenv("KOMA_CUSTOMER_WA_ENABLED", "false").strip().lower() != "true":
@@ -54,7 +41,7 @@ def customer_notice_transport_config(restaurant_id: int):
     if restaurant_id not in allowed_restaurants("KOMA_CUSTOMER_WA_ALLOWED_RESTAURANT_IDS"):
         return None
     config = pilot_configuration()
-    if config is None or restaurant_id not in config.restaurant_ids or limits() is None:
+    if config is None or restaurant_id not in config.restaurant_ids:
         return None
     return config
 
@@ -96,7 +83,7 @@ def _released(db: Session, rid: int, source_id: str) -> bool:
 def enqueue_customer_notice(db: Session, event, event_name: str):
     rid = int(event.restaurant_id)
     # The default-off path must add no query to the operational transaction.
-    if os.getenv("KOMA_CUSTOMER_WA_ENABLED", "false").strip().lower() != "true" or not enabled_for(rid) or limits() is None:
+    if os.getenv("KOMA_CUSTOMER_WA_ENABLED", "false").strip().lower() != "true" or not enabled_for(rid):
         return None
     tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one_or_none()
     if not customer_notices_enabled(rid, tenant) or not event.check_id:
@@ -196,27 +183,23 @@ def resolve_customer_notice(db: Session, snapshot: dict) -> tuple[str, str] | No
 
 
 def budget_available(tenant: ConfiguracaoRestaurante) -> bool:
-    configured = limits()
-    if configured is None:
-        return False
-    cap, unit, budget = configured
-    month = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m")
-    used = int(tenant.whatsapp_budget_attempts or 0) if tenant.whatsapp_budget_month == month else 0
-    spent = Decimal(str(tenant.whatsapp_budget_cost or 0)) if tenant.whatsapp_budget_month == month else Decimal("0")
-    return used < cap and spent + unit <= budget
+    """Legacy compatibility: budgets are observability only, never an order gate."""
+    return True
 
 
 def reserve_budget(tenant: ConfiguracaoRestaurante) -> None:
-    # Caller holds the central transport's settings row lock until commit.
-    # Reserved attempts include unavailable/ambiguous provider requests and are
-    # never refunded automatically. Re-registering a phone cannot reset spend.
+    """Preserve historical UTC-monthly estimate/attempts without blocking sends."""
+    from .whatsapp_usage import estimated_customer_unit_cost
     month = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m")
     if tenant.whatsapp_budget_month != month:
         tenant.whatsapp_budget_month = month
         tenant.whatsapp_budget_attempts = 0
         tenant.whatsapp_budget_cost = Decimal("0")
     tenant.whatsapp_budget_attempts = int(tenant.whatsapp_budget_attempts or 0) + 1
-    tenant.whatsapp_budget_cost = Decimal(str(tenant.whatsapp_budget_cost or 0)) + limits()[1]
+    tenant.whatsapp_budget_cost = (
+        Decimal(str(tenant.whatsapp_budget_cost or 0))
+        + (estimated_customer_unit_cost() or Decimal("0"))
+    )
 
 
 def dispatch_customer_notice(db: Session, snapshot: dict) -> bool:
