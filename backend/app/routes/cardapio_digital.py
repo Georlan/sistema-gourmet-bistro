@@ -235,8 +235,13 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
     )
     # Public capability depends only on the explicit customer-notice consent.
     # Never load private operator phone/session into public menu projections.
-    if customer_notice_transport_config(restaurante_id):
-        public_columns += (ConfiguracaoRestaurante.whatsapp_customer_notices_enabled,)
+    # Only booleans are loaded. Private destinations and instance metadata
+    # remain inaccessible to this public projection (raiseload).
+    public_columns += (
+        ConfiguracaoRestaurante.whatsapp_customer_notices_enabled,
+        ConfiguracaoRestaurante.whatsapp_platform_managed,
+        ConfiguracaoRestaurante.whatsapp_platform_customer_allowed,
+    )
     return db.query(ConfiguracaoRestaurante).options(
         load_only(*public_columns, raiseload=True),
         raiseload(ConfiguracaoRestaurante.restaurante),

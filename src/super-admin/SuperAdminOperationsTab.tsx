@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { publicApiFetch, superAdminFetch } from "./superAdminApi";
 import type { IntegrationsHealthStatus } from "./superAdminTypes";
+import { SuperAdminWhatsAppPanel } from "./SuperAdminWhatsAppPanel";
 
 
 interface DnsRecord {
@@ -167,6 +168,8 @@ export function SuperAdminOperationsTab() {
           </p>
         </div>
       </div>
+
+      <SuperAdminWhatsAppPanel />
 
       <details className="rounded-xl border border-zinc-800 bg-koma-card p-4">
         <summary className="cursor-pointer text-sm font-bold">Hospedagem e DNS · consultas administrativas opcionais</summary>
