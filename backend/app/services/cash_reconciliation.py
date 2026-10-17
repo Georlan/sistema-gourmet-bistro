@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Iterable, Sequence
 
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from ..financial_models import PagamentoAlocacao, PagamentoEstorno
@@ -104,72 +104,115 @@ def cash_shift_totals(
     restaurante_id: int,
     turno: CaixaTurno,
 ) -> CashShiftTotals:
-    payments = db.query(Pagamento).filter(
-        Pagamento.restaurante_id == restaurante_id,
-        Pagamento.turno_id == turno.id,
-        Pagamento.status == "aprovado",
-    ).all()
-    refunds = db.query(PagamentoEstorno).filter(
-        PagamentoEstorno.restaurante_id == restaurante_id,
-        PagamentoEstorno.turno_id == turno.id,
-    ).all()
-    refund_methods = _refund_method_map(
-        db,
-        restaurante_id,
-        [refund.id for refund in refunds],
+    card_methods_tuple = tuple(CARD_METHODS)
+    payment_method_expr = func.lower(func.trim(func.coalesce(Pagamento.metodo, "")))
+    payment_val_expr = func.round(func.coalesce(Pagamento.valor, 0), 2)
+
+    payment_agg = (
+        db.query(
+            func.coalesce(func.sum(payment_val_expr), 0),
+            func.coalesce(
+                func.sum(case((payment_method_expr == "dinheiro", payment_val_expr), else_=0)),
+                0,
+            ),
+            func.coalesce(
+                func.sum(case((payment_method_expr == "pix", payment_val_expr), else_=0)),
+                0,
+            ),
+            func.coalesce(
+                func.sum(case((payment_method_expr.in_(card_methods_tuple), payment_val_expr), else_=0)),
+                0,
+            ),
+            func.count(func.distinct(Pagamento.comanda_id)),
+        )
+        .filter(
+            Pagamento.restaurante_id == restaurante_id,
+            Pagamento.turno_id == turno.id,
+            Pagamento.status == "aprovado",
+        )
+        .one()
     )
 
-    gross_by_method: dict[str, Decimal] = defaultdict(lambda: Decimal("0.00"))
-    refund_by_method: dict[str, Decimal] = defaultdict(lambda: Decimal("0.00"))
-    gross_total = Decimal("0.00")
-    refund_total = Decimal("0.00")
+    gross_total = money(payment_agg[0])
+    gross_cash = money(payment_agg[1])
+    gross_pix = money(payment_agg[2])
+    gross_card = money(payment_agg[3])
+    paid_count = int(payment_agg[4] or 0)
 
-    for payment in payments:
-        value = money(payment.valor)
-        gross_total += value
-        gross_by_method[normalize_method(payment.metodo)] += value
-    for refund in refunds:
-        value = money(refund.valor)
-        refund_total += value
-        refund_by_method[normalize_method(
-            refund_methods.get(str(refund.id), refund.metodo)
-        )] += value
+    refund_method_expr = func.lower(
+        func.trim(
+            func.coalesce(
+                PagamentoEstornoLiquidacao.metodo_devolucao,
+                PagamentoEstorno.metodo,
+                "",
+            )
+        )
+    )
+    refund_val_expr = func.round(func.coalesce(PagamentoEstorno.valor, 0), 2)
 
-    movements = db.query(CaixaMovimentacao).filter(
-        CaixaMovimentacao.restaurante_id == restaurante_id,
-        CaixaMovimentacao.turno_id == turno.id,
-    ).all()
-    supplies = money(sum(
-        (money(row.valor) for row in movements if row.tipo == "suprimento"),
-        Decimal("0.00"),
-    ))
-    withdrawals = money(sum(
-        (money(row.valor) for row in movements if row.tipo == "sangria"),
-        Decimal("0.00"),
-    ))
+    refund_agg = (
+        db.query(
+            func.coalesce(func.sum(refund_val_expr), 0),
+            func.coalesce(
+                func.sum(case((refund_method_expr == "dinheiro", refund_val_expr), else_=0)),
+                0,
+            ),
+            func.coalesce(
+                func.sum(case((refund_method_expr == "pix", refund_val_expr), else_=0)),
+                0,
+            ),
+            func.coalesce(
+                func.sum(case((refund_method_expr.in_(card_methods_tuple), refund_val_expr), else_=0)),
+                0,
+            ),
+        )
+        .select_from(PagamentoEstorno)
+        .outerjoin(
+            PagamentoEstornoLiquidacao,
+            (PagamentoEstornoLiquidacao.estorno_id == PagamentoEstorno.id)
+            & (PagamentoEstornoLiquidacao.restaurante_id == PagamentoEstorno.restaurante_id),
+        )
+        .filter(
+            PagamentoEstorno.restaurante_id == restaurante_id,
+            PagamentoEstorno.turno_id == turno.id,
+        )
+        .one()
+    )
 
-    gross_cash = money(gross_by_method.get("dinheiro", 0))
-    gross_pix = money(gross_by_method.get("pix", 0))
-    gross_card = money(gross_by_method.get("cartao", 0))
-    refund_cash = money(refund_by_method.get("dinheiro", 0))
-    refund_pix = money(refund_by_method.get("pix", 0))
-    refund_card = money(refund_by_method.get("cartao", 0))
+    refund_total = money(refund_agg[0])
+    refund_cash = money(refund_agg[1])
+    refund_pix = money(refund_agg[2])
+    refund_card = money(refund_agg[3])
+
+    mov_val_expr = func.round(func.coalesce(CaixaMovimentacao.valor, 0), 2)
+    mov_agg = (
+        db.query(
+            func.coalesce(
+                func.sum(case((CaixaMovimentacao.tipo == "suprimento", mov_val_expr), else_=0)),
+                0,
+            ),
+            func.coalesce(
+                func.sum(case((CaixaMovimentacao.tipo == "sangria", mov_val_expr), else_=0)),
+                0,
+            ),
+        )
+        .filter(
+            CaixaMovimentacao.restaurante_id == restaurante_id,
+            CaixaMovimentacao.turno_id == turno.id,
+        )
+        .one()
+    )
+
+    supplies = money(mov_agg[0])
+    withdrawals = money(mov_agg[1])
+
     net_cash = money(gross_cash - refund_cash)
     net_pix = money(gross_pix - refund_pix)
     net_card = money(gross_card - refund_card)
 
-    paid_count = int(
-        db.query(func.count(func.distinct(Pagamento.comanda_id))).filter(
-            Pagamento.restaurante_id == restaurante_id,
-            Pagamento.turno_id == turno.id,
-            Pagamento.status == "aprovado",
-        ).scalar()
-        or 0
-    )
-
     return CashShiftTotals(
-        vendas_brutas=money(gross_total),
-        estornos=money(refund_total),
+        vendas_brutas=gross_total,
+        estornos=refund_total,
         vendas_liquidas=money(gross_total - refund_total),
         bruto_dinheiro=gross_cash,
         bruto_pix=gross_pix,
