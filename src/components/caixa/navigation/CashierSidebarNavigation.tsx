@@ -65,7 +65,7 @@ export function CashierSidebarNavigation({
                         className="cashier-nav-children ml-6 mt-1 space-y-0.5 border-l border-koma-border pl-2 group-data-[collapsible=icon]:hidden"
                         aria-label={`Atalhos de ${item.label}`}
                       >
-                        {item.children.map((child) => {
+                        {item.children.filter((child) => !child.navigationHidden).map((child) => {
                           const childActive = isSidebarTabActive(child.id);
                           const childCount = child.badge === 'orders' ? sidebarOrderCount : 0;
                           return (
@@ -74,7 +74,7 @@ export function CashierSidebarNavigation({
                               type="button"
                               onClick={() => handleSidebarNavigation(child.id, closeMobile)}
                               className={clsx(
-                                'cashier-nav-child flex min-h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-[11px] font-semibold transition-colors',
+                                'cashier-nav-child flex min-h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-[11px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500',
                                 childActive
                                   ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                                   : 'text-koma-subtle hover:bg-koma-raised hover:text-koma-foreground',

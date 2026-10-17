@@ -160,7 +160,7 @@ export function CustomerResultsWorkspace({
 
         {campanhas.length === 0 ? (
           <p className="text-xs text-koma-muted">
-            Nenhuma campanha registrada ainda. Inicie uma ação a partir da aba <strong>Ações para hoje</strong> ou{' '}
+            Nenhuma campanha registrada ainda. Inicie uma ação a partir da aba <strong>Hoje</strong> ou{' '}
             <strong>Campanhas</strong>.
           </p>
         ) : (
