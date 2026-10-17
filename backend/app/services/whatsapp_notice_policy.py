@@ -92,7 +92,7 @@ def still_relevant(
     fulfillment: str | FulfillmentType,
     queued_at: dt.datetime,
     now: dt.datetime,
-    max_age_minutes: int = 10,
+    max_age_minutes: int | None = None,
 ) -> bool:
     """Do not notify outdated states. Called immediately before delivery.
 
@@ -104,7 +104,12 @@ def still_relevant(
     if queued_at.tzinfo is None or now.tzinfo is None:
         return False
     age = now - queued_at
-    if age < dt.timedelta(0) or age > dt.timedelta(minutes=max(1, max_age_minutes)):
+    # A received update becomes obsolete quickly. A still-current ready/dispatch
+    # or cancellation can survive a moderately congested Business queue.
+    ttl = max_age_minutes if max_age_minutes is not None else (
+        10 if kind == NoticeKind.CUSTOMER_RECEIVED else 30
+    )
+    if age < dt.timedelta(0) or age > dt.timedelta(minutes=max(1, ttl)):
         return False
     state = _safe_status(latest_status)
     if state is None:

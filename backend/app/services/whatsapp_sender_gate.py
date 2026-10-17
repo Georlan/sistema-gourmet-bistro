@@ -1,6 +1,7 @@
 """Short persisted global sender reservations, never SQL locks over HTTP."""
 import datetime as dt
 import hashlib
+import os
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,15 @@ def _key(config) -> str:
     # Instance is technical metadata, not a phone or a credential. A session
     # keeps its lane even if the configured representation of its number changes.
     return hashlib.sha256(config.instance.encode()).hexdigest()
+
+
+def minimum_interval_seconds() -> int:
+    """Global conservative pacing; malformed/too-small env never enables a burst."""
+    try:
+        requested = int(os.getenv("KOMA_CENTRAL_WA_MIN_INTERVAL_SECONDS", "15"))
+    except ValueError:
+        requested = 15
+    return max(15, min(120, requested))
 
 
 def lock_sender(db: Session, config) -> CentralWhatsAppSenderState:

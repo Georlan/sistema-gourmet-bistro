@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.database import Base
 from app.domain.orders.events import OrderCreated, OrderReady, OrderDispatched, OrderCancelled
 from app.domain.orders.types import FulfillmentType, OrderChannel
-from app.models import Comanda, ConfiguracaoRestaurante, IntegrationOutbox, Lancamento, Restaurante, Usuario, WhatsAppContactOptOut
+from app.models import Comanda, ConfiguracaoRestaurante, IntegrationOutbox, Lancamento, Restaurante, Usuario, WhatsAppContactOptOut, WhatsAppUsageMetric, CentralWhatsAppSenderState
 from app.services import central_whatsapp as central
 from app.services import customer_whatsapp_dispatch as customer
 from app.services.outbox.dispatcher import dispatch_single_outbox_event, recover_stale_outbox_claims
@@ -157,13 +157,11 @@ def test_customer_receives_only_after_consent_and_from_same_order(flow):
     assert len(publish(db, replace(event, event_id='canonical-replay'))) == 1
 
 
-@pytest.mark.parametrize('condition', ['no_consent', 'off', 'no_tariff', 'no_limit', 'foreign', 'not_released'])
+@pytest.mark.parametrize('condition', ['no_consent', 'off', 'foreign', 'not_released'])
 def test_customer_is_default_off_and_does_not_use_operator_consent(flow, condition):
     db, patch = flow
     check, source, event = order(db, consent=condition != 'no_consent')
     if condition == 'off': patch.delenv('KOMA_CUSTOMER_WA_ENABLED')
-    if condition == 'no_tariff': patch.delenv('KOMA_CUSTOMER_WA_UNIT_COST_BRL')
-    if condition == 'no_limit': patch.delenv('KOMA_CUSTOMER_WA_MONTHLY_MESSAGE_LIMIT')
     if condition == 'foreign': patch.setenv('KOMA_CENTRAL_WA_PILOT_RESTAURANT_ID', '702')
     if condition == 'not_released':
         assert customer.enqueue_customer_notice(db, event, 'koma.order.created') is None
@@ -235,10 +233,11 @@ def test_delivery_ready_is_silent_until_dispatch_and_cancellation_is_separate(fl
     assert {r.payload['kind'] for r in rows} == {'customer_received','customer_dispatched','customer_cancelled'}
 
 
-def test_budget_is_durable_after_outbox_cleanup_and_reregistration(flow):
+def test_usage_is_durable_after_outbox_cleanup_and_never_blocks_new_orders(flow):
     db, patch = flow
     patch.setenv('KOMA_CUSTOMER_WA_MONTHLY_MESSAGE_LIMIT', '1')
-    check, source, event = order(db)
+    patch.setenv('KOMA_CUSTOMER_WA_MONTHLY_BUDGET_BRL', '0.01')
+    _, _, event = order(db)
     row = publish(db, event)[0]
     calls = provider(patch)
     assert dispatch_single_outbox_event(db, row)
@@ -247,15 +246,22 @@ def test_budget_is_durable_after_outbox_cleanup_and_reregistration(flow):
     assert cfg.whatsapp_budget_cost == Decimal('0.0350')
     db.delete(row)
     cfg.whatsapp_next_send_at = None
-    cfg.whatsapp_recipient_phone = '5511333333333'
+    db.query(CentralWhatsAppSenderState).one().next_send_at = None
     db.commit()
-    check2, source2, event2 = order(db, suffix='2')
+    _, _, event2 = order(db, suffix='2')
     row2 = publish(db, event2)[0]
-    assert not dispatch_single_outbox_event(db, row2)
-    assert len(calls) == 1
-    patch.setenv('KOMA_CUSTOMER_WA_MONTHLY_MESSAGE_LIMIT', '100')
-    patch.setenv('KOMA_CUSTOMER_WA_MONTHLY_BUDGET_BRL', '0.05')
-    assert not customer.budget_available(cfg)
+    assert dispatch_single_outbox_event(db, row2)
+    assert len(calls) == 2
+    assert cfg.whatsapp_budget_attempts == 2
+    assert cfg.whatsapp_budget_cost == Decimal('0.0700')
+    usage = db.query(WhatsAppUsageMetric).filter_by(restaurante_id=701).one()
+    assert (usage.attempts, usage.accepted, usage.discarded) == (2, 2, 0)
+    assert usage.estimated_customer_cost_brl == Decimal('0.0700')
+    # No checkout should be rejected because an arbitrary budget is exhausted.
+    patch.delenv('KOMA_CUSTOMER_WA_MONTHLY_MESSAGE_LIMIT')
+    patch.delenv('KOMA_CUSTOMER_WA_UNIT_COST_BRL')
+    assert customer.budget_available(cfg)
+    assert customer.customer_notices_enabled(701, cfg)
 
 
 def test_timeout_has_no_automatic_replay_and_reserves_budget(flow):
@@ -380,6 +386,7 @@ def test_customer_notices_admin_permission_revokes_pending_without_affecting_ope
     assert response['customer_notices_enabled'] is False
     db.refresh(notices[0])
     assert notices[0].status == 'dead_letter'
+    assert db.query(WhatsAppUsageMetric).filter_by(restaurante_id=701).one().discarded == 1
     assert customer.customer_notices_enabled(701, config(db)) is False
     calls = provider(patch)
     assert not dispatch_single_outbox_event(db, notices[0])
