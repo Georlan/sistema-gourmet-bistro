@@ -168,7 +168,7 @@ export default function CardapioDigital({
 }: CardapioDigitalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [supportCode, setSupportCode] = useState("");
+  const [requiresCartReview, setRequiresCartReview] = useState(false);
   const [canCorrectSubmission, setCanCorrectSubmission] = useState(true);
   const [orderingBlocked, setOrderingBlocked] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
@@ -412,7 +412,7 @@ export default function CardapioDigital({
     isSubmittingRef.current = true;
     setIsSubmitting(true);
     setErrorMessage("");
-    setSupportCode("");
+    setRequiresCartReview(false);
     setCanCorrectSubmission(false);
 
     const controller = new AbortController();
@@ -438,6 +438,7 @@ export default function CardapioDigital({
       const outdatedProducts = findOutdatedCartProducts(cart, latestCatalog);
       if (outdatedProducts.length) {
         setCanCorrectSubmission(true);
+        setRequiresCartReview(true);
         throw new Error(
           "O cardápio mudou desde a montagem. Revise os itens " +
           outdatedProducts.join(", ") +
@@ -458,8 +459,6 @@ export default function CardapioDigital({
       const data = await response.json().catch(() => null);
       if (!response.ok) {
         setCanCorrectSubmission([400, 404, 422].includes(response.status));
-        const requestId = response.headers.get("X-Request-ID") || "";
-        if (/^[a-zA-Z0-9_-]{1,64}$/.test(requestId)) setSupportCode(requestId.slice(0, 12));
       }
       if (response.status === 401 && customerToken) {
         onSessionExpired?.();
@@ -473,9 +472,18 @@ export default function CardapioDigital({
         return;
       }
       if (!response.ok || !(data?.comanda_id || data?.id) || data?.numero_pedido == null) {
+        // A catalogue update can race with the fresh snapshot above.
+        // Keep technical request IDs in backend logs; show a useful next action.
+        const detail = typeof data?.detail === "string" ? data.detail : "";
+        const changedItem = response.status === 404 && (
+          detail === "Modificador não encontrado ou inativo."
+          || detail.startsWith("Um complemento escolhido não está mais disponível")
+          || detail.startsWith("Produto '")
+        );
+        if (changedItem) setRequiresCartReview(true);
         throw new Error(
-          response.status === 404 && data?.detail === "Modificador não encontrado ou inativo."
-            ? "Um complemento da sacola não está mais disponível. Volte à sacola, confira as opções atualizadas e tente novamente."
+          changedItem
+            ? "O restaurante acabou de alterar a disponibilidade de um item ou complemento da sua sacola. Revise as opções atualizadas antes de confirmar o pedido."
             : formatCardapioApiError(data),
         );
       }
@@ -788,11 +796,10 @@ export default function CardapioDigital({
               <div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><div>
                 <p className="font-black">Não foi possível confirmar o pedido</p>
                 <p className="mt-1 max-h-[15dvh] overflow-y-auto font-semibold">{errorMessage}</p>
-                {supportCode && <p className="mt-1 text-[10px]">Código de suporte: {supportCode}</p>}
               </div></div>
-              {canCorrectSubmission && <button type="button" onClick={onEditCart || onClose} className="mt-2 min-h-11 w-full rounded-lg border border-rose-500/30 px-3 font-bold">Voltar à sacola e corrigir</button>}
+              {canCorrectSubmission && !requiresCartReview && <button type="button" onClick={onEditCart || onClose} className="mt-2 min-h-11 w-full rounded-lg border border-rose-500/30 px-3 font-bold">Voltar à sacola e corrigir</button>}
             </div>}
-            <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || Boolean(paymentError || schedulePaymentError)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : paymentError || schedulePaymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : scheduleMode === "scheduled" ? "Agendar pedido" : "Fazer pedido"}</span></button>
+            <button type="button" onClick={requiresCartReview ? (onEditCart || onClose) : handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || (!requiresCartReview && Boolean(paymentError || schedulePaymentError))} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : requiresCartReview ? "Revisar sacola" : paymentError || schedulePaymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : scheduleMode === "scheduled" ? "Agendar pedido" : "Fazer pedido"}</span></button>
             <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados são enviados agora ao restaurante com a data e o horário escolhidos." : "Pix só entra no painel após o pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente."}</p>
           </footer>
         )}
