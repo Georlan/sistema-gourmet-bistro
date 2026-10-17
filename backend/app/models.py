@@ -1044,6 +1044,8 @@ class ConfiguracaoRestaurante(Base):
     webhook_secret = Column(String(128), nullable=True)
     webhook_ativo = Column(Boolean, default=False, nullable=False)
     whatsapp_alerts_enabled = Column(Boolean, default=False, nullable=False)
+    # Independent tenant authorization to send customer order-status notices.
+    whatsapp_customer_notices_enabled = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     whatsapp_instance_name = Column(String(100), nullable=True)
     whatsapp_recipient_phone = Column(String(16), nullable=True)
     whatsapp_next_send_at = Column(DateTime(timezone=True), nullable=True)

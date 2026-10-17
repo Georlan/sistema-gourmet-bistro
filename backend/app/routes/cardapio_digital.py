@@ -233,14 +233,10 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
         ConfiguracaoRestaurante.tabela_taxas_km,
         ConfiguracaoRestaurante.promocoes,
     )
-    # Somente tenants habilitados ao envio recebem esses campos internos.
-    # Outros tenants mantêm a projeção pública mínima, sem telefone privado.
+    # Public capability depends only on the explicit customer-notice consent.
+    # Never load private operator phone/session into public menu projections.
     if customer_notice_transport_config(restaurante_id):
-        public_columns += (
-            ConfiguracaoRestaurante.whatsapp_instance_name,
-            ConfiguracaoRestaurante.whatsapp_alerts_enabled,
-            ConfiguracaoRestaurante.whatsapp_recipient_phone,
-        )
+        public_columns += (ConfiguracaoRestaurante.whatsapp_customer_notices_enabled,)
     return db.query(ConfiguracaoRestaurante).options(
         load_only(*public_columns, raiseload=True),
         raiseload(ConfiguracaoRestaurante.restaurante),

@@ -421,10 +421,11 @@ def test_registered_whatsapp_never_breaks_public_menu_snapshot(test_setup, monke
     tenant_context = current_restaurante_id.set(999)
     try:
         config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=999).one()
-        old = (config.whatsapp_instance_name, config.whatsapp_alerts_enabled, config.whatsapp_recipient_phone)
+        old = (config.whatsapp_instance_name, config.whatsapp_alerts_enabled, config.whatsapp_recipient_phone, config.whatsapp_customer_notices_enabled)
         config.whatsapp_instance_name = CENTRAL_INSTANCE_MARKER
         config.whatsapp_alerts_enabled = False
         config.whatsapp_recipient_phone = "5511999999999"
+        config.whatsapp_customer_notices_enabled = True
         db.commit()
         try:
             response = client.get(f"/api/cardapio-digital/{endpoint}?{identifier}")
@@ -439,7 +440,7 @@ def test_registered_whatsapp_never_breaks_public_menu_snapshot(test_setup, monke
             assert "whatsapp_alerts_enabled" not in str(payload)
             assert "5511999999999" not in str(payload)
         finally:
-            config.whatsapp_instance_name, config.whatsapp_alerts_enabled, config.whatsapp_recipient_phone = old
+            config.whatsapp_instance_name, config.whatsapp_alerts_enabled, config.whatsapp_recipient_phone, config.whatsapp_customer_notices_enabled = old
             db.commit()
     finally:
         current_restaurante_id.reset(tenant_context)
