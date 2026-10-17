@@ -5,9 +5,11 @@ import datetime
 from collections import defaultdict
 from decimal import Decimal
 from typing import Optional
+from types import SimpleNamespace
 
 from fastapi import Depends, HTTPException, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import and_, case, func, or_
+from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
 from ..models import (
@@ -25,6 +27,7 @@ from ..services.financial_read import (
     current_operational_day,
     daily_financial_rows,
     load_financial_snapshot,
+    load_period_comparison,
     load_period_totals,
     peak_hour_rows,
 )
@@ -72,18 +75,21 @@ def _method_dict(values: dict[str, Decimal]) -> dict[str, float]:
 def _command_context(db: Session, restaurante_id: int, command_ids: set[str]):
     if not command_ids:
         return {}, {}
-    commands = (
-        db.query(Comanda)
+    rows = (
+        db.query(Comanda.id, Comanda.garcom_id, Comanda.numero_pedido)
         .filter(
             Comanda.restaurante_id == restaurante_id,
             Comanda.id.in_(command_ids),
         )
         .all()
     )
-    command_map = {str(command.id): command for command in commands}
-    user_ids = {command.garcom_id for command in commands if command.garcom_id}
+    command_map = {
+        str(cid): SimpleNamespace(id=cid, garcom_id=garcom_id, numero_pedido=numero_pedido)
+        for cid, garcom_id, numero_pedido in rows
+    }
+    user_ids = {garcom_id for _, garcom_id, _ in rows if garcom_id}
     users = (
-        db.query(Usuario)
+        db.query(Usuario.id, Usuario.nome)
         .filter(
             Usuario.restaurante_id == restaurante_id,
             Usuario.id.in_(user_ids),
@@ -92,7 +98,7 @@ def _command_context(db: Session, restaurante_id: int, command_ids: set[str]):
         if user_ids
         else []
     )
-    return command_map, {str(user.id): user.nome for user in users}
+    return command_map, {str(uid): nome for uid, nome in users}
 
 
 def _attendance_numbers(db: Session, restaurante_id: int, attendance_ids: set[str]) -> dict[str, int]:
@@ -141,14 +147,16 @@ def get_relatorio_visao_geral_financeiro(
     period_days = (snapshot.period.end_day - snapshot.period.start_day).days + 1
     prev_end = snapshot.period.start_day - datetime.timedelta(days=1)
     prev_start = prev_end - datetime.timedelta(days=period_days - 1)
-    previous = _snapshot_or_400(db, rest_id, prev_start.isoformat(), prev_end.isoformat())
-
-    config = (
-        db.query(ConfiguracaoRestaurante)
-        .filter(ConfiguracaoRestaurante.restaurante_id == rest_id)
-        .first()
+    prev_totals, prev_sales_count = load_period_comparison(
+        db, rest_id, prev_start.isoformat(), prev_end.isoformat()
     )
-    monthly_goal = _float(config.meta_mensal if config else 0)
+
+    raw_monthly_goal = (
+        db.query(ConfiguracaoRestaurante.meta_mensal)
+        .filter(ConfiguracaoRestaurante.restaurante_id == rest_id)
+        .scalar()
+    )
+    monthly_goal = _float(raw_monthly_goal or 0)
 
     op_today = current_operational_day(db, rest_id)
     month_start = op_today.replace(day=1)
@@ -164,8 +172,8 @@ def get_relatorio_visao_geral_financeiro(
     days_left = max(1, month_days - op_today.day)
     daily_needed = money(remaining / days_left)
 
-    active_clients = (
-        db.query(Cliente).filter(Cliente.restaurante_id == rest_id).count()
+    active_clients = int(
+        db.query(func.count(Cliente.id)).filter(Cliente.restaurante_id == rest_id).scalar() or 0
     )
 
     return {
@@ -195,15 +203,15 @@ def get_relatorio_visao_geral_financeiro(
         "dia_operacional_fim": snapshot.period.end_day.isoformat(),
         "fonte_financeira": "pagamentos_aprovados_menos_estornos_por_data_evento",
         "comparativo_anterior": {
-            "tem_base_anterior": bool(previous.sales),
-            "faturamento_anterior": _float(previous.totals.vendas_liquidas),
-            "vendas_brutas_anteriores": _float(previous.totals.vendas_brutas),
-            "estornos_anteriores": _float(previous.totals.estornos),
-            "variacao_faturamento_pct": _pct(net, previous.totals.vendas_liquidas),
-            "pedidos_anteriores": len(previous.sales),
+            "tem_base_anterior": prev_sales_count > 0,
+            "faturamento_anterior": _float(prev_totals.vendas_liquidas),
+            "vendas_brutas_anteriores": _float(prev_totals.vendas_brutas),
+            "estornos_anteriores": _float(prev_totals.estornos),
+            "variacao_faturamento_pct": _pct(net, prev_totals.vendas_liquidas),
+            "pedidos_anteriores": prev_sales_count,
             "variacao_pedidos_pct": (
-                round((total_sales - len(previous.sales)) / len(previous.sales) * 100.0, 1)
-                if previous.sales
+                round((total_sales - prev_sales_count) / prev_sales_count * 100.0, 1)
+                if prev_sales_count
                 else 0.0
             ),
         },
@@ -295,7 +303,9 @@ def get_dashboard_financeiro(
     period_days = (snapshot.period.end_day - snapshot.period.start_day).days + 1
     prev_end = snapshot.period.start_day - datetime.timedelta(days=1)
     prev_start = prev_end - datetime.timedelta(days=period_days - 1)
-    previous = _snapshot_or_400(db, rest_id, prev_start.isoformat(), prev_end.isoformat())
+    prev_totals, prev_sales_count = load_period_comparison(
+        db, rest_id, prev_start.isoformat(), prev_end.isoformat()
+    )
 
     op_today = current_operational_day(db, rest_id)
     today_totals = (snapshot.totals
@@ -303,9 +313,8 @@ def get_dashboard_financeiro(
                     else load_period_totals(db, rest_id, op_today.isoformat(), op_today.isoformat()))
 
     command_ids = {command_id for sale in snapshot.sales.values() for command_id in sale.command_ids}
-    commands = (
-        db.query(Comanda)
-        .options(joinedload(Comanda.itens).joinedload(ComandaItem.produto))
+    command_types_rows = (
+        db.query(Comanda.id, Comanda.tipo)
         .filter(
             Comanda.restaurante_id == rest_id,
             Comanda.id.in_(command_ids),
@@ -314,14 +323,13 @@ def get_dashboard_financeiro(
         if command_ids
         else []
     )
-    command_map = {str(command.id): command for command in commands}
+    command_type_map = {str(cid): str(ctipo or "") for cid, ctipo in command_types_rows}
 
     days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]
     weekly = {day: {"delivery": 0, "local": 0, "balcao": 0} for day in days}
     modes = {"local": 0, "delivery": 0, "balcao": 0}
     for sale in snapshot.sales.values():
-        sale_commands = [command_map[cid] for cid in sale.command_ids if cid in command_map]
-        mode = _sale_mode({getattr(command, "tipo", "") for command in sale_commands})
+        mode = _sale_mode({command_type_map[cid] for cid in sale.command_ids if cid in command_type_map})
         modes[mode] += 1
         if sale.operational_days:
             op_day = max(sale.operational_days)
@@ -329,33 +337,64 @@ def get_dashboard_financeiro(
             day_label = days[(op_day.weekday() + 1) % 7]
             weekly[day_label][mode] += 1
 
-    total_products = db.query(Produto).filter(Produto.restaurante_id == rest_id).count()
-    if total_products:
-        optimized_products = (
-            db.query(Produto)
-            .filter(
-                Produto.restaurante_id == rest_id,
-                Produto.descricao != "",
-                Produto.descricao.isnot(None),
-                Produto.imagem != "",
-                Produto.imagem.isnot(None),
-            )
-            .count()
+    total_products, optimized_products = (
+        db.query(
+            func.count(Produto.id),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Produto.descricao.isnot(None),
+                                Produto.descricao != "",
+                                Produto.imagem.isnot(None),
+                                Produto.imagem != "",
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
         )
-        menu_quality = int(optimized_products / total_products * 100)
+        .filter(Produto.restaurante_id == rest_id)
+        .one()
+    )
+    if total_products:
+        menu_quality = int(int(optimized_products or 0) / int(total_products) * 100)
     else:
         menu_quality = 100
 
     # Top itens é deliberadamente métrica operacional de consumo, não fonte de
-    # receita. A soma abaixo nunca participa de faturamento/ticket/fechamento.
+    # receita. Agregado no banco para evitar carregar milhares de itens/produtos em memória.
     item_counts: dict[str, dict[str, float | int]] = {}
-    for command in commands:
-        for item in command.itens:
-            if item.status == "cancelado":
-                continue
-            product_name = item.produto.nome if item.produto else f"Item {item.produto_id}"
-            row = item_counts.setdefault(product_name, {"count": 0, "price": float(item.preco_unit or 0)})
-            row["count"] = int(row["count"]) + int(getattr(item, "quantidade", 1) or 1)
+    if command_ids:
+        agg_items = (
+            db.query(
+                ComandaItem.produto_id,
+                Produto.nome,
+                func.count(ComandaItem.id),
+                func.min(ComandaItem.preco_unit),
+            )
+            .outerjoin(
+                Produto,
+                (Produto.id == ComandaItem.produto_id)
+                & (Produto.restaurante_id == ComandaItem.restaurante_id),
+            )
+            .filter(
+                ComandaItem.restaurante_id == rest_id,
+                ComandaItem.comanda_id.in_(command_ids),
+                or_(ComandaItem.status.is_(None), ComandaItem.status != "cancelado"),
+            )
+            .group_by(ComandaItem.produto_id, Produto.nome)
+            .order_by(func.count(ComandaItem.id).desc())
+            .all()
+        )
+        for prod_id, prod_nome, qty, price in agg_items:
+            product_name = prod_nome if prod_nome else f"Item {prod_id}"
+            row = item_counts.setdefault(product_name, {"count": 0, "price": float(price or 0)})
+            row["count"] = int(row["count"]) + int(qty or 0)
 
     top_items = []
     for index, (name, row) in enumerate(
@@ -405,13 +444,13 @@ def get_dashboard_financeiro(
         "dia_operacional_fim": snapshot.period.end_day.isoformat(),
         "fonte_financeira": "pagamentos_aprovados_menos_estornos_por_data_evento",
         "comparativo_anterior": {
-            "tem_base_anterior": bool(previous.sales),
-            "recebido_anterior": _float(previous.totals.vendas_liquidas),
-            "variacao_recebido_pct": _pct(net, previous.totals.vendas_liquidas),
-            "contas_anteriores": len(previous.sales),
+            "tem_base_anterior": prev_sales_count > 0,
+            "recebido_anterior": _float(prev_totals.vendas_liquidas),
+            "variacao_recebido_pct": _pct(net, prev_totals.vendas_liquidas),
+            "contas_anteriores": prev_sales_count,
             "variacao_contas_pct": (
-                round((total_sales - len(previous.sales)) / len(previous.sales) * 100.0, 1)
-                if previous.sales
+                round((total_sales - prev_sales_count) / prev_sales_count * 100.0, 1)
+                if prev_sales_count
                 else 0.0
             ),
         },
@@ -434,20 +473,21 @@ def get_equipe_desempenho_financeiro(
     snapshot = _snapshot_or_400(db, rest_id, data_inicio, data_fim)
 
     command_ids = {allocation.command_id for allocation in snapshot.allocations}
-    commands = (
-        db.query(Comanda)
+    command_owner_rows = (
+        db.query(Comanda.id, Comanda.garcom_id)
         .filter(
             Comanda.restaurante_id == rest_id,
             Comanda.id.in_(command_ids),
+            Comanda.garcom_id.isnot(None),
         )
         .all()
         if command_ids
         else []
     )
     command_owner = {
-        str(command.id): str(command.garcom_id)
-        for command in commands
-        if command.garcom_id
+        str(cid): str(garcom_id)
+        for cid, garcom_id in command_owner_rows
+        if garcom_id
     }
 
     sales_by_member: dict[str, set[str]] = defaultdict(set)

@@ -9,23 +9,23 @@ export function LoyaltyImpactPanel({ rewardPercent, active }: { rewardPercent: n
   const [margin, setMargin] = useState('');
   const impact = projectLoyaltyImpact(Number(ticket), active ? rewardPercent : 0, margin.trim() ? Number(margin) : null);
   return (
-    <section aria-label="Simulação da fidelidade" className="rounded-2xl border border-koma-border bg-koma-panel p-5 space-y-4">
-      <div><h3 className="text-sm font-bold">Quanto este benefício representa?</h3><p className="mt-1 text-xs text-koma-muted">Simulação por pedido, considerando o resgate de todo o benefício gerado.</p></div>
-      <label className="block text-xs text-koma-muted">Valor do pedido (R$)
+    <section aria-label="Simulação da fidelidade" className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
+      <div><h3 className="text-base font-semibold">Simule o benefício por pedido</h3><p className="mt-1 text-sm text-koma-muted">Estimativa se todo o benefício gerado for resgatado.</p></div>
+      <label className="block text-sm text-koma-muted">Valor do pedido (R$)
         <input aria-label="Valor do pedido na simulação" type="number" min="0.01" step="0.01" value={ticket} onChange={e => setTicket(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-koma-foreground" />
       </label>
       {impact ? <>
-        <div className="rounded-xl bg-emerald-500/10 p-4"><span className="text-xs text-koma-muted">Benefício gerado para o cliente</span><strong className="mt-1 block text-2xl text-emerald-400">{money(impact.benefit)}</strong><span className="text-xs text-koma-muted">{active ? `${rewardPercent.toLocaleString('pt-BR', {maximumFractionDigits:2})}% do pedido` : 'Programa pausado: novas compras não geram benefício'}</span></div>
-        <label className="block text-xs text-koma-muted">Margem de contribuição antes do benefício (%) — opcional
+        <div className="rounded-xl bg-emerald-500/10 p-4"><span className="text-sm text-koma-muted">Benefício gerado para o cliente</span><strong className="mt-1 block text-2xl text-emerald-400">{money(impact.benefit)}</strong><span className="text-sm text-koma-muted">{active ? `${rewardPercent.toLocaleString('pt-BR', {maximumFractionDigits:2})}% do pedido` : 'Programa pausado: novas compras não geram benefício'}</span></div>
+        <label className="block text-sm text-koma-muted">Margem de contribuição antes do benefício (%) — opcional
           <input aria-label="Margem de contribuição na simulação" type="number" min="0" max="100" step="0.1" placeholder="Informe se conhecer" value={margin} onChange={e => setMargin(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-koma-foreground" />
         </label>
-        <p className="text-xs text-koma-muted">É o percentual que sobra após ingredientes, embalagens e taxas, antes dos custos fixos.</p>
+        <p className="text-sm text-koma-muted">É o percentual que sobra após ingredientes, embalagens e taxas, antes dos custos fixos.</p>
         {impact.contributionBefore !== null && impact.contributionAfter !== null ? <>
           <CrmMetricChart title="Impacto na contribuição por pedido" unit="BRL" rows={[{label:'Antes do benefício',value:impact.contributionBefore},{label:'Após o benefício',value:impact.contributionAfter}]} />
           <p role={impact.exceedsContribution ? 'alert' : undefined} className={`text-sm ${impact.exceedsContribution ? 'text-rose-400' : 'text-koma-muted'}`}>{impact.exceedsContribution ? 'O benefício supera a contribuição informada. Revise a taxa antes de salvar.' : `Neste cenário, restam ${money(impact.contributionAfter)} para cobrir custos fixos e resultado.`}</p>
         </> : <p className="text-sm text-koma-muted">{margin.trim() ? 'Informe uma margem entre 0% e 100%.' : 'Sem a margem, ainda não é possível avaliar se o benefício cabe no pedido.'}</p>}
       </> : <p role="alert" className="text-sm text-koma-muted">Informe um pedido maior que zero e uma taxa válida.</p>}
-      <p className="text-xs text-koma-muted">Estimativa com os valores informados. Não representa lucro líquido. A simulação não altera o programa.</p>
+      <p className="text-sm text-koma-muted">Estimativa com os valores informados. Não representa lucro líquido. A simulação não altera o programa.</p>
     </section>
   );
 }

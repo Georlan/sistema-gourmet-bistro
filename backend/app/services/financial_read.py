@@ -139,6 +139,132 @@ def load_period_totals(db: Session, restaurante_id: int, start_day: str, end_day
     return totais_financeiros(payments, refunds)
 
 
+def count_period_sales(db: Session, restaurante_id: int, period: FinancialPeriod) -> int:
+    """Conta Contas/Comandas financeiras únicas no período em uma única query leve sem ORM."""
+    effective_cmd = func.coalesce(PagamentoAlocacao.comanda_id, Pagamento.comanda_id)
+    rows = (
+        db.query(
+            Pagamento.id,
+            Pagamento.comanda_id,
+            Pagamento.valor,
+            PagamentoAlocacao.comanda_id,
+            PagamentoAlocacao.atendimento_id,
+            PagamentoAlocacao.valor,
+            AtendimentoComanda.atendimento_id,
+        )
+        .select_from(Pagamento)
+        .outerjoin(
+            PagamentoAlocacao,
+            (PagamentoAlocacao.pagamento_id == Pagamento.id)
+            & (PagamentoAlocacao.restaurante_id == Pagamento.restaurante_id),
+        )
+        .outerjoin(
+            AtendimentoComanda,
+            (AtendimentoComanda.comanda_id == effective_cmd)
+            & (AtendimentoComanda.restaurante_id == Pagamento.restaurante_id),
+        )
+        .filter(
+            Pagamento.restaurante_id == restaurante_id,
+            Pagamento.status == "aprovado",
+            Pagamento.criado_em >= period.start_utc,
+            Pagamento.criado_em < period.end_utc,
+        )
+        .order_by(Pagamento.id, PagamentoAlocacao.id)
+        .all()
+    )
+    if not rows:
+        return 0
+
+    by_payment: dict[str, tuple[str, Decimal, list[tuple[str | None, str | None, Decimal, str | None]]]] = {}
+    for pay_id, pay_cmd, pay_val, alloc_cmd, alloc_att, alloc_val, fallback_att in rows:
+        pid = str(pay_id)
+        entry = by_payment.get(pid)
+        if entry is None:
+            entry = (str(pay_cmd), money(pay_val), [])
+            by_payment[pid] = entry
+        if alloc_cmd is not None:
+            entry[2].append(
+                (
+                    str(alloc_cmd),
+                    str(alloc_att) if alloc_att else None,
+                    money(alloc_val),
+                    str(fallback_att) if fallback_att else None,
+                )
+            )
+        elif not entry[2]:
+            entry[2].append(
+                (
+                    None,
+                    None,
+                    Decimal("0.00"),
+                    str(fallback_att) if fallback_att else None,
+                )
+            )
+
+    sale_keys: set[str] = set()
+    for pid, (pay_cmd, payment_total, allocs) in by_payment.items():
+        has_real_allocs = any(a[0] is not None for a in allocs)
+        if not has_real_allocs:
+            fallback_att = allocs[0][3] if allocs else None
+            sale_keys.add(f"atendimento:{fallback_att}" if fallback_att else f"comanda:{pay_cmd}")
+            continue
+
+        allocated = Decimal("0.00")
+        keys_for_payment: list[str] = []
+        for alloc_cmd, alloc_att, val, fallback_att in allocs:
+            if alloc_cmd is None or val <= Decimal("0.00"):
+                continue
+            att_id = alloc_att or fallback_att
+            keys_for_payment.append(f"atendimento:{att_id}" if att_id else f"comanda:{alloc_cmd}")
+            allocated += val
+
+        allocated = money(allocated)
+        if allocated > payment_total:
+            sale_keys.add(f"unattributed:{pid}")
+            continue
+
+        sale_keys.update(keys_for_payment)
+        if money(payment_total - allocated) > Decimal("0.00"):
+            sale_keys.add(f"unattributed:{pid}")
+
+    return len(sale_keys)
+
+
+def load_period_comparison(
+    db: Session,
+    restaurante_id: int,
+    start_day: str,
+    end_day: str,
+) -> tuple[FinancialTotals, int]:
+    """Retorna totais agregados via SQL e contagem de Contas sem carregar o snapshot completo."""
+    period = resolve_financial_period(db, restaurante_id, start_day, end_day)
+    payments = (
+        db.query(Pagamento.metodo, func.sum(Pagamento.valor).label("valor"))
+        .filter(
+            Pagamento.restaurante_id == restaurante_id,
+            Pagamento.status == "aprovado",
+            Pagamento.criado_em >= period.start_utc,
+            Pagamento.criado_em < period.end_utc,
+        )
+        .group_by(Pagamento.metodo)
+        .all()
+    )
+    refunds = (
+        db.query(PagamentoEstorno.metodo, func.sum(PagamentoEstorno.valor).label("valor"))
+        .filter(
+            PagamentoEstorno.restaurante_id == restaurante_id,
+            PagamentoEstorno.criado_em >= period.start_utc,
+            PagamentoEstorno.criado_em < period.end_utc,
+        )
+        .group_by(PagamentoEstorno.metodo)
+        .all()
+    )
+    totals = totais_financeiros(payments, refunds)
+    if totals.vendas_brutas <= Decimal("0.00") and not payments:
+        return totals, 0
+    return totals, count_period_sales(db, restaurante_id, period)
+
+
 def _fallback_attendance_map(
     db: Session,
     restaurante_id: int,

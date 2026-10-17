@@ -11,8 +11,7 @@ import {
   ShoppingBag,
   Sparkles,
   Star,
-  UserCheck,
-  X,
+    X,
 } from 'lucide-react';
 import type { CashierNotice, LoyaltyCustomer } from '../cashierContracts';
 
@@ -158,9 +157,7 @@ export function CustomerProfileDrawer({
         {/* Cabeçalho da Ficha Individual */}
         <div className="flex items-start justify-between gap-3 border-b border-koma-border pb-4">
           <div className="min-w-0">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-              <UserCheck size={12} /> Ficha individual · Filtros preservados ao fechar
-            </span>
+            <span className="text-xs font-semibold text-koma-muted">Ficha individual</span>
             <h3 className="mt-1.5 text-lg font-black text-koma-foreground break-words">
               {customer.cliente}
             </h3>
@@ -195,7 +192,7 @@ export function CustomerProfileDrawer({
         {/* Barra de Próximo Passo Comercial */}
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
+            <span className="text-sm font-semibold text-emerald-400">
               Próximo passo comercial recomendado
             </span>
             {optOut ? (
@@ -249,10 +246,10 @@ export function CustomerProfileDrawer({
           {/* Coluna A: Informação Declarada */}
           <section className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-3">
             <div className="border-b border-koma-border pb-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-sky-400">
+              <span className="text-sm font-semibold text-sky-400">
                 1. Informação declarada (Cadastro)
               </span>
-              <p className="mt-0.5 text-[11px] text-koma-muted">
+              <p className="mt-0.5 text-sm text-koma-muted">
                 Dados informados pelo cliente ou operador. Telefone válido não significa autorização automática para marketing.
               </p>
             </div>
@@ -276,7 +273,7 @@ export function CustomerProfileDrawer({
 
             <form onSubmit={handleSavePreferences} className="space-y-3 border-t border-koma-border pt-3">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+                <label className="block text-xs font-bold uppercase tracking-wider text-koma-muted">
                   Canal de contato preferido
                 </label>
                 <select
@@ -292,7 +289,7 @@ export function CustomerProfileDrawer({
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+                <label className="block text-xs font-bold uppercase tracking-wider text-koma-muted">
                   Observações declaradas pelo cliente
                 </label>
                 <textarea
@@ -313,7 +310,7 @@ export function CustomerProfileDrawer({
                 />
                 <span className="text-xs leading-snug text-koma-foreground">
                   <strong className="block">Não receber mensagens de campanhas (Opt-out)</strong>
-                  <span className="text-[11px] text-koma-muted">
+                  <span className="text-sm text-koma-muted">
                     Exclui este cliente das listas de abordagem comercial.
                   </span>
                 </span>
@@ -321,7 +318,7 @@ export function CustomerProfileDrawer({
 
               {optOut && (
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-koma-muted">
                     Motivo da exclusão de campanhas
                   </label>
                   <input
@@ -347,10 +344,10 @@ export function CustomerProfileDrawer({
           {/* Coluna B: Comportamento Observado / Inferência */}
           <section className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-3">
             <div className="border-b border-koma-border pb-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400">
+              <span className="text-sm font-semibold text-amber-400">
                 2. Comportamento observado (Inferido)
               </span>
-              <p className="mt-0.5 text-[11px] text-koma-muted">
+              <p className="mt-0.5 text-sm text-koma-muted">
                 Calculado apenas sobre compras concluídas e valores líquidos pagos (sem itens ou pedidos cancelados/estornados).
               </p>
             </div>
@@ -366,25 +363,25 @@ export function CustomerProfileDrawer({
             ) : (
               <dl className="grid grid-cols-2 gap-2.5 text-xs">
                 <div className="rounded-xl border border-koma-border bg-koma-raised p-2.5">
-                  <dt className="text-[10px] text-koma-muted">Compras concluídas</dt>
+                  <dt className="text-xs text-koma-muted">Compras concluídas</dt>
                   <dd className="mt-1 font-mono text-sm font-black text-koma-foreground">
                     {observado?.pedidos_concluidos ?? customer.pedidos_concluidos ?? 0}
                   </dd>
                 </div>
                 <div className="rounded-xl border border-koma-border bg-koma-raised p-2.5">
-                  <dt className="text-[10px] text-koma-muted">Total líquido pago</dt>
+                  <dt className="text-xs text-koma-muted">Total líquido pago</dt>
                   <dd className="mt-1 font-mono text-sm font-black text-emerald-400">
                     {money(observado?.valor_pago_liquido_total ?? customer.valor_pago_total)}
                   </dd>
                 </div>
                 <div className="rounded-xl border border-koma-border bg-koma-raised p-2.5">
-                  <dt className="text-[10px] text-koma-muted">Ticket médio líquido</dt>
+                  <dt className="text-xs text-koma-muted">Ticket médio líquido</dt>
                   <dd className="mt-1 font-mono text-xs font-bold text-koma-foreground">
                     {money(observado?.ticket_medio_pago ?? customer.ticket_medio_pago)}
                   </dd>
                 </div>
                 <div className="rounded-xl border border-koma-border bg-koma-raised p-2.5">
-                  <dt className="text-[10px] text-koma-muted">Ritmo / intervalo médio</dt>
+                  <dt className="text-xs text-koma-muted">Ritmo / intervalo médio</dt>
                   <dd className="mt-1 font-mono text-xs font-bold text-koma-foreground">
                     {(observado?.intervalo_medio_dias ?? customer.intervalo_medio_dias) != null
                       ? `a cada ${observado?.intervalo_medio_dias ?? customer.intervalo_medio_dias} dias`
@@ -392,17 +389,17 @@ export function CustomerProfileDrawer({
                   </dd>
                 </div>
                 <div className="rounded-xl border border-koma-border bg-koma-raised p-2.5">
-                  <dt className="text-[10px] text-koma-muted">Primeira compra</dt>
+                  <dt className="text-xs text-koma-muted">Primeira compra</dt>
                   <dd className="mt-1 font-mono text-xs text-koma-foreground">
                     {formatDate(observado?.primeira_compra_em ?? customer.primeira_compra_em)}
                   </dd>
                 </div>
                 <div className="rounded-xl border border-koma-border bg-koma-raised p-2.5">
-                  <dt className="text-[10px] text-koma-muted">Última compra</dt>
+                  <dt className="text-xs text-koma-muted">Última compra</dt>
                   <dd className="mt-1 font-mono text-xs text-koma-foreground">
                     {formatDate(observado?.ultima_compra_em ?? customer.ultima_compra_em)}
                     {(observado?.dias_sem_comprar ?? customer.dias_sem_comprar) != null && (
-                      <span className="block text-[10px] text-koma-muted">
+                      <span className="block text-xs text-koma-muted">
                         há {observado?.dias_sem_comprar ?? customer.dias_sem_comprar} dias
                       </span>
                     )}
@@ -412,7 +409,7 @@ export function CustomerProfileDrawer({
             )}
 
             {observado?.pedidos_cancelados_ou_estornados > 0 && (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] text-amber-200 flex items-center gap-2">
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm text-amber-200 flex items-center gap-2">
                 <AlertTriangle size={14} className="shrink-0 text-amber-400" />
                 <span>
                   <strong>{observado.pedidos_cancelados_ou_estornados}</strong> pedido(s) cancelado(s) ou 100% estornado(s) foram excluídos das métricas deste cliente.
@@ -421,7 +418,7 @@ export function CustomerProfileDrawer({
             )}
 
             <div className="space-y-1.5 pt-1">
-              <span className="block text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+              <span className="block text-xs font-bold uppercase tracking-wider text-koma-muted">
                 Preferências observadas (itens não cancelados)
               </span>
               {(observado?.produtos_favoritos ?? customer.produtos_favoritos)?.length ? (
@@ -448,12 +445,12 @@ export function CustomerProfileDrawer({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Gift size={15} className="text-emerald-400" />
-              <h4 className="text-xs font-extrabold uppercase tracking-wider text-koma-foreground">
+              <h4 className="text-sm font-semibold text-koma-foreground">
                 3. Situação de benefícios (Acumulado vs. Resgatável)
               </h4>
             </div>
             <span
-              className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+              className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
                 (beneficio?.elegivel_resgate ?? customer.elegivel_resgate)
                   ? 'bg-emerald-500/15 text-emerald-300'
                   : (beneficio?.status_beneficio ?? customer.status_beneficio) === 'SALDO_EM_FORMACAO'
@@ -470,7 +467,7 @@ export function CustomerProfileDrawer({
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-1 text-xs">
             <div className="rounded-xl border border-koma-border bg-koma-raised p-3">
-              <span className="text-[10px] text-koma-muted block">Saldo acumulado na conta</span>
+              <span className="text-xs text-koma-muted block">Saldo acumulado na conta</span>
               <strong className="mt-1 block font-mono text-sm text-koma-foreground">
                 {beneficio
                   ? beneficio.tipo_recompensa === 'PONTOS'
@@ -480,14 +477,14 @@ export function CustomerProfileDrawer({
               </strong>
             </div>
             <div className="rounded-xl border border-koma-border bg-koma-raised p-3">
-              <span className="text-[10px] text-koma-muted block">Saldo resgatável agora</span>
+              <span className="text-xs text-koma-muted block">Saldo resgatável agora</span>
               <strong className="mt-1 block font-mono text-sm text-emerald-400">
                 {money(beneficio?.valor_resgatavel_brl ?? customer.valor_resgatavel_brl ?? 0)}
               </strong>
             </div>
             <div className="rounded-xl border border-koma-border bg-koma-raised p-3">
-              <span className="text-[10px] text-koma-muted block">Regra vigente do programa</span>
-              <span className="mt-1 block text-[11px] text-koma-foreground">
+              <span className="text-xs text-koma-muted block">Regra vigente do programa</span>
+              <span className="mt-1 block text-sm text-koma-foreground">
                 {customerBenefitDescription(beneficio ?? customer.beneficio_disponivel)}
               </span>
             </div>
@@ -499,7 +496,7 @@ export function CustomerProfileDrawer({
           <section className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-2.5">
             <div className="flex items-center gap-2">
               <Star size={15} className="text-amber-400" />
-              <h4 className="text-xs font-extrabold uppercase tracking-wider text-koma-foreground">
+              <h4 className="text-sm font-semibold text-koma-foreground">
                 Avaliações registradas deste cliente
               </h4>
             </div>
@@ -510,7 +507,7 @@ export function CustomerProfileDrawer({
                     <strong className={av.nota <= 2 ? 'text-rose-400' : 'text-emerald-400'}>
                       Nota {av.nota}/5
                     </strong>
-                    <span className="font-mono text-[10px] text-koma-muted">{formatDate(av.criado_em)}</span>
+                    <span className="font-mono text-xs text-koma-muted">{formatDate(av.criado_em)}</span>
                   </div>
                   {av.comentario && <p className="mt-1 text-koma-foreground">{av.comentario}</p>}
                 </div>
@@ -524,7 +521,7 @@ export function CustomerProfileDrawer({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageSquare size={15} className="text-emerald-400" />
-              <h4 className="text-xs font-extrabold uppercase tracking-wider text-koma-foreground">
+              <h4 className="text-sm font-semibold text-koma-foreground">
                 4. Contatos comerciais registrados ({profile?.historico_contatos?.length ?? customer.total_contatos_crm ?? 0})
               </h4>
             </div>
@@ -536,25 +533,25 @@ export function CustomerProfileDrawer({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-bold text-koma-foreground">
                       {OPPORTUNITY_LABELS[c.objetivo] || c.objetivo} ·{' '}
-                      <span className="font-mono text-[10px] text-amber-300">
+                      <span className="font-mono text-xs text-amber-300">
                         {c.acao_executada === 'CONTATO_MANUAL_CONFIRMADO' ? 'Registro manual' : c.acao_executada === 'WHATSAPP_ABERTO' ? 'WhatsApp aberto — envio não comprovado' : c.acao_executada === 'MENSAGEM_COPIADA' ? 'Mensagem copiada — envio não comprovado' : c.acao_executada}
                       </span>
                     </span>
-                    <span className="font-mono text-[10px] text-koma-muted">{formatDate(c.criado_em)}</span>
+                    <span className="font-mono text-xs text-koma-muted">{formatDate(c.criado_em)}</span>
                   </div>
                   {c.beneficio_oferecido && (
-                    <p className="text-[11px] text-emerald-300">
+                    <p className="text-sm text-emerald-300">
                       Benefício na abordagem: {c.beneficio_oferecido}
                       {c.cupom_codigo ? ` (Cupom: ${c.cupom_codigo})` : ''}
                     </p>
                   )}
                   {c.mensagem_personalizada && (
-                    <p className="rounded-lg bg-koma-panel p-2 text-[11px] text-koma-muted italic">
+                    <p className="rounded-lg bg-koma-panel p-2 text-sm text-koma-muted italic">
                       “{c.mensagem_personalizada}”
                     </p>
                   )}
                   {c.pedido_retorno_id && (
-                    <p className="text-[11px] font-semibold text-emerald-400">
+                    <p className="text-sm font-semibold text-emerald-400">
                       Retorno observado: Pedido {c.pedido_retorno_id} ({money(c.valor_pedido_retorno)}) —{' '}
                       {c.metodo_atribuicao === 'CUPOM_EXPLICITO'
                         ? 'Comprovado por uso do cupom'
@@ -575,7 +572,7 @@ export function CustomerProfileDrawer({
         <section className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-2.5">
           <div className="flex items-center gap-2">
             <ShoppingBag size={15} className="text-emerald-400" />
-            <h4 className="text-xs font-extrabold uppercase tracking-wider text-koma-foreground">
+            <h4 className="text-sm font-semibold text-koma-foreground">
               5. Histórico de pedidos identificados ({profile?.historico_pedidos?.length ?? 0})
             </h4>
           </div>
@@ -595,13 +592,13 @@ export function CustomerProfileDrawer({
                       <strong className="font-mono text-koma-foreground">
                         Pedido #{ped.numero_pedido}
                       </strong>{' '}
-                      <span className="text-[10px] text-koma-muted">
+                      <span className="text-xs text-koma-muted">
                         · {ped.tipo} · {formatDate(ped.data)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span
-                        className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                        className={`rounded-md px-2 py-0.5 text-xs font-bold ${
                           ped.contabilizado_no_crm
                             ? 'bg-emerald-500/15 text-emerald-300'
                             : 'bg-rose-500/20 text-rose-300'
@@ -615,12 +612,12 @@ export function CustomerProfileDrawer({
                     </div>
                   </div>
                   {ped.itens_resumo?.length > 0 && (
-                    <p className="mt-1.5 text-[11px] text-koma-muted">
+                    <p className="mt-1.5 text-sm text-koma-muted">
                       Itens: {ped.itens_resumo.join(', ')}
                     </p>
                   )}
                   {(ped.desconto > 0 || ped.valor_estornado > 0 || ped.cupom_codigo) && (
-                    <p className="mt-1 text-[10px] text-koma-muted">
+                    <p className="mt-1 text-xs text-koma-muted">
                       Bruto: {money(ped.valor_pago_bruto)}
                       {ped.desconto > 0 ? ` · Desconto: -${money(ped.desconto)}` : ''}
                       {ped.valor_estornado > 0 ? ` · Estornado: -${money(ped.valor_estornado)}` : ''}
