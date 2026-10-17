@@ -11,6 +11,7 @@ import os
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
+from decimal import Decimal
 from sqlalchemy import func
 
 from ..database import SessionLocal, tenant_session_scope
@@ -137,6 +138,9 @@ def _usage(db, rid: int, month: str) -> dict:
     if row is None:
         return dict(attempts=0, accepted=0, failed=0, discarded=0, deferred=0,
                     average_queue_ms=None, estimated_customer_cost_brl=None)
+    from ..services.whatsapp_usage import estimated_customer_unit_cost
+    measured_cost = Decimal(str(row.estimated_customer_cost_brl))
+    cost = str(measured_cost) if measured_cost != 0 or estimated_customer_unit_cost() is not None else None
     samples = int(row.queue_latency_samples)
     return {
         "attempts": int(row.attempts),
@@ -145,7 +149,7 @@ def _usage(db, rid: int, month: str) -> dict:
         "discarded": int(row.discarded),
         "deferred": int(row.deferred),
         "average_queue_ms": round(int(row.queue_latency_total_ms) / samples) if samples else None,
-        "estimated_customer_cost_brl": str(row.estimated_customer_cost_brl),
+        "estimated_customer_cost_brl": cost,
     }
 
 
@@ -203,6 +207,8 @@ def whatsapp_platform_overview(
             sender["connection"] = _verify_connection(transport)
         tenants = []
         totals = {"attempts": 0, "accepted": 0, "failed": 0, "discarded": 0, "deferred": 0, "waiting": 0}
+        page_estimated_cost = Decimal("0")
+        cost_estimate_complete = True
         for rid in ids[offset:offset + limit]:
             with tenant_session_scope(db, rid):
                 restaurant = db.query(Restaurante).filter_by(id=rid).one_or_none()
@@ -214,6 +220,10 @@ def whatsapp_platform_overview(
                 queue = _queue_summary(db, rid, now)
                 for key in totals:
                     totals[key] += queue["total"] if key == "waiting" else usage[key]
+                if usage["estimated_customer_cost_brl"] is None:
+                    cost_estimate_complete = False
+                else:
+                    page_estimated_cost += Decimal(usage["estimated_customer_cost_brl"])
                 tenants.append({
                     "restaurant_id": rid, "restaurant_name": restaurant.nome,
                     "saas_status": restaurant.saas_status,
@@ -228,7 +238,7 @@ def whatsapp_platform_overview(
             "page_offset": offset,
             "page_limit": limit,
             "sender": sender,
-            "page_totals": totals,
+            "page_totals": {**totals, "estimated_customer_cost_brl": str(page_estimated_cost) if cost_estimate_complete else None},
             "tenants": tenants,
             "note": "Aceite HTTP não comprova entrega no celular. Totais são da página exibida.",
         }
