@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Calculator, Check, Loader2, Pencil, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react';
 
 export interface GrowthEconomicsOption {
@@ -70,6 +70,8 @@ interface GrowthEconomicsCalculatorProps {
   onApplyOption?: (option: GrowthEconomicsOption) => void;
   applyLabel?: string;
   compact?: boolean;
+  /** Equivalente vigente apenas para comparação; nunca substitui a fonte backend. */
+  currentEffectivePercent?: number;
 }
 
 const currency = (value: number) => new Intl.NumberFormat('pt-BR', {
@@ -87,6 +89,7 @@ export default function GrowthEconomicsCalculator({
   onApplyOption,
   applyLabel = 'Usar sugestão',
   compact = false,
+  currentEffectivePercent,
 }: GrowthEconomicsCalculatorProps) {
   const [averageTicket, setAverageTicket] = useState('');
   const [variableCostPercent, setVariableCostPercent] = useState('');
@@ -101,8 +104,10 @@ export default function GrowthEconomicsCalculator({
   const [automaticLoading, setAutomaticLoading] = useState(false);
   const [automaticError, setAutomaticError] = useState('');
   const [automaticApplied, setAutomaticApplied] = useState(false);
+  const automaticRequestVersion = useRef(0);
 
   const loadAutomaticSuggestion = async () => {
+    const version = ++automaticRequestVersion.current;
     setAutomaticLoading(true);
     setAutomaticError('');
     setAutomaticApplied(false);
@@ -122,19 +127,22 @@ export default function GrowthEconomicsCalculator({
           : 'Não foi possível calcular a sugestão agora.';
         throw new Error(detail);
       }
-      setAutomaticResult(payload as AutomaticLoyaltyResponse);
+      if (version === automaticRequestVersion.current) setAutomaticResult(payload as AutomaticLoyaltyResponse);
     } catch (loadError) {
+      if (version !== automaticRequestVersion.current) return;
       setAutomaticResult(null);
       setAutomaticError(loadError instanceof Error ? loadError.message : 'Não foi possível calcular a sugestão agora.');
     } finally {
-      setAutomaticLoading(false);
+      if (version === automaticRequestVersion.current) setAutomaticLoading(false);
     }
   };
 
   useEffect(() => {
-    if (compact && loyaltyMode === 'automatico' && !automaticResult && !automaticLoading) {
+    if (compact && loyaltyMode === 'automatico') {
+      setAutomaticResult(null);
       void loadAutomaticSuggestion();
     }
+    return () => { automaticRequestVersion.current++; };
   }, [compact, loyaltyMode, apiBaseUrl, authHeaders.Authorization]);
 
   const applyAutomaticSuggestion = () => {
@@ -162,7 +170,7 @@ export default function GrowthEconomicsCalculator({
         suggested_point_value_brl: reward.point_value_brl,
         effective_reward_percent: reward.effective_reward_percent,
       },
-      preserves_minimum_margin: true,
+      preserves_minimum_margin: false, // automatic advice cannot certify unmeasured costs
     };
     onApplyOption(option);
     setAutomaticApplied(true);
@@ -183,7 +191,7 @@ export default function GrowthEconomicsCalculator({
           </span>
           <div className="min-w-0">
             <h4 className="text-xs font-black text-koma-foreground">Como definir a taxa</h4>
-            <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
+            <p className="mt-1 text-sm leading-relaxed text-koma-muted">
               O KÔMA pode sugerir uma taxa usando os dados que já conhece. Se preferir, escolha Manual e digite sua própria taxa nos campos abaixo.
             </p>
           </div>
@@ -194,7 +202,7 @@ export default function GrowthEconomicsCalculator({
             type="button"
             onClick={() => setLoyaltyMode('automatico')}
             aria-pressed={loyaltyMode === 'automatico'}
-            className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-[10px] font-black transition ${
+            className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-black transition ${
               loyaltyMode === 'automatico'
                 ? 'bg-emerald-500 text-white'
                 : 'text-koma-muted hover:bg-koma-raised'
@@ -207,7 +215,7 @@ export default function GrowthEconomicsCalculator({
             type="button"
             onClick={() => setLoyaltyMode('manual')}
             aria-pressed={loyaltyMode === 'manual'}
-            className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-[10px] font-black transition ${
+            className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-black transition ${
               loyaltyMode === 'manual'
                 ? 'bg-koma-raised text-koma-foreground'
                 : 'text-koma-muted hover:bg-koma-raised'
@@ -221,14 +229,14 @@ export default function GrowthEconomicsCalculator({
         {loyaltyMode === 'automatico' ? (
           <div className="mt-3">
             {automaticLoading && (
-              <div className="flex min-h-24 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card text-[10px] text-koma-muted">
+              <div className="flex min-h-24 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card text-sm text-koma-muted">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Calculando sugestão…
               </div>
             )}
 
             {automaticError && !automaticLoading && (
-              <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-[10px] text-rose-300" role="alert">
+              <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-300" role="alert">
                 <p>{automaticError}</p>
                 <button
                   type="button"
@@ -244,14 +252,14 @@ export default function GrowthEconomicsCalculator({
               <div className="rounded-xl border border-emerald-500/20 bg-koma-card p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[9px] font-black uppercase tracking-wider text-emerald-400">Sugestão KÔMA</p>
+                    <p className="text-xs font-black uppercase tracking-wider text-emerald-400">Sugestão KÔMA</p>
                     <p className="mt-1 text-xl font-black text-koma-foreground">
                       {isCashback
                         ? `${number(reward?.cashback_percent || 0)}% de volta`
                         : `${number(reward?.points_per_real || 0)} ponto por R$ 1`}
                     </p>
                     {!isCashback && (
-                      <p className="mt-1 text-[10px] text-koma-muted">
+                      <p className="mt-1 text-sm text-koma-muted">
                         Cada ponto vale {currency(reward?.point_value_brl || 0)} no resgate — equivalente a {number(reward?.effective_reward_percent || 0)}%.
                       </p>
                     )}
@@ -259,15 +267,33 @@ export default function GrowthEconomicsCalculator({
                   <button
                     type="button"
                     onClick={() => void loadAutomaticSuggestion()}
-                    className="shrink-0 text-[9px] font-bold text-emerald-400 underline underline-offset-2"
+                    className="shrink-0 text-xs font-bold text-emerald-400 underline underline-offset-2"
                   >
                     Recalcular
                   </button>
                 </div>
 
-                <p className="mt-2 text-[9px] leading-relaxed text-koma-muted">{automaticResult.message}</p>
+                <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                  {currentEffectivePercent !== undefined && (
+                    <div><span className="block text-koma-muted">Taxa vigente</span><strong className="text-koma-foreground">{number(currentEffectivePercent)}%</strong></div>
+                  )}
+                  <div><span className="block text-koma-muted">Sugestão do KÔMA</span><strong className="text-koma-foreground">{number(reward?.effective_reward_percent || 0)}%</strong></div>
+                  {currentEffectivePercent !== undefined && (
+                    <div className="col-span-2 text-koma-muted">Diferença: <strong className="text-koma-foreground">{number((reward?.effective_reward_percent || 0) - currentEffectivePercent)} ponto(s) percentual(is)</strong></div>
+                  )}
+                </div>
+                <p className="mt-3 text-sm font-semibold text-koma-foreground">
+                  {automaticResult.source === 'configured_costs'
+                    ? 'Baseada em custos cadastrados (estimativa parcial)'
+                    : 'Padrão conservador (custos insuficientes)'}
+                </p>
+                <p className="mt-1 text-sm text-koma-muted">
+                  {automaticResult.message} · {automaticResult.evidence.orders_analyzed} vendas analisadas;
+                  cobertura de custos {number(automaticResult.evidence.cost_coverage_percent)}%.
+                </p>
+                <p className="mt-1 text-sm text-koma-muted">Não representa lucro garantido nem margem comprovada: impostos, taxas e embalagens podem estar ausentes.</p>
                 {automaticResult.warnings.length > 0 && (
-                  <p className="mt-2 text-[9px] leading-relaxed text-amber-300">
+                  <p className="mt-2 text-xs leading-relaxed text-amber-300">
                     {automaticResult.warnings[0]}
                   </p>
                 )}
@@ -276,12 +302,12 @@ export default function GrowthEconomicsCalculator({
                   type="button"
                   onClick={applyAutomaticSuggestion}
                   disabled={!onApplyOption || (reward?.effective_reward_percent || 0) <= 0}
-                  className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-[10px] font-black text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-black text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {automaticApplied ? <Check className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
                   {automaticApplied ? 'Sugestão aplicada aos campos abaixo' : 'Usar sugestão KÔMA'}
                 </button>
-                <p className="mt-2 text-[9px] leading-relaxed text-koma-subtle">
+                <p className="mt-2 text-xs leading-relaxed text-koma-subtle">
                   A sugestão só preenche o programa. Nada é salvo até você tocar em “Salvar programa”.
                 </p>
               </div>
@@ -289,8 +315,8 @@ export default function GrowthEconomicsCalculator({
           </div>
         ) : (
           <div className="mt-3 rounded-xl border border-koma-border bg-koma-card p-3">
-            <p className="text-[10px] font-black text-koma-foreground">Você decide a taxa.</p>
-            <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">
+            <p className="text-sm font-black text-koma-foreground">Você decide a taxa.</p>
+            <p className="mt-1 text-xs leading-relaxed text-koma-muted">
               Digite abaixo o percentual de cashback que quiser ou, em Pontos, quantos pontos o cliente ganha e quanto vale cada ponto.
             </p>
           </div>
