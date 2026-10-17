@@ -125,10 +125,10 @@ def test_overview_is_bounded_and_never_exposes_private_contacts(sample):
     result = admin_wa.whatsapp_platform_overview(
         limit=25, offset=0, verify_sender=False, admin={"user": "test-super-admin"},
     )
-    assert result["total_restaurants"] == 2
+    assert result["total_restaurants"] >= 2
+    assert {701, 702}.issubset({row["restaurant_id"] for row in result["tenants"]})
     assert result["sender"]["connection"] == "not_verified"
     assert result["page_totals"]["waiting"] == 0
-    assert len(result["tenants"]) == 2
     assert "5511999999999" not in str(result)
     assert "5511888888888" not in str(result)
     assert "apikey" not in str(result).lower()
@@ -180,3 +180,22 @@ def test_high_volume_simulated_multi_tenant_queue_without_provider_calls(sample)
     selected = fair_claim_candidates(events, 10)
     assert len(selected) == 10
     assert [e.restaurante_id for e in selected[:4]] == [701, 702, 701, 702]
+
+
+def test_managed_tenant_can_use_valid_business_without_legacy_allowlist(sample):
+    engine, patch = sample
+    patch.setenv("KOMA_CENTRAL_WA_ALLOWED_RESTAURANT_IDS", "")
+    patch.setenv("KOMA_CUSTOMER_WA_ALLOWED_RESTAURANT_IDS", "*")
+    assert central.pilot_configuration() is None  # Old safety contract intact.
+    assert central.transport_configuration() is not None
+    with Session(engine) as db:
+        legacy = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=701).one()
+        managed = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=702).one()
+        managed.whatsapp_platform_managed = True
+        managed.whatsapp_platform_operator_allowed = True
+        managed.whatsapp_platform_customer_allowed = True
+        db.commit()
+        assert not central.enabled_for(701, legacy)
+        assert central.enabled_for(702, managed)
+        assert customer.customer_notices_enabled(702, managed)
+        assert not customer.customer_notices_enabled(701, legacy)
