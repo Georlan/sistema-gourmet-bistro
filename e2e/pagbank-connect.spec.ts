@@ -122,7 +122,7 @@ test('retorno sem estado iniciado no navegador não troca a conta', async ({ pag
 });
 
 
-test('integrações mostra apenas bancos e recolhe WhatsApp; 404 tem recuperação', async ({ page }) => {
+test('integrações separa Pagamentos e WhatsApp; 404 tem recuperação', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   let unavailable = true;
@@ -136,9 +136,10 @@ test('integrações mostra apenas bancos e recolhe WhatsApp; 404 tem recuperaç�
   await expect(page.getByText('Not Found', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Chave Pix', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Seu WhatsApp com DDD')).not.toBeVisible();
-  await page.getByText('WhatsApp · Avisos de pedidos', { exact: true }).click();
+  await page.getByRole('tab', { name: 'WhatsApp' }).click();
   await expect(page.getByRole('heading', { name: 'WhatsApp operacional' })).toBeVisible();
-  await page.getByText('WhatsApp · Avisos de pedidos', { exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Avisos para clientes pelo KÔMA Business' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Pagamentos' }).click();
   unavailable = false;
   await page.getByRole('button', { name: 'Atualizar status do PagBank' }).click();
   await expect(page.getByRole('button', { name: 'Conectar PagBank' })).toBeEnabled();
