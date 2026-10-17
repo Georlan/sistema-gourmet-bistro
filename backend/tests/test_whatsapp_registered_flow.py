@@ -388,7 +388,7 @@ def test_customer_permission_default_off_is_independent_from_registered_operator
     assert dispatch_single_outbox_event(db, rows[0])
     assert len(calls) == 1
     assert calls[0]['number'] == '5511777777777'
-    assert '*KÔMA | Avisos de pedidos*' in calls[0]['text']
+    assert '*KÔMA | Loja teste 701*' in calls[0]['text']
     assert 'não é o WhatsApp do restaurante' in calls[0]['text']
     assert 'Não quer mais receber avisos deste restaurante?' in calls[0]['text']
 
