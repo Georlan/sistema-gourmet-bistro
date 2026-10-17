@@ -31,11 +31,26 @@ export async function expectRelationshipSelected(page: Page, requested: Relation
     .filter({ hasText: labels[destination] });
   // React can switch sections after the navigation click. Wait for the active,
   // rendered presentation instead of branching on an instantaneous isVisible().
-  await expect.poll(async () => {
-    if (await horizontal.isVisible()) return horizontal.getAttribute('aria-current');
-    if (await sidebarChild.isVisible()) return sidebarChild.getAttribute('aria-current');
-    return null;
-  }, { message: `Esperando destino ativo do Relacionamento: ${destination}` }).toBe('page');
+  try {
+    await expect.poll(async () => {
+      if (await horizontal.isVisible()) return horizontal.getAttribute('aria-current');
+      if (await sidebarChild.isVisible()) return sidebarChild.getAttribute('aria-current');
+      return null;
+    }, { message: `Esperando destino ativo do Relacionamento: ${destination}` }).toBe('page');
+  } catch (error) {
+    const snapshot = await page.evaluate(() => ({
+      activeTab: sessionStorage.getItem('koma_active_tab'),
+      activeSubTab: sessionStorage.getItem('koma_active_subtab'),
+      relationshipLast: sessionStorage.getItem('koma_relationship_last_subtab'),
+      benefitLast: sessionStorage.getItem('koma_relationship_last_benefit'),
+      selected: Array.from(document.querySelectorAll('[aria-current="page"]')).map(el => el.textContent?.trim().slice(0, 35)),
+      horizontalCount: document.querySelectorAll('.cashier-subnav__button').length,
+      horizontalNav: document.querySelector('.cashier-subnav')?.getAttribute('class'),
+      documentLabel: document.querySelector('main')?.textContent?.trim().slice(0, 110),
+    }));
+    console.log('[relationship-navigation-selection-failure]', JSON.stringify(snapshot));
+    throw error;
+  }
   if (requested === 'fidelidade' || requested === 'cupons') {
     await expect(page.getByRole('tab', { name: requested === 'fidelidade' ? 'Fidelidade' : 'Cupons', exact: true }))
       .toHaveAttribute('aria-selected', 'true');
