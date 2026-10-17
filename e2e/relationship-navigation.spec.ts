@@ -7,7 +7,7 @@ const contract = JSON.parse(readFileSync(new URL('./fixtures/crm-api-contract.js
 
 async function setupRelationship(page: Page, loyalty: boolean, coupons: boolean) {
   await mockCashierBackend(page);
-  await seedCashierSession(page);
+  await seedCashierSession(page, { preserveNavigationOnReload: true });
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
   await page.route('**/caixa/configuracoes', route => route.fulfill({
     json: {
