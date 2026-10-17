@@ -162,7 +162,19 @@ def resolve_customer_notice(db: Session, snapshot: dict) -> tuple[str, str] | No
             fulfillment=order.tipo, queued_at=snapshot_time(snapshot), now=dt.datetime.now(dt.timezone.utc)):
         return None
     restaurant = db.query(Restaurante).filter_by(id=rid).one_or_none()
+    # A legacy tenant may still be named "Kôma" internally even though its
+    # public menu has a restaurant-specific slug (e.g. d8-burger).
+    # Prefer the public identifier only when the registered name is just the
+    # platform name; never hardcode tenant IDs or names of individual stores.
+    import re
+    import unicodedata
     label = " ".join((restaurant.nome if restaurant else "Restaurante").split())[:60]
+    normalized_name = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode().casefold()
+    if normalized_name == "koma" and restaurant and restaurant.slug:
+        public_slug = str(restaurant.slug).strip()
+        if re.fullmatch(r"[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*", public_slug):
+            label = public_slug.replace("-", " ").title()[:60]
+    safe_label = re.sub(r"[*_~\x60\\r\\n]", "", label).strip() or "Restaurante"
     description = {
         NoticeKind.CUSTOMER_RECEIVED: "Pedido recebido pelo restaurante.",
         NoticeKind.CUSTOMER_READY_PICKUP: "Seu pedido está pronto para retirada.",
@@ -172,17 +184,15 @@ def resolve_customer_notice(db: Session, snapshot: dict) -> tuple[str, str] | No
     if description is None:
         return None
     from .whatsapp_opt_out import opt_out_url
-    # Use native WhatsApp bold. Do not expose a customer name without identity proof.
-    # Restaurant label is normalized to avoid user-supplied line breaks or markup.
-    import re
-    safe_label = re.sub(r"[*_~`]", "", label).strip()
+    # Native WhatsApp bold, one clear header, minimal transactional content.
+    # No buyer name: voluntary checkout consent is not phone ownership proof.
     message = (
-        "*KÔMA | Avisos de pedidos*\n"
-        f"*{safe_label} · Pedido #{order.numero_pedido}*\n\n"
-        f"*{description}*\n\n"
-        "Este é um aviso automático do KÔMA. Este número não é o WhatsApp do restaurante.\n\n"
-        "Não quer mais receber avisos deste restaurante? Desative aqui:\n"
-        f"{opt_out_url(rid, target)}"
+        f"*KÔMA | {safe_label}*\\n"
+        f"Pedido #{order.numero_pedido}\\n\\n"
+        f"*{description}*\\n\\n"
+        "Aviso automático. Este número não é o WhatsApp do restaurante.\\n\\n"
+        "Não quer mais receber avisos deste restaurante?\\n"
+        f"Desative: {opt_out_url(rid, target)}"
     )
     return target, message
 

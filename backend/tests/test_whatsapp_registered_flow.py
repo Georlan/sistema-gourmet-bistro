@@ -140,6 +140,24 @@ def test_other_tenant_never_queues_or_borrows_registration(flow):
     assert calls[0]['number'] == '5521999999999'
 
 
+def test_customer_message_identifies_public_restaurant_not_platform(flow):
+    db, patch = flow
+    restaurant = db.query(Restaurante).filter_by(id=701).one()
+    restaurant.nome = "Kôma"
+    restaurant.slug = "d8-burger"
+    db.commit()
+    check, source, event = order(db)
+    row = publish(db, event)[0]
+    calls = provider(patch)
+    assert dispatch_single_outbox_event(db, row)
+    text = calls[0]["text"]
+    assert text.startswith("*KÔMA | D8 Burger*\\nPedido #")
+    assert "Este número não é o WhatsApp do restaurante" in text
+    import re
+    match = re.search(r"/whatsapp/avisos#token=([A-Za-z0-9_-]+)", text)
+    assert match and len(match.group(1)) == 76
+
+
 def test_customer_receives_only_after_consent_and_from_same_order(flow):
     db, patch = flow
     check, source, event = order(db)

@@ -1,5 +1,12 @@
 # WhatsApp central com destinatários do cadastro
 
+## Identidade do restaurante e descadastro compacto
+
+Avisos transacionais ao cliente começam com \u0027*KÔMA | Nome da loja*\u0027 e o pedido/status aparecem com hierarquia curta. A loja é resolvida por tenant na leitura, não por variável global nem pela conta Business. Para cadastros antigos com nome genérico de plataforma \u0027Kôma\u0027, um slug público válido pode servir como identificação comercial (ex.: d8-burger → D8 Burger). Um nome específico configurado na loja sempre prevalece. Isso não altera o cadastro do restaurante.
+
+O link segue em HTTPS, em \u0027/whatsapp/avisos#token=...\u0027; o token novo é compacto (76 caracteres URL-safe em vez do JWT longo), HMAC-SHA256 com tag 128-bit, escopo do restaurante, digest do contato e expiração de 90 dias. O fragmento é removido antes de analytics; nenhuma capability é enviada por GET ou registrada em query/path; a alteração exige confirmação via POST. Links JWT anteriores continuam sendo aceitos até a expiração original. A confirmação é idempotente e os bloqueios permanecem isolados por tenant. Não encurtar o link com redirecionador externo ou com segredo em path/query.
+
+
 ## Bloco 3 — autorização de plataforma e operação central
 
 O Super Admin utiliza **Plataforma → Saúde → WhatsApp Business compartilhado**.
