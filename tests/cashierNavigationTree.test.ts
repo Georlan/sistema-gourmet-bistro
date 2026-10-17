@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   CASHIER_SIDEBAR_GROUPS,
   getCashierSidebarGroupsForPlan,
+  getCashierHorizontalItems,
   getCashierSetupSidebarGroupsForPlan,
   getCashierNavigationAction,
   getCashierNavigationParentId,
@@ -107,12 +108,56 @@ test('cadastros keep sidebar compact while preserving existing workspace owners'
   assert.deepEqual(estoque?.children?.map((child) => child.label), [
     'Ingredientes', 'Compras', 'Inventário', 'Fornecedores',
   ]);
-  assert.deepEqual(clientes?.children?.map(child => child.label), ['Ações para hoje', 'Clientes', 'Campanhas', 'Fidelidade', 'Cupons', 'Resultados']);
+  assert.deepEqual(clientes?.children?.filter(child => !child.navigationHidden).map(child => child.label), ['Hoje', 'Clientes', 'Campanhas', 'Benefícios', 'Resultados']);
 
   assert.deepEqual(getCashierNavigationTarget('cardapio_preparo'), { tab: 'cardapio', subTab: 'categorias' });
   assert.deepEqual(getCashierNavigationTarget('estoque_fornecedores'), { tab: 'estoque', subTab: 'fornecedores' });
   assert.deepEqual(getCashierNavigationTarget('clientes'), { tab: 'clientes', subTab: 'oportunidades' });
   assert.deepEqual(getCashierNavigationTarget('clientes_cupons'), { tab: 'clientes', subTab: 'cupons' });
+  assert.deepEqual(getCashierNavigationTarget('clientes_beneficios'), { tab: 'clientes', subTab: 'beneficios' });
+  assert.deepEqual(getCashierNavigationTarget('clientes_fidelidade'), { tab: 'clientes', subTab: 'fidelidade' });
+});
+
+
+test('CRM navigation has five visible destinations and preserves legacy benefit aliases', () => {
+  const visibleIds = ['clientes_oportunidades', 'clientes_cadastro', 'clientes_campanhas', 'clientes_beneficios', 'clientes_resultados'];
+  const filtered = (loyalty: boolean, coupons: boolean) => getCashierSidebarGroupsForPlan('premium', {
+    ...premiumEntitlements, loyalty, coupons,
+  }).flatMap(g => g.items).find(i => i.id === 'clientes')?.children ?? [];
+
+  for (const [loyalty, coupons] of [[true, true], [true, false], [false, true], [false, false]] as const) {
+    const children = filtered(loyalty, coupons);
+    const expected = visibleIds.filter(id => id !== 'clientes_beneficios' || loyalty || coupons);
+    assert.deepEqual(children.filter(child => !child.navigationHidden).map(child => child.id), expected);
+    assert.equal(children.some(child => child.id === 'clientes_fidelidade'), loyalty);
+    assert.equal(children.some(child => child.id === 'clientes_cupons'), coupons);
+    const horizontal = getCashierHorizontalItems('clientes', 'premium', { ...premiumEntitlements, loyalty, coupons });
+    assert.deepEqual(horizontal.map(child => child.id), expected);
+  }
+
+  for (const subTab of ['beneficios', 'fidelidade', 'cupons']) {
+    assert.deepEqual(normalizeCashierNavigationState('clientes', subTab), { tab: 'clientes', subTab });
+    assert.equal(isCashierNavigationActive('clientes_beneficios', 'clientes', subTab), true);
+  }
+  assert.equal(isCashierNavigationActive('clientes_beneficios', 'clientes', 'campanhas'), false);
+  assert.deepEqual(normalizeCashierTargetForEntitlements({ tab: 'clientes', subTab: 'beneficios' }, {
+    ...premiumEntitlements, loyalty: false, coupons: false,
+  }), { tab: 'clientes', subTab: 'clientes' });
+  assert.deepEqual(normalizeCashierTargetForEntitlements({ tab: 'clientes', subTab: 'cupons' }, {
+    ...premiumEntitlements, loyalty: true, coupons: false,
+  }), { tab: 'clientes', subTab: 'clientes' });
+});
+
+test('CRM remembers the last tab without sharing it across restaurant switches', () => {
+  const hook = readFileSync(new URL('../src/components/caixa/navigation/useCashierNavigation.ts', import.meta.url), 'utf8');
+  const switchSource = readFileSync(new URL('../src/utils/storeSwitch.ts', import.meta.url), 'utf8');
+  for (const key of ['koma_relationship_last_subtab', 'koma_relationship_last_benefit']) {
+    assert.ok(hook.includes(key));
+    assert.ok(switchSource.includes(key));
+  }
+  const subnav = readFileSync(new URL('../src/components/caixa/navigation/CashierSubNavigation.tsx', import.meta.url), 'utf8');
+  assert.match(subnav, /relationshipWithExpandedSidebar/);
+  assert.match(subnav, /lg:hidden/);
 });
 
 test('gestão expõe relatórios e equipe como destinos canônicos', () => {
@@ -284,7 +329,7 @@ test('every nested parent always has exactly one active child', () => {
     const states = [parent.target, ...(parent.children ?? []).map((child) => child.target)];
     for (const state of states) {
       const activeChildren = parent.children?.filter((child) =>
-        isCashierNavigationActive(child.id, state.tab, state.subTab)) ?? [];
+        !child.navigationHidden && isCashierNavigationActive(child.id, state.tab, state.subTab)) ?? [];
       assert.equal(activeChildren.length, 1, `${parent.id}/${state.subTab} must have one active child`);
       assert.equal(isCashierNavigationActive(parent.id, state.tab, state.subTab), true);
     }
@@ -499,7 +544,7 @@ test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redu
   assert.deepEqual(pocketKitchen?.target, { tab: 'operacao', subTab: 'preparo' });
 
   const proCustomers = getCashierSidebarGroupsForPlan('pro', proEntitlements).flatMap(group => group.items).find(item => item.id === 'clientes');
-  assert.deepEqual(proCustomers?.children?.map(child => child.id), ['clientes_oportunidades', 'clientes_cadastro', 'clientes_campanhas', 'clientes_resultados']);
+  assert.deepEqual(proCustomers?.children?.filter(child => !child.navigationHidden).map(child => child.id), ['clientes_oportunidades', 'clientes_cadastro', 'clientes_campanhas', 'clientes_resultados']);
   assert.deepEqual(getCashierSidebarGroupsForPlan('premium', premiumEntitlements), CASHIER_SIDEBAR_GROUPS);
 });
 
