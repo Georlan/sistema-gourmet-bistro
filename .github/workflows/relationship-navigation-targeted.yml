@@ -32,8 +32,10 @@ jobs:
         run: >-
           KOMA_E2E_PORT=4283 npm run test:e2e --
           e2e/relationship-navigation.spec.ts
-          --project=mobile-390 --grep="five destinations"
-          --workers=1 --retries=0 --max-failures=1
+          e2e/crm-api-contract.spec.ts
+          e2e/customer-crm.spec.ts
+          e2e/shared-snapshot-requests.spec.ts
+          --workers=2
       - uses: actions/upload-artifact@v4
         if: always()
         with:
