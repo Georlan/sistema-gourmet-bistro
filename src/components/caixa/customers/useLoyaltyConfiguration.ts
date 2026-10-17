@@ -72,6 +72,7 @@ export function useLoyaltyConfiguration({ apiBaseUrl, authHeaders, hasLoyalty, v
   scopeRef.current = scope;
   const [state, setState] = useState<LoyaltyState>(() => emptyState(scope));
   const writeLock = useRef(false);
+  const [reloadVersion, setReloadVersion] = useState(0);
 
   const current = state.scope === scope ? state : emptyState(scope);
   const saved = current.saved;
@@ -104,7 +105,7 @@ export function useLoyaltyConfiguration({ apiBaseUrl, authHeaders, hasLoyalty, v
       }
     })();
     return () => controller.abort();
-  }, [scope, visible, hasLoyalty, apiBaseUrl, authHeaders.Authorization]);
+  }, [scope, visible, hasLoyalty, apiBaseUrl, authHeaders.Authorization, reloadVersion]);
 
   const setDraft = useCallback((next: SetStateAction<LoyaltyConfig>) => {
     setState(prev => {
@@ -156,5 +157,5 @@ export function useLoyaltyConfiguration({ apiBaseUrl, authHeaders, hasLoyalty, v
   }, [scope, hasLoyalty, visible, dirty, current.loading, draft, authHeaders, apiBaseUrl]);
 
   return { saved, draft, setDraft, dirty, loading: current.loading, saving: current.saving,
-    error: current.error, discard, save };
+    error: current.error, discard, save, reload: () => setReloadVersion(version => version + 1) };
 }
