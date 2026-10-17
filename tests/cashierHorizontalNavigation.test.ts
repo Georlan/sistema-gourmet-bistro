@@ -9,7 +9,7 @@ test('every workspace shares horizontal destinations with the sidebar, including
     for (const setup of [false, true]) {
       const groups = setup ? getCashierSetupSidebarGroupsForPlan('premium', capabilities) : getCashierSidebarGroupsForPlan('premium', capabilities);
       for (const item of groups.flatMap(group => group.items)) {
-        assert.deepEqual(getCashierHorizontalItems(item.id, 'premium', capabilities, setup), item.children ?? []);
+        assert.deepEqual(getCashierHorizontalItems(item.id, 'premium', capabilities, setup), (item.children ?? []).filter(child => !child.navigationHidden));
       }
     }
   }
