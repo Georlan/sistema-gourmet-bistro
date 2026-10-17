@@ -51,10 +51,18 @@ test('all CRM workspaces render backend-generated responses without losing the o
       await page.getByRole('region',{name:'Impacto na contribuição por pedido'}).scrollIntoViewIfNeeded();
       await expect(page.getByRole('region',{name:'Impacto na contribuição por pedido'}).getByText(/^R\$\s0,00$/)).toBeVisible();
       await page.screenshot({path:testInfo.outputPath(`loyalty-impact-${testInfo.project.name}.png`),animations:'disabled'});
-      await page.getByLabel('Ativar programa de fidelidade').uncheck({force:true});
+      await expect(page.getByRole('region', {name:'Programa vigente'})).toContainText('Ativo');
+      await page.getByText('Ajustar programa', {exact:false}).filter({visible:true}).click();
+      await page.getByLabel('Ativar programa de fidelidade').uncheck();
+      // Unsaved changes never impersonate the server snapshot or change the default simulation.
+      await expect(page.getByRole('region', {name:'Programa vigente'})).toContainText('Alterações pendentes');
+      await expect(simulation).toContainText('R$ 5,00');
+      await page.getByRole('button', {name:'Rascunho'}).click();
       await expect(simulation).toContainText('Programa pausado');
       await expect(simulation).toContainText('R$ 0,00');
-      await page.getByLabel('Ativar programa de fidelidade').check({force:true});
+      await page.getByRole('button', {name:'Vigente'}).click();
+      await expect(simulation).toContainText('R$ 5,00');
+      await page.getByLabel('Ativar programa de fidelidade').check();
       expect(loyaltyWrites).toBe(0);
     }
     await expect(page.getByRole('tablist',{name:'Áreas do CRM'})).toHaveCount(0);
