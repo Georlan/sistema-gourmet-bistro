@@ -340,17 +340,21 @@ async function mockCashierBackend(page: Page) {
   });
 }
 
-async function seedCashierSession(page: Page) {
-  await page.addInitScript(() => {
+async function seedCashierSession(page: Page, options: { preserveNavigationOnReload?: boolean } = {}) {
+  await page.addInitScript((preserveNavigationOnReload: boolean) => {
     sessionStorage.setItem('koma_caixa_token', 'playwright-e2e-token');
     sessionStorage.setItem('koma_active_operational_portal', 'caixa');
     sessionStorage.setItem('koma_caixa_id', 'caixa-e2e');
     sessionStorage.setItem('koma_caixa_name', 'Caixa E2E');
     sessionStorage.setItem('koma_caixa_role', 'caixa');
     sessionStorage.setItem('token', 'playwright-e2e-token');
-    sessionStorage.setItem('koma_active_tab', 'operacao');
-    sessionStorage.setItem('koma_active_subtab', 'pedidos');
-  });
+    // Default navigation only for a fresh fixture session. The opt-in
+    // relationship regression verifies real in-session reload persistence.
+    if (!preserveNavigationOnReload || !sessionStorage.getItem('koma_active_tab')) {
+      sessionStorage.setItem('koma_active_tab', 'operacao');
+      sessionStorage.setItem('koma_active_subtab', 'pedidos');
+    }
+  }, options.preserveNavigationOnReload === true);
 }
 
 export { mockCashierBackend, seedCashierSession, commands, DESKTOP_BREAKPOINT, cashierConfig };
