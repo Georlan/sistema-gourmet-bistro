@@ -683,18 +683,27 @@ export default function CardapioDigital({
               </div>
 
               {customerWhatsAppStatusEnabled && deliveryMethod !== "dine_in" && (
-                <label htmlFor="checkout-whatsapp-status-opt-in" className="flex cursor-pointer items-start gap-3 rounded-2xl border border-koma-border bg-koma-card px-4 py-3.5">
+                <label htmlFor="checkout-whatsapp-status-opt-in"
+                  className={`flex min-h-24 cursor-pointer items-start gap-3 rounded-2xl border-2 px-4 py-4 transition-colors focus-within:ring-2 focus-within:ring-emerald-500/60 sm:px-5 ${whatsappStatusOptIn
+                    ? 'border-emerald-500 bg-emerald-500/15'
+                    : 'border-emerald-500/50 bg-emerald-500/5 hover:bg-emerald-500/10'}`}>
                   <input
                     id="checkout-whatsapp-status-opt-in"
                     type="checkbox"
                     checked={whatsappStatusOptIn}
                     onChange={(event) => setWhatsappStatusOptIn(event.target.checked)}
                     disabled={isSubmitting}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-500"
+                    className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-emerald-500"
                   />
-                  <span className="text-xs leading-relaxed text-koma-foreground">
-                    <strong className="block font-semibold">Quero receber atualizações deste pedido pelo WhatsApp</strong>
-                    <span className="mt-1 block text-[11px] text-koma-muted">Autorizo o KÔMA a enviar avisos de pedido recebido, pronto para retirada ou saída para entrega e eventual cancelamento para o celular informado acima. Sem promoções. É opcional e posso continuar acompanhando tudo por aqui.</span>
+                  <span className="min-w-0 flex-1 text-xs leading-relaxed text-koma-foreground">
+                    <span className="flex items-center gap-2">
+                      <MessageCircle aria-hidden="true" className="h-5 w-5 shrink-0 text-emerald-500" />
+                      <strong className="text-sm font-black">Receba atualizações deste pedido pelo WhatsApp</strong>
+                    </span>
+                    <span className="mt-1.5 block text-xs text-koma-muted">
+                      Saiba quando o pedido for recebido, estiver pronto ou sair para entrega.
+                      É grátis e opcional, sem promoções. Você pode continuar acompanhando por aqui.
+                    </span>
                   </span>
                 </label>
               )}
