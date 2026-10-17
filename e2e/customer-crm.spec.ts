@@ -42,6 +42,28 @@ test('CRM ranks buyers, filters inactivity, searches formatted phones and preser
 
   // Volta para todos os clientes
   await page.getByRole('button', { name: 'Todos', exact: true }).click();
+
+  // Advanced criteria are available on demand, survive closing the disclosure,
+  // and can be cleared without resetting the search or the customer list.
+  const advancedFilters = page.locator('details[aria-label="Filtros avançados de clientes"]');
+  await expect(advancedFilters).not.toHaveAttribute('open', '');
+  await advancedFilters.locator('summary').focus();
+  await advancedFilters.locator('summary').press('Enter');
+  await expect(advancedFilters).toHaveAttribute('open', '');
+  await page.getByLabel('Filtrar por valor total pago').selectOption('MAIS_300');
+  await expect(records).toHaveCount(1);
+  await expect(records.first()).toContainText('Ana Frequente');
+  await advancedFilters.locator('summary').click();
+  await expect(advancedFilters).not.toHaveAttribute('open', '');
+  await expect(advancedFilters.locator('summary')).toContainText('1 ativo');
+  await expect(records).toHaveCount(1);
+  await page.getByRole('button', { name: 'Limpar filtros (1)' }).click();
+  await expect(records).toHaveCount(25);
+  await advancedFilters.locator('summary').click();
+  await expect(page.getByLabel('Filtrar por valor total pago')).toHaveValue('ALL');
+  await page.screenshot({ path: testInfo.outputPath(`crm-density-filters-${testInfo.project.name}.png`), fullPage: true, animations: 'disabled' });
+  await advancedFilters.locator('summary').click();
+
   await expect(records.first()).toContainText('Ana Frequente');
   await expect(records.first()).toContainText('Burger da casa');
   await expect(records.first()).toContainText('600,00');
