@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from ..domain.orders.events import OrderCreated
 from ..domain.orders.types import OrderChannel
 from ..models import Cliente, Comanda, ConfiguracaoRestaurante, IntegrationOutbox, Lancamento, Restaurante, WhatsAppContactOptOut
-from .central_whatsapp import allowed_restaurants, enabled_for, pilot_configuration, recipient_fingerprint, registered_operator_phone
+from .central_whatsapp import allowed_restaurants, pilot_configuration, recipient_fingerprint
 from .customer_status_whatsapp import eligible_order_status_recipient
 from .whatsapp_notice_policy import NoticeKind, customer_notice_for_event, still_relevant
 
@@ -34,20 +34,25 @@ class CustomerNotice:
     event_id: str
 
 
-def customer_notice_transport_config(restaurant_id: int):
-    """Configuração autorizada para avisos ao cliente, sem consultar nenhum dado de tenant."""
+def customer_notice_transport_config(
+    restaurant_id: int, tenant: ConfiguracaoRestaurante | None = None,
+):
+    """Global kill switch plus explicit tenant-scoped platform rollout."""
     if os.getenv("KOMA_CUSTOMER_WA_ENABLED", "false").strip().lower() != "true":
         return None
-    if restaurant_id not in allowed_restaurants("KOMA_CUSTOMER_WA_ALLOWED_RESTAURANT_IDS"):
-        return None
     config = pilot_configuration()
-    if config is None or restaurant_id not in config.restaurant_ids:
+    if config is None:
+        return None
+    if tenant is not None and tenant.whatsapp_platform_managed is True:
+        if tenant.whatsapp_platform_customer_allowed is not True:
+            return None
+    elif restaurant_id not in allowed_restaurants("KOMA_CUSTOMER_WA_ALLOWED_RESTAURANT_IDS") or restaurant_id not in config.restaurant_ids:
         return None
     return config
 
 
 def customer_notices_enabled(restaurant_id: int, tenant: ConfiguracaoRestaurante | None) -> bool:
-    config = customer_notice_transport_config(restaurant_id)
+    config = customer_notice_transport_config(restaurant_id, tenant)
     return bool(config and tenant is not None and tenant.whatsapp_customer_notices_enabled is True)
 
 
@@ -83,7 +88,7 @@ def _released(db: Session, rid: int, source_id: str) -> bool:
 def enqueue_customer_notice(db: Session, event, event_name: str):
     rid = int(event.restaurant_id)
     # The default-off path must add no query to the operational transaction.
-    if os.getenv("KOMA_CUSTOMER_WA_ENABLED", "false").strip().lower() != "true" or not enabled_for(rid):
+    if os.getenv("KOMA_CUSTOMER_WA_ENABLED", "false").strip().lower() != "true":
         return None
     tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one_or_none()
     if not customer_notices_enabled(rid, tenant) or not event.check_id:
