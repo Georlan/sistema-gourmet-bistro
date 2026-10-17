@@ -55,8 +55,12 @@ test('vigente, sugestão, rascunho, simulador e confirmação ficam isolados at�
   await expect(simulation).toContainText('R$ 5,00');
   await page.getByRole('button',{name:'Rascunho'}).click();
   await expect(simulation).toContainText('R$ 2,00');
-  await navigateRelationship(page,'cupons');
-  await navigateRelationship(page,'fidelidade');
+  // The Benefits parent is already active. Use its internal tabs directly,
+  // including after a draft exists; re-clicking the parent is a different journey.
+  await page.getByRole('tab', {name:'Cupons', exact:true}).click();
+  await expect(page.getByRole('tabpanel', {name:'Cupons'})).toBeVisible();
+  await page.getByRole('tab', {name:'Fidelidade', exact:true}).click();
+  await expect(page.getByRole('tabpanel', {name:'Fidelidade'})).toBeVisible();
   await expect(current).toContainText('Alterações pendentes');
   await expect(page.getByRole('button',{name:'Rascunho'})).toHaveAttribute('aria-pressed','true');
   expect(writes).toBe(0);
