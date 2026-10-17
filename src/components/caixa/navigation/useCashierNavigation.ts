@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
 import type { CashierTab } from '../cashierContracts';
 import {
@@ -42,6 +42,14 @@ const LAST_BENEFIT_KEY = 'koma_relationship_last_benefit';
 /** Owns persisted navigation and mobile drawer lifecycle, independent of operational controllers. */
 export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, showToast }: BoundaryProps) {
   const [setupMode] = useState(readSetupMode);
+  // Entitlements can arrive after the session is read. Keep a gated restoration
+  // request in memory, without showing restricted benefit content prematurely.
+  const pendingBenefitRestore = useRef<string | null>((() => {
+    const tab = sessionStorage.getItem('koma_active_tab');
+    const subTab = sessionStorage.getItem('koma_active_subtab');
+    return tab === 'clientes' && (subTab === 'fidelidade' || subTab === 'cupons' || subTab === 'beneficios')
+      ? subTab : null;
+  })());
   const normalizePlanTarget = (target: { tab: CashierTab; subTab: string }) =>
     normalizeCashierTargetForEntitlements(target, entitlements);
   const [initialNavigation] = useState(() => {
@@ -106,10 +114,23 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
     }
   }, [activeSubTab, activeTab, setupMode, planId, entitlements]);
 
+  useEffect(() => {
+    if (!entitlements || !pendingBenefitRestore.current) return;
+    const requested = pendingBenefitRestore.current;
+    pendingBenefitRestore.current = null;
+    if (setupMode || activeTab !== 'clientes' || activeSubTab !== 'clientes') return;
+    const restored = normalizePlanTarget({ tab: 'clientes', subTab: requested });
+    if (restored.tab === 'clientes' && restored.subTab === requested) {
+      setActiveSubTab(requested);
+    }
+  }, [entitlements, setupMode, activeTab, activeSubTab]);
+
   const setupAllowsTarget = (tab: CashierTab, subTab: string) =>
     !setupMode || isCashierSetupTargetAllowed(tab, subTab);
 
   const applyNavigationTarget = (navigationId: string) => {
+    // Explicit navigation supersedes any pending on-load restoration.
+    pendingBenefitRestore.current = null;
     let rawTarget = getCashierNavigationTarget(navigationId);
     // The parent is an entry point, not a reset button. Preserve the last workspace.
     if (navigationId === 'clientes' && activeTab !== 'clientes') {
@@ -152,6 +173,7 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
   };
 
   const handleTabChange = (tabId: string) => {
+    pendingBenefitRestore.current = null;
     if (applyNavigationTarget(tabId)) return;
     const candidate = normalizePlanTarget(normalizeCashierNavigationState(tabId, ''));
     if (setupMode && !isCashierSetupTargetAllowed(candidate.tab, candidate.subTab)) {
