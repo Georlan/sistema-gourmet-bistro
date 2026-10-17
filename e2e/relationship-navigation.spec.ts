@@ -61,7 +61,8 @@ async function enterRelationship(page: Page) {
 test('five destinations, benefit tabs, legacy restoration and module return share one active location', async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const errors: string[] = [];
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => { errors.push(error.message); console.log('[relationship-browser-exception]', error.stack ?? error.message); });
+  page.on('console', message => { if (message.type() === 'error') console.log('[relationship-browser-console]', message.text().slice(0, 2400)); });
   await setupRelationship(page, true, true);
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
@@ -125,7 +126,9 @@ test('five destinations, benefit tabs, legacy restoration and module return shar
 
 for (const [loyalty, coupons] of [[true, false], [false, true], [false, false]] as const) {
   test(`benefit navigation respects isolated entitlements: loyalty=${loyalty}, coupons=${coupons}`, async ({ page }) => {
-    await setupRelationship(page, loyalty, coupons);
+    page.on('pageerror', error => console.log('[relationship-browser-exception]', error.stack ?? error.message));
+  page.on('console', message => { if (message.type() === 'error') console.log('[relationship-browser-console]', message.text().slice(0, 2400)); });
+  await setupRelationship(page, loyalty, coupons);
     await page.goto('/?view=caixa');
     await expect(page.locator('.orders-board')).toBeVisible();
     await enterRelationship(page);
