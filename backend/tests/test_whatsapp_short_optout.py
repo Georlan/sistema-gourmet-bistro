@@ -24,7 +24,7 @@ def test_compact_capability_short_signed_scoped_and_expiring(monkeypatch):
     assert optout.create_opt_out_token(702, phone) != token
     assert optout.resolve_opt_out_token(optout.create_opt_out_token(702, phone))[0] == 702
 
-    for forged in (token + "x", token[:-1], "A" + token[1:], token[:-1] + ("A" if token[-1] != "A" else "B"),
+    for forged in (token + "x", token[:-1], ("B" if token[0] == "A" else "A") + token[1:], token[:-1] + ("A" if token[-1] != "A" else "B"),
                    token.replace(token[0], ".", 1), "", "bogus"):
         with pytest.raises(ValueError):
             optout.resolve_opt_out_token(forged)
