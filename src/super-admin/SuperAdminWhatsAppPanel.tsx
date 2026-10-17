@@ -160,6 +160,7 @@ export function SuperAdminWhatsAppPanel() {
             <div className="text-koma-muted">Agregado desta página ({data.month_utc})</div>
             <strong>{data.page_totals.attempts} tentativas · {data.page_totals.accepted} aceites HTTP</strong>
             <p className="mt-1 text-koma-muted">{data.page_totals.waiting} na fila · {data.page_totals.failed} falhas · {data.page_totals.discarded} descartes</p>
+            <p className="mt-1 text-koma-muted">Custo estimado dos avisos aos clientes: {data.page_totals.estimated_customer_cost_brl == null ? "não informado" : `R$ ${data.page_totals.estimated_customer_cost_brl}`} (não é a fatura Railway/Meta).</p>
           </div>
         </div>
 
@@ -203,6 +204,7 @@ export function SuperAdminWhatsAppPanel() {
                 <span className="ml-2">· {tenant.queue.total} aguardando</span>
                 {tenant.queue.ttl_risk && <span className="ml-2 text-amber-400"><AlertTriangle className="mr-1 inline h-3 w-3" />Fila próxima de expirar</span>}
                 <p className="mt-1">Fila mais antiga: {tenant.queue.oldest_seconds == null ? "—" : `${tenant.queue.oldest_seconds}s`}; espera média de tentativas: {tenant.usage.average_queue_ms == null ? "—" : `${tenant.usage.average_queue_ms}ms`}. Não equivale a entrega no aparelho.</p>
+                <p className="mt-1">Estimativa de custo das notificações ao cliente: {tenant.usage.estimated_customer_cost_brl == null ? "indisponível" : `R$ ${tenant.usage.estimated_customer_cost_brl}`}.</p>
               </div>
             </div>
           ))}
