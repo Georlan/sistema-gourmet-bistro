@@ -16,7 +16,13 @@ from sqlalchemy import text
 
 from ..database import SessionLocal
 from ..services.print_delivery import print_wakeup_hub
-from .print_agents import hash_token
+from .print_agents import (
+    _forget_invalid_agent_token,
+    _invalid_agent_token_is_cached,
+    _remember_agent_token_tenant,
+    _remember_invalid_agent_token,
+    hash_token,
+)
 
 
 router = APIRouter()
@@ -30,9 +36,15 @@ def _authenticate_agent_token(raw_token: str) -> tuple[str, int]:
             detail="Token de agente ausente",
         )
 
+    token_hash = hash_token(token)
+    if _invalid_agent_token_is_cached(token_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de agente inválido ou revogado",
+        )
+
     db = SessionLocal()
     try:
-        token_hash = hash_token(token)
         if db.get_bind().dialect.name == "postgresql":
             identity = db.execute(
                 text(
@@ -55,17 +67,26 @@ def _authenticate_agent_token(raw_token: str) -> tuple[str, int]:
         db.close()
 
     if not identity:
+        _remember_invalid_agent_token(token_hash)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de agente inválido ou revogado",
         )
     restaurante_id = int(identity["restaurante_id"])
     if restaurante_id <= 0:
+        _remember_invalid_agent_token(token_hash)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de agente inválido ou revogado",
         )
-    return str(identity["id"]), restaurante_id
+    token_id = str(identity["id"])
+    _forget_invalid_agent_token(token_hash)
+    _remember_agent_token_tenant(
+        token_hash,
+        token_id=token_id,
+        restaurante_id=restaurante_id,
+    )
+    return token_id, restaurante_id
 
 
 def _sse(event: str, payload: dict) -> str:

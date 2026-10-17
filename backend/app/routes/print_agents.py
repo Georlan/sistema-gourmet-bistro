@@ -19,7 +19,7 @@ from fastapi import (
     status,
 )
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, or_, text
+from sqlalchemy import and_, case, func, or_, text
 from sqlalchemy.orm import Session
 
 from ..database import (
@@ -58,6 +58,15 @@ INVALID_AGENT_TOKEN_CACHE_TTL_SECONDS = 300
 INVALID_AGENT_TOKEN_CACHE_MAX_ENTRIES = 2048
 _invalid_agent_token_cache: dict[str, float] = {}
 _invalid_agent_token_cache_lock = threading.Lock()
+
+# Tenant routing hint cache: maps token_hash -> (token_id, restaurante_id, expires_at).
+# Allows get_current_agent to bind the session to the tenant BEFORE opening a DB
+# transaction, eliminating the pre-tenant transaction + rollback while still
+# verifying token_hash and ativo=True live inside the tenant-scoped transaction.
+AGENT_TOKEN_TENANT_CACHE_TTL_SECONDS = 300
+AGENT_TOKEN_TENANT_CACHE_MAX_ENTRIES = 4096
+_agent_token_tenant_cache: dict[str, tuple[str, int, float]] = {}
+_agent_token_tenant_cache_lock = threading.Lock()
 
 
 _print_queue_maintenance_last_run: dict[int, float] = {}
@@ -134,10 +143,72 @@ def _forget_invalid_agent_token(token_hash: str) -> None:
         _invalid_agent_token_cache.pop(token_hash, None)
 
 
+def _get_cached_agent_token_tenant(
+    token_hash: str,
+    *,
+    now: float | None = None,
+) -> tuple[str, int] | None:
+    current = time.monotonic() if now is None else now
+    with _agent_token_tenant_cache_lock:
+        entry = _agent_token_tenant_cache.get(token_hash)
+        if entry is None:
+            return None
+        token_id, restaurante_id, expires_at = entry
+        if expires_at <= current:
+            _agent_token_tenant_cache.pop(token_hash, None)
+            return None
+        return token_id, restaurante_id
+
+
+def _remember_agent_token_tenant(
+    token_hash: str,
+    token_id: str,
+    restaurante_id: int,
+    *,
+    now: float | None = None,
+) -> None:
+    if not token_hash or not token_id or int(restaurante_id) <= 0:
+        return
+    current = time.monotonic() if now is None else now
+    with _agent_token_tenant_cache_lock:
+        if len(_agent_token_tenant_cache) >= AGENT_TOKEN_TENANT_CACHE_MAX_ENTRIES:
+            expired = [
+                key
+                for key, (_, _, expires_at) in _agent_token_tenant_cache.items()
+                if expires_at <= current
+            ]
+            for key in expired:
+                _agent_token_tenant_cache.pop(key, None)
+            if len(_agent_token_tenant_cache) >= AGENT_TOKEN_TENANT_CACHE_MAX_ENTRIES:
+                oldest_key = min(
+                    _agent_token_tenant_cache,
+                    key=lambda k: _agent_token_tenant_cache[k][2],
+                )
+                _agent_token_tenant_cache.pop(oldest_key, None)
+        _agent_token_tenant_cache[token_hash] = (
+            str(token_id),
+            int(restaurante_id),
+            current + AGENT_TOKEN_TENANT_CACHE_TTL_SECONDS,
+        )
+
+
+def _forget_agent_token_tenant(token_hash: str) -> None:
+    if not token_hash:
+        return
+    with _agent_token_tenant_cache_lock:
+        _agent_token_tenant_cache.pop(token_hash, None)
+
+
+def _clear_agent_token_tenant_cache() -> None:
+    with _agent_token_tenant_cache_lock:
+        _agent_token_tenant_cache.clear()
+
+
 def _clear_invalid_agent_token_cache() -> None:
     """Test/support helper: never stores or exposes the raw agent credential."""
     with _invalid_agent_token_cache_lock:
         _invalid_agent_token_cache.clear()
+    _clear_agent_token_tenant_cache()
 
 
 def require_internal_print_simulator_user(current_user=Depends(get_current_user)):
@@ -703,6 +774,32 @@ def _claimed_job_payload(job, claimed_at: datetime.datetime) -> dict:
     }
 
 
+def _resolve_agent_claim_role(
+    *,
+    is_primary: bool,
+    has_other_primary: bool,
+    active_agents_count: int,
+    restaurante_id: int,
+    agent_id: str,
+    log_warning_on_unassigned: bool = True,
+) -> tuple[bool, str]:
+    if is_primary:
+        return True, "primary"
+    if has_other_primary:
+        return False, "secondary"
+    if active_agents_count <= 1:
+        return True, "standalone"
+    if log_warning_on_unassigned:
+        log.warning(
+            "[PRINT CLAIM] Restaurante %s possui %s agentes ativos mas nenhum principal configurado. "
+            "Agente '%s' não consumirá jobs genéricos (agent_id IS NULL) para evitar corrida silenciosa.",
+            restaurante_id,
+            active_agents_count,
+            agent_id,
+        )
+    return False, "unassigned"
+
+
 def _can_agent_claim_generic_jobs(
     db: Session,
     agent: PrintAgentToken,
@@ -720,41 +817,37 @@ def _can_agent_claim_generic_jobs(
     if getattr(agent, "is_primary", False):
         return True, "primary"
 
-    has_other_primary = (
-        db.query(PrintAgentToken.id)
+    stats = (
+        db.query(
+            func.count(PrintAgentToken.id),
+            func.count(
+                case(
+                    (
+                        and_(
+                            PrintAgentToken.is_primary == True,
+                            PrintAgentToken.id != agent.id,
+                        ),
+                        1,
+                    )
+                )
+            ),
+        )
         .filter(
             PrintAgentToken.restaurante_id == agent.restaurante_id,
             PrintAgentToken.ativo == True,
-            PrintAgentToken.is_primary == True,
-            PrintAgentToken.id != agent.id,
         )
-        .first()
-        is not None
+        .one()
     )
-    if has_other_primary:
-        return False, "secondary"
+    active_agents_count = int(stats[0] or 0)
+    has_other_primary = int(stats[1] or 0) > 0
 
-    active_agents_count = (
-        db.query(func.count(PrintAgentToken.id))
-        .filter(
-            PrintAgentToken.restaurante_id == agent.restaurante_id,
-            PrintAgentToken.ativo == True,
-        )
-        .scalar()
-        or 0
+    return _resolve_agent_claim_role(
+        is_primary=False,
+        has_other_primary=has_other_primary,
+        active_agents_count=active_agents_count,
+        restaurante_id=agent.restaurante_id,
+        agent_id=agent.agent_id,
     )
-
-    if active_agents_count <= 1:
-        return True, "standalone"
-
-    log.warning(
-        "[PRINT CLAIM] Restaurante %s possui %s agentes ativos mas nenhum principal configurado. "
-        "Agente '%s' não consumirá jobs genéricos (agent_id IS NULL) para evitar corrida silenciosa.",
-        agent.restaurante_id,
-        active_agents_count,
-        agent.agent_id,
-    )
-    return False, "unassigned"
 
 
 def _log_claim_batch(
@@ -797,11 +890,6 @@ def _release_stuck_jobs(
     now: datetime.datetime,
 ) -> int:
     stuck_cutoff = now - datetime.timedelta(minutes=5)
-    base_query = db.query(PrintJob).filter(
-        PrintJob.restaurante_id == restaurante_id,
-        PrintJob.status == "claimed",
-        PrintJob.claimed_at < stuck_cutoff,
-    )
 
     # Testes disparados pela tela de um computador são deliberadamente
     # pré-atribuídos. Se o agente cair depois do claim, a recuperação deve
@@ -811,30 +899,28 @@ def _release_stuck_jobs(
         "teste_extremo_cardapio",
         "teste_extremo_garcom",
     )
-    targeted_released = (
-        base_query
-        .filter(PrintJob.source_type.in_(targeted_test_types))
+    return (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.restaurante_id == restaurante_id,
+            PrintJob.status == "claimed",
+            PrintJob.claimed_at < stuck_cutoff,
+        )
         .update(
             {
                 "status": "pending",
                 "claimed_at": None,
+                "agent_id": case(
+                    (
+                        PrintJob.source_type.in_(targeted_test_types),
+                        PrintJob.agent_id,
+                    ),
+                    else_=None,
+                ),
             },
             synchronize_session=False,
         )
     )
-    generic_released = (
-        base_query
-        .filter(~PrintJob.source_type.in_(targeted_test_types))
-        .update(
-            {
-                "status": "pending",
-                "claimed_at": None,
-                "agent_id": None,
-            },
-            synchronize_session=False,
-        )
-    )
-    return targeted_released + generic_released
 
 
 def _expire_stale_unresolved_jobs(
@@ -955,9 +1041,9 @@ def _claim_pending_jobs(
             _claimed_job_payload(row, now)
             for row in ordered_rows
         ]
+        _log_claim_batch(agent, payload, role=role)
         if claimed_rows or maintenance_ran:
             db.commit()
-        _log_claim_batch(agent, payload, role=role)
         return payload
 
     # SQLite é usado nos testes e no desenvolvimento. Cada UPDATE continua
@@ -1016,8 +1102,9 @@ def _claim_pending_jobs(
         )
         claimed_jobs.append(_claimed_job_payload(job, now))
 
-    db.commit()
     _log_claim_batch(agent, claimed_jobs, role=role)
+    if claimed_jobs or maintenance_ran:
+        db.commit()
     return claimed_jobs
 
 
@@ -1053,6 +1140,35 @@ def get_current_agent(
             detail="Token de agente inválido ou revogado"
         )
 
+    cached_identity = _get_cached_agent_token_tenant(computed_hash)
+    if cached_identity is not None:
+        cached_token_id, cached_restaurante_id = cached_identity
+        bind_session_to_tenant(db, cached_restaurante_id)
+        current_restaurante_id.set(cached_restaurante_id)
+        agent_record = (
+            db.query(PrintAgentToken)
+            .filter(
+                PrintAgentToken.id == cached_token_id,
+                PrintAgentToken.token_hash == computed_hash,
+                PrintAgentToken.ativo == True,
+            )
+            .first()
+        )
+        if agent_record is not None:
+            try:
+                yield agent_record
+            finally:
+                current_restaurante_id.set(None)
+            return
+
+        # Cache miss (token revogado, rotacionado ou recriado): limpa hint e
+        # revalida pelo caminho frio antes de concluir 401.
+        _forget_agent_token_tenant(computed_hash)
+        if db.in_transaction():
+            db.rollback()
+        db.restaurante_id = None
+        current_restaurante_id.set(None)
+
     if db.get_bind().dialect.name == "postgresql":
         identity = db.execute(
             text(
@@ -1076,6 +1192,7 @@ def get_current_agent(
         ).mappings().first()
 
     if not identity:
+        _forget_agent_token_tenant(computed_hash)
         _remember_invalid_agent_token(computed_hash)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -1083,20 +1200,25 @@ def get_current_agent(
         )
 
     _forget_invalid_agent_token(computed_hash)
-    restaurante_id = identity["restaurante_id"]
+    token_id = str(identity["id"])
+    restaurante_id = int(identity["restaurante_id"])
     bind_session_to_tenant(db, restaurante_id)
     current_restaurante_id.set(restaurante_id)
     try:
         agent_record = db.query(PrintAgentToken).filter(
-            PrintAgentToken.id == identity["id"],
+            PrintAgentToken.id == token_id,
+            PrintAgentToken.token_hash == computed_hash,
             PrintAgentToken.ativo == True,
         ).first()
         if not agent_record:
+            _forget_agent_token_tenant(computed_hash)
+            _remember_invalid_agent_token(computed_hash)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token de agente inválido ou revogado"
             )
 
+        _remember_agent_token_tenant(computed_hash, token_id, restaurante_id)
         yield agent_record
     finally:
         # Dependencies sync com ``yield`` podem entrar/sair em contextos AnyIO
@@ -1285,20 +1407,12 @@ def get_print_monitor(
         .all()
     )
 
-    status_rows = (
-        db.query(PrintJob.status, func.count(PrintJob.id))
-        .filter(
-            PrintJob.restaurante_id == rest_id,
-            PrintJob.status.in_(UNRESOLVED_JOB_STATUSES),
-        )
-        .group_by(PrintJob.status)
-        .all()
-    )
-    status_counts = {job_status: count for job_status, count in status_rows}
-    unresolved_jobs_for_origin = (
+    unresolved_rows = (
         db.query(
+            PrintJob.status,
             PrintJob.source_type,
             PrintJob.idempotency_key,
+            PrintJob.created_at,
         )
         .filter(
             PrintJob.restaurante_id == rest_id,
@@ -1306,13 +1420,17 @@ def get_print_monitor(
         )
         .all()
     )
+    status_counts: dict[str, int] = {}
     queue_origins = {
         "automatic": 0,
         "manual": 0,
         "manual_reprint": 0,
         "test": 0,
     }
-    for source_type, idempotency_key in unresolved_jobs_for_origin:
+    delayed_count = 0
+    oldest_unresolved: Optional[datetime.datetime] = None
+    for job_status, source_type, idempotency_key, created_at in unresolved_rows:
+        status_counts[job_status] = status_counts.get(job_status, 0) + 1
         origin = _print_job_origin(
             {
                 "source_type": source_type,
@@ -1320,6 +1438,13 @@ def get_print_monitor(
             }
         )
         queue_origins[origin["kind"]] += 1
+        created_utc = _as_utc(created_at)
+        if created_utc is not None:
+            if created_utc <= delay_cutoff:
+                delayed_count += 1
+            if oldest_unresolved is None or created_utc < oldest_unresolved:
+                oldest_unresolved = created_utc
+
     failed_today = (
         db.query(func.count(PrintJob.id))
         .filter(
@@ -1330,25 +1455,6 @@ def get_print_monitor(
         )
         .scalar()
         or 0
-    )
-
-    delayed_count = (
-        db.query(func.count(PrintJob.id))
-        .filter(
-            PrintJob.restaurante_id == rest_id,
-            PrintJob.status.in_(UNRESOLVED_JOB_STATUSES),
-            PrintJob.created_at <= delay_cutoff,
-        )
-        .scalar()
-        or 0
-    )
-    oldest_unresolved = (
-        db.query(func.min(PrintJob.created_at))
-        .filter(
-            PrintJob.restaurante_id == rest_id,
-            PrintJob.status.in_(UNRESOLVED_JOB_STATUSES),
-        )
-        .scalar()
     )
 
     history_jobs = (
@@ -1363,17 +1469,20 @@ def get_print_monitor(
         .limit(limit)
         .all()
     )
-    compatibility_jobs = (
-        db.query(PrintJob)
-        .filter(
-            PrintJob.restaurante_id == rest_id,
-            PrintJob.created_at >= day_start,
-            PrintJob.created_at < day_end,
+    if unresolved_rows:
+        compatibility_jobs = (
+            db.query(PrintJob)
+            .filter(
+                PrintJob.restaurante_id == rest_id,
+                PrintJob.created_at >= day_start,
+                PrintJob.created_at < day_end,
+            )
+            .order_by(PrintJob.created_at.desc())
+            .limit(limit)
+            .all()
         )
-        .order_by(PrintJob.created_at.desc())
-        .limit(limit)
-        .all()
-    )
+    else:
+        compatibility_jobs = history_jobs
     queue_jobs = (
         db.query(PrintJob)
         .filter(
@@ -1401,6 +1510,10 @@ def get_print_monitor(
         .first()
     )
 
+    active_agents_count = len(agents)
+    primary_agent_ids = {
+        agent.id for agent in agents if bool(getattr(agent, "is_primary", False))
+    }
     agent_payload = []
     expired_command = False
     for agent in agents:
@@ -1411,11 +1524,22 @@ def get_print_monitor(
         last_seen = _as_utc(agent.last_seen_at)
         printer_state = _agent_printer_state(agent, now)
         is_online = printer_state["online"]
-        _, agent_role = _can_agent_claim_generic_jobs(db, agent)
+        is_primary = bool(getattr(agent, "is_primary", False))
+        has_other_primary = any(
+            pid != agent.id for pid in primary_agent_ids
+        )
+        _, agent_role = _resolve_agent_claim_role(
+            is_primary=is_primary,
+            has_other_primary=has_other_primary,
+            active_agents_count=active_agents_count,
+            restaurante_id=rest_id,
+            agent_id=agent.agent_id,
+            log_warning_on_unassigned=False,
+        )
         agent_payload.append(
             {
                 "agent_id": agent.agent_id,
-                "is_primary": bool(getattr(agent, "is_primary", False)),
+                "is_primary": is_primary,
                 "role": agent_role,
                 "online": is_online,
                 "last_seen_at": last_seen.isoformat() if last_seen else None,
@@ -2131,11 +2255,15 @@ def register_agent(
     )
 
     if existing:
+        if existing.token_hash and existing.token_hash != token_h:
+            _forget_agent_token_tenant(existing.token_hash)
+            _remember_invalid_agent_token(existing.token_hash)
         existing.token_hash = token_h
         existing.ativo = True
         existing.created_at = datetime.datetime.now(datetime.timezone.utc)
         if not has_active_primary and not getattr(existing, "is_primary", False):
             existing.is_primary = True
+        target_token_record = existing
     else:
         new_token = PrintAgentToken(
             restaurante_id=rest_id,
@@ -2145,8 +2273,16 @@ def register_agent(
             is_primary=not has_active_primary,
         )
         db.add(new_token)
+        target_token_record = new_token
 
     db.commit()
+    if getattr(target_token_record, "id", None) is not None:
+        _forget_invalid_agent_token(token_h)
+        _remember_agent_token_tenant(
+            token_h,
+            token_id=str(target_token_record.id),
+            restaurante_id=int(rest_id),
+        )
 
     return {
         "status": "registered",
@@ -2191,12 +2327,13 @@ def set_primary_agent(
         PrintAgentToken.id != target_agent.id,
     ).update({"is_primary": False}, synchronize_session=False)
 
+    primary_agent_id = target_agent.agent_id
     target_agent.is_primary = True
     db.commit()
     _schedule_print_monitor_refresh(background_tasks, rest_id)
     return {
         "status": "updated",
-        "primary_agent_id": target_agent.agent_id,
+        "primary_agent_id": primary_agent_id,
         "restaurante_id": rest_id,
     }
 
@@ -2210,6 +2347,8 @@ def agent_heartbeat(
 ):
     """Heartbeat enviado periodicamente pelo agente local."""
     now = datetime.datetime.now(datetime.timezone.utc)
+    agent_id = agent.agent_id
+    restaurante_id = agent.restaurante_id
     previous_heartbeat_age = _age_seconds(agent.last_seen_at, now)
     presence_changed = (
         previous_heartbeat_age is None
@@ -2263,18 +2402,16 @@ def agent_heartbeat(
         if req and req.diagnostics:
             agent.diagnostics_updated_at = now
         db.commit()
-    else:
-        agent.last_seen_at = now
 
     if presence_changed or diagnostics_changed:
         _schedule_print_monitor_refresh(
             background_tasks,
-            agent.restaurante_id,
+            restaurante_id,
         )
     return {
         "status": "ok",
-        "agent_id": agent.agent_id,
-        "restaurante_id": agent.restaurante_id,
+        "agent_id": agent_id,
+        "restaurante_id": restaurante_id,
         "timestamp": now.isoformat(),
         "command": command,
     }
@@ -2293,6 +2430,7 @@ def complete_agent_command(
 ):
     """Registra o resultado idempotente da tentativa de conexão USB."""
     now = datetime.datetime.now(datetime.timezone.utc)
+    restaurante_id = agent.restaurante_id
     pending = (
         dict(agent.pending_command)
         if isinstance(agent.pending_command, Mapping)
@@ -2333,7 +2471,7 @@ def complete_agent_command(
     db.commit()
     _schedule_print_monitor_refresh(
         background_tasks,
-        agent.restaurante_id,
+        restaurante_id,
     )
     return {
         "status": "completed",
