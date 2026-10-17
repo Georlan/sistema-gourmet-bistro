@@ -6,6 +6,7 @@ import datetime
 import json
 import logging
 import uuid
+from collections import deque
 from typing import Any, Optional
 import httpx
 from sqlalchemy import and_, case, or_
@@ -90,6 +91,43 @@ def renew_outbox_claim_lease(
     return rows_affected > 0
 
 
+def _whatsapp_priority(event) -> int:
+    if event.event_name == "koma.whatsapp.central_operator_order":
+        return 0
+    if event.event_name == "koma.whatsapp.customer_status":
+        kind = (event.payload or {}).get("kind") if isinstance(event.payload, dict) else None
+        if kind == "customer_cancelled":
+            return 1
+        if kind == "customer_received":
+            return 3
+    return 2
+
+
+def fair_claim_candidates(events, batch_size: int):
+    """Interleave tenants within each priority while preserving FIFO per tenant.
+
+    Candidate selection remains bounded and SKIP LOCKED; this is best-effort
+    fairness, not a global guarantee when one tenant fills the candidate pool.
+    """
+    if batch_size <= 0:
+        return []
+    by_priority = {}
+    for ev in events:
+        by_priority.setdefault(_whatsapp_priority(ev), {}).setdefault(
+            ev.restaurante_id, deque(),
+        ).append(ev)
+    selected = []
+    for level in sorted(by_priority):
+        by_tenant = by_priority[level]
+        while any(by_tenant.values()) and len(selected) < batch_size:
+            for queue in by_tenant.values():
+                if queue and len(selected) < batch_size:
+                    selected.append(queue.popleft())
+        if len(selected) >= batch_size:
+            break
+    return selected
+
+
 def claim_outbox_batch(
     db: Session,
     *,
@@ -122,7 +160,10 @@ def claim_outbox_batch(
         (and_(customer_notice, IntegrationOutbox.payload["kind"].as_string() == "customer_received"), 3),
         else_=2,
     )
-    query = query.order_by(priority, IntegrationOutbox.created_at.asc()).limit(batch_size)
+    # Bounded over-fetch gives other tenants a slot even under a busy restaurant.
+    # Keep the existing SQL priority and FIFO, then round-robin within each tier.
+    candidate_limit = batch_size if restaurant_id is not None else min(400, max(batch_size, batch_size * 6))
+    query = query.order_by(priority, IntegrationOutbox.created_at.asc()).limit(candidate_limit)
 
     try:
         events = query.with_for_update(skip_locked=True).all()
@@ -133,6 +174,7 @@ def claim_outbox_batch(
     if not events:
         return snapshots
 
+    events = fair_claim_candidates(events, batch_size)
     for ev in events:
         snapshots.append({
             "id": ev.id,
@@ -175,6 +217,8 @@ def settle_outbox_event(
     if not record:
         logger.warning("[OUTBOX SETTLE] Registro %s não encontrado ou posse expirada ao liquidar.", outbox_id)
         return False
+    if record.status in {"delivered", "dead_letter"}:
+        return False
 
     now = datetime.datetime.now(datetime.timezone.utc)
     record.status = status
@@ -189,6 +233,20 @@ def settle_outbox_event(
         record.next_retry_at = next_retry_at
     if status in {"delivered", "dead_letter"}:
         record.processed_at = now
+    if record.event_name in {"koma.whatsapp.central_operator_order", "koma.whatsapp.customer_status"}:
+        from ..whatsapp_usage import record_outcome
+        if status == "delivered":
+            outcome = "accepted"  # Evolution 2xx, not handset delivery.
+        elif status == "dead_letter":
+            outcome = "discarded"
+        elif status == "failed":
+            outcome = "deferred" if (
+                (last_error or "").startswith(("Remetente central em pausa", "Limite de vazão"))
+            ) else "failed"
+        else:
+            outcome = ""
+        if outcome:
+            record_outcome(db, int(record.restaurante_id), outcome)
 
     db.commit()
     return True

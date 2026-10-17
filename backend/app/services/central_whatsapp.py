@@ -294,10 +294,6 @@ def dispatch_registered_message(
     pause = wait_until(sender_state)
     if pause is not None:
         return settle("failed", "Remetente central em pausa; aviso mantido na fila.", retry_at=pause)
-    if customer:
-        from .customer_whatsapp_dispatch import budget_available
-        if not budget_available(settings):
-            return settle("dead_letter", "Cota de mensagens do restaurante atingida.")
     now = dt.datetime.now(dt.timezone.utc)
     due = settings.whatsapp_next_send_at
     if due and (due.replace(tzinfo=dt.timezone.utc) if due.tzinfo is None else due) > now:
@@ -311,8 +307,10 @@ def dispatch_registered_message(
     pilot_rid, sender, instance = rid, config.sender, config.instance
     headers = {"apikey": key, "Accept": "application/json"}
     # Reserve both the tenant lane and shared Business lane before HTTP.
-    settings.whatsapp_next_send_at = now + dt.timedelta(seconds=15)
-    sender_state.next_send_at = now + dt.timedelta(seconds=15)
+    from .whatsapp_sender_gate import minimum_interval_seconds
+    spacing = dt.timedelta(seconds=minimum_interval_seconds())
+    settings.whatsapp_next_send_at = now + spacing
+    sender_state.next_send_at = now + spacing
     from ..models import IntegrationOutbox
     event = db.query(IntegrationOutbox).filter(
         IntegrationOutbox.id == outbox_id,
@@ -325,6 +323,10 @@ def dispatch_registered_message(
     if customer:
         from .customer_whatsapp_dispatch import reserve_budget
         reserve_budget(settings)
+    from .customer_whatsapp_dispatch import snapshot_time
+    from .whatsapp_usage import reserve_attempt
+    queue_age_ms = (now - snapshot_time(snapshot)).total_seconds() * 1000
+    reserve_attempt(db, rid, customer=customer, age_ms=max(0, int(queue_age_ms)))
     event.attempts = attempt_number
     event.processed_at = now  # Reservation time for conservative monthly accounting.
     db.commit()  # Release all SQL locks BEFORE provider HTTP requests.

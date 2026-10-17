@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
@@ -2034,6 +2035,22 @@ class NotificacaoWhatsApp(Base):
     raw_payload = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc), onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+
+class WhatsAppUsageMetric(Base):
+    """Durable, tenant-scoped UTC monthly aggregates; no contact or content."""
+    __tablename__ = "whatsapp_usage_metrics"
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), primary_key=True,
+                            default=lambda: current_restaurante_id.get())
+    month_utc = Column(String(7), primary_key=True)
+    attempts = Column(Integer, nullable=False, server_default="0", default=0)
+    accepted = Column(Integer, nullable=False, server_default="0", default=0)
+    failed = Column(Integer, nullable=False, server_default="0", default=0)
+    discarded = Column(Integer, nullable=False, server_default="0", default=0)
+    deferred = Column(Integer, nullable=False, server_default="0", default=0)
+    queue_latency_total_ms = Column(BigInteger, nullable=False, server_default="0", default=0)
+    queue_latency_samples = Column(Integer, nullable=False, server_default="0", default=0)
+    estimated_customer_cost_brl = Column(Numeric(14, 4), nullable=False, server_default="0", default=0)
 
 
 class CentralWhatsAppSenderState(Base):
