@@ -60,8 +60,14 @@ def _permissions(rid: int, cfg: ConfiguracaoRestaurante) -> dict:
     requested_customer = cfg.whatsapp_customer_notices_enabled is True
     return {
         "managed": cfg.whatsapp_platform_managed is True,
-        "operator_allowed": platform_operator_enabled(rid, cfg),
-        "customer_allowed": customer_notice_transport_config(rid, cfg) is not None,
+        "operator_allowed": (
+            cfg.whatsapp_platform_operator_allowed is True if cfg.whatsapp_platform_managed is True
+            else rid in allowed_restaurants("KOMA_CENTRAL_WA_ALLOWED_RESTAURANT_IDS")
+        ),
+        "customer_allowed": (
+            cfg.whatsapp_platform_customer_allowed is True if cfg.whatsapp_platform_managed is True
+            else _legacy_customer(rid)
+        ),
         "operator_registered": bool(
             transport and registered_operator_phone(cfg, transport.sender)
         ),
@@ -253,8 +259,14 @@ def update_platform_permissions(
                 raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
             before = {
                 "managed": cfg.whatsapp_platform_managed is True,
-                "operator_allowed": platform_operator_enabled(restaurant_id, cfg),
-                "customer_allowed": customer_notice_transport_config(restaurant_id, cfg) is not None,
+                "operator_allowed": (
+                    cfg.whatsapp_platform_operator_allowed is True if cfg.whatsapp_platform_managed is True
+                    else restaurant_id in allowed_restaurants("KOMA_CENTRAL_WA_ALLOWED_RESTAURANT_IDS")
+                ),
+                "customer_allowed": (
+                    cfg.whatsapp_platform_customer_allowed is True if cfg.whatsapp_platform_managed is True
+                    else _legacy_customer(restaurant_id)
+                ),
             }
             # Convert from legacy mode without changing the other channel.
             old_operator = before["operator_allowed"]
