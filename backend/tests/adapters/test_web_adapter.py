@@ -406,7 +406,7 @@ class TestCardapioWebAdapter:
         }
         res_mismatch = char_client.post("/cardapio/pedidos", json=mismatch_payload)
         assert res_mismatch.status_code == 404
-        assert "Modificador não encontrado" in res_mismatch.json()["detail"]
+        assert "complemento escolhido não está mais disponível" in res_mismatch.json()["detail"]
 
 
 @pytest.mark.parametrize('error_kind', ['minimum', 'modifiers', 'generic'])
