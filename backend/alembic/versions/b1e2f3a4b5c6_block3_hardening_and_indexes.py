@@ -1,7 +1,7 @@
 """Block 3 foreign key indexes, WhatsApp partial index and backfill, and complete RLS InitPlan normalization.
 
 Revision ID: b1e2f3a4b5c6
-Revises: a9c4e1b8d203
+Revises: b3c4d5e6f709
 Create Date: 2026-10-17 14:40:00.000000
 """
 
@@ -10,7 +10,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "b1e2f3a4b5c6"
-down_revision: Union[str, Sequence[str], None] = "a9c4e1b8d203"
+down_revision: Union[str, Sequence[str], None] = "b3c4d5e6f709"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
