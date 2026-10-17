@@ -162,6 +162,10 @@ class Settings:
     DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "5"))
     DB_POOL_TIMEOUT: int = int(os.getenv("DB_POOL_TIMEOUT", "15"))
     DB_POOL_RECYCLE: int = int(os.getenv("DB_POOL_RECYCLE", "1800"))
+    DB_PRE_PING_FRESH_SECONDS: float = max(
+        0.0,
+        float(os.getenv("DB_PRE_PING_FRESH_SECONDS", "5.0")),
+    )
     
     # Sentry DSN
     SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")

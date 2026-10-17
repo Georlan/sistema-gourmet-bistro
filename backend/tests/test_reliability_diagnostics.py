@@ -106,3 +106,55 @@ def test_middleware_preserves_rejection_and_classifies_jwt(monkeypatch, failure,
     next_handler.assert_not_called()
     assert json.loads(logger.warning.call_args.args[0])['reason'] == reason
     assert 'SECRET_SENTINEL' not in logger.warning.call_args.args[0]
+
+
+def test_smart_pre_ping_skips_fresh_checkouts_and_pings_after_ttl_or_close():
+    from app.database import install_smart_pre_ping
+
+    clock = [1000.0]
+    engine = create_engine(
+        'sqlite://',
+        poolclass=QueuePool,
+        pool_size=1,
+        max_overflow=0,
+        pool_pre_ping=True,
+        pool_use_lifo=True,
+    )
+    ping_calls = []
+    original_do_ping = engine.dialect.do_ping
+
+    def spy_do_ping(dbapi_connection):
+        ping_calls.append(clock[0])
+        return original_do_ping(dbapi_connection)
+
+    engine.dialect.do_ping = spy_do_ping
+    install_smart_pre_ping(
+        engine,
+        fresh_seconds=5.0,
+        clock=lambda: clock[0],
+    )
+
+    # First checkout creates a brand-new connection (no pre_ping on connect, stamped on connect/checkin).
+    with engine.connect() as conn:
+        conn.execute(text('SELECT 1'))
+    assert len(ping_calls) == 0
+
+    # Immediate second checkout (within 5.0s TTL, e.g. get_current_user -> route handler): skips do_ping!
+    clock[0] += 0.2
+    with engine.connect() as conn:
+        conn.execute(text('SELECT 1'))
+    assert len(ping_calls) == 0
+
+    # Idle past 5.0s TTL: executes real do_ping to detect dead connections.
+    clock[0] += 6.0
+    with engine.connect() as conn:
+        conn.execute(text('SELECT 1'))
+    assert len(ping_calls) == 1
+
+    # Immediate checkout again after fresh ping/checkin skips do_ping.
+    clock[0] += 0.5
+    with engine.connect() as conn:
+        conn.execute(text('SELECT 1'))
+    assert len(ping_calls) == 1
+
+    engine.dispose()

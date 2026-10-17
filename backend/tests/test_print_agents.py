@@ -2362,3 +2362,54 @@ def test_heartbeat_accepts_structured_endpoints_and_destinations():
     assert len(base_agent.printer_diagnostics["endpoints"]) == 2
     assert base_agent.printer_diagnostics["destinations"]["COZINHA"] == "ep-ka1445-bt"
 
+
+def test_agent_token_tenant_cache_eliminates_pre_tenant_lookup_and_honors_immediate_revocation():
+    client = TestClient(app)
+    statements: list[str] = []
+
+    def capture_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+        normalized = " ".join(statement.split())
+        if "print_agent_tokens" in normalized:
+            statements.append(normalized)
+
+    event.listen(engine, "before_cursor_execute", capture_sql)
+    try:
+        # Cold request: discovers tenant via raw SQL + loads ORM PrintAgentToken + 1 UPDATE (no post-commit refresh SELECT!)
+        statements.clear()
+        cold = client.post(
+            "/api/print-agents/heartbeat",
+            headers={"X-Agent-Token": "token_agent_1"},
+        )
+        assert cold.status_code == 200
+        cold_selects = [s for s in statements if s.upper().startswith("SELECT")]
+        assert len(cold_selects) == 2
+
+        # Warm request: tenant routing hint cached -> binds tenant directly and queries print_agent_tokens only ONCE
+        statements.clear()
+        warm = client.post(
+            "/api/print-agents/heartbeat",
+            headers={"X-Agent-Token": "token_agent_1"},
+        )
+        assert warm.status_code == 200
+        assert len(statements) == 1
+        assert statements[0].upper().startswith("SELECT")
+
+        # Immediate revocation check: even with warm cache, deactivating the token in DB must reject on next request
+        tenant_token = current_restaurante_id.set(1)
+        db = TestingSessionLocal()
+        try:
+            agent = db.query(PrintAgentToken).filter_by(id="a1").one()
+            agent.ativo = False
+            db.commit()
+        finally:
+            db.close()
+            current_restaurante_id.reset(tenant_token)
+
+        revoked = client.post(
+            "/api/print-agents/heartbeat",
+            headers={"X-Agent-Token": "token_agent_1"},
+        )
+        assert revoked.status_code == 401
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_sql)
+
