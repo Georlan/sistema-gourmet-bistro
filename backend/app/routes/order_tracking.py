@@ -193,8 +193,17 @@ def _resolve_tracking_payment_state(
         if expires_at is not None and expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
 
-        # 1. Intent pendente que já expirou
-        if intent.status in {"created", "pending"} and expires_at is not None and expires_at <= now_utc:
+        # 1. Vencimento local só pode encerrar uma intenção sem provedor externo.
+        # O prazo do QR Code não é um status financeiro: Mercado Pago e PagBank
+        # podem manter o pagamento em análise e aprová-lo após esse prazo.
+        # A decisão terminal desses provedores deve vir da reconciliação autoritativa,
+        # como já ocorre na rota legada de status do Cardápio.
+        if (
+            intent.provider not in {"mercado_pago", "pagbank"}
+            and intent.status in {"created", "pending"}
+            and expires_at is not None
+            and expires_at <= now_utc
+        ):
             intent.status = "expired"
             comanda = (
                 db.query(Comanda)
