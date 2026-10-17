@@ -163,7 +163,7 @@ def render_operator_message(db: Session, payload: dict) -> str:
             lines.append("  Obs.: " + item.notes)
     if not items:
         lines.append("Confira os itens no KÔMA.")
-    lines += ["", f"*Total: R$ {str(total).replace('.', ',')}*", "", "Aviso automático do KÔMA. Confira e aceite no painel; esta conversa não aceita pedidos."]
+    lines += ["", f"*Total: R$ {str(total).replace('.', ',')}*", "", "Aviso automático do KÔMA. Abra o painel para conferir e aceitar o pedido; esta conversa não recebe confirmações."]
     message = "\n".join(lines)
     return message if len(message) <= 3000 else message[:2890].rstrip() + "\n…\nConfira o pedido completo no KÔMA."
 
