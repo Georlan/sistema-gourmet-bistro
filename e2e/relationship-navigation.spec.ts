@@ -18,32 +18,19 @@ async function setupRelationship(page: Page, loyalty: boolean, coupons: boolean)
   await page.route('**/fidelidade/clientes', route => route.fulfill({ json: contract.customers }));
   await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({ json: contract.summary }));
   await page.route('**/caixa/cupons', route => route.fulfill({ json: [] }));
+  // Match the backend economic recommendation contract used by the existing CRM browser suite.
+  // A generic {} response would make the loyalty calculator render an invalid payload.
+  await page.route('**/caixa/cupons/economia/recomendacao', route => route.fulfill({
+    json: {
+      mode: 'automatico', source: 'conservative_default',
+      suggestion: { effective_reward_percent: 2, cashback_percent: 2, points_per_real: 1, point_value_brl: 0.02 },
+      evidence: { lookback_days: 30, orders_analyzed: 0, cost_coverage_percent: 0, known_contribution_percent: null },
+      warnings: [], message: 'Sugestão isolada de teste',
+    },
+  }));
   await page.route('**/fidelidade/config', route => route.fulfill({
     json: { ativo: true, tipo_recompensa: 'PONTOS', taxa_conversao: 1, valor_ponto_em_dinheiro: 0.05 },
   }));
-}
-
-async function traceRelationshipStateOnMissing(page: Page, element: string) {
-  const target = page.locator(element);
-  if (await target.isVisible()) return;
-  const state = await page.evaluate(() => ({
-    activeTab: sessionStorage.getItem('koma_active_tab'),
-    activeSubTab: sessionStorage.getItem('koma_active_subtab'),
-    selected: Array.from(document.querySelectorAll<HTMLElement>('[aria-current="page"]')).map(el => ({
-      name: el.textContent?.trim().slice(0, 35),
-      navId: el.dataset.navigationId,
-    })),
-    crmSection: Array.from(document.querySelectorAll<HTMLElement>('[data-cashier-section="Clientes"]')).map(el => ({
-      hidden: el.hidden,
-      text: el.textContent?.trim().slice(0, 160),
-    })),
-    benefitsTablist: document.querySelector('[aria-label="Tipos de benefícios"]')?.outerHTML.slice(0, 350),
-    campaignDraftInputs: document.querySelectorAll('[aria-label="Identificação da campanha"]').length,
-    loyaltyPanels: document.querySelectorAll('#crm-benefit-panel-fidelidade').length,
-    couponPanels: document.querySelectorAll('#crm-benefit-panel-cupons').length,
-  }));
-  // Fixture-only DOM details to diagnose mismatched navigation/entitlement state in CI.
-  console.log('[relationship-navigation-diagnostic]', JSON.stringify(state));
 }
 
 async function openSidebar(page: Page) {
@@ -61,8 +48,7 @@ async function enterRelationship(page: Page) {
 test('five destinations, benefit tabs, legacy restoration and module return share one active location', async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const errors: string[] = [];
-  page.on('pageerror', error => { errors.push(error.message); console.log('[relationship-browser-exception]', error.stack ?? error.message); });
-  page.on('console', message => { if (message.type() === 'error') console.log('[relationship-browser-console]', message.text().slice(0, 2400)); });
+  page.on('pageerror', error => errors.push(error.message));
   await setupRelationship(page, true, true);
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
@@ -84,14 +70,12 @@ test('five destinations, benefit tabs, legacy restoration and module return shar
 
   await navigateRelationship(page, 'campanhas');
   const campaignDraft = page.getByLabel('Identificação da campanha');
-  await traceRelationshipStateOnMissing(page, '[aria-label="Identificação da campanha"]');
   await campaignDraft.fill('Rascunho preservado entre áreas');
   await navigateRelationship(page, 'clientes');
   await navigateRelationship(page, 'campanhas');
   await expect(campaignDraft).toHaveValue('Rascunho preservado entre áreas');
 
   await navigateRelationship(page, 'beneficios');
-  await traceRelationshipStateOnMissing(page, '[aria-label="Tipos de benefícios"]');
   await expect(page.getByRole('tablist', { name: 'Tipos de benefícios' })).toBeVisible();
   const fidelity = page.getByRole('tab', { name: 'Fidelidade', exact: true });
   await fidelity.focus();
@@ -126,8 +110,7 @@ test('five destinations, benefit tabs, legacy restoration and module return shar
 
 for (const [loyalty, coupons] of [[true, false], [false, true], [false, false]] as const) {
   test(`benefit navigation respects isolated entitlements: loyalty=${loyalty}, coupons=${coupons}`, async ({ page }) => {
-    page.on('pageerror', error => console.log('[relationship-browser-exception]', error.stack ?? error.message));
-  page.on('console', message => { if (message.type() === 'error') console.log('[relationship-browser-console]', message.text().slice(0, 2400)); });
+  
   await setupRelationship(page, loyalty, coupons);
     await page.goto('/?view=caixa');
     await expect(page.locator('.orders-board')).toBeVisible();
@@ -142,7 +125,6 @@ for (const [loyalty, coupons] of [[true, false], [false, true], [false, false]] 
       await navigateRelationship(page, 'beneficios');
       await expectRelationshipSelected(page, 'beneficios');
       await expect(page.getByRole('tablist', { name: 'Tipos de benefícios' })).toHaveCount(0);
-      await traceRelationshipStateOnMissing(page, loyalty ? '#crm-benefit-panel-fidelidade' : '#crm-benefit-panel-cupons');
       await expect(page.getByRole('tabpanel', { name: loyalty ? 'Fidelidade' : 'Cupons' })).toBeVisible();
       await expect(page.getByRole('tabpanel', { name: loyalty ? 'Cupons' : 'Fidelidade' })).toHaveCount(0);
     } else {
