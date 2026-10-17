@@ -66,7 +66,7 @@ def pilot_configuration() -> CentralConfiguration | None:
         return None
     allowed = allowed_restaurants("KOMA_CENTRAL_WA_ALLOWED_RESTAURANT_IDS")
     instance = os.getenv("KOMA_CENTRAL_WA_INSTANCE_NAME", "").strip()
-    if not allowed or not _INSTANCE_RE.fullmatch(instance):
+    if not _INSTANCE_RE.fullmatch(instance):
         return None
     if instance.startswith("koma-restaurant-"):
         return None
@@ -77,7 +77,20 @@ def pilot_configuration() -> CentralConfiguration | None:
     return CentralConfiguration(allowed, sender, instance)
 
 
-def enabled_for(restaurant_id: int) -> bool:
+def platform_operator_enabled(restaurant_id: int, tenant: ConfiguracaoRestaurante | None) -> bool:
+    """Tenant-scoped platform authority; managed rows override legacy env rollout."""
+    config = pilot_configuration()
+    if config is None or tenant is None:
+        return False
+    if tenant.whatsapp_platform_managed is True:
+        return tenant.whatsapp_platform_operator_allowed is True
+    return int(restaurant_id) in config.restaurant_ids
+
+
+def enabled_for(restaurant_id: int, tenant: ConfiguracaoRestaurante | None = None) -> bool:
+    """Compatibility for legacy callers; DB authorization requires tenant row."""
+    if tenant is not None:
+        return platform_operator_enabled(restaurant_id, tenant)
     config = pilot_configuration()
     return config is not None and int(restaurant_id) in config.restaurant_ids
 
@@ -103,11 +116,13 @@ def recipient_fingerprint(restaurant_id: int, phone: str) -> str:
 
 def enqueue_operator_alert(db: Session, order: OrderCreated):
     """Only register at the same transaction boundary as a released online order."""
-    if order.channel != OrderChannel.WEB_CARDAPIO or not enabled_for(order.restaurant_id):
+    if order.channel != OrderChannel.WEB_CARDAPIO:
         return None
     config = pilot_configuration()
+    if config is None:
+        return None
     tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=order.restaurant_id).one_or_none()
-    if config is None or registered_operator_phone(tenant, config.sender) is None:
+    if not platform_operator_enabled(order.restaurant_id, tenant) or registered_operator_phone(tenant, config.sender) is None:
         return None
     event = CentralOperatorAlert(
         restaurant_id=order.restaurant_id,
@@ -237,8 +252,11 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
         return status == "delivered"
 
     config = pilot_configuration()
-    if config is None or rid not in config.restaurant_ids:
-        return settle("dead_letter", "Piloto central desativado ou restaurante não autorizado; nenhuma mensagem enviada.")
+    if config is None:
+        return settle("dead_letter", "Canal central desativado; nenhuma mensagem enviada.")
+    tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one_or_none()
+    if not platform_operator_enabled(rid, tenant):
+        return settle("dead_letter", "Plataforma não autoriza o aviso ao operador.")
     if int(snapshot["payload"].get("restaurant_id", -1)) != rid:
         return settle("dead_letter", "Evento e restaurante divergentes.")
 
@@ -287,8 +305,8 @@ def dispatch_registered_message(
         from .customer_whatsapp_dispatch import customer_notices_enabled
         if not customer_notices_enabled(rid, settings):
             return settle("dead_letter", "Autorização para avisos ao cliente revogada.")
-    elif registered_operator_phone(settings, config.sender) is None:
-        return settle("dead_letter", "Cadastro central removido ou desativado.")
+    elif not platform_operator_enabled(rid, settings) or registered_operator_phone(settings, config.sender) is None:
+        return settle("dead_letter", "Avisos operacionais sem autorização ou cadastro.")
     from .whatsapp_sender_gate import lock_sender, wait_until
     sender_state = lock_sender(db, config)
     pause = wait_until(sender_state)
@@ -371,8 +389,8 @@ def dispatch_registered_message(
         from .customer_whatsapp_dispatch import customer_notices_enabled
         if not customer_notices_enabled(rid, latest_settings):
             return settle("dead_letter", "Autorização do restaurante revogada antes do envio.", attempts=attempt_number)
-    elif registered_operator_phone(latest_settings, config.sender) is None:
-        return settle("dead_letter", "Cadastro do operador alterado antes do envio.", attempts=attempt_number)
+    elif not platform_operator_enabled(rid, latest_settings) or registered_operator_phone(latest_settings, config.sender) is None:
+        return settle("dead_letter", "Permissão ou cadastro do operador alterados antes do envio.", attempts=attempt_number)
     if customer:
         from .customer_whatsapp_dispatch import resolve_customer_notice
         resolved = resolve_customer_notice(db, snapshot)
