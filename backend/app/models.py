@@ -436,6 +436,10 @@ class Comanda(Base):
             "fechado_em",
             "criado_em",
         ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_comandas_garcom_id",
+            "garcom_id",
+        ).ddl_if(dialect="postgresql"),
     )
     
     id = Column(String, primary_key=True, index=True)
@@ -759,6 +763,10 @@ class Pagamento(Base):
             "restaurante_id",
             "status",
             "criado_em",
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_pagamentos_turno_id",
+            "turno_id",
         ).ddl_if(dialect="postgresql"),
     )
     
@@ -1243,6 +1251,8 @@ class ItemModificador(Base):
     __tablename__ = "item_modificadores"
     __table_args__ = (
         Index("ix_item_modificadores_tenant_item", "restaurante_id", "item_id").ddl_if(dialect="postgresql"),
+        Index("ix_item_modificadores_item_id", "item_id").ddl_if(dialect="postgresql"),
+        Index("ix_item_modificadores_opcao_modificador_id", "opcao_modificador_id").ddl_if(dialect="postgresql"),
     )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -2056,6 +2066,14 @@ class PrintAgentToken(Base):
 
 class NotificacaoWhatsApp(Base):
     __tablename__ = "notificacoes_whatsapp"
+    __table_args__ = (
+        Index(
+            "ix_notificacoes_whatsapp_wamid_tenant",
+            "wamid",
+            "restaurante_id",
+            postgresql_where=text("restaurante_id IS NOT NULL"),
+        ).ddl_if(dialect="postgresql"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=True, index=True)
@@ -2209,6 +2227,7 @@ class DirectPixReceipt(Base):
     __table_args__ = (
         UniqueConstraint("restaurante_id","bank_reference", name="uq_direct_pix_receipt_reference"),
         Index("ix_direct_pix_receipts_tenant_date", "restaurante_id", "confirmed_at"),
+        Index("ix_direct_pix_receipts_invoice_id", "invoice_id").ddl_if(dialect="postgresql"),
     )
 
 

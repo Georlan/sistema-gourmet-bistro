@@ -878,6 +878,14 @@ def run_full_postgres_benchmark(db_url: str, *, num_tenants: int = 10) -> dict[s
         with admin_engine.connect() as admin_conn:
             admin_conn.execute(text("SELECT pg_terminate_backend(:pid)"), {"pid": backend_pid})
             admin_conn.commit()
+            for _ in range(50):
+                alive = admin_conn.execute(
+                    text("SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = :pid)"),
+                    {"pid": backend_pid},
+                ).scalar()
+                if not alive:
+                    break
+                time.sleep(0.01)
         with SmartSession() as db:
             recovered_val = db.execute(text("SELECT 1")).scalar()
         smart_pre_ping_recovered = recovered_val == 1

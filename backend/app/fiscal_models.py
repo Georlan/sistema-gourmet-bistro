@@ -224,6 +224,10 @@ class FiscalDocument(Base):
             "restaurante_id",
             "comanda_id",
         ),
+        Index(
+            "ix_fiscal_documents_comanda_id",
+            "comanda_id",
+        ).ddl_if(dialect="postgresql"),
     )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -329,6 +333,10 @@ class FiscalPayment(Base):
         ),
         CheckConstraint("payment_order > 0", name="ck_fiscal_payment_order"),
         CheckConstraint("amount > 0", name="ck_fiscal_payment_amount"),
+        Index(
+            "ix_fiscal_payments_pagamento_id",
+            "pagamento_id",
+        ).ddl_if(dialect="postgresql"),
     )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
