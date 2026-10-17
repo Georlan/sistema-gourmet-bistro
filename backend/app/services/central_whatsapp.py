@@ -60,8 +60,12 @@ def allowed_restaurants(variable: str) -> frozenset[int]:
     return frozenset(map(int, parts))
 
 
-def pilot_configuration() -> CentralConfiguration | None:
-    """Shared Business transport with an explicit tenant allowlist; default-off."""
+def transport_configuration() -> CentralConfiguration | None:
+    """Configured Business transport; tenant admission is checked separately.
+
+    A valid transport with zero legacy IDs is not a permit to send: only
+    an explicit managed tenant DB permission can use it.
+    """
     if os.getenv("KOMA_CENTRAL_WA_ENABLED", "false").strip().lower() != "true":
         return None
     allowed = allowed_restaurants("KOMA_CENTRAL_WA_ALLOWED_RESTAURANT_IDS")
@@ -77,9 +81,15 @@ def pilot_configuration() -> CentralConfiguration | None:
     return CentralConfiguration(allowed, sender, instance)
 
 
+def pilot_configuration() -> CentralConfiguration | None:
+    """Legacy pilot contract: empty/malformed allowlists always fail closed."""
+    transport = transport_configuration()
+    return transport if transport and transport.restaurant_ids else None
+
+
 def platform_operator_enabled(restaurant_id: int, tenant: ConfiguracaoRestaurante | None) -> bool:
     """Tenant-scoped platform authority; managed rows override legacy env rollout."""
-    config = pilot_configuration()
+    config = transport_configuration()
     if config is None or tenant is None:
         return False
     if tenant.whatsapp_platform_managed is True:
@@ -118,7 +128,7 @@ def enqueue_operator_alert(db: Session, order: OrderCreated):
     """Only register at the same transaction boundary as a released online order."""
     if order.channel != OrderChannel.WEB_CARDAPIO:
         return None
-    config = pilot_configuration()
+    config = transport_configuration()
     if config is None:
         return None
     tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=order.restaurant_id).one_or_none()
@@ -251,7 +261,7 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
         )
         return status == "delivered"
 
-    config = pilot_configuration()
+    config = transport_configuration()
     if config is None:
         return settle("dead_letter", "Canal central desativado; nenhuma mensagem enviada.")
     tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one_or_none()
@@ -381,7 +391,7 @@ def dispatch_registered_message(
     if still_owned is None:
         db.rollback()
         return False
-    current = pilot_configuration()
+    current = transport_configuration()
     latest_settings = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one_or_none()
     if current != config:
         return settle("dead_letter", "Liberação do remetente alterada antes do envio.", attempts=attempt_number)
