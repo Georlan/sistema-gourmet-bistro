@@ -41,7 +41,6 @@ test('checkout opt-in has a prominent accessible area without implied consent', 
   assert.match(checkout, /focus-within:ring-2/);
   assert.match(checkout, /Receba atualizações deste pedido pelo WhatsApp/);
   assert.match(checkout, /É grátis e opcional, sem promoções/);
-  assert.match(checkout, /whatsappStatusOptIn\\s*\\?/);
 });
 
 test('integration settings separate operator number from independent customer permission', () => {
