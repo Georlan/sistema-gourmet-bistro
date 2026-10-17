@@ -145,12 +145,12 @@ def render_operator_message(db: Session, payload: dict) -> str:
     number = re.sub(r"[^a-zA-Z0-9#_-]", "", str(payload.get("display_number") or ""))[:32]
     total = Decimal(str(payload["total"])).quantize(Decimal("0.01"))
     lines = [
-        "KÔMA | Nova comanda online",
-        f"Pedido #{number}",
+        "*KÔMA | Nova comanda online*",
+        f"*Pedido #{number}*",
         f"Cliente: {name}",
         f"Modalidade: {kind}",
         "",
-        "Itens:",
+        "*Itens:*",
     ]
     items = _snapshot_alert_items(
         db, restaurant_id=rid, order_id=str(payload["order_id"])
@@ -163,7 +163,7 @@ def render_operator_message(db: Session, payload: dict) -> str:
             lines.append("  Obs.: " + item.notes)
     if not items:
         lines.append("Confira os itens no KÔMA.")
-    lines += ["", f"Total: R$ {str(total).replace('.', ',')}", "", "Abra o KÔMA para conferir e aceitar. Não responda a esta mensagem para aceitar."]
+    lines += ["", f"*Total: R$ {str(total).replace('.', ',')}*", "", "Aviso automático do KÔMA. Confira e aceite no painel; esta conversa não aceita pedidos."]
     message = "\n".join(lines)
     return message if len(message) <= 3000 else message[:2890].rstrip() + "\n…\nConfira o pedido completo no KÔMA."
 
@@ -281,7 +281,13 @@ def dispatch_registered_message(
         return status == "delivered"
 
     settings = _locked_whatsapp_config_query(db, rid).populate_existing().one_or_none()
-    if settings is None or registered_operator_phone(settings, config.sender) is None:
+    if settings is None:
+        return settle("dead_letter", "Configuração do restaurante ausente.")
+    if customer:
+        from .customer_whatsapp_dispatch import customer_notices_enabled
+        if not customer_notices_enabled(rid, settings):
+            return settle("dead_letter", "Autorização para avisos ao cliente revogada.")
+    elif registered_operator_phone(settings, config.sender) is None:
         return settle("dead_letter", "Cadastro central removido ou desativado.")
     from .whatsapp_sender_gate import lock_sender, wait_until
     sender_state = lock_sender(db, config)
@@ -357,8 +363,14 @@ def dispatch_registered_message(
         return False
     current = pilot_configuration()
     latest_settings = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one_or_none()
-    if current != config or registered_operator_phone(latest_settings, config.sender) is None:
-        return settle("dead_letter", "Liberação ou cadastro alterado antes do envio.", attempts=attempt_number)
+    if current != config:
+        return settle("dead_letter", "Liberação do remetente alterada antes do envio.", attempts=attempt_number)
+    if customer:
+        from .customer_whatsapp_dispatch import customer_notices_enabled
+        if not customer_notices_enabled(rid, latest_settings):
+            return settle("dead_letter", "Autorização do restaurante revogada antes do envio.", attempts=attempt_number)
+    elif registered_operator_phone(latest_settings, config.sender) is None:
+        return settle("dead_letter", "Cadastro do operador alterado antes do envio.", attempts=attempt_number)
     if customer:
         from .customer_whatsapp_dispatch import resolve_customer_notice
         resolved = resolve_customer_notice(db, snapshot)
