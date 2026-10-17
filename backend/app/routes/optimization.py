@@ -220,12 +220,12 @@ def get_loyalty_clients(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     q: Optional[str] = Query(default=None, max_length=120),
-    include_products: bool = Query(default=True),
+    include_products: bool = Query(default=False),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("clientes:operar"))
 ):
     """Retorna a ficha canônica; o ID não muda quando nome/telefone mudam."""
-    from ..crypt import pii_lookup_hash
+    from ..crypt import decrypt_field, pii_lookup_hash
     from ..services.customer_crm import enrich_customer_crm_payloads
 
     restaurante_id = require_tenant_id()
@@ -233,7 +233,7 @@ def get_loyalty_clients(
     eff_limit = limit if isinstance(limit, int) else 100
     eff_offset = offset if isinstance(offset, int) else 0
     eff_q = (q if isinstance(q, str) else "").strip()
-    eff_include_products = include_products if isinstance(include_products, bool) else True
+    eff_include_products = include_products if isinstance(include_products, bool) else False
 
     base_query = db.query(Cliente).filter(
         Cliente.restaurante_id == restaurante_id,
@@ -261,16 +261,38 @@ def get_loyalty_clients(
             clientes = matched[eff_offset : eff_offset + eff_limit]
         else:
             q_lower = eff_q.lower()
-            all_rows = base_query.all()
-            matched = [
-                c
-                for c in all_rows
-                if q_lower in str(c.nome or "").lower()
-                or (digits and digits in str(c.telefone or ""))
-                or q_lower in str(c.email or "").lower()
-            ]
-            total_count = len(matched)
-            clientes = matched[eff_offset : eff_offset + eff_limit]
+            search_query = (
+                db.query(Cliente.id, Cliente._nome, Cliente._telefone, Cliente._email)
+                .filter(Cliente.restaurante_id == restaurante_id)
+                .order_by(Cliente.criado_em.desc(), Cliente.id.asc())
+            )
+            matched_ids: list[str] = []
+            for cid, enc_nome, enc_tel, enc_mail in search_query.yield_per(250):
+                nome_dec = decrypt_field(enc_nome) if enc_nome else ""
+                if q_lower in (nome_dec or "").lower():
+                    matched_ids.append(cid)
+                    continue
+                if digits:
+                    tel_dec = decrypt_field(enc_tel) if enc_tel else ""
+                    if digits in (tel_dec or ""):
+                        matched_ids.append(cid)
+                        continue
+                if enc_mail:
+                    mail_dec = decrypt_field(enc_mail) if enc_mail else ""
+                    if q_lower in (mail_dec or "").lower():
+                        matched_ids.append(cid)
+                        continue
+
+            total_count = len(matched_ids)
+            page_ids = matched_ids[eff_offset : eff_offset + eff_limit]
+            if page_ids:
+                page_clients = {
+                    c.id: c
+                    for c in base_query.filter(Cliente.id.in_(page_ids)).all()
+                }
+                clientes = [page_clients[cid] for cid in page_ids if cid in page_clients]
+            else:
+                clientes = []
 
     if isinstance(response, Response):
         response.headers["X-Total-Count"] = str(total_count)

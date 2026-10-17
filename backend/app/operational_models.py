@@ -116,6 +116,10 @@ class AtendimentoComanda(Base):
             "restaurante_id",
             "atendimento_id",
         ),
+        Index(
+            "ix_atendimento_comandas_atendimento_id",
+            "atendimento_id",
+        ).ddl_if(dialect="postgresql"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
