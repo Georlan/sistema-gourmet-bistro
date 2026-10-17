@@ -17,6 +17,22 @@ from .email_delivery import send_email, provider_email_id, record_acceptance
 
 logger = logging.getLogger(__name__)
 
+_worker_wakeup_loop: asyncio.AbstractEventLoop | None = None
+_worker_wakeup_event: asyncio.Event | None = None
+_WORKER_MIN_IDLE_SECONDS = 30.0
+_WORKER_MAX_IDLE_SECONDS = 30.0
+_WORKER_ACTIVE_POLL_SECONDS = 2.0
+
+
+def _signal_worker_wakeup() -> None:
+    loop = _worker_wakeup_loop
+    event = _worker_wakeup_event
+    if loop is not None and event is not None and not loop.is_closed():
+        try:
+            loop.call_soon_threadsafe(event.set)
+        except RuntimeError:
+            pass
+
 
 def _owner_telegram_chat():
     if not os.getenv("TELEGRAM_BOT_TOKEN", "").strip():
@@ -73,6 +89,8 @@ def enqueue(
                 .on_conflict_do_nothing()
             )
             inserted = inserted or bool(getattr(result, "rowcount", 0))
+    if inserted:
+        _signal_worker_wakeup()
     return inserted
 
 
@@ -341,17 +359,43 @@ def dispatch_batch():
                     }
                 )
             db.commit()
+    return len(rows)
 
 
 async def run_worker():
+    global _worker_wakeup_loop, _worker_wakeup_event
+    _worker_wakeup_loop = asyncio.get_running_loop()
+    wakeup_event = asyncio.Event()
+    _worker_wakeup_event = wakeup_event
+    idle_seconds = _WORKER_MIN_IDLE_SECONDS
     try:
-        from .event_acquisition import backfill_owner_notices
-        await asyncio.to_thread(backfill_owner_notices)
-    except Exception:
-        logger.exception("Event lead notification reconciliation failed")
-    while True:
         try:
-            await asyncio.to_thread(dispatch_batch)
+            from .event_acquisition import backfill_owner_notices
+            await asyncio.to_thread(backfill_owner_notices)
         except Exception:
-            logger.exception("Signup notification worker failed")
-        await asyncio.sleep(30)
+            logger.exception("Event lead notification reconciliation failed")
+        while True:
+            wakeup_event.clear()
+            processed = 0
+            try:
+                processed = int(await asyncio.to_thread(dispatch_batch) or 0)
+            except Exception:
+                logger.exception("Signup notification worker failed")
+            if processed > 0:
+                idle_seconds = _WORKER_MIN_IDLE_SECONDS
+                wait_timeout = _WORKER_ACTIVE_POLL_SECONDS
+            else:
+                wait_timeout = idle_seconds
+                idle_seconds = min(
+                    _WORKER_MAX_IDLE_SECONDS,
+                    idle_seconds * 2.0,
+                )
+            try:
+                await asyncio.wait_for(wakeup_event.wait(), timeout=wait_timeout)
+                idle_seconds = _WORKER_MIN_IDLE_SECONDS
+            except asyncio.TimeoutError:
+                pass
+    finally:
+        if _worker_wakeup_event is wakeup_event:
+            _worker_wakeup_event = None
+            _worker_wakeup_loop = None
