@@ -175,6 +175,8 @@ def settle_outbox_event(
     if not record:
         logger.warning("[OUTBOX SETTLE] Registro %s não encontrado ou posse expirada ao liquidar.", outbox_id)
         return False
+    if record.status in {"delivered", "dead_letter"}:
+        return False
 
     now = datetime.datetime.now(datetime.timezone.utc)
     record.status = status
@@ -189,6 +191,20 @@ def settle_outbox_event(
         record.next_retry_at = next_retry_at
     if status in {"delivered", "dead_letter"}:
         record.processed_at = now
+    if record.event_name in {"koma.whatsapp.central_operator_order", "koma.whatsapp.customer_status"}:
+        from ..whatsapp_usage import record_outcome
+        if status == "delivered":
+            outcome = "accepted"  # Evolution 2xx, not handset delivery.
+        elif status == "dead_letter":
+            outcome = "discarded"
+        elif status == "failed":
+            outcome = "deferred" if (
+                (last_error or "").startswith(("Remetente central em pausa", "Limite de vazão"))
+            ) else "failed"
+        else:
+            outcome = ""
+        if outcome:
+            record_outcome(db, int(record.restaurante_id), outcome)
 
     db.commit()
     return True
