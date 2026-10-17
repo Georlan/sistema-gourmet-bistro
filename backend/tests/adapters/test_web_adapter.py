@@ -408,6 +408,41 @@ class TestCardapioWebAdapter:
         assert res_mismatch.status_code == 404
         assert "complemento escolhido não está mais disponível" in res_mismatch.json()["detail"]
 
+        # 3. The customer's page may still show bacon while the operator pauses
+        # it: the write-time server validation wins and creates no order.
+        db = SessionLocal()
+        try:
+            active_count = db.query(Comanda).filter(
+                Comanda.restaurante_id == CHAR_RESTAURANT_ID,
+            ).count()
+            bacon = db.query(OpcaoModificador).filter(
+                OpcaoModificador.restaurante_id == CHAR_RESTAURANT_ID,
+                OpcaoModificador.id == "mod-char-bacon",
+            ).one()
+            bacon.ativo = False
+            db.commit()
+        finally:
+            db.close()
+
+        stale_payload = {
+            **valid_payload,
+            "cliente_nome": "Cliente Cardapio Desatualizado",
+            "cliente_telefone": "11999990011",
+        }
+        res_paused = char_client.post("/cardapio/pedidos", json=stale_payload)
+        assert res_paused.status_code == 404
+        assert "complemento escolhido não está mais disponível" in res_paused.json()["detail"]
+        assert "mod-char-bacon" not in res_paused.text
+
+        db = SessionLocal()
+        try:
+            assert db.query(Comanda).filter(
+                Comanda.restaurante_id == CHAR_RESTAURANT_ID,
+            ).count() == active_count
+        finally:
+            db.close()
+
+
 
 @pytest.mark.parametrize('error_kind', ['minimum', 'modifiers', 'generic'])
 def test_public_validation_rejection_is_correlated_without_customer_data(char_client, char_setup, caplog, error_kind):
