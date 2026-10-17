@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
@@ -2047,7 +2048,7 @@ class WhatsAppUsageMetric(Base):
     failed = Column(Integer, nullable=False, server_default="0", default=0)
     discarded = Column(Integer, nullable=False, server_default="0", default=0)
     deferred = Column(Integer, nullable=False, server_default="0", default=0)
-    queue_latency_total_ms = Column(Integer, nullable=False, server_default="0", default=0)
+    queue_latency_total_ms = Column(BigInteger, nullable=False, server_default="0", default=0)
     queue_latency_samples = Column(Integer, nullable=False, server_default="0", default=0)
     estimated_customer_cost_brl = Column(Numeric(14, 4), nullable=False, server_default="0", default=0)
 
