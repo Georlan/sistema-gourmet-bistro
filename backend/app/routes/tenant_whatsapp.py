@@ -108,23 +108,30 @@ def get_status(
 
 
 def _cancel_pending_central_notices(db: Session, restaurant_id: int) -> None:
-    db.query(IntegrationOutbox).filter(
+    changed = db.query(IntegrationOutbox).filter(
         IntegrationOutbox.restaurante_id == restaurant_id,
         IntegrationOutbox.event_name == "koma.whatsapp.central_operator_order",
         IntegrationOutbox.status.in_(["pending", "failed", "processing"]),
     ).update({"status": "dead_letter", "locked_by": None, "locked_at": None,
         "last_error": "Cadastro de recebimento alterado; aguardando novos pedidos."}, synchronize_session=False)
+    if changed:
+        from ..services.whatsapp_usage import increment
+        increment(db, restaurant_id, discarded=changed)
 
 
 def _cancel_pending_customer_notices(db: Session, restaurant_id: int) -> None:
-    # Already claimed attempts must also be invalidated before the sender's
-    # final ownership check; history and opt-outs remain intact.
-    db.query(IntegrationOutbox).filter(
+    # Claimed attempts must also be invalidated before the sender's ownership
+    # check. Account for the bulk discard even though settle_outbox_event is
+    # deliberately bypassed; preserve history, operator notices and opt-outs.
+    changed = db.query(IntegrationOutbox).filter(
         IntegrationOutbox.restaurante_id == restaurant_id,
         IntegrationOutbox.event_name == "koma.whatsapp.customer_status",
         IntegrationOutbox.status.in_(["pending", "failed", "processing"]),
     ).update({"status": "dead_letter", "locked_by": None, "locked_at": None,
               "last_error": "Restaurante desativou avisos ao cliente; sem envio."}, synchronize_session=False)
+    if changed:
+        from ..services.whatsapp_usage import increment
+        increment(db, restaurant_id, discarded=changed)
 
 
 @router.post("/customer-notices")
