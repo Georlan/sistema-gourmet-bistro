@@ -48,9 +48,9 @@ class PlatformPermissionUpdate(BaseModel):
 
 
 def _legacy_customer(rid: int) -> bool:
-    cfg = pilot_configuration()
-    return bool(
-        cfg and rid in cfg.restaurant_ids
+    # Preserve requested rollout even if the global transport kill switch is off.
+    return (
+        rid in allowed_restaurants("KOMA_CENTRAL_WA_ALLOWED_RESTAURANT_IDS")
         and rid in allowed_restaurants("KOMA_CUSTOMER_WA_ALLOWED_RESTAURANT_IDS")
     )
 
