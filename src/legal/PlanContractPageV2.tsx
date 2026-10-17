@@ -403,8 +403,21 @@ export default function PlanContractPageV2() {
       } catch { /* estado é recuperável ao recarregar */ }
     };
     void checkBilling();
-    const timer = window.setInterval(() => void checkBilling(), 5000);
-    return () => { active = false; window.clearInterval(timer); };
+    const timer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      void checkBilling();
+    }, 5000);
+    const onVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void checkBilling();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [receipt, activationResult]);
 
   const updateField = (field: keyof ContractForm, value: string) => {

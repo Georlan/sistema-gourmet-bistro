@@ -364,10 +364,20 @@ export default function PrintingSimulatorPage() {
     };
 
     void poll();
-    const intervalId = window.setInterval(() => void poll(), 600);
+    const intervalId = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void poll();
+    }, 600);
+    const onVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void poll();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       disposed = true;
       window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [bridge]);
 

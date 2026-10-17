@@ -470,6 +470,7 @@ export function PrintMonitorPanel({
   useEffect(() => {
     if (!hasPendingCommand && !pendingCommandId) return;
     const intervalId = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void loadMonitor(false);
     }, 1_500);
     return () => window.clearInterval(intervalId);
