@@ -263,9 +263,33 @@ def _add_tenant_id_filtering_criteria(execute_state):
                     )
 
 
+import select
 from time import monotonic
 import threading
 from sqlalchemy.pool import QueuePool
+
+
+def _is_dbapi_socket_cleanly_idle(dbapi_conn) -> bool:
+    """Verifica sem roundtrip de rede se o socket TCP continua ocioso e íntegro.
+
+    Em conexões PostgreSQL (psycopg2), uma conexão ociosa no pool não deve ter
+    bytes pendentes de leitura no buffer do kernel. Se o Supavisor/PostgreSQL
+    reiniciar ou encerrar a conexão (enviando ``FATAL``, ``FIN`` ou ``RST``),
+    o descritor ``fileno()`` torna-se imediatamente legível no ``select(..., 0)``,
+    permitindo detectar desconexões em sub-milissegundos mesmo dentro da janela
+    de frescor do ``smart_pre_ping``.
+    """
+    fileno_fn = getattr(dbapi_conn, "fileno", None)
+    if not callable(fileno_fn):
+        return True
+    try:
+        fd = fileno_fn()
+        if not isinstance(fd, int) or fd < 0:
+            return False
+        readable, _, exceptional = select.select([fd], [], [fd], 0.0)
+        return not readable and not exceptional
+    except Exception:
+        return False
 
 
 def install_smart_pre_ping(
@@ -277,8 +301,9 @@ def install_smart_pre_ping(
     """Evita ``SELECT 1`` redundante em conexões recém-devolvidas ao pool LIFO.
 
     Mantém ``pool_pre_ping=True`` ativo para qualquer conexão que tenha ficado
-    ociosa por ``fresh_seconds`` ou mais, ou que tenha sofrido erro/fechamento,
-    preservando integralmente a proteção contra conexões mortas no Supavisor.
+    ociosa por ``fresh_seconds`` ou mais, que apresente EOF/erro no socket TCP
+    (reinício do pooler/servidor) ou quando qualquer conexão do pool sofrer
+    invalidação, preservando integralmente a proteção contra conexões mortas.
     """
     pool = getattr(target_engine, "pool", None)
     if not isinstance(pool, QueuePool) or not getattr(pool, "_pre_ping", False):
@@ -305,6 +330,10 @@ def install_smart_pre_ping(
         with lock:
             last_validated_at.pop(id(dbapi_conn), None)
 
+    def _evict_all() -> None:
+        with lock:
+            last_validated_at.clear()
+
     @event.listens_for(pool, "connect")
     def _on_connect(dbapi_conn, _connection_record):
         _mark_fresh(dbapi_conn)
@@ -319,15 +348,15 @@ def install_smart_pre_ping(
 
     @event.listens_for(pool, "invalidate")
     def _on_invalidate(dbapi_conn, _connection_record, _exception):
-        _evict(dbapi_conn)
+        _evict_all()
 
     @event.listens_for(pool, "soft_invalidate")
     def _on_soft_invalidate(dbapi_conn, _connection_record, _exception):
-        _evict(dbapi_conn)
+        _evict_all()
 
     def _smart_do_ping(dbapi_conn) -> bool:
         if dbapi_conn is None or getattr(dbapi_conn, "closed", 0):
-            _evict(dbapi_conn)
+            _evict_all()
             return original_do_ping(dbapi_conn)
 
         conn_id = id(dbapi_conn)
@@ -335,20 +364,24 @@ def install_smart_pre_ping(
         if ttl > 0.0:
             with lock:
                 last_ok = last_validated_at.get(conn_id)
-            if last_ok is not None and (now - last_ok) < ttl:
+            if (
+                last_ok is not None
+                and (now - last_ok) < ttl
+                and _is_dbapi_socket_cleanly_idle(dbapi_conn)
+            ):
                 return True
 
         try:
             alive = bool(original_do_ping(dbapi_conn))
         except Exception:
-            _evict(dbapi_conn)
+            _evict_all()
             raise
 
         if alive:
             with lock:
                 last_validated_at[conn_id] = float(clock())
         else:
-            _evict(dbapi_conn)
+            _evict_all()
         return alive
 
     target_engine.dialect.do_ping = _smart_do_ping

@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 _worker_wakeup_loop: asyncio.AbstractEventLoop | None = None
 _worker_wakeup_event: asyncio.Event | None = None
 _WORKER_MIN_IDLE_SECONDS = 30.0
-_WORKER_MAX_IDLE_SECONDS = 300.0
-_WORKER_ACTIVE_POLL_SECONDS = 5.0
+_WORKER_MAX_IDLE_SECONDS = 30.0
+_WORKER_ACTIVE_POLL_SECONDS = 2.0
 
 
 def _signal_worker_wakeup() -> None:

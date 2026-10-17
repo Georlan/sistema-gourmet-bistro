@@ -158,3 +158,71 @@ def test_smart_pre_ping_skips_fresh_checkouts_and_pings_after_ttl_or_close():
     assert len(ping_calls) == 1
 
     engine.dispose()
+
+
+def test_smart_pre_ping_detects_pooler_socket_eof_and_flushes_pool_on_invalidation():
+    import socket
+    from app.database import _is_dbapi_socket_cleanly_idle, install_smart_pre_ping
+
+    # 1. Real OS socket pair: idle socket is cleanly idle; once peer closes (FIN) or sends FATAL bytes,
+    # _is_dbapi_socket_cleanly_idle immediately returns False without network roundtrip.
+    client_sock, server_sock = socket.socketpair()
+    try:
+        class SocketConn:
+            closed = 0
+            def fileno(self):
+                return client_sock.fileno()
+
+        dummy = SocketConn()
+        assert _is_dbapi_socket_cleanly_idle(dummy) is True
+        server_sock.close()  # Simulates Supavisor / PostgreSQL closing TCP socket (FIN)
+        assert _is_dbapi_socket_cleanly_idle(dummy) is False
+    finally:
+        client_sock.close()
+
+    # 2. Pool-wide invalidation: if conn A is invalidated (e.g. pooler restart),
+    # conn B must NOT skip do_ping even within the 5.0s freshness window.
+    clock = [2000.0]
+    engine = create_engine(
+        'sqlite://',
+        poolclass=QueuePool,
+        pool_size=2,
+        max_overflow=0,
+        pool_pre_ping=True,
+        pool_use_lifo=True,
+    )
+    ping_calls = []
+    original_do_ping = engine.dialect.do_ping
+
+    def spy_do_ping(dbapi_connection):
+        ping_calls.append(clock[0])
+        return original_do_ping(dbapi_connection)
+
+    engine.dialect.do_ping = spy_do_ping
+    install_smart_pre_ping(
+        engine,
+        fresh_seconds=5.0,
+        clock=lambda: clock[0],
+    )
+
+    c1 = engine.connect()
+    c2 = engine.connect()
+    c1.close()
+    c2.close()
+    assert len(ping_calls) == 0
+
+    # Invalidate one connection within the 5s window (simulating pooler restart discovered on c2)
+    clock[0] += 0.1
+    with engine.connect() as conn:
+        conn.invalidate()
+
+    # Next checkouts: LIFO slot 1 reconnects invalidated c2, and slot 2 checks out existing pooled c1;
+    # because the pool flushed all freshness timestamps on invalidate, c1 MUST be pinged even though only 0.2s elapsed!
+    clock[0] += 0.1
+    with engine.connect() as conn_a, engine.connect() as conn_b:
+        conn_a.execute(text('SELECT 1'))
+        conn_b.execute(text('SELECT 1'))
+    assert len(ping_calls) == 1
+
+    engine.dispose()
+
