@@ -61,7 +61,7 @@ def customer_notice_transport_config(restaurant_id: int):
 
 def customer_notices_enabled(restaurant_id: int, tenant: ConfiguracaoRestaurante | None) -> bool:
     config = customer_notice_transport_config(restaurant_id)
-    return bool(config and registered_operator_phone(tenant, config.sender))
+    return bool(config and tenant is not None and tenant.whatsapp_customer_notices_enabled is True)
 
 
 def opted_out(db: Session, rid: int, digest: str) -> bool:
