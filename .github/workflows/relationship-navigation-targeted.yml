@@ -35,7 +35,7 @@ jobs:
           e2e/crm-api-contract.spec.ts
           e2e/customer-crm.spec.ts
           e2e/shared-snapshot-requests.spec.ts
-          --workers=2
+          --workers=2 --max-failures=1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
