@@ -7,7 +7,7 @@ const product = { id: 'p1', name: 'Quentinha G', price: 10 };
 const chosen = { id: 'option-a', name: 'Frango', extraPrice: 0 };
 const draft = () => ([{
   id: 'p1', product, quantity: 2, selectedOptions: { proteins: [chosen, chosen] }, notes: '',
-}] as CartItem[]);
+}] as unknown as CartItem[]);
 const catalog = () => ({
   produtos: [{
     id: 'p1', nome: 'Quentinha G', preco: 10, ativo: true,
