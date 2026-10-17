@@ -42,7 +42,10 @@ test('checkout uses the formatter for failed order submissions', () => {
     'utf8',
   );
   assert.match(source, /formatCardapioApiError/);
-  assert.match(source, /throw new Error\(formatCardapioApiError\(data\)\)/);
+  assert.match(source, /: formatCardapioApiError\(data\)/);
+  assert.match(source, /acabou de alterar a disponibilidade/);
+  assert.doesNotMatch(source, /Código de suporte:/);
+  assert.match(source, /requiresCartReview \? "Revisar sacola"/);
   assert.match(source, /authRequestErrorMessage/);
   assert.doesNotMatch(source, /error instanceof Error\s*\? error\.message/);
 });

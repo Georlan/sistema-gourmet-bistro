@@ -1418,7 +1418,9 @@ export default function CardapioPage() {
           onEditCart={() => {
             setIsCheckoutOpen(false);
             setCheckoutRequest(null);
-            setIsCartOpen(true);
+            // Reopening the bag must use current products, not the old draft
+            // snapshot that may contain a now-disabled daily-menu option.
+            void loadRestaurantData(true).finally(() => setIsCartOpen(true));
           }}
           onOrderSuccess={() => {
             setCart([]);

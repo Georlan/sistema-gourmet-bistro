@@ -8,6 +8,7 @@ OrderDTO / erros de domínio de volta para a resposta HTTP pública padronizada.
 from __future__ import annotations
 
 import datetime
+import hashlib
 from decimal import Decimal
 import logging
 import json
@@ -230,16 +231,24 @@ def _configured_payment_methods(raw_methods: Any) -> set[str]:
     return configured
 
 
-def _log_validation_rejection(request: Request, restaurante_id: int, modalidade: str, error: Exception) -> None:
-    # Never log the payload or exception text: either may contain customer PII.
-    logger.info(json.dumps({
+def _log_validation_rejection(
+    request: Request, restaurante_id: int, modalidade: str, error: Exception, *, status_code: int = 400,
+) -> None:
+    # Never log raw item IDs, payload, exception text or customer PII. Hashes
+    # can be matched against tenant-scoped catalog IDs during support triage.
+    diagnostic = {
         "event": "public_order_validation_rejected",
         "restaurante_id": restaurante_id,
         "request_id": getattr(request.state, "request_id", None),
-        "status_code": 400,
+        "status_code": status_code,
         "validation_type": type(error).__name__,
         "fulfillment": modalidade,
-    }, separators=(",", ":")))
+    }
+    if isinstance(error, (ModifierNotFoundError, ModifierInactiveError, ModifierGroupMismatchError)):
+        diagnostic["modifier_id_hash"] = hashlib.sha256(str(error.modifier_id).encode()).hexdigest()[:16]
+        if isinstance(error, ModifierGroupMismatchError):
+            diagnostic["product_id_hash"] = hashlib.sha256(str(error.product_id).encode()).hexdigest()[:16]
+    logger.info(json.dumps(diagnostic, separators=(",", ":")))
 
 
 class CardapioWebAdapter:
@@ -650,9 +659,10 @@ class CardapioWebAdapter:
             )
         except (ModifierNotFoundError, ModifierInactiveError, ModifierGroupMismatchError) as err:
             db.rollback()
+            _log_validation_rejection(request, rest_id, modalidade, err, status_code=404)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Modificador não encontrado ou inativo.",
+                detail="Um complemento escolhido não está mais disponível para este produto. Volte à sacola, confira as opções e tente novamente.",
             )
         except MinimumOrderAmountNotMetError as err:
             db.rollback()
