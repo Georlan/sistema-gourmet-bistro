@@ -793,7 +793,7 @@ export function CustomerCampaignsWorkspace({
 
             {selectedCustomers.length === 0 ? (
               <div className="rounded-xl border border-koma-border bg-koma-card p-6 text-center text-xs text-koma-muted">
-                Selecione uma oportunidade na aba <strong>Ações para hoje</strong> ou escolha um objetivo com clientes elegíveis para liberar a fila individual.
+                Selecione uma oportunidade na aba <strong>Hoje</strong> ou escolha um objetivo com clientes elegíveis para liberar a fila individual.
               </div>
             ) : (
               <div className="space-y-3 max-h-[620px] overflow-y-auto pr-1">
