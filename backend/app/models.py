@@ -1073,6 +1073,11 @@ class ConfiguracaoRestaurante(Base):
     whatsapp_alerts_enabled = Column(Boolean, default=False, nullable=False)
     # Independent tenant authorization to send customer order-status notices.
     whatsapp_customer_notices_enabled = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    # Privileged platform override. Unmanaged tenants retain legacy rollout,
+    # while a managed tenant is explicitly authorized (or suspended) per channel.
+    whatsapp_platform_managed = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    whatsapp_platform_operator_allowed = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    whatsapp_platform_customer_allowed = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     whatsapp_instance_name = Column(String(100), nullable=True)
     whatsapp_recipient_phone = Column(String(16), nullable=True)
     whatsapp_next_send_at = Column(DateTime(timezone=True), nullable=True)

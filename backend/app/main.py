@@ -40,6 +40,7 @@ from .routes import (
     relatorios,
     restaurant_features,
     super_admin,
+    super_admin_whatsapp,
     super_admin_onboarding,
     tables,
     tenant_whatsapp,
@@ -512,6 +513,7 @@ app.include_router(restaurant_features.router)
 from .routes import super_admin_finance
 app.include_router(super_admin_finance.router)
 app.include_router(super_admin.router, prefix="/api")
+app.include_router(super_admin_whatsapp.router, prefix="/api")
 app.include_router(super_admin_onboarding.router, prefix="/api")
 from .routes import cearatech_leads
 app.include_router(cearatech_leads.router)

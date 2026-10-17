@@ -1,5 +1,28 @@
 # WhatsApp central com destinatários do cadastro
 
+## Bloco 3 — autorização de plataforma e operação central
+
+O Super Admin utiliza **Plataforma → Saúde → WhatsApp Business compartilhado**.
+Uma nova permissão de plataforma vive em `configuracoes_restaurante`, protegida pelo RLS existente:
+
+- `whatsapp_platform_managed=false`: mantém a política anterior das allowlists do Railway. A migration não autoriza nenhum restaurante novo, não escreve telefones e não altera as escolhas do dono.
+- `whatsapp_platform_managed=true`: os campos `whatsapp_platform_operator_allowed` e `whatsapp_platform_customer_allowed` passam a ser fonte de verdade para a autorização de cada canal. Um canal pode ser suspenso sem desativar o outro; um novo restaurante pode ser autorizado explicitamente sem redeploy.
+- `KOMA_CENTRAL_WA_ENABLED` continua como kill switch GLOBAL para o remetente; `KOMA_CUSTOMER_WA_ENABLED` continua independente para avisos ao cliente. A existência de permissão no banco não sobrepõe um kill switch desligado.
+- Autorização do Super Admin **não substitui** `whatsapp_customer_notices_enabled` da loja, opt-in do pedido, opt-out nem validade da mensagem. Os envios precisam passar por todos esses gates tanto no enqueue como imediatamente antes do POST à Evolution.
+
+Admin APIs (exclusivas do JWT de Super Admin existente):
+- `GET /api/super-admin/whatsapp/overview?limit=25&offset=0`: lê no escopo do tenant; usa `whatsapp_usage_metrics`, outbox e `central_whatsapp_sender_state` para contagens mensais, atrasos e sinalização de TTL. Identidade do remetente **não verificada** sem sondagem. `verify_sender=true` executa apenas o diagnóstico explícito de sessão, sem mensagens.
+- `PATCH /api/super-admin/whatsapp/restaurantes/{id}/permissions` com `reason` e pelo menos um booleano `operator_allowed`/`customer_allowed`. Atualização com lock tenant-scoped, cancelamento atômico das pendências do canal revogado e `SuperAdminAuditLog` imutável. Reativação não ressuscita mensagens mortas.
+
+O painel não expõe celulares, mensagens, tokens, hashes de contatos ou valores de segredo.
+O contador `accepted` indica exclusivamente HTTP 2xx da Evolution, não entrega/visualização.
+Fila próxima da expiração é uma estimativa conservadora por *grupo* de evento, baseada na idade do mais antigo; não representa o número exato de avisos prestes a expirar.
+O overview é limitado e manual (sem polling no navegador); totais correspondem à página exibida.
+Indicadores de Railway (CPU, memória, rede) são externos e não podem ser inferidos dos contadores de mensagens.
+Não há reenvio automático de resultado incerto, alteração no pacing ou novas instâncias Evolution.
+Não ativar novos tenants antes de homologar explicitamente o fluxo; a migração por si só mantém o piloto anterior.
+
+
 ## Bloco 2 — observabilidade sem corte arbitrário de avisos
 
 A autorização do restaurante, opt-in por pedido, descadastro por tenant, deduplicação e
