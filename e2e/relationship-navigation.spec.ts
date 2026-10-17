@@ -89,7 +89,7 @@ test('five destinations, benefit tabs, legacy restoration and module return shar
   await navigateRelationship(page, 'resultados');
   await page.screenshot({ path: testInfo.outputPath('relationship-navigation.png'), animations: 'disabled', fullPage: true });
   await openSidebar(page);
-  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: 'Vendas', exact: true }).click();
+  await page.locator('.cashier-sidebar:visible .cashier-nav-item[title="Vendas"]').click({ timeout: 10000 });
   await enterRelationship(page);
   await expectRelationshipSelected(page, 'resultados');
   await navigateRelationship(page, 'campanhas');
