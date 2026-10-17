@@ -662,7 +662,7 @@ class CardapioWebAdapter:
             _log_validation_rejection(request, rest_id, modalidade, err, status_code=404)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Modificador não encontrado ou inativo.",
+                detail="Um complemento escolhido não está mais disponível para este produto. Volte à sacola, confira as opções e tente novamente.",
             )
         except MinimumOrderAmountNotMetError as err:
             db.rollback()
