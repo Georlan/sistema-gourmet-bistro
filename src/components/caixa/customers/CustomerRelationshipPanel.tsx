@@ -62,7 +62,7 @@ export function CustomerRelationshipPanel({ customers }: Props) {
           <HeartHandshake size={16} className="text-emerald-600 dark:text-emerald-400" />
           Saúde do relacionamento e frequência
         </h3>
-        <p className="text-[11px] leading-relaxed text-koma-muted">
+        <p className="text-sm leading-relaxed text-koma-muted">
           Acompanhe o tempo desde a última compra identificada e saiba quem precisa de atenção antes de esfriar.
         </p>
       </div>
@@ -70,50 +70,50 @@ export function CustomerRelationshipPanel({ customers }: Props) {
       {/* Resumo compacto de segmentos */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <div className="rounded-xl border border-koma-border-subtle bg-koma-canvas/45 p-3">
-          <div className="flex items-center justify-between text-koma-muted text-[10px] font-bold uppercase tracking-wider">
+          <div className="flex items-center justify-between text-koma-muted text-sm font-semibold">
             <span>Total</span>
             <Users size={12} aria-hidden="true" />
           </div>
           <strong className="mt-1 block font-mono text-lg text-koma-foreground">{summary.total}</strong>
-          <span className="text-[9px] text-koma-subtle">{summary.semCompra} sem compra</span>
+          <span className="text-xs text-koma-subtle">{summary.semCompra} sem compra</span>
         </div>
 
         <div className="rounded-xl border border-koma-border-subtle bg-koma-canvas/45 p-3">
-          <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+          <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 text-sm font-semibold">
             <span>Ativos</span>
             <UserCheck size={12} aria-hidden="true" />
           </div>
           <strong className="mt-1 block font-mono text-lg text-emerald-600 dark:text-emerald-400">{summary.ativos}</strong>
-          <span className="text-[9px] text-koma-subtle">até 30 dias</span>
+          <span className="text-xs text-koma-subtle">até 30 dias</span>
         </div>
 
         <div className="rounded-xl border border-koma-border-subtle bg-koma-canvas/45 p-3">
-          <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+          <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 text-sm font-semibold">
             <span>Atenção</span>
             <Clock size={12} aria-hidden="true" />
           </div>
           <strong className="mt-1 block font-mono text-lg text-amber-600 dark:text-amber-400">{summary.atencao}</strong>
-          <span className="text-[9px] text-koma-subtle">31 a 60 dias</span>
+          <span className="text-xs text-koma-subtle">31 a 60 dias</span>
         </div>
 
         <div className="rounded-xl border border-koma-border-subtle bg-koma-canvas/45 p-3">
-          <div className="flex items-center justify-between text-rose-600 dark:text-rose-400 text-[10px] font-bold uppercase tracking-wider">
+          <div className="flex items-center justify-between text-rose-600 dark:text-rose-400 text-sm font-semibold">
             <span>Reativar</span>
             <RotateCcw size={12} aria-hidden="true" />
           </div>
           <strong className="mt-1 block font-mono text-lg text-rose-600 dark:text-rose-400">{summary.reativar}</strong>
-          <span className="text-[9px] text-koma-subtle">+60 dias</span>
+          <span className="text-xs text-koma-subtle">+60 dias</span>
         </div>
       </div>
 
       {/* Prioridade de relacionamento (máx 5) */}
       <div className="space-y-2 pt-1 border-t border-koma-border-subtle">
         <div className="flex items-center justify-between">
-          <h4 className="text-[10px] font-bold uppercase tracking-wider text-koma-secondary flex items-center gap-1.5">
+          <h4 className="text-sm font-semibold text-koma-secondary flex items-center gap-1.5">
             <AlertCircle size={12} className="text-koma-muted" />
             Prioridade de relacionamento
           </h4>
-          <span className="text-[10px] text-koma-muted">
+          <span className="text-xs text-koma-muted">
             {priorityCustomers.length > 0 ? `Top ${priorityCustomers.length} para reconectar` : 'Nenhum pendente'}
           </span>
         </div>
@@ -135,14 +135,14 @@ export function CustomerRelationshipPanel({ customers }: Props) {
                       <span
                         className={
                           isReativar
-                            ? 'inline-flex items-center rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400 shrink-0'
-                            : 'inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400 shrink-0'
+                            ? 'inline-flex items-center rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-xs font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400 shrink-0'
+                            : 'inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400 shrink-0'
                         }
                       >
                         {isReativar ? 'Reativar' : 'Atenção'}
                       </span>
                     </div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-koma-muted">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-koma-muted">
                       <span>{formatLastPurchase(user.dias_sem_comprar)}</span>
                       <span aria-hidden="true">•</span>
                       <span>

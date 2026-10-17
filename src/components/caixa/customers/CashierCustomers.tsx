@@ -187,6 +187,16 @@ export default function CashierCustomers({
     benefitFilter !== 'ALL' ||
     contactFilter !== 'ALL';
 
+  const activeCustomerFilters = [
+    customerSegment !== 'ALL',
+    recencyFilter !== 'ALL',
+    frequencyFilter !== 'ALL',
+    valueFilter !== 'ALL',
+    productQuery.trim() !== '',
+    benefitFilter !== 'ALL',
+    contactFilter !== 'ALL',
+  ].filter(Boolean).length;
+
   const filteredLoyaltyUsers = useMemo(() => {
     if (!hasAdvancedFilters) {
       return selectCrmCustomers(loyaltyUsers, clientesSearch, customerSegment, customerSort);
@@ -695,16 +705,13 @@ export default function CashierCustomers({
                 </div>
               </section>
 
-              <div className="rounded-2xl border border-koma-border bg-koma-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-col gap-3 py-1 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
-                    Quem merece sua atenção agora
-                  </span>
-                  <h3 className="mt-0.5 text-sm font-black text-koma-foreground">
-                    Quem você pode trazer de volta hoje?
+                  <h3 className="text-lg font-bold text-koma-foreground">
+                    Quem contatar hoje
                   </h3>
-                  <p className="mt-0.5 text-xs text-koma-muted">
-                    Escolha um grupo, revise a mensagem e inicie o contato.
+                  <p className="mt-1 text-sm text-koma-muted">
+                    Escolha um grupo e revise a mensagem antes de entrar em contato.
                   </p>
                 </div>
                 <button
@@ -717,7 +724,7 @@ export default function CashierCustomers({
               </div>
 
               {/* Grid principal de Oportunidades (Aberto diretamente, nunca escondido em acordeão) */}
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className={`grid gap-3 ${opportunitiesCatalog.filter((opp: any) => opp.elegiveis_count > 0).length > 1 ? 'grid-cols-1 xl:grid-cols-2' : 'grid-cols-1 max-w-5xl'}`}>
                 {opportunitiesCatalog.filter((opp: any) => opp.elegiveis_count > 0).map((opp: any) => {
                   const previewCustomers = loyaltyUsers
                     .filter((u) => (opp.elegiveis_ids || []).includes(u.id))
@@ -726,15 +733,15 @@ export default function CashierCustomers({
                   return (
                     <article
                       key={opp.id}
-                      className="rounded-2xl border border-koma-border bg-koma-panel p-4 flex flex-col justify-between gap-4 shadow-xs"
+                      className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5 flex flex-col justify-between gap-3"
                     >
                       <div className="space-y-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                               Prioridade {opp.prioridade}
                             </span>
-                            <h4 className="mt-1.5 text-sm font-black text-koma-foreground">{opp.titulo}</h4>
+                            <h4 className="mt-1.5 text-base font-bold text-koma-foreground">{opp.titulo}</h4>
                           </div>
                           <div className="text-right shrink-0">
                             <strong className="block font-mono text-2xl font-black text-emerald-400">
@@ -764,7 +771,7 @@ export default function CashierCustomers({
                                 key={c.id}
                                 type="button"
                                 onClick={() => setSelectedProfileCustomerId(c.id)}
-                                className="rounded-lg border border-koma-border bg-koma-raised px-2 py-0.5 text-[11px] font-semibold text-koma-foreground hover:border-emerald-500/50"
+                                className="min-h-8 rounded-lg bg-koma-raised px-2.5 py-1 text-xs font-medium text-koma-foreground hover:bg-emerald-500/10 focus-visible:outline-2 focus-visible:outline-emerald-500"
                               >
                                 {c.cliente}
                               </button>
@@ -782,15 +789,15 @@ export default function CashierCustomers({
                         )}
 
                         {/* Critérios e limitações acessíveis sem ocupar a tela inteira */}
-                        <details className="rounded-xl border border-koma-border/70 bg-koma-card/60 px-3 py-2 text-[11px] text-koma-muted">
-                          <summary className="cursor-pointer font-bold text-koma-foreground">
+                        <details className="text-sm text-koma-muted">
+                          <summary className="min-h-10 cursor-pointer py-2 font-semibold text-koma-foreground focus-visible:outline-2 focus-visible:outline-emerald-500">
                             Por que este grupo?
                           </summary>
                           <div className="mt-2 space-y-1">
                             <p>{opp.motivo_entrada}</p>
                             <p>{opp.abordagem_sem_desconto || opp.abordagem_recomendada}</p>
                         {opp.retidos_contato_recente_count > 0 && (
-                          <p className="text-[11px] text-amber-300">
+                          <p className="text-xs text-amber-300">
                             {opp.retidos_contato_recente_count} cliente(s) deste perfil foram retidos por já terem sido abordados nos últimos 7 dias.
                           </p>
                         )}
@@ -832,8 +839,8 @@ export default function CashierCustomers({
                 <div className="rounded-2xl border border-koma-border p-5 text-sm text-koma-muted">Nenhum grupo precisa de contato hoje. Consulte sua base em Clientes.</div>
               )}
               {opportunitiesCatalog.some((opp: any) => !opp.elegiveis_count) && (
-                <details className="rounded-2xl border border-koma-border bg-koma-panel p-4">
-                  <summary className="cursor-pointer text-sm font-bold text-koma-muted">Outros grupos ({opportunitiesCatalog.filter((opp: any) => !opp.elegiveis_count).length})</summary>
+                <details className="rounded-xl border border-koma-border bg-koma-panel px-4 py-3">
+                  <summary className="min-h-8 cursor-pointer text-sm font-semibold text-koma-muted focus-visible:outline-2 focus-visible:outline-emerald-500">Outros grupos ({opportunitiesCatalog.filter((opp: any) => !opp.elegiveis_count).length})</summary>
                   <div className="mt-3 divide-y divide-koma-border">
                     {opportunitiesCatalog.filter((opp: any) => !opp.elegiveis_count).map((opp: any) => (
                       <div key={opp.id} className="flex items-center justify-between gap-3 py-3 text-sm">
@@ -868,7 +875,7 @@ export default function CashierCustomers({
                   )}
                 </div>
                 {(clientesSearch || filteredLoyaltyUsers.length !== loyaltyUsers.length) && (
-                  <p className="shrink-0 text-[10px] font-medium text-koma-muted">
+                  <p className="shrink-0 text-xs font-medium text-koma-muted">
                     <strong className="font-mono text-koma-foreground">{filteredLoyaltyUsers.length}</strong> de{' '}
                     {loyaltyUsers.length} {loyaltyUsers.length === 1 ? 'cliente' : 'clientes'}
                   </p>
@@ -904,45 +911,60 @@ export default function CashierCustomers({
                 </div>
               </section>
 
-              {/* Filtros rápidos de relacionamento */}
-              <div className="flex flex-wrap gap-2" aria-label="Filtrar clientes">
-                {(
-                  [
-                    ['ALL', 'Todos'],
-                    ['ATIVO', 'Ativos (até 30 dias)'],
-                    ['REPEAT', 'Recorrentes (2+ compras)'],
-                    ['SECOND_PURCHASE', 'Elegíveis 2ª compra (6–30d)'],
-                    ['CADENCE_RECOVERY', 'Fora do ritmo habitual'],
-                    ['ATENCAO', 'Atenção (31–60 dias)'],
-                    ['REATIVAR', 'Reativar (+60 dias)'],
-                    ['SEM_COMPRA', 'Sem compra identificada'],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={customerSegment === value}
+              {/* Atalhos principais. Segmentos menos comuns ficam em Mais filtros. */}
+              <div className="flex flex-wrap gap-1.5" aria-label="Filtrar clientes">
+                {([
+                  ['ALL', 'Todos'],
+                  ['ATIVO', 'Ativos (até 30 dias)'],
+                  ['REPEAT', 'Recorrentes (2+ compras)'],
+                  ['REATIVAR', 'Reativar (+60 dias)'],
+                ] as const).map(([value, label]) => (
+                  <button key={value} type="button" aria-pressed={customerSegment === value}
                     onClick={() => setCustomerSegment(value)}
-                    className={`min-h-10 rounded-lg border px-3 text-xs ${
+                    className={`min-h-10 rounded-lg border px-3 text-sm focus-visible:outline-2 focus-visible:outline-emerald-500 ${
                       customerSegment === value
-                        ? 'border-emerald-600 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold'
-                        : 'border-koma-border text-koma-muted'
-                    }`}
-                  >
+                        ? 'border-emerald-600 bg-emerald-500/10 font-semibold text-emerald-700 dark:text-emerald-300'
+                        : 'border-koma-border text-koma-muted hover:bg-koma-raised'
+                    }`}>
                     {label}
                   </button>
                 ))}
               </div>
 
+              <details className="rounded-xl border border-koma-border bg-koma-panel p-3 sm:p-4" aria-label="Filtros avançados de clientes">
+                <summary className="flex min-h-10 cursor-pointer items-center justify-between gap-2 text-sm font-semibold text-koma-foreground focus-visible:outline-2 focus-visible:outline-emerald-500">
+                  <span>Mais filtros</span>
+                  <span className="text-xs font-normal text-koma-muted">{activeCustomerFilters ? `${activeCustomerFilters} ativo${activeCustomerFilters === 1 ? '' : 's'}` : 'Segmentos e critérios'}</span>
+                </summary>
+                <div className="space-y-3 pt-3">
+                  <div className="flex flex-wrap gap-1.5" aria-label="Outros segmentos de clientes">
+                    {([
+                      ['SECOND_PURCHASE', 'Elegíveis 2ª compra (6–30d)'],
+                      ['CADENCE_RECOVERY', 'Fora do ritmo habitual'],
+                      ['ATENCAO', 'Atenção (31–60 dias)'],
+                      ['SEM_COMPRA', 'Sem compra identificada'],
+                    ] as const).map(([value, label]) => (
+                      <button key={value} type="button" aria-pressed={customerSegment === value}
+                        onClick={() => setCustomerSegment(value)}
+                        className={`min-h-10 rounded-lg border px-3 text-sm focus-visible:outline-2 focus-visible:outline-emerald-500 ${
+                          customerSegment === value
+                            ? 'border-emerald-600 bg-emerald-500/10 font-semibold text-emerald-700 dark:text-emerald-300'
+                            : 'border-koma-border text-koma-muted hover:bg-koma-raised'
+                        }`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
               {/* Filtros comportamentais compreensíveis (Recência, Frequência, Valor, Produto, Benefício, Contato) */}
-              <div className="grid grid-cols-1 gap-2.5 rounded-2xl border border-koma-border bg-koma-card p-3.5 sm:grid-cols-2 lg:grid-cols-6">
-                <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <label className="flex flex-col gap-1 text-sm font-medium text-koma-muted">
                   Última compra (Recência)
                   <select
                     aria-label="Filtrar por última compra"
                     value={recencyFilter}
                     onChange={(e) => setRecencyFilter(e.target.value as CrmRecencyFilter)}
-                    className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-2 text-xs font-normal text-koma-foreground"
+                    className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-2 min-h-10 text-sm text-koma-foreground"
                   >
                     <option value="ALL">Qualquer data</option>
                     <option value="ATE_15">Até 15 dias</option>
@@ -953,13 +975,13 @@ export default function CashierCustomers({
                   </select>
                 </label>
 
-                <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+                <label className="flex flex-col gap-1 text-sm font-medium text-koma-muted">
                   Frequência de pedidos
                   <select
                     aria-label="Filtrar por frequência de pedidos"
                     value={frequencyFilter}
                     onChange={(e) => setFrequencyFilter(e.target.value as CrmFrequencyFilter)}
-                    className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-2 text-xs font-normal text-koma-foreground"
+                    className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-2 min-h-10 text-sm text-koma-foreground"
                   >
                     <option value="ALL">Qualquer quantidade</option>
                     <option value="SEM_COMPRA">0 compras (apenas cadastro)</option>
@@ -969,13 +991,13 @@ export default function CashierCustomers({
                   </select>
                 </label>
 
-                <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+                <label className="flex flex-col gap-1 text-sm font-medium text-koma-muted">
                   Total líquido pago
                   <select
                     aria-label="Filtrar por valor total pago"
                     value={valueFilter}
                     onChange={(e) => setValueFilter(e.target.value as CrmValueFilter)}
-                    className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-2 text-xs font-normal text-koma-foreground"
+                    className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-2 min-h-10 text-sm text-koma-foreground"
                   >
                     <option value="ALL">Qualquer valor</option>
                     <option value="ATE_100">Até R$ 100</option>
@@ -984,7 +1006,7 @@ export default function CashierCustomers({
                   </select>
                 </label>
 
-                <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+                <label className="flex flex-col gap-1 text-sm font-medium text-koma-muted">
                   Produto comprado
                   <input
                     type="text"
@@ -992,17 +1014,17 @@ export default function CashierCustomers({
                     value={productQuery}
                     onChange={(e) => setProductQuery(e.target.value)}
                     placeholder="Ex.: Risoto, Burger…"
-                    className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-2 text-xs font-normal text-koma-foreground"
+                    className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-2 min-h-10 text-sm text-koma-foreground"
                   />
                 </label>
 
-                <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+                <label className="flex flex-col gap-1 text-sm font-medium text-koma-muted">
                   Benefício de fidelidade
                   <select
                     aria-label="Filtrar por situação do benefício"
                     value={benefitFilter}
                     onChange={(e) => setBenefitFilter(e.target.value as CrmBenefitFilter)}
-                    className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-2 text-xs font-normal text-koma-foreground"
+                    className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-2 min-h-10 text-sm text-koma-foreground"
                   >
                     <option value="ALL">Qualquer situação</option>
                     <option value="RESGATAVEL">Pronto para resgate</option>
@@ -1011,13 +1033,13 @@ export default function CashierCustomers({
                   </select>
                 </label>
 
-                <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+                <label className="flex flex-col gap-1 text-sm font-medium text-koma-muted">
                   Status de contato
                   <select
                     aria-label="Filtrar por status de contato"
                     value={contactFilter}
                     onChange={(e) => setContactFilter(e.target.value as CrmContactFilter)}
-                    className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-2 text-xs font-normal text-koma-foreground"
+                    className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-2 min-h-10 text-sm text-koma-foreground"
                   >
                     <option value="ALL">Todos</option>
                     <option value="DISPONIVEL_ABORDAGEM">Disponível para abordar</option>
@@ -1028,14 +1050,18 @@ export default function CashierCustomers({
                 </label>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-koma-muted">
+                </div>
+              </details>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-koma-muted">
                 <p>
                   {filteredLoyaltyUsers.length} de {loyaltyUsers.length} clientes · Compras concluídas e valores líquidos pagos (cancelamentos e estornos excluídos).
                 </p>
-                {hasAdvancedFilters && (
+                {activeCustomerFilters > 0 && (
                   <button
                     type="button"
                     onClick={() => {
+                      setCustomerSegment('ALL');
                       setRecencyFilter('ALL');
                       setFrequencyFilter('ALL');
                       setValueFilter('ALL');
@@ -1043,14 +1069,14 @@ export default function CashierCustomers({
                       setBenefitFilter('ALL');
                       setContactFilter('ALL');
                     }}
-                    className="font-bold text-emerald-400 hover:underline"
+                    className="min-h-10 font-semibold text-emerald-600 hover:underline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-emerald-400"
                   >
-                    Limpar filtros avançados
+                    Limpar filtros ({activeCustomerFilters})
                   </button>
                 )}
               </div>
 
-              <div className="bg-koma-panel border border-koma-border rounded-2xl p-3 space-y-4 shadow-xs">
+              <div className="bg-koma-panel border border-koma-border rounded-2xl p-3 sm:p-4 space-y-3">
                 {filteredLoyaltyUsers.length > 0 ? (
                   <>
                     {/* Lista Mobile Compacta */}
@@ -1145,7 +1171,7 @@ export default function CashierCustomers({
 
                     {/* Tabela Desktop Compacta */}
                     <div className="hidden overflow-x-auto border border-koma-border rounded-2xl md:block">
-                      <table className="w-full text-left text-xs">
+                      <table className="w-full text-left text-sm">
                         <thead>
                           <tr className="bg-koma-raised border-b border-koma-border text-koma-muted uppercase tracking-wider font-extrabold text-[9px]">
                             <th className="p-3.5">Cliente</th>
@@ -1374,13 +1400,10 @@ export default function CashierCustomers({
           {(crmTab === 'beneficios' || visitedBenefits) && (
             <div hidden={crmTab !== 'beneficios'} style={{ display: crmTab === 'beneficios' ? undefined : 'none' }} className="space-y-4 animate-fade-in">
               {/* Subdivisão Clara: Saldo Acumulado vs. Resgatável + Seletor Fidelidade / Cupons */}
-              <div className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-3">
+              <div className="rounded-2xl border border-koma-border bg-koma-card p-3 sm:p-4 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
-                      {beneficiosSection === 'cupons' ? 'Cupons' : 'Fidelidade'}
-                    </span>
-                    <h3 className="mt-0.5 text-sm font-black text-koma-foreground">
+                    <h3 className="text-lg font-bold text-koma-foreground">
                       Benefícios para a próxima compra
                     </h3>
                     <p className="text-xs text-koma-muted">
@@ -1392,7 +1415,7 @@ export default function CashierCustomers({
                 </div>
 
                 {hasLoyalty && hasCoupons && (
-                  <div role="tablist" aria-label="Tipos de benefícios" className="flex flex-wrap gap-2 border-t border-koma-border pt-3"
+                  <div role="tablist" aria-label="Tipos de benefícios" className="flex flex-wrap gap-2 pt-1"
                     onKeyDown={(event) => {
                       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
                       const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
@@ -1421,33 +1444,33 @@ export default function CashierCustomers({
                 {/* Resumo honesto de saldos de fidelidade (Acumulado vs. Resgatável) */}
                 {hasLoyalty && beneficiosSection === 'fidelidade' && (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-1 text-xs">
-                    <div className="rounded-xl border border-koma-border bg-koma-panel p-3">
-                      <span className="text-[10px] text-koma-muted block">
+                    <div className="rounded-xl bg-koma-panel p-3">
+                      <span className="text-xs text-koma-muted block">
                         Já podem usar o benefício
                       </span>
                       <strong className="mt-1 block font-mono text-base text-emerald-400">
                         {relationshipSummary.resgataveis}{' '}
                         {relationshipSummary.resgataveis === 1 ? 'cliente' : 'clientes'}
                       </strong>
-                      <span className="text-[10px] text-koma-muted">
+                      <span className="text-xs text-koma-muted">
                         Prontos para um lembrete de retorno.
                       </span>
                     </div>
-                    <div className="rounded-xl border border-koma-border bg-koma-panel p-3">
-                      <span className="text-[10px] text-koma-muted block">
+                    <div className="rounded-xl bg-koma-panel p-3">
+                      <span className="text-xs text-koma-muted block">
                         Ainda acumulando
                       </span>
                       <strong className="mt-1 block font-mono text-base text-amber-300">
                         {relationshipSummary.emFormacao}{' '}
                         {relationshipSummary.emFormacao === 1 ? 'cliente' : 'clientes'}
                       </strong>
-                      <span className="text-[10px] text-koma-muted">
+                      <span className="text-xs text-koma-muted">
                         Possuem pontos acumulados, mas ainda não atingiram o mínimo de resgate.
                       </span>
                     </div>
-                    <div className="rounded-xl border border-koma-border bg-koma-panel p-3 flex flex-col justify-between">
+                    <div className="rounded-xl bg-koma-panel p-3 flex flex-col justify-between">
                       <div>
-                        <span className="text-[10px] text-koma-muted block">Benefício por pedido</span>
+                        <span className="text-xs text-koma-muted block">Benefício por pedido</span>
                         <strong className="mt-1 block font-mono text-xs text-koma-foreground">
                           {fidelidadeConfig.ativo ? `${(fidelidadeConfig.tipo_recompensa === 'PONTOS' ? fidelidadeConfig.taxa_conversao * Number(fidelidadeConfig.valor_ponto_em_dinheiro || 0) * 100 : fidelidadeConfig.taxa_conversao).toLocaleString('pt-BR', {style:'currency',currency:'BRL'})} em benefício a cada R$ 100` : 'Programa pausado'}
                         </strong>
@@ -1463,7 +1486,7 @@ export default function CashierCustomers({
                             'FIDELIDADE',
                           )
                         }
-                        className="mt-2 text-left text-[11px] font-bold text-emerald-400 hover:underline"
+                        className="mt-2 text-left text-xs font-bold text-emerald-400 hover:underline"
                       >
                         Lembrar clientes com saldo resgatável em Campanhas →
                       </button>
@@ -1483,7 +1506,7 @@ export default function CashierCustomers({
                         <span className="block text-sm font-bold text-koma-foreground">
                           Configuração do programa
                         </span>
-                        <span className="mt-0.5 block text-[10px] text-koma-muted">
+                        <span className="mt-0.5 block text-xs text-koma-muted">
                           Defina como os clientes acumulam e resgatam benefícios.
                         </span>
                       </div>
@@ -1491,7 +1514,7 @@ export default function CashierCustomers({
 
                     <form onSubmit={handleSaveFidelidadeConfig} className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-semibold text-koma-secondary">
+                        <span className="text-xs font-semibold text-koma-secondary">
                           {fidelidadeConfig.ativo ? 'Programa ativo' : 'Programa pausado'}
                         </span>
                         <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -1509,7 +1532,7 @@ export default function CashierCustomers({
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-koma-secondary uppercase tracking-wider block">
+                        <label className="text-sm font-medium text-koma-muted block">
                           Benefício oferecido
                         </label>
                         <select
@@ -1518,7 +1541,7 @@ export default function CashierCustomers({
                             setFidelidadeConfig((prev) => ({ ...prev, tipo_recompensa: e.target.value }))
                           }
                           disabled={!fidelidadeConfig.ativo}
-                          className="w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground text-[10px] disabled:opacity-50"
+                          className="w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground text-xs disabled:opacity-50"
                         >
                           <option value="PONTOS">Pontos</option>
                           <option value="CASHBACK">Dinheiro de volta</option>
@@ -1542,7 +1565,7 @@ export default function CashierCustomers({
                       <details className="rounded-xl border border-koma-border p-3 space-y-3">
                         <summary className="cursor-pointer text-xs font-bold">Ajustar a taxa manualmente</summary>
                       <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-koma-secondary uppercase tracking-wider block">
+                        <label className="text-sm font-medium text-koma-muted block">
                           {fidelidadeConfig.tipo_recompensa === 'PONTOS'
                             ? 'Pontos ganhos a cada R$ 1'
                             : 'Percentual devolvido ao cliente'}
@@ -1558,13 +1581,13 @@ export default function CashierCustomers({
                             }))
                           }
                           disabled={!fidelidadeConfig.ativo}
-                          className="w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground font-mono text-[10px] disabled:opacity-50"
+                          className="w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground font-mono text-xs disabled:opacity-50"
                         />
                       </div>
 
                       {fidelidadeConfig.tipo_recompensa === 'PONTOS' && (
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-koma-secondary uppercase tracking-wider block">
+                          <label className="text-sm font-medium text-koma-muted block">
                             Valor de cada ponto
                           </label>
                           <input
@@ -1578,7 +1601,7 @@ export default function CashierCustomers({
                               }))
                             }
                             disabled={!fidelidadeConfig.ativo}
-                            className="w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground font-mono text-[10px] disabled:opacity-50"
+                            className="w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground font-mono text-xs disabled:opacity-50"
                           />
                         </div>
                       )}
@@ -1587,7 +1610,7 @@ export default function CashierCustomers({
 
                       <button
                         type="submit"
-                        className="koma-btn-success flex min-h-10 w-full items-center justify-center rounded-xl text-[10px] font-bold"
+                        className="koma-btn-success flex min-h-10 w-full items-center justify-center rounded-xl text-xs font-bold"
                       >
                         Salvar programa
                       </button>

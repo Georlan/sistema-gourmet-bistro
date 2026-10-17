@@ -38,27 +38,21 @@ export function CustomerResultsWorkspace({
   return (
     <div className="space-y-4 text-left animate-fade-in">
       {/* Barra de Período, Janela e Metodologia */}
-      <div className="rounded-2xl border border-koma-border bg-koma-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">
-            Resultados
-          </span>
-          <h3 className="text-sm font-black text-koma-foreground">
+      <div className="flex flex-col gap-3 py-1 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h3 className="text-lg font-bold text-koma-foreground">
             Quantos clientes voltaram e quanto compraram?
           </h3>
-          <p className="text-xs text-koma-muted">
-            Acompanhe as compras após seus contatos.
-          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+        <div className="flex flex-wrap items-end gap-2 sm:gap-3">
+          <label className="flex min-w-[9rem] flex-1 flex-col gap-1 text-sm font-medium text-koma-muted">
             Período analisado
             <select
               aria-label="Período analisado nos resultados"
               value={periodoDias}
               onChange={(e) => onChangePeriodo(Number(e.target.value))}
-              className="rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-xs font-semibold text-koma-foreground"
+              className="min-h-10 rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-sm font-medium text-koma-foreground"
             >
               <option value={7}>Últimos 7 dias</option>
               <option value={30}>Últimos 30 dias</option>
@@ -67,13 +61,13 @@ export function CustomerResultsWorkspace({
             </select>
           </label>
 
-          <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+          <label className="flex min-w-[9rem] flex-1 flex-col gap-1 text-sm font-medium text-koma-muted">
             Compras após o contato
             <select
               aria-label="Janela de atribuição pós-abordagem"
               value={janelaDias}
               onChange={(e) => onChangeJanela(Number(e.target.value))}
-              className="rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-xs font-semibold text-koma-foreground"
+              className="min-h-10 rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-sm font-medium text-koma-foreground"
             >
               <option value={7}>Até 7 dias após contato</option>
               <option value={14}>Até 14 dias após contato</option>
@@ -84,7 +78,7 @@ export function CustomerResultsWorkspace({
           <button
             type="button"
             onClick={onRefresh}
-            className="koma-btn-secondary mt-4 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold"
+            className="koma-btn-secondary inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium"
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Atualizar
           </button>
@@ -101,8 +95,8 @@ export function CustomerResultsWorkspace({
       )}
 
       {loading && <p role="status" className="text-sm text-koma-muted">Atualizando resultados…</p>}
-      <div className="grid gap-4 md:grid-cols-2">
-        <article className="rounded-2xl border border-koma-border bg-koma-panel p-5 space-y-3">
+      <div className="grid gap-3 lg:grid-cols-2">
+        <article className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-2.5">
           <h4 className="text-sm font-bold text-koma-muted">Clientes que voltaram</h4>
           <strong className="block text-3xl font-black text-emerald-400">{isMeasured ? retorno.clientes_que_voltaram : '—'}</strong>
           {isMeasured ? <>
@@ -112,7 +106,7 @@ export function CustomerResultsWorkspace({
             </div>
           </> : <p className="text-sm text-koma-muted">Registre contatos em Campanhas para acompanhar o retorno.</p>}
         </article>
-        <article className="rounded-2xl border border-koma-border bg-koma-panel p-5 space-y-3">
+        <article className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-2.5">
           <h4 className="text-sm font-bold text-koma-muted">Quanto compraram após o contato</h4>
           <strong className="block text-3xl font-black text-emerald-400">{isMeasured && valores ? money(valores.total_liquido_brl) : '—'}</strong>
           {isMeasured && valores ? <>
@@ -128,19 +122,19 @@ export function CustomerResultsWorkspace({
         </article>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <article className="rounded-2xl border border-koma-border bg-koma-panel p-4">
+        <article className="rounded-xl border border-koma-border bg-koma-panel p-4">
           <h4 className="text-xs font-bold text-koma-muted">Clientes com 2 ou mais compras</h4>
           <strong className="block mt-2 text-xl">{segundaCompra ? segundaCompra.clientes_que_fizeram_segunda_compra : '—'}</strong>
           <p className="text-xs text-koma-muted">{segundaCompra ? `De ${segundaCompra.clientes_com_1_compra_base} clientes com compra no histórico` : 'Ainda sem dados'}</p>
         </article>
-        <article className="rounded-2xl border border-koma-border bg-koma-panel p-4">
+        <article className="rounded-xl border border-koma-border bg-koma-panel p-4">
           <h4 className="text-xs font-bold text-koma-muted">Descontos utilizados</h4>
           <strong className="block mt-2 text-xl">{descontos ? money(descontos.total_brl) : '—'}</strong>
           <p className="text-xs text-koma-muted">Apenas pedidos concluídos</p>
         </article>
       </div>
-      <details className="rounded-2xl border border-koma-border bg-koma-panel p-4 text-xs text-koma-muted">
-        <summary className="cursor-pointer font-bold text-koma-foreground">Como calculamos os resultados</summary>
+      <details className="rounded-xl border border-koma-border bg-koma-panel p-3 text-sm text-koma-muted">
+        <summary className="min-h-10 cursor-pointer py-2 font-semibold text-koma-foreground focus-visible:outline-2 focus-visible:outline-emerald-500">Como calculamos os resultados</summary>
         <div className="mt-3 space-y-2">
           <p>{res?.regra_associacao || `Cada pedido concluído é vinculado a no máximo uma abordagem dentro de ${janelaDias} dias após o contato. Cancelamentos e estornos são excluídos.`}</p>
           <p>{res?.aviso_metodologico || 'Compras após contato sem cupom são associações por período, não comprovam que a campanha causou a venda.'}</p>
@@ -151,9 +145,9 @@ export function CustomerResultsWorkspace({
       </details>
 
       {/* Tabela de Acompanhamento por Campanha */}
-      <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 space-y-3">
+      <section className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h4 className="text-xs font-extrabold uppercase tracking-wider text-koma-foreground">
+          <h4 className="text-xs font-semibold text-koma-foreground">
             Resultados por campanha ({campanhas.length})
           </h4>
         </div>
@@ -165,8 +159,8 @@ export function CustomerResultsWorkspace({
           </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-koma-border">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-koma-raised border-b border-koma-border text-[10px] font-extrabold uppercase tracking-wider text-koma-muted">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-koma-raised border-b border-koma-border text-xs font-semibold text-koma-muted">
                 <tr>
                   <th className="p-3">Campanha / Objetivo</th>
                   <th className="p-3">Abordagem</th>
@@ -182,10 +176,10 @@ export function CustomerResultsWorkspace({
                   <tr key={camp.id} className="hover:bg-koma-raised/50">
                     <td className="p-3">
                       <strong className="block text-koma-foreground">{camp.nome}</strong>
-                      <span className="text-[10px] text-koma-muted">{camp.objetivo}</span>
+                      <span className="text-xs text-koma-muted">{camp.objetivo}</span>
                     </td>
                     <td className="p-3">
-                      <span className="rounded-md bg-koma-raised px-2 py-0.5 font-mono text-[10px] text-koma-foreground">
+                      <span className="rounded-md bg-koma-raised px-2 py-0.5 font-mono text-xs text-koma-foreground">
                         {camp.abordagem_tipo}
                         {camp.cupom_codigo ? ` (${camp.cupom_codigo})` : ''}
                       </span>
