@@ -20,7 +20,7 @@ from ..models import (
     IntegrationOutbox, Restaurante, SuperAdminAuditLog, WhatsAppUsageMetric,
 )
 from ..services.central_whatsapp import (
-    _provider_sender_status, allowed_restaurants, pilot_configuration,
+    _provider_sender_status, allowed_restaurants, transport_configuration,
     platform_operator_enabled, registered_operator_phone,
 )
 from ..services.customer_whatsapp_dispatch import (
@@ -57,7 +57,7 @@ def _legacy_customer(rid: int) -> bool:
 
 
 def _permissions(rid: int, cfg: ConfiguracaoRestaurante) -> dict:
-    transport = pilot_configuration()
+    transport = transport_configuration()
     requested_customer = cfg.whatsapp_customer_notices_enabled is True
     return {
         "managed": cfg.whatsapp_platform_managed is True,
@@ -208,7 +208,7 @@ def whatsapp_platform_overview(
         ids = _discover_restaurant_ids(db)
         now = dt.datetime.now(dt.timezone.utc)
         month = now.strftime("%Y-%m")
-        transport = pilot_configuration()
+        transport = transport_configuration()
         sender = {"state": "unavailable", "connection": "not_verified"}
         if ids:
             with tenant_session_scope(db, ids[0]):
