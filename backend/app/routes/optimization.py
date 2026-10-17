@@ -1,6 +1,6 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
 from typing import Optional
 from pydantic import BaseModel
@@ -216,22 +216,73 @@ def get_fidelidade_config(
 
 @router.get("/fidelidade/clientes")
 def get_loyalty_clients(
+    response: Response = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    q: Optional[str] = Query(default=None, max_length=120),
+    include_products: bool = Query(default=True),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("clientes:operar"))
 ):
     """Retorna a ficha canônica; o ID não muda quando nome/telefone mudam."""
+    from ..crypt import pii_lookup_hash
     from ..services.customer_crm import enrich_customer_crm_payloads
 
     restaurante_id = require_tenant_id()
     loyalty_enabled = has_plan_entitlement(db, restaurante_id, ENTITLEMENT_LOYALTY)
-    clientes = db.query(Cliente).filter(
+    eff_limit = limit if isinstance(limit, int) else 100
+    eff_offset = offset if isinstance(offset, int) else 0
+    eff_q = (q if isinstance(q, str) else "").strip()
+    eff_include_products = include_products if isinstance(include_products, bool) else True
+
+    base_query = db.query(Cliente).filter(
         Cliente.restaurante_id == restaurante_id,
-    ).order_by(Cliente.criado_em.desc(), Cliente.id.asc()).all()
+    ).order_by(Cliente.criado_em.desc(), Cliente.id.asc())
+
+    if not eff_q:
+        total_count = int(
+            db.query(func.count(Cliente.id))
+            .filter(Cliente.restaurante_id == restaurante_id)
+            .scalar()
+            or 0
+        )
+        clientes = base_query.offset(eff_offset).limit(eff_limit).all()
+    else:
+        digits = "".join(ch for ch in eff_q if ch.isdigit())
+        if len(digits) in (10, 11) and digits == eff_q.replace("(", "").replace(")", "").replace("-", "").replace(" ", "").replace("+", ""):
+            phone_hash = cliente_telefone_lookup_hash(restaurante_id, digits)
+            matched = base_query.filter(Cliente.telefone_hash == phone_hash).all()
+            total_count = len(matched)
+            clientes = matched[eff_offset : eff_offset + eff_limit]
+        elif "@" in eff_q and " " not in eff_q:
+            email_hash = pii_lookup_hash("cliente-email", restaurante_id, eff_q.lower())
+            matched = base_query.filter(Cliente.email_hash == email_hash).all()
+            total_count = len(matched)
+            clientes = matched[eff_offset : eff_offset + eff_limit]
+        else:
+            q_lower = eff_q.lower()
+            all_rows = base_query.all()
+            matched = [
+                c
+                for c in all_rows
+                if q_lower in str(c.nome or "").lower()
+                or (digits and digits in str(c.telefone or ""))
+                or q_lower in str(c.email or "").lower()
+            ]
+            total_count = len(matched)
+            clientes = matched[eff_offset : eff_offset + eff_limit]
+
+    if isinstance(response, Response):
+        response.headers["X-Total-Count"] = str(total_count)
+        response.headers["X-Page-Limit"] = str(eff_limit)
+        response.headers["X-Page-Offset"] = str(eff_offset)
+        response.headers["X-Has-More"] = "true" if (eff_offset + len(clientes)) < total_count else "false"
+
     metrics = load_customer_relationship_metrics(
         db,
         restaurante_id=restaurante_id,
         cliente_ids=[c.id for c in clientes],
-        include_products=True,
+        include_products=eff_include_products,
     )
     payloads = build_customer_relationship_payloads(clientes, metrics)
     if not loyalty_enabled:

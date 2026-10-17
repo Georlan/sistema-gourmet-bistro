@@ -12,6 +12,7 @@ from sqlalchemy import and_, func, inspect as sa_inspect, or_
 from sqlalchemy.orm import Session
 
 from ..crm_models import CrmCampanha, CrmClientePreferencia, CrmContatoCliente
+from ..crypt import decrypt_field
 from ..financial_models import PagamentoEstorno
 from ..models import (
     AvaliacaoCliente,
@@ -328,9 +329,17 @@ def enrich_customer_crm_payloads(
             config=config,
         )
 
+        raw_phone = copy_item.get("telefone")
+        if raw_phone is None and "_encrypted_telefone" in copy_item:
+            enc_phone = copy_item.pop("_encrypted_telefone")
+            if not opt_out and not contato_recente and (
+                int(copy_item.get("pedidos_concluidos") or 0) >= 1 or ocorrencia_aberta
+            ):
+                raw_phone = decrypt_field(enc_phone)
+
         copy_item.update(
             {
-                "telefone_valido_whatsapp": is_valid_whatsapp_phone(copy_item.get("telefone")),
+                "telefone_valido_whatsapp": is_valid_whatsapp_phone(raw_phone),
                 "opt_out_marketing": opt_out,
                 "motivo_opt_out": motivo_opt_out,
                 "canal_preferido": canal_preferido,
@@ -1292,8 +1301,13 @@ def get_crm_overview_and_results(
     janela_atribuicao_dias = max(1, min(90, int(janela_atribuicao_dias or DEFAULT_ATTRIBUTION_WINDOW_DAYS)))
     inicio_periodo = utc_now - datetime.timedelta(days=periodo_dias)
 
-    clientes = (
-        db.query(Cliente)
+    cliente_rows = (
+        db.query(
+            Cliente.id,
+            Cliente.saldo_pontos,
+            Cliente.saldo_cashback,
+            Cliente._telefone,
+        )
         .filter(Cliente.restaurante_id == restaurante_id)
         .order_by(Cliente.criado_em.desc(), Cliente.id.asc())
         .all()
@@ -1301,11 +1315,30 @@ def get_crm_overview_and_results(
     metrics = load_customer_relationship_metrics(
         db,
         restaurante_id=restaurante_id,
-        cliente_ids=[c.id for c in clientes],
+        cliente_ids=[str(c[0]) for c in cliente_rows],
         now=utc_now,
-        include_products=True,
+        include_products=False,
     )
-    base_payloads = build_customer_relationship_payloads(clientes, metrics)
+    base_payloads = []
+    for cid_val, raw_pontos, raw_cashback, enc_telefone in cliente_rows:
+        cid = str(cid_val)
+        metric = metrics.get(cid)
+        pontos = int(raw_pontos or 0)
+        cashback = round(float(raw_cashback or 0.0), 2)
+        base_payloads.append(
+            {
+                "id": cid,
+                "_encrypted_telefone": enc_telefone,
+                "pontos": pontos,
+                "saldo_pontos": pontos,
+                "saldoCashback": cashback,
+                "saldo_cashback": cashback,
+                "pedidos_concluidos": metric.pedidos_concluidos if metric else 0,
+                "ultima_compra_em": metric.ultima_compra_em if metric else None,
+                "dias_sem_comprar": metric.dias_sem_comprar if metric else None,
+                "intervalo_medio_dias": metric.intervalo_medio_dias if metric else None,
+            }
+        )
     enriched_customers = enrich_customer_crm_payloads(
         db,
         restaurante_id=restaurante_id,
@@ -1361,11 +1394,25 @@ def get_crm_overview_and_results(
     ]
 
     # 3. Carregar comandas do restaurante no período para atribuição honesta
+    sql_cutoff = (inicio_periodo - datetime.timedelta(days=1)).replace(tzinfo=None)
     comandas_all = (
-        db.query(Comanda)
+        db.query(
+            Comanda.id,
+            Comanda.cliente_id,
+            Comanda.fechado_em,
+            Comanda.criado_em,
+            Comanda.valor_pago,
+            Comanda.fechada,
+            Comanda.delivery_status,
+            Comanda.online_payment_status,
+            Comanda.cupom_id,
+            Comanda.valor_desconto_cupom,
+            Comanda.valor_desconto_cashback,
+        )
         .filter(
             Comanda.restaurante_id == restaurante_id,
             Comanda.cliente_id.isnot(None),
+            func.coalesce(Comanda.fechado_em, Comanda.criado_em) >= sql_cutoff,
         )
         .order_by(
             func.coalesce(Comanda.fechado_em, Comanda.criado_em).asc(),

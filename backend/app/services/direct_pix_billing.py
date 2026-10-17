@@ -25,11 +25,12 @@ def invoice_due(sub, next_month):
         hour=local.hour, minute=local.minute, second=local.second).astimezone(dt.timezone.utc)
 
 
-def billing_summary(db: Session, restaurant_id: int, *, now=None):
+def billing_summary(db: Session, restaurant_id: int, *, now=None, subscription_row=None):
     now = now or dt.datetime.now(dt.timezone.utc)
-    subscription_row = db.query(SaaSSubscription, Restaurante.billing_mode).join(
-        Restaurante, Restaurante.id == SaaSSubscription.restaurante_id).filter(
-        SaaSSubscription.restaurante_id == restaurant_id).one_or_none()
+    if subscription_row is None:
+        subscription_row = db.query(SaaSSubscription, Restaurante.billing_mode).join(
+            Restaurante, Restaurante.id == SaaSSubscription.restaurante_id).filter(
+            SaaSSubscription.restaurante_id == restaurant_id).one_or_none()
     sub = subscription_row[0] if subscription_row else None
     rows = db.query(DirectPixFeeInvoice).filter(DirectPixFeeInvoice.restaurante_id == restaurant_id,
         DirectPixFeeInvoice.status == 'open').order_by(

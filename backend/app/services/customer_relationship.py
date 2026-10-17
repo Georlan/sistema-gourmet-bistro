@@ -90,6 +90,14 @@ def load_customer_relationship_metrics(
     # Data efetiva da compra: prefere fechado_em; aceita criado_em como fallback legado
     data_efetiva = func.coalesce(Comanda.fechado_em, Comanda.criado_em)
 
+    customer_comandas_subq = (
+        db.query(Comanda.id)
+        .filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.cliente_id.in_(normalized_ids),
+        )
+    )
+
     estornos_subq = (
         db.query(
             Pagamento.comanda_id.label("comanda_id"),
@@ -100,7 +108,10 @@ def load_customer_relationship_metrics(
             (PagamentoEstorno.pagamento_id == Pagamento.id)
             & (PagamentoEstorno.restaurante_id == Pagamento.restaurante_id),
         )
-        .filter(Pagamento.restaurante_id == restaurante_id)
+        .filter(
+            Pagamento.restaurante_id == restaurante_id,
+            Pagamento.comanda_id.in_(customer_comandas_subq),
+        )
         .group_by(Pagamento.comanda_id)
         .subquery()
     )

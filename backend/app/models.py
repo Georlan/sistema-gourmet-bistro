@@ -423,6 +423,19 @@ class Comanda(Base):
             "online_payment_status",
             "criado_em",
         ),
+        Index(
+            "ix_comandas_tenant_cliente_fechada",
+            "restaurante_id",
+            "cliente_id",
+            "fechada",
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_comandas_tenant_fechada_fechado_em",
+            "restaurante_id",
+            "fechada",
+            "fechado_em",
+            "criado_em",
+        ).ddl_if(dialect="postgresql"),
     )
     
     id = Column(String, primary_key=True, index=True)
@@ -522,6 +535,7 @@ class Lancamento(Base):
             name="ck_lancamentos_status",
         ),
         Index("ix_lancamentos_tenant_timestamp", "restaurante_id", "timestamp").ddl_if(dialect="postgresql"),
+        Index("ix_lancamentos_tenant_comanda_status", "restaurante_id", "comanda_id", "status").ddl_if(dialect="postgresql"),
     )
 
     id = Column(String, primary_key=True, index=True)
@@ -571,6 +585,12 @@ class Item(Base):
             "ix_itens_tenant_produto_fk",
             "restaurante_id",
             "produto_id",
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_itens_tenant_comanda_status",
+            "restaurante_id",
+            "comanda_id",
+            "status",
         ).ddl_if(dialect="postgresql"),
     )
     
@@ -733,6 +753,12 @@ class Pagamento(Base):
             "metodo",
             postgresql_where=text("status = 'aprovado'"),
             postgresql_include=("valor", "comanda_id"),
+        ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_pagamentos_tenant_status_created",
+            "restaurante_id",
+            "status",
+            "criado_em",
         ).ddl_if(dialect="postgresql"),
     )
     
@@ -1989,6 +2015,14 @@ class PrintJob(Base):
             "status",
             "created_at",
         ),
+        Index(
+            "ix_print_jobs_tenant_active_queue",
+            "restaurante_id",
+            "status",
+            "claimed_at",
+            "created_at",
+            postgresql_where=text("status IN ('pending', 'claimed')"),
+        ).ddl_if(dialect="postgresql"),
     )
 
 
