@@ -144,3 +144,39 @@ def test_invalid_update_requires_reason_and_channel():
             0, admin_wa.PlatformPermissionUpdate(reason="Valid reason", operator_allowed=True),
             {"user": "test-super-admin"},
         )
+
+def test_high_volume_simulated_multi_tenant_queue_without_provider_calls(sample):
+    """A busy restaurant cannot monopolize every slot; diagnostics stay bounded."""
+    from types import SimpleNamespace
+    from app.services.outbox.dispatcher import fair_claim_candidates
+
+    engine, _ = sample
+    now = dt.datetime.now(dt.timezone.utc)
+    with Session(engine) as db:
+        for idx in range(160):
+            rid = 701 if idx < 130 else 702
+            kind = "customer_received" if idx % 3 else "customer_ready_pickup"
+            db.add(IntegrationOutbox(
+                id=str(uuid.uuid4()), restaurante_id=rid, event_id=str(uuid.uuid4()),
+                event_name="koma.whatsapp.customer_status", aggregate_type="order",
+                aggregate_id=f"synthetic-{idx}", payload={"kind": kind},
+                status="pending", created_at=now - dt.timedelta(minutes=9 if kind == "customer_received" else 26),
+            ))
+        db.commit()
+        first = admin_wa._queue_summary(db, 701, now)
+        second = admin_wa._queue_summary(db, 702, now)
+        assert first["total"] == 130
+        assert second["total"] == 30
+        assert first["ttl_risk"] and second["ttl_risk"]
+
+    # In the actual dispatcher priority is preserved, then candidate tenants
+    # are round-robined. No call is made to Evolution in this simulation.
+    events = [
+        SimpleNamespace(restaurante_id=(701 if i < 130 else 702),
+                        event_name="koma.whatsapp.customer_status",
+                        payload={"kind": "customer_received"})
+        for i in range(160)
+    ]
+    selected = fair_claim_candidates(events, 10)
+    assert len(selected) == 10
+    assert [e.restaurante_id for e in selected[:4]] == [701, 702, 701, 702]
