@@ -205,6 +205,10 @@ class SmartPosPaymentIntentEvent(Base):
             "restaurante_id",
             "intent_id",
         ),
+        Index(
+            "ix_smartpos_payment_intent_events_intent_id",
+            "intent_id",
+        ).ddl_if(dialect="postgresql"),
     )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

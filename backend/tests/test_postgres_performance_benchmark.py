@@ -34,6 +34,20 @@ def test_hot_path_indexes_and_rls_initplan_exist_on_postgres():
                 "ix_itens_tenant_comanda_status",
                 "ix_pagamentos_tenant_status_created",
                 "ix_print_jobs_tenant_active_queue",
+                "ix_itens_lancamento_id",
+                "ix_item_modificadores_item_id",
+                "ix_item_modificadores_opcao_modificador_id",
+                "ix_pagamentos_comanda_id",
+                "ix_pagamentos_turno_id",
+                "ix_caixa_movimentacoes_turno_id",
+                "ix_comandas_garcom_id",
+                "ix_direct_pix_receipts_invoice_id",
+                "ix_atendimento_comandas_atendimento_id",
+                "ix_smartpos_payment_intent_events_intent_id",
+                "ix_scheduled_orders_comanda_id",
+                "ix_fiscal_documents_comanda_id",
+                "ix_fiscal_payments_pagamento_id",
+                "ix_notificacoes_whatsapp_wamid_tenant",
             }
             rows = conn.execute(
                 text(
@@ -44,15 +58,19 @@ def test_hot_path_indexes_and_rls_initplan_exist_on_postgres():
             ).scalars().all()
             assert set(rows) == expected_indexes
 
-            # Verify tenant_isolation policies use (SELECT current_setting(...)) InitPlan form
-            non_initplan = conn.execute(
+            # Verify ALL tenant policies across public schema use (SELECT current_setting(...)) InitPlan form
+            all_non_initplan = conn.execute(
                 text(
-                    "SELECT tablename, qual FROM pg_policies "
-                    "WHERE schemaname = 'public' AND policyname = 'tenant_isolation' "
-                    "AND qual NOT LIKE '%SELECT current_setting%'"
+                    "SELECT tablename, policyname, qual FROM pg_policies "
+                    "WHERE schemaname = 'public' "
+                    "AND ("
+                    "  (qual LIKE '%current_setting%app.current_restaurante_id%' AND qual NOT LIKE '%SELECT current_setting%') "
+                    "  OR "
+                    "  (with_check LIKE '%current_setting%app.current_restaurante_id%' AND with_check NOT LIKE '%SELECT current_setting%')"
+                    ")"
                 )
             ).all()
-            assert non_initplan == [], f"Políticas sem InitPlan: {non_initplan}"
+            assert all_non_initplan == [], f"Políticas sem InitPlan: {all_non_initplan}"
     finally:
         engine.dispose()
 

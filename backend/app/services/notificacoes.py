@@ -45,6 +45,38 @@ async def enviar_notificacao_whatsapp(
             "conteudo": auditoria,
         }
 
+    # Resolver restaurante_id a partir do contexto, sessão ou comanda se não fornecido
+    if restaurante_id is None or not (isinstance(restaurante_id, int) and restaurante_id > 0):
+        sess_rid = getattr(db, "restaurante_id", None)
+        if isinstance(sess_rid, int) and sess_rid > 0:
+            restaurante_id = sess_rid
+        else:
+            from ..database import current_restaurante_id
+            ctx_rid = current_restaurante_id.get()
+            if isinstance(ctx_rid, int) and ctx_rid > 0:
+                restaurante_id = ctx_rid
+            elif comanda_ref:
+                from ..models import Comanda
+                c_row = db.query(Comanda.restaurante_id).filter(Comanda.id == comanda_ref).first()
+                if c_row and isinstance(c_row[0], int) and c_row[0] > 0:
+                    restaurante_id = int(c_row[0])
+            try:
+                if (restaurante_id is None or restaurante_id <= 0) and db.get_bind().dialect.name == "sqlite":
+                    restaurante_id = 1
+            except Exception:
+                pass
+
+    if restaurante_id is None or not (isinstance(restaurante_id, int) and restaurante_id > 0):
+        logger.warning(
+            "[NOTIFICAÇÃO WA] Envios operacionais exigem restaurante_id válido e identificável."
+        )
+        return {
+            "sucesso": False,
+            "motivo": "tenant_invalido",
+            "conteudo": auditoria,
+            "telefone": telefone_limpo,
+        }
+
     existente = db.query(NotificacaoWhatsApp).filter(
         NotificacaoWhatsApp.restaurante_id == restaurante_id,
         NotificacaoWhatsApp.comanda_id == comanda_ref,

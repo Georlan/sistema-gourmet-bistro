@@ -567,7 +567,14 @@ def test_favorite_products_use_valid_units_and_tenant_identity():
     assert history_only["fav-client"].produtos_favoritos == []
     assert history_only["fav-client"].pedidos_concluidos == metrics["fav-client"].pedidos_concluidos
     api = TestClient(app)
-    response = api.get("/fidelidade/clientes", headers=get_auth_headers(api, "caixa_r1"))
+    # Default call without include_products should not calculate favorite products (empty list)
+    resp_default = api.get("/fidelidade/clientes", headers=get_auth_headers(api, "caixa_r1"))
+    assert resp_default.status_code == 200
+    payload_default = next(customer for customer in resp_default.json() if customer["id"] == "fav-client")
+    assert payload_default["produtos_favoritos"] == []
+
+    # Explicit opt-in calculates favorite products
+    response = api.get("/fidelidade/clientes?include_products=true", headers=get_auth_headers(api, "caixa_r1"))
     assert response.status_code == 200
     payload = next(customer for customer in response.json() if customer["id"] == "fav-client")
     assert payload["produtos_favoritos"] == metrics["fav-client"].produtos_favoritos
