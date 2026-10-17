@@ -35,6 +35,9 @@ test('vigente, sugestão, rascunho, simulador e confirmação ficam isolados at�
     saved=route.request().postDataJSON() as Program;
     return route.fulfill({json:saved});
   });
+  // Cupons mounts when its tab is visited; the generic cashier mock does not
+  // provide the array contract expected by that workspace.
+  await page.route('**/caixa/cupons', route=>route.fulfill({json:[]}));
   await page.route('**/caixa/cupons/economia/recomendacao',route=>route.fulfill({json:{
     mode:'automatico',source:'configured_costs',
     suggestion:{effective_reward_percent:2,cashback_percent:2,points_per_real:1,point_value_brl:0.02},
