@@ -6,10 +6,13 @@ const source = (path: string) => readFileSync(new URL('../' + path, import.meta.
 
 test('fidelity owner reuses the deterministic calculator for points and cashback', () => {
   const panel = source('src/components/caixa/customers/CashierCustomers.tsx');
-  assert.match(panel, /GrowthEconomicsCalculator/);
+  const workspace = source('src/components/caixa/customers/LoyaltyProgramPanel.tsx');
+  assert.match(panel, /LoyaltyProgramPanel/);
   assert.match(panel, /onApplyOption=\{handleApplyGrowthOptionToLoyalty\}/);
-  assert.match(panel, /Usar no cashback/);
-  assert.match(panel, /Usar nos pontos/);
+  assert.match(workspace, /GrowthEconomicsCalculator/);
+  assert.match(workspace, /onApplyOption=\{applySuggestion\}/);
+  assert.match(workspace, /Usar no cashback/);
+  assert.match(workspace, /Usar nos pontos/);
 });
 
 test('loyalty suggestion only fills current config and never saves automatically', () => {
@@ -27,9 +30,11 @@ test('loyalty suggestion only fills current config and never saves automatically
 });
 
 test('manual fidelity controls remain editable after applying a suggestion', () => {
-  const panel = source('src/components/caixa/customers/CashierCustomers.tsx');
-  assert.match(panel, /value=\{fidelidadeConfig\.taxa_conversao\}/);
-  assert.match(panel, /value=\{fidelidadeConfig\.valor_ponto_em_dinheiro\}/);
+  const panel = source('src/components/caixa/customers/LoyaltyProgramPanel.tsx');
+  assert.match(panel, /value=\{draft\.taxa_conversao\}/);
+  assert.match(panel, /value=\{draft\.valor_ponto_em_dinheiro\}/);
   assert.match(panel, /step="0\.0001"/);
   assert.match(panel, />\s*Salvar programa\s*</);
+  assert.match(panel, /Confirmar e salvar/);
+  assert.match(panel, /role="status"/);
 });
