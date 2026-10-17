@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { SubscriptionEntitlements, SubscriptionPlanId } from '../../../config/subscriptionPlans';
 import { getCashierHorizontalItems, isCashierNavigationActive } from './cashierNavigation';
+import { useSidebar } from '../../ui/sidebar';
 
 interface Props {
   activeTab: string;
@@ -15,6 +16,9 @@ interface Props {
 
 export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlements, setupMode, onNavigate, counts = {} }: Props) {
   const items = getCashierHorizontalItems(activeTab, planId, entitlements, setupMode);
+  const { state: sidebarState } = useSidebar();
+  const relationshipWithExpandedSidebar = activeTab === 'clientes' && sidebarState === 'expanded';
+  const currentLabel = items.find(item => isCashierNavigationActive(item.id, activeTab, activeSubTab))?.label ?? 'Hoje';
   const scrollRef = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ left: false, right: false });
   const itemKey = items.map(item => item.id).join('|');
@@ -43,7 +47,14 @@ export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlem
 
   if (!items.length) return null;
   return (
-    <nav className="cashier-subnav cashier-subnav--shared flex shrink-0 border-b border-koma-border" aria-label="Telas desta área">
+    <>
+      {relationshipWithExpandedSidebar && (
+        <div className="hidden lg:flex min-h-11 shrink-0 items-center gap-2 border-b border-koma-border px-5 text-xs text-koma-muted" aria-label="Localização no Relacionamento">
+          <span>Relacionamento</span><ChevronRight size={14} aria-hidden="true" />
+          <strong className="font-semibold text-koma-foreground">{currentLabel}</strong>
+        </div>
+      )}
+      <nav className={`cashier-subnav cashier-subnav--shared flex shrink-0 border-b border-koma-border${relationshipWithExpandedSidebar ? ' lg:hidden' : ''}`} aria-label="Telas desta área">
       <button type="button" className="cashier-subnav__arrow" aria-label="Ver abas anteriores" disabled={!edges.left} onClick={() => scrollRef.current?.scrollBy({ left: -240, behavior: 'smooth' })}><ChevronLeft size={16} /></button>
       <div ref={scrollRef} className="cashier-subnav__scroll">
         {items.map(item => {
@@ -54,6 +65,7 @@ export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlem
         })}
       </div>
       <button type="button" className="cashier-subnav__arrow" aria-label="Ver próximas abas" disabled={!edges.right} onClick={() => scrollRef.current?.scrollBy({ left: 240, behavior: 'smooth' })}><ChevronRight size={16} /></button>
-    </nav>
+      </nav>
+    </>
   );
 }
