@@ -86,13 +86,15 @@ def test_whatsapp_usage_counters_force_tenant_rls(pg):
             conn.execute(text("SET LOCAL ROLE koma_app"))
             conn.execute(text("SELECT set_config('app.current_restaurante_id','991701',true)"))
             assert conn.execute(text("SELECT restaurante_id FROM whatsapp_usage_metrics")).scalars().all() == [991701]
+            assert conn.execute(text(
+                "UPDATE whatsapp_usage_metrics SET attempts=99 WHERE restaurante_id=991702"
+            )).rowcount == 0
             with pytest.raises(Exception):
                 with conn.begin_nested():
                     conn.execute(text(
-                        "UPDATE whatsapp_usage_metrics SET attempts=99 WHERE restaurante_id=991702"
+                        "INSERT INTO whatsapp_usage_metrics(restaurante_id,month_utc,attempts) "
+                        "VALUES (991702,'2026-11',1)"
                     ))
-                    # UPDATE hidden by RLS; no leaked rows.
-                    raise RuntimeError("Protected tenant never becomes visible")
             assert conn.execute(text(
                 "SELECT count(*) FROM whatsapp_usage_metrics WHERE restaurante_id=991702"
             )).scalar() == 0
