@@ -17,7 +17,7 @@ type CustomerSnapshot = {
   hasSnapshot: boolean;
 };
 
-function mapCustomers(clientes: any[], productsIncluded: boolean): LoyaltyCustomer[] {
+export function mapCustomers(clientes: any[], productsIncluded: boolean): LoyaltyCustomer[] {
   return clientes
           .filter((c: any) => c?.id != null && String(c.id).trim() !== '')
     .map((c: any) => ({
@@ -59,7 +59,8 @@ function mapCustomers(clientes: any[], productsIncluded: boolean): LoyaltyCustom
             elegivel_resgate: Boolean(c.elegivel_resgate),
             valor_resgatavel_brl: typeof c.valor_resgatavel_brl === 'number' ? c.valor_resgatavel_brl : 0,
             status_beneficio: c.status_beneficio || 'SEM_SALDO',
-    }));}
+    }));
+}
 
 export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
   const authorization = authHeaders.Authorization || authHeaders.authorization || '';
