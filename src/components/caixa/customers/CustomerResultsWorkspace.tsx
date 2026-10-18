@@ -106,14 +106,14 @@ export function CustomerResultsWorkspace({
           </h3>
         </div>
 
-        <div className="flex flex-wrap items-end gap-2 sm:gap-3">
-          <label className="flex min-w-[9rem] flex-1 flex-col gap-1 text-sm font-medium text-koma-muted">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-3">
+          <label className="flex min-w-0 flex-col gap-1 text-sm font-medium text-koma-muted sm:min-w-[9rem] sm:flex-1">
             Período analisado
             <select
               aria-label="Período analisado nos resultados"
               value={periodoDias}
               onChange={(e) => onChangePeriodo(Number(e.target.value))}
-              className="min-h-10 rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-sm font-medium text-koma-foreground"
+              className="min-h-10 w-full min-w-0 rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-sm font-medium text-koma-foreground"
             >
               <option value={7}>Últimos 7 dias</option>
               <option value={30}>Últimos 30 dias</option>
@@ -122,13 +122,13 @@ export function CustomerResultsWorkspace({
             </select>
           </label>
 
-          <label className="flex min-w-[9rem] flex-1 flex-col gap-1 text-sm font-medium text-koma-muted">
+          <label className="flex min-w-0 flex-col gap-1 text-sm font-medium text-koma-muted sm:min-w-[9rem] sm:flex-1">
             Janela geral (sem campanha)
             <select
               aria-label="Janela de atribuição pós-abordagem"
               value={janelaDias}
               onChange={(e) => onChangeJanela(Number(e.target.value))}
-              className="min-h-10 rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-sm font-medium text-koma-foreground"
+              className="min-h-10 w-full min-w-0 rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-sm font-medium text-koma-foreground"
             >
               <option value={7}>Até 7 dias após contato</option>
               <option value={14}>Até 14 dias após contato</option>
@@ -139,7 +139,7 @@ export function CustomerResultsWorkspace({
           <button
             type="button"
             onClick={onRefresh}
-            className="koma-btn-secondary inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium"
+            className="koma-btn-secondary col-span-2 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium sm:w-auto"
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Atualizar
           </button>

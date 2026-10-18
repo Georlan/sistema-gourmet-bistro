@@ -277,7 +277,7 @@ test('customer base metadata stays honest beyond the first 100 and pages load on
 });
 
 
-test('stage5 Results ignores stale HTTP responses and charts only dated real events', async ({page}) => {
+test('stage5 Results ignores stale HTTP responses and charts only dated real events', async ({page}, testInfo) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
@@ -323,6 +323,7 @@ test('stage5 Results ignores stale HTTP responses and charts only dated real eve
   await expect(page.getByLabel('Período analisado nos resultados')).toHaveValue('60');
   await expect(card.locator('strong')).toHaveText('2');
   await expect(page.getByRole('region', {name: 'Evolução observada'})).toContainText('08/10');
+  await page.screenshot({path:testInfo.outputPath('stage5-dated-results-' + testInfo.project.name + '.png'),fullPage:true,animations:'disabled'});
   const campaignList = page.getByRole('region', {name: 'Resultados por campanha'});
   await campaignList.getByText('Campanha fixture de contrato', {exact:true}).filter({visible:true}).click();
   await expect(campaignList.getByText(/Janela histórica da campanha:/).filter({visible:true})).toBeVisible();
