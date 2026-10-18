@@ -205,19 +205,21 @@ if ("serviceWorker" in navigator) {
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 const isWhatsAppOptOutRoute = ["/whatsapp/avisos", "/w/a"].includes(window.location.pathname);
-if (sentryDsn && !isWhatsAppOptOutRoute) {
-  void import("@sentry/react").then((Sentry) => {
-    Sentry.init({
-      dsn: sentryDsn,
-      // Limita o monitoramento de performance a 10% para nunca estourar o plano gratuito.
-      tracesSampleRate: 0.1,
+if (!isWhatsAppOptOutRoute) {
+  if (sentryDsn) {
+    void import("@sentry/react").then((Sentry) => {
+      Sentry.init({
+        dsn: sentryDsn,
+        // Limita o monitoramento de performance a 10% para nunca estourar o plano gratuito.
+        tracesSampleRate: 0.1,
+      });
+    }).catch((error: unknown) => {
+      console.warn('[monitoring] Monitoramento indisponível.', error);
     });
-  }).catch((error: unknown) => {
-    console.warn('[monitoring] Monitoramento indisponível.', error);
-  });
-}
+  }
 
-if (!isWhatsAppOptOutRoute) initAnalytics();
+  initAnalytics();
+}
 
 const pathname = window.location.pathname;
 const isSmartPosRoute = pathname.startsWith("/smartpos");
