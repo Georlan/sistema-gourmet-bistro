@@ -111,7 +111,7 @@ test('template interpolation applies known data and safe fallbacks when fields a
       elegivel_resgate: false,
       beneficio_disponivel: '10 pts (saldo em formação)',
     }),
-    'Oi, tudo bem? Que tal pedir seu prato preferido da casa usando uma condição especial para o seu próximo pedido?',
+    'Oi, tudo bem? Que tal pedir uma opção do nosso cardápio usando as condições do programa de fidelidade, quando aplicáveis?',
   );
 });
 
