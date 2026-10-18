@@ -28,3 +28,19 @@ Simplificar filtros e ações compartilhados; reduzir textos instrutivos repetid
 ## Validação e reversão
 
 Typecheck, suíte unitária, build e navegador com dados locais. Produção somente leitura, sem alterações na loja 6. Nenhuma alteração de backend, agentes, impressão, autenticação ou pagamento. Reverter a PR restaura apresentação e catálogo anteriores; configurações persistidas mantêm o mesmo contrato.
+
+## Correção de salto durante rolagem móvel
+
+As setas desabilitadas usavam `display: none`. Ao cruzar uma borda, a seta
+aparecia/desaparecia no flex, mudava a largura do scroller e disparava o
+`ResizeObserver(revealSelected)`. A seleção era revelada novamente durante a
+rolagem manual, produzindo o salto relatado. Agora as setas indisponíveis ficam
+invisíveis e desabilitadas, mantendo sua largura. O espaço estável nas bordas
+é intencional, inclusive quando não há overflow. A posição local da seleção usa
+`offsetLeft` relativo ao scroller posicionado, sem descontar o offset do próprio
+scroller no nav.
+
+A regressão de browser cobre bordas e posição intermediária em Vendas,
+Relatórios, Configurações e Cardápio online, a seleção do último destino e swipe
+nativo via CDP nos viewports touch. O gate de navegação inclui essa suíte.
+Reverter esta PR restaura o comportamento anterior; não há mudanças de dados.

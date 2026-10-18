@@ -26,7 +26,9 @@ export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlem
     const revealSelected = () => {
       const selected = scroller.querySelector<HTMLElement>('[aria-current="page"]');
       if (selected) {
-        const start = selected.offsetLeft - scroller.offsetLeft;
+        // The positioned scroller is the button offset parent. Its own
+        // offset in the nav must not be subtracted from this local coordinate.
+        const start = selected.offsetLeft;
         if (start < scroller.scrollLeft) scroller.scrollLeft = start;
         else if (start + selected.offsetWidth > scroller.scrollLeft + scroller.clientWidth) scroller.scrollLeft = start + selected.offsetWidth - scroller.clientWidth;
       }
