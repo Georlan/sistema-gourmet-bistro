@@ -303,14 +303,15 @@ export function CustomerCampaignsWorkspace({
   );
 
   const selectedCustomers = useMemo(() => {
-    const idSet = new Set(selectedCustomerIds);
+    const scoped = audienceScopeRef.current === audienceScope;
+    const idSet = new Set(scoped ? selectedCustomerIds : []);
     const present = new Set(customers.map(c => c.id));
-    const pool = [...customers, ...supplementaryCustomers.filter(c => !present.has(c.id))];
+    const pool = [...customers, ...(scoped ? supplementaryCustomers : []).filter(c => !present.has(c.id))];
     return pool.filter(c => idSet.has(c.id)).map(c => (
-      Object.prototype.hasOwnProperty.call(previewDetails, c.id)
+      scoped && Object.prototype.hasOwnProperty.call(previewDetails, c.id)
         ? { ...c, produtos_favoritos: previewDetails[c.id] } : c
     ));
-  }, [customers, supplementaryCustomers, selectedCustomerIds, previewDetails]);
+  }, [customers, supplementaryCustomers, selectedCustomerIds, previewDetails, audienceScope]);
 
   const previewCustomer = selectedCustomers.find(customer => customer.id === previewCustomerId) || selectedCustomers[0] || null;
   // Resolve product details only for the selected preview, never for every campaign recipient.
