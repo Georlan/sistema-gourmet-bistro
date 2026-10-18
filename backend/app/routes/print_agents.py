@@ -2304,11 +2304,13 @@ def register_agent(
         is_primary=not has_active_primary,
     )
     db.add(new_token)
+    db.flush()
+    issued_token_id = str(new_token.id)
     db.commit()
     _forget_invalid_agent_token(token_h)
     _remember_agent_token_tenant(
         token_h,
-        token_id=str(new_token.id),
+        token_id=issued_token_id,
         restaurante_id=int(rest_id),
     )
 
