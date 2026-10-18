@@ -1379,6 +1379,7 @@ export default function CashierCustomers({
               totalCustomers={totalCustomers}
               hasMoreCustomers={hasMoreCustomers}
               onLoadMoreCustomers={loadMoreCustomers}
+              opportunities={crmSummary?.oportunidades ?? []}
               draftSeed={campaignDraftSeed}
               hasLoyalty={hasLoyalty}
               hasCoupons={hasCoupons}
