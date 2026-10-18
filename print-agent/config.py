@@ -38,6 +38,7 @@ def is_automatic_printer_name(value: str) -> bool:
 class AgentConfig:
     api_url: str = "https://sistema-gourmet-bistro-production.up.railway.app"
     agent_token: str = ""
+    agent_token_source: str = ""
     agent_id: str = "agent-local"
     adapter: str = "auto"  # 'auto', 'file', 'linux', 'windows'
     output_dir: str = "print_output"
@@ -169,10 +170,14 @@ class AgentConfig:
 
         # 2. Sobrescrever por variáveis de ambiente se definidas
         config.api_url = os.getenv("KOMA_API_URL", config.api_url)
-        config.agent_token = (
-            os.getenv("KOMA_AGENT_TOKEN", config.agent_token)
-            or os.getenv("KOMA_TOKEN", config.agent_token)
-        )
+        if config.agent_token:
+            config.agent_token_source = "config"
+        env_token = (
+            os.getenv("KOMA_AGENT_TOKEN") or os.getenv("KOMA_TOKEN") or ""
+        ).strip()
+        if env_token:
+            config.agent_token = env_token
+            config.agent_token_source = "env"
         config.agent_id = os.getenv("KOMA_AGENT_ID", config.agent_id)
         config.adapter = os.getenv("KOMA_ADAPTER", config.adapter)
         config.output_dir = os.getenv("KOMA_OUTPUT_DIR", config.output_dir)
@@ -232,8 +237,14 @@ class AgentConfig:
         try:
             from pairing import load_stored_agent_id, load_stored_token
 
-            if not config.agent_token:
-                config.agent_token = load_stored_token()
+            stored_token = load_stored_token()
+            if stored_token and config.agent_token_source != "env":
+                # O token pareado é salvo junto do agent_id real. Um
+                # ``agent_token`` antigo em config.json não pode sombreá-lo,
+                # senão cada novo pareamento volta a usar a credencial
+                # revogada e o agent_id novo (par inconsistente → 401).
+                config.agent_token = stored_token
+                config.agent_token_source = "credentials"
             stored_agent_id = load_stored_agent_id()
             if stored_agent_id:
                 config.agent_id = stored_agent_id
@@ -518,6 +529,8 @@ def parse_cli_args(config: AgentConfig) -> AgentConfig:
 
     args = parser.parse_args()
     config.api_url = args.api_url.rstrip("/")
+    if args.token != config.agent_token:
+        config.agent_token_source = "cli"
     config.agent_token = args.token
     config.agent_id = args.agent_id
     config.adapter = args.adapter
