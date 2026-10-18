@@ -1109,10 +1109,10 @@ export default function CashierCustomers({
                 </label>
 
                 <label className="flex flex-col gap-1 text-sm font-medium text-koma-muted">
-                  Produto comprado
+                  Produto entre mais pedidos
                   <input
                     type="text"
-                    aria-label="Filtrar por produto comprado"
+                    aria-label="Filtrar por produto entre mais pedidos"
                     value={productQuery}
                     onChange={(e) => setProductQuery(e.target.value)}
                     placeholder="Ex.: Risoto, Burger…"
