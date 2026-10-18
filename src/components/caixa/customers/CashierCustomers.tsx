@@ -269,10 +269,10 @@ export default function CashierCustomers({
 
   const filteredLoyaltyUsers = useMemo(() => {
     if (!hasAdvancedFilters) {
-      return selectCrmCustomers(listUsers, clientesSearch, customerSegment, customerSort);
+      return selectCrmCustomers(listUsers, activeSearch ? '' : clientesSearch, customerSegment, customerSort);
     }
     return filterCrmCustomersAdvanced(listUsers, {
-      search: clientesSearch,
+      search: activeSearch ? '' : clientesSearch,
       segment: customerSegment,
       sort: customerSort,
       recency: recencyFilter,
@@ -285,6 +285,7 @@ export default function CashierCustomers({
   }, [
     listUsers,
     clientesSearch,
+    activeSearch,
     customerSegment,
     customerSort,
     hasAdvancedFilters,
@@ -923,7 +924,7 @@ export default function CashierCustomers({
                     </button>
                   )}
                 </div>
-                {(clientesSearch || filteredLoyaltyUsers.length !== loyaltyUsers.length) && (
+                {(clientesSearch || filteredLoyaltyUsers.length !== listUsers.length) && (
                   <p className="shrink-0 text-xs font-medium text-koma-muted">
                     <strong className="font-mono text-koma-foreground">{filteredLoyaltyUsers.length}</strong> de{' '}
                     {listUsers.length} carregados de {listTotal} encontrados no banco
