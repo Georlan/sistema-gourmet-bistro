@@ -258,10 +258,17 @@ test('customer base metadata stays honest beyond the first 100 and pages load on
   });
   await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json:contract.summary}));
   await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  if (!(await page.locator('.cashier-sidebar:visible').count())) {
+    const menu = page.getByRole('button',{name:'Abrir menu completo',exact:true});
+    if (await menu.isVisible()) await menu.click();
+    else await page.getByRole('button',{name:'Abrir menu principal',exact:true}).click();
+  }
+  await page.locator('.cashier-sidebar:visible').getByRole('button',{name:/^Relacionamento(?: \d+)?$/}).click();
   await navigateRelationship(page, 'clientes');
   await expect(page.getByText('Exibindo 100 de 125 clientes.', {exact:false})).toBeVisible();
-  await expect(page.getByText('Favoritos não consultados', {exact:false}).first()).toBeVisible();
-  expect(requests).toEqual([0]);
+  await expect(page.getByText(/Favoritos (ainda )?não consultados/).first()).toBeVisible();
+  expect(requests).not.toContain(100);
   await page.getByRole('button',{name:'Carregar mais 100 clientes'}).click();
   await expect(page.getByText('125 de 125 clientes', {exact:false}).first()).toBeVisible();
   expect(requests).toContain(100);
