@@ -130,3 +130,16 @@ test('old event links redirect to Siará and preserve source/query parameters', 
     assert.equal(response.headers.get('X-Frame-Options'), 'DENY');
   }
 });
+
+test('unsubscribe aliases invoke the worker and suppress referrers without changing the SPA', async () => {
+  const routes = JSON.parse(readFileSync(new URL('../public/_routes.json', import.meta.url), 'utf8'));
+  for (const path of ['/w/a', '/whatsapp/avisos']) {
+    assert.ok(routes.include.includes(path));
+    const { response, paths } = await serve(`https://app.komafood.com.br${path}`);
+    assert.deepEqual(paths, [path]);
+    assert.equal(await response.text(), 'operational shell');
+    assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer');
+    assert.match(response.headers.get('Cache-Control')!, /no-store/);
+    assert.match(response.headers.get('X-Robots-Tag')!, /^noindex/);
+  }
+});
