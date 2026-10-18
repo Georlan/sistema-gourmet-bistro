@@ -1194,9 +1194,11 @@ export default function CashierCustomers({
                     <button type="button" className="ml-2 underline" onClick={() => { setFavoriteSnapshot(prev => ({ ...prev, error: null })); setFavoriteRetry(n => n + 1); }}>Tentar novamente</button>
                   </div>
                 )}
-                {activeSearch && queryResult?.loading && <p role="status" className="my-2 text-sm text-koma-muted">Pesquisando no banco…</p>}
-                {activeSearch && queryResult?.error && <p role="alert" className="my-2 text-sm text-amber-300">{queryResult.error}</p>}
-                {filteredLoyaltyUsers.length > 0 ? (
+                {activeSearch && (!queryResult || (queryResult.loading && !listUsers.length)) ? (
+                  <p role="status" className="rounded-xl border border-koma-border bg-koma-panel p-4 text-sm text-koma-muted">Pesquisando clientes no banco…</p>
+                ) : activeSearch && queryResult?.error && !listUsers.length ? (
+                  <p role="alert" className="rounded-xl border border-amber-500/30 bg-koma-panel p-4 text-sm text-amber-300">{queryResult.error}</p>
+                ) : filteredLoyaltyUsers.length > 0 ? (
                   <>
                     {/* Lista Mobile Compacta */}
                     <div className="grid gap-2 md:hidden">
