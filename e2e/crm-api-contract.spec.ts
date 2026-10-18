@@ -272,6 +272,6 @@ test('customer base metadata stays honest beyond the first 100 and pages load on
   await expect(page.getByText(/Favoritos (ainda )?não consultados/).filter({visible:true}).first()).toBeVisible();
   expect(requests).not.toContain(100);
   await page.getByRole('button',{name:'Carregar mais 100 clientes'}).click();
-  await expect(page.getByText('125 de 125 clientes', {exact:false}).first()).toBeVisible();
+  await expect(page.getByText('125 de 125 clientes', {exact:false}).filter({visible:true}).first()).toBeVisible();
   expect(requests).toContain(100);
 });
