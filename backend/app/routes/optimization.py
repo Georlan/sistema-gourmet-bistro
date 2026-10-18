@@ -236,7 +236,7 @@ def get_loyalty_clients(
     eff_q = (q if isinstance(q, str) else "").strip()
     eff_include_products = include_products if isinstance(include_products, bool) else False
     # Optional bounded batch for a selected CRM audience. Never query another tenant.
-    requested_ids = list(dict.fromkeys(item.strip() for item in (ids or "").split(",") if item.strip()))
+    requested_ids = list(dict.fromkeys(item.strip() for item in (ids if isinstance(ids, str) else "").split(",") if item.strip()))
     if len(requested_ids) > 100:
         raise HTTPException(status_code=422, detail="Selecione no máximo 100 clientes por consulta.")
     if requested_ids and eff_q:
