@@ -82,12 +82,11 @@ def test_repeated_disconnects_back_off_without_disabling_polling(failure):
     session.close.assert_called_once()
 
 
-@pytest.mark.parametrize("status", [401, 403])
-def test_authentication_rejection_stops_without_retry(status):
+def test_authentication_rejection_stops_without_retry():
     wakeup = Event()
     listener = PrintWakeupListener("https://api.example.test", "token", wakeup)
     session = MagicMock()
-    session.get.return_value.status_code = status
+    session.get.return_value.status_code = 401
     with patch("wake_listener.requests.Session", return_value=session), \
          patch.object(listener._stop, "wait") as wait:
         listener._run()
@@ -96,6 +95,27 @@ def test_authentication_rejection_stops_without_retry(status):
     wait.assert_not_called()
     session.get.assert_called_once()
     session.get.return_value.close.assert_called_once()
+
+
+def test_forbidden_is_not_treated_as_revoked_credential():
+    """403 não prova revogação (bloqueio de borda/conflito); recua sem apagar credencial."""
+    listener = PrintWakeupListener("https://api.example.test", "token", Event())
+    session = MagicMock()
+    session.get.return_value.status_code = 403
+    session.get.return_value.raise_for_status.side_effect = requests.HTTPError("403")
+    delays = []
+
+    def wait(delay):
+        delays.append(delay)
+        if len(delays) == 3:
+            listener._stop.set()
+
+    with patch("wake_listener.requests.Session", return_value=session), \
+         patch.object(listener._stop, "wait", side_effect=wait), \
+         patch("wake_listener.random.uniform", side_effect=lambda low, high: high):
+        listener._run()
+    assert not listener.authentication_failed.is_set()
+    assert delays == [1, 2, 4]
 
 
 def test_ready_event_resets_backoff_and_wakes_queue_reconciliation():

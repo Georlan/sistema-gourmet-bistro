@@ -16,6 +16,18 @@ class AgentAuthenticationError(RuntimeError):
     """A credencial persistida foi revogada e precisa de novo pareamento."""
 
 
+class AckResult(set):
+    """IDs confirmados pelo backend + IDs que ele recusou definitivamente.
+
+    ``rejected`` contém trabalhos inexistentes, encerrados ou pertencentes a
+    outro agente: reenviar a confirmação nunca terá outro resultado.
+    """
+
+    def __init__(self, confirmed: Iterable[str] = (), rejected: Iterable[str] = ()):
+        super().__init__(confirmed)
+        self.rejected = frozenset(rejected) - frozenset(self)
+
+
 def _diagnostics_with_capabilities(
     diagnostics: Optional[Dict[str, Any]],
 ) -> Optional[Dict[str, Any]]:
@@ -32,6 +44,7 @@ class KomaApiClient:
     def __init__(self, api_url: str, agent_token: str):
         self.api_url = api_url.rstrip("/")
         self.agent_token = agent_token
+        self.registered_agent_id = ""
         # Mantém a conexão HTTP/TLS aberta entre os ciclos de polling. Além de
         # reduzir a latência, evita um novo handshake para cada job consultado.
         self.session = requests.Session()
@@ -44,7 +57,11 @@ class KomaApiClient:
 
     @staticmethod
     def _check_auth(response):
-        if response.status_code in (401, 403):
+        # Somente 401 prova credencial desconhecida/revogada. 403/409 de uma
+        # rota de agente indicam conflito de posse do job ou bloqueio de
+        # borda; apagar a credencial nesses casos exigiria novo pareamento
+        # sem que o token tivesse sido revogado.
+        if response.status_code == 401:
             raise AgentAuthenticationError("A autorização deste computador foi revogada.")
 
     def register(self, agent_id: str, jwt_token: str) -> Optional[str]:
@@ -67,7 +84,10 @@ class KomaApiClient:
                 if token:
                     self.agent_token = token
                     self.headers["X-Agent-Token"] = token
-                    log.info(f"Agente '{agent_id}' registrado com sucesso na API!")
+                    # O backend pode atribuir um agent_id distinto quando o
+                    # solicitado já pertence a outro computador do restaurante.
+                    self.registered_agent_id = str(data.get("agent_id") or agent_id)
+                    log.info(f"Agente '{self.registered_agent_id}' registrado com sucesso na API!")
                     return token
             log.error(f"Falha ao registrar agente (HTTP {resp.status_code}): {resp.text}")
         except Exception as e:
@@ -360,10 +380,18 @@ class KomaApiClient:
             self._check_auth(resp)
             if resp.status_code == 200:
                 data = resp.json()
-                return {
-                    str(job_id)
-                    for job_id in data.get("confirmed_job_ids", [])
-                }
+                requested = {item["job_id"] for item in items}
+                return AckResult(
+                    (
+                        str(job_id)
+                        for job_id in data.get("confirmed_job_ids", [])
+                    ),
+                    rejected=(
+                        str(job_id)
+                        for job_id in data.get("rejected_job_ids", []) or []
+                        if str(job_id) in requested
+                    ),
+                )
             if resp.status_code not in (404, 405):
                 log.warning(
                     "Falha ao confirmar lote de impressão "

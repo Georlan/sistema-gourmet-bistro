@@ -2860,8 +2860,11 @@ def complete_job(
         raise HTTPException(status_code=404, detail="Job de impressão não encontrado")
 
     if job.agent_id != agent.agent_id:
+        # 409, não 403: a credencial do agente é válida; o conflito é de
+        # posse do job. Agentes instalados tratam 401/403 como revogação e
+        # apagariam a credencial local por causa de uma corrida de fila.
         raise HTTPException(
-            status_code=403,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Operação negada: o job foi assumido por outro agente"
         )
 
@@ -2916,8 +2919,11 @@ def fail_job(
         raise HTTPException(status_code=404, detail="Job de impressão não encontrado")
 
     if job.agent_id != agent.agent_id:
+        # 409, não 403: a credencial do agente é válida; o conflito é de
+        # posse do job. Agentes instalados tratam 401/403 como revogação e
+        # apagariam a credencial local por causa de uma corrida de fila.
         raise HTTPException(
-            status_code=403,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Operação negada: o job pertence a outro agente"
         )
 

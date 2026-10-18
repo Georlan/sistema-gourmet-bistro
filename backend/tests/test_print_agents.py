@@ -2573,3 +2573,65 @@ def test_invalid_agent_polling_logs_aggregate_without_leaking_tokens(caplog):
     assert caplog.text.count("reason=cached_invalid_token") == 1
     assert "attempts=1" in caplog.text
     assert secret not in caplog.text
+
+
+def test_events_sse_auth_diagnostics_and_bearer_fallback(caplog):
+    client = TestClient(app)
+    secret = "koma_ag_unknown_events_token"
+
+    with caplog.at_level("WARNING"):
+        resp_missing = client.get("/api/print-agents/events")
+        assert resp_missing.status_code == 401
+
+        resp_unknown = client.get(
+            "/api/print-agents/events",
+            headers={"X-Agent-Token": secret},
+        )
+        assert resp_unknown.status_code == 401
+
+        resp_cached = client.get(
+            "/api/print-agents/events",
+            headers={"X-Agent-Token": secret},
+        )
+        assert resp_cached.status_code == 401
+
+        resp_bearer_unknown = client.get(
+            "/api/print-agents/events",
+            headers={"Authorization": f"Bearer {secret}"},
+        )
+        assert resp_bearer_unknown.status_code == 401
+
+    assert "reason=missing_token channel=events" in caplog.text
+    assert "reason=unknown_or_revoked_token channel=events" in caplog.text
+    assert secret not in caplog.text
+
+
+def test_job_ack_ownership_mismatch_returns_409_conflict():
+    mark_agent_printer_ready("a1")
+    mark_agent_printer_ready("a2")
+    client = TestClient(app)
+    headers1 = {"X-Agent-Token": "token_agent_1"}
+    headers2 = {"X-Agent-Token": "token_agent_2"}
+
+    # Agente 1 assume o job
+    resp_claim = client.post("/api/print-agents/jobs/job-1001/claim", headers=headers1)
+    assert resp_claim.status_code == 200
+
+    # Agente 2 tenta completar o job de outro agente -> 409 Conflict
+    resp_complete = client.post(
+        "/api/print-agents/jobs/job-1001/complete",
+        headers=headers2,
+        json={"printer_name": "POS80"},
+    )
+    assert resp_complete.status_code == 409
+    assert "outro agente" in resp_complete.json()["detail"]
+
+    # Agente 2 tenta falhar o job de outro agente -> 409 Conflict
+    resp_fail = client.post(
+        "/api/print-agents/jobs/job-1001/fail",
+        headers=headers2,
+        json={"error": "wrong agent"},
+    )
+    assert resp_fail.status_code == 409
+    assert "outro agente" in resp_fail.json()["detail"]
+
