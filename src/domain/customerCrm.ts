@@ -154,12 +154,12 @@ export function interpolateCrmTemplate(
   const safeName = firstName || 'tudo bem';
 
   const topProduct = customer.produtos_favoritos?.[0]?.nome?.trim();
-  const safeProduct = topProduct || 'seu prato preferido da casa';
+  const safeProduct = topProduct || 'uma opção do nosso cardápio';
 
   const rawBenefit =
     (benefitOverride && benefitOverride.trim()) ||
     (customer.elegivel_resgate && customer.beneficio_disponivel ? customer.beneficio_disponivel.trim() : '');
-  const safeBenefit = rawBenefit || 'uma condição especial para o seu próximo pedido';
+  const safeBenefit = rawBenefit || 'as condições do programa de fidelidade, quando aplicáveis';
 
   let out = template;
   if (!firstName) {
