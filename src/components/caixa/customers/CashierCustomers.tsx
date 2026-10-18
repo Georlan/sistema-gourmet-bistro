@@ -1656,7 +1656,7 @@ export default function CashierCustomers({
           await loadCrmSummary();
         }}
         onStartCampaignForCustomer={handleStartCampaignForSingleCustomer}
-        onEditCustomerBasic={(c) => startEditingCustomer(c)}
+        onEditCustomerBasic={(c) => { setSelectedProfileCustomerId(null); startEditingCustomer(c); }}
         showToast={showToast}
       />
 
