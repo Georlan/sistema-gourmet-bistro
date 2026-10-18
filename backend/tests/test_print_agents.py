@@ -2557,3 +2557,19 @@ def test_tenant_verification_miss_is_temporary_and_does_not_cache_valid_token(mo
     assert error.value.headers["Retry-After"] == "5"
     assert not print_agents_route._invalid_agent_token_is_cached(token_hash)
     assert print_agents_route._get_cached_agent_token_tenant(token_hash) is None
+
+
+def test_invalid_agent_polling_logs_aggregate_without_leaking_tokens(caplog):
+    client = TestClient(app)
+    secret = "koma_ag_unknown_polling_test"
+    with caplog.at_level("WARNING", logger="koma.print_agents"):
+        for _ in range(12):
+            resp = client.post(
+                "/api/print-agents/jobs/claim-batch",
+                headers={"X-Agent-Token": secret},
+            )
+            assert resp.status_code == 401
+    assert caplog.text.count("reason=unknown_or_revoked_token") == 1
+    assert caplog.text.count("reason=cached_invalid_token") == 1
+    assert "attempts=1" in caplog.text
+    assert secret not in caplog.text
