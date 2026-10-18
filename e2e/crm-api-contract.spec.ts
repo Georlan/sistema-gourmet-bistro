@@ -120,7 +120,9 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await page.getByRole('button',{name:'Ver perfil',exact:true}).filter({visible:true}).first().click();
   const dialog=page.getByRole('dialog');
   await expect(dialog).toBeVisible();
+  await dialog.getByText('Benefícios e saldos',{exact:true}).click();
   await expect(dialog.getByText(contract.profile.beneficio.explicacao,{exact:true})).toBeVisible();
+  await dialog.getByText('Cadastro, preferências e hábitos observados',{exact:true}).click();
   await dialog.getByRole('combobox').selectOption('telefone');
   await dialog.getByRole('button',{name:'Salvar preferências declaradas',exact:true}).click();
   await expect.poll(()=>savedPreference?.canal_preferido).toBe('telefone');
