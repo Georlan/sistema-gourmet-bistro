@@ -470,7 +470,7 @@ app.add_middleware(
         "X-Request-ID",
         "X-Signup-Token",
     ],
-    expose_headers=["X-Request-ID"],
+    expose_headers=["X-Request-ID", "X-Total-Count", "X-Page-Limit", "X-Page-Offset", "X-Has-More", "X-Products-Included"],
 )
 
 
