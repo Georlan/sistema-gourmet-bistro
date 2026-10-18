@@ -432,6 +432,9 @@ export function CustomerCampaignsWorkspace({
         throw new Error(err.detail || 'Não foi possível registrar a campanha.');
       }
       const data = await res.json();
+      if (typeof data?.id !== 'string' || !data.id.trim()) {
+        throw new Error('O servidor não confirmou o registro da campanha.');
+      }
       if (draftGenerationRef.current !== draftGeneration) {
         showToast(
           'A versão anterior da campanha foi salva no histórico, mas você alterou o rascunho durante o salvamento. Salve a versão atual antes de registrar contatos.',
@@ -513,6 +516,9 @@ export function CustomerCampaignsWorkspace({
         throw new Error(err.detail || 'Não foi possível registrar o contato.');
       }
       const saved = await res.json();
+      if (typeof saved?.id !== 'string' || !saved.id.trim()) {
+        throw new Error('O servidor não confirmou o registro do contato.');
+      }
       if (draftGenerationRef.current === draftGeneration) {
         setRecordedCustomerIds((prev) => ({ ...prev, [customer.id]: saved.id }));
         showToast(`Contato manual com ${customer.cliente} registrado no histórico!`);

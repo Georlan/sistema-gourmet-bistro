@@ -15,7 +15,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
 import {
   customerOpportunityRules,
@@ -271,9 +271,12 @@ export default function CashierCustomers({
   const [crmSummaryError, setCrmSummaryError] = useState<string | null>(null);
   const [periodoDias, setPeriodoDias] = useState(30);
   const [janelaDias, setJanelaDias] = useState(14);
+  // The latest filter or explicit refresh owns the visible summary.
+  const crmSummaryRequestRef = useRef(0);
 
   const loadCrmSummary = useCallback(async () => {
     if (activeTab !== 'clientes') return;
+    const requestId = ++crmSummaryRequestRef.current;
     setCrmSummaryLoading(true);
     setCrmSummaryError(null);
     try {
@@ -282,22 +285,31 @@ export default function CashierCustomers({
         { headers: authHeaders },
       );
       if (!res.ok) throw new Error('CRM summary unavailable');
-      {
-        const data = await res.json();
-        setCrmSummary({...data, oportunidades: Array.isArray(data?.oportunidades) ? data.oportunidades.map((op: any) => ({
-          ...op, elegiveis_ids: op.elegiveis_cliente_ids ?? op.elegiveis_ids ?? [],
-          motivo_entrada: op.por_que_entraram ?? op.motivo_entrada ?? '',
-        })) : []});
+      const data = await res.json();
+      if (requestId !== crmSummaryRequestRef.current) return;
+      // A malformed success response must leave the last confirmed snapshot
+      // and editable workspaces intact, with the same retry path as HTTP errors.
+      if (!data || typeof data !== 'object' || !Array.isArray(data.campanhas)
+        || !Array.isArray(data.oportunidades) || !data.resultados
+        || typeof data.resultados !== 'object' || Array.isArray(data.resultados)) {
+        throw new Error('Invalid CRM summary');
       }
+      setCrmSummary({...data, oportunidades: Array.isArray(data?.oportunidades) ? data.oportunidades.map((op: any) => ({
+        ...op, elegiveis_ids: op.elegiveis_cliente_ids ?? op.elegiveis_ids ?? [],
+        motivo_entrada: op.por_que_entraram ?? op.motivo_entrada ?? '',
+      })) : []});
     } catch {
-      setCrmSummaryError('Não foi possível atualizar os indicadores consolidados do CRM.');
+      if (requestId === crmSummaryRequestRef.current) {
+        setCrmSummaryError('Não foi possível atualizar os indicadores consolidados do CRM.');
+      }
     } finally {
-      setCrmSummaryLoading(false);
+      if (requestId === crmSummaryRequestRef.current) setCrmSummaryLoading(false);
     }
   }, [activeTab, apiBaseUrl, authHeaders.Authorization, periodoDias, janelaDias]);
 
   useEffect(() => {
     void loadCrmSummary();
+    return () => { crmSummaryRequestRef.current += 1; };
   }, [loadCrmSummary]);
 
   const hasAdvancedFilters =
@@ -1644,7 +1656,7 @@ export default function CashierCustomers({
           await loadCrmSummary();
         }}
         onStartCampaignForCustomer={handleStartCampaignForSingleCustomer}
-        onEditCustomerBasic={(c) => startEditingCustomer(c)}
+        onEditCustomerBasic={(c) => { setSelectedProfileCustomerId(null); startEditingCustomer(c); }}
         showToast={showToast}
       />
 

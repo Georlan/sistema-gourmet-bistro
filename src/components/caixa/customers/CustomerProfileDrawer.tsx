@@ -1,6 +1,6 @@
 import { customerBenefitDescription } from '../../../domain/customerBenefit';
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -63,6 +63,26 @@ export function CustomerProfileDrawer({
   const [canalPreferido, setCanalPreferido] = useState('whatsapp');
   const [observacoesDeclaradas, setObservacoesDeclaradas] = useState('');
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const [preferenceMessage, setPreferenceMessage] = useState<{text: string; error: boolean} | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const profileScope = `${apiBaseUrl}|${authHeaders.Authorization || ''}|${customer?.id || ''}`;
+  const profileScopeRef = useRef(profileScope);
+  profileScopeRef.current = profileScope;
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    setPreferenceMessage(null);
+    setSavingPrefs(false);
+    if (!customer || !dialog) return;
+    const previousFocus = document.activeElement;
+    if (!dialog.open) dialog.showModal();
+    closeButtonRef.current?.focus();
+    return () => {
+      if (dialog.open) dialog.close();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+  }, [profileScope]);
 
   useEffect(() => {
     if (!customer) {
@@ -111,8 +131,10 @@ export function CustomerProfileDrawer({
 
   const handleSavePreferences = async (e: React.FormEvent) => {
     e.preventDefault();
+    const requestScope = profileScope;
     try {
       setSavingPrefs(true);
+      setPreferenceMessage(null);
       const res = await fetch(`${apiBaseUrl}/fidelidade/clientes/${customer.id}/preferencias`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -127,12 +149,16 @@ export function CustomerProfileDrawer({
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || 'Não foi possível salvar as preferências.');
       }
+      if (profileScopeRef.current !== requestScope) return;
       showToast('Preferências de relacionamento salvas com sucesso!');
+      setPreferenceMessage({text: 'Preferências de relacionamento salvas com sucesso!', error: false});
       await onUpdated();
     } catch (err: any) {
+      if (profileScopeRef.current !== requestScope) return;
       showToast(err.message || 'Falha ao salvar preferências.', 'error');
+      setPreferenceMessage({text: err.message || 'Falha ao salvar preferências.', error: true});
     } finally {
-      setSavingPrefs(false);
+      if (profileScopeRef.current === requestScope) setSavingPrefs(false);
     }
   };
 
@@ -144,14 +170,29 @@ export function CustomerProfileDrawer({
   const primaryObjective = oportunidades[0] || 'SECOND_PURCHASE';
 
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={`Ficha individual de ${customer.cliente}`}
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Tab') return;
+        const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+          'button, input, select, textarea, a[href], summary, [tabindex]',
+        )).filter(item => item.tabIndex >= 0 && !item.matches(':disabled') && item.getClientRects().length > 0);
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (event.shiftKey && document.activeElement === first && last) {
+          event.preventDefault(); last.focus();
+        } else if (!event.shiftKey && document.activeElement === last && first) {
+          event.preventDefault(); first.focus();
+        }
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex justify-end bg-black/75 backdrop-blur-xs animate-fade-in overscroll-contain"
+      className="fixed inset-0 z-50 m-0 hidden h-full max-h-none w-full max-w-none justify-end border-0 bg-black/75 p-0 text-koma-foreground backdrop-blur-xs open:flex backdrop:bg-transparent animate-fade-in overscroll-contain"
     >
       <div className="relative flex h-full w-full max-w-2xl flex-col overflow-y-auto border-l border-koma-border bg-koma-panel p-5 text-left shadow-2xl overscroll-contain space-y-5">
         {/* Cabeçalho da Ficha Individual */}
@@ -181,6 +222,7 @@ export function CustomerProfileDrawer({
             <button
               type="button"
               onClick={onClose}
+              ref={closeButtonRef}
               aria-label="Fechar ficha do cliente"
               className="rounded-xl border border-koma-border bg-koma-raised p-2 text-koma-muted hover:text-koma-foreground"
             >
@@ -347,6 +389,8 @@ export function CustomerProfileDrawer({
               >
                 {savingPrefs ? 'Salvando…' : 'Salvar preferências declaradas'}
               </button>
+              {preferenceMessage && <p role={preferenceMessage.error ? 'alert' : 'status'}
+                className="text-sm text-koma-foreground">{preferenceMessage.text}</p>}
             </form>
           </section>
 
@@ -648,6 +692,6 @@ export function CustomerProfileDrawer({
         </section>
         </details>
       </div>
-    </div>
+    </dialog>
   );
 }

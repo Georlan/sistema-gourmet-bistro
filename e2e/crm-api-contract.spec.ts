@@ -120,13 +120,26 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await page.getByRole('button',{name:'Ver perfil',exact:true}).filter({visible:true}).first().click();
   const dialog=page.getByRole('dialog');
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'Fechar ficha do cliente',exact:true})).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect.poll(() => dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
   await dialog.getByText('Benefícios e saldos',{exact:true}).click();
   await expect(dialog.getByText(contract.profile.beneficio.explicacao,{exact:true})).toBeVisible();
+  await page.screenshot({path:testInfo.outputPath(`customer-profile-${testInfo.project.name}.png`),animations:'disabled'});
   await dialog.getByText('Cadastro, preferências e hábitos observados',{exact:true}).click();
   await dialog.getByRole('combobox').selectOption('telefone');
   await dialog.getByRole('button',{name:'Salvar preferências declaradas',exact:true}).click();
   await expect.poll(()=>savedPreference?.canal_preferido).toBe('telefone');
-  await page.getByRole('button',{name:'Fechar ficha do cliente',exact:true}).click();
+  await expect(dialog.getByRole('status').filter({hasText:'Preferências de relacionamento salvas com sucesso!'})).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button',{name:'Ver perfil',exact:true}).filter({visible:true}).first()).toBeFocused();
+  await page.getByRole('button',{name:'Ver perfil',exact:true}).filter({visible:true}).first().click();
+  await dialog.getByRole('button',{name:'Editar cadastro',exact:true}).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('heading',{name:'Editar Cliente CRM',exact:true})).toBeVisible();
+  await page.locator('.cashier-customer-modal').getByRole('button').first().click();
   await expectRelationshipSelected(page, 'clientes');
   expect(errors).toEqual([]);
 });
@@ -153,10 +166,10 @@ test('relationship keeps missing results distinct from zero and empty audiences 
   await expect(page.locator('#clientes-subtab-beneficios')).toHaveCount(0);
   await navigateRelationship(page, 'resultados');
   const returning=page.locator('article').filter({has:page.getByRole('heading',{name:'Clientes que voltaram',exact:true})});
-  const revenue=page.locator('article').filter({has:page.getByRole('heading',{name:'Quanto compraram após o contato',exact:true})});
+  const revenue=page.locator('article').filter({has:page.getByRole('heading',{name:'Valor líquido de compras associadas',exact:true})});
   await expect(returning.locator('strong')).toHaveText('—');
-  await expect(revenue.locator('strong')).toHaveText('—');
-  await expect(revenue).not.toContainText('R$ 0,00');
+  // Retorno sem contatos is unmeasured, while observed coupon usage is measured (zero).
+  await expect(revenue.locator('strong')).toHaveText('R$ 0,00');
   await page.screenshot({path:testInfo.outputPath(`relationship-no-contacts-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
 });
 
@@ -274,4 +287,149 @@ test('customer base metadata stays honest beyond the first 100 and pages load on
   await page.getByRole('button',{name:'Carregar mais 100 clientes'}).click();
   await expect(page.getByText('125 de 125 clientes', {exact:false}).filter({visible:true}).first()).toBeVisible();
   expect(requests).toContain(100);
+});
+
+
+test('stage5 Results ignores stale HTTP responses and charts only dated real events', async ({page}, testInfo) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  let pendingSeven: import('@playwright/test').Route | null = null;
+  const makeSummary = (days: number, returns: number) => {
+    const summary = structuredClone(contract.summary);
+    summary.resultados.periodo_dias = days;
+    summary.resultados.retorno_apos_abordagem = {
+      status_mensuracao: 'MENSURADO',
+      clientes_abordados_no_periodo: 3,
+      clientes_que_voltaram: returns,
+    };
+    summary.resultados.serie_temporal = [
+      {data: '2026-10-08', clientes_contatados: 2, clientes_que_voltaram: 0},
+      {data: '2026-10-12', clientes_contatados: 1, clientes_que_voltaram: returns},
+    ];
+    summary.resultados.regra_janelas = {campanhas: 'PERSISTIDA', sem_campanha_dias: 14};
+    summary.resultados.pedidos_associados = {
+      ...summary.resultados.pedidos_associados, total: 2,
+      comprovados_por_cupom: 1, estimados_por_janela_temporal: 1,
+      cupons_sem_contato_confirmado: 0, status_mensuracao: 'MENSURADO',
+    };
+    summary.resultados.valor_pago_pedidos_associados = {
+      total_liquido_brl: 140, comprovado_cupom_brl: 80,
+      estimado_temporal_brl: 60, status_mensuracao: 'MENSURADO',
+    };
+    summary.campanhas[0] = {...summary.campanhas[0], clientes_abordados: 1,
+      clientes_que_voltaram: 1, pedidos_comprovados_cupom: 1,
+      pedidos_estimados_janela: 0, valor_pago_liquido_brl: 80,
+      cupons_sem_contato_confirmado: 0};
+    summary.resultados.conciliacao_campanhas = {
+      pedidos_com_campanha: 1, pedidos_sem_campanha: 1,
+      valor_com_campanha_brl: 80, valor_sem_campanha_brl: 60,
+    };
+    return summary;
+  };
+  await page.route('**/fidelidade/crm/resumo**', async route => {
+    const period = Number(new URL(route.request().url()).searchParams.get('periodo_dias') || 30);
+    if (period === 7) { pendingSeven = route; return; }
+    await route.fulfill({json: makeSummary(period, period === 60 ? 2 : 1)});
+  });
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  if (!(await page.locator('.cashier-sidebar:visible').count())) {
+    const menu = page.getByRole('button', {name: 'Abrir menu completo', exact: true});
+    if (await menu.isVisible()) await menu.click();
+    else await page.getByRole('button', {name: 'Abrir menu principal', exact: true}).click();
+  }
+  await page.locator('.cashier-sidebar:visible').getByRole('button', {name: /^Relacionamento(?: \d+)?$/}).click();
+  await navigateRelationship(page, 'resultados');
+  const card = page.locator('article').filter({has: page.getByRole('heading', {name:'Clientes que voltaram'})});
+  await expect(card.locator('strong')).toHaveText('1');
+  await expect(page.getByRole('region', {name: 'Evolução observada'})).toContainText('08/10');
+  await page.getByLabel('Período analisado nos resultados').selectOption('7');
+  await expect.poll(() => pendingSeven !== null).toBe(true);
+  await page.getByLabel('Período analisado nos resultados').selectOption('60');
+  await expect(card.locator('strong')).toHaveText('2');
+  // The old response completes last: it must not replace the latest selection.
+  await pendingSeven!.fulfill({json: makeSummary(7, 99)});
+  await expect(page.getByLabel('Período analisado nos resultados')).toHaveValue('60');
+  await expect(card.locator('strong')).toHaveText('2');
+  await expect(page.getByRole('region', {name: 'Evolução observada'})).toContainText('08/10');
+  await page.screenshot({path:testInfo.outputPath('stage5-dated-results-' + testInfo.project.name + '.png'),fullPage:true,animations:'disabled'});
+  const campaignList = page.getByRole('region', {name: 'Resultados por campanha'});
+  await expect(campaignList).toContainText('1 compras em campanhas');
+  await expect(campaignList).toContainText('1 sem campanha');
+  await campaignList.getByText('Campanha fixture de contrato', {exact:true}).filter({visible:true}).click();
+  await expect(campaignList.getByText(/Janela histórica da campanha:/).filter({visible:true})).toBeVisible();
+});
+
+test('results recover from forbidden, unauthorized, network and malformed responses without losing navigation', async ({page}) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  let failure: number | 'network' | 'malformed' | null = null;
+  await page.route('**/fidelidade/crm/resumo**', async route => {
+    if (failure === 'network') return route.abort('failed');
+    if (failure === 'malformed') return route.fulfill({json: {...contract.summary, campanhas: {invalid: true}}});
+    if (failure) return route.fulfill({status: failure, json: {detail: 'Acesso indisponível'}});
+    return route.fulfill({json: contract.summary});
+  });
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  if (!(await page.locator('.cashier-sidebar:visible').count())) {
+    const menu = page.getByRole('button', {name: 'Abrir menu completo', exact: true});
+    if (await menu.isVisible()) await menu.click();
+    else await page.getByRole('button', {name: 'Abrir menu principal', exact: true}).click();
+  }
+  await page.locator('.cashier-sidebar:visible').getByRole('button', {name: /^Relacionamento(?: \d+)?$/}).click();
+  await navigateRelationship(page, 'resultados');
+  const error = page.getByRole('alert').filter({hasText: 'Não foi possível atualizar os indicadores consolidados do CRM.'});
+  await expect(page.getByRole('heading', {name: 'Resultados por campanha (1)', exact: true})).toBeVisible();
+  for (const kind of [401, 403, 'network', 'malformed'] as const) {
+    failure = kind;
+    await page.getByRole('button', {name: 'Atualizar', exact: true}).click();
+    await expect(error).toBeVisible();
+    await expect(page.getByRole('heading', {name: 'Resultados por campanha (1)', exact: true})).toBeVisible();
+    failure = null;
+    await error.getByRole('button', {name: 'Tentar novamente'}).click();
+    await expect(error).toBeHidden();
+  }
+  await navigateRelationship(page, 'clientes');
+  await expectRelationshipSelected(page, 'clientes');
+});
+
+test('campaign and contact success require a valid server acknowledgement', async ({page}) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  await page.route('**/fidelidade/clientes', route => route.fulfill({json: contract.customers}));
+  await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json: contract.summary}));
+  let validCampaign = false;
+  let validContact = false;
+  await page.route('**/fidelidade/crm/campanhas', route => route.fulfill({json: validCampaign ? {id:'ack-campaign'} : {}}));
+  await page.route('**/fidelidade/crm/contatos', route => route.fulfill({json: validContact ? {id:'ack-contact'} : {}}));
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  if (!(await page.locator('.cashier-sidebar:visible').count())) {
+    const menu = page.getByRole('button', {name:'Abrir menu completo', exact:true});
+    if (await menu.isVisible()) await menu.click();
+    else await page.getByRole('button', {name:'Abrir menu principal', exact:true}).click();
+  }
+  await page.locator('.cashier-sidebar:visible').getByRole('button', {name:/^Relacionamento(?: \d+)?$/}).click();
+  const opportunity = contract.summary.oportunidades.find((op:{elegiveis_count:number}) => op.elegiveis_count > 0);
+  await page.locator('article').filter({has:page.getByRole('heading', {name:opportunity.titulo, exact:true})})
+    .getByRole('button', {name:'Abrir público e iniciar ação', exact:true}).click();
+  await page.getByRole('button', {name:'Continuar para mensagem', exact:true}).click();
+  await page.getByRole('button', {name:'Salvar campanha no histórico e revisar envios', exact:true}).click();
+  await expect(page.getByText('O servidor não confirmou o registro da campanha.', {exact:true})).toBeVisible();
+  await expect(page.getByRole('button', {name:'2. Mensagem', exact:true})).toHaveAttribute('aria-current', 'step');
+  await expect(page.getByRole('button', {name:'3. Contatos', exact:true})).toBeDisabled();
+  validCampaign = true;
+  await page.getByRole('button', {name:'Salvar campanha no histórico e revisar envios', exact:true}).click();
+  const record = page.getByRole('button', {name:'Registrar contato manual', exact:true}).first();
+  await record.click();
+  await expect(page.getByText('O servidor não confirmou o registro do contato.', {exact:true})).toBeVisible();
+  await expect(record).toBeEnabled();
+  await expect(page.getByText('Contato manual registrado', {exact:true})).toHaveCount(0);
+  validContact = true;
+  await record.click();
+  await expect(page.getByRole('button', {name:'Contato manual registrado', exact:true}).first()).toBeDisabled();
 });

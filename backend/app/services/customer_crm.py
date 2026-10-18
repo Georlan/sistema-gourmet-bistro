@@ -243,12 +243,15 @@ def enrich_customer_crm_payloads(
         .all()
     )
     latest_contact_by_cid: dict[str, CrmContatoCliente] = {}
+    latest_confirmed_by_cid: dict[str, CrmContatoCliente] = {}
     total_contacts_by_cid: dict[str, int] = {}
     for c_row in contatos_rows:
         cid = str(c_row.cliente_id)
         total_contacts_by_cid[cid] = total_contacts_by_cid.get(cid, 0) + 1
         if cid not in latest_contact_by_cid:
             latest_contact_by_cid[cid] = c_row
+        if c_row.acao_executada == "CONTATO_MANUAL_CONFIRMADO":
+            latest_confirmed_by_cid.setdefault(cid, c_row)
 
     # 3. Última avaliação de satisfação por cliente
     avaliacoes_rows = (
@@ -295,11 +298,14 @@ def enrich_customer_crm_payloads(
             if contact_dt is not None:
                 ultimo_contato_em = contact_dt.isoformat()
                 dias_desde_contato = max(0, (utc_now - contact_dt).days)
-                # Só bloqueia por contato recente quando houve abertura de WhatsApp ou confirmação manual
-                if contact.acao_executada in ("CONTATO_MANUAL_CONFIRMADO", "WHATSAPP_ABERTO"):
-                    contato_recente = dias_desde_contato < RECENT_CONTACT_COOLDOWN_DAYS
-                if ultima_compra_dt is not None and ultima_compra_dt > contact_dt:
-                    voltou_apos_contato = True
+
+        # Preparation remains in the activity history but cannot hide a real
+        # contact or establish a customer return by itself.
+        confirmed = latest_confirmed_by_cid.get(cid)
+        confirmed_dt = to_utc(confirmed.criado_em) if confirmed else None
+        if confirmed_dt is not None:
+            contato_recente = utc_now - confirmed_dt < datetime.timedelta(days=RECENT_CONTACT_COOLDOWN_DAYS)
+        voltou_apos_contato = bool(ultima_compra_dt and confirmed_dt and ultima_compra_dt > confirmed_dt)
 
         ultima_av_nota: Optional[int] = None
         ultima_av_comentario: Optional[str] = None
@@ -314,11 +320,9 @@ def enrich_customer_crm_payloads(
                 # Ocorrência permanece aberta se o cliente não voltou a comprar nem recebeu abordagem de recuperação depois da avaliação
                 comprou_depois = bool(ultima_compra_dt and rev_dt and ultima_compra_dt > rev_dt)
                 abordado_depois = bool(
-                    contact
-                    and contact.acao_executada == "CONTATO_MANUAL_CONFIRMADO"
-                    and to_utc(contact.criado_em)
+                    confirmed_dt
                     and rev_dt
-                    and to_utc(contact.criado_em) >= rev_dt
+                    and confirmed_dt >= rev_dt
                 )
                 ocorrencia_aberta = not comprou_depois and not abordado_depois
 
@@ -1158,6 +1162,9 @@ def record_crm_customer_contact(
     cliente = (
         db.query(Cliente)
         .filter(Cliente.restaurante_id == restaurante_id, Cliente.id == str(cliente_id))
+        # Serialize confirmations from different operators before checking the
+        # cooldown; a UI lock alone cannot protect concurrent sessions.
+        .with_for_update()
         .first()
     )
     if cliente is None:
@@ -1227,7 +1234,7 @@ def record_crm_customer_contact(
                 CrmContatoCliente.restaurante_id == restaurante_id,
                 CrmContatoCliente.cliente_id == cliente.id,
                 CrmContatoCliente.acao_executada.in_(
-                    ["CONTATO_MANUAL_CONFIRMADO", "WHATSAPP_ABERTO"]
+                    ["CONTATO_MANUAL_CONFIRMADO"]
                 ),
             )
             .order_by(CrmContatoCliente.criado_em.desc())
@@ -1380,7 +1387,7 @@ def get_crm_overview_and_results(
         .filter(
             CrmContatoCliente.restaurante_id == restaurante_id,
             CrmContatoCliente.acao_executada.in_(
-                ["CONTATO_MANUAL_CONFIRMADO", "WHATSAPP_ABERTO"]
+                ["CONTATO_MANUAL_CONFIRMADO"]
             ),
         )
         .order_by(CrmContatoCliente.criado_em.asc(), CrmContatoCliente.id.asc())
@@ -1454,15 +1461,16 @@ def get_crm_overview_and_results(
         ):
             lanc_status_map.setdefault(str(l_cid), []).append(str(l_st or ""))
 
-    # Mapear cupons de campanhas
-    campaign_by_cupom_id: dict[str, CrmCampanha] = {}
-    for cp in campanhas_rows:
-        if cp.cupom_id and str(cp.cupom_id) not in campaign_by_cupom_id:
-            campaign_by_cupom_id[str(cp.cupom_id)] = cp
+    # Multiple campaigns may share a coupon: only campaigns already created
+    # when the order closed may claim a coupon use, newest eligible first.
+    campaign_by_cupom_id: dict[str, list[CrmCampanha]] = {}
+    for cp in campanhas_rows:  # sorted by creation, newest first
+        if cp.cupom_id:
+            campaign_by_cupom_id.setdefault(str(cp.cupom_id), []).append(cp)
 
     # Contatos agrupados por cliente
     contacts_by_customer: dict[str, list[CrmContatoCliente]] = {}
-    for ct in contatos_rows:
+    for ct in contatos_no_periodo:
         contacts_by_customer.setdefault(str(ct.cliente_id), []).append(ct)
 
     # Atribuição sem dupla contagem (cada pedido associado no máximo a 1 campanha/contato)
@@ -1475,6 +1483,15 @@ def get_crm_overview_and_results(
     desconto_cupom_periodo = Decimal("0.00")
     desconto_fidelidade_periodo = Decimal("0.00")
     usos_cupons_campanha = 0
+    cupons_sem_contato_confirmado = 0
+
+    # Actual event dates only; daily counts, not synthetic allocation.
+    contacts_by_day: dict[str, set[str]] = {}
+    returns_by_day: dict[str, set[str]] = {}
+    for contact in contatos_no_periodo:
+        contact_time = to_utc(contact.criado_em)
+        if contact_time is not None and contact_time <= utc_now:
+            contacts_by_day.setdefault(contact_time.date().isoformat(), set()).add(str(contact.cliente_id))
 
     clientes_retorno_cupom: set[str] = set()
     clientes_retorno_temporal: set[str] = set()
@@ -1486,6 +1503,7 @@ def get_crm_overview_and_results(
             "voltaram_ids": set(),
             "pedidos_cupom": 0,
             "pedidos_temporal": 0,
+            "cupons_sem_contato": 0,
             "valor_pago_liquido": Decimal("0.00"),
             "desconto_utilizado": Decimal("0.00"),
         }
@@ -1538,7 +1556,12 @@ def get_crm_overview_and_results(
             to_utc(ct.criado_em) is not None and to_utc(ct.criado_em) <= order_dt
             for ct in customer_contacts
         )
-        has_campaign_coupon = bool(com.cupom_id and str(com.cupom_id) in campaign_by_cupom_id)
+        matched_campaign_coupon = next(
+            (cp for cp in campaign_by_cupom_id.get(str(com.cupom_id), [])
+             if to_utc(cp.criado_em) is not None and to_utc(cp.criado_em) <= order_dt),
+            None,
+        ) if com.cupom_id else None
+        has_campaign_coupon = matched_campaign_coupon is not None
 
         if not is_valid_order:
             if had_prior_contact or has_campaign_coupon:
@@ -1558,29 +1581,48 @@ def get_crm_overview_and_results(
         if cid_str in claimed_order_ids:
             continue
 
-        # Regra 1 (Prioridade máxima): Associação explícita por cupom de campanha/contato
+        # A confirmed, period-scoped contact must precede the purchase and
+        # respect its campaign's immutable original attribution window.
+        eligible_contacts: list[CrmContatoCliente] = []
+        for ct in customer_contacts:
+            ct_dt = to_utc(ct.criado_em)
+            if ct_dt is None or ct_dt > order_dt:
+                continue
+            camp = campanhas_by_id.get(str(ct.campanha_id)) if ct.campanha_id else None
+            if camp is not None:
+                camp_created = to_utc(camp.criado_em)
+                if camp_created is None or camp_created > order_dt:
+                    continue
+                effective_window = camp.janela_atribuicao_dias
+            else:
+                effective_window = janela_atribuicao_dias
+            if order_dt <= ct_dt + datetime.timedelta(days=int(effective_window)):
+                eligible_contacts.append(ct)
+        matched_contact = eligible_contacts[-1] if eligible_contacts else None
+
+        # Regra 1 (Prioridade máxima): uso explícito do cupom, com ou sem contato
         matched_contact_coupon = next(
             (
                 ct
-                for ct in reversed(customer_contacts)
+                for ct in reversed(eligible_contacts)
                 if ct.cupom_id
                 and com.cupom_id
                 and str(ct.cupom_id) == str(com.cupom_id)
-                and to_utc(ct.criado_em) is not None
-                and to_utc(ct.criado_em) <= order_dt
             ),
             None,
         )
-        matched_campaign_coupon = (
-            campaign_by_cupom_id.get(str(com.cupom_id)) if com.cupom_id else None
-        )
+        matched_contact = matched_contact_coupon or matched_contact
 
         if matched_contact_coupon is not None or matched_campaign_coupon is not None:
             claimed_order_ids.add(cid_str)
             pedidos_comprovados_cupom += 1
             usos_cupons_campanha += 1
             valor_comprovado_cupom += liquido
-            clientes_retorno_cupom.add(client_id_str)
+            if matched_contact is not None:
+                clientes_retorno_cupom.add(client_id_str)
+                returns_by_day.setdefault(order_dt.date().isoformat(), set()).add(client_id_str)
+            else:
+                cupons_sem_contato_confirmado += 1
 
             target_camp_id = (
                 str(matched_contact_coupon.campanha_id)
@@ -1590,13 +1632,18 @@ def get_crm_overview_and_results(
                 else None
             )
             if target_camp_id and target_camp_id in campaign_stats:
-                campaign_stats[target_camp_id]["voltaram_ids"].add(client_id_str)
+                campaign_contact = next((ct for ct in reversed(eligible_contacts)
+                    if str(ct.campanha_id) == target_camp_id), None)
+                if campaign_contact is not None:
+                    campaign_stats[target_camp_id]["voltaram_ids"].add(client_id_str)
+                else:
+                    campaign_stats[target_camp_id]["cupons_sem_contato"] += 1
                 campaign_stats[target_camp_id]["pedidos_cupom"] += 1
                 campaign_stats[target_camp_id]["valor_pago_liquido"] += liquido
                 campaign_stats[target_camp_id]["desconto_utilizado"] += desc_cupom + desc_cashback
 
-            if matched_contact_coupon is not None:
-                key_ap = f"{matched_contact_coupon.objetivo}:{matched_contact_coupon.abordagem_tipo}"
+            if matched_contact is not None:
+                key_ap = f"{matched_contact.objetivo}:{matched_contact.abordagem_tipo}"
                 st_ap = approach_stats.get(key_ap)
                 if st_ap is not None:
                     st_ap["voltaram_ids"].add(client_id_str)
@@ -1605,26 +1652,14 @@ def get_crm_overview_and_results(
                     st_ap["desconto_utilizado"] += desc_cupom + desc_cashback
             continue
 
-        # Regra 2: Estimativa temporal pós-abordagem (contato mais recente dentro da janela)
-        eligible_contacts: list[CrmContatoCliente] = []
-        for ct in customer_contacts:
-            ct_dt = to_utc(ct.criado_em)
-            if ct_dt is None or ct_dt > order_dt:
-                continue
-            camp_window = (
-                campanhas_by_id[str(ct.campanha_id)].janela_atribuicao_dias
-                if ct.campanha_id and str(ct.campanha_id) in campanhas_by_id
-                else janela_atribuicao_dias
-            )
-            if order_dt <= ct_dt + datetime.timedelta(days=int(camp_window)):
-                eligible_contacts.append(ct)
-
+        # Regra 2: associação temporal após contato manual confirmado
         if eligible_contacts:
             latest_ct = eligible_contacts[-1]
             claimed_order_ids.add(cid_str)
             pedidos_estimados_janela += 1
             valor_estimado_janela += liquido
             clientes_retorno_temporal.add(client_id_str)
+            returns_by_day.setdefault(order_dt.date().isoformat(), set()).add(client_id_str)
 
             if latest_ct.campanha_id and str(latest_ct.campanha_id) in campaign_stats:
                 c_stat = campaign_stats[str(latest_ct.campanha_id)]
@@ -1653,6 +1688,8 @@ def get_crm_overview_and_results(
 
     total_pedidos_associados = pedidos_comprovados_cupom + pedidos_estimados_janela
     total_valor_associado = valor_comprovado_cupom + valor_estimado_janela
+    campaign_orders = sum(st["pedidos_cupom"] + st["pedidos_temporal"] for st in campaign_stats.values())
+    campaign_value = sum((st["valor_pago_liquido"] for st in campaign_stats.values()), Decimal("0.00"))
 
     campanhas_list: list[dict[str, Any]] = []
     for cp in campanhas_rows:
@@ -1672,6 +1709,7 @@ def get_crm_overview_and_results(
                 "criado_em": cp_dt.isoformat() if cp_dt else None,
                 "clientes_abordados": len(st["abordados_ids"]),
                 "clientes_que_voltaram": len(st["voltaram_ids"]),
+                "cupons_sem_contato_confirmado": st["cupons_sem_contato"],
                 "pedidos_comprovados_cupom": st["pedidos_cupom"],
                 "pedidos_estimados_janela": st["pedidos_temporal"],
                 "valor_pago_liquido_brl": float(st["valor_pago_liquido"]),
@@ -1699,10 +1737,35 @@ def get_crm_overview_and_results(
             "periodo_dias": periodo_dias,
             "janela_atribuicao_dias": janela_atribuicao_dias,
             "tem_rastreamento_suficiente": tem_rastreamento_abordagem,
+            "conciliacao_campanhas": {
+                "pedidos_com_campanha": campaign_orders,
+                "pedidos_sem_campanha": total_pedidos_associados - campaign_orders,
+                "valor_com_campanha_brl": float(campaign_value),
+                "valor_sem_campanha_brl": float(total_valor_associado - campaign_value),
+            },
+            "regra_janelas": {
+                "campanhas": "PERSISTIDA",
+                "sem_campanha_dias": janela_atribuicao_dias,
+                "explicacao": (
+                    "O período limita contatos e compras analisados. A janela histórica de "
+                    "cada campanha permanece vigente; a janela geral vale só para contatos sem campanha."
+                ),
+            },
+            "serie_temporal": [
+                {
+                    "data": day,
+                    "clientes_contatados": len(contacts_by_day.get(day, set())),
+                    "clientes_que_voltaram": len(returns_by_day.get(day, set())),
+                }
+                for day in sorted(set(contacts_by_day) | set(returns_by_day))
+            ],
             "regra_associacao": (
                 "Cada pedido fechado e pago (líquido de estornos e sem cancelamento) é associado a no máximo "
                 "uma campanha/abordagem: (1) uso explícito do cupom da campanha; ou (2) compra concluída pelo "
-                f"cliente abordado dentro da janela de até {janela_atribuicao_dias} dias após o contato mais recente."
+                "cliente com contato manual confirmado dentro da janela originalmente gravada na campanha, "
+                f"ou {janela_atribuicao_dias} dias para contato sem campanha. "
+                "Uso de cupom sem contato confirmado é evidência de uso, não de abordagem."
+
             ),
             "aviso_metodologico": (
                 "Receita associada não comprova receita incremental nem causalidade isolada. "
@@ -1712,6 +1775,8 @@ def get_crm_overview_and_results(
                 "clientes_com_1_compra_base": clientes_com_pelo_menos_1_compra,
                 "clientes_que_fizeram_segunda_compra": clientes_com_segunda_compra,
                 "taxa_conversao_pct": taxa_segunda_compra,
+                "escopo": "HISTORICO_TOTAL",
+                "explicacao": "Indicador histórico da base identificada, não conversão no período nem retorno de campanha.",
                 "status_mensuracao": (
                     "MENSURADO" if clientes_com_pelo_menos_1_compra > 0 else "NAO_MENSURADO"
                 ),
@@ -1729,6 +1794,7 @@ def get_crm_overview_and_results(
             "pedidos_associados": {
                 "total": total_pedidos_associados if tem_rastreamento_abordagem else None,
                 "comprovados_por_cupom": pedidos_comprovados_cupom,
+                "cupons_sem_contato_confirmado": cupons_sem_contato_confirmado,
                 "estimados_por_janela_temporal": pedidos_estimados_janela,
                 "pedidos_cancelados_excluidos": pedidos_cancelados_excluidos,
                 "status_mensuracao": "MENSURADO" if tem_rastreamento_abordagem else "NAO_MENSURADO",
@@ -1744,6 +1810,7 @@ def get_crm_overview_and_results(
                 "cupom_brl": float(desconto_cupom_periodo),
                 "fidelidade_cashback_brl": float(desconto_fidelidade_periodo),
                 "usos_cupons_campanha": usos_cupons_campanha,
+                "escopo": "PEDIDOS_VALIDOS_IDENTIFICADOS_NO_PERIODO",
             },
             "desempenho_por_abordagem": desempenho_abordagens,
         },

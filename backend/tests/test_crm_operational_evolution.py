@@ -844,3 +844,291 @@ def test_missing_crm_schema_preserves_customer_reads_and_never_runs_ddl():
         assert not {'crm_clientes_preferencias', 'crm_campanhas', 'crm_contatos_clientes'} & set(inspect(engine).get_table_names())
     finally:
         event.remove(engine, 'before_cursor_execute', capture)
+
+
+def test_stage5_coupon_usage_without_contact_is_not_a_return():
+    """Coupon evidence and contacted-customer return must have independent denominators."""
+    from app.crm_models import CrmCampanha, CrmContatoCliente
+
+    client = TestClient(app)
+    headers = get_auth_headers(client)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    with TestingSessionLocal() as db:
+        db.add(Cupom(id="stage5-coupon", restaurante_id=1, codigo="CINCO5",
+                     tipo_desconto="fixo", valor_desconto=5, ativo=True))
+        db.add_all([
+            Cliente(id="stage5-no-contact", restaurante_id=1, nome="Sem contato", telefone="85999993001"),
+            Cliente(id="stage5-confirmed", restaurante_id=1, nome="Contatado", telefone="85999993002"),
+            Cliente(id="stage5-open-only", restaurante_id=1, nome="Apenas aberto", telefone="85999993003"),
+        ])
+        db.flush()
+        db.add(CrmCampanha(
+            id="stage5-old-campaign", restaurante_id=1, nome="Campanha antiga",
+            objetivo="CUSTOM", segmento_filtro="CUSTOM", abordagem_tipo="CUPOM",
+            cupom_id="stage5-coupon", template_mensagem="Cupom de teste para retorno",
+            janela_atribuicao_dias=7, status="EM_EXECUCAO",
+            criado_em=now - datetime.timedelta(days=12)))
+        db.add(CrmCampanha(
+            id="stage5-new-campaign", restaurante_id=1, nome="Campanha nova",
+            objetivo="CUSTOM", segmento_filtro="CUSTOM", abordagem_tipo="CUPOM",
+            cupom_id="stage5-coupon", template_mensagem="Cupom compartilhado entre campanhas",
+            janela_atribuicao_dias=14, status="EM_EXECUCAO",
+            criado_em=now - datetime.timedelta(days=1)))
+        db.flush()
+        db.add_all([
+            CrmContatoCliente(
+                id="stage5-confirmed-contact", restaurante_id=1,
+                campanha_id="stage5-old-campaign", cliente_id="stage5-confirmed",
+                objetivo="CUSTOM", abordagem_tipo="CUPOM", cupom_id="stage5-coupon",
+                canal="WHATSAPP_MANUAL", acao_executada="CONTATO_MANUAL_CONFIRMADO",
+                criado_em=now - datetime.timedelta(days=4)),
+            CrmContatoCliente(
+                id="stage5-open-contact", restaurante_id=1,
+                campanha_id="stage5-old-campaign", cliente_id="stage5-open-only",
+                objetivo="CUSTOM", abordagem_tipo="CUPOM", cupom_id="stage5-coupon",
+                canal="WHATSAPP_MANUAL", acao_executada="WHATSAPP_ABERTO",
+                criado_em=now - datetime.timedelta(days=4)),
+        ])
+        db.add_all([
+            Comanda(
+                id="stage5-order-no-contact", restaurante_id=1, cliente_id="stage5-no-contact",
+                garcom_id="user-caixa-1", numero_pedido=9301, fechada=True,
+                fechado_em=now - datetime.timedelta(days=2), valor_pago=100,
+                cupom_id="stage5-coupon", valor_desconto_cupom=5),
+            Comanda(
+                id="stage5-order-confirmed", restaurante_id=1, cliente_id="stage5-confirmed",
+                garcom_id="user-caixa-1", numero_pedido=9302, fechada=True,
+                fechado_em=now - datetime.timedelta(days=2), valor_pago=120,
+                cupom_id="stage5-coupon", valor_desconto_cupom=5),
+            Comanda(
+                id="stage5-order-open-only", restaurante_id=1, cliente_id="stage5-open-only",
+                garcom_id="user-caixa-1", numero_pedido=9303, fechada=True,
+                fechado_em=now - datetime.timedelta(days=2), valor_pago=80,
+                cupom_id="stage5-coupon", valor_desconto_cupom=5),
+        ])
+        db.commit()
+
+    response = client.get("/fidelidade/crm/resumo", headers=headers)
+    assert response.status_code == 200, response.text
+    result = response.json()
+    metrics = result["resultados"]
+    assert metrics["retorno_apos_abordagem"]["clientes_abordados_no_periodo"] == 1
+    assert metrics["retorno_apos_abordagem"]["clientes_que_voltaram"] == 1
+    assert metrics["pedidos_associados"]["comprovados_por_cupom"] == 3
+    assert metrics["pedidos_associados"]["cupons_sem_contato_confirmado"] == 2
+    assert metrics["pedidos_associados"]["total"] == 3
+    by_id = {row["id"]: row for row in result["campanhas"]}
+    assert by_id["stage5-old-campaign"]["pedidos_comprovados_cupom"] == 3
+    assert by_id["stage5-old-campaign"]["clientes_que_voltaram"] == 1
+    assert by_id["stage5-new-campaign"]["pedidos_comprovados_cupom"] == 0
+    assert metrics["conversao_segunda_compra"]["escopo"] == "HISTORICO_TOTAL"
+
+
+def test_stage5_saved_window_is_not_overridden_and_old_orders_cannot_use_future_campaigns():
+    from app.crm_models import CrmCampanha, CrmContatoCliente
+
+    client = TestClient(app)
+    headers = get_auth_headers(client)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    with TestingSessionLocal() as db:
+        db.add_all([
+            Cliente(id="stage5-window", restaurante_id=1, nome="Janela antiga", telefone="85999993201"),
+            Cliente(id="stage5-future", restaurante_id=1, nome="Antes da campanha", telefone="85999993202"),
+        ])
+        db.add(Cupom(id="stage5-future-coupon", restaurante_id=1, codigo="NOVO5",
+                     tipo_desconto="fixo", valor_desconto=5, ativo=True))
+        db.flush()
+        db.add_all([
+            CrmCampanha(
+                id="stage5-window-campaign", restaurante_id=1, nome="Campanha 7 dias",
+                objetivo="CUSTOM", segmento_filtro="CUSTOM", abordagem_tipo="SEM_DESCONTO",
+                template_mensagem="Retorno em sete dias", janela_atribuicao_dias=7,
+                criado_em=now - datetime.timedelta(days=20)),
+            CrmCampanha(
+                id="stage5-future-campaign", restaurante_id=1, nome="Campanha futura",
+                objetivo="CUSTOM", segmento_filtro="CUSTOM", abordagem_tipo="CUPOM",
+                cupom_id="stage5-future-coupon", template_mensagem="Cupom criado depois",
+                janela_atribuicao_dias=14, criado_em=now - datetime.timedelta(days=1)),
+        ])
+        db.flush()
+        db.add(CrmContatoCliente(
+            id="stage5-window-contact", restaurante_id=1,
+            campanha_id="stage5-window-campaign", cliente_id="stage5-window",
+            objetivo="CUSTOM", abordagem_tipo="SEM_DESCONTO",
+            canal="TELEFONE", acao_executada="CONTATO_MANUAL_CONFIRMADO",
+            criado_em=now - datetime.timedelta(days=12)))
+        db.add_all([
+            Comanda(id="stage5-window-order", restaurante_id=1, cliente_id="stage5-window",
+                    garcom_id="user-caixa-1", numero_pedido=9321,
+                    fechada=True, fechado_em=now - datetime.timedelta(days=3),
+                    valor_pago=65),
+            Comanda(id="stage5-future-order", restaurante_id=1, cliente_id="stage5-future",
+                    garcom_id="user-caixa-1", numero_pedido=9322,
+                    fechada=True, fechado_em=now - datetime.timedelta(days=3),
+                    valor_pago=90, cupom_id="stage5-future-coupon"),
+        ])
+        db.commit()
+
+    for selected_window in (7, 14, 30):
+        response = client.get("/fidelidade/crm/resumo", headers=headers,
+                              params={"periodo_dias": 30, "janela_atribuicao_dias": selected_window})
+        assert response.status_code == 200, response.text
+        data = response.json()
+        results = data["resultados"]
+        assert results["pedidos_associados"]["total"] == 0
+        assert results["retorno_apos_abordagem"]["clientes_que_voltaram"] == 0
+        assert results["regra_janelas"]["campanhas"] == "PERSISTIDA"
+        assert results["regra_janelas"]["sem_campanha_dias"] == selected_window
+
+
+def test_preparation_does_not_hide_confirmed_contact_cooldown_or_return():
+    from app.crm_models import CrmContatoCliente
+    from app.services.customer_crm import enrich_customer_crm_payloads
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    with TestingSessionLocal() as db:
+        db.add(Cliente(id="audit-contact", restaurante_id=1, nome="Cliente fixture", telefone="85999993301"))
+        db.flush()
+        for action, days in (("CONTATO_MANUAL_CONFIRMADO", 2), ("MENSAGEM_COPIADA", 1)):
+            db.add(CrmContatoCliente(
+                id=f"audit-{action}", restaurante_id=1, cliente_id="audit-contact",
+                objetivo="SECOND_PURCHASE", abordagem_tipo="SEM_DESCONTO",
+                canal="WHATSAPP_MANUAL", acao_executada=action,
+                criado_em=now - datetime.timedelta(days=days)))
+        db.commit()
+        customer = enrich_customer_crm_payloads(
+            db, restaurante_id=1, loyalty_enabled=True, now=now,
+            payloads=[{"id": "audit-contact", "telefone": "85999993301",
+                       "ultima_compra_em": (now - datetime.timedelta(hours=36)).isoformat()}])[0]
+        assert customer["contato_recente"] is True
+        assert customer["voltou_apos_ultimo_contato"] is True
+        # The most recent action remains available for the activity history.
+        assert customer["ultimo_contato_status"] == "MENSAGEM_COPIADA"
+
+
+@pytest.mark.parametrize("action", ["WHATSAPP_ABERTO", "MENSAGEM_COPIADA"])
+def test_preparation_alone_does_not_block_or_claim_customer_return(action):
+    from app.crm_models import CrmContatoCliente
+    from app.services.customer_crm import enrich_customer_crm_payloads
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    with TestingSessionLocal() as db:
+        db.add(Cliente(id="audit-preparation", restaurante_id=1, nome="Cliente fixture", telefone="85999993303"))
+        db.flush()
+        db.add(CrmContatoCliente(id="audit-prepared", restaurante_id=1, cliente_id="audit-preparation",
+            objetivo="CUSTOM", abordagem_tipo="SEM_DESCONTO", canal="WHATSAPP_MANUAL",
+            acao_executada=action, criado_em=now - datetime.timedelta(days=2)))
+        db.commit()
+        customer = enrich_customer_crm_payloads(db, restaurante_id=1, loyalty_enabled=True, now=now,
+            payloads=[{"id": "audit-preparation", "telefone": "85999993303",
+                       "ultima_compra_em": (now - datetime.timedelta(days=1)).isoformat()}])[0]
+        assert customer["contato_recente"] is False
+        assert customer["voltou_apos_ultimo_contato"] is False
+        assert customer["ultimo_contato_status"] == action
+
+    client = TestClient(app)
+    response = client.post("/fidelidade/crm/contatos", headers=get_auth_headers(client), json={
+        "cliente_id": "audit-preparation", "objetivo": "CUSTOM", "abordagem_tipo": "SEM_DESCONTO",
+        "canal": "WHATSAPP_MANUAL", "acao_executada": "CONTATO_MANUAL_CONFIRMADO"})
+    assert response.status_code == 201, response.text
+    # A confirmed contact now protects the customer from duplicate approaches.
+    retry = client.post("/fidelidade/crm/contatos", headers=get_auth_headers(client), json={
+        "cliente_id": "audit-preparation", "objetivo": "CUSTOM", "abordagem_tipo": "SEM_DESCONTO",
+        "canal": "WHATSAPP_MANUAL", "acao_executada": "CONTATO_MANUAL_CONFIRMADO"})
+    assert retry.status_code == 409, retry.text
+
+
+def test_coupon_campaign_without_own_contact_and_unassigned_orders_reconcile():
+    from app.crm_models import CrmCampanha, CrmContatoCliente
+    from app.services.customer_crm import get_crm_overview_and_results
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    with TestingSessionLocal() as db:
+        db.add(Cliente(id="audit-reconcile", restaurante_id=1, nome="Cliente fixture", telefone="85999993302"))
+        db.add(Cupom(id="audit-coupon", restaurante_id=1, codigo="AUDIT5", tipo_desconto="fixo", valor_desconto=5, ativo=True))
+        db.flush()
+        db.add(CrmCampanha(id="audit-campaign", restaurante_id=1, nome="Cupom sem contato próprio",
+            objetivo="CUSTOM", segmento_filtro="CUSTOM", abordagem_tipo="CUPOM",
+            cupom_id="audit-coupon", template_mensagem="Mensagem de teste isolado",
+            janela_atribuicao_dias=14, criado_em=now - datetime.timedelta(days=5)))
+        db.add(CrmContatoCliente(id="audit-unassigned", restaurante_id=1, cliente_id="audit-reconcile",
+            objetivo="CUSTOM", abordagem_tipo="SEM_DESCONTO", canal="TELEFONE",
+            acao_executada="CONTATO_MANUAL_CONFIRMADO", criado_em=now - datetime.timedelta(days=3)))
+        db.add_all([
+            Comanda(id="audit-coupon-order", restaurante_id=1, cliente_id="audit-reconcile", garcom_id="user-caixa-1",
+                numero_pedido=9341, fechada=True, fechado_em=now - datetime.timedelta(days=2), valor_pago=80, cupom_id="audit-coupon"),
+            Comanda(id="audit-unassigned-order", restaurante_id=1, cliente_id="audit-reconcile", garcom_id="user-caixa-1",
+                numero_pedido=9342, fechada=True, fechado_em=now - datetime.timedelta(days=1), valor_pago=60),
+        ])
+        db.commit()
+        data = get_crm_overview_and_results(db, restaurante_id=1, loyalty_enabled=True, coupons_enabled=True, now=now)
+        campaign = data["campanhas"][0]
+        assert campaign["clientes_abordados"] == 0
+        assert campaign["cupons_sem_contato_confirmado"] == 1
+        reconciliation = data["resultados"]["conciliacao_campanhas"]
+        assert reconciliation == {
+            "pedidos_com_campanha": 1, "pedidos_sem_campanha": 1,
+            "valor_com_campanha_brl": 80.0, "valor_sem_campanha_brl": 60.0,
+        }
+        assert data["resultados"]["pedidos_associados"]["total"] == 2
+        assert data["resultados"]["valor_pago_pedidos_associados"]["total_liquido_brl"] == 140.0
+
+
+def test_relationship_journey_saved_benefit_profile_campaign_contact_and_results(monkeypatch):
+    """One isolated HTTP journey joins saved loyalty, customer history and attribution."""
+    from app.services import customer_crm
+
+    clock = datetime.datetime.now(datetime.timezone.utc)
+    monkeypatch.setattr(customer_crm, "get_utc_now", lambda: clock)
+    client = TestClient(app)
+    headers = get_auth_headers(client)
+    with TestingSessionLocal() as db:
+        db.add(Cliente(id="journey-customer", restaurante_id=1, nome="Cliente Jornada", telefone="85999993304", saldo_pontos=40))
+        db.flush()
+        db.add(Comanda(id="journey-first-order", restaurante_id=1, cliente_id="journey-customer",
+            garcom_id="user-caixa-1", numero_pedido=9351, fechada=True,
+            fechado_em=clock - datetime.timedelta(days=10), valor_pago=80))
+        db.commit()
+
+    config_before = client.get("/fidelidade/config", headers=headers).json()
+    recommendation = client.post("/caixa/cupons/economia/recomendacao", headers=headers, json={"mode": "automatico"})
+    assert recommendation.status_code == 200, recommendation.text
+    assert client.get("/fidelidade/config", headers=headers).json() == config_before
+    saved = client.post("/fidelidade/config", headers=headers, json={
+        "ativo": True, "tipo_recompensa": "PONTOS", "taxa_conversao": 2,
+        "valor_ponto_em_dinheiro": 0.05})
+    assert saved.status_code == 200, saved.text
+    profile = client.get("/fidelidade/clientes/journey-customer/perfil", headers=headers).json()
+    assert profile["beneficio"]["valor_resgatavel_brl"] == 2.0
+    with TestingSessionLocal() as db:
+        assert db.get(Cliente, "journey-customer").saldo_pontos == 40
+
+    campaign = client.post("/fidelidade/crm/campanhas", headers=headers, json={
+        "nome": "Jornada de benefício confirmado", "objetivo": "BENEFIT_REMINDER",
+        "segmento_filtro": "BENEFIT_REMINDER", "abordagem_tipo": "FIDELIDADE",
+        "template_mensagem": "Olá {nome}, consulte seu benefício disponível.", "janela_atribuicao_dias": 7})
+    assert campaign.status_code == 201, campaign.text
+    campaign_id = campaign.json()["id"]
+    contact = client.post("/fidelidade/crm/contatos", headers=headers, json={
+        "cliente_id": "journey-customer", "campanha_id": campaign_id,
+        "objetivo": "BENEFIT_REMINDER", "abordagem_tipo": "FIDELIDADE",
+        "canal": "WHATSAPP_MANUAL", "acao_executada": "CONTATO_MANUAL_CONFIRMADO",
+        "mensagem_personalizada": "Olá Cliente Jornada, seu benefício disponível é R$ 2,00."})
+    assert contact.status_code == 201, contact.text
+    assert contact.json()["comprovacao_envio"] == "REGISTRO_MANUAL_OPERADOR"
+    history = client.get("/fidelidade/clientes/journey-customer/perfil", headers=headers).json()
+    assert any(row["campanha_id"] == campaign_id for row in history["historico_contatos"])
+    clock += datetime.timedelta(hours=1)
+    with TestingSessionLocal() as db:
+        db.add(Comanda(id="journey-return", restaurante_id=1, cliente_id="journey-customer",
+            garcom_id="user-caixa-1", numero_pedido=9352, fechada=True,
+            fechado_em=clock, valor_pago=100))
+        db.commit()
+    results = client.get("/fidelidade/crm/resumo", headers=headers).json()
+    row = next(c for c in results["campanhas"] if c["id"] == campaign_id)
+    assert row["clientes_abordados"] == row["clientes_que_voltaram"] == 1
+    assert row["pedidos_estimados_janela"] == 1
+    assert row["pedidos_comprovados_cupom"] == 0
+    assert row["valor_pago_liquido_brl"] == 100.0
+    other = client.get("/fidelidade/crm/resumo", headers=get_auth_headers(client, "caixa_r2")).json()
+    assert not other["campanhas"]
