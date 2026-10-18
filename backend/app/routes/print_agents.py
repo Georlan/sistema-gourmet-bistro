@@ -1128,6 +1128,7 @@ def get_current_agent(
             raw_token = parts[1]
 
     if not raw_token:
+        log.warning("print_agent_auth_rejected reason=missing_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de agente não fornecido no cabeçalho X-Agent-Token"
