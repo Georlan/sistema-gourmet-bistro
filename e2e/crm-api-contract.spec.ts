@@ -269,7 +269,7 @@ test('customer base metadata stays honest beyond the first 100 and pages load on
   await page.locator('.cashier-sidebar:visible').getByRole('button',{name:/^Relacionamento(?: \d+)?$/}).click();
   await navigateRelationship(page, 'clientes');
   await expect(page.getByText('Exibindo 100 de 125 clientes', {exact:false})).toBeVisible();
-  await expect(page.getByText(/Favoritos (ainda )?não consultados/).first()).toBeVisible();
+  await expect(page.getByText(/Favoritos (ainda )?não consultados/).filter({visible:true}).first()).toBeVisible();
   expect(requests).not.toContain(100);
   await page.getByRole('button',{name:'Carregar mais 100 clientes'}).click();
   await expect(page.getByText('125 de 125 clientes', {exact:false}).first()).toBeVisible();
