@@ -46,6 +46,7 @@ import { DEFAULT_LOYALTY_CONFIG, useLoyaltyConfiguration } from './useLoyaltyCon
 import { CustomerResultsWorkspace } from './CustomerResultsWorkspace';
 import { CustomerSatisfactionPanel } from './CustomerSatisfactionPanel';
 import { useCustomerSatisfaction } from './useCustomerSatisfaction';
+import { mapCustomers } from './useCashierCustomers';
 
 const formatarTelefoneTabela = (tel?: string) => {
   if (!tel) return '-';
@@ -133,6 +134,67 @@ export default function CashierCustomers({
 
   // Busca e filtros da aba Clientes
   const [clientesSearch, setClientesSearch] = useState('');
+  const searchTerm = clientesSearch.trim();
+  const [searchResult, setSearchResult] = useState<{
+    query: string; scope: string; data: LoyaltyCustomer[]; total: number;
+    hasMore: boolean; loading: boolean; error: string | null;
+  } | null>(null);
+  const searchScope = `${apiBaseUrl}\u0000${authHeaders.Authorization || authHeaders.authorization || ''}`;
+  useEffect(() => {
+    if (!searchTerm) { setSearchResult(null); return; }
+    const controller = new AbortController();
+    setSearchResult({ query: searchTerm, scope: searchScope, data: [], total: 0, hasMore: false, loading: true, error: null });
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ q: searchTerm, limit: '100', offset: '0' });
+        const res = await fetch(`${apiBaseUrl}/fidelidade/clientes?${params}`, { headers: authHeaders, signal: controller.signal });
+        if (!res.ok) throw new Error(`Falha na pesquisa (${res.status})`);
+        const payload = await res.json();
+        if (!Array.isArray(payload)) throw new Error('Pesquisa retornou dados inválidos');
+        if (!controller.signal.aborted) setSearchResult({
+          query: searchTerm, scope: searchScope,
+          data: mapCustomers(payload, res.headers.get('X-Products-Included') !== 'false'),
+          total: Number(res.headers.get('X-Total-Count')) || payload.length,
+          hasMore: res.headers.get('X-Has-More') === 'true', loading: false, error: null,
+        });
+      } catch (err) {
+        if (!controller.signal.aborted) setSearchResult({
+          query: searchTerm, scope: searchScope, data: [], total: 0, hasMore: false,
+          loading: false, error: err instanceof Error ? err.message : 'Pesquisa indisponível',
+        });
+      }
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [searchTerm, searchScope]);
+
+  const activeSearch = Boolean(searchTerm);
+  const queryResult = activeSearch && searchResult?.query === searchTerm && searchResult.scope === searchScope ? searchResult : null;
+  const listUsers = activeSearch ? (queryResult?.data ?? []) : loyaltyUsers;
+  const listTotal = activeSearch ? (queryResult?.total ?? 0) : totalCustomers;
+  const listHasMore = activeSearch ? Boolean(queryResult?.hasMore) : hasMoreCustomers;
+  const loadNextSearchPage = async () => {
+    if (!queryResult || queryResult.loading || !queryResult.hasMore) return;
+    const previous = queryResult;
+    setSearchResult({ ...previous, loading: true });
+    try {
+      const params = new URLSearchParams({ q: searchTerm, limit: '100', offset: String(previous.data.length) });
+      const res = await fetch(`${apiBaseUrl}/fidelidade/clientes?${params}`, { headers: authHeaders });
+      if (!res.ok) throw new Error(`Falha na próxima página (${res.status})`);
+      const payload = await res.json();
+      if (!Array.isArray(payload)) throw new Error('Página inválida');
+      setSearchResult(current => {
+        if (!current || current.query !== previous.query || current.scope !== previous.scope) return current;
+        const already = new Set(current.data.map(c => c.id));
+        const more = mapCustomers(payload, res.headers.get('X-Products-Included') !== 'false').filter(c => !already.has(c.id));
+        return { ...current, data: [...current.data, ...more],
+          total: Number(res.headers.get('X-Total-Count')) || current.total,
+          hasMore: res.headers.get('X-Has-More') === 'true', loading: false, error: null };
+      });
+    } catch (err) {
+      setSearchResult(current => current?.query === previous.query && current.scope === previous.scope
+        ? { ...current, loading: false, error: err instanceof Error ? err.message : 'Falha na próxima página' } : current);
+    }
+  };
   const [customerSort, setCustomerSort] = useState<CustomerSort>('orders');
   const [customerSegment, setCustomerSegment] = useState<CustomerSegment>('ALL');
   const [recencyFilter, setRecencyFilter] = useState<CrmRecencyFilter>('ALL');
@@ -145,8 +207,8 @@ export default function CashierCustomers({
   // Ficha individual lateral (preserva filtros, busca e página ao fechar)
   const [selectedProfileCustomerId, setSelectedProfileCustomerId] = useState<string | null>(null);
   const selectedProfileCustomer = useMemo(
-    () => loyaltyUsers.find((u) => u.id === selectedProfileCustomerId) || null,
-    [loyaltyUsers, selectedProfileCustomerId],
+    () => [...loyaltyUsers, ...listUsers].find((u) => u.id === selectedProfileCustomerId) || null,
+    [loyaltyUsers, listUsers, selectedProfileCustomerId],
   );
 
   // Rascunho para abrir Campanhas já preenchido a partir de Oportunidade, Ficha Individual ou Benefício
@@ -207,9 +269,9 @@ export default function CashierCustomers({
 
   const filteredLoyaltyUsers = useMemo(() => {
     if (!hasAdvancedFilters) {
-      return selectCrmCustomers(loyaltyUsers, clientesSearch, customerSegment, customerSort);
+      return selectCrmCustomers(listUsers, clientesSearch, customerSegment, customerSort);
     }
-    return filterCrmCustomersAdvanced(loyaltyUsers, {
+    return filterCrmCustomersAdvanced(listUsers, {
       search: clientesSearch,
       segment: customerSegment,
       sort: customerSort,
@@ -221,7 +283,7 @@ export default function CashierCustomers({
       contactStatus: contactFilter,
     });
   }, [
-    loyaltyUsers,
+    listUsers,
     clientesSearch,
     customerSegment,
     customerSort,
@@ -864,7 +926,7 @@ export default function CashierCustomers({
                 {(clientesSearch || filteredLoyaltyUsers.length !== loyaltyUsers.length) && (
                   <p className="shrink-0 text-xs font-medium text-koma-muted">
                     <strong className="font-mono text-koma-foreground">{filteredLoyaltyUsers.length}</strong> de{' '}
-                    {loyaltyUsers.length} carregados de {totalCustomers} no banco · {loyaltyUsers.length === 1 ? 'cliente' : 'clientes'}
+                    {listUsers.length} carregados de {listTotal} encontrados no banco
                   </p>
                 )}
                 <label className="flex flex-col gap-1 text-xs text-koma-muted">
@@ -1042,7 +1104,7 @@ export default function CashierCustomers({
 
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-koma-muted">
                 <p>
-                  {filteredLoyaltyUsers.length} de {loyaltyUsers.length} clientes carregados{hasMoreCustomers ? ` · ${totalCustomers} cadastrados no restaurante` : ''} · Compras concluídas e valores líquidos pagos (cancelamentos e estornos excluídos).
+                  {filteredLoyaltyUsers.length} de {listUsers.length} clientes carregados{listHasMore ? ` · ${listTotal} correspondentes na consulta` : ''} · Compras concluídas e valores líquidos pagos (cancelamentos e estornos excluídos).
                 </p>
                 {activeCustomerFilters > 0 && (
                   <button
@@ -1064,15 +1126,17 @@ export default function CashierCustomers({
               </div>
 
               <div className="bg-koma-panel border border-koma-border rounded-2xl p-3 sm:p-4 space-y-3">
-                {hasMoreCustomers && (
+                {listHasMore && (
                   <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-koma-panel p-3 text-sm text-koma-muted">
-                    <span>Exibindo {loyaltyUsers.length} de {totalCustomers} clientes. Busca, ordenação e filtros nesta tela consideram somente os registros carregados; isso não representa toda a base.</span>
-                    <button type="button" disabled={loadingMoreCustomers} onClick={() => void loadMoreCustomers()}
+                    <span>Exibindo {listUsers.length} de {listTotal} clientes {activeSearch ? 'encontrados na pesquisa' : 'cadastrados'}. Ordenação e filtros adicionais consideram apenas os registros carregados.</span>
+                    <button type="button" disabled={activeSearch ? Boolean(queryResult?.loading) : loadingMoreCustomers} onClick={() => void (activeSearch ? loadNextSearchPage() : loadMoreCustomers())}
                       className="koma-btn-secondary min-h-11 rounded-lg px-3 font-semibold disabled:opacity-40">
-                      {loadingMoreCustomers ? 'Carregando…' : 'Carregar mais 100 clientes'}
+                      {activeSearch ? (queryResult?.loading ? 'Carregando…' : 'Carregar mais resultados') : (loadingMoreCustomers ? 'Carregando…' : 'Carregar mais 100 clientes')}
                     </button>
                   </div>
                 )}
+                {activeSearch && queryResult?.loading && <p role="status" className="my-2 text-sm text-koma-muted">Pesquisando no banco…</p>}
+                {activeSearch && queryResult?.error && <p role="alert" className="my-2 text-sm text-amber-300">{queryResult.error}</p>}
                 {filteredLoyaltyUsers.length > 0 ? (
                   <>
                     {/* Lista Mobile Compacta */}
@@ -1282,15 +1346,15 @@ export default function CashierCustomers({
                   <KomaEmptyState
                     icon={<Users size={24} className="text-koma-muted" />}
                     title={
-                      loyaltyUsers.length === 0 ? 'Nenhum cliente cadastrado ainda' : 'Nenhum cliente encontrado'
+                      listTotal === 0 && !activeSearch ? 'Nenhum cliente cadastrado ainda' : 'Nenhum cliente encontrado'
                     }
                     description={
-                      loyaltyUsers.length === 0
+                      listTotal === 0 && !activeSearch
                         ? 'Cadastre clientes ou aguarde os primeiros pedidos identificados no cardápio e balcão.'
                         : 'Ajuste ou limpe a busca para ver outros clientes.'
                     }
                     action={
-                      loyaltyUsers.length === 0
+                      listTotal === 0 && !activeSearch
                         ? {
                             label: 'Cadastrar primeiro cliente',
                             onClick: () => {
@@ -1340,7 +1404,7 @@ export default function CashierCustomers({
                 <span>
                   {filteredLoyaltyUsers.length ? (currentPage - 1) * pageSize + 1 : 0}–
                   {Math.min(currentPage * pageSize, filteredLoyaltyUsers.length)} de {filteredLoyaltyUsers.length}{' '}
-                  clientes {hasMoreCustomers ? 'carregados (lista parcial)' : '(base consultada)'}
+                  clientes {listHasMore ? 'carregados (lista parcial)' : '(base consultada)'}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
