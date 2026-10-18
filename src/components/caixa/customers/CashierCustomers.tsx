@@ -78,6 +78,10 @@ interface Props {
   customersStatus: 'loading' | 'ready' | 'refreshing' | 'error';
   hasCustomerSnapshot: boolean;
   refreshLoyaltyUsers: () => Promise<void>;
+  totalCustomers: number;
+  hasMoreCustomers: boolean;
+  loadingMoreCustomers: boolean;
+  loadMoreCustomers: () => Promise<void>;
   hasLoyalty: boolean;
   hasCoupons: boolean;
 }
@@ -93,6 +97,10 @@ export default function CashierCustomers({
   customersStatus,
   hasCustomerSnapshot,
   refreshLoyaltyUsers,
+  totalCustomers,
+  hasMoreCustomers,
+  loadingMoreCustomers,
+  loadMoreCustomers,
   hasLoyalty,
   hasCoupons,
 }: Props) {
@@ -621,19 +629,19 @@ export default function CashierCustomers({
             accent="e recompra"
             description="Escolha quem contatar e acompanhe o retorno."
             metrics={[
-              { label: loyaltyUsers.length === 1 ? 'cliente na base' : 'clientes na base', value: loyaltyUsers.length },
+              { label: totalCustomers === 1 ? 'cliente na base' : 'clientes na base', value: totalCustomers },
               {
-                label: 'elegíveis p/ ação hoje',
+                label: crmSummary?.oportunidades ? 'elegíveis p/ ação hoje' : 'oportunidades nos carregados',
                 value: totalActionableOpportunities,
                 valueClassName: 'text-emerald-600 dark:text-emerald-300',
               },
               {
-                label: 'ativos (até 30d)',
+                label: hasMoreCustomers ? 'ativos carregados (até 30d)' : 'ativos (até 30d)',
                 value: relationshipSummary.ativos,
                 valueClassName: 'text-emerald-600 dark:text-emerald-300',
               },
               {
-                label: 'em atenção / reativar',
+                label: hasMoreCustomers ? 'atenção / reativar carregados' : 'em atenção / reativar',
                 value: relationshipSummary.atencao + relationshipSummary.reativar,
                 valueClassName: 'text-amber-600 dark:text-amber-300',
               },
@@ -667,7 +675,7 @@ export default function CashierCustomers({
                     onClick={() => handleSelectCrmTab('clientes')}
                     className="koma-btn-secondary rounded-xl px-3 py-2 text-xs font-bold"
                   >
-                    Abrir base completa ({loyaltyUsers.length})
+                    Abrir clientes ({totalCustomers})
                   </button>
                   <button
                     type="button"
@@ -856,7 +864,7 @@ export default function CashierCustomers({
                 {(clientesSearch || filteredLoyaltyUsers.length !== loyaltyUsers.length) && (
                   <p className="shrink-0 text-xs font-medium text-koma-muted">
                     <strong className="font-mono text-koma-foreground">{filteredLoyaltyUsers.length}</strong> de{' '}
-                    {loyaltyUsers.length} {loyaltyUsers.length === 1 ? 'cliente' : 'clientes'}
+                    {loyaltyUsers.length} carregados de {totalCustomers} no banco · {loyaltyUsers.length === 1 ? 'cliente' : 'clientes'}
                   </p>
                 )}
                 <label className="flex flex-col gap-1 text-xs text-koma-muted">
@@ -1034,7 +1042,7 @@ export default function CashierCustomers({
 
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-koma-muted">
                 <p>
-                  {filteredLoyaltyUsers.length} de {loyaltyUsers.length} clientes · Compras concluídas e valores líquidos pagos (cancelamentos e estornos excluídos).
+                  {filteredLoyaltyUsers.length} de {loyaltyUsers.length} clientes carregados{hasMoreCustomers ? ` · ${totalCustomers} cadastrados no restaurante` : ''} · Compras concluídas e valores líquidos pagos (cancelamentos e estornos excluídos).
                 </p>
                 {activeCustomerFilters > 0 && (
                   <button
@@ -1056,6 +1064,15 @@ export default function CashierCustomers({
               </div>
 
               <div className="bg-koma-panel border border-koma-border rounded-2xl p-3 sm:p-4 space-y-3">
+                {hasMoreCustomers && (
+                  <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-koma-panel p-3 text-sm text-koma-muted">
+                    <span>Exibindo {loyaltyUsers.length} de {totalCustomers} clientes. Busca, ordenação e filtros nesta tela consideram somente os registros carregados; isso não representa toda a base.</span>
+                    <button type="button" disabled={loadingMoreCustomers} onClick={() => void loadMoreCustomers()}
+                      className="koma-btn-secondary min-h-11 rounded-lg px-3 font-semibold disabled:opacity-40">
+                      {loadingMoreCustomers ? 'Carregando…' : 'Carregar mais 100 clientes'}
+                    </button>
+                  </div>
+                )}
                 {filteredLoyaltyUsers.length > 0 ? (
                   <>
                     {/* Lista Mobile Compacta */}
@@ -1125,7 +1142,7 @@ export default function CashierCustomers({
                                   ? user.produtos_favoritos
                                       .map((product) => `${product.nome} (${product.unidades} un.)`)
                                       .join(' · ')
-                                  : 'Sem itens identificados'}
+                                  : user.produtos_favoritos === undefined ? 'Favoritos ainda não consultados' : 'Sem itens identificados'}
                               </dd>
                             </div>
                             {hasLoyalty && (
@@ -1214,7 +1231,7 @@ export default function CashierCustomers({
                                     </span>
                                   ))
                                 ) : (
-                                  <span className="text-koma-muted">Sem itens identificados</span>
+                                  <span className="text-koma-muted">{user.produtos_favoritos === undefined ? 'Favoritos não consultados' : 'Sem itens identificados'}</span>
                                 )}
                               </td>
                               {hasLoyalty && (
@@ -1323,7 +1340,7 @@ export default function CashierCustomers({
                 <span>
                   {filteredLoyaltyUsers.length ? (currentPage - 1) * pageSize + 1 : 0}–
                   {Math.min(currentPage * pageSize, filteredLoyaltyUsers.length)} de {filteredLoyaltyUsers.length}{' '}
-                  clientes
+                  clientes {hasMoreCustomers ? 'carregados (lista parcial)' : '(base consultada)'}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -1359,6 +1376,9 @@ export default function CashierCustomers({
               apiBaseUrl={apiBaseUrl}
               authHeaders={authHeaders}
               customers={loyaltyUsers}
+              totalCustomers={totalCustomers}
+              hasMoreCustomers={hasMoreCustomers}
+              onLoadMoreCustomers={loadMoreCustomers}
               draftSeed={campaignDraftSeed}
               hasLoyalty={hasLoyalty}
               hasCoupons={hasCoupons}
