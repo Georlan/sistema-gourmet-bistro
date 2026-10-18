@@ -66,11 +66,12 @@ test('five destinations, benefit tabs, legacy restoration and module return shar
     await expect(visibleSidebarChildren).toHaveCount(5);
     await expect(visibleSidebarChildren.first()).toHaveAttribute('aria-current', 'page');
   }
-  // Disabled scroll arrows must not reserve a blank column at the start.
+  // Edge controls keep a stable slot so showing an arrow cannot resize
+  // the scroller and pull the selected tab back during a swipe.
   const navLeft = await page.getByRole('navigation', { name: 'Telas desta área' })
     .evaluate(element => element.getBoundingClientRect().left);
   const firstTabLeft = await horizontal.evaluate(element => element.getBoundingClientRect().left);
-  expect(firstTabLeft - navLeft).toBeLessThanOrEqual(20);
+  expect(firstTabLeft - navLeft).toBeLessThanOrEqual(68);
 
   for (const target of ['clientes', 'campanhas', 'beneficios', 'resultados', 'oportunidades'] as const) {
     await navigateRelationship(page, target);

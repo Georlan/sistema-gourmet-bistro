@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'src/components/caixa/navigation/**'
+      - 'src/index.css'
+      - 'e2e/cashier-horizontal-navigation.spec.ts'
       - 'src/components/caixa/customers/**'
       - 'src/components/clientes/GrowthEconomicsCalculator.tsx'
       - 'src/utils/storeSwitch.ts'
@@ -33,6 +35,7 @@ jobs:
       - name: Exercise all CRM destinations in the configured viewport matrix
         run: >-
           KOMA_E2E_PORT=4283 npm run test:e2e --
+          e2e/cashier-horizontal-navigation.spec.ts
           e2e/relationship-navigation.spec.ts
           e2e/loyalty-stage3.spec.ts
           e2e/crm-api-contract.spec.ts
