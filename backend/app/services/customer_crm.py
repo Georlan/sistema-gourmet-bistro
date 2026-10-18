@@ -244,7 +244,6 @@ def enrich_customer_crm_payloads(
     )
     latest_contact_by_cid: dict[str, CrmContatoCliente] = {}
     latest_confirmed_by_cid: dict[str, CrmContatoCliente] = {}
-    latest_protective_by_cid: dict[str, CrmContatoCliente] = {}
     total_contacts_by_cid: dict[str, int] = {}
     for c_row in contatos_rows:
         cid = str(c_row.cliente_id)
@@ -253,8 +252,6 @@ def enrich_customer_crm_payloads(
             latest_contact_by_cid[cid] = c_row
         if c_row.acao_executada == "CONTATO_MANUAL_CONFIRMADO":
             latest_confirmed_by_cid.setdefault(cid, c_row)
-        if c_row.acao_executada in ("CONTATO_MANUAL_CONFIRMADO", "WHATSAPP_ABERTO"):
-            latest_protective_by_cid.setdefault(cid, c_row)
 
     # 3. Última avaliação de satisfação por cliente
     avaliacoes_rows = (
@@ -304,12 +301,10 @@ def enrich_customer_crm_payloads(
 
         # Preparation remains in the activity history but cannot hide a real
         # contact or establish a customer return by itself.
-        protective = latest_protective_by_cid.get(cid)
-        protective_dt = to_utc(protective.criado_em) if protective else None
-        if protective_dt is not None:
-            contato_recente = utc_now - protective_dt < datetime.timedelta(days=RECENT_CONTACT_COOLDOWN_DAYS)
         confirmed = latest_confirmed_by_cid.get(cid)
         confirmed_dt = to_utc(confirmed.criado_em) if confirmed else None
+        if confirmed_dt is not None:
+            contato_recente = utc_now - confirmed_dt < datetime.timedelta(days=RECENT_CONTACT_COOLDOWN_DAYS)
         voltou_apos_contato = bool(ultima_compra_dt and confirmed_dt and ultima_compra_dt > confirmed_dt)
 
         ultima_av_nota: Optional[int] = None

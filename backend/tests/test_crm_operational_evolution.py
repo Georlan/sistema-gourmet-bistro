@@ -1006,6 +1006,38 @@ def test_preparation_does_not_hide_confirmed_contact_cooldown_or_return():
         assert customer["ultimo_contato_status"] == "MENSAGEM_COPIADA"
 
 
+@pytest.mark.parametrize("action", ["WHATSAPP_ABERTO", "MENSAGEM_COPIADA"])
+def test_preparation_alone_does_not_block_or_claim_customer_return(action):
+    from app.crm_models import CrmContatoCliente
+    from app.services.customer_crm import enrich_customer_crm_payloads
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    with TestingSessionLocal() as db:
+        db.add(Cliente(id="audit-preparation", restaurante_id=1, nome="Cliente fixture", telefone="85999993303"))
+        db.flush()
+        db.add(CrmContatoCliente(id="audit-prepared", restaurante_id=1, cliente_id="audit-preparation",
+            objetivo="CUSTOM", abordagem_tipo="SEM_DESCONTO", canal="WHATSAPP_MANUAL",
+            acao_executada=action, criado_em=now - datetime.timedelta(days=2)))
+        db.commit()
+        customer = enrich_customer_crm_payloads(db, restaurante_id=1, loyalty_enabled=True, now=now,
+            payloads=[{"id": "audit-preparation", "telefone": "85999993303",
+                       "ultima_compra_em": (now - datetime.timedelta(days=1)).isoformat()}])[0]
+        assert customer["contato_recente"] is False
+        assert customer["voltou_apos_ultimo_contato"] is False
+        assert customer["ultimo_contato_status"] == action
+
+    client = TestClient(app)
+    response = client.post("/fidelidade/crm/contatos", headers=get_auth_headers(client), json={
+        "cliente_id": "audit-preparation", "objetivo": "CUSTOM", "abordagem_tipo": "SEM_DESCONTO",
+        "canal": "WHATSAPP_MANUAL", "acao_executada": "CONTATO_MANUAL_CONFIRMADO"})
+    assert response.status_code == 201, response.text
+    # A confirmed contact now protects the customer from duplicate approaches.
+    retry = client.post("/fidelidade/crm/contatos", headers=get_auth_headers(client), json={
+        "cliente_id": "audit-preparation", "objetivo": "CUSTOM", "abordagem_tipo": "SEM_DESCONTO",
+        "canal": "WHATSAPP_MANUAL", "acao_executada": "CONTATO_MANUAL_CONFIRMADO"})
+    assert retry.status_code == 409, retry.text
+
+
 def test_coupon_campaign_without_own_contact_and_unassigned_orders_reconcile():
     from app.crm_models import CrmCampanha, CrmContatoCliente
     from app.services.customer_crm import get_crm_overview_and_results
@@ -1040,3 +1072,63 @@ def test_coupon_campaign_without_own_contact_and_unassigned_orders_reconcile():
         }
         assert data["resultados"]["pedidos_associados"]["total"] == 2
         assert data["resultados"]["valor_pago_pedidos_associados"]["total_liquido_brl"] == 140.0
+
+
+def test_relationship_journey_saved_benefit_profile_campaign_contact_and_results(monkeypatch):
+    """One isolated HTTP journey joins saved loyalty, customer history and attribution."""
+    from app.services import customer_crm
+
+    clock = datetime.datetime.now(datetime.timezone.utc)
+    monkeypatch.setattr(customer_crm, "get_utc_now", lambda: clock)
+    client = TestClient(app)
+    headers = get_auth_headers(client)
+    with TestingSessionLocal() as db:
+        db.add(Cliente(id="journey-customer", restaurante_id=1, nome="Cliente Jornada", telefone="85999993304", saldo_pontos=40))
+        db.flush()
+        db.add(Comanda(id="journey-first-order", restaurante_id=1, cliente_id="journey-customer",
+            garcom_id="user-caixa-1", numero_pedido=9351, fechada=True,
+            fechado_em=clock - datetime.timedelta(days=10), valor_pago=80))
+        db.commit()
+
+    config_before = client.get("/fidelidade/config", headers=headers).json()
+    recommendation = client.post("/caixa/cupons/economia/recomendacao", headers=headers, json={"mode": "automatico"})
+    assert recommendation.status_code == 200, recommendation.text
+    assert client.get("/fidelidade/config", headers=headers).json() == config_before
+    saved = client.post("/fidelidade/config", headers=headers, json={
+        "ativo": True, "tipo_recompensa": "PONTOS", "taxa_conversao": 2,
+        "valor_ponto_em_dinheiro": 0.05})
+    assert saved.status_code == 200, saved.text
+    profile = client.get("/fidelidade/clientes/journey-customer/perfil", headers=headers).json()
+    assert profile["beneficio"]["valor_resgatavel_brl"] == 2.0
+    with TestingSessionLocal() as db:
+        assert db.get(Cliente, "journey-customer").saldo_pontos == 40
+
+    campaign = client.post("/fidelidade/crm/campanhas", headers=headers, json={
+        "nome": "Jornada de benefício confirmado", "objetivo": "BENEFIT_REMINDER",
+        "segmento_filtro": "BENEFIT_REMINDER", "abordagem_tipo": "FIDELIDADE",
+        "template_mensagem": "Olá {nome}, consulte seu benefício disponível.", "janela_atribuicao_dias": 7})
+    assert campaign.status_code == 201, campaign.text
+    campaign_id = campaign.json()["id"]
+    contact = client.post("/fidelidade/crm/contatos", headers=headers, json={
+        "cliente_id": "journey-customer", "campanha_id": campaign_id,
+        "objetivo": "BENEFIT_REMINDER", "abordagem_tipo": "FIDELIDADE",
+        "canal": "WHATSAPP_MANUAL", "acao_executada": "CONTATO_MANUAL_CONFIRMADO",
+        "mensagem_personalizada": "Olá Cliente Jornada, seu benefício disponível é R$ 2,00."})
+    assert contact.status_code == 201, contact.text
+    assert contact.json()["comprovacao_envio"] == "REGISTRO_MANUAL_OPERADOR"
+    history = client.get("/fidelidade/clientes/journey-customer/perfil", headers=headers).json()
+    assert any(row["campanha_id"] == campaign_id for row in history["historico_contatos"])
+    clock += datetime.timedelta(hours=1)
+    with TestingSessionLocal() as db:
+        db.add(Comanda(id="journey-return", restaurante_id=1, cliente_id="journey-customer",
+            garcom_id="user-caixa-1", numero_pedido=9352, fechada=True,
+            fechado_em=clock, valor_pago=100))
+        db.commit()
+    results = client.get("/fidelidade/crm/resumo", headers=headers).json()
+    row = next(c for c in results["campanhas"] if c["id"] == campaign_id)
+    assert row["clientes_abordados"] == row["clientes_que_voltaram"] == 1
+    assert row["pedidos_estimados_janela"] == 1
+    assert row["pedidos_comprovados_cupom"] == 0
+    assert row["valor_pago_liquido_brl"] == 100.0
+    other = client.get("/fidelidade/crm/resumo", headers=get_auth_headers(client, "caixa_r2")).json()
+    assert not other["campanhas"]

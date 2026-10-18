@@ -363,3 +363,41 @@ test('results recover from forbidden, unauthorized, network and malformed respon
   await navigateRelationship(page, 'clientes');
   await expectRelationshipSelected(page, 'clientes');
 });
+
+test('campaign and contact success require a valid server acknowledgement', async ({page}) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  await page.route('**/fidelidade/clientes', route => route.fulfill({json: contract.customers}));
+  await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json: contract.summary}));
+  let validCampaign = false;
+  let validContact = false;
+  await page.route('**/fidelidade/crm/campanhas', route => route.fulfill({json: validCampaign ? {id:'ack-campaign'} : {}}));
+  await page.route('**/fidelidade/crm/contatos', route => route.fulfill({json: validContact ? {id:'ack-contact'} : {}}));
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  if (!(await page.locator('.cashier-sidebar:visible').count())) {
+    const menu = page.getByRole('button', {name:'Abrir menu completo', exact:true});
+    if (await menu.isVisible()) await menu.click();
+    else await page.getByRole('button', {name:'Abrir menu principal', exact:true}).click();
+  }
+  await page.locator('.cashier-sidebar:visible').getByRole('button', {name:/^Relacionamento(?: \d+)?$/}).click();
+  const opportunity = contract.summary.oportunidades.find((op:{elegiveis_count:number}) => op.elegiveis_count > 0);
+  await page.locator('article').filter({has:page.getByRole('heading', {name:opportunity.titulo, exact:true})})
+    .getByRole('button', {name:'Abrir público e iniciar ação', exact:true}).click();
+  await page.getByRole('button', {name:'Continuar para mensagem', exact:true}).click();
+  await page.getByRole('button', {name:'Salvar campanha no histórico e revisar envios', exact:true}).click();
+  await expect(page.getByText('O servidor não confirmou o registro da campanha.', {exact:true})).toBeVisible();
+  await expect(page.getByRole('button', {name:'2. Mensagem', exact:true})).toHaveAttribute('aria-current', 'step');
+  await expect(page.getByRole('button', {name:'3. Contatos', exact:true})).toBeDisabled();
+  validCampaign = true;
+  await page.getByRole('button', {name:'Salvar campanha no histórico e revisar envios', exact:true}).click();
+  const record = page.getByRole('button', {name:'Registrar contato manual', exact:true}).first();
+  await record.click();
+  await expect(page.getByText('O servidor não confirmou o registro do contato.', {exact:true})).toBeVisible();
+  await expect(record).toBeEnabled();
+  await expect(page.getByText('Contato manual registrado', {exact:true})).toHaveCount(0);
+  validContact = true;
+  await record.click();
+  await expect(page.getByRole('button', {name:'Contato manual registrado', exact:true}).first()).toBeDisabled();
+});
