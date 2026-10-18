@@ -295,6 +295,10 @@ test('stage5 Results ignores stale HTTP responses and charts only dated real eve
       {data: '2026-10-12', clientes_contatados: 1, clientes_que_voltaram: 1},
     ];
     summary.resultados.regra_janelas = {campanhas: 'PERSISTIDA', sem_campanha_dias: 14};
+    summary.resultados.conciliacao_campanhas = {
+      pedidos_com_campanha: 1, pedidos_sem_campanha: 1,
+      valor_com_campanha_brl: 80, valor_sem_campanha_brl: 60,
+    };
     return summary;
   };
   await page.route('**/fidelidade/crm/resumo**', async route => {
@@ -325,6 +329,8 @@ test('stage5 Results ignores stale HTTP responses and charts only dated real eve
   await expect(page.getByRole('region', {name: 'Evolução observada'})).toContainText('08/10');
   await page.screenshot({path:testInfo.outputPath('stage5-dated-results-' + testInfo.project.name + '.png'),fullPage:true,animations:'disabled'});
   const campaignList = page.getByRole('region', {name: 'Resultados por campanha'});
+  await expect(campaignList).toContainText('1 compras em campanhas');
+  await expect(campaignList).toContainText('1 sem campanha');
   await campaignList.getByText('Campanha fixture de contrato', {exact:true}).filter({visible:true}).click();
   await expect(campaignList.getByText(/Janela histórica da campanha:/).filter({visible:true})).toBeVisible();
 });
