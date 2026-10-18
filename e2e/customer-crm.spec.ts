@@ -17,10 +17,10 @@ test('CRM ranks buyers, filters inactivity, searches formatted phones and preser
   await page.route('**/fidelidade/clientes*', route => {
     const query = new URL(route.request().url()).searchParams;
     const term = (query.get('q') || '').trim().toLowerCase();
-    const digits = term.replace(/\\D/g, '');
+    const digits = term.replace(/[^0-9]/g, '');
     const matches = customerRows.filter((c) =>
       !term || c.nome.toLowerCase().includes(term) ||
-      (digits && c.telefone.replace(/\\D/g, '').includes(digits))
+      (digits && c.telefone.replace(/[^0-9]/g, '').includes(digits))
     );
     const offset = Number(query.get('offset') || 0);
     const limit = Number(query.get('limit') || 100);
