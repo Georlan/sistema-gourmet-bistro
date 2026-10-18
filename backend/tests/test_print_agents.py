@@ -2413,3 +2413,24 @@ def test_agent_token_tenant_cache_eliminates_pre_tenant_lookup_and_honors_immedi
     finally:
         event.remove(engine, "before_cursor_execute", capture_sql)
 
+
+
+def test_missing_agent_token_emits_safe_diagnostic(caplog):
+    """Authentication failures must be diagnosable without leaking credentials."""
+    with caplog.at_level("WARNING", logger="koma.print_agents"):
+        response = TestClient(app).post("/api/print-agents/heartbeat", json={})
+    assert response.status_code == 401
+    assert "reason=missing_token" in caplog.text
+    assert "X-Agent-Token" not in caplog.text
+
+
+def test_invalid_agent_token_emits_safe_diagnostic(caplog):
+    with caplog.at_level("WARNING", logger="koma.print_agents"):
+        response = TestClient(app).post(
+            "/api/print-agents/heartbeat",
+            headers={"X-Agent-Token": "koma_ag_test_never_registered"},
+            json={},
+        )
+    assert response.status_code == 401
+    assert "reason=unknown_or_revoked_token" in caplog.text
+    assert "koma_ag_test_never_registered" not in caplog.text
