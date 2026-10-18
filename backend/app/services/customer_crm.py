@@ -1162,6 +1162,9 @@ def record_crm_customer_contact(
     cliente = (
         db.query(Cliente)
         .filter(Cliente.restaurante_id == restaurante_id, Cliente.id == str(cliente_id))
+        # Serialize confirmations from different operators before checking the
+        # cooldown; a UI lock alone cannot protect concurrent sessions.
+        .with_for_update()
         .first()
     )
     if cliente is None:
