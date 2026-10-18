@@ -89,7 +89,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await page.screenshot({path:testInfo.outputPath(`campaign-message-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
   await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
   await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
-  await expect(page.getByRole('region',{name:'Contatos nesta sessão'})).toBeVisible();
+  await expect(page.getByText(/contatos registrados manualmente de .* selecionados nesta sessão/)).toBeVisible();
   await expect.poll(()=>savedCampaign?.abordagem_tipo).toBe('SEM_DESCONTO');
   await expect.poll(()=>savedCampaign?.segmento_filtro).toBe(opportunity.id);
   await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
