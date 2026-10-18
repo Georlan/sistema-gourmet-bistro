@@ -59,6 +59,30 @@ INVALID_AGENT_TOKEN_CACHE_MAX_ENTRIES = 2048
 _invalid_agent_token_cache: dict[str, float] = {}
 _invalid_agent_token_cache_lock = threading.Lock()
 
+# Cached 401s can occur several times a second from outdated executables.
+# Emit an aggregate at most once per minute instead of a WARNING per request.
+_CACHED_INVALID_AUTH_LOG_INTERVAL_SECONDS = 60.0
+_cached_invalid_auth_log_lock = threading.Lock()
+_cached_invalid_auth_last_log_at = 0.0
+_cached_invalid_auth_suppressed = 0
+
+
+def _log_cached_invalid_agent_token() -> None:
+    global _cached_invalid_auth_last_log_at, _cached_invalid_auth_suppressed
+    now = time.monotonic()
+    with _cached_invalid_auth_log_lock:
+        if now - _cached_invalid_auth_last_log_at < _CACHED_INVALID_AUTH_LOG_INTERVAL_SECONDS:
+            _cached_invalid_auth_suppressed += 1
+            return
+        attempts = _cached_invalid_auth_suppressed + 1
+        _cached_invalid_auth_suppressed = 0
+        _cached_invalid_auth_last_log_at = now
+    log.warning(
+        "print_agent_auth_rejected reason=cached_invalid_token attempts=%s",
+        attempts,
+    )
+
+
 # Tenant routing hint cache: maps token_hash -> (token_id, restaurante_id, expires_at).
 # Allows get_current_agent to bind the session to the tenant BEFORE opening a DB
 # transaction, eliminating the pre-tenant transaction + rollback while still
@@ -206,8 +230,12 @@ def _clear_agent_token_tenant_cache() -> None:
 
 def _clear_invalid_agent_token_cache() -> None:
     """Test/support helper: never stores or exposes the raw agent credential."""
+    global _cached_invalid_auth_last_log_at, _cached_invalid_auth_suppressed
     with _invalid_agent_token_cache_lock:
         _invalid_agent_token_cache.clear()
+    with _cached_invalid_auth_log_lock:
+        _cached_invalid_auth_last_log_at = 0.0
+        _cached_invalid_auth_suppressed = 0
     _clear_agent_token_tenant_cache()
 
 
@@ -1128,6 +1156,7 @@ def get_current_agent(
             raw_token = parts[1]
 
     if not raw_token:
+        log.warning("print_agent_auth_rejected reason=missing_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de agente não fornecido no cabeçalho X-Agent-Token"
@@ -1135,6 +1164,7 @@ def get_current_agent(
 
     computed_hash = hash_token(raw_token.strip())
     if _invalid_agent_token_is_cached(computed_hash):
+        _log_cached_invalid_agent_token()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de agente inválido ou revogado"
@@ -1192,6 +1222,7 @@ def get_current_agent(
         ).mappings().first()
 
     if not identity:
+        log.warning('print_agent_auth_rejected reason=unknown_or_revoked_token')
         _forget_agent_token_tenant(computed_hash)
         _remember_invalid_agent_token(computed_hash)
         raise HTTPException(
@@ -1211,11 +1242,17 @@ def get_current_agent(
             PrintAgentToken.ativo == True,
         ).first()
         if not agent_record:
+            # A lookup SECURITY DEFINER encontrou uma credencial ativa, mas
+            # a segunda verificação tenant-scoped não conseguiu validá-la.
+            # Pode ser uma corrida com revogação ou uma inconsistência de RLS;
+            # não declarar o token inválido nem causar perda do arquivo local.
+            # Na próxima tentativa, a lookup autoritativa decide novamente.
+            log.warning('print_agent_auth_rejected reason=tenant_validation_failed')
             _forget_agent_token_tenant(computed_hash)
-            _remember_invalid_agent_token(computed_hash)
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token de agente inválido ou revogado"
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Autenticação do agente temporariamente indisponível",
+                headers={"Retry-After": "5"},
             )
 
         _remember_agent_token_tenant(computed_hash, token_id, restaurante_id)
@@ -2224,24 +2261,55 @@ def register_agent(
     db: Session = Depends(get_db)
 ):
     """
-    Registra um novo agente para o restaurante do usuário logado.
-    Retorna o token_hash puro APENAS UMA VEZ.
+    Registra uma nova instalação no tenant autenticado.
+
+    Em colisões de agent_id, gera uma identidade distinta em vez de revogar
+    credenciais de instalações existentes. Token bruto é retornado uma única vez.
     """
     rest_id = current_restaurante_id.get()
     if not rest_id:
         raise HTTPException(status_code=400, detail="Restaurante não selecionado")
 
-    agent_id_clean = req.agent_id.strip()
-    if not agent_id_clean:
+    requested_agent_id = req.agent_id.strip()
+    if not requested_agent_id:
         raise HTTPException(status_code=400, detail="agent_id é obrigatório")
 
-    raw_token = f"koma_ag_{secrets.token_urlsafe(32)}"
-    token_h = hash_token(raw_token)
+    # Serializa somente novos pareamentos do mesmo restaurante. Sem isso,
+    # registros simultâneos poderiam escolher o mesmo agent_id e ambos
+    # se declarar principais. Não bloqueia heartbeat/claim nem outros tenants.
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(14806515, :restaurante_id)"),
+            {"restaurante_id": int(rest_id)},
+        )
 
     existing = db.query(PrintAgentToken).filter(
         PrintAgentToken.restaurante_id == rest_id,
-        PrintAgentToken.agent_id == agent_id_clean
+        PrintAgentToken.agent_id == requested_agent_id,
     ).first()
+
+    # Registros antigos podiam reutilizar 'agent-local' ou o nome da máquina.
+    # NUNCA rotacionar o token de outra instalação só porque seu agent_id
+    # coincide. Criar uma identidade distinta e devolver o ID canônico para
+    # o pareamento local, preservando o token/hash e o papel da instalação antiga.
+    agent_id_clean = requested_agent_id
+    if existing is not None:
+        for _ in range(8):
+            suffix = secrets.token_urlsafe(9)
+            candidate = f"{requested_agent_id[:200 - len(suffix) - 1]}-{suffix}"
+            collision = db.query(PrintAgentToken.id).filter(
+                PrintAgentToken.restaurante_id == rest_id,
+                PrintAgentToken.agent_id == candidate,
+            ).first()
+            if collision is None:
+                agent_id_clean = candidate
+                break
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail="Não foi possível reservar uma identidade de impressão.",
+            )
+        log.warning("print_agent_registration_collision_preserved")
 
     has_active_primary = (
         db.query(PrintAgentToken.id)
@@ -2254,41 +2322,31 @@ def register_agent(
         is not None
     )
 
-    if existing:
-        if existing.token_hash and existing.token_hash != token_h:
-            _forget_agent_token_tenant(existing.token_hash)
-            _remember_invalid_agent_token(existing.token_hash)
-        existing.token_hash = token_h
-        existing.ativo = True
-        existing.created_at = datetime.datetime.now(datetime.timezone.utc)
-        if not has_active_primary and not getattr(existing, "is_primary", False):
-            existing.is_primary = True
-        target_token_record = existing
-    else:
-        new_token = PrintAgentToken(
-            restaurante_id=rest_id,
-            agent_id=agent_id_clean,
-            token_hash=token_h,
-            ativo=True,
-            is_primary=not has_active_primary,
-        )
-        db.add(new_token)
-        target_token_record = new_token
-
+    raw_token = f"koma_ag_{secrets.token_urlsafe(32)}"
+    token_h = hash_token(raw_token)
+    new_token = PrintAgentToken(
+        restaurante_id=rest_id,
+        agent_id=agent_id_clean,
+        token_hash=token_h,
+        ativo=True,
+        is_primary=not has_active_primary,
+    )
+    db.add(new_token)
+    db.flush()
+    issued_token_id = str(new_token.id)
     db.commit()
-    if getattr(target_token_record, "id", None) is not None:
-        _forget_invalid_agent_token(token_h)
-        _remember_agent_token_tenant(
-            token_h,
-            token_id=str(target_token_record.id),
-            restaurante_id=int(rest_id),
-        )
+    _forget_invalid_agent_token(token_h)
+    _remember_agent_token_tenant(
+        token_h,
+        token_id=issued_token_id,
+        restaurante_id=int(rest_id),
+    )
 
     return {
         "status": "registered",
         "agent_id": agent_id_clean,
         "restaurante_id": rest_id,
-        "agent_token": raw_token
+        "agent_token": raw_token,
     }
 
 
@@ -2802,8 +2860,11 @@ def complete_job(
         raise HTTPException(status_code=404, detail="Job de impressão não encontrado")
 
     if job.agent_id != agent.agent_id:
+        # 409, não 403: a credencial do agente é válida; o conflito é de
+        # posse do job. Agentes instalados tratam 401/403 como revogação e
+        # apagariam a credencial local por causa de uma corrida de fila.
         raise HTTPException(
-            status_code=403,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Operação negada: o job foi assumido por outro agente"
         )
 
@@ -2858,8 +2919,11 @@ def fail_job(
         raise HTTPException(status_code=404, detail="Job de impressão não encontrado")
 
     if job.agent_id != agent.agent_id:
+        # 409, não 403: a credencial do agente é válida; o conflito é de
+        # posse do job. Agentes instalados tratam 401/403 como revogação e
+        # apagariam a credencial local por causa de uma corrida de fila.
         raise HTTPException(
-            status_code=403,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Operação negada: o job pertence a outro agente"
         )
 

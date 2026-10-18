@@ -54,6 +54,7 @@ def run(config: AgentConfig) -> int:
                 )
                 return 1
             config.agent_token = paired_token
+            config.agent_token_source = "credentials"
             print("[PAREAMENTO] Computador conectado com sucesso.")
 
         try:
@@ -67,8 +68,9 @@ def run(config: AgentConfig) -> int:
         except AgentAuthenticationError:
             from pairing import clear_stored_token
 
-            clear_stored_token()
+            clear_stored_token(config.agent_token, config.config_path)
             config.agent_token = ""
+            config.agent_token_source = ""
             if config.pair_only:
                 print(
                     "[PAREAMENTO] A autorização anterior foi revogada. "
@@ -91,8 +93,9 @@ def run(config: AgentConfig) -> int:
         except AgentAuthenticationError:
             from pairing import clear_stored_token
 
-            clear_stored_token()
+            clear_stored_token(config.agent_token, config.config_path)
             config.agent_token = ""
+            config.agent_token_source = ""
             print(
                 "[PAREAMENTO] A autorização deste computador foi revogada. "
                 "O serviço foi pausado sem abrir navegador; use 'Preparar impressão'."

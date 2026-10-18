@@ -152,7 +152,7 @@ class PrintWakeupListener:
                     )
                     with self._response_lock:
                         self._response = response
-                    if response.status_code in (401, 403):
+                    if response.status_code == 401:
                         self.authentication_failed.set()
                         self.wakeup_event.set()
                         return

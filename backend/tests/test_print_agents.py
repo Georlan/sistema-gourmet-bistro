@@ -6,7 +6,7 @@ import pytest
 import datetime
 from types import SimpleNamespace
 from fastapi.testclient import TestClient
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
@@ -2412,4 +2412,226 @@ def test_agent_token_tenant_cache_eliminates_pre_tenant_lookup_and_honors_immedi
         assert revoked.status_code == 401
     finally:
         event.remove(engine, "before_cursor_execute", capture_sql)
+
+
+
+def test_missing_agent_token_emits_safe_diagnostic(caplog):
+    """Authentication failures must be diagnosable without leaking credentials."""
+    with caplog.at_level("WARNING", logger="koma.print_agents"):
+        response = TestClient(app).post("/api/print-agents/heartbeat", json={})
+    assert response.status_code == 401
+    assert "reason=missing_token" in caplog.text
+    assert "X-Agent-Token" not in caplog.text
+
+
+def test_invalid_agent_token_emits_safe_diagnostic(caplog):
+    with caplog.at_level("WARNING", logger="koma.print_agents"):
+        response = TestClient(app).post(
+            "/api/print-agents/heartbeat",
+            headers={"X-Agent-Token": "koma_ag_test_never_registered"},
+            json={},
+        )
+    assert response.status_code == 401
+    assert "reason=unknown_or_revoked_token" in caplog.text
+    assert "koma_ag_test_never_registered" not in caplog.text
+
+
+def test_repeated_registration_preserves_both_machine_tokens_and_claim_is_atomic():
+    """A second installation with a reused legacy ID must not revoke the first."""
+    client = TestClient(app)
+    headers = jwt_headers("2", 2, "admin")
+
+    first = client.post(
+        "/api/print-agents/register",
+        headers=headers,
+        json={"agent_id": "agent-local"},
+    )
+    assert first.status_code == 200
+    first_data = first.json()
+    assert first_data["agent_id"] == "agent-local"
+    first_auth = {"X-Agent-Token": first_data["agent_token"]}
+    assert client.post("/api/print-agents/heartbeat", headers=first_auth).status_code == 200
+
+    second = client.post(
+        "/api/print-agents/register",
+        headers=headers,
+        json={"agent_id": "agent-local"},
+    )
+    assert second.status_code == 200
+    second_data = second.json()
+    assert second_data["agent_id"] != first_data["agent_id"]
+    assert second_data["agent_id"].startswith("agent-local-")
+    assert second_data["agent_token"] != first_data["agent_token"]
+    second_auth = {"X-Agent-Token": second_data["agent_token"]}
+
+    tenant_ctx = current_restaurante_id.set(2)
+    try:
+        with TestingSessionLocal() as db:
+            original = db.query(PrintAgentToken).filter_by(
+                restaurante_id=2, agent_id="agent-local",
+            ).one()
+            replacement = db.query(PrintAgentToken).filter_by(
+                restaurante_id=2, agent_id=second_data["agent_id"],
+            ).one()
+            assert original.token_hash == hash_token(first_data["agent_token"])
+            assert original.ativo is True
+            assert original.is_primary is True
+            assert replacement.token_hash == hash_token(second_data["agent_token"])
+            assert replacement.ativo is True
+            assert replacement.is_primary is False
+    finally:
+        current_restaurante_id.reset(tenant_ctx)
+    assert client.post("/api/print-agents/heartbeat", headers=first_auth).status_code == 200
+    assert client.post("/api/print-agents/heartbeat", headers=second_auth).status_code == 200
+
+    primary_claim = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10", headers=first_auth,
+    )
+    secondary_claim = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10", headers=second_auth,
+    )
+    assert primary_claim.status_code == secondary_claim.status_code == 200
+    primary_ids = {job["id"] for job in primary_claim.json()}
+    secondary_ids = {job["id"] for job in secondary_claim.json()}
+    assert not primary_ids.intersection(secondary_ids)
+    assert "job-1001" not in primary_ids | secondary_ids  # other tenant
+
+
+def test_equal_agent_ids_in_different_tenants_do_not_rotate_credentials():
+    client = TestClient(app)
+    response = client.post(
+        "/api/print-agents/register",
+        headers=jwt_headers("2", 2, "admin"),
+        json={"agent_id": "agent-box-1"},  # tenant 1 already uses this ID
+    )
+    assert response.status_code == 200
+    assert response.json()["agent_id"] == "agent-box-1"
+    assert client.post(
+        "/api/print-agents/heartbeat",
+        headers={"X-Agent-Token": "token_agent_1"},
+    ).status_code == 200
+    assert client.post(
+        "/api/print-agents/heartbeat",
+        headers={"X-Agent-Token": response.json()["agent_token"]},
+    ).status_code == 200
+
+
+def test_tenant_verification_miss_is_temporary_and_does_not_cache_valid_token(monkeypatch):
+    """Identity found by the trusted lookup must never become a permanent 401
+    just because tenant RLS verification momentarily returned no row."""
+    raw_token = "koma_ag_tenant_verification_race"
+    token_hash = hash_token(raw_token)
+
+    class Result:
+        def mappings(self):
+            return self
+
+        def first(self):
+            return {"id": "a1", "restaurante_id": 1}
+
+    class Query:
+        def filter(self, *args):
+            return self
+
+        def first(self):
+            return None
+
+    class Session:
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+
+        def execute(self, *args, **kwargs):
+            return Result()
+
+        def query(self, *args):
+            return Query()
+
+    monkeypatch.setattr(
+        print_agents_route, "bind_session_to_tenant", lambda db, tenant: None,
+    )
+    with pytest.raises(HTTPException) as error:
+        next(print_agents_route.get_current_agent(
+            x_agent_token=raw_token, authorization=None, db=Session(),
+        ))
+    assert error.value.status_code == 503
+    assert error.value.headers["Retry-After"] == "5"
+    assert not print_agents_route._invalid_agent_token_is_cached(token_hash)
+    assert print_agents_route._get_cached_agent_token_tenant(token_hash) is None
+
+
+def test_invalid_agent_polling_logs_aggregate_without_leaking_tokens(caplog):
+    client = TestClient(app)
+    secret = "koma_ag_unknown_polling_test"
+    with caplog.at_level("WARNING", logger="koma.print_agents"):
+        for _ in range(12):
+            resp = client.post(
+                "/api/print-agents/jobs/claim-batch",
+                headers={"X-Agent-Token": secret},
+            )
+            assert resp.status_code == 401
+    assert caplog.text.count("reason=unknown_or_revoked_token") == 1
+    assert caplog.text.count("reason=cached_invalid_token") == 1
+    assert "attempts=1" in caplog.text
+    assert secret not in caplog.text
+
+
+def test_events_sse_auth_diagnostics_and_bearer_fallback(caplog):
+    client = TestClient(app)
+    secret = "koma_ag_unknown_events_token"
+
+    with caplog.at_level("WARNING"):
+        resp_missing = client.get("/api/print-agents/events")
+        assert resp_missing.status_code == 401
+
+        resp_unknown = client.get(
+            "/api/print-agents/events",
+            headers={"X-Agent-Token": secret},
+        )
+        assert resp_unknown.status_code == 401
+
+        resp_cached = client.get(
+            "/api/print-agents/events",
+            headers={"X-Agent-Token": secret},
+        )
+        assert resp_cached.status_code == 401
+
+        resp_bearer_unknown = client.get(
+            "/api/print-agents/events",
+            headers={"Authorization": f"Bearer {secret}"},
+        )
+        assert resp_bearer_unknown.status_code == 401
+
+    assert "reason=missing_token channel=events" in caplog.text
+    assert "reason=unknown_or_revoked_token channel=events" in caplog.text
+    assert secret not in caplog.text
+
+
+def test_job_ack_ownership_mismatch_returns_409_conflict():
+    mark_agent_printer_ready("a1")
+    mark_agent_printer_ready("a2")
+    client = TestClient(app)
+    headers1 = {"X-Agent-Token": "token_agent_1"}
+    headers2 = {"X-Agent-Token": "token_agent_2"}
+
+    # Agente 1 assume o job
+    resp_claim = client.post("/api/print-agents/jobs/job-1001/claim", headers=headers1)
+    assert resp_claim.status_code == 200
+
+    # Agente 2 tenta completar o job de outro agente -> 409 Conflict
+    resp_complete = client.post(
+        "/api/print-agents/jobs/job-1001/complete",
+        headers=headers2,
+        json={"printer_name": "POS80"},
+    )
+    assert resp_complete.status_code == 409
+    assert "outro agente" in resp_complete.json()["detail"]
+
+    # Agente 2 tenta falhar o job de outro agente -> 409 Conflict
+    resp_fail = client.post(
+        "/api/print-agents/jobs/job-1001/fail",
+        headers=headers2,
+        json={"error": "wrong agent"},
+    )
+    assert resp_fail.status_code == 409
+    assert "outro agente" in resp_fail.json()["detail"]
 

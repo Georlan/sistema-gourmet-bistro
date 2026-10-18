@@ -91,15 +91,54 @@ def load_stored_agent_id() -> str:
     return load_stored_credentials()["agent_id"]
 
 
-def clear_stored_token() -> None:
-    """Remove somente a credencial já rejeitada; fila e journal são preservados."""
+def clear_stored_token(
+    rejected_token: str = "",
+    config_path: Optional[str] = None,
+) -> None:
+    """Remove somente a credencial já rejeitada; fila e journal são preservados.
 
+    Quando ``rejected_token`` é informado, um ``credentials.json`` contendo
+    outra credencial (pareamento mais novo e válido) é preservado, e um
+    ``agent_token`` idêntico em ``config.json`` é removido para não voltar a
+    ser usado na próxima inicialização.
+    """
+
+    rejected = (rejected_token or "").strip()
+    stored = load_stored_token()
+    if not rejected or not stored or stored == rejected:
+        try:
+            credentials_path().unlink(missing_ok=True)
+        except OSError:
+            # O processo ainda encerra sem martelar a API. O próximo instalador
+            # poderá substituir o arquivo manualmente se o SO bloquear a remoção.
+            pass
+
+    if rejected and config_path:
+        _forget_rejected_config_token(Path(config_path), rejected)
+
+
+def _forget_rejected_config_token(path: Path, rejected_token: str) -> None:
     try:
-        credentials_path().unlink(missing_ok=True)
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return
+    if not isinstance(data, dict):
+        return
+    if str(data.get("agent_token", "")).strip() != rejected_token:
+        return
+    data.pop("agent_token", None)
+    temporary = path.with_name(path.name + ".tmp")
+    try:
+        temporary.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        os.replace(temporary, path)
     except OSError:
-        # O processo ainda encerra sem martelar a API. O próximo instalador
-        # poderá substituir o arquivo manualmente se o SO bloquear a remoção.
-        pass
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def save_stored_token(token: str, agent_id: str = "") -> None:

@@ -354,6 +354,27 @@ def execute_agent_command(adapter, command: dict) -> dict:
         }
 
 
+def _settle_rejected_acks(journal: PrintJournal, ack_result) -> frozenset:
+    """Encerra localmente confirmações que o backend recusou em definitivo.
+
+    O backend só recusa um ``complete-batch`` quando o trabalho não existe
+    mais, já está encerrado (cancelado/falho) ou pertence a outro agente —
+    por exemplo, um trabalho impresso antes de um novo pareamento deste
+    computador. Reenviar para sempre não muda o resultado e gerava tráfego
+    contínuo. O registro ``printed`` permanece no diário, então a proteção
+    contra reimpressão por ``job_id``/``idempotency_key`` é preservada.
+    """
+    rejected = frozenset(getattr(ack_result, "rejected", ()) or ())
+    for job_id in rejected:
+        journal.mark_backend_confirmed(job_id)
+        log.warning(
+            "[RESILIÊNCIA] Backend recusou definitivamente a confirmação do job '%s'; "
+            "o registro local foi encerrado sem reimprimir.",
+            job_id,
+        )
+    return rejected
+
+
 def process_unconfirmed_journal_jobs(client: KomaApiClient, journal: PrintJournal):
     """
     Verifica e reenvia confirmações (complete_job) para o backend de trabalhos
@@ -369,6 +390,7 @@ def process_unconfirmed_journal_jobs(client: KomaApiClient, journal: PrintJourna
             for item in unconfirmed[:10]
         ]
         confirmed_ids = client.complete_jobs(confirmations)
+        _settle_rejected_acks(journal, confirmed_ids)
         for item in confirmations:
             job_id = item["job_id"]
             if job_id in confirmed_ids:
@@ -491,12 +513,16 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
         nonlocal ack_future, next_ack_at
         completed_future, ack_future = ack_future, None
         confirmed = completed_future.result()
+        rejected = _settle_rejected_acks(journal, confirmed)
         for item in ack_items:
             job_id = item["job_id"]
             if job_id in confirmed:
                 journal.mark_backend_confirmed(job_id)
                 pending.pop(job_id, None)
-        next_ack_at = time.monotonic() + (RECONCILIATION_INTERVAL_SECONDS if len(confirmed) < len(ack_items) else 0)
+            elif job_id in rejected:
+                pending.pop(job_id, None)
+        settled = len(confirmed) + len(rejected)
+        next_ack_at = time.monotonic() + (RECONCILIATION_INTERVAL_SECONDS if settled < len(ack_items) else 0)
 
     try:
         with ThreadPoolExecutor(max_workers=1, thread_name_prefix="koma-control") as control, \

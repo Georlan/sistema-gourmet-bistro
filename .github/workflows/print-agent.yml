@@ -4,6 +4,7 @@ on:
     paths:
       - 'print-agent/**'
       - 'backend/app/routes/print_agents.py'
+      - 'backend/app/routes/print_agent_events.py'
       - 'backend/tests/test_print_agents.py'
       - 'backend/tests/test_print_job_terminal_invariant.py'
       - 'backend/tests/test_print_ack_concurrency_postgres.py'

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
@@ -19,18 +20,21 @@ from ..services.print_delivery import print_wakeup_hub
 from .print_agents import (
     _forget_invalid_agent_token,
     _invalid_agent_token_is_cached,
+    _log_cached_invalid_agent_token,
     _remember_agent_token_tenant,
     _remember_invalid_agent_token,
     hash_token,
 )
 
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 
 def _authenticate_agent_token(raw_token: str) -> tuple[str, int]:
     token = (raw_token or "").strip()
     if not token:
+        log.warning("print_agent_auth_rejected reason=missing_token channel=events")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de agente ausente",
@@ -38,6 +42,7 @@ def _authenticate_agent_token(raw_token: str) -> tuple[str, int]:
 
     token_hash = hash_token(token)
     if _invalid_agent_token_is_cached(token_hash):
+        _log_cached_invalid_agent_token()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de agente inválido ou revogado",
@@ -67,6 +72,7 @@ def _authenticate_agent_token(raw_token: str) -> tuple[str, int]:
         db.close()
 
     if not identity:
+        log.warning("print_agent_auth_rejected reason=unknown_or_revoked_token channel=events")
         _remember_invalid_agent_token(token_hash)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -100,12 +106,19 @@ def _sse(event: str, payload: dict) -> str:
 async def stream_print_job_wakeups(
     request: Request,
     x_agent_token: Optional[str] = Header(default=None, alias="X-Agent-Token"),
+    authorization: Optional[str] = Header(default=None),
 ):
     """Streams commit-safe wake-up hints; the agent still claims from PostgreSQL."""
 
+    raw_token = x_agent_token or ""
+    if not raw_token.strip() and authorization:
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            raw_token = parts[1]
+
     agent_id, restaurante_id = await asyncio.to_thread(
         _authenticate_agent_token,
-        x_agent_token or "",
+        raw_token,
     )
 
     async def event_stream():
