@@ -89,7 +89,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await page.screenshot({path:testInfo.outputPath(`campaign-message-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
   await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
   await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
-  await expect(page.getByRole('region',{name:'Contatos nesta sessão'})).toBeVisible();
+  await expect(page.getByText(/contatos registrados manualmente de .* selecionados nesta sessão/)).toBeVisible();
   await expect.poll(()=>savedCampaign?.abordagem_tipo).toBe('SEM_DESCONTO');
   await expect.poll(()=>savedCampaign?.segmento_filtro).toBe(opportunity.id);
   await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
@@ -120,7 +120,9 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await page.getByRole('button',{name:'Ver perfil',exact:true}).filter({visible:true}).first().click();
   const dialog=page.getByRole('dialog');
   await expect(dialog).toBeVisible();
+  await dialog.getByText('Benefícios e saldos',{exact:true}).click();
   await expect(dialog.getByText(contract.profile.beneficio.explicacao,{exact:true})).toBeVisible();
+  await dialog.getByText('Cadastro, preferências e hábitos observados',{exact:true}).click();
   await dialog.getByRole('combobox').selectOption('telefone');
   await dialog.getByRole('button',{name:'Salvar preferências declaradas',exact:true}).click();
   await expect.poll(()=>savedPreference?.canal_preferido).toBe('telefone');
@@ -232,4 +234,44 @@ test('campaign responses cannot unlock edited drafts or carry late contact confi
   await expect.poll(() => contactCampaignIds.length).toBe(2);
   expect(contactCampaignIds).toEqual(['campaign-fixture-2','campaign-fixture-3']);
   expect(campaignCreates).toBe(3);
+});
+
+test('customer base metadata stays honest beyond the first 100 and pages load only on request', async ({page}) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  const data = Array.from({length: 125}, (_, index) => ({
+    ...contract.customers[0],
+    id: `stage4-customer-${index}`,
+    nome: `Cliente ${index + 1}`,
+    cliente: `Cliente ${index + 1}`,
+    telefone: '85999991122',
+  }));
+  const requests: number[] = [];
+  await page.route('**/fidelidade/clientes*', async route => {
+    const url = new URL(route.request().url());
+    const offset = Number(url.searchParams.get('offset') || 0);
+    requests.push(offset);
+    const limit = Number(url.searchParams.get('limit') || 100);
+    return route.fulfill({
+      json: data.slice(offset, offset + limit),
+      headers: { 'X-Total-Count': '125', 'X-Has-More': offset + limit < 125 ? 'true' : 'false', 'X-Products-Included': 'false', 'Access-Control-Expose-Headers': 'X-Total-Count, X-Has-More, X-Products-Included' },
+    });
+  });
+  await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json:contract.summary}));
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  if (!(await page.locator('.cashier-sidebar:visible').count())) {
+    const menu = page.getByRole('button',{name:'Abrir menu completo',exact:true});
+    if (await menu.isVisible()) await menu.click();
+    else await page.getByRole('button',{name:'Abrir menu principal',exact:true}).click();
+  }
+  await page.locator('.cashier-sidebar:visible').getByRole('button',{name:/^Relacionamento(?: \d+)?$/}).click();
+  await navigateRelationship(page, 'clientes');
+  await expect(page.getByText('Exibindo 100 de 125 clientes', {exact:false})).toBeVisible();
+  await expect(page.getByText(/Favoritos (ainda )?não consultados/).filter({visible:true}).first()).toBeVisible();
+  expect(requests).not.toContain(100);
+  await page.getByRole('button',{name:'Carregar mais 100 clientes'}).click();
+  await expect(page.getByText('125 de 125 clientes', {exact:false}).filter({visible:true}).first()).toBeVisible();
+  expect(requests).toContain(100);
 });

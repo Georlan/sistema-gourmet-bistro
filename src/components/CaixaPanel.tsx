@@ -362,7 +362,7 @@ export function CaixaPanel({
   const { apiProdutos, apiCategorias, dynamicMenu, suggestedProductCode, fetchProdutos, fetchCategorias } =
     catalog;
   const customers = useCashierCustomers({ apiBaseUrl, authHeaders });
-  const { loyaltyUsers, customersStatus, hasCustomerSnapshot, refreshLoyaltyUsers } = customers;
+  const { loyaltyUsers, customersStatus, hasCustomerSnapshot, refreshLoyaltyUsers, totalCustomers, hasMoreCustomers, loadingMoreCustomers, loadMoreCustomers } = customers;
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -1011,7 +1011,7 @@ export function CaixaPanel({
               />
             )}
 
-            <DeferredCashierSection active={activeTab === 'clientes'} label="Clientes" load={loadCashierCustomers} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, loyaltyUsers, customersStatus, hasCustomerSnapshot, refreshLoyaltyUsers, hasLoyalty, hasCoupons }} />
+            <DeferredCashierSection active={activeTab === 'clientes'} label="Clientes" load={loadCashierCustomers} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, loyaltyUsers, customersStatus, hasCustomerSnapshot, refreshLoyaltyUsers, totalCustomers, hasMoreCustomers, loadingMoreCustomers, loadMoreCustomers, hasLoyalty, hasCoupons }} />
 
             <DeferredCashierSection
               active={activeTab === 'cardapio'}

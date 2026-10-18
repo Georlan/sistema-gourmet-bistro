@@ -10,50 +10,17 @@ type Props = {
 
 type CustomerSnapshot = {
   scope: string;
+  totalCount: number;
+  hasMore: boolean;
   data: LoyaltyCustomer[];
   status: 'loading' | 'ready' | 'refreshing' | 'error';
   hasSnapshot: boolean;
 };
 
-export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
-  const authorization = authHeaders.Authorization || authHeaders.authorization || '';
-  const scope = `${apiBaseUrl}\u0000${authorization}`;
-  const [snapshot, setSnapshot] = useState<CustomerSnapshot>({ scope, data: [], status: 'loading', hasSnapshot: false });
-  const scopeRef = useRef(scope);
-  const mountedRef = useRef(false);
-  const flightRef = useRef<Promise<void> | null>(null);
-  const dirtyRef = useRef(false);
-  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const controllerRef = useRef<AbortController | null>(null);
-  const current = snapshot.scope === scope ? snapshot : { scope, data: [], status: 'loading' as const, hasSnapshot: false };
-
-  const loadCustomers = useCallback((): Promise<void> => {
-    if (scopeRef.current !== scope) {
-      scopeRef.current = scope;
-      controllerRef.current?.abort();
-      flightRef.current = null;
-      dirtyRef.current = false;
-      setSnapshot({ scope, data: [], status: 'loading', hasSnapshot: false });
-    }
-    if (flightRef.current) return flightRef.current;
-    setSnapshot(previous => ({ ...previous, status: previous.hasSnapshot ? 'refreshing' : 'loading' }));
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    const flight = (async () => {
-    try {
-      // O backend aplica autenticação, tenant e RLS antes de devolver as fichas.
-      const response = await fetch(`${apiBaseUrl}/fidelidade/clientes`, {
-        headers: authHeaders,
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        throw new Error(`Falha ao carregar clientes (${response.status})`);
-      }
-      const clientes = await response.json();
-      if (Array.isArray(clientes)) {
-        const mapped: LoyaltyCustomer[] = clientes
+export function mapCustomers(clientes: any[], productsIncluded: boolean): LoyaltyCustomer[] {
+  return clientes
           .filter((c: any) => c?.id != null && String(c.id).trim() !== '')
-          .map((c: any) => ({
+    .map((c: any) => ({
             id: String(c.id),
             cliente: c.nome || c.cliente || 'Cliente',
             nome: c.nome || c.cliente || 'Cliente',
@@ -64,7 +31,7 @@ export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
             saldoCashback: Number(c.saldo_cashback || 0),
             saldo_cashback: Number(c.saldo_cashback || 0),
             historico: c.historico || [],
-            produtos_favoritos: Array.isArray(c.produtos_favoritos) ? c.produtos_favoritos : [],
+            produtos_favoritos: productsIncluded && Array.isArray(c.produtos_favoritos) ? c.produtos_favoritos : undefined,
             pedidos_concluidos: typeof c.pedidos_concluidos === 'number' ? c.pedidos_concluidos : 0,
             valor_pago_total: typeof c.valor_pago_total === 'number' ? c.valor_pago_total : 0,
             ticket_medio_pago: typeof c.ticket_medio_pago === 'number' ? c.ticket_medio_pago : 0,
@@ -92,9 +59,56 @@ export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
             elegivel_resgate: Boolean(c.elegivel_resgate),
             valor_resgatavel_brl: typeof c.valor_resgatavel_brl === 'number' ? c.valor_resgatavel_brl : 0,
             status_beneficio: c.status_beneficio || 'SEM_SALDO',
-          }));
+    }));
+}
+
+export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
+  const authorization = authHeaders.Authorization || authHeaders.authorization || '';
+  const scope = `${apiBaseUrl}\u0000${authorization}`;
+  const [snapshot, setSnapshot] = useState<CustomerSnapshot>({ scope, data: [], status: 'loading', hasSnapshot: false, totalCount: 0, hasMore: false });
+  const scopeRef = useRef(scope);
+  const mountedRef = useRef(false);
+  const flightRef = useRef<Promise<void> | null>(null);
+  const dirtyRef = useRef(false);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
+  const moreControllerRef = useRef<AbortController | null>(null);
+  const moreFlightRef = useRef<Promise<void> | null>(null);
+  const [loadingMoreCustomers, setLoadingMoreCustomers] = useState(false);
+  const current = snapshot.scope === scope ? snapshot : { scope, data: [], status: 'loading' as const, hasSnapshot: false, totalCount: 0, hasMore: false };
+
+  const loadCustomers = useCallback((): Promise<void> => {
+    if (scopeRef.current !== scope) {
+      scopeRef.current = scope;
+      controllerRef.current?.abort();
+      moreControllerRef.current?.abort();
+      moreFlightRef.current = null;
+      flightRef.current = null;
+      dirtyRef.current = false;
+      setSnapshot({ scope, data: [], status: 'loading', hasSnapshot: false, totalCount: 0, hasMore: false });
+    }
+    if (flightRef.current) return flightRef.current;
+    setSnapshot(previous => ({ ...previous, status: previous.hasSnapshot ? 'refreshing' : 'loading' }));
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    const flight = (async () => {
+    try {
+      // O backend aplica autenticação, tenant e RLS antes de devolver as fichas.
+      const response = await fetch(`${apiBaseUrl}/fidelidade/clientes`, {
+        headers: authHeaders,
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`Falha ao carregar clientes (${response.status})`);
+      }
+      const clientes = await response.json();
+      if (Array.isArray(clientes)) {
+        const mapped = mapCustomers(clientes, response.headers.get('X-Products-Included') !== 'false');
         if (mountedRef.current && scopeRef.current === scope) {
-          setSnapshot({ scope, data: mapped, status: 'ready', hasSnapshot: true });
+          setSnapshot({ scope, data: mapped, status: 'ready', hasSnapshot: true,
+            totalCount: Number(response.headers.get('X-Total-Count')) || mapped.length,
+            hasMore: response.headers.get('X-Has-More') === 'true',
+          });
         }
         return;
       }
@@ -118,6 +132,48 @@ export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
     flightRef.current = flight;
     return flight;
   }, [apiBaseUrl, authorization, scope]);
+
+  // Extra pages are fetched only on explicit request. A partial snapshot is never called the entire base.
+  const loadMoreCustomers = useCallback((): Promise<void> => {
+    if (current.scope !== scope || !current.hasMore || moreFlightRef.current) {
+      return moreFlightRef.current ?? Promise.resolve();
+    }
+    const offset = current.data.length;
+    const controller = new AbortController();
+    moreControllerRef.current = controller;
+    const flight = (async () => {
+      setLoadingMoreCustomers(true);
+      try {
+        const response = await fetch(`${apiBaseUrl}/fidelidade/clientes?limit=100&offset=${offset}`, {
+          headers: authHeaders, signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Falha ao carregar mais clientes (${response.status})`);
+        const json = await response.json();
+        if (!Array.isArray(json)) throw new Error('Resposta inválida de paginação de clientes');
+        const next = mapCustomers(json, response.headers.get('X-Products-Included') !== 'false');
+        if (mountedRef.current && scopeRef.current === scope) {
+          setSnapshot(previous => {
+            if (previous.scope !== scope) return previous;
+            const existing = new Set(previous.data.map(customer => customer.id));
+            const additional = next.filter(customer => !existing.has(customer.id));
+            const data = [...previous.data, ...additional];
+            const totalCount = Number(response.headers.get('X-Total-Count')) || previous.totalCount;
+            return { ...previous, data, totalCount,
+              hasMore: response.headers.get('X-Has-More') === 'true',
+            };
+          });
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) console.error('Error loading next customer page:', error);
+      } finally {
+        if (moreControllerRef.current === controller) moreControllerRef.current = null;
+        moreFlightRef.current = null;
+        if (mountedRef.current) setLoadingMoreCustomers(false);
+      }
+    })();
+    moreFlightRef.current = flight;
+    return flight;
+  }, [apiBaseUrl, authHeaders, current, scope]);
 
   const refreshLoyaltyUsers = useCallback((): Promise<void> => {
     if (flightRef.current) {
@@ -147,6 +203,7 @@ export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
 
     return () => {
       mountedRef.current = false;
+      moreControllerRef.current?.abort();
       if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
       window.removeEventListener('koma_customers_updated', handleCustomerEvent);
       window.removeEventListener('storage', handleStorage);
@@ -155,6 +212,10 @@ export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
 
   return {
     loyaltyUsers: current.data,
+    totalCustomers: current.totalCount,
+    hasMoreCustomers: current.hasMore,
+    loadingMoreCustomers,
+    loadMoreCustomers,
     customersStatus: current.status,
     hasCustomerSnapshot: current.hasSnapshot,
     refreshLoyaltyUsers,

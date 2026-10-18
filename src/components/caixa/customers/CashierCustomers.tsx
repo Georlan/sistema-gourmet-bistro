@@ -46,6 +46,7 @@ import { DEFAULT_LOYALTY_CONFIG, useLoyaltyConfiguration } from './useLoyaltyCon
 import { CustomerResultsWorkspace } from './CustomerResultsWorkspace';
 import { CustomerSatisfactionPanel } from './CustomerSatisfactionPanel';
 import { useCustomerSatisfaction } from './useCustomerSatisfaction';
+import { mapCustomers } from './useCashierCustomers';
 
 const formatarTelefoneTabela = (tel?: string) => {
   if (!tel) return '-';
@@ -78,6 +79,10 @@ interface Props {
   customersStatus: 'loading' | 'ready' | 'refreshing' | 'error';
   hasCustomerSnapshot: boolean;
   refreshLoyaltyUsers: () => Promise<void>;
+  totalCustomers: number;
+  hasMoreCustomers: boolean;
+  loadingMoreCustomers: boolean;
+  loadMoreCustomers: () => Promise<void>;
   hasLoyalty: boolean;
   hasCoupons: boolean;
 }
@@ -93,6 +98,10 @@ export default function CashierCustomers({
   customersStatus,
   hasCustomerSnapshot,
   refreshLoyaltyUsers,
+  totalCustomers,
+  hasMoreCustomers,
+  loadingMoreCustomers,
+  loadMoreCustomers,
   hasLoyalty,
   hasCoupons,
 }: Props) {
@@ -125,20 +134,132 @@ export default function CashierCustomers({
 
   // Busca e filtros da aba Clientes
   const [clientesSearch, setClientesSearch] = useState('');
+  const searchTerm = clientesSearch.trim();
+  const [searchResult, setSearchResult] = useState<{
+    query: string; scope: string; data: LoyaltyCustomer[]; total: number;
+    hasMore: boolean; loading: boolean; error: string | null;
+  } | null>(null);
+  const searchScope = `${apiBaseUrl}\u0000${authHeaders.Authorization || authHeaders.authorization || ''}`;
+  useEffect(() => {
+    if (!searchTerm) { setSearchResult(null); return; }
+    const controller = new AbortController();
+    setSearchResult({ query: searchTerm, scope: searchScope, data: [], total: 0, hasMore: false, loading: true, error: null });
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ q: searchTerm, limit: '100', offset: '0' });
+        const res = await fetch(`${apiBaseUrl}/fidelidade/clientes?${params}`, { headers: authHeaders, signal: controller.signal });
+        if (!res.ok) throw new Error(`Falha na pesquisa (${res.status})`);
+        const payload = await res.json();
+        if (!Array.isArray(payload)) throw new Error('Pesquisa retornou dados inválidos');
+        if (!controller.signal.aborted) setSearchResult({
+          query: searchTerm, scope: searchScope,
+          data: mapCustomers(payload, res.headers.get('X-Products-Included') !== 'false'),
+          total: Number(res.headers.get('X-Total-Count')) || payload.length,
+          hasMore: res.headers.get('X-Has-More') === 'true', loading: false, error: null,
+        });
+      } catch (err) {
+        if (!controller.signal.aborted) setSearchResult({
+          query: searchTerm, scope: searchScope, data: [], total: 0, hasMore: false,
+          loading: false, error: err instanceof Error ? err.message : 'Pesquisa indisponível',
+        });
+      }
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [searchTerm, searchScope]);
+
+  const activeSearch = Boolean(searchTerm);
+  const queryResult = activeSearch && searchResult?.query === searchTerm && searchResult.scope === searchScope ? searchResult : null;
+  const listUsers = activeSearch ? (queryResult?.data ?? []) : loyaltyUsers;
+  const listTotal = activeSearch ? (queryResult?.total ?? 0) : totalCustomers;
+  const listHasMore = activeSearch ? Boolean(queryResult?.hasMore) : hasMoreCustomers;
+  const loadNextSearchPage = async () => {
+    if (!queryResult || queryResult.loading || !queryResult.hasMore) return;
+    const previous = queryResult;
+    setSearchResult({ ...previous, loading: true });
+    try {
+      const params = new URLSearchParams({ q: searchTerm, limit: '100', offset: String(previous.data.length) });
+      const res = await fetch(`${apiBaseUrl}/fidelidade/clientes?${params}`, { headers: authHeaders });
+      if (!res.ok) throw new Error(`Falha na próxima página (${res.status})`);
+      const payload = await res.json();
+      if (!Array.isArray(payload)) throw new Error('Página inválida');
+      setSearchResult(current => {
+        if (!current || current.query !== previous.query || current.scope !== previous.scope) return current;
+        const already = new Set(current.data.map(c => c.id));
+        const more = mapCustomers(payload, res.headers.get('X-Products-Included') !== 'false').filter(c => !already.has(c.id));
+        return { ...current, data: [...current.data, ...more],
+          total: Number(res.headers.get('X-Total-Count')) || current.total,
+          hasMore: res.headers.get('X-Has-More') === 'true', loading: false, error: null };
+      });
+    } catch (err) {
+      setSearchResult(current => current?.query === previous.query && current.scope === previous.scope
+        ? { ...current, loading: false, error: err instanceof Error ? err.message : 'Falha na próxima página' } : current);
+    }
+  };
   const [customerSort, setCustomerSort] = useState<CustomerSort>('orders');
   const [customerSegment, setCustomerSegment] = useState<CustomerSegment>('ALL');
   const [recencyFilter, setRecencyFilter] = useState<CrmRecencyFilter>('ALL');
   const [frequencyFilter, setFrequencyFilter] = useState<CrmFrequencyFilter>('ALL');
   const [valueFilter, setValueFilter] = useState<CrmValueFilter>('ALL');
   const [productQuery, setProductQuery] = useState('');
+  const [favoriteSnapshot, setFavoriteSnapshot] = useState<{
+    scope: string; byCustomerId: Record<string, LoyaltyCustomer['produtos_favoritos']>;
+    loading: boolean; error: string | null;
+  }>({ scope: searchScope, byCustomerId: {}, loading: false, error: null });
+  const [favoriteRetry, setFavoriteRetry] = useState(0);
+  const favoriteData = favoriteSnapshot.scope === searchScope ? favoriteSnapshot.byCustomerId : {};
+  const filteredSourceUsers = useMemo(
+    () => listUsers.map(user => Object.prototype.hasOwnProperty.call(favoriteData, user.id)
+      ? { ...user, produtos_favoritos: favoriteData[user.id] } : user),
+    [listUsers, favoriteData],
+  );
+  useEffect(() => {
+    if (!productQuery.trim() || !listUsers.length) return;
+    const known = favoriteSnapshot.scope === searchScope ? favoriteSnapshot.byCustomerId : {};
+    const unknown = listUsers.filter(user => !Object.prototype.hasOwnProperty.call(known, user.id));
+    if (!unknown.length || (favoriteSnapshot.scope === searchScope && (favoriteSnapshot.loading || favoriteSnapshot.error))) return;
+    const controller = new AbortController();
+    setFavoriteSnapshot(previous => ({
+      scope: searchScope, byCustomerId: previous.scope === searchScope ? previous.byCustomerId : {},
+      loading: true, error: null,
+    }));
+    (async () => {
+      try {
+        const additions: Record<string, LoyaltyCustomer['produtos_favoritos']> = {};
+        for (let i = 0; i < unknown.length; i += 100) {
+          const ids = unknown.slice(i, i + 100).map(customer => customer.id);
+          const params = new URLSearchParams({ ids: ids.join(','), include_products: 'true', limit: '100' });
+          const res = await fetch(`${apiBaseUrl}/fidelidade/clientes?${params}`, { headers: authHeaders, signal: controller.signal });
+          if (!res.ok) throw new Error(`Falha ao consultar produtos (${res.status})`);
+          const payload = await res.json();
+          if (!Array.isArray(payload)) throw new Error('Resposta inválida de produtos');
+          for (const customer of payload) {
+            if (customer?.id) additions[String(customer.id)] = Array.isArray(customer.produtos_favoritos) ? customer.produtos_favoritos : [];
+          }
+        }
+        if (!controller.signal.aborted) setFavoriteSnapshot(previous => previous.scope === searchScope
+          ? { scope: searchScope, byCustomerId: { ...previous.byCustomerId, ...additions }, loading: false, error: null } : previous);
+      } catch (error) {
+        if (!controller.signal.aborted) setFavoriteSnapshot(previous => previous.scope === searchScope
+          ? { ...previous, loading: false, error: error instanceof Error ? error.message : 'Falha nos favoritos' } : previous);
+      }
+    })();
+    return () => controller.abort();
+  }, [productQuery, listUsers, searchScope, apiBaseUrl, favoriteRetry]);
   const [benefitFilter, setBenefitFilter] = useState<CrmBenefitFilter>('ALL');
   const [contactFilter, setContactFilter] = useState<CrmContactFilter>('ALL');
 
   // Ficha individual lateral (preserva filtros, busca e página ao fechar)
   const [selectedProfileCustomerId, setSelectedProfileCustomerId] = useState<string | null>(null);
+  const [externalCampaignCustomer, setExternalCampaignCustomer] = useState<{ scope: string; customer: LoyaltyCustomer } | null>(null);
+  const currentExternalCustomer = externalCampaignCustomer?.scope === searchScope ? externalCampaignCustomer.customer : null;
+  useEffect(() => {
+    setExternalCampaignCustomer(null);
+    setSelectedProfileCustomerId(null);
+    setCampaignDraftSeed(null);
+  }, [searchScope]);
   const selectedProfileCustomer = useMemo(
-    () => loyaltyUsers.find((u) => u.id === selectedProfileCustomerId) || null,
-    [loyaltyUsers, selectedProfileCustomerId],
+    () => [...loyaltyUsers, ...listUsers, ...(currentExternalCustomer ? [currentExternalCustomer] : [])].find((u) => u.id === selectedProfileCustomerId) || null,
+    [loyaltyUsers, listUsers, currentExternalCustomer, selectedProfileCustomerId],
   );
 
   // Rascunho para abrir Campanhas já preenchido a partir de Oportunidade, Ficha Individual ou Benefício
@@ -199,10 +320,10 @@ export default function CashierCustomers({
 
   const filteredLoyaltyUsers = useMemo(() => {
     if (!hasAdvancedFilters) {
-      return selectCrmCustomers(loyaltyUsers, clientesSearch, customerSegment, customerSort);
+      return selectCrmCustomers(filteredSourceUsers, activeSearch ? '' : clientesSearch, customerSegment, customerSort);
     }
-    return filterCrmCustomersAdvanced(loyaltyUsers, {
-      search: clientesSearch,
+    return filterCrmCustomersAdvanced(filteredSourceUsers, {
+      search: activeSearch ? '' : clientesSearch,
       segment: customerSegment,
       sort: customerSort,
       recency: recencyFilter,
@@ -213,8 +334,9 @@ export default function CashierCustomers({
       contactStatus: contactFilter,
     });
   }, [
-    loyaltyUsers,
+    filteredSourceUsers,
     clientesSearch,
+    activeSearch,
     customerSegment,
     customerSort,
     hasAdvancedFilters,
@@ -551,6 +673,7 @@ export default function CashierCustomers({
   };
 
   const handleStartCampaignForSingleCustomer = (customer: LoyaltyCustomer, suggestedObjective = 'SECOND_PURCHASE') => {
+    setExternalCampaignCustomer({ scope: searchScope, customer });
     setSelectedProfileCustomerId(null);
     setCampaignDraftSeed({
       objetivo: suggestedObjective,
@@ -621,19 +744,19 @@ export default function CashierCustomers({
             accent="e recompra"
             description="Escolha quem contatar e acompanhe o retorno."
             metrics={[
-              { label: loyaltyUsers.length === 1 ? 'cliente na base' : 'clientes na base', value: loyaltyUsers.length },
+              { label: totalCustomers === 1 ? 'cliente na base' : 'clientes na base', value: totalCustomers },
               {
-                label: 'elegíveis p/ ação hoje',
+                label: crmSummary?.oportunidades ? 'elegíveis p/ ação hoje' : 'oportunidades nos carregados',
                 value: totalActionableOpportunities,
                 valueClassName: 'text-emerald-600 dark:text-emerald-300',
               },
               {
-                label: 'ativos (até 30d)',
+                label: hasMoreCustomers ? 'ativos carregados (até 30d)' : 'ativos (até 30d)',
                 value: relationshipSummary.ativos,
                 valueClassName: 'text-emerald-600 dark:text-emerald-300',
               },
               {
-                label: 'em atenção / reativar',
+                label: hasMoreCustomers ? 'atenção / reativar carregados' : 'em atenção / reativar',
                 value: relationshipSummary.atencao + relationshipSummary.reativar,
                 valueClassName: 'text-amber-600 dark:text-amber-300',
               },
@@ -667,7 +790,7 @@ export default function CashierCustomers({
                     onClick={() => handleSelectCrmTab('clientes')}
                     className="koma-btn-secondary rounded-xl px-3 py-2 text-xs font-bold"
                   >
-                    Abrir base completa ({loyaltyUsers.length})
+                    Abrir clientes ({totalCustomers})
                   </button>
                   <button
                     type="button"
@@ -853,10 +976,10 @@ export default function CashierCustomers({
                     </button>
                   )}
                 </div>
-                {(clientesSearch || filteredLoyaltyUsers.length !== loyaltyUsers.length) && (
+                {(clientesSearch || filteredLoyaltyUsers.length !== listUsers.length) && (
                   <p className="shrink-0 text-xs font-medium text-koma-muted">
                     <strong className="font-mono text-koma-foreground">{filteredLoyaltyUsers.length}</strong> de{' '}
-                    {loyaltyUsers.length} {loyaltyUsers.length === 1 ? 'cliente' : 'clientes'}
+                    {listUsers.length} carregados de {listTotal} encontrados no banco
                   </p>
                 )}
                 <label className="flex flex-col gap-1 text-xs text-koma-muted">
@@ -986,10 +1109,10 @@ export default function CashierCustomers({
                 </label>
 
                 <label className="flex flex-col gap-1 text-sm font-medium text-koma-muted">
-                  Produto comprado
+                  Produto entre mais pedidos
                   <input
                     type="text"
-                    aria-label="Filtrar por produto comprado"
+                    aria-label="Filtrar por produto entre mais pedidos"
                     value={productQuery}
                     onChange={(e) => setProductQuery(e.target.value)}
                     placeholder="Ex.: Risoto, Burger…"
@@ -1034,7 +1157,7 @@ export default function CashierCustomers({
 
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-koma-muted">
                 <p>
-                  {filteredLoyaltyUsers.length} de {loyaltyUsers.length} clientes · Compras concluídas e valores líquidos pagos (cancelamentos e estornos excluídos).
+                  {filteredLoyaltyUsers.length} de {listUsers.length} clientes carregados{listHasMore ? ` · ${listTotal} correspondentes na consulta` : ''} · Compras concluídas e valores líquidos pagos (cancelamentos e estornos excluídos).
                 </p>
                 {activeCustomerFilters > 0 && (
                   <button
@@ -1056,7 +1179,28 @@ export default function CashierCustomers({
               </div>
 
               <div className="bg-koma-panel border border-koma-border rounded-2xl p-3 sm:p-4 space-y-3">
-                {filteredLoyaltyUsers.length > 0 ? (
+                {listHasMore && (
+                  <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-koma-panel p-3 text-sm text-koma-muted">
+                    <span>Exibindo {listUsers.length} de {listTotal} clientes {activeSearch ? 'encontrados na pesquisa' : 'cadastrados'}. Ordenação e filtros adicionais consideram apenas os registros carregados.</span>
+                    <button type="button" disabled={activeSearch ? Boolean(queryResult?.loading) : loadingMoreCustomers} onClick={() => void (activeSearch ? loadNextSearchPage() : loadMoreCustomers())}
+                      className="koma-btn-secondary min-h-11 rounded-lg px-3 font-semibold disabled:opacity-40">
+                      {activeSearch ? (queryResult?.loading ? 'Carregando…' : 'Carregar mais resultados') : (loadingMoreCustomers ? 'Carregando…' : 'Carregar mais 100 clientes')}
+                    </button>
+                  </div>
+                )}
+                {productQuery.trim() && favoriteSnapshot.scope === searchScope && favoriteSnapshot.loading && (
+                  <p role="status" className="my-2 text-sm text-koma-muted">Consultando os produtos dos clientes carregados para aplicar este filtro…</p>
+                )}
+                {productQuery.trim() && favoriteSnapshot.scope === searchScope && favoriteSnapshot.error && (
+                  <div role="alert" className="my-2 text-sm text-amber-300">{favoriteSnapshot.error}
+                    <button type="button" className="ml-2 underline" onClick={() => { setFavoriteSnapshot(prev => ({ ...prev, error: null })); setFavoriteRetry(n => n + 1); }}>Tentar novamente</button>
+                  </div>
+                )}
+                {activeSearch && (!queryResult || (queryResult.loading && !listUsers.length)) ? (
+                  <p role="status" className="rounded-xl border border-koma-border bg-koma-panel p-4 text-sm text-koma-muted">Pesquisando clientes no banco…</p>
+                ) : activeSearch && queryResult?.error && !listUsers.length ? (
+                  <p role="alert" className="rounded-xl border border-amber-500/30 bg-koma-panel p-4 text-sm text-amber-300">{queryResult.error}</p>
+                ) : filteredLoyaltyUsers.length > 0 ? (
                   <>
                     {/* Lista Mobile Compacta */}
                     <div className="grid gap-2 md:hidden">
@@ -1125,7 +1269,7 @@ export default function CashierCustomers({
                                   ? user.produtos_favoritos
                                       .map((product) => `${product.nome} (${product.unidades} un.)`)
                                       .join(' · ')
-                                  : 'Sem itens identificados'}
+                                  : user.produtos_favoritos === undefined ? 'Favoritos ainda não consultados' : 'Sem itens identificados'}
                               </dd>
                             </div>
                             {hasLoyalty && (
@@ -1214,7 +1358,7 @@ export default function CashierCustomers({
                                     </span>
                                   ))
                                 ) : (
-                                  <span className="text-koma-muted">Sem itens identificados</span>
+                                  <span className="text-koma-muted">{user.produtos_favoritos === undefined ? 'Favoritos não consultados' : 'Sem itens identificados'}</span>
                                 )}
                               </td>
                               {hasLoyalty && (
@@ -1265,15 +1409,15 @@ export default function CashierCustomers({
                   <KomaEmptyState
                     icon={<Users size={24} className="text-koma-muted" />}
                     title={
-                      loyaltyUsers.length === 0 ? 'Nenhum cliente cadastrado ainda' : 'Nenhum cliente encontrado'
+                      listTotal === 0 && !activeSearch ? 'Nenhum cliente cadastrado ainda' : 'Nenhum cliente encontrado'
                     }
                     description={
-                      loyaltyUsers.length === 0
+                      listTotal === 0 && !activeSearch
                         ? 'Cadastre clientes ou aguarde os primeiros pedidos identificados no cardápio e balcão.'
                         : 'Ajuste ou limpe a busca para ver outros clientes.'
                     }
                     action={
-                      loyaltyUsers.length === 0
+                      listTotal === 0 && !activeSearch
                         ? {
                             label: 'Cadastrar primeiro cliente',
                             onClick: () => {
@@ -1323,7 +1467,7 @@ export default function CashierCustomers({
                 <span>
                   {filteredLoyaltyUsers.length ? (currentPage - 1) * pageSize + 1 : 0}–
                   {Math.min(currentPage * pageSize, filteredLoyaltyUsers.length)} de {filteredLoyaltyUsers.length}{' '}
-                  clientes
+                  clientes {listHasMore ? 'carregados (lista parcial)' : '(base consultada)'}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -1358,7 +1502,11 @@ export default function CashierCustomers({
               <CustomerCampaignsWorkspace
               apiBaseUrl={apiBaseUrl}
               authHeaders={authHeaders}
-              customers={loyaltyUsers}
+              customers={currentExternalCustomer && !loyaltyUsers.some(c => c.id === currentExternalCustomer.id) ? [...loyaltyUsers, currentExternalCustomer] : loyaltyUsers}
+              totalCustomers={totalCustomers}
+              hasMoreCustomers={hasMoreCustomers}
+              onLoadMoreCustomers={loadMoreCustomers}
+              opportunities={crmSummary?.oportunidades ?? []}
               draftSeed={campaignDraftSeed}
               hasLoyalty={hasLoyalty}
               hasCoupons={hasCoupons}
@@ -1368,7 +1516,7 @@ export default function CashierCustomers({
                 await loadCrmSummary();
               }}
               onOpenResults={() => handleSelectCrmTab('resultados')}
-              onInspectCustomer={(customer) => setSelectedProfileCustomerId(customer.id)}
+              onInspectCustomer={(customer) => { setExternalCampaignCustomer({ scope: searchScope, customer }); setSelectedProfileCustomerId(customer.id); }}
               />
             </div>
           )}

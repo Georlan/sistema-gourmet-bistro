@@ -221,6 +221,7 @@ def get_loyalty_clients(
     offset: int = Query(default=0, ge=0),
     q: Optional[str] = Query(default=None, max_length=120),
     include_products: bool = Query(default=False),
+    ids: Optional[str] = Query(default=None, max_length=8000),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("clientes:operar"))
 ):
@@ -234,12 +235,24 @@ def get_loyalty_clients(
     eff_offset = offset if isinstance(offset, int) else 0
     eff_q = (q if isinstance(q, str) else "").strip()
     eff_include_products = include_products if isinstance(include_products, bool) else False
+    # Optional bounded batch for a selected CRM audience. Never query another tenant.
+    requested_ids = list(dict.fromkeys(item.strip() for item in (ids if isinstance(ids, str) else "").split(",") if item.strip()))
+    if len(requested_ids) > 100:
+        raise HTTPException(status_code=422, detail="Selecione no máximo 100 clientes por consulta.")
+    if requested_ids and eff_q:
+        raise HTTPException(status_code=422, detail="Não combine IDs selecionados com pesquisa textual.")
 
     base_query = db.query(Cliente).filter(
         Cliente.restaurante_id == restaurante_id,
     ).order_by(Cliente.criado_em.desc(), Cliente.id.asc())
 
-    if not eff_q:
+    if requested_ids:
+        selected = base_query.filter(Cliente.id.in_(requested_ids)).all()
+        selected_by_id = {str(cliente.id): cliente for cliente in selected}
+        ordered = [selected_by_id[cid] for cid in requested_ids if cid in selected_by_id]
+        total_count = len(ordered)
+        clientes = ordered[eff_offset : eff_offset + eff_limit]
+    elif not eff_q:
         total_count = int(
             db.query(func.count(Cliente.id))
             .filter(Cliente.restaurante_id == restaurante_id)
@@ -299,6 +312,7 @@ def get_loyalty_clients(
         response.headers["X-Page-Limit"] = str(eff_limit)
         response.headers["X-Page-Offset"] = str(eff_offset)
         response.headers["X-Has-More"] = "true" if (eff_offset + len(clientes)) < total_count else "false"
+        response.headers["X-Products-Included"] = "true" if eff_include_products else "false"
 
     metrics = load_customer_relationship_metrics(
         db,

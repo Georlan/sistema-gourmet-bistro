@@ -21,9 +21,9 @@ import {
   matchesCustomerSegment,
   type CustomerSegment,
 } from '../../../domain/customerCrm';
-import { CrmMetricChart } from './CrmMetricChart';
 import type { CupomData } from '../../clientes/CuponsTab';
 import type { CashierNotice, LoyaltyCustomer } from '../cashierContracts';
+import { mapCustomers } from './useCashierCustomers';
 
 export interface CrmCampaignDraftSeed {
   objetivo: string;
@@ -37,6 +37,10 @@ interface Props {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
   customers: LoyaltyCustomer[];
+  totalCustomers: number;
+  hasMoreCustomers: boolean;
+  onLoadMoreCustomers: () => Promise<void>;
+  opportunities: Array<{ id?: string; elegiveis_cliente_ids?: string[]; elegiveis_ids?: string[]; elegiveis_count?: number }>;
   draftSeed: CrmCampaignDraftSeed | null;
   hasLoyalty: boolean;
   hasCoupons: boolean;
@@ -78,6 +82,10 @@ export function CustomerCampaignsWorkspace({
   apiBaseUrl,
   authHeaders,
   customers,
+  totalCustomers,
+  hasMoreCustomers,
+  onLoadMoreCustomers,
+  opportunities,
   draftSeed,
   hasLoyalty,
   hasCoupons,
@@ -99,6 +107,26 @@ export function CustomerCampaignsWorkspace({
     DEFAULT_CRM_TEMPLATES.SECOND_PURCHASE.semDesconto,
   );
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
+  const [previewCustomerId, setPreviewCustomerId] = useState('');
+  const [copiedMessageIds, setCopiedMessageIds] = useState<Record<string, boolean>>({});
+  const [supplementaryCustomers, setSupplementaryCustomers] = useState<LoyaltyCustomer[]>([]);
+  const [previewDetails, setPreviewDetails] = useState<Record<string, LoyaltyCustomer['produtos_favoritos']>>({});
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [audienceLoading, setAudienceLoading] = useState(false);
+  const [audienceError, setAudienceError] = useState<string | null>(null);
+  const audienceRequestRef = useRef(0);
+  const audienceScope = `${apiBaseUrl}\u0000${authHeaders.Authorization || authHeaders.authorization || ''}`;
+  const audienceScopeRef = useRef(audienceScope);
+  useEffect(() => {
+    if (audienceScopeRef.current === audienceScope) return;
+    audienceScopeRef.current = audienceScope;
+    audienceRequestRef.current += 1;
+    setSupplementaryCustomers([]);
+    setPreviewDetails({});
+    setSelectedCustomerIds([]);
+    setAudienceLoading(false);
+    setAudienceError(null);
+  }, [audienceScope]);
   const [cupons, setCupons] = useState<CupomData[]>([]);
   const [loadingCupons, setLoadingCupons] = useState(false);
 
@@ -130,6 +158,7 @@ export function CustomerCampaignsWorkspace({
     setActiveCampaignId(null);
     setRecordedCustomerIds({});
     setOpenedWhatsAppIds({});
+    setCopiedMessageIds({});
   };
 
   useEffect(() => {
@@ -151,6 +180,41 @@ export function CustomerCampaignsWorkspace({
   }, [apiBaseUrl, authHeaders, hasCoupons]);
 
   // Calcula público elegível padrão para o objetivo quando não vier de uma seleção individual
+  const currentOpportunity = opportunities.find(opp => opp.id === objetivo);
+  const authoritativeAudienceIds = currentOpportunity?.elegiveis_cliente_ids || currentOpportunity?.elegiveis_ids || [];
+
+  // Fetch selected eligible IDs in bounded tenant-scoped batches, never the whole client base.
+  const loadCompleteOpportunityAudience = async () => {
+    if (!authoritativeAudienceIds.length || audienceLoading) return;
+    const request = ++audienceRequestRef.current;
+    setAudienceLoading(true);
+    setAudienceError(null);
+    const hydrated: LoyaltyCustomer[] = [];
+    try {
+      for (let offset = 0; offset < authoritativeAudienceIds.length; offset += 100) {
+        const ids = authoritativeAudienceIds.slice(offset, offset + 100);
+        const params = new URLSearchParams({ ids: ids.join(','), limit: '100', offset: '0' });
+        const response = await fetch(`${apiBaseUrl}/fidelidade/clientes?${params}`, { headers: authHeaders });
+        if (!response.ok) throw new Error(`Consulta dos destinatários falhou (${response.status})`);
+        const data = await response.json();
+        if (!Array.isArray(data)) throw new Error('Resposta inválida de destinatários');
+        hydrated.push(...mapCustomers(data, response.headers.get('X-Products-Included') !== 'false'));
+        if (audienceRequestRef.current !== request) return;
+      }
+      if (audienceRequestRef.current !== request) return;
+      invalidateSavedCampaign();
+      setSupplementaryCustomers(hydrated);
+      setSelectedCustomerIds(hydrated.filter(c => !c.opt_out_marketing && !c.contato_recente && c.telefone_valido_whatsapp).map(c => c.id));
+      if (hydrated.length !== authoritativeAudienceIds.length) {
+        setAudienceError('Alguns destinatários não estavam disponíveis na consulta atual. Revise a seleção.');
+      }
+    } catch (error) {
+      if (audienceRequestRef.current === request) setAudienceError(error instanceof Error ? error.message : 'Não foi possível consultar os destinatários.');
+    } finally {
+      if (audienceRequestRef.current === request) setAudienceLoading(false);
+    }
+  };
+
   const computeEligibleAudienceIds = (targetObjective: string) => {
     return customers
       .filter((c) => {
@@ -161,6 +225,11 @@ export function CustomerCampaignsWorkspace({
   };
 
   useEffect(() => {
+    audienceRequestRef.current += 1;
+    setSupplementaryCustomers([]);
+    setPreviewDetails({});
+    setAudienceLoading(false);
+    setAudienceError(null);
     const nextObj = draftSeed?.objetivo || 'SECOND_PURCHASE';
     const nextApproach =
       draftSeed?.tipoAbordagem || (nextObj === 'BENEFIT_REMINDER' && hasLoyalty ? 'FIDELIDADE' : 'SEM_DESCONTO');
@@ -203,6 +272,10 @@ export function CustomerCampaignsWorkspace({
     setTemplateMensagem(nextApproach === 'SEM_DESCONTO' ? tplGroup.semDesconto : tplGroup.comBeneficio);
     const objLabel = OBJECTIVES.find((o) => o.id === nextObj)?.label || 'Ação comercial';
     setNomeCampanha(`Ação: ${objLabel}`);
+    audienceRequestRef.current += 1;
+    setSupplementaryCustomers([]);
+    setAudienceLoading(false);
+    setAudienceError(null);
     setSelectedCustomerIds(computeEligibleAudienceIds(nextObj));
     invalidateSavedCampaign();
   };
@@ -230,9 +303,39 @@ export function CustomerCampaignsWorkspace({
   );
 
   const selectedCustomers = useMemo(() => {
-    const idSet = new Set(selectedCustomerIds);
-    return customers.filter((c) => idSet.has(c.id));
-  }, [customers, selectedCustomerIds]);
+    const scoped = audienceScopeRef.current === audienceScope;
+    const idSet = new Set(scoped ? selectedCustomerIds : []);
+    const present = new Set(customers.map(c => c.id));
+    const pool = [...customers, ...(scoped ? supplementaryCustomers : []).filter(c => !present.has(c.id))];
+    return pool.filter(c => idSet.has(c.id)).map(c => (
+      scoped && Object.prototype.hasOwnProperty.call(previewDetails, c.id)
+        ? { ...c, produtos_favoritos: previewDetails[c.id] } : c
+    ));
+  }, [customers, supplementaryCustomers, selectedCustomerIds, previewDetails, audienceScope]);
+
+  const previewCustomer = selectedCustomers.find(customer => customer.id === previewCustomerId) || selectedCustomers[0] || null;
+  // Resolve product details only for the selected preview, never for every campaign recipient.
+  const previewId = previewCustomer?.id || '';
+  const previewRequiresProducts = templateMensagem.includes('{produto_favorito}');
+  useEffect(() => {
+    if (step !== 2 || !previewRequiresProducts || !previewId || previewCustomer?.produtos_favoritos !== undefined) return;
+    const controller = new AbortController();
+    setPreviewLoading(true);
+    const params = new URLSearchParams({ ids: previewId, include_products: 'true', limit: '1' });
+    fetch(`${apiBaseUrl}/fidelidade/clientes?${params}`, { headers: authHeaders, signal: controller.signal })
+      .then(async res => {
+        if (!res.ok) throw new Error('Favoritos indisponíveis');
+        const data = await res.json();
+        if (!Array.isArray(data) || !data.length) throw new Error('Cliente não localizado na consulta');
+        const normalized = mapCustomers(data, true)[0];
+        if (!controller.signal.aborted && normalized) {
+          setPreviewDetails(current => ({ ...current, [previewId]: normalized.produtos_favoritos ?? [] }));
+        }
+      })
+      .catch(() => { /* Preserve a neutral fallback when details cannot be read. */ })
+      .finally(() => { if (!controller.signal.aborted) setPreviewLoading(false); });
+    return () => controller.abort();
+  }, [step, previewId, previewRequiresProducts, previewCustomer?.produtos_favoritos, apiBaseUrl, authHeaders.Authorization]);
 
   const benefitOverrideLabel = useMemo(() => {
     if (tipoAbordagem === 'SEM_DESCONTO') return '';
@@ -352,6 +455,7 @@ export function CustomerCampaignsWorkspace({
   const handleCopyMessage = async (customer: LoyaltyCustomer, text: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      setCopiedMessageIds(previous => ({ ...previous, [customer.id]: true }));
       showToast(`Mensagem para ${customer.cliente} copiada!`);
     } catch {
       showToast('Não foi possível copiar automaticamente. Selecione o texto manualmente.', 'info');
@@ -364,8 +468,9 @@ export function CustomerCampaignsWorkspace({
       showToast('Telefone inválido para abertura no WhatsApp.', 'error');
       return;
     }
-    setOpenedWhatsAppIds((prev) => ({ ...prev, [customer.id]: true }));
+    // Browser popup success is not proof of a delivered or even sent message.
     window.open(url, '_blank', 'noopener,noreferrer');
+    setOpenedWhatsAppIds((prev) => ({ ...prev, [customer.id]: true }));
   };
 
   const handleConfirmManualContact = async (customer: LoyaltyCustomer, renderedMessage: string) => {
@@ -496,6 +601,22 @@ export function CustomerCampaignsWorkspace({
               </span>
             </div>
 
+            {hasMoreCustomers && (
+              <div role="status" className="rounded-lg border border-amber-500/30 p-3 text-sm text-koma-muted space-y-2">
+                <p>A seleção automática considera {customers.length} de {totalCustomers} clientes carregados. Ela não representa necessariamente todos os elegíveis da base.</p>
+                <div className="flex flex-wrap gap-2">
+                  {currentOpportunity && authoritativeAudienceIds.length > 0 && (
+                    <button type="button" disabled={audienceLoading} onClick={() => void loadCompleteOpportunityAudience()}
+                      className="koma-btn-primary min-h-10 rounded-lg px-3 disabled:opacity-40">
+                      {audienceLoading ? 'Consultando elegíveis…' : `Selecionar elegíveis do restaurante (${currentOpportunity.elegiveis_count ?? authoritativeAudienceIds.length})`}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => void onLoadMoreCustomers()} className="koma-btn-secondary min-h-10 rounded-lg px-3">Carregar mais clientes</button>
+                  <button type="button" onClick={() => { invalidateSavedCampaign(); setSelectedCustomerIds(computeEligibleAudienceIds(objetivo)); }} className="koma-btn-secondary min-h-10 rounded-lg px-3">Recalcular seleção carregada</button>
+                </div>
+              </div>
+            )}
+            {audienceError && <p role="alert" className="text-sm text-amber-300">{audienceError}</p>}
             {selectedCustomers.length === 0 ? (
               <div className="rounded-xl border border-koma-border bg-koma-card p-3 text-sm text-koma-muted">
                 Nenhum cliente elegível automaticamente para este objetivo no momento. Você pode selecionar clientes na aba{' '}
@@ -748,6 +869,28 @@ export function CustomerCampaignsWorkspace({
               </ul>
             </details>
 
+            {previewCustomer && (
+              <div className="rounded-xl border border-koma-border bg-koma-card p-3 space-y-2">
+                <label className="block text-sm font-medium text-koma-muted" htmlFor="crm-preview-customer">
+                  Prévia para um destinatário selecionado
+                </label>
+                <select id="crm-preview-customer" value={previewCustomer.id}
+                  onChange={event => setPreviewCustomerId(event.target.value)}
+                  className="min-h-11 w-full rounded-lg border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground">
+                  {selectedCustomers.map(customer => <option key={customer.id} value={customer.id}>{customer.cliente}</option>)}
+                </select>
+                <p className="whitespace-pre-wrap text-sm text-koma-foreground" aria-label="Prévia personalizada">
+                  {interpolateCrmTemplate(templateMensagem, previewCustomer, benefitOverrideLabel)}
+                </p>
+                {previewLoading && <p role="status" className="text-xs text-koma-muted">Consultando favorito deste cliente…</p>}
+                {templateMensagem.includes('{produto_favorito}') && previewCustomer.produtos_favoritos === undefined && (
+                  <p className="text-xs text-amber-300">Favoritos não consultados nesta listagem. A prévia usa um texto neutro, sem afirmar preferência.</p>
+                )}
+              </div>
+            )}
+            <p className="text-xs text-koma-muted">
+              Salvar a campanha registra o objetivo e o modelo, não a lista selecionada. O histórico de destinatários só cresce após cada contato confirmado.
+            </p>
             <button
               type="button"
               disabled={savingCampaign || selectedCustomers.length === 0}
@@ -765,7 +908,9 @@ export function CustomerCampaignsWorkspace({
 
         {/* Coluna Direita: Etapa 5 — Revisão, Prévia Individual e Registro Manual */}
         <div hidden={step !== 3} className="space-y-4">
-          <CrmMetricChart title="Contatos nesta sessão" rows={[{label:'Selecionados',value:selectedCustomers.length},{label:'WhatsApp aberto',value:selectedCustomers.filter(c=>openedWhatsAppIds[c.id]).length},{label:'Contato registrado',value:selectedCustomers.filter(c=>recordedCustomerIds[c.id]).length}]} />
+          <p role="status" className="text-sm text-koma-muted">
+            {selectedCustomers.filter(c => recordedCustomerIds[c.id]).length} contatos registrados manualmente de {selectedCustomers.length} selecionados nesta sessão.
+          </p>
           <section className="rounded-xl border border-koma-border bg-koma-panel p-3 sm:p-4 space-y-3">
             <div className="border-b border-koma-border pb-3">
               <div className="flex items-center justify-between gap-2">
@@ -779,7 +924,7 @@ export function CustomerCampaignsWorkspace({
                 )}
               </div>
               <p className="mt-1 text-xs text-amber-300/90">
-                <strong>Importante:</strong> Abrir o WhatsApp apenas inicia a conversa individual com a mensagem preenchida;{' '}
+                <strong>Importante:</strong> Solicitar a abertura do WhatsApp não confirma que a conversa foi iniciada nem que a mensagem foi enviada;{' '}
                 <strong>não comprova envio</strong>. Clique em <em>“Registrar contato manual”</em> somente após enviar de fato.
               </p>
             </div>
@@ -835,7 +980,13 @@ export function CustomerCampaignsWorkspace({
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-300">
                             Contato recente ({customer.dias_desde_ultimo_contato ?? 0}d)
                           </span>
-                        ) : null}
+                        ) : wasOpened ? (
+                          <span className="text-xs text-koma-muted">WhatsApp solicitado · envio não confirmado</span>
+                        ) : copiedMessageIds[customer.id] ? (
+                          <span className="text-xs text-koma-muted">Mensagem copiada · envio não confirmado</span>
+                        ) : (
+                          <span className="text-xs text-koma-muted">Selecionado · contato pendente</span>
+                        )}
                       </div>
 
                       <div className="rounded-xl border border-koma-border bg-koma-panel p-2.5 text-xs text-koma-foreground leading-relaxed">
@@ -850,7 +1001,7 @@ export function CustomerCampaignsWorkspace({
 
                       {wasOpened && !isRecorded && (
                         <p className="text-xs text-amber-300">
-                          Conversa aberta no WhatsApp. Como abrir o aplicativo não comprova envio, confirme no botão abaixo se você enviou a mensagem.
+                          Abertura do WhatsApp solicitada. Isso não comprova envio; confirme abaixo apenas depois de enviar a mensagem.
                         </p>
                       )}
 

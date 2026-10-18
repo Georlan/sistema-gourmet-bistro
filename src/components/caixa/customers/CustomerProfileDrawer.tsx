@@ -189,6 +189,13 @@ export function CustomerProfileDrawer({
           </div>
         </div>
 
+        <dl aria-label="Resumo do cliente" className="grid grid-cols-2 gap-3 rounded-xl border border-koma-border bg-koma-card p-3 text-sm sm:grid-cols-4">
+          <div><dt className="text-xs text-koma-muted">Última compra</dt><dd className="font-semibold text-koma-foreground">{customer.dias_sem_comprar == null ? 'Sem compra identificada' : `Há ${customer.dias_sem_comprar} dias`}</dd></div>
+          <div><dt className="text-xs text-koma-muted">Compras concluídas</dt><dd className="font-semibold text-koma-foreground">{customer.pedidos_concluidos ?? 0}</dd></div>
+          <div><dt className="text-xs text-koma-muted">Valor total pago</dt><dd className="font-semibold text-koma-foreground">{money(customer.valor_pago_total)}</dd></div>
+          <div><dt className="text-xs text-koma-muted">Resgatável</dt><dd className="font-semibold text-koma-foreground">{customer.elegivel_resgate ? money(customer.valor_resgatavel_brl) : 'Não disponível'}</dd></div>
+        </dl>
+
         {/* Barra de Próximo Passo Comercial */}
         <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">
@@ -241,8 +248,10 @@ export function CustomerProfileDrawer({
           </div>
         )}
 
-        {/* Seção 1 vs Seção 2: Informação Declarada vs Comportamento Observado (Inferência) */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {/* Dados declarados e comportamento observado permanecem separados. */}
+        <details className="group space-y-3">
+          <summary className="cursor-pointer rounded-xl border border-koma-border bg-koma-card p-3 text-sm font-semibold text-koma-foreground">Cadastro, preferências e hábitos observados</summary>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {/* Coluna A: Informação Declarada */}
           <section className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-3">
             <div className="border-b border-koma-border pb-2">
@@ -434,13 +443,15 @@ export function CustomerProfileDrawer({
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-koma-muted">Sem itens identificados em compras concluídas.</p>
+                <p className="text-xs text-koma-muted">{observado?.produtos_favoritos === undefined && customer.produtos_favoritos === undefined ? 'Favoritos não consultados; não é possível concluir que não existam.' : 'Sem itens identificados em compras concluídas.'}</p>
               )}
             </div>
           </section>
-        </div>
+          </div>
+        </details>
 
         {/* Seção 3: Benefício Atual (Saldo Acumulado vs Saldo Resgatável) */}
+        <details className="space-y-3"><summary className="cursor-pointer rounded-xl border border-koma-border bg-koma-card p-3 text-sm font-semibold text-koma-foreground">Benefícios e saldos</summary>
         <section className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -490,6 +501,7 @@ export function CustomerProfileDrawer({
             </div>
           </div>
         </section>
+        </details>
 
         {/* Seção 4: Avaliações declaradas e ocorrências */}
         {declarado?.avaliacoes?.length > 0 && (
@@ -517,6 +529,7 @@ export function CustomerProfileDrawer({
         )}
 
         {/* Seção 5: Histórico de Contatos Registrados no CRM */}
+        <details className="space-y-3"><summary className="cursor-pointer rounded-xl border border-koma-border bg-koma-card p-3 text-sm font-semibold text-koma-foreground">Contatos e relacionamento</summary>
         <section className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-2.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -567,8 +580,10 @@ export function CustomerProfileDrawer({
             </p>
           )}
         </section>
+        </details>
 
         {/* Seção 6: Histórico de Compras (incluindo distinção honesta de cancelados/estornados) */}
+        <details className="space-y-3"><summary className="cursor-pointer rounded-xl border border-koma-border bg-koma-card p-3 text-sm font-semibold text-koma-foreground">Compras identificadas</summary>
         <section className="rounded-2xl border border-koma-border bg-koma-card p-4 space-y-2.5">
           <div className="flex items-center gap-2">
             <ShoppingBag size={15} className="text-emerald-400" />
@@ -631,6 +646,7 @@ export function CustomerProfileDrawer({
             <p className="text-xs text-koma-muted">Nenhum pedido vinculado ao histórico deste cliente.</p>
           )}
         </section>
+        </details>
       </div>
     </div>
   );

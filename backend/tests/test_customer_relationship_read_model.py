@@ -579,3 +579,50 @@ def test_favorite_products_use_valid_units_and_tenant_identity():
     payload = next(customer for customer in response.json() if customer["id"] == "fav-client")
     assert payload["produtos_favoritos"] == metrics["fav-client"].produtos_favoritos
     db.close()
+
+
+def test_customer_pages_and_selected_audience_are_bounded_and_tenant_scoped():
+    """A first page cannot claim to be the entire database; batched IDs never cross tenants."""
+    client = TestClient(app)
+    headers = get_auth_headers(client, "caixa_r1")
+    with TestingSessionLocal() as db:
+        db.add_all([
+            Cliente(id=f"stage4-client-{i:03d}", restaurante_id=1,
+                    nome=f"Cliente {i:03d}", telefone=f"8599{i:07d}")
+            for i in range(125)
+        ])
+        db.add(Cliente(id="stage4-other-tenant", restaurante_id=2,
+                       nome="Privado", telefone="85912345678"))
+        db.commit()
+
+    first = client.get("/fidelidade/clientes", headers=headers)
+    assert first.status_code == 200, first.text
+    assert len(first.json()) == 100
+    assert first.headers["X-Total-Count"] == "125"
+    assert first.headers["X-Has-More"] == "true"
+    assert first.headers["X-Products-Included"] == "false"
+
+    second = client.get("/fidelidade/clientes?offset=100&limit=100", headers=headers)
+    assert second.status_code == 200, second.text
+    assert len(second.json()) == 25
+    assert second.headers["X-Total-Count"] == "125"
+    assert second.headers["X-Has-More"] == "false"
+
+    selected = client.get(
+        "/fidelidade/clientes",
+        params={"ids": "stage4-client-005,stage4-other-tenant,stage4-client-003",
+                "include_products": "true"},
+        headers=headers,
+    )
+    assert selected.status_code == 200, selected.text
+    assert [item["id"] for item in selected.json()] == [
+        "stage4-client-005", "stage4-client-003",
+    ]
+    assert selected.headers["X-Total-Count"] == "2"
+    assert selected.headers["X-Products-Included"] == "true"
+
+    invalid = client.get(
+        "/fidelidade/clientes", params={"ids": ",".join(f"client-{i}" for i in range(101))},
+        headers=headers,
+    )
+    assert invalid.status_code == 422
