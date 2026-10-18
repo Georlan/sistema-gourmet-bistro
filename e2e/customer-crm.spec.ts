@@ -74,6 +74,11 @@ test('CRM ranks buyers, filters inactivity, searches formatted phones and preser
   // Abre e testa a Ficha Individual (Perfil Lateral)
   await records.first().getByRole('button', { name: 'Ver perfil', exact: true }).click();
   await expect(page.getByRole('dialog', { name: /Ficha individual de Ana Frequente/ })).toBeVisible();
+  const customerDrawer = page.getByRole('dialog', { name: /Ficha individual de Ana Frequente/ });
+  await customerDrawer.getByText('Cadastro, preferências e hábitos observados', {exact:true}).click();
+  await customerDrawer.getByText('Benefícios e saldos', {exact:true}).click();
+  await customerDrawer.getByText('Contatos e relacionamento', {exact:true}).click();
+  await customerDrawer.getByText('Compras identificadas', {exact:true}).click();
   await expect(page.getByText('Informação declarada (Cadastro)')).toBeVisible();
   await expect(page.getByText('Comportamento observado (Inferido)')).toBeVisible();
   await expect(page.getByText('Regra real fixture: 120 pontos disponíveis.')).toBeVisible();
