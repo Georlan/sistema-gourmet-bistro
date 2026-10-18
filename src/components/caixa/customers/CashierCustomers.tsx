@@ -201,6 +201,49 @@ export default function CashierCustomers({
   const [frequencyFilter, setFrequencyFilter] = useState<CrmFrequencyFilter>('ALL');
   const [valueFilter, setValueFilter] = useState<CrmValueFilter>('ALL');
   const [productQuery, setProductQuery] = useState('');
+  const [favoriteSnapshot, setFavoriteSnapshot] = useState<{
+    scope: string; byCustomerId: Record<string, LoyaltyCustomer['produtos_favoritos']>;
+    loading: boolean; error: string | null;
+  }>({ scope: searchScope, byCustomerId: {}, loading: false, error: null });
+  const favoriteData = favoriteSnapshot.scope === searchScope ? favoriteSnapshot.byCustomerId : {};
+  const filteredSourceUsers = useMemo(
+    () => listUsers.map(user => Object.prototype.hasOwnProperty.call(favoriteData, user.id)
+      ? { ...user, produtos_favoritos: favoriteData[user.id] } : user),
+    [listUsers, favoriteData],
+  );
+  useEffect(() => {
+    if (!productQuery.trim() || !listUsers.length) return;
+    const known = favoriteSnapshot.scope === searchScope ? favoriteSnapshot.byCustomerId : {};
+    const unknown = listUsers.filter(user => !Object.prototype.hasOwnProperty.call(known, user.id));
+    if (!unknown.length || (favoriteSnapshot.scope === searchScope && (favoriteSnapshot.loading || favoriteSnapshot.error))) return;
+    const controller = new AbortController();
+    setFavoriteSnapshot(previous => ({
+      scope: searchScope, byCustomerId: previous.scope === searchScope ? previous.byCustomerId : {},
+      loading: true, error: null,
+    }));
+    (async () => {
+      try {
+        const additions: Record<string, LoyaltyCustomer['produtos_favoritos']> = {};
+        for (let i = 0; i < unknown.length; i += 100) {
+          const ids = unknown.slice(i, i + 100).map(customer => customer.id);
+          const params = new URLSearchParams({ ids: ids.join(','), include_products: 'true', limit: '100' });
+          const res = await fetch(`${apiBaseUrl}/fidelidade/clientes?${params}`, { headers: authHeaders, signal: controller.signal });
+          if (!res.ok) throw new Error(`Falha ao consultar produtos (${res.status})`);
+          const payload = await res.json();
+          if (!Array.isArray(payload)) throw new Error('Resposta inválida de produtos');
+          for (const customer of payload) {
+            if (customer?.id) additions[String(customer.id)] = Array.isArray(customer.produtos_favoritos) ? customer.produtos_favoritos : [];
+          }
+        }
+        if (!controller.signal.aborted) setFavoriteSnapshot(previous => previous.scope === searchScope
+          ? { scope: searchScope, byCustomerId: { ...previous.byCustomerId, ...additions }, loading: false, error: null } : previous);
+      } catch (error) {
+        if (!controller.signal.aborted) setFavoriteSnapshot(previous => previous.scope === searchScope
+          ? { ...previous, loading: false, error: error instanceof Error ? error.message : 'Falha nos favoritos' } : previous);
+      }
+    })();
+    return () => controller.abort();
+  }, [productQuery, listUsers, favoriteSnapshot, searchScope, apiBaseUrl]);
   const [benefitFilter, setBenefitFilter] = useState<CrmBenefitFilter>('ALL');
   const [contactFilter, setContactFilter] = useState<CrmContactFilter>('ALL');
 
@@ -274,9 +317,9 @@ export default function CashierCustomers({
 
   const filteredLoyaltyUsers = useMemo(() => {
     if (!hasAdvancedFilters) {
-      return selectCrmCustomers(listUsers, activeSearch ? '' : clientesSearch, customerSegment, customerSort);
+      return selectCrmCustomers(filteredSourceUsers, activeSearch ? '' : clientesSearch, customerSegment, customerSort);
     }
-    return filterCrmCustomersAdvanced(listUsers, {
+    return filterCrmCustomersAdvanced(filteredSourceUsers, {
       search: activeSearch ? '' : clientesSearch,
       segment: customerSegment,
       sort: customerSort,
@@ -288,7 +331,7 @@ export default function CashierCustomers({
       contactStatus: contactFilter,
     });
   }, [
-    listUsers,
+    filteredSourceUsers,
     clientesSearch,
     activeSearch,
     customerSegment,
@@ -1140,6 +1183,14 @@ export default function CashierCustomers({
                       className="koma-btn-secondary min-h-11 rounded-lg px-3 font-semibold disabled:opacity-40">
                       {activeSearch ? (queryResult?.loading ? 'Carregando…' : 'Carregar mais resultados') : (loadingMoreCustomers ? 'Carregando…' : 'Carregar mais 100 clientes')}
                     </button>
+                  </div>
+                )}
+                {productQuery.trim() && favoriteSnapshot.scope === searchScope && favoriteSnapshot.loading && (
+                  <p role="status" className="my-2 text-sm text-koma-muted">Consultando os produtos dos clientes carregados para aplicar este filtro…</p>
+                )}
+                {productQuery.trim() && favoriteSnapshot.scope === searchScope && favoriteSnapshot.error && (
+                  <div role="alert" className="my-2 text-sm text-amber-300">{favoriteSnapshot.error}
+                    <button type="button" className="ml-2 underline" onClick={() => setFavoriteSnapshot(prev => ({ ...prev, error: null }))}>Tentar novamente</button>
                   </div>
                 )}
                 {activeSearch && queryResult?.loading && <p role="status" className="my-2 text-sm text-koma-muted">Pesquisando no banco…</p>}
