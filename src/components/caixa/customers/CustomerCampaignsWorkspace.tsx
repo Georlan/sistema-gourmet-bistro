@@ -113,6 +113,17 @@ export function CustomerCampaignsWorkspace({
   const [audienceLoading, setAudienceLoading] = useState(false);
   const [audienceError, setAudienceError] = useState<string | null>(null);
   const audienceRequestRef = useRef(0);
+  const audienceScope = `${apiBaseUrl}\u0000${authHeaders.Authorization || authHeaders.authorization || ''}`;
+  const audienceScopeRef = useRef(audienceScope);
+  useEffect(() => {
+    if (audienceScopeRef.current === audienceScope) return;
+    audienceScopeRef.current = audienceScope;
+    audienceRequestRef.current += 1;
+    setSupplementaryCustomers([]);
+    setSelectedCustomerIds([]);
+    setAudienceLoading(false);
+    setAudienceError(null);
+  }, [audienceScope]);
   const [cupons, setCupons] = useState<CupomData[]>([]);
   const [loadingCupons, setLoadingCupons] = useState(false);
 
@@ -211,6 +222,10 @@ export function CustomerCampaignsWorkspace({
   };
 
   useEffect(() => {
+    audienceRequestRef.current += 1;
+    setSupplementaryCustomers([]);
+    setAudienceLoading(false);
+    setAudienceError(null);
     const nextObj = draftSeed?.objetivo || 'SECOND_PURCHASE';
     const nextApproach =
       draftSeed?.tipoAbordagem || (nextObj === 'BENEFIT_REMINDER' && hasLoyalty ? 'FIDELIDADE' : 'SEM_DESCONTO');
