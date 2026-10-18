@@ -23,6 +23,7 @@ import {
 } from '../../../domain/customerCrm';
 import type { CupomData } from '../../clientes/CuponsTab';
 import type { CashierNotice, LoyaltyCustomer } from '../cashierContracts';
+import { mapCustomers } from './useCashierCustomers';
 
 export interface CrmCampaignDraftSeed {
   objetivo: string;
@@ -39,6 +40,7 @@ interface Props {
   totalCustomers: number;
   hasMoreCustomers: boolean;
   onLoadMoreCustomers: () => Promise<void>;
+  opportunities: Array<{ id?: string; elegiveis_cliente_ids?: string[]; elegiveis_ids?: string[]; elegiveis_count?: number }>;
   draftSeed: CrmCampaignDraftSeed | null;
   hasLoyalty: boolean;
   hasCoupons: boolean;
@@ -83,6 +85,7 @@ export function CustomerCampaignsWorkspace({
   totalCustomers,
   hasMoreCustomers,
   onLoadMoreCustomers,
+  opportunities,
   draftSeed,
   hasLoyalty,
   hasCoupons,
@@ -106,6 +109,10 @@ export function CustomerCampaignsWorkspace({
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
   const [previewCustomerId, setPreviewCustomerId] = useState('');
   const [copiedMessageIds, setCopiedMessageIds] = useState<Record<string, boolean>>({});
+  const [supplementaryCustomers, setSupplementaryCustomers] = useState<LoyaltyCustomer[]>([]);
+  const [audienceLoading, setAudienceLoading] = useState(false);
+  const [audienceError, setAudienceError] = useState<string | null>(null);
+  const audienceRequestRef = useRef(0);
   const [cupons, setCupons] = useState<CupomData[]>([]);
   const [loadingCupons, setLoadingCupons] = useState(false);
 
@@ -159,6 +166,41 @@ export function CustomerCampaignsWorkspace({
   }, [apiBaseUrl, authHeaders, hasCoupons]);
 
   // Calcula público elegível padrão para o objetivo quando não vier de uma seleção individual
+  const currentOpportunity = opportunities.find(opp => opp.id === objetivo);
+  const authoritativeAudienceIds = currentOpportunity?.elegiveis_cliente_ids || currentOpportunity?.elegiveis_ids || [];
+
+  // Fetch selected eligible IDs in bounded tenant-scoped batches, never the whole client base.
+  const loadCompleteOpportunityAudience = async () => {
+    if (!authoritativeAudienceIds.length || audienceLoading) return;
+    const request = ++audienceRequestRef.current;
+    setAudienceLoading(true);
+    setAudienceError(null);
+    const hydrated: LoyaltyCustomer[] = [];
+    try {
+      for (let offset = 0; offset < authoritativeAudienceIds.length; offset += 100) {
+        const ids = authoritativeAudienceIds.slice(offset, offset + 100);
+        const params = new URLSearchParams({ ids: ids.join(','), limit: '100', offset: '0' });
+        const response = await fetch(`${apiBaseUrl}/fidelidade/clientes?${params}`, { headers: authHeaders });
+        if (!response.ok) throw new Error(`Consulta dos destinatários falhou (${response.status})`);
+        const data = await response.json();
+        if (!Array.isArray(data)) throw new Error('Resposta inválida de destinatários');
+        hydrated.push(...mapCustomers(data, response.headers.get('X-Products-Included') !== 'false'));
+        if (audienceRequestRef.current !== request) return;
+      }
+      if (audienceRequestRef.current !== request) return;
+      invalidateSavedCampaign();
+      setSupplementaryCustomers(hydrated);
+      setSelectedCustomerIds(hydrated.filter(c => !c.opt_out_marketing && !c.contato_recente && c.telefone_valido_whatsapp).map(c => c.id));
+      if (hydrated.length !== authoritativeAudienceIds.length) {
+        setAudienceError('Alguns destinatários não estavam disponíveis na consulta atual. Revise a seleção.');
+      }
+    } catch (error) {
+      if (audienceRequestRef.current === request) setAudienceError(error instanceof Error ? error.message : 'Não foi possível consultar os destinatários.');
+    } finally {
+      if (audienceRequestRef.current === request) setAudienceLoading(false);
+    }
+  };
+
   const computeEligibleAudienceIds = (targetObjective: string) => {
     return customers
       .filter((c) => {
@@ -211,6 +253,10 @@ export function CustomerCampaignsWorkspace({
     setTemplateMensagem(nextApproach === 'SEM_DESCONTO' ? tplGroup.semDesconto : tplGroup.comBeneficio);
     const objLabel = OBJECTIVES.find((o) => o.id === nextObj)?.label || 'Ação comercial';
     setNomeCampanha(`Ação: ${objLabel}`);
+    audienceRequestRef.current += 1;
+    setSupplementaryCustomers([]);
+    setAudienceLoading(false);
+    setAudienceError(null);
     setSelectedCustomerIds(computeEligibleAudienceIds(nextObj));
     invalidateSavedCampaign();
   };
@@ -239,8 +285,10 @@ export function CustomerCampaignsWorkspace({
 
   const selectedCustomers = useMemo(() => {
     const idSet = new Set(selectedCustomerIds);
-    return customers.filter((c) => idSet.has(c.id));
-  }, [customers, selectedCustomerIds]);
+    const present = new Set(customers.map(c => c.id));
+    const pool = [...customers, ...supplementaryCustomers.filter(c => !present.has(c.id))];
+    return pool.filter(c => idSet.has(c.id));
+  }, [customers, supplementaryCustomers, selectedCustomerIds]);
 
   const previewCustomer = selectedCustomers.find(customer => customer.id === previewCustomerId) || selectedCustomers[0] || null;
 
@@ -512,11 +560,18 @@ export function CustomerCampaignsWorkspace({
               <div role="status" className="rounded-lg border border-amber-500/30 p-3 text-sm text-koma-muted space-y-2">
                 <p>A seleção automática considera {customers.length} de {totalCustomers} clientes carregados. Ela não representa necessariamente todos os elegíveis da base.</p>
                 <div className="flex flex-wrap gap-2">
+                  {currentOpportunity && authoritativeAudienceIds.length > 0 && (
+                    <button type="button" disabled={audienceLoading} onClick={() => void loadCompleteOpportunityAudience()}
+                      className="koma-btn-primary min-h-10 rounded-lg px-3 disabled:opacity-40">
+                      {audienceLoading ? 'Consultando elegíveis…' : `Selecionar elegíveis do restaurante (${currentOpportunity.elegiveis_count ?? authoritativeAudienceIds.length})`}
+                    </button>
+                  )}
                   <button type="button" onClick={() => void onLoadMoreCustomers()} className="koma-btn-secondary min-h-10 rounded-lg px-3">Carregar mais clientes</button>
                   <button type="button" onClick={() => { invalidateSavedCampaign(); setSelectedCustomerIds(computeEligibleAudienceIds(objetivo)); }} className="koma-btn-secondary min-h-10 rounded-lg px-3">Recalcular seleção carregada</button>
                 </div>
               </div>
             )}
+            {audienceError && <p role="alert" className="text-sm text-amber-300">{audienceError}</p>}
             {selectedCustomers.length === 0 ? (
               <div className="rounded-xl border border-koma-border bg-koma-card p-3 text-sm text-koma-muted">
                 Nenhum cliente elegível automaticamente para este objetivo no momento. Você pode selecionar clientes na aba{' '}
