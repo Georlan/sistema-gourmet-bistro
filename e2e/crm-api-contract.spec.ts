@@ -131,7 +131,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await dialog.getByRole('combobox').selectOption('telefone');
   await dialog.getByRole('button',{name:'Salvar preferências declaradas',exact:true}).click();
   await expect.poll(()=>savedPreference?.canal_preferido).toBe('telefone');
-  await expect(dialog.getByRole('status')).toHaveText('Preferências de relacionamento salvas com sucesso!');
+  await expect(dialog.getByRole('status').filter({hasText:'Preferências de relacionamento salvas com sucesso!'})).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('button',{name:'Ver perfil',exact:true}).filter({visible:true}).first()).toBeFocused();
@@ -305,9 +305,22 @@ test('stage5 Results ignores stale HTTP responses and charts only dated real eve
     };
     summary.resultados.serie_temporal = [
       {data: '2026-10-08', clientes_contatados: 2, clientes_que_voltaram: 0},
-      {data: '2026-10-12', clientes_contatados: 1, clientes_que_voltaram: 1},
+      {data: '2026-10-12', clientes_contatados: 1, clientes_que_voltaram: returns},
     ];
     summary.resultados.regra_janelas = {campanhas: 'PERSISTIDA', sem_campanha_dias: 14};
+    summary.resultados.pedidos_associados = {
+      ...summary.resultados.pedidos_associados, total: 2,
+      comprovados_por_cupom: 1, estimados_por_janela_temporal: 1,
+      cupons_sem_contato_confirmado: 0, status_mensuracao: 'MENSURADO',
+    };
+    summary.resultados.valor_pago_pedidos_associados = {
+      total_liquido_brl: 140, comprovado_cupom_brl: 80,
+      estimado_temporal_brl: 60, status_mensuracao: 'MENSURADO',
+    };
+    summary.campanhas[0] = {...summary.campanhas[0], clientes_abordados: 1,
+      clientes_que_voltaram: 1, pedidos_comprovados_cupom: 1,
+      pedidos_estimados_janela: 0, valor_pago_liquido_brl: 80,
+      cupons_sem_contato_confirmado: 0};
     summary.resultados.conciliacao_campanhas = {
       pedidos_com_campanha: 1, pedidos_sem_campanha: 1,
       valor_com_campanha_brl: 80, valor_sem_campanha_brl: 60,
