@@ -59,6 +59,30 @@ INVALID_AGENT_TOKEN_CACHE_MAX_ENTRIES = 2048
 _invalid_agent_token_cache: dict[str, float] = {}
 _invalid_agent_token_cache_lock = threading.Lock()
 
+# Cached 401s can occur several times a second from outdated executables.
+# Emit an aggregate at most once per minute instead of a WARNING per request.
+_CACHED_INVALID_AUTH_LOG_INTERVAL_SECONDS = 60.0
+_cached_invalid_auth_log_lock = threading.Lock()
+_cached_invalid_auth_last_log_at = 0.0
+_cached_invalid_auth_suppressed = 0
+
+
+def _log_cached_invalid_agent_token() -> None:
+    global _cached_invalid_auth_last_log_at, _cached_invalid_auth_suppressed
+    now = time.monotonic()
+    with _cached_invalid_auth_log_lock:
+        if now - _cached_invalid_auth_last_log_at < _CACHED_INVALID_AUTH_LOG_INTERVAL_SECONDS:
+            _cached_invalid_auth_suppressed += 1
+            return
+        attempts = _cached_invalid_auth_suppressed + 1
+        _cached_invalid_auth_suppressed = 0
+        _cached_invalid_auth_last_log_at = now
+    log.warning(
+        "print_agent_auth_rejected reason=cached_invalid_token attempts=%s",
+        attempts,
+    )
+
+
 # Tenant routing hint cache: maps token_hash -> (token_id, restaurante_id, expires_at).
 # Allows get_current_agent to bind the session to the tenant BEFORE opening a DB
 # transaction, eliminating the pre-tenant transaction + rollback while still
@@ -206,8 +230,12 @@ def _clear_agent_token_tenant_cache() -> None:
 
 def _clear_invalid_agent_token_cache() -> None:
     """Test/support helper: never stores or exposes the raw agent credential."""
+    global _cached_invalid_auth_last_log_at, _cached_invalid_auth_suppressed
     with _invalid_agent_token_cache_lock:
         _invalid_agent_token_cache.clear()
+    with _cached_invalid_auth_log_lock:
+        _cached_invalid_auth_last_log_at = 0.0
+        _cached_invalid_auth_suppressed = 0
     _clear_agent_token_tenant_cache()
 
 
@@ -1136,7 +1164,7 @@ def get_current_agent(
 
     computed_hash = hash_token(raw_token.strip())
     if _invalid_agent_token_is_cached(computed_hash):
-        log.warning('print_agent_auth_rejected reason=cached_invalid_token')
+        _log_cached_invalid_agent_token()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de agente inválido ou revogado"
