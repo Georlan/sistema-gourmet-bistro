@@ -205,6 +205,7 @@ export default function CashierCustomers({
     scope: string; byCustomerId: Record<string, LoyaltyCustomer['produtos_favoritos']>;
     loading: boolean; error: string | null;
   }>({ scope: searchScope, byCustomerId: {}, loading: false, error: null });
+  const [favoriteRetry, setFavoriteRetry] = useState(0);
   const favoriteData = favoriteSnapshot.scope === searchScope ? favoriteSnapshot.byCustomerId : {};
   const filteredSourceUsers = useMemo(
     () => listUsers.map(user => Object.prototype.hasOwnProperty.call(favoriteData, user.id)
@@ -243,7 +244,7 @@ export default function CashierCustomers({
       }
     })();
     return () => controller.abort();
-  }, [productQuery, listUsers, favoriteSnapshot, searchScope, apiBaseUrl]);
+  }, [productQuery, listUsers, searchScope, apiBaseUrl, favoriteRetry]);
   const [benefitFilter, setBenefitFilter] = useState<CrmBenefitFilter>('ALL');
   const [contactFilter, setContactFilter] = useState<CrmContactFilter>('ALL');
 
@@ -1190,7 +1191,7 @@ export default function CashierCustomers({
                 )}
                 {productQuery.trim() && favoriteSnapshot.scope === searchScope && favoriteSnapshot.error && (
                   <div role="alert" className="my-2 text-sm text-amber-300">{favoriteSnapshot.error}
-                    <button type="button" className="ml-2 underline" onClick={() => setFavoriteSnapshot(prev => ({ ...prev, error: null }))}>Tentar novamente</button>
+                    <button type="button" className="ml-2 underline" onClick={() => { setFavoriteSnapshot(prev => ({ ...prev, error: null })); setFavoriteRetry(n => n + 1); }}>Tentar novamente</button>
                   </div>
                 )}
                 {activeSearch && queryResult?.loading && <p role="status" className="my-2 text-sm text-koma-muted">Pesquisando no banco…</p>}
