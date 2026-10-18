@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 import logging
+import time
+import threading
 import re
 from typing import Any
 from urllib.parse import quote
@@ -271,7 +273,25 @@ def enviar_texto_whatsapp(
     ).sucesso
 
 
+_evolution_diagnostic_cache = None
+_evolution_diagnostic_lock = threading.Lock()
+
+
 def obter_status_evolution() -> dict[str, object]:
+    """At most one legacy diagnostic per 30 seconds, without send-side caching."""
+    global _evolution_diagnostic_cache
+    key = _configuracao_evolution()
+    with _evolution_diagnostic_lock:
+        cached = _evolution_diagnostic_cache
+        now = time.monotonic()
+        if cached and cached[0] == key and now - cached[1] < 30:
+            return dict(cached[2])
+        result = _obter_status_evolution()
+        _evolution_diagnostic_cache = (key, time.monotonic(), dict(result))
+        return result
+
+
+def _obter_status_evolution() -> dict[str, object]:
     """Diagnóstico sem segredos para a área autenticada de operações."""
     configuracao = _configuracao_evolution()
     if configuracao is None:

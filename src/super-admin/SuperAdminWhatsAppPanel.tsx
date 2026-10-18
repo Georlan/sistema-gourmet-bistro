@@ -129,7 +129,7 @@ export function SuperAdminWhatsAppPanel() {
           <h2 className="flex items-center gap-2 text-base font-bold text-koma-foreground">
             <MessageCircle className="h-5 w-5 text-emerald-500" /> WhatsApp Business compartilhado
           </h2>
-          <p className="mt-1 text-xs text-koma-muted">Liberação por restaurante, fila e aceites HTTP. Nenhum disparo ocorre neste painel.</p>
+          <p className="mt-1 text-xs text-koma-muted">Liberação por restaurante, fila e aceites HTTP. Aceite HTTP não comprova entrega ao telefone. Nenhum disparo ocorre neste painel.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={loading} onClick={() => void refresh(false, offset)}
@@ -150,11 +150,11 @@ export function SuperAdminWhatsAppPanel() {
           <div className="rounded-lg border border-koma-border p-3 text-xs">
             <div className="text-koma-muted">Canal</div>
             <strong>{data.sender.state === "configured" ? "Configurado" : "Desligado / indisponível"}</strong>
-            <p className="mt-1 text-koma-muted">Sessão: {data.sender.connection === "matched" ? "Identidade confirmada"
+            <p className="mt-1 text-koma-muted">Sessão: {data.sender.connection === "matched" ? "Identidade verificada (cache até 30s)"
               : data.sender.connection === "not_verified" ? "Não verificada nesta consulta"
               : data.sender.connection === "mismatch" ? "Remetente divergente: bloqueie envios e confira a sessão"
-              : data.sender.connection === "not_open" ? "Evolution desconectada"
-              : data.sender.connection === "unavailable" ? "Evolution indisponível"
+              : data.sender.connection === "not_open" ? "Sessão Business desconectada"
+              : data.sender.connection === "unavailable" ? "Verificação do Business indisponível"
               : data.sender.connection}</p>
           </div>
           <div className="rounded-lg border border-koma-border p-3 text-xs">

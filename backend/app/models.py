@@ -2127,6 +2127,16 @@ class WhatsAppContactOptOut(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 
+class WhatsAppOptOutCapability(Base):
+    # Only a SHA-256 digest of the random capability is retained.
+    __tablename__ = "whatsapp_opt_out_capabilities"
+    __table_args__ = (Index("ix_wa_optout_capability_tenant", "restaurante_id"),)
+    token_hash = Column(String(64), primary_key=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), nullable=False, default=lambda: current_restaurante_id.get())
+    phone_hash = Column(String(64), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class IntegrationOutbox(Base):
     """Tabela de Transactional Outbox para mensageria e integrações assíncronas do KÔMA."""
     __tablename__ = "integration_outbox"

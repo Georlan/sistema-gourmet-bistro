@@ -51,7 +51,7 @@ function isPublicCommercialRoute(): boolean {
 
 function isOperationalUtilityRoute(): boolean {
   const pathname = window.location.pathname;
-  return pathname === "/whatsapp/avisos"
+  return (pathname === "/whatsapp/avisos" || pathname === "/w/a")
     || pathname === "/recuperar-senha"
     || pathname === "/confirmar-cadastro"
     || pathname.startsWith("/ferramentas/simulador-impressao")
@@ -124,7 +124,9 @@ function bypassTenantSuspensionBoundary(): boolean {
   const pathname = window.location.pathname;
   const resolved = resolveKomaHost();
 
-  return pathname === "/recuperar-senha"
+  return pathname === "/w/a"
+    || pathname === "/whatsapp/avisos"
+    || pathname === "/recuperar-senha"
     || pathname === "/confirmar-cadastro"
     || pathname.startsWith("/super-admin")
     || (isCentralSupportOperationalBridge() && hasInternalSupportSessionContext())
@@ -202,19 +204,22 @@ if ("serviceWorker" in navigator) {
 }
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
-if (sentryDsn) {
-  void import("@sentry/react").then((Sentry) => {
-    Sentry.init({
-      dsn: sentryDsn,
-      // Limita o monitoramento de performance a 10% para nunca estourar o plano gratuito.
-      tracesSampleRate: 0.1,
+const isWhatsAppOptOutRoute = ["/whatsapp/avisos", "/w/a"].includes(window.location.pathname);
+if (!isWhatsAppOptOutRoute) {
+  if (sentryDsn) {
+    void import("@sentry/react").then((Sentry) => {
+      Sentry.init({
+        dsn: sentryDsn,
+        // Limita o monitoramento de performance a 10% para nunca estourar o plano gratuito.
+        tracesSampleRate: 0.1,
+      });
+    }).catch((error: unknown) => {
+      console.warn('[monitoring] Monitoramento indisponível.', error);
     });
-  }).catch((error: unknown) => {
-    console.warn('[monitoring] Monitoramento indisponível.', error);
-  });
-}
+  }
 
-initAnalytics();
+  initAnalytics();
+}
 
 const pathname = window.location.pathname;
 const isSmartPosRoute = pathname.startsWith("/smartpos");
@@ -251,7 +256,7 @@ if (
 }
 
 const RootApp = React.lazy(
-  pathname === "/whatsapp/avisos"
+  (pathname === "/whatsapp/avisos" || pathname === "/w/a")
     ? () => import("./cardapio/WhatsAppOptOutPage")
     : pathname === "/recuperar-senha"
     ? () => import("./components/auth/PasswordResetPage")
@@ -286,7 +291,7 @@ const RouteLoading = () => (pathname === "/recuperar-senha" || pathname === "/co
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <AnalyticsProvider>
+    <AnalyticsProvider disabled={isWhatsAppOptOutRoute}>
       <AppRecoveryBoundary>
       <TenantSuspensionBoundary disabled={bypassTenantSuspensionBoundary()}>
         <React.Suspense fallback={<RouteLoading />}>
