@@ -110,6 +110,8 @@ export function CustomerCampaignsWorkspace({
   const [previewCustomerId, setPreviewCustomerId] = useState('');
   const [copiedMessageIds, setCopiedMessageIds] = useState<Record<string, boolean>>({});
   const [supplementaryCustomers, setSupplementaryCustomers] = useState<LoyaltyCustomer[]>([]);
+  const [previewDetails, setPreviewDetails] = useState<Record<string, LoyaltyCustomer['produtos_favoritos']>>({});
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [audienceLoading, setAudienceLoading] = useState(false);
   const [audienceError, setAudienceError] = useState<string | null>(null);
   const audienceRequestRef = useRef(0);
@@ -120,6 +122,7 @@ export function CustomerCampaignsWorkspace({
     audienceScopeRef.current = audienceScope;
     audienceRequestRef.current += 1;
     setSupplementaryCustomers([]);
+    setPreviewDetails({});
     setSelectedCustomerIds([]);
     setAudienceLoading(false);
     setAudienceError(null);
@@ -224,6 +227,7 @@ export function CustomerCampaignsWorkspace({
   useEffect(() => {
     audienceRequestRef.current += 1;
     setSupplementaryCustomers([]);
+    setPreviewDetails({});
     setAudienceLoading(false);
     setAudienceError(null);
     const nextObj = draftSeed?.objetivo || 'SECOND_PURCHASE';
@@ -302,10 +306,35 @@ export function CustomerCampaignsWorkspace({
     const idSet = new Set(selectedCustomerIds);
     const present = new Set(customers.map(c => c.id));
     const pool = [...customers, ...supplementaryCustomers.filter(c => !present.has(c.id))];
-    return pool.filter(c => idSet.has(c.id));
-  }, [customers, supplementaryCustomers, selectedCustomerIds]);
+    return pool.filter(c => idSet.has(c.id)).map(c => (
+      Object.prototype.hasOwnProperty.call(previewDetails, c.id)
+        ? { ...c, produtos_favoritos: previewDetails[c.id] } : c
+    ));
+  }, [customers, supplementaryCustomers, selectedCustomerIds, previewDetails]);
 
   const previewCustomer = selectedCustomers.find(customer => customer.id === previewCustomerId) || selectedCustomers[0] || null;
+  // Resolve product details only for the selected preview, never for every campaign recipient.
+  const previewId = previewCustomer?.id || '';
+  const previewRequiresProducts = templateMensagem.includes('{produto_favorito}');
+  useEffect(() => {
+    if (step !== 2 || !previewRequiresProducts || !previewId || previewCustomer?.produtos_favoritos !== undefined) return;
+    const controller = new AbortController();
+    setPreviewLoading(true);
+    const params = new URLSearchParams({ ids: previewId, include_products: 'true', limit: '1' });
+    fetch(`${apiBaseUrl}/fidelidade/clientes?${params}`, { headers: authHeaders, signal: controller.signal })
+      .then(async res => {
+        if (!res.ok) throw new Error('Favoritos indisponíveis');
+        const data = await res.json();
+        if (!Array.isArray(data) || !data.length) throw new Error('Cliente não localizado na consulta');
+        const normalized = mapCustomers(data, true)[0];
+        if (!controller.signal.aborted && normalized) {
+          setPreviewDetails(current => ({ ...current, [previewId]: normalized.produtos_favoritos ?? [] }));
+        }
+      })
+      .catch(() => { /* Preserve a neutral fallback when details cannot be read. */ })
+      .finally(() => { if (!controller.signal.aborted) setPreviewLoading(false); });
+    return () => controller.abort();
+  }, [step, previewId, previewRequiresProducts, previewCustomer?.produtos_favoritos, apiBaseUrl, authHeaders.Authorization]);
 
   const benefitOverrideLabel = useMemo(() => {
     if (tipoAbordagem === 'SEM_DESCONTO') return '';
@@ -852,6 +881,7 @@ export function CustomerCampaignsWorkspace({
                 <p className="whitespace-pre-wrap text-sm text-koma-foreground" aria-label="Prévia personalizada">
                   {interpolateCrmTemplate(templateMensagem, previewCustomer, benefitOverrideLabel)}
                 </p>
+                {previewLoading && <p role="status" className="text-xs text-koma-muted">Consultando favorito deste cliente…</p>}
                 {templateMensagem.includes('{produto_favorito}') && previewCustomer.produtos_favoritos === undefined && (
                   <p className="text-xs text-amber-300">Favoritos não consultados nesta listagem. A prévia usa um texto neutro, sem afirmar preferência.</p>
                 )}
