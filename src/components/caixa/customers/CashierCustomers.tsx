@@ -255,6 +255,7 @@ export default function CashierCustomers({
   useEffect(() => {
     setExternalCampaignCustomer(null);
     setSelectedProfileCustomerId(null);
+    setCampaignDraftSeed(null);
   }, [searchScope]);
   const selectedProfileCustomer = useMemo(
     () => [...loyaltyUsers, ...listUsers, ...(currentExternalCustomer ? [currentExternalCustomer] : [])].find((u) => u.id === selectedProfileCustomerId) || null,
