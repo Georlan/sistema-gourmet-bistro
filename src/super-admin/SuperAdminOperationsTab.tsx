@@ -149,23 +149,24 @@ export function SuperAdminOperationsTab() {
         </div>
 
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
-          <div className="flex items-center justify-between"><span className="text-xs font-medium text-koma-muted">Evolution / WhatsApp operacional</span><Globe className="w-4 h-4 text-koma-subtle" /></div>
+          <div className="flex items-center justify-between"><span className="text-xs font-medium text-koma-muted">Serviço Evolution e sessão legada</span><Globe className="w-4 h-4 text-koma-subtle" /></div>
           <div className="flex items-center gap-2">
-            {integrationsHealth?.evolution?.status === "available" ? (
-              <><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span className="font-bold text-sm text-koma-foreground">Conectado</span></>
-            ) : integrationsHealth?.evolution?.status === "degraded" ? (
-              <><AlertTriangle className="w-4 h-4 text-amber-400" /><span className="font-bold text-sm text-amber-300">Degradado</span></>
-            ) : integrationsHealth?.evolution?.status === "unavailable" ? (
-              <><AlertTriangle className="w-4 h-4 text-rose-400" /><span className="font-bold text-sm text-rose-300">Indisponível</span></>
-            ) : integrationsHealth?.evolution?.status === "not_configured" ? (
-              <><HelpCircle className="w-4 h-4 text-zinc-500" /><span className="font-bold text-sm text-koma-muted">Não configurado</span></>
+            {integrationsHealth?.evolution?.service_status === "available" ? (
+              <><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span className="font-bold text-sm text-koma-foreground">Serviço respondeu</span></>
             ) : (
-              <><HelpCircle className="w-4 h-4 text-zinc-500" /><span className="font-bold text-sm text-koma-muted">Não verificado</span></>
+              <><HelpCircle className="w-4 h-4 text-amber-400" /><span className="font-bold text-sm text-koma-muted">Serviço não confirmado</span></>
             )}
           </div>
           <p className="text-[11px] text-koma-subtle">
-            {integrationsHealth?.evolution?.details?.details || "Sem diagnóstico de conexão carregado"}
+            Sessão legada: {integrationsHealth?.evolution?.legacy_session === "open" ? "conectada"
+              : integrationsHealth?.evolution?.legacy_session === "not_open" ? "desconectada" : "não verificada"}.
+            {integrationsHealth?.evolution?.shared_is_legacy === true
+              ? " Usa a mesma instância do Business compartilhado."
+              : integrationsHealth?.evolution?.shared_is_legacy === false
+                ? " Instância distinta do Business compartilhado; confira a sessão no painel abaixo."
+                : " Relação com o Business compartilhado não verificada."}
           </p>
+          <p className="text-[11px] text-koma-subtle">{integrationsHealth?.evolution?.details?.details}</p>
         </div>
       </div>
 

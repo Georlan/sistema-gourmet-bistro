@@ -1,39 +1,45 @@
+import pathModule from 'node:path';
 import { expect, test } from '@playwright/test';
 
-test('descadastro exige confirmação e remove a capability da URL antes de enviar', async ({ page }) => {
-  const requests: Array<{ method: string; token: string }> = [];
-  await page.route('**/api/cardapio/whatsapp/opt-out', async route => {
-    requests.push({ method: route.request().method(), token: route.request().postDataJSON().token });
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"disabled":true}' });
+for (const path of ['/w/a#' + 'A'.repeat(32), '/whatsapp/avisos#token=' + 'B'.repeat(76), '/whatsapp/avisos#token=synthetic.legacy.jwt']) {
+  test(`descadastro identifica a loja e exige confirmação: ${path.split('#')[0]} ${path.length}`, async ({ page }, testInfo) => {
+    const seen: Array<{ path: string; token: string }> = [];
+    await page.route('**/api/cardapio/whatsapp/opt-out**', async route => {
+      const request = route.request();
+      const requestPath = new URL(request.url()).pathname;
+      seen.push({ path: requestPath, token: request.postDataJSON().token });
+      await route.fulfill({ status: 200, contentType: 'application/json',
+        body: requestPath.endsWith('/preview') ? '{"restaurant_name":"D8 Burger"}' : '{"disabled":true}' });
+    });
+    await page.goto(path);
+    await expect(page).toHaveURL(path.startsWith('/w/a') ? /\/w\/a$/ : /\/whatsapp\/avisos$/);
+    const button = page.getByRole('button', { name: 'Parar avisos de D8 Burger', exact: true });
+    await expect(button).toBeEnabled();
+    expect(seen.every(r => r.path.endsWith('/preview'))).toBe(true);
+    expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(path.split('#')[1]);
+    if (process.env.KOMA_VISUAL_OUTPUT_DIR && path.startsWith('/w/a')) {
+      await page.screenshot({ path: pathModule.join(process.env.KOMA_VISUAL_OUTPUT_DIR, `descadastro-${testInfo.project.name}.png`), fullPage: true });
+    }
+    await button.click();
+    await expect(page.getByRole('heading', { name: 'Avisos desativados' })).toBeVisible();
+    if (process.env.KOMA_VISUAL_OUTPUT_DIR && path.startsWith('/w/a')) {
+      await page.screenshot({ path: pathModule.join(process.env.KOMA_VISUAL_OUTPUT_DIR, `confirmado-${testInfo.project.name}.png`), fullPage: true });
+    }
+    expect(seen.filter(r => !r.path.endsWith('/preview'))).toHaveLength(1);
+    await expect(page.getByText('Você não receberá novos avisos de D8 Burger neste número.')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
-  await page.goto('/whatsapp/avisos#token=synthetic-test-capability');
-  await expect(page.getByRole('heading', { name: 'Parar avisos pelo WhatsApp' })).toBeVisible();
-  await expect(page).toHaveURL(/\/whatsapp\/avisos$/);
-  expect(requests).toHaveLength(0);
-  await page.getByRole('button', { name: 'Parar avisos deste restaurante' }).click();
-  await expect(page.getByRole('heading', { name: 'Avisos desativados' })).toBeVisible();
-  expect(requests).toEqual([{ method: 'POST', token: 'synthetic-test-capability' }]);
-});
+}
 
 test('link sem capability não permite descadastro', async ({ page }) => {
-  await page.goto('/whatsapp/avisos');
+  await page.goto('/w/a');
   await expect(page.getByRole('alert')).toHaveText('Abra o link de descadastro recebido na mensagem.');
-  await expect(page.getByRole('button', { name: 'Parar avisos deste restaurante' })).toHaveCount(0);
+  await expect(page.getByRole('button')).toHaveCount(0);
 });
 
-test('link compacto continua no fragmento e exige POST explícito', async ({ page }) => {
-  const compact = 'A'.repeat(76); // Somente formato sintético; sem capability verdadeira.
-  const seen: Array<{ method: string; path: string; token: string }> = [];
-  await page.route('**/api/cardapio/whatsapp/opt-out', async route => {
-    const request = route.request();
-    seen.push({ method: request.method(), path: new URL(request.url()).pathname,
-      token: request.postDataJSON().token });
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"disabled":true}' });
-  });
-  await page.goto(`/whatsapp/avisos#token=${compact}`);
-  await expect(page).toHaveURL(/\/whatsapp\/avisos$/);
-  expect(seen).toEqual([]);
-  await page.getByRole('button', { name: 'Parar avisos deste restaurante' }).click();
-  await expect(page.getByRole('heading', { name: 'Avisos desativados' })).toBeVisible();
-  expect(seen).toEqual([{ method: 'POST', path: '/api/cardapio/whatsapp/opt-out', token: compact }]);
+test('falha na prévia bloqueia confirmação', async ({ page }) => {
+  await page.route('**/api/cardapio/whatsapp/opt-out/preview', route => route.fulfill({status:404, body:'{}'}));
+  await page.goto('/w/a#' + 'C'.repeat(32));
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('button')).toBeDisabled();
 });

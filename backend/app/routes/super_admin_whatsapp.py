@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import time
+import threading
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -176,7 +178,23 @@ def _sender_snapshot(db, cfg) -> dict:
     }
 
 
+_verification_cache = None
+_verification_lock = threading.Lock()
+
+
 def _verify_connection(cfg) -> str:
+    global _verification_cache
+    key = (cfg, os.getenv("EVOLUTION_API_URL", ""), os.getenv("EVOLUTION_API_KEY", ""))
+    with _verification_lock:
+        cached = _verification_cache
+        if cached and cached[0] == key and time.monotonic() - cached[1] < 30:
+            return cached[2]
+        result = _probe_connection(cfg)
+        _verification_cache = (key, time.monotonic(), result)
+        return result
+
+
+def _probe_connection(cfg) -> str:
     """Explicit-only probe: never poll the provider for a dashboard refresh."""
     if cfg is None:
         return "disabled"

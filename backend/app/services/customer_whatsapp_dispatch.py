@@ -139,7 +139,7 @@ def snapshot_time(snapshot: dict) -> dt.datetime:
     return value.replace(tzinfo=dt.timezone.utc) if value.tzinfo is None else value
 
 
-def resolve_customer_notice(db: Session, snapshot: dict) -> tuple[str, str] | None:
+def resolve_customer_notice(db: Session, snapshot: dict, *, include_link: bool = True) -> tuple[str, str] | None:
     rid = int(snapshot["restaurante_id"])
     payload = snapshot.get("payload") or {}
     tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one_or_none()
@@ -162,37 +162,30 @@ def resolve_customer_notice(db: Session, snapshot: dict) -> tuple[str, str] | No
             fulfillment=order.tipo, queued_at=snapshot_time(snapshot), now=dt.datetime.now(dt.timezone.utc)):
         return None
     restaurant = db.query(Restaurante).filter_by(id=rid).one_or_none()
-    # A legacy tenant may still be named "Kôma" internally even though its
-    # public menu has a restaurant-specific slug (e.g. d8-burger).
-    # Prefer the public identifier only when the registered name is just the
-    # platform name; never hardcode tenant IDs or names of individual stores.
-    import re
-    import unicodedata
-    label = " ".join((restaurant.nome if restaurant else "Restaurante").split())[:60]
-    normalized_name = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode().casefold()
-    if normalized_name == "koma" and restaurant and restaurant.slug:
-        public_slug = str(restaurant.slug).strip()
-        if re.fullmatch(r"[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*", public_slug):
-            label = public_slug.replace("-", " ").title()[:60]
-    safe_label = re.sub(r"[*_~`\r\n]", "", label).strip() or "Restaurante"
-    description = {
-        NoticeKind.CUSTOMER_RECEIVED: "Pedido recebido pelo restaurante.",
-        NoticeKind.CUSTOMER_READY_PICKUP: "Seu pedido está pronto para retirada.",
-        NoticeKind.CUSTOMER_DISPATCHED: "Seu pedido saiu para entrega.",
-        NoticeKind.CUSTOMER_CANCELLED: "Seu pedido foi cancelado ou recusado. Consulte o acompanhamento para detalhes.",
-    }.get(kind)
-    if description is None:
+    if restaurant is None:
         return None
+    from .restaurant_public_label import restaurant_public_label
+    safe_label = restaurant_public_label(restaurant)
+    copy = {
+        NoticeKind.CUSTOMER_RECEIVED: ("Pedido recebido!", "O restaurante recebeu seu pedido. Acompanhe as atualizações pelo Cardápio Online."),
+        NoticeKind.CUSTOMER_READY_PICKUP: ("Seu pedido está pronto para retirada!", "Você já pode buscar seu pedido no restaurante."),
+        NoticeKind.CUSTOMER_DISPATCHED: ("Seu pedido saiu para entrega!", "Aguarde a chegada do seu pedido."),
+        NoticeKind.CUSTOMER_CANCELLED: ("Seu pedido foi cancelado ou recusado.", "Consulte o acompanhamento do pedido para mais detalhes."),
+    }.get(kind)
+    if copy is None:
+        return None
+    title, detail = copy
     from .whatsapp_opt_out import opt_out_url
-    # Native WhatsApp bold, one clear header, minimal transactional content.
-    # No buyer name: voluntary checkout consent is not phone ownership proof.
+    # A capability is issued only after the final pre-send revalidation.
+    link = opt_out_url(rid, target, db) if include_link else ""
     message = (
-        f"*KÔMA | {safe_label}*\n"
-        f"Pedido #{order.numero_pedido}\n\n"
-        f"*{description}*\n\n"
-        "Aviso automático. Este número não é o WhatsApp do restaurante.\n\n"
-        "Não quer mais receber avisos deste restaurante?\n"
-        f"Desative: {opt_out_url(rid, target)}"
+        "*KÔMA | Avisos de pedidos*\n"
+        f"*{safe_label} · Pedido #{order.numero_pedido}*\n\n"
+        f"*{title}*\n\n{detail}\n\n"
+        f"_Aviso automático enviado pelo KÔMA em nome de {safe_label}. "
+        "Este número não é o WhatsApp do restaurante._\n\n"
+        f"Não quer mais receber avisos de {safe_label}?\n"
+        f"Desative aqui: {link}"
     )
     return target, message
 
@@ -218,7 +211,7 @@ def reserve_budget(tenant: ConfiguracaoRestaurante) -> None:
 
 
 def dispatch_customer_notice(db: Session, snapshot: dict) -> bool:
-    resolved = resolve_customer_notice(db, snapshot)
+    resolved = resolve_customer_notice(db, snapshot, include_link=False)
     if resolved is None:
         from .outbox.dispatcher import settle_outbox_event
         settle_outbox_event(db, str(snapshot["id"]), status="dead_letter",

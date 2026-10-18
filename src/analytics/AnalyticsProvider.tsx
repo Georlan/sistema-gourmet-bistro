@@ -8,15 +8,17 @@ import { getPostHogInstance, initAnalytics } from './posthog';
 
 interface AnalyticsProviderProps {
   children: React.ReactNode;
+  disabled?: boolean;
 }
 
-export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
+export function AnalyticsProvider({ children, disabled = false }: AnalyticsProviderProps) {
   const [providerState, setProviderState] = useState<{
     Provider: React.ComponentType<{ client: any; children: React.ReactNode }> | null;
     client: any;
   }>({ Provider: null, client: null });
 
   useEffect(() => {
+    if (disabled) return;
     let cancelled = false;
     void (async () => {
       const active = await initAnalytics();
@@ -40,7 +42,7 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [disabled]);
 
   if (providerState.Provider && providerState.client) {
     const PostHogProvider = providerState.Provider;

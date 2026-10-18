@@ -55,8 +55,8 @@ test('Saúde da Evolution diferencia configuração, degradação e disponibilid
   assert.match(backend, /"available"/);
   assert.match(backend, /"degraded"/);
   assert.match(backend, /"not_configured"/);
-  assert.match(operations, /Evolution \/ WhatsApp operacional/);
-  assert.match(operations, /Conectado/);
-  assert.match(operations, /Degradado/);
+  assert.match(operations, /Serviço Evolution e sessão legada/);
+  assert.match(operations, /Serviço respondeu/);
+  assert.match(operations, /Sessão legada/);
   assert.match(operations, /Indisponível/);
 });

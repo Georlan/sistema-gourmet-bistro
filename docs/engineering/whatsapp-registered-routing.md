@@ -2,9 +2,13 @@
 
 ## Identidade do restaurante e descadastro compacto
 
-Avisos transacionais ao cliente começam com \u0027*KÔMA | Nome da loja*\u0027 e o pedido/status aparecem com hierarquia curta. A loja é resolvida por tenant na leitura, não por variável global nem pela conta Business. Para cadastros antigos com nome genérico de plataforma \u0027Kôma\u0027, um slug público válido pode servir como identificação comercial (ex.: d8-burger → D8 Burger). Um nome específico configurado na loja sempre prevalece. Isso não altera o cadastro do restaurante.
+Avisos transacionais separam a plataforma (`*KÔMA | Avisos de pedidos*`) da loja e do pedido (`*Nome da loja · Pedido #N*`). Status em negrito nativo, explicação curta e aviso de canal intermediário. `restaurant_public_label` usa o nome cadastrado específico; somente em cadastros legados com nome genérico da plataforma usa o slug público válido como fallback comercial. A mesma regra identifica a loja na confirmação de descadastro. Isso não renomeia restaurante, identidade jurídica ou slug. Não há campo de nome fantasia do restaurante no modelo atual (o campo homônimo é de fornecedores).
 
-O link segue em HTTPS, em \u0027/whatsapp/avisos#token=...\u0027; o token novo é compacto (76 caracteres URL-safe em vez do JWT longo), HMAC-SHA256 com tag 128-bit, escopo do restaurante, digest do contato e expiração de 90 dias. O fragmento é removido antes de analytics; nenhuma capability é enviada por GET ou registrada em query/path; a alteração exige confirmação via POST. Links JWT anteriores continuam sendo aceitos até a expiração original. A confirmação é idempotente e os bloqueios permanecem isolados por tenant. Não encurtar o link com redirecionador externo ou com segredo em path/query.
+O novo link segue em HTTPS em `/w/a#<capacidade>`. São 24 bytes criptograficamente aleatórios (192 bits), 32 caracteres URL-safe. `whatsapp_opt_out_capabilities` armazena apenas SHA-256, tenant, HMAC tenant-scoped do contato e expiração de 90 dias. Uma capacidade é emitida por tentativa efetiva, após revalidação de identidade/consentimento, e commitada antes do HTTP, sem manter locks durante a chamada. Pausas de vazão e falhas na verificação não alocam links. Não há como recuperar o token em claro para reutilizá-lo em mensagens posteriores.
+
+A capacidade pode confirmar idempotentemente até expirar; abrir/pré-visualizar não a consome. `/opt-out/preview` retorna apenas o nome da loja, sob escopo do tenant e sem escrita. A confirmação explícita em `/opt-out` bloqueia somente aquele contato/restaurante. Links assinados compactos de 76 caracteres e JWTs anteriores continuam válidos até suas expirações originais. O bootstrap remove o fragmento antes de inicializar a aplicação; analytics e Sentry ficam desativados nas duas rotas de descadastro. Não há capacidade em query/path, localStorage, telemetria ou redirecionador externo. Respostas sem cache, referrer suprimido e mensagens de erro genéricas.
+
+A tabela tem FORCE RLS e privilégios revogados para PUBLIC/anon/authenticated. O runtime só descobre o tenant por uma função interna SECURITY DEFINER, com search_path fixo e entrada hash; depois lê o contato sob escopo RLS. A função é exclusivamente do backend (`koma_app`), sem acesso via Data API nem JWT de usuário Supabase. O guard público limita 20 chamadas/minuto por IP/processo, com memória limitada a 4096 buckets, sem IP/token em claro; corpos acima de 2300 bytes são interrompidos. A resistência à enumeração depende também dos 192 bits aleatórios. Não há tabela adicional de rate limiting, cache distribuído ou escrita por abertura. Linhas expiradas deixam de resolver; não foi adicionado purge automático.
 
 
 ## Bloco 3 — autorização de plataforma e operação central
@@ -116,7 +120,7 @@ A contabilidade do cliente continua sob lock da configuração do tenant, por m�
 
 ## Descadastro
 
-A mensagem leva a `/whatsapp/avisos#token=...` no app. O token contém apenas tipo, tenant, hash do contato e validade. O fragmento é retirado antes de inicializar analytics; não é colocado em query/path, armazenamento local ou logs. A página só envia o token no corpo de um POST depois da confirmação. Abrir/visualizar o link não muda estado. Uma chave de tipo diferente não autoriza o descadastro.
+A mensagem leva a `/w/a#...` no app; o alias `/whatsapp/avisos#token=...` continua compatível. A capacidade opaca não contém campos decodificáveis do contato/tenant. A prévia POST somente identifica a loja; apenas a confirmação POST altera o bloqueio. Nenhum GET muda consentimento.
 
 `whatsapp_contact_opt_outs` guarda somente HMAC + tenant e data, com FORCE RLS. Bloqueia avisos pendentes e futuros do contato nesse restaurante, inclusive se um novo checkout marcar a caixa. Não bloqueia pedidos nem usa preferências de marketing do CRM. Ainda não existe fluxo de reativação do número na UI; não apagar bloqueios manualmente para simular homologação.
 
@@ -138,3 +142,12 @@ Evolution é o transporte temporário de homologação solicitado pelo usuário;
 Testes cobrem cadastro dinâmico, destinos separados, opt-in/opt-out, TTL, estado atrasado, agregação, deduplicação, timeout, 429/circuito compartilhado, orçamento durável, RLS e corrida real de reserva em PostgreSQL. Testes de browser cobrem checkout com/sem checkbox, consentimento inicialmente desmarcado, ausência de OTP e confirmação do descadastro sem capability em URL/logs.
 
 Em regressão: desligar a liberação afetada, preservar fila/contador e usar revert por PR. Não executar downgrade destrutivo de preferências/contadores ou reabrir dead letters para testar.
+
+
+### Diagnóstico de instâncias
+
+O cartão Evolution distingue resposta do serviço e sessão legada (`EVOLUTION_INSTANCE_NAME`), incluindo se ela coincide com a instância Business. Sessão legada desconectada não comprova falha do Business. O painel compartilhado separa configuração, identidade verificada e aceites HTTP, sem afirmar entrega. Diagnósticos explícitos têm cache local de 30 s; a validação de identidade imediatamente antes de cada envio continua sem esse cache. Nenhum polling foi adicionado.
+
+### Reversão
+
+Preferir correção adiante. Em regressão, reverter o código de envio mantendo a rota/leitura de capacidades opacas e a tabela aditiva enquanto houver links válidos (90 dias). Não fazer downgrade destrutivo da tabela em produção: isso invalidaria links já enviados. A migration não altera configurações, pedidos ou consentimentos existentes dos restaurantes.

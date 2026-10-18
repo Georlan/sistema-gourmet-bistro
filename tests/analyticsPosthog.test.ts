@@ -185,7 +185,7 @@ test('react initialization and error tracking are configured cleanly in main and
 
   // React initialization in main.tsx
   assert.match(main, /initAnalytics\(\)/);
-  assert.match(main, /<AnalyticsProvider>/);
+  assert.match(main, /<AnalyticsProvider disabled=\{isWhatsAppOptOutRoute\}>/);
 
   // Error tracking in AppRecoveryBoundary
   assert.match(recovery, /captureAnalyticsException\(error,\s*\{\s*source:\s*['"]AppRecoveryBoundary['"]\s*\}\)/);

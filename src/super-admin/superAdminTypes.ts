@@ -50,6 +50,9 @@ export interface IntegrationsHealthStatus {
   mercado_pago?: { status: string };
   telegram?: { status: string };
   evolution?: {
+    service_status?: string;
+    legacy_session?: string;
+    shared_is_legacy?: boolean | null;
     status: "available" | "degraded" | "unavailable" | "not_configured" | string;
     details?: {
       configured?: boolean;

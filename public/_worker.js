@@ -40,6 +40,10 @@ export function createSeoWorker(securityHeaders = {}) {
       const headers = new Headers(response.headers);
       for (const [name, value] of Object.entries(securityHeaders)) headers.set(name, String(value));
       headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      if (url.pathname === '/w/a' || url.pathname === '/whatsapp/avisos') {
+        headers.set('Referrer-Policy', 'no-referrer');
+        headers.set('X-Robots-Tag', 'noindex, nofollow');
+      }
       if (privateHost || (brandHost && LANDING_PATHS.has(url.pathname) && !landing) || response.status === 404) {
         headers.set('X-Robots-Tag', 'noindex');
       } else if (landing) {

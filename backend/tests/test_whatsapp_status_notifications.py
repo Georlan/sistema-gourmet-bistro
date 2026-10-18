@@ -473,3 +473,19 @@ def test_diagnostico_evolution_confirma_instancia_conectada(monkeypatch):
         "connected": True,
         "details": "WhatsApp conectado",
     }
+
+
+def test_legacy_diagnostic_cache_expires_without_affecting_sender_verification(monkeypatch):
+    clock = [100.0]
+    calls = []
+    monkeypatch.setattr(whatsapp_service, '_evolution_diagnostic_cache', None)
+    monkeypatch.setattr(whatsapp_service, '_configuracao_evolution', lambda: ('https://synthetic.test', 'test', 'legacy'))
+    monkeypatch.setattr(whatsapp_service.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(whatsapp_service, '_obter_status_evolution', lambda: calls.append(clock[0]) or {'connected': False})
+    assert whatsapp_service.obter_status_evolution() == {'connected': False}
+    clock[0] = 129
+    whatsapp_service.obter_status_evolution()
+    assert calls == [100]
+    clock[0] = 131
+    whatsapp_service.obter_status_evolution()
+    assert calls == [100, 131]

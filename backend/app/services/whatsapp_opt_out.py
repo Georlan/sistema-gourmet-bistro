@@ -1,9 +1,4 @@
-"""Tenant-scoped, short unsubscribe capabilities.
-
-The URL fragment is never sent to the web server. The signed compact capability
-contains only a tenant ID, expiry and tenant-keyed contact digest. Legacy JWTs
-remain valid until their original expiry so existing messages do not break.
-"""
+"""Opaque unsubscribe capabilities in URL fragments; legacy signed links remain valid."""
 from __future__ import annotations
 
 import base64
@@ -12,13 +7,15 @@ import hashlib
 import hmac
 import re
 import struct
-from urllib.parse import quote
+import secrets
 
 import jwt
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import WhatsAppContactOptOut
+from ..models import WhatsAppContactOptOut, WhatsAppOptOutCapability
+from ..database import tenant_session_scope
 from .central_whatsapp import recipient_fingerprint
 
 
@@ -35,14 +32,46 @@ def _now() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
-def create_opt_out_token(restaurant_id: int, phone: str) -> str:
-    if not 1 <= restaurant_id <= 0xFFFFFFFF:
+def create_opt_out_token(restaurant_id: int, phone: str, db: Session) -> str:
+    """One random 192-bit capability per actual send, reusable for 90 days.
+
+    No plaintext token is stored, so it cannot be recovered or reused for later
+    messages. Confirmation is idempotent; opening/previewing never consumes it.
+    The caller commits before sending and releases the SQL transaction.
+    """
+    if restaurant_id < 1:
         raise ValueError("Restaurante inválido.")
-    digest = bytes.fromhex(recipient_fingerprint(restaurant_id, phone))
-    expiry = int((_now() + dt.timedelta(days=90)).timestamp())
-    body = _CAPABILITY.pack(_CAPABILITY_VERSION, restaurant_id, expiry, digest)
-    tag = hmac.new(settings.SECRET_KEY.encode("utf-8"), _DOMAIN + body, hashlib.sha256).digest()[:_TAG_LENGTH]
-    return base64.urlsafe_b64encode(body + tag).rstrip(b"=").decode("ascii")
+    token = secrets.token_urlsafe(24)
+    db.add(WhatsAppOptOutCapability(
+        token_hash=hashlib.sha256(token.encode("ascii")).hexdigest(),
+        restaurante_id=restaurant_id,
+        phone_hash=recipient_fingerprint(restaurant_id, phone),
+        expires_at=_now() + dt.timedelta(days=90),
+    ))
+    db.flush()
+    return token
+
+
+def _resolve_opaque(token: str, db: Session) -> tuple[int, str]:
+    digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+    if db.get_bind().dialect.name == "postgresql":
+        # Discover only the tenant through a fixed-path, narrowly granted lookup;
+        # the protected contact identity is read under FORCE RLS below.
+        rid = db.execute(text("SELECT restaurante_id FROM koma_internal.lookup_whatsapp_opt_out(:digest)"), {"digest": digest}).scalar()
+    else:
+        rid = db.query(WhatsAppOptOutCapability.restaurante_id).filter_by(token_hash=digest).scalar()
+    if rid is None:
+        raise ValueError
+    with tenant_session_scope(db, rid):
+        row = db.query(WhatsAppOptOutCapability).filter_by(token_hash=digest, restaurante_id=rid).one_or_none()
+        if row is None:
+            raise ValueError
+        expiry = row.expires_at
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=dt.timezone.utc)
+        if expiry <= _now():
+            raise ValueError
+        return rid, row.phone_hash
 
 
 def _resolve_compact(token: str) -> tuple[int, str]:
@@ -76,20 +105,24 @@ def _resolve_legacy(token: str) -> tuple[int, str]:
     return rid, digest
 
 
-def resolve_opt_out_token(token: str) -> tuple[int, str]:
+def resolve_opt_out_token(token: str, db: Session | None = None) -> tuple[int, str]:
     try:
         if not isinstance(token, str) or len(token) > 2048:
             raise ValueError
+        if re.fullmatch(r"[A-Za-z0-9_-]{32}", token):
+            if db is None:
+                raise ValueError
+            return _resolve_opaque(token, db)
         return _resolve_legacy(token) if token.count(".") == 2 else _resolve_compact(token)
     except (jwt.PyJWTError, ValueError, TypeError, KeyError, OverflowError):
         raise ValueError("Link de descadastro inválido ou expirado.") from None
 
 
-def opt_out_url(restaurant_id: int, phone: str) -> str:
+def opt_out_url(restaurant_id: int, phone: str, db: Session) -> str:
     base = settings.KOMA_PUBLIC_APP_URL.rstrip("/")
     if not base.startswith("https://"):
         raise ValueError("URL pública segura não configurada.")
-    return f"{base}/whatsapp/avisos#token={quote(create_opt_out_token(restaurant_id, phone), safe='')}"
+    return f"{base}/w/a#{create_opt_out_token(restaurant_id, phone, db)}"
 
 
 def block_contact(db: Session, restaurant_id: int, digest: str) -> None:

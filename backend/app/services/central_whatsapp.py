@@ -410,7 +410,11 @@ def dispatch_registered_message(
         latest_target = registered_operator_phone(latest_settings, config.sender)
         if not phones_match(latest_target, target):
             return settle("dead_letter", "Destinatário alterado durante a tentativa; aguarde um novo pedido.", attempts=attempt_number)
-    db.rollback()  # No read transaction held over the send.
+    if customer:
+        target, message = resolved
+        db.commit()  # Persist the capability before HTTP; release all SQL locks.
+    else:
+        db.rollback()  # No read transaction held over the send.
 
     try:
         with httpx.Client(timeout=4.0) as client:

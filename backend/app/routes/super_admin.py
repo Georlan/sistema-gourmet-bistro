@@ -819,6 +819,10 @@ def get_integrations_health(admin: dict = Depends(get_current_admin)):
         }
 
     evolution_details = obter_status_evolution()
+    from ..services.central_whatsapp import transport_configuration
+    shared = transport_configuration()
+    legacy_instance = os.getenv("EVOLUTION_INSTANCE_NAME", "").strip()
+    shared_is_legacy = shared.instance == legacy_instance if shared and legacy_instance else None
     evolution_status = (
         "available"
         if evolution_details.get("configured") and evolution_details.get("connected")
@@ -856,7 +860,10 @@ def get_integrations_health(admin: dict = Depends(get_current_admin)):
         ),
         "telegram": configured("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
         "evolution": {
-            "status": evolution_status,
+            "status": evolution_status,  # Backwards-compatible legacy session status.
+            "service_status": "available" if evolution_details.get("status") in {"green", "yellow"} else "unverified",
+            "legacy_session": "open" if evolution_details.get("connected") else "not_open" if evolution_details.get("status") == "yellow" else "unverified",
+            "shared_is_legacy": shared_is_legacy,
             "details": evolution_details,
             "source": "evolution_connection_state",
             "simulated": False,

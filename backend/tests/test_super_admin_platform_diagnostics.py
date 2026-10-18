@@ -158,3 +158,20 @@ def test_database_latency_excludes_evolution_and_railway_identity_is_not_health(
     assert health['railway']['hosting_detected'] is True
     assert health['railway']['status'] == 'not_configured'
     assert 'service-id' not in json.dumps(health)
+
+
+def test_evolution_service_and_legacy_session_do_not_claim_business_health(monkeypatch):
+    @contextmanager
+    def connect():
+        yield SimpleNamespace(execute=lambda *args: None)
+    monkeypatch.setattr(super_admin, 'engine', SimpleNamespace(connect=connect))
+    monkeypatch.setattr(super_admin, 'obter_status_evolution', lambda: {'configured': True, 'status': 'yellow', 'connected': False})
+    from app.services import central_whatsapp
+    monkeypatch.setattr(central_whatsapp, 'transport_configuration', lambda: SimpleNamespace(instance='business'))
+    monkeypatch.setenv('EVOLUTION_INSTANCE_NAME', 'legacy')
+    result = super_admin.get_integrations_health({})['evolution']
+    assert result['service_status'] == 'available'
+    assert result['legacy_session'] == 'not_open'
+    assert result['shared_is_legacy'] is False
+    monkeypatch.setenv('EVOLUTION_INSTANCE_NAME', 'business')
+    assert super_admin.get_integrations_health({})['evolution']['shared_is_legacy'] is True

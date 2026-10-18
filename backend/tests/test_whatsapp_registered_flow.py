@@ -151,11 +151,11 @@ def test_customer_message_identifies_public_restaurant_not_platform(flow):
     calls = provider(patch)
     assert dispatch_single_outbox_event(db, row)
     text = calls[0]["text"]
-    assert text.startswith("*KÔMA | D8 Burger*\nPedido #")
+    assert text.startswith("*KÔMA | Avisos de pedidos*\n*D8 Burger · Pedido #")
     assert "Este número não é o WhatsApp do restaurante" in text
     import re
-    match = re.search(r"/whatsapp/avisos#token=([A-Za-z0-9_-]+)", text)
-    assert match and len(match.group(1)) == 76
+    match = re.search(r"/w/a#([A-Za-z0-9_-]+)", text)
+    assert match and len(match.group(1)) == 32
 
 
 def test_customer_receives_only_after_consent_and_from_same_order(flow):
@@ -170,7 +170,7 @@ def test_customer_receives_only_after_consent_and_from_same_order(flow):
     assert dispatch_single_outbox_event(db, row)
     assert calls[0]['number'] == check.delivery_telefone
     assert 'Pedido recebido' in calls[0]['text']
-    assert '/whatsapp/avisos#token=' in calls[0]['text']
+    assert '/w/a#' in calls[0]['text']
     assert 'Loja teste 701' in calls[0]['text']
     assert len(publish(db, replace(event, event_id='canonical-replay'))) == 1
 
@@ -296,8 +296,9 @@ def test_timeout_has_no_automatic_replay_and_reserves_budget(flow):
 
 def test_optout_token_is_scoped_idempotent_and_not_staff_login(flow):
     db, patch = flow
-    token = create_opt_out_token(701, '5511777777777')
-    rid, digest = resolve_opt_out_token(token)
+    token = create_opt_out_token(701, '5511777777777', db)
+    db.commit()
+    rid, digest = resolve_opt_out_token(token, db)
     assert rid == 701
     assert digest == central.recipient_fingerprint(701, '5511777777777')
     block_contact(db, rid, digest)
@@ -388,9 +389,9 @@ def test_customer_permission_default_off_is_independent_from_registered_operator
     assert dispatch_single_outbox_event(db, rows[0])
     assert len(calls) == 1
     assert calls[0]['number'] == '5511777777777'
-    assert '*KÔMA | Loja teste 701*' in calls[0]['text']
+    assert '*Loja teste 701 · Pedido #' in calls[0]['text']
     assert 'não é o WhatsApp do restaurante' in calls[0]['text']
-    assert 'Não quer mais receber avisos deste restaurante?' in calls[0]['text']
+    assert 'Não quer mais receber avisos de Loja teste 701?' in calls[0]['text']
 
 
 def test_customer_notices_admin_permission_revokes_pending_without_affecting_operator(flow):
@@ -438,3 +439,27 @@ def test_unregistered_tenant_is_default_off_even_when_platform_allows_customer_n
     _, _, event = order(db, rid=702)
     assert publish(db, event) == []
 
+
+
+def test_capability_issued_once_only_after_provider_identity_verification(flow):
+    from app.models import WhatsAppOptOutCapability
+    db, patch = flow
+    _, _, event = order(db)
+    row = publish(db, event)[0]
+    # A paused sender must not allocate an unused capability on every retry.
+    cfg = config(db)
+    cfg.whatsapp_next_send_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=1)
+    db.commit()
+    calls = provider(patch)
+    assert not dispatch_single_outbox_event(db, row)
+    assert db.query(WhatsAppOptOutCapability).count() == 0 and not calls
+    cfg.whatsapp_next_send_at = None
+    row.next_retry_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=1)
+    db.commit()
+    assert dispatch_single_outbox_event(db, row)
+    assert db.query(WhatsAppOptOutCapability).count() == 1
+    token = calls[0]['text'].split('/w/a#')[1]
+    assert resolve_opt_out_token(token, db)[0] == 701
+    assert dispatch_single_outbox_event(db, row)
+    assert len(calls) == 1
+    assert db.query(WhatsAppOptOutCapability).count() == 1
