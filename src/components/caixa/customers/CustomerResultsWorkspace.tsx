@@ -68,7 +68,7 @@ export function CustomerResultsWorkspace({
   const daily = res?.serie_temporal;
   const temporalSeries = useMemo(() => {
     const rows = (Array.isArray(daily) ? daily : [])
-      .filter((item: any) => typeof item.data === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(item.data))
+      .filter((item: any) => typeof item.data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.data))
       .sort((a: any, b: any) => a.data.localeCompare(b.data));
     if (!rows.length) return [] as { key: number; label: string; contacts: number; returns: number }[];
     const start = Date.parse(rows[0].data + 'T00:00:00Z');

@@ -1380,7 +1380,7 @@ def get_crm_overview_and_results(
         .filter(
             CrmContatoCliente.restaurante_id == restaurante_id,
             CrmContatoCliente.acao_executada.in_(
-                ["CONTATO_MANUAL_CONFIRMADO", "WHATSAPP_ABERTO"]
+                ["CONTATO_MANUAL_CONFIRMADO"]
             ),
         )
         .order_by(CrmContatoCliente.criado_em.asc(), CrmContatoCliente.id.asc())

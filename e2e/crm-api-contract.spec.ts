@@ -153,10 +153,10 @@ test('relationship keeps missing results distinct from zero and empty audiences 
   await expect(page.locator('#clientes-subtab-beneficios')).toHaveCount(0);
   await navigateRelationship(page, 'resultados');
   const returning=page.locator('article').filter({has:page.getByRole('heading',{name:'Clientes que voltaram',exact:true})});
-  const revenue=page.locator('article').filter({has:page.getByRole('heading',{name:'Quanto compraram após o contato',exact:true})});
+  const revenue=page.locator('article').filter({has:page.getByRole('heading',{name:'Valor líquido de compras associadas',exact:true})});
   await expect(returning.locator('strong')).toHaveText('—');
-  await expect(revenue.locator('strong')).toHaveText('—');
-  await expect(revenue).not.toContainText('R$ 0,00');
+  // Retorno sem contatos is unmeasured, while observed coupon usage is measured (zero).
+  await expect(revenue.locator('strong')).toHaveText('R$ 0,00');
   await page.screenshot({path:testInfo.outputPath(`relationship-no-contacts-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
 });
 
@@ -313,7 +313,7 @@ test('stage5 Results ignores stale HTTP responses and charts only dated real eve
   await navigateRelationship(page, 'resultados');
   const card = page.locator('article').filter({has: page.getByRole('heading', {name:'Clientes que voltaram'})});
   await expect(card.locator('strong')).toHaveText('1');
-  await expect(page.getByRole('region', {name: 'Evolução observada'})).toContainText('10/12');
+  await expect(page.getByRole('region', {name: 'Evolução observada'})).toContainText('08/10');
   await page.getByLabel('Período analisado nos resultados').selectOption('7');
   await expect.poll(() => pendingSeven !== null).toBe(true);
   await page.getByLabel('Período analisado nos resultados').selectOption('60');
