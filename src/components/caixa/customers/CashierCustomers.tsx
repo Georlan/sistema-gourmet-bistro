@@ -250,14 +250,15 @@ export default function CashierCustomers({
 
   // Ficha individual lateral (preserva filtros, busca e página ao fechar)
   const [selectedProfileCustomerId, setSelectedProfileCustomerId] = useState<string | null>(null);
-  const [externalCampaignCustomer, setExternalCampaignCustomer] = useState<LoyaltyCustomer | null>(null);
+  const [externalCampaignCustomer, setExternalCampaignCustomer] = useState<{ scope: string; customer: LoyaltyCustomer } | null>(null);
+  const currentExternalCustomer = externalCampaignCustomer?.scope === searchScope ? externalCampaignCustomer.customer : null;
   useEffect(() => {
     setExternalCampaignCustomer(null);
     setSelectedProfileCustomerId(null);
   }, [searchScope]);
   const selectedProfileCustomer = useMemo(
-    () => [...loyaltyUsers, ...listUsers, ...(externalCampaignCustomer ? [externalCampaignCustomer] : [])].find((u) => u.id === selectedProfileCustomerId) || null,
-    [loyaltyUsers, listUsers, externalCampaignCustomer, selectedProfileCustomerId],
+    () => [...loyaltyUsers, ...listUsers, ...(currentExternalCustomer ? [currentExternalCustomer] : [])].find((u) => u.id === selectedProfileCustomerId) || null,
+    [loyaltyUsers, listUsers, currentExternalCustomer, selectedProfileCustomerId],
   );
 
   // Rascunho para abrir Campanhas já preenchido a partir de Oportunidade, Ficha Individual ou Benefício
@@ -671,7 +672,7 @@ export default function CashierCustomers({
   };
 
   const handleStartCampaignForSingleCustomer = (customer: LoyaltyCustomer, suggestedObjective = 'SECOND_PURCHASE') => {
-    setExternalCampaignCustomer(customer);
+    setExternalCampaignCustomer({ scope: searchScope, customer });
     setSelectedProfileCustomerId(null);
     setCampaignDraftSeed({
       objetivo: suggestedObjective,
@@ -1500,7 +1501,7 @@ export default function CashierCustomers({
               <CustomerCampaignsWorkspace
               apiBaseUrl={apiBaseUrl}
               authHeaders={authHeaders}
-              customers={externalCampaignCustomer && !loyaltyUsers.some(c => c.id === externalCampaignCustomer.id) ? [...loyaltyUsers, externalCampaignCustomer] : loyaltyUsers}
+              customers={currentExternalCustomer && !loyaltyUsers.some(c => c.id === currentExternalCustomer.id) ? [...loyaltyUsers, currentExternalCustomer] : loyaltyUsers}
               totalCustomers={totalCustomers}
               hasMoreCustomers={hasMoreCustomers}
               onLoadMoreCustomers={loadMoreCustomers}
@@ -1514,7 +1515,7 @@ export default function CashierCustomers({
                 await loadCrmSummary();
               }}
               onOpenResults={() => handleSelectCrmTab('resultados')}
-              onInspectCustomer={(customer) => { setExternalCampaignCustomer(customer); setSelectedProfileCustomerId(customer.id); }}
+              onInspectCustomer={(customer) => { setExternalCampaignCustomer({ scope: searchScope, customer }); setSelectedProfileCustomerId(customer.id); }}
               />
             </div>
           )}
