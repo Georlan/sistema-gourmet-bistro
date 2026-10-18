@@ -979,3 +979,64 @@ def test_stage5_saved_window_is_not_overridden_and_old_orders_cannot_use_future_
         assert results["retorno_apos_abordagem"]["clientes_que_voltaram"] == 0
         assert results["regra_janelas"]["campanhas"] == "PERSISTIDA"
         assert results["regra_janelas"]["sem_campanha_dias"] == selected_window
+
+
+def test_preparation_does_not_hide_confirmed_contact_cooldown_or_return():
+    from app.crm_models import CrmContatoCliente
+    from app.services.customer_crm import enrich_customer_crm_payloads
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    with TestingSessionLocal() as db:
+        db.add(Cliente(id="audit-contact", restaurante_id=1, nome="Cliente fixture", telefone="85999993301"))
+        db.flush()
+        for action, days in (("CONTATO_MANUAL_CONFIRMADO", 2), ("MENSAGEM_COPIADA", 1)):
+            db.add(CrmContatoCliente(
+                id=f"audit-{action}", restaurante_id=1, cliente_id="audit-contact",
+                objetivo="SECOND_PURCHASE", abordagem_tipo="SEM_DESCONTO",
+                canal="WHATSAPP_MANUAL", acao_executada=action,
+                criado_em=now - datetime.timedelta(days=days)))
+        db.commit()
+        customer = enrich_customer_crm_payloads(
+            db, restaurante_id=1, loyalty_enabled=True, now=now,
+            payloads=[{"id": "audit-contact", "telefone": "85999993301",
+                       "ultima_compra_em": (now - datetime.timedelta(hours=36)).isoformat()}])[0]
+        assert customer["contato_recente"] is True
+        assert customer["voltou_apos_ultimo_contato"] is True
+        # The most recent action remains available for the activity history.
+        assert customer["ultimo_contato_status"] == "MENSAGEM_COPIADA"
+
+
+def test_coupon_campaign_without_own_contact_and_unassigned_orders_reconcile():
+    from app.crm_models import CrmCampanha, CrmContatoCliente
+    from app.services.customer_crm import get_crm_overview_and_results
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    with TestingSessionLocal() as db:
+        db.add(Cliente(id="audit-reconcile", restaurante_id=1, nome="Cliente fixture", telefone="85999993302"))
+        db.add(Cupom(id="audit-coupon", restaurante_id=1, codigo="AUDIT5", tipo_desconto="fixo", valor_desconto=5, ativo=True))
+        db.flush()
+        db.add(CrmCampanha(id="audit-campaign", restaurante_id=1, nome="Cupom sem contato próprio",
+            objetivo="CUSTOM", segmento_filtro="CUSTOM", abordagem_tipo="CUPOM",
+            cupom_id="audit-coupon", template_mensagem="Mensagem de teste isolado",
+            janela_atribuicao_dias=14, criado_em=now - datetime.timedelta(days=5)))
+        db.add(CrmContatoCliente(id="audit-unassigned", restaurante_id=1, cliente_id="audit-reconcile",
+            objetivo="CUSTOM", abordagem_tipo="SEM_DESCONTO", canal="TELEFONE",
+            acao_executada="CONTATO_MANUAL_CONFIRMADO", criado_em=now - datetime.timedelta(days=3)))
+        db.add_all([
+            Comanda(id="audit-coupon-order", restaurante_id=1, cliente_id="audit-reconcile", garcom_id="user-caixa-1",
+                numero_pedido=9341, fechada=True, fechado_em=now - datetime.timedelta(days=2), valor_pago=80, cupom_id="audit-coupon"),
+            Comanda(id="audit-unassigned-order", restaurante_id=1, cliente_id="audit-reconcile", garcom_id="user-caixa-1",
+                numero_pedido=9342, fechada=True, fechado_em=now - datetime.timedelta(days=1), valor_pago=60),
+        ])
+        db.commit()
+        data = get_crm_overview_and_results(db, restaurante_id=1, loyalty_enabled=True, coupons_enabled=True, now=now)
+        campaign = data["campanhas"][0]
+        assert campaign["clientes_abordados"] == 0
+        assert campaign["cupons_sem_contato_confirmado"] == 1
+        reconciliation = data["resultados"]["conciliacao_campanhas"]
+        assert reconciliation == {
+            "pedidos_com_campanha": 1, "pedidos_sem_campanha": 1,
+            "valor_com_campanha_brl": 80.0, "valor_sem_campanha_brl": 60.0,
+        }
+        assert data["resultados"]["pedidos_associados"]["total"] == 2
+        assert data["resultados"]["valor_pago_pedidos_associados"]["total_liquido_brl"] == 140.0

@@ -287,6 +287,13 @@ export default function CashierCustomers({
       if (!res.ok) throw new Error('CRM summary unavailable');
       const data = await res.json();
       if (requestId !== crmSummaryRequestRef.current) return;
+      // A malformed success response must leave the last confirmed snapshot
+      // and editable workspaces intact, with the same retry path as HTTP errors.
+      if (!data || typeof data !== 'object' || !Array.isArray(data.campanhas)
+        || !Array.isArray(data.oportunidades) || !data.resultados
+        || typeof data.resultados !== 'object' || Array.isArray(data.resultados)) {
+        throw new Error('Invalid CRM summary');
+      }
       setCrmSummary({...data, oportunidades: Array.isArray(data?.oportunidades) ? data.oportunidades.map((op: any) => ({
         ...op, elegiveis_ids: op.elegiveis_cliente_ids ?? op.elegiveis_ids ?? [],
         motivo_entrada: op.por_que_entraram ?? op.motivo_entrada ?? '',

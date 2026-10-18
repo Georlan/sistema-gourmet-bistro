@@ -243,12 +243,18 @@ def enrich_customer_crm_payloads(
         .all()
     )
     latest_contact_by_cid: dict[str, CrmContatoCliente] = {}
+    latest_confirmed_by_cid: dict[str, CrmContatoCliente] = {}
+    latest_protective_by_cid: dict[str, CrmContatoCliente] = {}
     total_contacts_by_cid: dict[str, int] = {}
     for c_row in contatos_rows:
         cid = str(c_row.cliente_id)
         total_contacts_by_cid[cid] = total_contacts_by_cid.get(cid, 0) + 1
         if cid not in latest_contact_by_cid:
             latest_contact_by_cid[cid] = c_row
+        if c_row.acao_executada == "CONTATO_MANUAL_CONFIRMADO":
+            latest_confirmed_by_cid.setdefault(cid, c_row)
+        if c_row.acao_executada in ("CONTATO_MANUAL_CONFIRMADO", "WHATSAPP_ABERTO"):
+            latest_protective_by_cid.setdefault(cid, c_row)
 
     # 3. Última avaliação de satisfação por cliente
     avaliacoes_rows = (
@@ -295,11 +301,16 @@ def enrich_customer_crm_payloads(
             if contact_dt is not None:
                 ultimo_contato_em = contact_dt.isoformat()
                 dias_desde_contato = max(0, (utc_now - contact_dt).days)
-                # Só bloqueia por contato recente quando houve abertura de WhatsApp ou confirmação manual
-                if contact.acao_executada in ("CONTATO_MANUAL_CONFIRMADO", "WHATSAPP_ABERTO"):
-                    contato_recente = dias_desde_contato < RECENT_CONTACT_COOLDOWN_DAYS
-                if ultima_compra_dt is not None and ultima_compra_dt > contact_dt:
-                    voltou_apos_contato = True
+
+        # Preparation remains in the activity history but cannot hide a real
+        # contact or establish a customer return by itself.
+        protective = latest_protective_by_cid.get(cid)
+        protective_dt = to_utc(protective.criado_em) if protective else None
+        if protective_dt is not None:
+            contato_recente = utc_now - protective_dt < datetime.timedelta(days=RECENT_CONTACT_COOLDOWN_DAYS)
+        confirmed = latest_confirmed_by_cid.get(cid)
+        confirmed_dt = to_utc(confirmed.criado_em) if confirmed else None
+        voltou_apos_contato = bool(ultima_compra_dt and confirmed_dt and ultima_compra_dt > confirmed_dt)
 
         ultima_av_nota: Optional[int] = None
         ultima_av_comentario: Optional[str] = None
@@ -314,11 +325,9 @@ def enrich_customer_crm_payloads(
                 # Ocorrência permanece aberta se o cliente não voltou a comprar nem recebeu abordagem de recuperação depois da avaliação
                 comprou_depois = bool(ultima_compra_dt and rev_dt and ultima_compra_dt > rev_dt)
                 abordado_depois = bool(
-                    contact
-                    and contact.acao_executada == "CONTATO_MANUAL_CONFIRMADO"
-                    and to_utc(contact.criado_em)
+                    confirmed_dt
                     and rev_dt
-                    and to_utc(contact.criado_em) >= rev_dt
+                    and confirmed_dt >= rev_dt
                 )
                 ocorrencia_aberta = not comprou_depois and not abordado_depois
 
@@ -1625,9 +1634,11 @@ def get_crm_overview_and_results(
                 else None
             )
             if target_camp_id and target_camp_id in campaign_stats:
-                if matched_contact is not None and str(matched_contact.campanha_id) == target_camp_id:
+                campaign_contact = next((ct for ct in reversed(eligible_contacts)
+                    if str(ct.campanha_id) == target_camp_id), None)
+                if campaign_contact is not None:
                     campaign_stats[target_camp_id]["voltaram_ids"].add(client_id_str)
-                if matched_contact is None:
+                else:
                     campaign_stats[target_camp_id]["cupons_sem_contato"] += 1
                 campaign_stats[target_camp_id]["pedidos_cupom"] += 1
                 campaign_stats[target_camp_id]["valor_pago_liquido"] += liquido
@@ -1679,6 +1690,8 @@ def get_crm_overview_and_results(
 
     total_pedidos_associados = pedidos_comprovados_cupom + pedidos_estimados_janela
     total_valor_associado = valor_comprovado_cupom + valor_estimado_janela
+    campaign_orders = sum(st["pedidos_cupom"] + st["pedidos_temporal"] for st in campaign_stats.values())
+    campaign_value = sum((st["valor_pago_liquido"] for st in campaign_stats.values()), Decimal("0.00"))
 
     campanhas_list: list[dict[str, Any]] = []
     for cp in campanhas_rows:
@@ -1726,6 +1739,12 @@ def get_crm_overview_and_results(
             "periodo_dias": periodo_dias,
             "janela_atribuicao_dias": janela_atribuicao_dias,
             "tem_rastreamento_suficiente": tem_rastreamento_abordagem,
+            "conciliacao_campanhas": {
+                "pedidos_com_campanha": campaign_orders,
+                "pedidos_sem_campanha": total_pedidos_associados - campaign_orders,
+                "valor_com_campanha_brl": float(campaign_value),
+                "valor_sem_campanha_brl": float(total_valor_associado - campaign_value),
+            },
             "regra_janelas": {
                 "campanhas": "PERSISTIDA",
                 "sem_campanha_dias": janela_atribuicao_dias,

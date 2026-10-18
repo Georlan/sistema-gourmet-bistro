@@ -328,3 +328,38 @@ test('stage5 Results ignores stale HTTP responses and charts only dated real eve
   await campaignList.getByText('Campanha fixture de contrato', {exact:true}).filter({visible:true}).click();
   await expect(campaignList.getByText(/Janela histórica da campanha:/).filter({visible:true})).toBeVisible();
 });
+
+test('results recover from forbidden, unauthorized, network and malformed responses without losing navigation', async ({page}) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  let failure: number | 'network' | 'malformed' | null = null;
+  await page.route('**/fidelidade/crm/resumo**', async route => {
+    if (failure === 'network') return route.abort('failed');
+    if (failure === 'malformed') return route.fulfill({json: {...contract.summary, campanhas: {invalid: true}}});
+    if (failure) return route.fulfill({status: failure, json: {detail: 'Acesso indisponível'}});
+    return route.fulfill({json: contract.summary});
+  });
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  if (!(await page.locator('.cashier-sidebar:visible').count())) {
+    const menu = page.getByRole('button', {name: 'Abrir menu completo', exact: true});
+    if (await menu.isVisible()) await menu.click();
+    else await page.getByRole('button', {name: 'Abrir menu principal', exact: true}).click();
+  }
+  await page.locator('.cashier-sidebar:visible').getByRole('button', {name: /^Relacionamento(?: \d+)?$/}).click();
+  await navigateRelationship(page, 'resultados');
+  const error = page.getByRole('alert').filter({hasText: 'Não foi possível atualizar os indicadores consolidados do CRM.'});
+  await expect(page.getByRole('heading', {name: 'Resultados por campanha (1)', exact: true})).toBeVisible();
+  for (const kind of [401, 403, 'network', 'malformed'] as const) {
+    failure = kind;
+    await page.getByRole('button', {name: 'Atualizar', exact: true}).click();
+    await expect(error).toBeVisible();
+    await expect(page.getByRole('heading', {name: 'Resultados por campanha (1)', exact: true})).toBeVisible();
+    failure = null;
+    await error.getByRole('button', {name: 'Tentar novamente'}).click();
+    await expect(error).toBeHidden();
+  }
+  await navigateRelationship(page, 'clientes');
+  await expectRelationshipSelected(page, 'clientes');
+});

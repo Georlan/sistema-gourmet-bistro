@@ -36,7 +36,7 @@ function CampaignEvidence({ camp }: { camp: any }) {
       <p>Janela histórica da campanha: {camp.janela_atribuicao_dias ?? '—'} dias. O seletor geral não modifica este valor.</p>
       <p>Contatos confirmados: {count(camp.clientes_abordados)}. Registro manual não comprova entrega no WhatsApp.</p>
       <p>Clientes que compraram após contato: {camp.clientes_abordados > 0 ? count(camp.clientes_que_voltaram) : 'Não medido — sem contato confirmado'}.</p>
-      <p>Usos de cupom vinculado: {count(camp.pedidos_comprovados_cupom)} · {count(camp.cupons_sem_contato_confirmado)} sem contato confirmado.</p>
+      <p>Usos de cupom vinculado: {count(camp.pedidos_comprovados_cupom)} · {count(camp.cupons_sem_contato_confirmado)} sem contato confirmado nesta campanha.</p>
       <p>Compras por associação temporal: {count(camp.pedidos_estimados_janela)}. Não comprova causalidade.</p>
       <p>Valor líquido associado: {money(camp.valor_pago_liquido_brl)} (não é lucro). Descontos nessas compras: {money(camp.desconto_utilizado_brl)} (não são necessariamente custo incremental).</p>
     </div>
@@ -239,6 +239,11 @@ export function CustomerResultsWorkspace({
 
       <section aria-label="Resultados por campanha" className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
         <h4 className="text-sm font-semibold text-koma-foreground">Resultados por campanha ({campanhas.length})</h4>
+        {res?.conciliacao_campanhas && <p className="text-sm text-koma-muted">
+          Do total associado: {count(res.conciliacao_campanhas.pedidos_com_campanha)} compras em campanhas ({money(res.conciliacao_campanhas.valor_com_campanha_brl)})
+          {' e '}{count(res.conciliacao_campanhas.pedidos_sem_campanha)} sem campanha ({money(res.conciliacao_campanhas.valor_sem_campanha_brl)}).
+          {' '}Clientes únicos podem participar de mais de uma campanha; as contagens de pessoas não devem ser somadas.
+        </p>}
         {campanhas.length === 0 ? (
           <p className="text-sm text-koma-muted">Nenhuma campanha registrada ainda. Inicie uma ação a partir das abas Hoje ou Campanhas.</p>
         ) : <>
