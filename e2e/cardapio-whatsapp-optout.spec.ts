@@ -41,5 +41,5 @@ test('falha na prévia bloqueia confirmação', async ({ page }) => {
   await page.route('**/api/cardapio/whatsapp/opt-out/preview', route => route.fulfill({status:404, body:'{}'}));
   await page.goto('/w/a#' + 'C'.repeat(32));
   await expect(page.getByRole('alert')).toBeVisible();
-  await expect(page.getByRole('button')).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Link indisponível' })).toBeDisabled();
 });

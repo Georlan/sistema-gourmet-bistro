@@ -45,7 +45,7 @@ export default function WhatsAppOptOutPage() {
       <p>{done ? `Você não receberá novos avisos de ${restaurant} neste número.` : 'Confirme para parar os avisos deste restaurante neste número. Os avisos de outros restaurantes e o acompanhamento pelo Cardápio Online continuam disponíveis.'}</p>
       {!done && (token ? <button type="button" disabled={busy || !restaurant} onClick={() => void unsubscribe()}
         className="w-full rounded-xl bg-emerald-600 p-3 font-bold text-white disabled:opacity-50">
-        {busy ? 'Desativando…' : restaurant ? `Parar avisos de ${restaurant}` : 'Conferindo link…'}
+        {busy ? 'Desativando…' : restaurant ? `Parar avisos de ${restaurant}` : error ? 'Link indisponível' : 'Conferindo link…'}
       </button> : <p role="alert">Abra o link de descadastro recebido na mensagem.</p>)}
       {error && <p role="alert">{error}</p>}
     </section>
