@@ -233,3 +233,36 @@ test('campaign responses cannot unlock edited drafts or carry late contact confi
   expect(contactCampaignIds).toEqual(['campaign-fixture-2','campaign-fixture-3']);
   expect(campaignCreates).toBe(3);
 });
+
+test('customer base metadata stays honest beyond the first 100 and pages load only on request', async ({page}) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  const data = Array.from({length: 125}, (_, index) => ({
+    ...contract.customers[0],
+    id: `stage4-customer-${index}`,
+    nome: `Cliente ${index + 1}`,
+    cliente: `Cliente ${index + 1}`,
+    telefone: '85999991122',
+  }));
+  const requests: number[] = [];
+  await page.route('**/fidelidade/clientes*', async route => {
+    const url = new URL(route.request().url());
+    const offset = Number(url.searchParams.get('offset') || 0);
+    requests.push(offset);
+    const limit = Number(url.searchParams.get('limit') || 100);
+    return route.fulfill({
+      json: data.slice(offset, offset + limit),
+      headers: { 'X-Total-Count': '125', 'X-Has-More': offset + limit < 125 ? 'true' : 'false', 'X-Products-Included': 'false' },
+    });
+  });
+  await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json:contract.summary}));
+  await page.goto('/?view=caixa');
+  await navigateRelationship(page, 'clientes');
+  await expect(page.getByText('Exibindo 100 de 125 clientes.', {exact:false})).toBeVisible();
+  await expect(page.getByText('Favoritos não consultados', {exact:false}).first()).toBeVisible();
+  expect(requests).toEqual([0]);
+  await page.getByRole('button',{name:'Carregar mais 100 clientes'}).click();
+  await expect(page.getByText('125 de 125 clientes', {exact:false}).first()).toBeVisible();
+  expect(requests).toContain(100);
+});
