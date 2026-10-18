@@ -275,3 +275,55 @@ test('customer base metadata stays honest beyond the first 100 and pages load on
   await expect(page.getByText('125 de 125 clientes', {exact:false}).filter({visible:true}).first()).toBeVisible();
   expect(requests).toContain(100);
 });
+
+
+test('stage5 Results ignores stale HTTP responses and charts only dated real events', async ({page}) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  let pendingSeven: import('@playwright/test').Route | null = null;
+  const makeSummary = (days: number, returns: number) => {
+    const summary = structuredClone(contract.summary);
+    summary.resultados.periodo_dias = days;
+    summary.resultados.retorno_apos_abordagem = {
+      status_mensuracao: 'MENSURADO',
+      clientes_abordados_no_periodo: 3,
+      clientes_que_voltaram: returns,
+    };
+    summary.resultados.serie_temporal = [
+      {data: '2026-10-08', clientes_contatados: 2, clientes_que_voltaram: 0},
+      {data: '2026-10-12', clientes_contatados: 1, clientes_que_voltaram: 1},
+    ];
+    summary.resultados.regra_janelas = {campanhas: 'PERSISTIDA', sem_campanha_dias: 14};
+    return summary;
+  };
+  await page.route('**/fidelidade/crm/resumo**', async route => {
+    const period = Number(new URL(route.request().url()).searchParams.get('periodo_dias') || 30);
+    if (period === 7) { pendingSeven = route; return; }
+    await route.fulfill({json: makeSummary(period, period === 60 ? 2 : 1)});
+  });
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  if (!(await page.locator('.cashier-sidebar:visible').count())) {
+    const menu = page.getByRole('button', {name: 'Abrir menu completo', exact: true});
+    if (await menu.isVisible()) await menu.click();
+    else await page.getByRole('button', {name: 'Abrir menu principal', exact: true}).click();
+  }
+  await page.locator('.cashier-sidebar:visible').getByRole('button', {name: /^Relacionamento(?: \d+)?$/}).click();
+  await navigateRelationship(page, 'resultados');
+  const card = page.locator('article').filter({has: page.getByRole('heading', {name:'Clientes que voltaram'})});
+  await expect(card.locator('strong')).toHaveText('1');
+  await expect(page.getByRole('region', {name: 'Evolução observada'})).toContainText('10/12');
+  await page.getByLabel('Período analisado nos resultados').selectOption('7');
+  await expect.poll(() => pendingSeven !== null).toBe(true);
+  await page.getByLabel('Período analisado nos resultados').selectOption('60');
+  await expect(card.locator('strong')).toHaveText('2');
+  // The old response completes last: it must not replace the latest selection.
+  await pendingSeven!.fulfill({json: makeSummary(7, 99)});
+  await expect(page.getByLabel('Período analisado nos resultados')).toHaveValue('60');
+  await expect(card.locator('strong')).toHaveText('2');
+  await expect(page.getByRole('region', {name: 'Evolução observada'})).toContainText('08/10');
+  const campaignList = page.getByRole('region', {name: 'Resultados por campanha'});
+  await campaignList.getByText('Campanha fixture de contrato', {exact:true}).filter({visible:true}).click();
+  await expect(campaignList.getByText(/Janela histórica da campanha:/).filter({visible:true})).toBeVisible();
+});
