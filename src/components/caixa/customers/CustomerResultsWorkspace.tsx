@@ -251,7 +251,7 @@ export function CustomerResultsWorkspace({
                 <tr key={camp.id} className="align-top">
                   <td className="p-3">
                     <details><summary className="min-h-10 cursor-pointer font-semibold text-koma-foreground focus-visible:outline-2 focus-visible:outline-emerald-500">
-                      {camp.nome}
+                      <span className="block">{camp.nome}</span>
                       <span className="mt-1 block font-normal text-xs text-koma-muted">{objectiveNames[camp.objetivo] || 'Ação personalizada'}</span>
                     </summary><div className="mt-3 max-w-lg"><CampaignEvidence camp={camp} /></div></details>
                   </td>
@@ -266,7 +266,7 @@ export function CustomerResultsWorkspace({
             {campanhas.map(camp => <details key={camp.id}
               className="rounded-xl border border-koma-border bg-koma-card p-3 text-sm">
               <summary className="min-h-10 cursor-pointer font-semibold text-koma-foreground focus-visible:outline-2 focus-visible:outline-emerald-500">
-                {camp.nome}
+                <span className="block">{camp.nome}</span>
                 <span className="mt-1 block font-normal text-xs text-koma-muted">
                   {count(camp.clientes_abordados)} contatos · {camp.clientes_abordados > 0 ? count(camp.clientes_que_voltaram) + ' retornaram' : 'Retorno não medido'} · {money(camp.valor_pago_liquido_brl)}
                 </span>
