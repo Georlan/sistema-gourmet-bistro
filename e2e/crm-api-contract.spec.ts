@@ -255,7 +255,7 @@ test('customer base metadata stays honest beyond the first 100 and pages load on
     const limit = Number(url.searchParams.get('limit') || 100);
     return route.fulfill({
       json: data.slice(offset, offset + limit),
-      headers: { 'X-Total-Count': '125', 'X-Has-More': offset + limit < 125 ? 'true' : 'false', 'X-Products-Included': 'false' },
+      headers: { 'X-Total-Count': '125', 'X-Has-More': offset + limit < 125 ? 'true' : 'false', 'X-Products-Included': 'false', 'Access-Control-Expose-Headers': 'X-Total-Count, X-Has-More, X-Products-Included' },
     });
   });
   await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json:contract.summary}));
