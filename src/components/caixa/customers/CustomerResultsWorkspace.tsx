@@ -28,6 +28,21 @@ const approachNames: Record<string, string> = {
   SEM_DESCONTO: 'Sem desconto', CUPOM: 'Com cupom', FIDELIDADE: 'Fidelidade',
 };
 
+
+function CampaignEvidence({ camp }: { camp: any }) {
+  return (
+    <div className="space-y-2 text-xs text-koma-muted">
+      <p>Abordagem: {approachNames[camp.abordagem_tipo] || 'Não informada'}{camp.cupom_codigo ? ' · Cupom ' + camp.cupom_codigo : ''}</p>
+      <p>Janela histórica da campanha: {camp.janela_atribuicao_dias ?? '—'} dias. O seletor geral não modifica este valor.</p>
+      <p>Contatos confirmados: {count(camp.clientes_abordados)}. Registro manual não comprova entrega no WhatsApp.</p>
+      <p>Clientes que compraram após contato: {camp.clientes_abordados > 0 ? count(camp.clientes_que_voltaram) : 'Não medido — sem contato confirmado'}.</p>
+      <p>Usos de cupom vinculado: {count(camp.pedidos_comprovados_cupom)} · {count(camp.cupons_sem_contato_confirmado)} sem contato confirmado.</p>
+      <p>Compras por associação temporal: {count(camp.pedidos_estimados_janela)}. Não comprova causalidade.</p>
+      <p>Valor líquido associado: {money(camp.valor_pago_liquido_brl)} (não é lucro). Descontos nessas compras: {money(camp.desconto_utilizado_brl)} (não são necessariamente custo incremental).</p>
+    </div>
+  );
+}
+
 export function CustomerResultsWorkspace({
   crmSummary,
   loading,
@@ -157,12 +172,7 @@ export function CustomerResultsWorkspace({
           <strong className="block text-3xl font-black text-emerald-400">{hasAssociations ? money(valores.total_liquido_brl) : '—'}</strong>
           {hasAssociations ? <>
             <p className="text-sm text-koma-muted">{pedidos?.total ?? '—'} compras associadas (inclui cupom sem contato confirmado)</p>
-            <div className="space-y-2 text-xs">
-              {[{label:'Uso de cupom vinculado (com ou sem contato)',value:valores.comprovado_cupom_brl,color:'bg-emerald-500'}, {label:'Associação temporal após contato confirmado',value:valores.estimado_temporal_brl,color:'bg-sky-500'}].map(item => <div key={item.label}>
-                <div className="flex justify-between gap-2"><span>{item.label}</span><strong>{money(item.value)}</strong></div>
-                <div aria-hidden="true" className="mt-1 h-2 rounded-full bg-koma-raised"><div className={`h-full rounded-full ${item.color}`} style={{width:`${valores.total_liquido_brl > 0 ? Math.min(100,Math.max(0,item.value / valores.total_liquido_brl * 100)) : 0}%`}} /></div>
-              </div>)}
-            </div>
+            <p className="text-xs text-koma-muted">Cupom vinculado: {money(valores.comprovado_cupom_brl)} · Associação temporal: {money(valores.estimado_temporal_brl)}</p>
           </> : <p className="text-sm text-koma-muted">Ainda sem dados de compras após contatos.</p>}
           <p className="text-xs text-koma-muted">Compras associadas por cupom ou por contato; não representam lucro, causalidade ou vendas incrementais comprovadas.</p>
         </article>
@@ -227,74 +237,44 @@ export function CustomerResultsWorkspace({
         </div>
       </details>
 
-      {/* Tabela de Acompanhamento por Campanha */}
-      <section className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xs font-semibold text-koma-foreground">
-            Resultados por campanha ({campanhas.length})
-          </h4>
-        </div>
-
+      <section aria-label="Resultados por campanha" className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
+        <h4 className="text-sm font-semibold text-koma-foreground">Resultados por campanha ({campanhas.length})</h4>
         {campanhas.length === 0 ? (
-          <p className="text-xs text-koma-muted">
-            Nenhuma campanha registrada ainda. Inicie uma ação a partir da aba <strong>Hoje</strong> ou{' '}
-            <strong>Campanhas</strong>.
-          </p>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-koma-border">
+          <p className="text-sm text-koma-muted">Nenhuma campanha registrada ainda. Inicie uma ação a partir das abas Hoje ou Campanhas.</p>
+        ) : <>
+          <div className="hidden md:block overflow-x-auto rounded-xl border border-koma-border">
             <table className="w-full text-left text-sm">
-              <thead className="bg-koma-raised border-b border-koma-border text-xs font-semibold text-koma-muted">
-                <tr>
-                  <th className="p-3">Campanha / Objetivo</th>
-                  <th className="p-3">Abordagem</th>
-                  <th className="p-3">Contatos registrados</th>
-                  <th className="p-3">Clientes que voltaram</th>
-                  <th className="p-3">Pedidos (Cupom vs. Janela)</th>
-                  <th className="p-3">Valor líquido pago</th>
-                  <th className="p-3">Descontos usados</th>
-                </tr>
+              <thead className="border-b border-koma-border bg-koma-raised text-xs text-koma-muted">
+                <tr><th className="p-3">Campanha</th><th className="p-3">Contatados</th><th className="p-3">Retornaram</th><th className="p-3">Valor associado</th></tr>
               </thead>
-              <tbody className="divide-y divide-koma-border">
-                {campanhas.map((camp) => (
-                  <tr key={camp.id} className="hover:bg-koma-raised/50">
-                    <td className="p-3">
-                      <strong className="block text-koma-foreground">{camp.nome}</strong>
-                      <span className="text-xs text-koma-muted">{camp.objetivo}</span>
-                    </td>
-                    <td className="p-3">
-                      <span className="rounded-md bg-koma-raised px-2 py-0.5 font-mono text-xs text-koma-foreground">
-                        {camp.abordagem_tipo}
-                        {camp.cupom_codigo ? ` (${camp.cupom_codigo})` : ''}
-                      </span>
-                    </td>
-                    <td className="p-3 font-mono text-koma-foreground">
-                      {camp.clientes_abordados}
-                    </td>
-                    <td className="p-3 font-mono text-koma-foreground">
-                      {camp.clientes_abordados > 0 ? camp.clientes_que_voltaram : 'Não mensurado'}
-                    </td>
-                    <td className="p-3 font-mono text-koma-foreground">
-                      {camp.clientes_abordados > 0 ? (
-                        <span>
-                          {(camp.pedidos_comprovados_cupom ?? 0) + (camp.pedidos_estimados_janela ?? 0)} ({camp.pedidos_comprovados_cupom} cupom ·{' '}
-                          {camp.pedidos_estimados_janela} janela)
-                        </span>
-                      ) : (
-                        'Não mensurado'
-                      )}
-                    </td>
-                    <td className="p-3 font-mono font-bold text-emerald-400">
-                      {camp.clientes_abordados > 0 ? money(camp.valor_pago_liquido_brl) : 'Não mensurado'}
-                    </td>
-                    <td className="p-3 font-mono text-koma-foreground">
-                      {money(camp.desconto_utilizado_brl)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+              <tbody className="divide-y divide-koma-border">{campanhas.map(camp =>
+                <tr key={camp.id} className="align-top">
+                  <td className="p-3">
+                    <details><summary className="min-h-10 cursor-pointer font-semibold text-koma-foreground focus-visible:outline-2 focus-visible:outline-emerald-500">
+                      {camp.nome}
+                      <span className="mt-1 block font-normal text-xs text-koma-muted">{objectiveNames[camp.objetivo] || 'Ação personalizada'}</span>
+                    </summary><div className="mt-3 max-w-lg"><CampaignEvidence camp={camp} /></div></details>
+                  </td>
+                  <td className="p-3 tabular-nums">{count(camp.clientes_abordados)}</td>
+                  <td className="p-3 tabular-nums">{camp.clientes_abordados > 0 ? count(camp.clientes_que_voltaram) : 'Não medido'}</td>
+                  <td className="p-3 tabular-nums font-semibold">{money(camp.valor_pago_liquido_brl)}</td>
+                </tr>
+              )}</tbody>
             </table>
           </div>
-        )}
+          <div className="grid gap-2 md:hidden">
+            {campanhas.map(camp => <details key={camp.id}
+              className="rounded-xl border border-koma-border bg-koma-card p-3 text-sm">
+              <summary className="min-h-10 cursor-pointer font-semibold text-koma-foreground focus-visible:outline-2 focus-visible:outline-emerald-500">
+                {camp.nome}
+                <span className="mt-1 block font-normal text-xs text-koma-muted">
+                  {count(camp.clientes_abordados)} contatos · {camp.clientes_abordados > 0 ? count(camp.clientes_que_voltaram) + ' retornaram' : 'Retorno não medido'} · {money(camp.valor_pago_liquido_brl)}
+                </span>
+              </summary>
+              <div className="mt-3"><CampaignEvidence camp={camp} /></div>
+            </details>)}
+          </div>
+        </>}
       </section>
     </div>
   );
