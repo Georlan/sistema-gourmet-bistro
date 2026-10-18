@@ -1136,6 +1136,7 @@ def get_current_agent(
 
     computed_hash = hash_token(raw_token.strip())
     if _invalid_agent_token_is_cached(computed_hash):
+        log.warning('print_agent_auth_rejected reason=cached_invalid_token')
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de agente inválido ou revogado"
@@ -1193,6 +1194,7 @@ def get_current_agent(
         ).mappings().first()
 
     if not identity:
+        log.warning('print_agent_auth_rejected reason=unknown_or_revoked_token')
         _forget_agent_token_tenant(computed_hash)
         _remember_invalid_agent_token(computed_hash)
         raise HTTPException(
@@ -1212,6 +1214,7 @@ def get_current_agent(
             PrintAgentToken.ativo == True,
         ).first()
         if not agent_record:
+            log.warning('print_agent_auth_rejected reason=tenant_validation_failed')
             _forget_agent_token_tenant(computed_hash)
             _remember_invalid_agent_token(computed_hash)
             raise HTTPException(
