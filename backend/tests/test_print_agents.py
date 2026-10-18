@@ -2464,19 +2464,23 @@ def test_repeated_registration_preserves_both_machine_tokens_and_claim_is_atomic
     assert second_data["agent_token"] != first_data["agent_token"]
     second_auth = {"X-Agent-Token": second_data["agent_token"]}
 
-    with TestingSessionLocal() as db:
-        original = db.query(PrintAgentToken).filter_by(
-            restaurante_id=2, agent_id="agent-local",
-        ).one()
-        replacement = db.query(PrintAgentToken).filter_by(
-            restaurante_id=2, agent_id=second_data["agent_id"],
-        ).one()
-        assert original.token_hash == hash_token(first_data["agent_token"])
-        assert original.ativo is True
-        assert original.is_primary is True
-        assert replacement.token_hash == hash_token(second_data["agent_token"])
-        assert replacement.ativo is True
-        assert replacement.is_primary is False
+    tenant_ctx = current_restaurante_id.set(2)
+    try:
+        with TestingSessionLocal() as db:
+            original = db.query(PrintAgentToken).filter_by(
+                restaurante_id=2, agent_id="agent-local",
+            ).one()
+            replacement = db.query(PrintAgentToken).filter_by(
+                restaurante_id=2, agent_id=second_data["agent_id"],
+            ).one()
+            assert original.token_hash == hash_token(first_data["agent_token"])
+            assert original.ativo is True
+            assert original.is_primary is True
+            assert replacement.token_hash == hash_token(second_data["agent_token"])
+            assert replacement.ativo is True
+            assert replacement.is_primary is False
+    finally:
+        current_restaurante_id.reset(tenant_ctx)
     assert client.post("/api/print-agents/heartbeat", headers=first_auth).status_code == 200
     assert client.post("/api/print-agents/heartbeat", headers=second_auth).status_code == 200
 
