@@ -428,19 +428,25 @@ export default function CardapioProductModal({
 
                     <div id={`modifier-options-${modifier.id}`} hidden={!expanded} className="mt-3 space-y-2">
                       {optionalSalad && (
-                        <button
-                          type="button"
-                          aria-label="Sem salada"
-                          aria-pressed={selections.length === 0}
-                          onClick={() => {
-                            setSelectedOptions(current => ({ ...current, [modifier.id]: [] }));
-                            setFeedback("");
-                          }}
-                          className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 text-left transition ${selections.length === 0 ? "border-emerald-500/50 bg-emerald-500/10" : "border-koma-border bg-koma-card"}`}
+                        <label
+                          className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border p-3.5 transition ${selections.length === 0 ? "border-emerald-500/50 bg-emerald-500/10" : "border-koma-border bg-koma-card"}`}
                         >
                           <span className="text-sm font-bold text-koma-foreground">Sem salada</span>
-                          <span className="text-xs font-bold text-koma-muted">{selections.length === 0 ? "Selecionado" : "Escolher"}</span>
-                        </button>
+                          <span className="flex shrink-0 items-center gap-3">
+                            <span className="text-xs font-bold text-koma-muted">{selections.length === 0 ? "Selecionado" : "Selecionar"}</span>
+                            <input
+                              type="checkbox"
+                              aria-label="Sem salada"
+                              checked={selections.length === 0}
+                              onChange={() => {
+                                // Estado derivado das escolhas reais: não adiciona um complemento fictício.
+                                setSelectedOptions(current => ({ ...current, [modifier.id]: [] }));
+                                setFeedback("");
+                              }}
+                              className="h-5 w-5 accent-emerald-500"
+                            />
+                          </span>
+                        </label>
                       )}
                       {modifier.options.map((option) => {
                         const optionQuantity = modifierOptionQuantity(selectedIds, option.id);
@@ -452,14 +458,25 @@ export default function CardapioProductModal({
                         return (
                           <OptionRow
                             key={option.id}
-                            className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 transition ${simpleSelection ? "cursor-pointer" : ""} ${
+                            className={`relative flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 transition ${simpleSelection ? "cursor-pointer" : ""} ${
                               selected
                                 ? "border-emerald-500/50 bg-emerald-500/10 shadow-sm"
-                                : "border-koma-border bg-koma-card"
+                                : optionalSalad && selections.length === 0
+                                  ? "border-koma-border bg-koma-raised/40"
+                                  : "border-koma-border bg-koma-card"
                             }`}
                           >
-                            <span className="min-w-0">
-                              <span className="block text-sm font-bold text-koma-foreground">{option.name}</span>
+                            {optionalSalad && !simpleSelection && (
+                              <button
+                                type="button"
+                                aria-label={`Escolher ${option.name}`}
+                                disabled={!canIncrement}
+                                onClick={() => handleOptionQuantity(modifier, option, 1)}
+                                className="absolute inset-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                              />
+                            )}
+                            <span className={`relative min-w-0 ${optionalSalad && !simpleSelection ? "pointer-events-none" : ""}`}>
+                              <span className={`block text-sm font-bold ${optionalSalad && !selected && selections.length === 0 ? "text-koma-muted" : "text-koma-foreground"}`}>{option.name}</span>
                               {option.extraPrice > 0 && (
                                 <span className="mt-0.5 block text-xs font-bold text-emerald-400">+ {formatPrice(option.extraPrice)} cada</span>
                               )}
@@ -476,7 +493,7 @@ export default function CardapioProductModal({
                                 />
                               </span>
                             ) : (
-                            <span className="flex shrink-0 items-center rounded-xl border border-koma-border bg-koma-raised p-1">
+                            <span className="relative flex shrink-0 items-center rounded-xl border border-koma-border bg-koma-raised p-1">
                               <button
                                 type="button"
                                 onClick={() => handleOptionQuantity(modifier, option, -1)}

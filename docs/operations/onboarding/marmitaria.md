@@ -23,7 +23,14 @@ selecioná-lo não cria produtos, preços ou limites automaticamente.
    desmarcar exige ao menos uma salada, conforme a regra daquele tamanho.
    No cardápio público, quando o mínimo for zero, aparece a escolha explícita
    **Sem salada**. Essa escolha não é um ingrediente, não cobra nem vai na comanda;
-   selecionar uma salada depois substitui automaticamente a opção sem salada.
+   **Sem salada** aparece como caixinha marcada inicialmente, quando não existe
+   salada selecionada. As demais opções ficam neutras/cinzas, mas continuam
+   clicáveis: tocar no cartão de uma salada adiciona uma porção e desmarca
+   **Sem salada**; usar os botões +/− mantém os limites do tamanho.
+   Ao remover todas as porções, a caixinha volta a ficar marcada. Marcá-la
+   novamente remove as porções selecionadas; na edição de uma sacola existente
+   com saladas escolhidas, a caixinha começa desmarcada. O estado permanece
+   representado somente pelas opções reais, sem criar um modificador artificial.
 5. **Permitir repetir a mesma opção** aceita duas porções de Frango quando o máximo
    permitir. Desmarcada, exige opções diferentes. Essa regra também pertence ao
    produto/tamanho, não ao grupo compartilhado.
