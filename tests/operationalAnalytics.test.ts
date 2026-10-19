@@ -39,3 +39,17 @@ test('fetch preserves responses and errors, ignores aborts and never reads bodie
   const brokenReporter = observeOperationalFetch(async () => response, 'https://api.test', 'https://app.test/', () => { throw Error('analytics down'); });
   assert.equal(await brokenReporter('https://api.test/pedidos'), response);
 });
+
+test('slow signals exclude external requests and streaming responses', async () => {
+  let time = 0;
+  const signals: OperationalSignal[] = [];
+  const observer = observeOperationalFetch(async input => {
+    time += 3500;
+    return new Response(null, { headers: String(input).includes('streaming') ? { 'content-type': 'text/event-stream' } : {} });
+  }, 'https://api.test', 'https://app.test/', signal => signals.push(signal), () => time);
+  await observer('https://outside.test/pedidos');
+  await observer('https://api.test/streaming');
+  assert.equal(signals.length, 0);
+  await observer('https://api.test/pedidos?tracking_token=private');
+  assert.deepEqual(signals, [{ endpoint: '/pedidos', method: 'GET', status: 200, duration_ms: 3500, outcome: 'slow' }]);
+});
