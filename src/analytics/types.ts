@@ -61,6 +61,8 @@ export interface PublicOrderSubmittedProps {
 }
 
 export interface AnalyticsEventMap {
+  operational_api_signal: import('./operational').OperationalSignal;
+  operational_screen_viewed: { screen: string; sub_screen: string; surface: 'cashier' };
   public_menu_viewed: PublicMenuViewedProps;
   public_product_viewed: PublicProductViewedProps;
   public_cart_item_added: PublicCartItemAddedProps;

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { initAnalytics, trackOperationalScreen } from '../../../analytics';
 import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
 import type { CashierTab } from '../cashierContracts';
 import {
@@ -67,6 +68,14 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
   });
   const [activeTab, setActiveTab] = useState<CashierTab>(initialNavigation.tab);
   const [activeSubTab, setActiveSubTab] = useState<string>(initialNavigation.subTab);
+
+  useEffect(() => {
+    let cancelled = false;
+    void initAnalytics().then(active => {
+      if (active && !cancelled) trackOperationalScreen(activeTab, activeSubTab);
+    });
+    return () => { cancelled = true; };
+  }, [activeTab, activeSubTab]);
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [mobileOrdersStage, setMobileOrdersStage] = useState<'salon' | 'digital' | 'closing'>('salon');

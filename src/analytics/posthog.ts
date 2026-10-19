@@ -4,6 +4,8 @@
  */
 
 import type { PostHog } from 'posthog-js';
+import { API_BASE_URL } from '../config/api';
+import { observeOperationalFetch } from './operational';
 import type {
   AnalyticsEventMap,
   AnalyticsEventName,
@@ -103,6 +105,7 @@ function recordDebugEvent(event: string, properties: Record<string, any>) {
       properties,
       timestamp: Date.now(),
     });
+    if (target.__KOMA_ANALYTICS_EVENTS__.length > 100) target.__KOMA_ANALYTICS_EVENTS__.splice(0, target.__KOMA_ANALYTICS_EVENTS__.length - 100);
   }
 }
 
@@ -180,6 +183,8 @@ export function initAnalytics(): Promise<boolean> {
 
       posthogInstance = posthog;
       analyticsActive = true;
+      window.fetch = observeOperationalFetch(window.fetch.bind(window), new URL(API_BASE_URL).origin,
+        window.location.href, signal => trackAnalyticsEvent('operational_api_signal', signal));
       flushPendingQueue();
       return true;
     } catch (error) {
@@ -198,6 +203,17 @@ export function isAnalyticsActive(): boolean {
 
 export function getPostHogInstance() {
   return posthogInstance;
+}
+
+let lastOperationalScreen = '';
+export function trackOperationalScreen(screen: string, subScreen: string): void {
+  // Navigation identifiers are code-owned enum values, never labels or customer input.
+  if (![screen, subScreen].every(value => /^[a-z_]{0,48}$/.test(value))) return;
+  const key = `${screen}:${subScreen}`;
+  if (key === lastOperationalScreen) return;
+  lastOperationalScreen = key;
+  try { posthogInstance?.register({ operational_screen: screen, operational_sub_screen: subScreen }); } catch { /* optional */ }
+  trackAnalyticsEvent('operational_screen_viewed', { screen, sub_screen: subScreen, surface: 'cashier' });
 }
 
 export function trackAnalyticsEvent<E extends AnalyticsEventName>(
@@ -299,6 +315,11 @@ export function setRestaurantGroup(
  * Limpa a identidade do usuário e a associação ao tenant ao deslogar ou trocar de sessão.
  */
 export function resetAnalytics(): void {
+  lastOperationalScreen = '';
+  try {
+    posthogInstance?.unregister('operational_screen');
+    posthogInstance?.unregister('operational_sub_screen');
+  } catch { /* optional */ }
   recordDebugEvent('$reset', {});
 
   if (posthogInstance && analyticsActive) {
