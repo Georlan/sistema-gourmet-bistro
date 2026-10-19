@@ -31,6 +31,10 @@ test('Marmitaria oferece Sem salada em qualquer tenant quando mínimo é zero, p
   await expect(modal.locator('#btn-add-to-cart-action')).toContainText('15,00');
   await modal.locator('#btn-add-to-cart-action').click();
   await expect(modal).toHaveCount(0);
+  // A sacola abre automaticamente em alguns viewports; feche-a antes do próximo produto.
+  if (await page.locator('#cart-overlay').isVisible()) {
+    await page.locator('#btn-close-cart').click();
+  }
 
   await page.getByRole('button', { name: 'Quentinha P, R$ 10,00, ver detalhes' }).click();
   await expect(modal.getByRole('button', { name: 'Sem salada', exact: true })).toHaveCount(0);
