@@ -447,7 +447,7 @@ export default function CardapioProductModal({
                             />
                           </span>
                         </label>
-                      )
+                      )}
                       {modifier.options.map((option) => {
                         const optionQuantity = modifierOptionQuantity(selectedIds, option.id);
                         const selected = optionQuantity > 0;
