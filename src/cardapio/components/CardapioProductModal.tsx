@@ -31,6 +31,7 @@ import {
   LOCAL_PRODUCT_PLACEHOLDER,
 } from "../CardapioTypes";
 import { trackAnalyticsEvent } from "../../analytics";
+import { isMarmitariaSaladGroup } from "../../domain/marmitariaSalad";
 
 interface CardapioProductModalProps {
   product: Product;
@@ -377,6 +378,7 @@ export default function CardapioProductModal({
                   && max >= 20 && (modifier.minSelection ?? 0) === 0;
 
                 const min = rules.minSelection || 0;
+                const optionalSalad = product.marmitaria === true && min === 0 && isMarmitariaSaladGroup(modifier.title);
                 const unit = modifier.selectionMode === "porcoes" ? (max === 1 ? "porção" : "porções") : (max === 1 ? "opção" : "opções");
                 const instruction = freeGarnishes ? "Escolha à vontade"
                   : min === max ? `Escolha ${max} ${unit}`
@@ -425,6 +427,21 @@ export default function CardapioProductModal({
                     </Heading>
 
                     <div id={`modifier-options-${modifier.id}`} hidden={!expanded} className="mt-3 space-y-2">
+                      {optionalSalad && (
+                        <button
+                          type="button"
+                          aria-label="Sem salada"
+                          aria-pressed={selections.length === 0}
+                          onClick={() => {
+                            setSelectedOptions(current => ({ ...current, [modifier.id]: [] }));
+                            setFeedback("");
+                          }}
+                          className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 text-left transition ${selections.length === 0 ? "border-emerald-500/50 bg-emerald-500/10" : "border-koma-border bg-koma-card"}`}
+                        >
+                          <span className="text-sm font-bold text-koma-foreground">Sem salada</span>
+                          <span className="text-xs font-bold text-koma-muted">{selections.length === 0 ? "Selecionado" : "Escolher"}</span>
+                        </button>
+                      )}
                       {modifier.options.map((option) => {
                         const optionQuantity = modifierOptionQuantity(selectedIds, option.id);
                         const selected = optionQuantity > 0;

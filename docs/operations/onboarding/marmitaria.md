@@ -18,6 +18,12 @@ selecioná-lo não cria produtos, preços ou limites automaticamente.
    e informe nome e preço. No mesmo cadastro, em **Composição deste tamanho**, escolha
    os grupos existentes e informe **Mínimo** e **Máximo** de cada um. Exemplo:
    Quentinha P pode usar Proteínas 0–1 e Quentinha G Proteínas 0–2.
+   Para **Saladas/Verduras**, marque **Cliente pode pedir sem salada** em cada
+   tamanho para manter o mínimo em zero. O máximo continua independente em P/M/G;
+   desmarcar exige ao menos uma salada, conforme a regra daquele tamanho.
+   No cardápio público, quando o mínimo for zero, aparece a escolha explícita
+   **Sem salada**. Essa escolha não é um ingrediente, não cobra nem vai na comanda;
+   selecionar uma salada depois substitui automaticamente a opção sem salada.
 5. **Permitir repetir a mesma opção** aceita duas porções de Frango quando o máximo
    permitir. Desmarcada, exige opções diferentes. Essa regra também pertence ao
    produto/tamanho, não ao grupo compartilhado.
