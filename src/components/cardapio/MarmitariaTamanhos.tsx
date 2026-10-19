@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import MoneyInput from '../MoneyInput';
 import type { GrupoModificador } from './ComplementosTab';
+import { isMarmitariaSaladGroup } from '../../domain/marmitariaSalad';
 
 type Regra = { grupo_id: string; minimo: number; maximo: number; modo_selecao: 'porcoes' | 'tipos' };
 type Tamanho = { id?: string; tamanho: 'P' | 'M' | 'G' | null; nome: string; preco: number; ativo: boolean; configurado?: boolean; regras: Regra[] };
@@ -144,6 +145,13 @@ export default function MarmitariaTamanhos({ apiBaseUrl, authHeaders, grupos: gr
             <p className="text-[11px] leading-relaxed text-koma-muted">
               Mínimo 0 deixa o grupo opcional. O máximo é apenas o limite permitido e não obriga o cliente a completar essa quantidade. Para guarnições ou adicionais livres, use um limite operacional amplo (ex.: 20).
             </p>
+            {isMarmitariaSaladGroup(grupos.find(group => group.id === rule.grupo_id)?.nome || '') && (
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" aria-label={`Cliente pode pedir sem salada no grupo ${index + 1}`}
+                  checked={rule.minimo === 0} onChange={event => updateRule(index, { minimo: event.target.checked ? 0 : 1 })} />
+                Cliente pode pedir sem salada (mantém o máximo deste tamanho)
+              </label>
+            )}
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" aria-label={`Permitir repetir grupo ${index + 1}`} checked={rule.modo_selecao === 'porcoes'} onChange={event => updateRule(index, { modo_selecao: event.target.checked ? 'porcoes' : 'tipos' })} />Permitir repetir a mesma opção</label>
             <button type="button" className="text-sm text-rose-500" onClick={() => setEditing({ ...editing, ativo: editing.regras.length > 1 && editing.ativo, regras: editing.regras.filter((_, i) => i !== index) })}>Remover grupo desta quentinha</button>
           </div>)}

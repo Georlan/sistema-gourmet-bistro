@@ -8,7 +8,7 @@ test('Produtos define limites próprios por quentinha e Complementos oferece ví
   const categories = [{ id: 'quentinhas', nome: 'Quentinhas', destino_impressao: 'COZINHA' }];
   const products: Record<string, any>[] = [{ id: 'original-g', nome: 'Quentinha G', categoria_id: 'quentinhas', preco: 10, ativo: false, marmitaria_tamanho: 'g' }];
   let sizes: Record<string, any>[] = [{ ...products[0], tamanho: 'G', regras: [], configurado: true }];
-  const groups = ['Proteínas', 'Guarnições'].map((nome, index) => ({ id: `group-${index}`, nome, tipo: 'opcional', min_selecoes: 0, max_selecoes: 3, opcoes: ['Frango', 'Carne', 'Peixe'].map((name, i) => ({ id: `option-${index}-${i}`, nome: name, ativo: true, preco_adicional: 0 })), produto_ids: [], categoria_ids: [] }));
+  const groups = ['Proteínas', 'Guarnições', 'Saladas/Verduras'].map((nome, index) => ({ id: `group-${index}`, nome, tipo: 'opcional', min_selecoes: 0, max_selecoes: 3, opcoes: ['Frango', 'Carne', 'Peixe'].map((name, i) => ({ id: `option-${index}-${i}`, nome: name, ativo: true, preco_adicional: 0 })), produto_ids: [], categoria_ids: [] }));
   await page.route('**/caixa/configuracoes', route => route.fulfill({ json: { ...cashierConfig, operation_profile: 'marmitaria' } }));
   await page.route('**/produtos/catalogo', route => route.fulfill({ json: { categorias: categories, produtos: products } }));
   await page.route('**/cardapio/modificadores/grupos', route => route.fulfill({ json: groups }));
@@ -103,6 +103,26 @@ test('Produtos define limites próprios por quentinha e Complementos oferece ví
   await expect(retryPanel.getByLabel('Permitir repetir grupo 1')).toBeChecked();
   await retryPanel.getByRole('button', { name: 'Salvar marmita' }).click();
   await expect(retryDialog).toHaveCount(0);
+
+  // A decisão "sem salada" pertence ao tamanho, não ao tenant nem ao grupo global.
+  await row('Quentinha G').getByRole('button', { name: 'Editar', exact: true }).click();
+  await edit.getByRole('button', { name: 'Salvar e configurar composição da quentinha' }).click();
+  const saladDialog = page.getByRole('dialog', { name: 'Nova marmita' });
+  const saladPanel = saladDialog.getByRole('region', { name: 'Cadastro de marmitas' });
+  await saladPanel.getByRole('button', { name: /Adicionar outro grupo à composição/ }).click();
+  await saladPanel.getByLabel('Grupo 3', { exact: true }).selectOption('group-2');
+  const optionalSalad = saladPanel.getByLabel('Cliente pode pedir sem salada no grupo 3');
+  await expect(optionalSalad).toBeChecked();
+  await saladPanel.getByLabel('Mínimo do grupo 3').fill('1');
+  await expect(optionalSalad).not.toBeChecked();
+  await optionalSalad.check();
+  await expect(saladPanel.getByLabel('Mínimo do grupo 3')).toHaveValue('0');
+  await saladPanel.getByLabel('Máximo do grupo 3').fill('3');
+  await saladPanel.getByRole('button', { name: 'Salvar marmita' }).click();
+  await expect(saladDialog).toHaveCount(0);
+  expect(sizes.find(size => size.id === 'original-g')?.regras.find((rule: any) => rule.grupo_id === 'group-2'))
+    .toMatchObject({ minimo: 0, maximo: 3 });
+  expect(sizes.find(size => size.tamanho === 'P')?.regras.some((rule: any) => rule.grupo_id === 'group-2')).toBe(false);
 
   await page.getByRole('button', { name: 'Complementos', exact: true }).last().click();
   await expect(page.getByRole('region', { name: 'Cadastro de marmitas' })).toHaveCount(0);
