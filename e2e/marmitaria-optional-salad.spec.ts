@@ -43,6 +43,9 @@ test('Marmitaria oferece Sem salada em qualquer tenant quando mínimo é zero, p
   await modal.getByRole('checkbox', { name: 'Selecionar Alface' }).check();
   await modal.locator('#btn-add-to-cart-action').click();
   await expect(modal).toHaveCount(0);
+  if (await page.locator('#cart-overlay').isVisible()) {
+    await page.locator('#btn-close-cart').click();
+  }
 
   await page.getByRole('button', { name: 'Prato comum, R$ 12,00, ver detalhes' }).click();
   await expect(modal.getByRole('button', { name: 'Sem salada', exact: true })).toHaveCount(0);
