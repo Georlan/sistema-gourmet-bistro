@@ -40,7 +40,7 @@ def status_recipient_eligible(db: Session, restaurante_id: int, comanda_id, tele
     if tenant is None or tenant.whatsapp_customer_notices_enabled is not True:
         return False
     # The transactional customer outbox owns these milestones when released.
-    if customer_notices_enabled(restaurante_id, tenant):
+    if tenant.whatsapp_platform_managed is True or customer_notices_enabled(restaurante_id, tenant):
         return False
     order = db.query(Comanda).filter_by(restaurante_id=restaurante_id, id=str(comanda_id)).first()
     if order is None or not phones_match(order.delivery_telefone, telefone):

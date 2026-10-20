@@ -690,7 +690,7 @@ def test_expired_operator_notice_cannot_replay_on_reconnection(char_setup, monke
         db.refresh(event)
         assert event.status == "delivered"  # terminal compatibility; reason says ignored
         assert "Ignorado" in event.last_error
-        assert event.attempts == 0
+        assert event.attempts == 1  # one internal worker decision, zero provider calls
         provider.assert_not_called()
         config.whatsapp_alerts_enabled = False
         db.commit()

@@ -115,8 +115,9 @@ tratavam bloqueio pré-envio por configuração como falha de entrega.
 
 A pasta local `automations` estava vazia. As ferramentas disponíveis não expõem
 listagem/edição das automações ChatGPT hospedadas que originaram esses alertas.
-A interface de navegador disponível também falhou ao carregar sua política de
-acesso. Não foi possível identificar com segurança a configuração editável dos
+A interface de navegador falhou inicialmente; na segunda tentativa abriu a
+página de agendamentos, mas a sessão web disponível não exibia esses monitores
+ativos. Não foi possível identificar com segurança a configuração editável dos
 três monitores nem ler o prompt completo de infraestrutura e erros de uso.
 Nenhum monitor foi duplicado, reconfigurado ou enviado a outra conversa. O
 contrato revisado neste repositório está preparado para a atualização posterior
@@ -130,3 +131,10 @@ não é prova de ausência definitiva de ingestão: não foi feita consulta exau
 a eventos brutos. A API servia `fbabc3f15a9e`, que inclui os arquivos de analytics
 via #1179, apesar de #1176 estar fechado sem merge. Novos sinais permanecem
 sem comprovação de ingestão; nenhum relatório depende deles neste trabalho.
+
+Validação de concorrência adicional: `test_notification_concurrency_postgres.py`
+executado em PostgreSQL 17 local descartável, uma tentativa de envio para duas
+tarefas concorrentes, sem lock SQL durante HTTP e sem escrita no outro tenant.
+O teste exige `KOMA_NOTIFICATION_TEST_POSTGRES_URL` em loopback, banco dedicado
+`koma_notification_test`; não aceita URL remota. Container e schema removidos
+ao terminar. Não usa dados nem credenciais de produção.

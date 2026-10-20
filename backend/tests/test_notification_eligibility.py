@@ -114,3 +114,11 @@ def test_notification_provider_does_not_hold_sql_transaction(policy_db, monkeypa
     monkeypatch.setattr(whatsapp, "enviar_texto_whatsapp_detalhado", provider)
     result = asyncio.run(notices.enviar_notificacao_whatsapp(db, telefone="81999991111", conteudo="fixture", tipo="status_pedido", restaurante_id=991, comanda_id=order.id))
     assert result["status_envio"] == "enviado"
+
+
+def test_managed_customer_channel_never_falls_back_to_legacy_transport(policy_db):
+    db, config, order = policy_db
+    config.whatsapp_platform_managed = True
+    config.whatsapp_platform_customer_allowed = False
+    db.commit()
+    assert not notices.status_recipient_eligible(db, 991, order.id, order.delivery_telefone)
