@@ -624,6 +624,7 @@ def despachar_delivery(
         telefone=motoboy.telefone,
         conteudo=mensagem_motoboy,
         tipo="atribuicao_motoboy",
+        db=db,
         restaurante_id=rid,
         comanda_id=comanda.id,
         conteudo_auditoria=(

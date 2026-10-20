@@ -15,6 +15,7 @@ from typing import Iterable, Iterator, Tuple
 import requests
 
 from api_client import AGENT_VERSION
+from retry_budget import RetryBudget
 
 
 log = logging.getLogger("print-agent.wakeup")
@@ -140,9 +141,11 @@ class PrintWakeupListener:
         }
         url = f"{self.api_url}/api/print-agents/events"
         retry_ceiling = 1.0
+        retry_budget = RetryBudget()
 
         try:
             while not self._stop.is_set():
+                response_for_retry = None
                 try:
                     response = session.get(
                         url,
@@ -150,6 +153,7 @@ class PrintWakeupListener:
                         stream=True,
                         timeout=(5, 35),
                     )
+                    response_for_retry = response
                     with self._response_lock:
                         self._response = response
                     if response.status_code == 401:
@@ -188,7 +192,8 @@ class PrintWakeupListener:
                         except Exception:
                             pass
                 if not self._stop.is_set():
-                    self._stop.wait(random.uniform(retry_ceiling / 2, retry_ceiling))
+                    retry_budget.ceiling = retry_ceiling
+                    self._stop.wait(retry_budget.fail(response_for_retry))
                     retry_ceiling = min(30.0, retry_ceiling * 2)
         finally:
             session.close()

@@ -115,7 +115,7 @@ def test_forbidden_is_not_treated_as_revoked_credential():
          patch("wake_listener.random.uniform", side_effect=lambda low, high: high):
         listener._run()
     assert not listener.authentication_failed.is_set()
-    assert delays == [1, 2, 4]
+    assert delays == [60, 60, 60]
 
 
 def test_ready_event_resets_backoff_and_wakes_queue_reconciliation():

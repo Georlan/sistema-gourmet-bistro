@@ -668,3 +668,29 @@ def test_uncertain_send_is_not_replayed_after_timeout_or_worker_restart(char_set
             config.whatsapp_consecutive_failures = 0
         db.commit()
         db.close()
+
+
+def test_expired_operator_notice_cannot_replay_on_reconnection(char_setup, monkeypatch):
+    from app.services import tenant_order_whatsapp as wa
+    from unittest.mock import MagicMock
+    rid = CHAR_RESTAURANT_ID
+    with SessionLocal(restaurante_id=rid) as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+        config.whatsapp_alerts_enabled = True
+        config.whatsapp_instance_name = instance_name(rid)
+        config.whatsapp_recipient_phone = "5511999999999"
+        db.commit()
+        import uuid
+        event = enqueue_order_alert(db, _order(rid, "expired-" + uuid.uuid4().hex))
+        event.created_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=11)
+        db.commit()
+        provider = MagicMock(side_effect=AssertionError("expired notice must not query connection"))
+        monkeypatch.setattr(wa, "connection_state", provider)
+        assert dispatch_single_outbox_event(db, event) is True
+        db.refresh(event)
+        assert event.status == "delivered"  # terminal compatibility; reason says ignored
+        assert "Ignorado" in event.last_error
+        assert event.attempts == 0
+        provider.assert_not_called()
+        config.whatsapp_alerts_enabled = False
+        db.commit()

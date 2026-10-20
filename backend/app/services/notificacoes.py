@@ -22,6 +22,36 @@ MENSAGENS_STATUS = {
 }
 
 
+def operational_notices_enabled(db: Session, restaurante_id: int) -> bool:
+    from ..models import ConfiguracaoRestaurante
+    tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=restaurante_id).first()
+    return bool(tenant and tenant.whatsapp_alerts_enabled is True)
+
+
+def status_recipient_eligible(db: Session, restaurante_id: int, comanda_id, telefone: str) -> bool:
+    """Local policy only. Re-evaluate consent in the task, never probe Evolution."""
+    from ..models import Cliente, Comanda, ConfiguracaoRestaurante
+    from .customer_status_whatsapp import eligible_order_status_recipient
+    from .customer_whatsapp_dispatch import opted_out, customer_notices_enabled
+    from .central_whatsapp import recipient_fingerprint
+    from .tenant_order_whatsapp import phones_match
+
+    tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=restaurante_id).first()
+    if tenant is None or tenant.whatsapp_customer_notices_enabled is not True:
+        return False
+    # The transactional customer outbox owns these milestones when released.
+    if customer_notices_enabled(restaurante_id, tenant):
+        return False
+    order = db.query(Comanda).filter_by(restaurante_id=restaurante_id, id=str(comanda_id)).first()
+    if order is None or not phones_match(order.delivery_telefone, telefone):
+        return False
+    customer = db.query(Cliente).filter_by(restaurante_id=restaurante_id, id=order.cliente_id).first() if order.cliente_id else None
+    return eligible_order_status_recipient(
+        restaurant_id=restaurante_id, order=order, customer=customer,
+        opted_out=opted_out(db, restaurante_id, recipient_fingerprint(restaurante_id, telefone)),
+    )
+
+
 async def enviar_notificacao_whatsapp(
     db: Session,
     *,
@@ -34,6 +64,9 @@ async def enviar_notificacao_whatsapp(
     contexto: str = "notificação operacional",
 ) -> dict:
     """Persiste e envia uma mensagem operacional, com deduplicação segura."""
+    if not settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
+        return {"sucesso": False, "status_envio": "ignorado", "motivo": "automacao_desativada"}
+
     telefone_limpo = (telefone or "").strip()
     auditoria = conteudo_auditoria or conteudo
     comanda_ref = str(comanda_id) if comanda_id is not None else None
@@ -77,16 +110,28 @@ async def enviar_notificacao_whatsapp(
             "telefone": telefone_limpo,
         }
 
+    if tipo != "status_pedido" and not operational_notices_enabled(db, restaurante_id):
+        return {"sucesso": False, "status_envio": "ignorado", "motivo": "integracao_desativada", "conteudo": auditoria}
+
+    if tipo == "status_pedido" and not status_recipient_eligible(db, restaurante_id, comanda_ref, telefone_limpo):
+        return {"sucesso": False, "status_envio": "ignorado", "motivo": "destinatario_nao_elegivel", "conteudo": auditoria}
+
+    if comanda_ref is not None:
+        from ..models import Comanda
+        # Serialize duplicate tasks for one check. Commit of the pending record
+        # releases the lock before HTTP; another worker then sees that record.
+        db.query(Comanda.id).filter_by(restaurante_id=restaurante_id, id=comanda_ref).with_for_update().first()
+
     existente = db.query(NotificacaoWhatsApp).filter(
         NotificacaoWhatsApp.restaurante_id == restaurante_id,
         NotificacaoWhatsApp.comanda_id == comanda_ref,
         NotificacaoWhatsApp.tipo == tipo,
         NotificacaoWhatsApp.conteudo == auditoria,
-        NotificacaoWhatsApp.status_envio.in_(("pendente", "enviado", "entregue")),
+        NotificacaoWhatsApp.status_envio.in_(("pendente", "enviado", "entregue", "falhou", "ignorado")),
     ).first()
     if existente:
         return {
-            "sucesso": True,
+            "sucesso": existente.status_envio in {"enviado", "entregue"},
             "status_envio": existente.status_envio,
             "duplicada": True,
             "conteudo": auditoria,
@@ -105,7 +150,6 @@ async def enviar_notificacao_whatsapp(
         )
         db.add(notif)
         db.commit()
-        db.refresh(notif)
     except Exception as err:
         logger.error(
             "[NOTIFICAÇÃO WA DB ERROR] Falha ao preparar registro de envio: %s",
@@ -120,12 +164,26 @@ async def enviar_notificacao_whatsapp(
             "telefone": telefone_limpo,
         }
 
+    # Re-read after reserving the pending notification, then release SQL before
+    # waiting on the provider. A queued task never owns a consent snapshot.
+    db.expire_all()
+    eligible = settings.KOMA_WHATSAPP_AUTOMATION_ENABLED and (
+        status_recipient_eligible(db, restaurante_id, comanda_ref, telefone_limpo)
+        if tipo == "status_pedido" else operational_notices_enabled(db, restaurante_id)
+    )
+    db.rollback()
+    if not eligible:
+        notif.status_envio = "ignorado"
+        notif.error_title = "Ignorado: autorização alterada antes do envio."
+        db.commit()
+        return {"sucesso": False, "status_envio": "ignorado", "motivo": "autorizacao_revogada"}
+
     resultado = whatsapp_service.enviar_texto_whatsapp_detalhado(
         telefone_limpo,
         conteudo,
         contexto=contexto,
     )
-    status_envio = "enviado" if resultado.sucesso else "falhou"
+    status_envio = "enviado" if resultado.sucesso else ("ignorado" if resultado.provider_status == "skipped_disabled" else "falhou")
 
     try:
         notif.status_envio = status_envio
@@ -166,6 +224,9 @@ async def notificar_cliente_status_pedido(
     modalidade: str | None = None,
 ) -> dict:
     """Monta, persiste e envia a atualização de pedido via WhatsApp."""
+    if not settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
+        return {"sucesso": False, "status_envio": "ignorado", "motivo": "automacao_desativada"}
+
     status_normalizado = (novo_status or "").lower().strip()
     template_msg = MENSAGENS_STATUS.get(status_normalizado)
     if status_normalizado == "saiu_entrega" and link_rastreamento:
@@ -245,8 +306,15 @@ def agendar_notificacao_whatsapp_task(
     comanda_id: str | int | None = None,
     conteudo_auditoria: str | None = None,
     contexto: str = "notificação operacional",
+    db: Session | None = None,
 ) -> None:
     """Agenda um envio genérico sem reutilizar a sessão da requisição."""
+
+    if not settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
+        return
+
+    if db is not None and not operational_notices_enabled(db, restaurante_id):
+        return
 
     async def _runner():
         db = SessionLocal(restaurante_id=restaurante_id)
@@ -280,6 +348,9 @@ def agendar_notificacao_status_task(
     modalidade: str | None = None,
 ) -> None:
     """Agenda o envio sem reutilizar a sessão ligada à requisição HTTP."""
+
+    if not settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
+        return
 
     async def _runner():
         db = SessionLocal(restaurante_id=restaurante_id)

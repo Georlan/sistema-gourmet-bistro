@@ -55,3 +55,29 @@ def test_claim_backoff_does_not_block_confirmation_or_heartbeat():
         assert client.heartbeat() == {}
         assert client.complete_job("already-printed") is True
     assert client.session.post.call_count == 3
+
+
+@pytest.mark.parametrize("method", ["claim_jobs", "heartbeat", "claim_next_job", "get_next_job"])
+def test_forbidden_preserves_token_and_waits_a_minute(method):
+    client = KomaApiClient("https://api.example.test", "fixture-token")
+    client.session = MagicMock()
+    response = MagicMock(status_code=403, headers={})
+    client.session.post.return_value = response
+    client.session.get.return_value = response
+    with patch("retry_budget.time.monotonic", return_value=100):
+        for _ in range(100):
+            getattr(client, method)()
+    assert client.session.post.call_count + client.session.get.call_count == 1
+    assert client.agent_token == "fixture-token"
+
+
+@pytest.mark.parametrize("header,delay", [("120",120), ("invalid",1), ("-3",1), ("inf",1), ("Wed, 21 Oct 2015 07:28:00 GMT",120)])
+def test_retry_after_is_respected(header, delay):
+    from retry_budget import RetryBudget
+    response = MagicMock(status_code=429, headers={"Retry-After": header})
+    budget = RetryBudget()
+    with patch("retry_budget.time.monotonic", return_value=100), \
+         patch("retry_budget.time.time", return_value=1445412360), \
+         patch("retry_budget.random.uniform", return_value=1):
+        budget.fail(response)
+    assert budget.not_before == 100 + delay

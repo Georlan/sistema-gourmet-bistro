@@ -9,7 +9,7 @@ from retry_budget import RetryBudget
 
 log = logging.getLogger("print-agent.api")
 AGENT_CAPABILITIES = ["connect_usb", "test_bluetooth"]
-AGENT_VERSION = "2026.10.05.1"
+AGENT_VERSION = "2026.10.20.1"
 
 
 class AgentAuthenticationError(RuntimeError):
@@ -118,11 +118,7 @@ class KomaApiClient:
                 payload = resp.json()
                 self._heartbeat_retry.recover()
                 return payload if isinstance(payload, dict) else {}
-            if resp.status_code in (401, 403):
-                raise AgentAuthenticationError(
-                    "A autorização deste computador expirou ou foi revogada."
-                )
-            self._heartbeat_retry.fail()
+            self._heartbeat_retry.fail(resp)
             return None
         except AgentAuthenticationError:
             raise
@@ -214,7 +210,7 @@ class KomaApiClient:
 
     def get_next_job(self) -> Optional[Dict[str, Any]]:
         """Consulta o próximo job sem reservá-lo (compatibilidade legada)."""
-        if not self.agent_token:
+        if not self.agent_token or not self._claim_retry.ready():
             return None
         url = f"{self.api_url}/api/print-agents/jobs/next"
         try:
@@ -224,7 +220,7 @@ class KomaApiClient:
                 data = resp.json()
                 self._claim_retry.recover()
                 return data if data else None
-            self._claim_retry.fail()
+            self._claim_retry.fail(resp)
         except AgentAuthenticationError:
             raise
         except Exception as e:
@@ -234,7 +230,7 @@ class KomaApiClient:
 
     def claim_next_job(self) -> Optional[Dict[str, Any]]:
         """Busca e reserva atomicamente o próximo job em uma única chamada."""
-        if not self.agent_token:
+        if not self.agent_token or not self._claim_retry.ready():
             return None
         url = f"{self.api_url}/api/print-agents/jobs/claim-next"
         try:
@@ -245,7 +241,7 @@ class KomaApiClient:
                 self._claim_retry.recover()
                 return data if data else None
             if resp.status_code not in (404, 405):
-                self._claim_retry.fail()
+                self._claim_retry.fail(resp)
                 log.warning(
                     "Falha ao buscar e reservar próximo job "
                     f"(HTTP {resp.status_code}): {resp.text}"
@@ -296,7 +292,7 @@ class KomaApiClient:
                 self._claim_retry.recover()
                 return data
             if resp.status_code not in (404, 405):
-                self._claim_retry.fail()
+                self._claim_retry.fail(resp)
                 log.warning(
                     "Falha ao reservar lote de impressão "
                     f"(HTTP {resp.status_code})"

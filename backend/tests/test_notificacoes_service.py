@@ -11,6 +11,14 @@ from app.services.notificacoes import (
 )
 
 
+@pytest.fixture(autouse=True)
+def enabled_copy_transport(monkeypatch):
+    # These tests exercise copy, persistence and dedup; policy has its own suite.
+    from app.config import settings
+    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", True)
+    monkeypatch.setattr("app.services.notificacoes.status_recipient_eligible", lambda *args: True)
+
+
 def test_notificar_cliente_status_pedido_todos_status(monkeypatch):
     from app.services import whatsapp as whatsapp_service
 
@@ -208,7 +216,7 @@ def test_notificacao_de_status_identica_e_deduplicada(monkeypatch):
         ).count() == 1
 
 
-def test_notificacao_com_falha_pode_ser_tentada_novamente(monkeypatch):
+def test_notificacao_com_falha_nao_e_reenviada_por_evento_repetido(monkeypatch):
     from app.services import whatsapp as whatsapp_service
 
     resultados = iter((False, True))
@@ -245,8 +253,9 @@ def test_notificacao_com_falha_pode_ser_tentada_novamente(monkeypatch):
         ))
 
         assert primeira["status_envio"] == "falhou"
-        assert segunda["status_envio"] == "enviado"
-        assert len(chamadas) == 2
+        assert segunda["status_envio"] == "falhou"
+        assert segunda["duplicada"] is True
+        assert len(chamadas) == 1
         assert db.query(NotificacaoWhatsApp).filter(
             NotificacaoWhatsApp.comanda_id == comanda_id,
-        ).count() == 2
+        ).count() == 1
