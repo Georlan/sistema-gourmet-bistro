@@ -4,6 +4,8 @@
  */
 
 import type { PostHog } from 'posthog-js';
+import { API_BASE_URL } from '../config/api';
+import { observeOperationalFetch } from './operational';
 import type {
   AnalyticsEventMap,
   AnalyticsEventName,
@@ -51,11 +53,15 @@ function sanitizeProperties<T extends Record<string, any>>(props?: T, depth = 0)
       } else if (val && typeof val === 'object') {
         clean[key] = sanitizeProperties(val, depth + 1);
       } else {
-        clean[key] = cleanUrl(val);
+        clean[key] = lowerKey === '$pathname' && typeof val === 'string' ? cleanCapabilityPath(val) : cleanUrl(val);
       }
     }
   }
   return clean;
+}
+
+function cleanCapabilityPath(path: string): string {
+  return path.split(/[?#]/, 1)[0].replace(/\/(acompanhar|ativar|recuperar-senha|confirmar-cadastro)(?:\/[^/]+)+/g, '/$1/:id');
 }
 
 function cleanUrl(value: unknown): unknown {
@@ -66,6 +72,7 @@ function cleanUrl(value: unknown): unknown {
     url.hash = '';
     url.username = '';
     url.password = '';
+    url.pathname = cleanCapabilityPath(url.pathname);
     return url.toString();
   } catch {
     return '[invalid URL]';
@@ -103,6 +110,7 @@ function recordDebugEvent(event: string, properties: Record<string, any>) {
       properties,
       timestamp: Date.now(),
     });
+    if (target.__KOMA_ANALYTICS_EVENTS__.length > 100) target.__KOMA_ANALYTICS_EVENTS__.splice(0, target.__KOMA_ANALYTICS_EVENTS__.length - 100);
   }
 }
 
@@ -180,6 +188,8 @@ export function initAnalytics(): Promise<boolean> {
 
       posthogInstance = posthog;
       analyticsActive = true;
+      window.fetch = observeOperationalFetch(window.fetch.bind(window), new URL(API_BASE_URL, window.location.href).origin,
+        window.location.href, signal => trackAnalyticsEvent('operational_api_signal', signal));
       flushPendingQueue();
       return true;
     } catch (error) {
@@ -198,6 +208,22 @@ export function isAnalyticsActive(): boolean {
 
 export function getPostHogInstance() {
   return posthogInstance;
+}
+
+let lastOperationalScreen = '';
+export function trackOperationalAction(action: 'cashier_navigation' | 'signup_checkout', target: string, outcome: 'requested' | 'succeeded' | 'failed' | 'blocked' = 'requested'): void {
+  if (!/^[a-z_]{1,48}$/.test(target)) return;
+  trackAnalyticsEvent('operational_action', { action, target, outcome });
+}
+
+export function trackOperationalScreen(screen: string, subScreen: string): void {
+  // Navigation identifiers are code-owned enum values, never labels or customer input.
+  if (![screen, subScreen].every(value => /^[a-z_]{0,48}$/.test(value))) return;
+  const key = `${screen}:${subScreen}`;
+  if (key === lastOperationalScreen) return;
+  lastOperationalScreen = key;
+  try { posthogInstance?.register({ operational_screen: screen, operational_sub_screen: subScreen }); } catch { /* optional */ }
+  trackAnalyticsEvent('operational_screen_viewed', { screen, sub_screen: subScreen, surface: 'cashier' });
 }
 
 export function trackAnalyticsEvent<E extends AnalyticsEventName>(
@@ -299,6 +325,11 @@ export function setRestaurantGroup(
  * Limpa a identidade do usuário e a associação ao tenant ao deslogar ou trocar de sessão.
  */
 export function resetAnalytics(): void {
+  lastOperationalScreen = '';
+  try {
+    posthogInstance?.unregister('operational_screen');
+    posthogInstance?.unregister('operational_sub_screen');
+  } catch { /* optional */ }
   recordDebugEvent('$reset', {});
 
   if (posthogInstance && analyticsActive) {

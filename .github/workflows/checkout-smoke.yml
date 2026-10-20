@@ -2,6 +2,14 @@ name: Checkout Smoke
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/legal/PlanContractPageV2.tsx'
+      - 'src/analytics/**'
+      - 'backend/app/routes/saas_pix.py'
+      - 'backend/app/services/saas_mercadopago*'
+      - 'e2e/checkout-money-clicks.spec.ts'
+      - '.github/workflows/checkout-smoke.yml'
 
 permissions:
   contents: read

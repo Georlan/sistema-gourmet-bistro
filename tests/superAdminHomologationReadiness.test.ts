@@ -40,13 +40,14 @@ test('Signups tab mounts diagnostics before manual release operations', () => {
   assert.doesNotMatch(signups, /e-mail\/WhatsApp/);
 });
 
-test('PlanContractPage explains why checkout is paused when test gateway is unconfigured', () => {
+test('public checkout explains unavailability without exposing internal gateway configuration', () => {
   const contractPage = readFileSync(
     new URL('../src/legal/PlanContractPageV2.tsx', import.meta.url),
     'utf8',
   );
-  assert.match(contractPage, /KOMA_SAAS_CHECKOUT_ENABLED=false/);
-  assert.match(contractPage, /credenciais TEST do gateway/);
+  assert.match(contractPage, /Os pagamentos estão temporariamente indisponíveis/);
+  assert.match(contractPage, /Sua inscrição fica salva para continuar depois/);
+  assert.doesNotMatch(contractPage, /KOMA_SAAS_CHECKOUT_ENABLED=false|credenciais TEST do gateway/);
 });
 
 test('SaaS diagnostics protects canonical webhook, required events, and KOMA_PUBLIC_API_URL', () => {

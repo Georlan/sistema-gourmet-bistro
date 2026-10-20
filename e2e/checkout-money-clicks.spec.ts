@@ -102,5 +102,12 @@ for (const scenario of cases) {
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(80);
     expect(acceptanceSeen).toBe(true);
     expect(billingSeen).toBe(true);
+    const actions = await page.evaluate(() => (window.__KOMA_ANALYTICS_EVENTS__ || [])
+      .filter(event => event.event === 'operational_action').map(event => event.properties));
+    expect(actions).toEqual([
+      { action: 'signup_checkout', target: scenario.method, outcome: 'requested' },
+      { action: 'signup_checkout', target: scenario.method, outcome: 'succeeded' },
+    ]);
+    expect(JSON.stringify(actions)).not.toMatch(/ana@|411111|529982|tok_simulated|resume-checkout/);
   });
 }

@@ -2,7 +2,7 @@
 #    uv pip compile backend/requirements.txt --universal --python-version 3.13 -o backend/requirements.lock
 aiohappyeyeballs==2.7.1
     # via aiohttp
-aiohttp==3.14.3
+aiohttp==3.14.4
     # via pywebpush
 aiosignal==1.4.0
     # via aiohttp

@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import logging
 import os
+import re
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -83,6 +84,18 @@ class SaasMercadoPagoService:
         }
 
     def _ensure_provider_ready(self) -> None:
+        # No modo com token estático, o APP_USR incorpora o identificador da
+        # aplicação. Validá-lo antes do POST impede criar cobranças na aplicação
+        # OAuth dos restaurantes por engano. No modo runtime, a validação ocorre
+        # no resolvedor que emite o token específico do SaaS.
+        if self.environment == "production" and not _env_flag("KOMA_SAAS_MP_RUNTIME_TOKEN_ENABLED"):
+            expected_app = os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "").strip()
+            match = re.match(r"^APP_USR-([0-9]+)-", self.access_token)
+            if expected_app and match and match.group(1) != expected_app:
+                raise SaasMercadoPagoError(
+                    "O token estático não pertence à aplicação Mercado Pago configurada para a assinatura KÔMA.",
+                    status_code=409,
+                )
         if self.environment == "production" and self.is_test_credentials:
             raise SaasMercadoPagoError(
                 "Credenciais de teste do Mercado Pago (TEST-) são estritamente proibidas em ambiente de produção.",
@@ -556,7 +569,7 @@ class SaasMercadoPagoService:
             raise SaasMercadoPagoError("Erro de comunicação ao sincronizar início de cobrança com o gateway.") from exc
 
     def get_payment(self, payment_id: str) -> dict[str, Any]:
-        """Consulta pagamentos legados somente para reconciliação; novas assinaturas não criam Pix avulso."""
+        """Consulta pagamento SaaS e valida o recebedor antes da conciliação."""
         self._ensure_provider_ready()
         if self.is_mock:
             return {
@@ -574,7 +587,9 @@ class SaasMercadoPagoService:
                         f"Consulta de pagamento falhou ({resp.status_code}).",
                         status_code=resp.status_code,
                     )
-                return resp.json()
+                result = resp.json()
+                self._validate_merchant_identity(result)
+                return result
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Erro de comunicação ao consultar pagamento.") from exc
 

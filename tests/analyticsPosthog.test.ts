@@ -190,3 +190,36 @@ test('react initialization and error tracking are configured cleanly in main and
   // Error tracking in AppRecoveryBoundary
   assert.match(recovery, /captureAnalyticsException\(error,\s*\{\s*source:\s*['"]AppRecoveryBoundary['"]\s*\}\)/);
 });
+
+
+test('operational diagnostics caps the debug buffer and resets navigation on logout', async () => {
+  const { trackOperationalAction, trackOperationalScreen } = await import('../src/analytics');
+  const target: any = globalThis;
+  target.__KOMA_ANALYTICS_EVENTS__ = [];
+  trackOperationalScreen('operacao', 'pedidos');
+  trackOperationalScreen('operacao', 'pedidos');
+  assert.equal(target.__KOMA_ANALYTICS_EVENTS__.length, 1);
+  resetAnalytics();
+  trackOperationalScreen('operacao', 'pedidos');
+  assert.equal(target.__KOMA_ANALYTICS_EVENTS__.filter((e: any) => e.event === 'operational_screen_viewed').length, 2);
+  trackOperationalAction('signup_checkout', 'private@example.test');
+  assert.equal(target.__KOMA_ANALYTICS_EVENTS__.filter((e: any) => e.event === 'operational_action').length, 0);
+  for (let i = 0; i < 120; i++) trackOperationalAction('signup_checkout', 'pix');
+  assert.equal(target.__KOMA_ANALYTICS_EVENTS__.length, 100);
+});
+
+
+test('SDK URL metadata never retains public tracking capability tokens', () => {
+  const target: any = globalThis;
+  target.__KOMA_ANALYTICS_EVENTS__ = [];
+  trackAnalyticsEvent('operational_action', {
+    action: 'signup_checkout', target: 'pix', outcome: 'requested',
+    $current_url: 'https://app.example.test/acompanhar/private-capability?key=secret#fragment',
+    $pathname: '/acompanhar/private-capability',
+    $referrer: 'https://app.example.test/ativar/private-invitation?token=secret',
+  } as any);
+  const p=target.__KOMA_ANALYTICS_EVENTS__.at(-1).properties;
+  assert.equal(p.$current_url, 'https://app.example.test/acompanhar/:id');
+  assert.equal(p.$pathname, '/acompanhar/:id');
+  assert.equal(p.$referrer, 'https://app.example.test/ativar/:id');
+});
