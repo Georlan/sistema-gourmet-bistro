@@ -559,6 +559,10 @@ def dispatch_alert(db: Session, snapshot: dict) -> bool:
     from .outbox.dispatcher import settle_outbox_event
 
     rid = int(snapshot["restaurante_id"])
+    from .customer_whatsapp_dispatch import snapshot_time
+    age = dt.datetime.now(dt.timezone.utc) - snapshot_time(snapshot)
+    if age < dt.timedelta(0) or age > dt.timedelta(minutes=10):
+        return mark_terminal(db, snapshot, status="delivered", reason="Ignorado: aviso operacional expirado; nenhum envio.")
     config = _locked_whatsapp_config_query(db, rid).first()
     if not config or not config.whatsapp_alerts_enabled:
         return mark_terminal(db, snapshot, status="delivered", reason="Avisos desativados.")
@@ -608,6 +612,16 @@ def dispatch_alert(db: Session, snapshot: dict) -> bool:
             last_error="Conexão indisponível antes do envio.", worker_id=snapshot.get("locked_by"),
         )
         return False
+
+    # Connection verification releases SQL. Reload authorization before reserving
+    # a send, since the operator may have disabled it while the provider replied.
+    config = _locked_whatsapp_config_query(db, rid).populate_existing().first()
+    if not config or not config.whatsapp_alerts_enabled:
+        return mark_terminal(db, snapshot, status="delivered", reason="Ignorado: avisos desativados antes do envio.")
+    if config.whatsapp_recipient_phone != recipient_phone or config.whatsapp_instance_name != instance_name(rid):
+        return mark_terminal(db, snapshot, status="dead_letter", reason="Associação alterada antes do envio.")
+    if dt.datetime.now(dt.timezone.utc) - snapshot_time(snapshot) > dt.timedelta(minutes=10):
+        return mark_terminal(db, snapshot, status="delivered", reason="Ignorado: aviso operacional expirado; nenhum envio.")
 
     # Persist the attempt before the network call. If the worker crashes or the
     # response is ambiguous, recovery must not send the same order twice.

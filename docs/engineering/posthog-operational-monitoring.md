@@ -26,3 +26,37 @@ Limite: 30 sinais de API por janela de cinco minutos por página, com no máximo
 A navegação explícita cobre o Caixa e suas abas, incluindo Relacionamento; ações cobrem menu lateral e envio da adesão, sem comprovar cobertura de cada botão, Garçom ou Super Admin. O observador de API cobre fetch do navegador após inicialização; não cobre agentes Python, backend, XHR nem requisições anteriores. Cliques sem efeito e rage clicks permanecem não instrumentados. Não descrever esses eventos explícitos como `$pageview`, `$rageclick` ou `$dead_click`.
 
 Validar com fixtures e testes locais, typecheck, suíte unitária e build. Após eventual publicação, verificar build SHA e ingestão passiva sem pedidos de teste no ID 6. Para reverter, reverter o PR; não alterar dados operacionais nem as filas. Nenhuma infraestrutura paga é necessária.
+
+## Classificação de notificações e impressão
+
+No legado, `falhou` com motivo exato `Automação de WhatsApp desativada.` é
+bloqueio anterior ao HTTP: classificar como ignorado por configuração, separado
+de tentativa de envio recusada, indisponibilidade de conexão e resultado incerto.
+Não reclassificar ou apagar linhas históricas em produção. No caminho corrigido,
+a elegibilidade negativa não cria registro/tarefa; ausência desses registros não
+prova entrega. Na outbox operacional, estado terminal `delivered` com motivo
+`Ignorado:` (ou `Avisos desativados.`) significa encerramento sem envio por
+compatibilidade: contar separadamente de aceite do provedor. `wamid`, 2xx e
+`printed` têm níveis de evidência distintos de entrega no aparelho e papel.
+
+Manter por incidente: janela local e UTC, causa, primeira/última observação,
+contagem na janela, fila/idade, build/versão instalada, tenant/dispositivo apenas
+quando verificados, fonte, limites e lacunas. Token inválido desconhecido não
+identifica tenant; IP não é dispositivo. Não expor token, hash de credencial,
+telefone, URL de acompanhamento ou conteúdo dos pedidos em relatórios.
+
+Agrupar o mesmo problema por causa e escopo seguro. Variação cumulativa pequena
+não é incidente novo. Repetir por causa nova, impacto novo, fila envelhecendo,
+intensidade sustentada em janelas equivalentes ou recuperação com evidência
+positiva de funcionamento. Ausência de requests, sinal PostHog ou atividade fora
+do horário não demonstra recuperação. Não inferir volume global das amostras.
+
+Em 20/10/2026 o PR #1176 estava fechado sem merge registrado, enquanto este
+contrato já existia na main. Descobrir a implementação publicada e ingestão reais
+antes de exigir eventos novos; estado do PR isolado não determina cobertura.
+Atualização deste documento não atualiza os prompts das automações hospedadas.
+
+No caminho central, `dead_letter` com motivo de expiração, consentimento revogado
+ou canal desativado também é encerramento sem tentativa, quando não há evidência
+de POST ao provedor. Separar essa categoria de recusa HTTP e resposta incerta;
+`attempts` pode incluir reserva/verificação de conexão, não só `sendText`.

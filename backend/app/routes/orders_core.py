@@ -84,9 +84,15 @@ def _agendar_notificacao_whatsapp_status(
     status_anterior: Optional[str],
     novo_status: str,
 ) -> None:
+    from ..config import settings
+    if not settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
+        return
     if status_anterior == novo_status:
         return
 
+    from ..services.notificacoes import status_recipient_eligible
+    if not status_recipient_eligible(db, comanda.restaurante_id, comanda.id, comanda.delivery_telefone or ""):
+        return
     telefone = (comanda.delivery_telefone or "").strip()
     if not telefone:
         logger.warning(

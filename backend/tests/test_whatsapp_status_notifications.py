@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from app.config import settings
 from app.database import Base, SessionLocal, current_restaurante_id, engine
 from app.main import app
-from app.models import Comanda, Motoboy, NotificacaoWhatsApp, Restaurante, Usuario
+from app.models import Comanda, ConfiguracaoRestaurante, Motoboy, NotificacaoWhatsApp, Restaurante, Usuario
 from app.routes import orders
 from app.security import create_access_token
 from app.services import whatsapp as whatsapp_service
@@ -66,10 +66,21 @@ def preparar_tenant_whatsapp():
                         ativo=True,
                     )
                 )
+            config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=RESTAURANTE_ID).first()
+            if config is None:
+                config = ConfiguracaoRestaurante(restaurante_id=RESTAURANTE_ID)
+                db.add(config)
+            config.whatsapp_customer_notices_enabled = True
+            config.whatsapp_alerts_enabled = True
             db.commit()
         yield
     finally:
         current_restaurante_id.reset(tenant_token)
+
+
+@pytest.fixture(autouse=True)
+def enabled_operational_transport(monkeypatch):
+    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", True)
 
 
 def _headers():
@@ -101,6 +112,7 @@ def _criar_comanda(
                     numero_pedido=321,
                     delivery_status=status_inicial,
                     delivery_telefone=TELEFONE,
+                    whatsapp_status_opt_in=True,
                     delivery_endereco="Rua dos Testes, 10",
                     delivery_taxa=0,
                     motoboy_id=motoboy_id,

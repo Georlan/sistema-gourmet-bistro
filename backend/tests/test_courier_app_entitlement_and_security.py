@@ -15,6 +15,7 @@ from app.models import (
     Categoria,
     CaixaTurno,
     NotificacaoWhatsApp,
+    ConfiguracaoRestaurante,
 )
 from app.smartpos_models import RestauranteCapability
 from app.security import create_access_token, create_motoboy_token
@@ -324,8 +325,21 @@ def test_painel_entregador_and_confirmar_entrega_enforce_entitlement():
     assert "App do Entregador" in resp_pocket.json()["detail"]
 
 
-def test_delivery_dispatch_operational_flow_preserved_on_pocket():
+@pytest.mark.parametrize("whatsapp_enabled", [False, True])
+def test_delivery_dispatch_operational_flow_preserved_on_pocket(monkeypatch, whatsapp_enabled):
     """Despacho no Pocket/Pro funciona normalmente sem vazar o PWA."""
+    from app.config import settings
+    from app.services import whatsapp
+    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", whatsapp_enabled)
+    monkeypatch.setattr(whatsapp, "enviar_texto_whatsapp_detalhado", lambda *args, **kwargs: whatsapp.ResultadoEnvioWhatsApp(sucesso=True, provider="evolution"))
+    for rid in (POCKET_REST_ID, PREMIUM_REST_ID):
+        with SessionLocal(restaurante_id=rid) as db:
+            config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
+            if config is None:
+                config = ConfiguracaoRestaurante(restaurante_id=rid)
+                db.add(config)
+            config.whatsapp_alerts_enabled = whatsapp_enabled
+            db.commit()
     # 1. Cadastrar Motoboy
     mb_res = client.post(
         "/comandas/motoboys/cadastro",
@@ -393,7 +407,11 @@ def test_delivery_dispatch_operational_flow_preserved_on_pocket():
                 NotificacaoWhatsApp.comanda_id == cmd_id,
                 NotificacaoWhatsApp.tipo == "atribuicao_motoboy",
             ).first()
-            assert notif is not None
+            if whatsapp_enabled:
+                assert notif is not None
+                assert notif.status_envio == "enviado"
+            else:
+                assert notif is None
     finally:
         current_restaurante_id.reset(token)
 

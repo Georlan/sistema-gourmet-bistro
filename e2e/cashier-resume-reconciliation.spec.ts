@@ -115,6 +115,7 @@ test('reconciliação ao retornar do background move card imediatamente', async 
         atividades_recentes: [],
       };
     } else if (
+      pathname === '/comandas/delivery/pendentes' ||
       pathname === '/caixa/pagamentos/pendentes' ||
       pathname === '/comandas/motoboys/lista' ||
       pathname === '/auth/usuarios'
@@ -174,10 +175,11 @@ test('reconciliação ao retornar do background move card imediatamente', async 
   expect(deliveryCalls).toBeGreaterThan(initialCalls);
 });
 
-test('respostas fora de ordem não fazem o status regredir para trás', async ({ page }) => {
+test('retomada durante leitura lenta enfileira uma reconciliação sem duplicar polling', async ({ page }) => {
   await seedCashierSession(page);
 
   let deliveryStatus = 'producao';
+  let deliveryCalls = 0;
   let holdNextRequest = false;
   let resolveHeldRequest: (() => void) | null = null;
 
@@ -188,6 +190,7 @@ test('respostas fora de ordem não fazem o status regredir para trás', async ({
     let body: unknown = {};
 
     if (pathname === '/comandas/delivery/ativos') {
+      deliveryCalls += 1;
       const responseStatus = deliveryStatus;
       if (holdNextRequest) {
         holdNextRequest = false;
@@ -229,6 +232,7 @@ test('respostas fora de ordem não fazem o status regredir para trás', async ({
         atividades_recentes: [],
       };
     } else if (
+      pathname === '/comandas/delivery/pendentes' ||
       pathname === '/caixa/pagamentos/pendentes' ||
       pathname === '/comandas/motoboys/lista' ||
       pathname === '/auth/usuarios'
@@ -260,8 +264,10 @@ test('respostas fora de ordem não fazem o status regredir para trás', async ({
     window.dispatchEvent(new Event('koma_orders_updated'));
   });
 
-  // Aguarda 50ms para garantir que a requisição lenta entrou em processamento
-  await page.waitForTimeout(50);
+  // Synchronize with the intercepted request instead of racing a fixed sleep.
+  await expect.poll(() => resolveHeldRequest !== null).toBe(true);
+
+  const callsWhileHeld = deliveryCalls;
 
   // Enquanto a requisição antiga está presa, o backend avança para 'pronto'
   deliveryStatus = 'pronto';
@@ -272,21 +278,24 @@ test('respostas fora de ordem não fazem o status regredir para trás', async ({
     document.dispatchEvent(new Event('visibilitychange'));
   });
 
+  // The refresh owner coalesces concurrent invalidations: the fresh read runs
+  // immediately AFTER the current one, rather than opening another HTTP lane.
+  // Release the old response, then require the queued read to show fresh state.
+  expect(deliveryCalls).toBe(callsWhileHeld);
+  resolveHeldRequest!();
+
   if (isMobile) {
     await expect(page.getByRole('tab', { name: /Concluir/ })).toContainText('1');
     await page.getByRole('tab', { name: /Concluir/ }).click();
   }
 
-  // A requisição de retomada (rápida) deve atualizar para "PRONTO PARA RETIRADA"
+  // A leitura de retomada deve atualizar para "PRONTO PARA RETIRADA"
   await expect(page.getByText('PRONTO PARA RETIRADA')).toBeVisible({ timeout: 2000 });
-
-  // Agora a requisição antiga (lenta, com status antigo 'producao') finalmente responde!
-  if (resolveHeldRequest) {
-    resolveHeldRequest();
-  }
 
   // Espera um instante para ver se a resposta lenta sobrescreveria o estado
   await page.waitForTimeout(300);
+
+  expect(deliveryCalls).toBeGreaterThan(callsWhileHeld);
 
   // O card NÃO DEVE regredir para trás ("EM PREPARO")! Deve continuar "PRONTO PARA RETIRADA"!
   await expect(page.getByText('PRONTO PARA RETIRADA')).toBeVisible();

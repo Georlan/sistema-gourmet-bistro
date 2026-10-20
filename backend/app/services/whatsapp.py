@@ -138,6 +138,7 @@ def enviar_texto_whatsapp_detalhado(
             sucesso=False,
             provider="evolution",
             error_message="Automação de WhatsApp desativada.",
+            provider_status="skipped_disabled",
         )
 
     configuracao = _configuracao_evolution()
