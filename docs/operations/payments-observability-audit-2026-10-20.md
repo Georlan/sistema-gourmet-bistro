@@ -10,15 +10,17 @@ Base: `main` b340e809f53e0d0dd266a5b95577d290f6acc6cb. Portados os deltas úteis
 - Adesão Pix seleciona o método sem emitir cobrança; trial inicia após implantação essencial. Cartão autoriza a recorrência. Pix é gerado no vencimento. Preservada essa política comercial; pagamento imediato na inscrição exigiria alterar explicitamente o contrato e o trial.
 - Railway informa nomes das variáveis, sem seus valores: token SaaS, chave pública, segredo webhook, aplicação e recebedor esperados estão presentes. O par `KOMA_SAAS_MERCADO_PAGO_CLIENT_ID/SECRET` está ausente. OAuth legado existe. Não é possível atestar correspondência de app/recebedor com valores redigidos.
 - PostHog: projeto KÔMA Production 648305, America/Fortaleza. Consulta em janela móvel de sete dias retornou quatro `public_menu_viewed`; em 24 horas, um. Sem navegação/API/ações operacionais publicadas. Ausência de evento não comprova ausência de uso nem de erro.
-- Aviso ativo PostHog: Authorized URLs vazio. Alterar `app_urls` exige confirmação dos domínios; proposta para conferência: `https://app.komafood.com.br`, `https://central.komafood.com.br`, `https://komafood.com.br`. Não usar hosts enviados por eventos como prova de propriedade. Nenhuma configuração PostHog alterada nesta revisão.
+- Aviso ativo PostHog: Authorized URLs vazio. Alterar `app_urls` exige confirmação dos domínios; proposta para conferência: `https://app.komafood.com.br`, `https://central.komafood.com.br`, `https://komafood.com.br`. Não usar hosts enviados por eventos como prova de propriedade. Após confirmação explícita do usuário em 20/10, os três domínios foram cadastrados preservando as demais configurações. Nova consulta de saúde retornou zero avisos ativos.
 
 ## Correções sobre a main
 
 - Acompanhamento não cancela pedido de provedor externo pelo relógio do QR; aguarda estado financeiro, sem liberar pedido não aprovado. Compatibilidade com provedores já existentes preservada sem ativar novos. Acompanhamento por token também reconcilia quando o webhook atrasa, reutilizando o orçamento atômico de polling existente e projetando o estado após a conciliação; consultas de pedidos sem Pix mantêm o mesmo limite de queries.
 - SaaS valida aplicação OAuth também no fallback, recebedor do token e identidade nas consultas de pagamento antes de conciliar. Capacidade pública falha fechada diante de identidade incompatível.
 - Reemissão Pix mantém a tentativa em `pending/in_process/authorized` mesmo com QR vencido; falha de consulta e estado desconhecido bloqueiam nova cobrança. Status terminal do provedor permite nova tentativa; pagamento do ciclo anterior já conciliado não bloqueia a mensalidade seguinte. Chave de idempotência é estável inclusive na virada do dia e muda por tentativa/vencimento.
-- PostHog recebe navegação explícita, ações de menu/adesão e sinais de erro/lentidão de API com endpoint sanitizado, build e request ID válido. Sem corpos, dados de cartão, PII de formulário, autocapture indiscriminado ou replay. Limite de sinais não representa tráfego total.
+- PostHog recebe navegação explícita, ações de menu/adesão e sinais de erro/lentidão de API com endpoint sanitizado, build e request ID válido. Sem corpos, dados de cartão, PII de formulário, autocapture indiscriminado ou replay. Metadados de URL do SDK também ocultam capabilities nos paths de acompanhamento/ativação. Limite de sinais não representa tráfego total.
 - Mensagem pública de indisponibilidade preserva a inscrição sem exibir configuração interna nem afirmar erroneamente que produção é homologação.
+
+A auditoria de dependências no CI encontrou três advisories em aiohttp 3.14.3 já fixado pela main. Atualização pontual para 3.14.4, sem atualizar os demais pacotes; resolução universal do lock conferida.
 
 ## Verificação e liberação
 

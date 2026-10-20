@@ -53,11 +53,15 @@ function sanitizeProperties<T extends Record<string, any>>(props?: T, depth = 0)
       } else if (val && typeof val === 'object') {
         clean[key] = sanitizeProperties(val, depth + 1);
       } else {
-        clean[key] = cleanUrl(val);
+        clean[key] = lowerKey === '$pathname' && typeof val === 'string' ? cleanCapabilityPath(val) : cleanUrl(val);
       }
     }
   }
   return clean;
+}
+
+function cleanCapabilityPath(path: string): string {
+  return path.split(/[?#]/, 1)[0].replace(/\/(acompanhar|ativar|recuperar-senha|confirmar-cadastro)(?:\/[^/]+)+/g, '/$1/:id');
 }
 
 function cleanUrl(value: unknown): unknown {
@@ -68,6 +72,7 @@ function cleanUrl(value: unknown): unknown {
     url.hash = '';
     url.username = '';
     url.password = '';
+    url.pathname = cleanCapabilityPath(url.pathname);
     return url.toString();
   } catch {
     return '[invalid URL]';
