@@ -282,7 +282,8 @@ def test_zero_fee_does_not_depend_on_old_linked_rate_contract(monkeypatch):
 
 
 @pytest.mark.parametrize("provider_name", ["mercado_pago", "pagbank"])
-def test_online_order_is_published_and_settled_only_after_provider_approval(monkeypatch, provider_name):
+@pytest.mark.parametrize("recovery", ["provider", "secure_tracking"])
+def test_online_order_is_published_and_settled_only_after_provider_approval(monkeypatch, provider_name, recovery):
     Base.metadata.create_all(bind=engine)
     token = current_restaurante_id.set(RESTAURANT_ID)
     db = SessionLocal()
@@ -379,7 +380,26 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
             "app.services.online_payments.service.MercadoPagoProvider" if provider_name == "mercado_pago" else "app.services.online_payments.provider_registry.PagBankProvider",
             ApprovedProvider,
         )
-        if provider_name == "pagbank":
+        if recovery == "secure_tracking":
+            import datetime
+            from app.order_chat_models import OrderConversation
+            from app.routes import order_tracking
+            intent.expires_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)
+            db.add(OrderConversation(
+                id="payment-gate-conversation", restaurante_id=RESTAURANT_ID,
+                pedido_id=comanda.id, public_access_token_hash="fixture-token-hash",
+            ))
+            db.commit()
+            monkeypatch.setattr(order_tracking, "resolve_public_tracking",
+                lambda *_: (RESTAURANT_ID, "payment-gate-conversation", comanda.id, None))
+            summary = order_tracking.consultar_resumo_pedido_por_token("fixture-token", db)
+            assert summary["pagamento"]["status"] == "approved"
+            assert summary["status"] != "aguardando_pagamento"
+            assert summary["fechada"] is False
+            # Repeat both secure projections: approval effects remain singular.
+            order_tracking.consultar_pedido_por_token("fixture-token", db)
+            order_tracking.consultar_resumo_pedido_por_token("fixture-token", db)
+        elif provider_name == "pagbank":
             import json
             from fastapi.testclient import TestClient
             from app.main import app
@@ -399,7 +419,7 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
             external_payment_id="mp-payment-9917",
         )
 
-        assert became_approved is (provider_name != "pagbank")
+        assert became_approved is (provider_name != "pagbank" and recovery == "provider")
         assert settled is not None and settled.status == "approved"
         db.refresh(comanda)
         assert comanda.online_payment_status == "approved"
@@ -420,6 +440,8 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
         assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANT_ID).count() == 1
     finally:
         db.rollback()
+        from app.order_chat_models import OrderConversation
+        db.query(OrderConversation).filter(OrderConversation.restaurante_id == RESTAURANT_ID).delete(synchronize_session=False)
         from app.models import OnlinePaymentWebhookEvent
         for model in (OnlinePaymentWebhookEvent, OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
             db.query(model).filter(model.restaurante_id == RESTAURANT_ID).delete(synchronize_session=False)

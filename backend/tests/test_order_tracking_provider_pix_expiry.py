@@ -89,3 +89,22 @@ def test_tracking_advances_only_after_financial_approval(provider):
     intent.status='approved'
     assert _resolve_tracking_payment_state(db,**kwargs)[:3] == ('pendente',False,False)
     db.flush.assert_not_called()
+
+
+@pytest.mark.parametrize('claimed', [False, True])
+def test_secure_tracking_reuses_atomic_reconciliation_budget_and_survives_outage(monkeypatch, claimed):
+    from app.services.online_payments import OnlinePaymentService
+    from app.routes.order_tracking import _tracking_payment_intent
+    intent=SimpleNamespace(provider='mercado_pago',status='pending',external_payment_id='fixture')
+    db=Mock()
+    db.query.return_value.filter.return_value.first.return_value=intent
+    claim=Mock(return_value=claimed)
+    reconcile=Mock(side_effect=RuntimeError('provider unavailable'))
+    monkeypatch.setattr(OnlinePaymentService,'claim_poll_reconciliation',claim)
+    monkeypatch.setattr(OnlinePaymentService,'account_for_intent',Mock(return_value=object()))
+    monkeypatch.setattr(OnlinePaymentService,'reconcile_provider_payment',reconcile)
+    assert _tracking_payment_intent(db,restaurante_id=9941,comanda_id='fixture') is intent
+    claim.assert_called_once_with(db,intent)
+    assert reconcile.call_count == int(claimed)
+    assert db.rollback.call_count == int(claimed)
+    assert intent.status == 'pending'

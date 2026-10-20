@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import json
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -159,6 +160,35 @@ def _active_ordering_block(
     return None
 
 
+_UNREAD_PAYMENT_INTENT = object()
+_logger = logging.getLogger(__name__)
+
+
+def _tracking_payment_intent(db: Session, *, restaurante_id: int, comanda_id: str):
+    intent = db.query(OnlinePaymentIntent).filter(
+        OnlinePaymentIntent.restaurante_id == restaurante_id,
+        OnlinePaymentIntent.comanda_id == comanda_id,
+    ).first()
+    if (intent is not None and intent.provider in {"mercado_pago", "pagbank"}
+        and intent.status in {"created", "pending"} and getattr(intent, "external_payment_id", None)):
+        from ..services.online_payments import OnlinePaymentService
+        # Same atomic cross-worker budget as the legacy status route. A missed
+        # webhook must not leave secure tracking permanently awaiting payment.
+        if OnlinePaymentService.claim_poll_reconciliation(db, intent):
+            try:
+                account = OnlinePaymentService.account_for_intent(db, intent)
+                reconciled, _ = OnlinePaymentService.reconcile_provider_payment(
+                    db, account=account, external_payment_id=intent.external_payment_id,
+                )
+                if reconciled is not None:
+                    intent = reconciled
+            except Exception as exc:
+                db.rollback()
+                db.refresh(intent)
+                _logger.warning("tracking_payment_reconciliation_unavailable type=%s", type(exc).__name__)
+    return intent
+
+
 def _resolve_tracking_payment_state(
     db: Session,
     *,
@@ -166,6 +196,7 @@ def _resolve_tracking_payment_state(
     comanda_id: str,
     delivery_status: Any,
     fechada: bool,
+    intent: Any = _UNREAD_PAYMENT_INTENT,
 ) -> tuple[str, bool, bool, dict[str, Any] | None]:
     """Resolve o ciclo de vida do pagamento online para o acompanhamento público.
 
@@ -174,14 +205,8 @@ def _resolve_tracking_payment_state(
     vencimento local continua aplicável ao Pix sem provedor externo.
     """
     now_utc = datetime.datetime.now(datetime.timezone.utc)
-    intent = (
-        db.query(OnlinePaymentIntent)
-        .filter(
-            OnlinePaymentIntent.restaurante_id == restaurante_id,
-            OnlinePaymentIntent.comanda_id == comanda_id,
-        )
-        .first()
-    )
+    if intent is _UNREAD_PAYMENT_INTENT:
+        intent = _tracking_payment_intent(db, restaurante_id=restaurante_id, comanda_id=comanda_id)
 
     raw_status = str(delivery_status or "pendente").strip().lower()
     effective_status = _effective_tracking_status_values(raw_status, fechada)
@@ -271,6 +296,7 @@ def consultar_resumo_pedido_por_token(
 
     restaurante_id, conversation_id, pedido_id, _resolved_closed_at = resolved
     with tenant_session_scope(db, restaurante_id):
+        payment_intent = _tracking_payment_intent(db, restaurante_id=restaurante_id, comanda_id=pedido_id)
         row = (
             db.query(
                 Comanda.id.label("id"),
@@ -330,6 +356,7 @@ def consultar_resumo_pedido_por_token(
             comanda_id=row.id,
             delivery_status=row.delivery_status,
             fechada=bool(row.fechada),
+            intent=payment_intent,
         )
         state_contract = build_order_state_contract(
             effective_status,
@@ -366,6 +393,7 @@ def consultar_pedido_por_token(
 
     restaurante_id, conversation_id, pedido_id, closed_at = resolved
     with tenant_session_scope(db, restaurante_id):
+        payment_intent = _tracking_payment_intent(db, restaurante_id=restaurante_id, comanda_id=pedido_id)
         comanda = (
             db.query(Comanda)
             .options(selectinload(Comanda.itens).joinedload(Item.produto))
@@ -419,6 +447,7 @@ def consultar_pedido_por_token(
             comanda_id=comanda.id,
             delivery_status=comanda.delivery_status,
             fechada=bool(comanda.fechada),
+            intent=payment_intent,
         )
         state_contract = build_order_state_contract(
             effective_status,

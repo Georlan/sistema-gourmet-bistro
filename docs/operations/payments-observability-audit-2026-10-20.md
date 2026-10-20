@@ -14,7 +14,7 @@ Base: `main` b340e809f53e0d0dd266a5b95577d290f6acc6cb. Portados os deltas úteis
 
 ## Correções sobre a main
 
-- Acompanhamento não cancela pedido de provedor externo pelo relógio do QR; aguarda estado financeiro, sem liberar pedido não aprovado. Compatibilidade com provedores já existentes preservada sem ativar novos.
+- Acompanhamento não cancela pedido de provedor externo pelo relógio do QR; aguarda estado financeiro, sem liberar pedido não aprovado. Compatibilidade com provedores já existentes preservada sem ativar novos. Acompanhamento por token também reconcilia quando o webhook atrasa, reutilizando o orçamento atômico de polling existente e projetando o estado após a conciliação; consultas de pedidos sem Pix mantêm o mesmo limite de queries.
 - SaaS valida aplicação OAuth também no fallback, recebedor do token e identidade nas consultas de pagamento antes de conciliar. Capacidade pública falha fechada diante de identidade incompatível.
 - Reemissão Pix mantém a tentativa em `pending/in_process/authorized` mesmo com QR vencido; falha de consulta e estado desconhecido bloqueiam nova cobrança. Status terminal do provedor permite nova tentativa; pagamento do ciclo anterior já conciliado não bloqueia a mensalidade seguinte. Chave de idempotência é estável inclusive na virada do dia e muda por tentativa/vencimento.
 - PostHog recebe navegação explícita, ações de menu/adesão e sinais de erro/lentidão de API com endpoint sanitizado, build e request ID válido. Sem corpos, dados de cartão, PII de formulário, autocapture indiscriminado ou replay. Limite de sinais não representa tráfego total.
