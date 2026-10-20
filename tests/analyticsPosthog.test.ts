@@ -190,3 +190,20 @@ test('react initialization and error tracking are configured cleanly in main and
   // Error tracking in AppRecoveryBoundary
   assert.match(recovery, /captureAnalyticsException\(error,\s*\{\s*source:\s*['"]AppRecoveryBoundary['"]\s*\}\)/);
 });
+
+
+test('operational diagnostics caps the debug buffer and resets navigation on logout', async () => {
+  const { trackOperationalAction, trackOperationalScreen } = await import('../src/analytics');
+  const target: any = globalThis;
+  target.__KOMA_ANALYTICS_EVENTS__ = [];
+  trackOperationalScreen('operacao', 'pedidos');
+  trackOperationalScreen('operacao', 'pedidos');
+  assert.equal(target.__KOMA_ANALYTICS_EVENTS__.length, 1);
+  resetAnalytics();
+  trackOperationalScreen('operacao', 'pedidos');
+  assert.equal(target.__KOMA_ANALYTICS_EVENTS__.filter((e: any) => e.event === 'operational_screen_viewed').length, 2);
+  trackOperationalAction('signup_checkout', 'private@example.test');
+  assert.equal(target.__KOMA_ANALYTICS_EVENTS__.filter((e: any) => e.event === 'operational_action').length, 0);
+  for (let i = 0; i < 120; i++) trackOperationalAction('signup_checkout', 'pix');
+  assert.equal(target.__KOMA_ANALYTICS_EVENTS__.length, 100);
+});

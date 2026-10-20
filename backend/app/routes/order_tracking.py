@@ -169,8 +169,9 @@ def _resolve_tracking_payment_state(
 ) -> tuple[str, bool, bool, dict[str, Any] | None]:
     """Resolve o ciclo de vida do pagamento online para o acompanhamento público.
 
-    Retorna: (effective_status, state_contract_kwargs, payment_pending, payment_failed, pagamento_payload)
-    Se o intent Pix pendente tiver expirado, marca automaticamente comanda e intent como expirados/cancelados.
+    Retorna: (effective_status, payment_pending, payment_failed, pagamento_payload).
+    Pix de provedor externo só encerra por estado financeiro conciliado;
+    vencimento local continua aplicável ao Pix sem provedor externo.
     """
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     intent = (
@@ -193,8 +194,17 @@ def _resolve_tracking_payment_state(
         if expires_at is not None and expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
 
-        # 1. Intent pendente que já expirou
-        if intent.status in {"created", "pending"} and expires_at is not None and expires_at <= now_utc:
+        # 1. Vencimento local só pode encerrar uma intenção sem provedor externo.
+        # O prazo do QR Code não é um status financeiro: Mercado Pago e PagBank
+        # podem manter o pagamento em análise e aprová-lo após esse prazo.
+        # A decisão terminal desses provedores deve vir da reconciliação autoritativa,
+        # como já ocorre na rota legada de status do Cardápio.
+        if (
+            intent.provider not in {"mercado_pago", "pagbank"}
+            and intent.status in {"created", "pending"}
+            and expires_at is not None
+            and expires_at <= now_utc
+        ):
             intent.status = "expired"
             comanda = (
                 db.query(Comanda)

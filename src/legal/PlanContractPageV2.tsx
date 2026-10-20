@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { KOMA_WORDMARK_ON_DARK_SRC } from '../brand/komaBrand';
 import { API_BASE_URL } from '../config/api';
+import { trackOperationalAction } from '../analytics';
 import {
   SUBSCRIPTION_PLANS,
   ONLINE_ORDER_COMMISSION_ENABLED,
@@ -586,6 +587,7 @@ export default function PlanContractPageV2() {
 
   const handleCheckout = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    trackOperationalAction('signup_checkout', billingMethod, canContinue ? 'requested' : 'blocked');
     if (!canContinue) return;
     setIsSubmitting(true);
     setError(null);
@@ -614,6 +616,7 @@ export default function PlanContractPageV2() {
       }
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(contractErrorMessage(payload?.detail));
+      trackOperationalAction('signup_checkout', billingMethod, 'succeeded');
       setActivationResult({
         restaurantId: payload.restaurantId ? String(payload.restaurantId) : undefined,
         status: payload.status,
@@ -624,6 +627,7 @@ export default function PlanContractPageV2() {
         activationToken: payload.activationToken || undefined,
       });
     } catch (checkoutError) {
+      trackOperationalAction('signup_checkout', billingMethod, 'failed');
       setError(checkoutError instanceof Error ? checkoutError.message : 'Não foi possível processar a contratação.');
     } finally { setIsSubmitting(false); }
   };
@@ -798,7 +802,7 @@ export default function PlanContractPageV2() {
                   )}
                   {billingMethod === 'pix' && capabilities.pix && <div className="koma-sub-locked-note"><QrCode size={17} /> Nenhum Pix é cobrado hoje. {activeBillingCycle === 'anual' ? 'Depois da implantação e dos 7 dias grátis, o KÔMA gerará um único QR Code e Pix Copia e Cola do valor anual, quitando os próximos 12 meses.' : 'Quando a primeira mensalidade vencer, o KÔMA exibirá o QR Code e o Pix Copia e Cola; um novo QR será gerado a cada vencimento mensal.'} Você poderá pagar com qualquer banco ou PSP Pix.</div>}
                   {!methodAvailable && <p role="status" className="koma-sub-locked-note">{billingMethodLabel} está indisponível nesta contratação. Escolha outro meio disponível para continuar; sua inscrição permanece salva.</p>}
-                  {!capabilities.credit_card && !capabilities.pix && <p role="status">Ambiente de homologação: o checkout recorrente está temporariamente pausado enquanto as credenciais TEST do gateway são concluídas (KOMA_SAAS_CHECKOUT_ENABLED=false). Sua inscrição fica salva.</p>}
+                  {!capabilities.credit_card && !capabilities.pix && <p role="status">Os pagamentos estão temporariamente indisponíveis. Sua inscrição fica salva para continuar depois.</p>}
                 </section>
                 ) : (
                   <section className="koma-sub-section-card">

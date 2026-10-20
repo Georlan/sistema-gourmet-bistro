@@ -269,7 +269,7 @@ def _payment_qr_payload(payment: dict[str, Any], *, due_at: dt.datetime | None, 
     }
 
 
-def _create_pix_payment(*, restaurante_id: int, amount: Decimal, payer_email: str, due_at: dt.datetime) -> dict[str, Any]:
+def _create_pix_payment(*, restaurante_id: int, amount: Decimal, payer_email: str, due_at: dt.datetime, previous_payment_id: str | None = None) -> dict[str, Any]:
     service = default_saas_mp_service
     service._ensure_provider_ready()
     reference = _pix_reference(restaurante_id, due_at)
@@ -308,7 +308,10 @@ def _create_pix_payment(*, restaurante_id: int, amount: Decimal, payer_email: st
     if notification_url:
         payload["notification_url"] = notification_url
 
-    key_source = f"https://komafood.com.br/saas-pix/{restaurante_id}/{due_at.date().isoformat()}/{now:%Y%m%d}"
+    # Chave estável em retentativas da MESMA tentativa, mas diferente após
+    # expiração/cancelamento do Pix anterior (inclusive no mesmo dia).
+    previous_attempt = str(previous_payment_id or "").strip() or "initial"
+    key_source = f"https://komafood.com.br/saas-pix/{restaurante_id}/{due_at.date().isoformat()}/{previous_attempt}"
     idempotency_key = str(uuid.uuid5(uuid.NAMESPACE_URL, key_source))
     try:
         with service._client() as client:
@@ -385,6 +388,21 @@ def _reconcile_pix_payment(db: Session, subscription: SaaSSubscription, payment:
     return True
 
 
+def _get_existing_pix_payment_or_fail(payment_id: str) -> dict[str, Any] | None:
+    """Evita criar segundo Pix quando a consulta anterior está incerta.
+
+    Só 404/410 permitem reemissão; indisponibilidade do provedor é bloqueante.
+    """
+    try:
+        return default_saas_mp_service.get_payment(payment_id)
+    except SaasMercadoPagoError as exc:
+        if exc.status_code in {404, 410}:
+            return None
+        raise HTTPException(
+            502, "Não foi possível confirmar o estado do Pix anterior. Tente novamente."
+        ) from exc
+
+
 @subscription_router.post("/pix")
 def generate_or_get_subscription_pix(user=Depends(_administrator), db: Session = Depends(get_db)):
     restaurante_id = int(user.restaurante_id)
@@ -452,10 +470,7 @@ def generate_or_get_subscription_pix(user=Depends(_administrator), db: Session =
     amount = _subscription_amount(db, subscription, restaurante_id)
     existing_payment_id = str(subscription.provider_subscription_id or "").strip()
     if existing_payment_id:
-        try:
-            existing_payment = default_saas_mp_service.get_payment(existing_payment_id)
-        except SaasMercadoPagoError:
-            existing_payment = None
+        existing_payment = _get_existing_pix_payment_or_fail(existing_payment_id)
         if existing_payment:
             if _reconcile_pix_payment(db, subscription, existing_payment, restaurante_id=restaurante_id):
                 return {
@@ -464,9 +479,20 @@ def generate_or_get_subscription_pix(user=Depends(_administrator), db: Session =
                     "paidUntil": _as_utc(subscription.current_period_end).isoformat() if subscription.current_period_end else None,
                 }
             provider_status = str(existing_payment.get("status") or "").lower()
-            expires_at = _parse_provider_datetime(existing_payment.get("date_of_expiration"))
-            if provider_status in {"pending", "in_process"} and (expires_at is None or now < expires_at):
+            period_start = _as_utc(subscription.current_period_start)
+            settled_previous_cycle = bool(
+                provider_status == "approved"
+                and period_start is not None and due_at is not None and period_start < due_at
+                and str(existing_payment.get("external_reference") or "") == _pix_reference(restaurante_id, period_start)
+            )
+            if provider_status == "approved" and not settled_previous_cycle:
+                raise HTTPException(409, "Pagamento anterior aprovado, mas ainda não conciliado. Aguarde a verificação administrativa.")
+            # QR vencido não prova encerramento financeiro no Mercado Pago.
+            # Reutilizar a tentativa enquanto o provedor ainda pode aprová-la.
+            if provider_status in {"pending", "in_process", "authorized"}:
                 return _payment_qr_payload(existing_payment, due_at=due_at, amount=amount)
+            if not settled_previous_cycle and provider_status not in {"cancelled", "rejected", "expired"}:
+                raise HTTPException(409, "O estado do Pix anterior exige verificação antes de uma nova cobrança.")
 
     payer_email = str(getattr(user, "email", "") or "").strip().lower()
     if not payer_email or "@" not in payer_email:
@@ -477,6 +503,7 @@ def generate_or_get_subscription_pix(user=Depends(_administrator), db: Session =
             amount=amount,
             payer_email=payer_email,
             due_at=due_at or now,
+            previous_payment_id=existing_payment_id,
         )
     except SaasMercadoPagoError as exc:
         raise HTTPException(502, str(exc)) from exc

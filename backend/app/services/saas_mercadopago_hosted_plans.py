@@ -68,28 +68,23 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
     def _expected_application_id() -> str:
         """Retorna a identidade efetiva da aplicação usada para emitir o token.
 
-        Em produção o token runtime é criado com `MERCADO_PAGO_CLIENT_ID`; por
-        isso esse Client ID é a fonte de verdade para `application_id` retornado
-        pela API. A variável EXPECTED_APPLICATION_ID fica apenas como fallback
-        legado para ambientes que não tenham Client ID configurado.
+        A aplicação de faturamento explicitamente configurada prevalece sobre
+        o OAuth dos restaurantes. O runtime valida previamente se o Client ID
+        efetivo é compatível; a resposta do Mercado Pago é verificada novamente.
         """
+        configured_saas_id = os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "").strip()
+        if configured_saas_id:
+            return configured_saas_id
         dedicated_id = os.getenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_ID", "").strip()
         dedicated_secret = os.getenv("KOMA_SAAS_MERCADO_PAGO_CLIENT_SECRET", "").strip()
         if dedicated_id and dedicated_secret:
             return dedicated_id
-        return (
-            os.getenv("MERCADO_PAGO_CLIENT_ID", "").strip()
-            or os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "").strip()
-        )
+        return os.getenv("MERCADO_PAGO_CLIENT_ID", "").strip()
 
     def _validate_merchant_identity(self, payload: dict[str, Any]) -> None:
-        """Valida assinaturas usando a mesma aplicação que emitiu o token runtime.
+        """Valida recebedor e aplicação SaaS em respostas e reconciliações.
 
-        A classe base compara `application_id` com um valor auxiliar legado.
-        Como esse valor pode ficar desatualizado enquanto o OAuth runtime usa um
-        Client ID diferente, o gateway hospedado canoniza a identidade pelo
-        `MERCADO_PAGO_CLIENT_ID`. Isso também cobre consultas e webhooks da
-        assinatura real após o checkout.
+        A identidade SaaS explícita prevalece sobre o OAuth dos restaurantes.
         """
         if self.is_mock:
             return
