@@ -32,9 +32,9 @@ test('pacote é apresentado como um só na sacola e serializado como dois produt
   assert.ok(items.every(i => !i.produto_id.startsWith('promotion:')));
 });
 
-test('vitrine explícita aparece antes de mais escolhidos e não substitui sugestões', () => {
+test('mais escolhidos têm prioridade sem remover a vitrine promocional', () => {
   const source = readFileSync(new URL('../src/cardapio/components/CardapioOrderConditions.tsx', import.meta.url), 'utf8');
-  assert.ok(source.indexOf('<CardapioPromotions') < source.indexOf('<PopularProductsPreview'));
+  assert.ok(source.indexOf('<PopularProductsPreview') < source.indexOf('<CardapioPromotions'));
   const page = readFileSync(new URL('../src/cardapio/CardapioPage.tsx', import.meta.url), 'utf8');
   assert.match(page, /<CardapioPromotionWizard/);
   assert.match(page, /promotionParts: parts/);

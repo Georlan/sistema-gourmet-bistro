@@ -134,11 +134,10 @@ export function CardapioRecommendations({ brand }: { brand: BrandConfig }) {
         </span>
         <div>
           <h2 id="cardapio-recommendations-title" className="text-sm font-black text-koma-foreground">Destaques do cardápio</h2>
-          <p className="text-[10px] text-koma-muted">Sugestões disponíveis agora no cardápio.</p>
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3" role="list">
+      <div className="cardapio-recommendation-list" role="list">
         {recommendations.map(({ kind, label, product }) => {
           return (
             <button

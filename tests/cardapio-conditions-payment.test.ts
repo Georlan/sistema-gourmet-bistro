@@ -118,10 +118,10 @@ test('troco é mostrado como valor entregue, somente para dinheiro', () => {
   assert.match(exact, /Sem troco solicitado/);
 });
 
-test('consulta fica antes das categorias e usa a loja ativa', () => {
+test('consulta fica antes dos produtos e usa a loja ativa', () => {
   const page = readFileSync(new URL('../src/cardapio/CardapioPage.tsx', import.meta.url), 'utf8');
   assert.match(page, /<CardapioConditionsSummary brand=\{activeBrand\} onOpen=\{\(\) => setIsStoreInfoOpen\(true\)\}/);
-  assert.ok(page.indexOf('<CardapioConditionsSummary') < page.indexOf('<CardapioCategoryNav'));
+  assert.ok(page.indexOf('<CardapioConditionsSummary') < page.indexOf('id="catalog-feed"'));
 });
 
 test('checkout solicita e valida documento somente para Pix PagBank', () => {

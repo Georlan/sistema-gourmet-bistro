@@ -5,7 +5,7 @@ import CatalogProductImage from './CatalogProductImage';
  */
 
 import React from "react";
-import { Minus, Plus } from "lucide-react";
+import { ChevronRight, Minus, Plus } from "lucide-react";
 import { Product } from "../CardapioTypes";
 import { getProductCatalogSignalLabel } from "../cardapioMerchandising";
 import "../cardapioTone.css";
@@ -79,11 +79,6 @@ export default function CardapioProductCard({
                 {catalogSignal}
               </span>
             )}
-            {available && hasModifiers && (
-              <span className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400/90">
-                Opções
-              </span>
-            )}
           </div>
           {product.description && (
             <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-400 font-normal">
@@ -96,7 +91,7 @@ export default function CardapioProductCard({
             </strong>
             {available && (
               hasModifiers ? (
-                <span className="text-xs font-bold text-emerald-400">Escolher opções</span>
+                <span className="cardapio-product-card__choose">{product.marmitaria ? "Montar" : "Escolher"}<ChevronRight size={14} aria-hidden="true" /></span>
               ) : cartQuantity > 0 ? (
                 <div
                   className="cardapio-product-card__stepper relative z-10 inline-flex items-center gap-1 rounded-xl bg-emerald-500/20 border border-emerald-500/40 p-0.5 shadow-sm"
@@ -143,7 +138,6 @@ export default function CardapioProductCard({
                   aria-label={`Adicionar ${product.name} à sacola`}
                 >
                   <Plus size={14} className="stroke-[2.5]" />
-                  <span>Adicionar</span>
                 </button>
               )
             )}

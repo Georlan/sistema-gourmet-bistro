@@ -25,11 +25,12 @@ test('destaques reconhecem categorias promocionais sem inventar desconto', () =>
   assert.doesNotMatch(highlights, /desconto|economia|preço anterior|priceBefore/i);
 });
 
-test('home monta destaques antes de populares e recomendações', () => {
+test('home prioriza ranking real e mantém a vitrine antes do catálogo', () => {
   const conditions = source('../src/cardapio/components/CardapioOrderConditions.tsx');
   assert.match(conditions, /CardapioHighlights/);
-  assert.ok(conditions.indexOf('<CardapioHighlights') < conditions.indexOf('<PopularProductsPreview'));
-  assert.ok(conditions.indexOf('<PopularProductsPreview') < conditions.indexOf('<CardapioRecommendations'));
+  assert.ok(conditions.indexOf('<PopularProductsPreview') < conditions.indexOf('<CardapioHighlights'));
+  const page = source('../src/cardapio/CardapioPage.tsx');
+  assert.ok(page.indexOf('<CardapioConditionsSummary') < page.indexOf('id="catalog-feed"'));
 });
 
 const sampleProduct = (id: string, category: string, available = true): Product => ({
