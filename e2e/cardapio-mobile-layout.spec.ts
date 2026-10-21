@@ -45,7 +45,7 @@ for (const [profile, category, product] of [
     await expect(page.locator('#product-card-902')).toContainText('Hambúrguer artesanal');
     // Solid sticky header: no catalog content should bleed through while scrolling.
     await expect(page.locator('#app-header')).toHaveCSS('backdrop-filter', 'none');
-    await expect(page.locator('#app-header')).toHaveCSS('background-color', /^rgb\\(/);
+    await expect(page.locator('#app-header')).toHaveCSS('background-color', /^rgb\(/);
     const initialReads = { menuReads, rankingReads };
     const nav = page.getByRole('navigation', { name: 'Categorias do cardápio' });
     await nav.getByRole('button', { name: category, exact: true }).click();
