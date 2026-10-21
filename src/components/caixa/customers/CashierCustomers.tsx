@@ -1,3 +1,4 @@
+import '../../shared/operationalWorkspace.css';
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 
 import {
@@ -754,7 +755,7 @@ export default function CashierCustomers({
 
       {(activeTab === 'clientes' || visitedRelationship) && (
         <div hidden={activeTab !== 'clientes'} style={{ display: activeTab === 'clientes' ? undefined : 'none' }}
-          className="space-y-4 text-left animate-fade-in [&_button]:scroll-mt-32 [&_input]:scroll-mt-32 [&_select]:scroll-mt-32 [&_summary]:scroll-mt-32">
+          className="koma-workspace space-y-4 text-left animate-fade-in [&_button]:scroll-mt-32 [&_input]:scroll-mt-32 [&_select]:scroll-mt-32 [&_summary]:scroll-mt-32">
           {/* Banner Operacional com até 4 indicadores essenciais */}
           <OperationalBanner
             id="customers-heading"
@@ -856,8 +857,8 @@ export default function CashierCustomers({
                       <div className="space-y-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                              Prioridade {opp.prioridade}
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-koma-raised px-2 py-1 text-xs font-medium text-koma-muted">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"/>Prioridade {opp.prioridade}
                             </span>
                             <h4 className="mt-1.5 text-base font-bold text-koma-foreground">{opp.titulo}</h4>
                           </div>
@@ -900,13 +901,13 @@ export default function CashierCustomers({
                           </p>
                         )}
 
-                        {/* Critérios e limitações acessíveis sem ocupar a tela inteira */}
+                        <p className="border-l-2 border-emerald-500/40 pl-3 text-xs leading-relaxed text-koma-muted">{opp.motivo_entrada}</p>
+                        {/* Critérios técnicos complementam o resumo sempre visível. */}
                         <details className="text-sm text-koma-muted">
                           <summary className="min-h-10 cursor-pointer py-2 font-semibold text-koma-foreground focus-visible:outline-2 focus-visible:outline-emerald-500">
                             Por que este grupo?
                           </summary>
                           <div className="mt-2 space-y-1">
-                            <p>{opp.motivo_entrada}</p>
                             <p>{opp.abordagem_sem_desconto || opp.abordagem_recomendada}</p>
                         {opp.retidos_contato_recente_count > 0 && (
                           <p className="text-xs text-amber-300">
@@ -1349,7 +1350,7 @@ export default function CashierCustomers({
                               </td>
                               <td className="p-3.5 font-mono text-xs text-koma-muted">
                                 {ultimaCompraLabel(user.dias_sem_comprar)}
-                                <span className="mt-1 block text-koma-muted">{customerSegmentLabel(user)}</span>
+                                <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 font-sans text-[11px] ${user.segmento_relacionamento === 'ATIVO' ? 'koma-badge-success' : user.segmento_relacionamento === 'ATENCAO' ? 'koma-badge-warning' : user.segmento_relacionamento === 'REATIVAR' ? 'koma-badge-danger' : 'koma-badge-neutral'}`}>{customerSegmentLabel(user)}</span>
                               </td>
                               <td className="p-3.5 font-mono text-xs text-koma-foreground">
                                 {user.pedidos_concluidos ?? 0}
@@ -1538,7 +1539,7 @@ export default function CashierCustomers({
           {(crmTab === 'beneficios' || visitedBenefits) && (
             <div hidden={crmTab !== 'beneficios'} style={{ display: crmTab === 'beneficios' ? undefined : 'none' }} className="space-y-4 animate-fade-in">
               {/* Subdivisão Clara: Saldo Acumulado vs. Resgatável + Seletor Fidelidade / Cupons */}
-              <div className="rounded-2xl border border-koma-border bg-koma-card p-3 sm:p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 py-1">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-bold text-koma-foreground">
@@ -1570,7 +1571,7 @@ export default function CashierCustomers({
                         tabIndex={beneficiosSection === section ? 0 : -1}
                         onClick={() => setActiveSubTab(section)}
                         className={`min-h-11 rounded-lg px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${beneficiosSection === section ? 'bg-koma-raised text-koma-foreground' : 'text-koma-muted hover:bg-koma-raised'}`}>
-                        {section === 'fidelidade' ? 'Fidelidade' : 'Cupons'}
+                        <span className="inline-flex items-center gap-2">{section === 'fidelidade' ? <Gift size={16} aria-hidden="true"/> : <Ticket size={16} aria-hidden="true"/>}{section === 'fidelidade' ? 'Fidelidade' : 'Cupons'}</span>
                       </button>
                     ))}
                   </div>
@@ -1624,12 +1625,11 @@ export default function CashierCustomers({
                 janelaDias={janelaDias}
                 onChangePeriodo={setPeriodoDias}
                 onChangeJanela={setJanelaDias}
+                onOpenCampaigns={() => handleSelectCrmTab('campanhas')}
                 onRefresh={() => void loadCrmSummary()}
               />
 
-              <details className="rounded-xl border border-koma-border bg-koma-panel px-4 py-2">
-                <summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold text-koma-foreground">Relacionamento e avaliações</summary>
-                <div className="space-y-3 pt-2">
+              <section aria-label="Relacionamento e avaliações" className="grid gap-3 xl:grid-cols-2">
                 <CustomerRelationshipPanel customers={loyaltyUsers} />
                 <CustomerSatisfactionPanel
                   resumo={satisfactionData.resumo}
@@ -1637,8 +1637,7 @@ export default function CashierCustomers({
                   isLoading={isSatisfactionLoading}
                   onOpenRegisterModal={handleOpenSatisfactionModal}
                 />
-              </div>
-              </details>
+              </section>
             </div>
           )}
         </div>

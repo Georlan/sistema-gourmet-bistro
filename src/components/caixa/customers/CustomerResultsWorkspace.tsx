@@ -1,5 +1,7 @@
+import { KomaMetricGroup } from '../../shared/KomaMetricGroup';
+import { KomaEmptyState } from '../../shared/KomaEmptyState';
 import React, { useMemo } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Users, Repeat2, Wallet, Ticket, ArrowRight, MessageCircle, ChartNoAxesCombined } from 'lucide-react';
 
 interface Props {
   crmSummary: any | null;
@@ -10,6 +12,7 @@ interface Props {
   onChangePeriodo: (dias: number) => void;
   onChangeJanela: (dias: number) => void;
   onRefresh: () => void;
+  onOpenCampaigns: () => void;
 }
 
 const money = (value?: number | null) =>
@@ -31,14 +34,19 @@ const approachNames: Record<string, string> = {
 
 function CampaignEvidence({ camp }: { camp: any }) {
   return (
-    <div className="space-y-2 text-xs text-koma-muted">
-      <p>Abordagem: {approachNames[camp.abordagem_tipo] || 'Não informada'}{camp.cupom_codigo ? ' · Cupom ' + camp.cupom_codigo : ''}</p>
-      <p>Janela histórica da campanha: {camp.janela_atribuicao_dias ?? '—'} dias. O seletor geral não modifica este valor.</p>
-      <p>Contatos confirmados: {count(camp.clientes_abordados)}. Registro manual não comprova entrega no WhatsApp.</p>
-      <p>Clientes que compraram após contato: {camp.clientes_abordados > 0 ? count(camp.clientes_que_voltaram) : 'Não medido — sem contato confirmado'}.</p>
-      <p>Usos de cupom vinculado: {count(camp.pedidos_comprovados_cupom)} · {count(camp.cupons_sem_contato_confirmado)} sem contato confirmado nesta campanha.</p>
-      <p>Compras por associação temporal: {count(camp.pedidos_estimados_janela)}. Não comprova causalidade.</p>
-      <p>Valor líquido associado: {money(camp.valor_pago_liquido_brl)} (não é lucro). Descontos nessas compras: {money(camp.desconto_utilizado_brl)} (não são necessariamente custo incremental).</p>
+    <div className="space-y-3 text-xs text-koma-muted">
+      <div className="flex flex-wrap gap-2"><span className="rounded-md bg-koma-raised px-2 py-1">{approachNames[camp.abordagem_tipo] || 'Não informada'}</span><span className="rounded-md bg-koma-raised px-2 py-1">Janela: {camp.janela_atribuicao_dias ?? '—'} dias</span>{camp.cupom_codigo && <span className="rounded-md bg-koma-raised px-2 py-1">{camp.cupom_codigo}</span>}</div>
+      <dl className="grid grid-cols-2 gap-3">
+        {[
+          ['Contatos confirmados',count(camp.clientes_abordados)],
+          ['Compraram após contato',camp.clientes_abordados > 0 ? count(camp.clientes_que_voltaram) : 'Não medido'],
+          ['Usos de cupom',count(camp.pedidos_comprovados_cupom)],
+          ['Cupom sem contato',count(camp.cupons_sem_contato_confirmado)],
+          ['Associação por data',count(camp.pedidos_estimados_janela)],
+          ['Descontos associados',money(camp.desconto_utilizado_brl)],
+        ].map(([label,value]) => <div key={label}><dt>{label}</dt><dd className="mt-1 font-semibold text-koma-foreground">{value}</dd></div>)}
+      </dl>
+      <p>Registro manual não comprova entrega. Associação não comprova causalidade ou lucro. A janela salva é preservada.</p>
     </div>
   );
 }
@@ -52,6 +60,7 @@ export function CustomerResultsWorkspace({
   onChangePeriodo,
   onChangeJanela,
   onRefresh,
+  onOpenCampaigns,
 }: Props) {
   const res = crmSummary?.resultados;
   const segundaCompra = res?.conversao_segunda_compra;
@@ -106,9 +115,9 @@ export function CustomerResultsWorkspace({
           </h3>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2 sm:flex sm:flex-wrap sm:gap-3">
           <label className="flex min-w-0 flex-col gap-1 text-sm font-medium text-koma-muted sm:min-w-[9rem] sm:flex-1">
-            Período analisado
+            Período
             <select
               aria-label="Período analisado nos resultados"
               value={periodoDias}
@@ -123,31 +132,33 @@ export function CustomerResultsWorkspace({
           </label>
 
           <label className="flex min-w-0 flex-col gap-1 text-sm font-medium text-koma-muted sm:min-w-[9rem] sm:flex-1">
-            Janela geral (sem campanha)
+            Janela geral
             <select
               aria-label="Janela de atribuição pós-abordagem"
               value={janelaDias}
               onChange={(e) => onChangeJanela(Number(e.target.value))}
               className="min-h-10 w-full min-w-0 rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-sm font-medium text-koma-foreground"
             >
-              <option value={7}>Até 7 dias após contato</option>
-              <option value={14}>Até 14 dias após contato</option>
-              <option value={30}>Até 30 dias após contato</option>
+              <option value={7}>7 dias após contato</option>
+              <option value={14}>14 dias após contato</option>
+              <option value={30}>30 dias após contato</option>
             </select>
           </label>
 
           <button
             type="button"
             onClick={onRefresh}
-            className="koma-btn-secondary col-span-2 inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium sm:w-auto"
+            aria-label="Atualizar resultados"
+            title="Atualizar resultados"
+            className="koma-btn-secondary inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium"
           >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Atualizar
+            <RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin' : ''} /><span className="hidden sm:inline">Atualizar</span>
           </button>
         </div>
       </div>
 
       {error && (
-        <div role="alert" className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-4 text-xs text-rose-200">
+        <div role="alert" className="rounded-xl border border-koma-danger-border bg-koma-danger-bg p-4 text-xs text-koma-danger-text">
           {error}{' '}
           <button type="button" onClick={onRefresh} className="underline font-bold">
             Tentar novamente
@@ -156,30 +167,21 @@ export function CustomerResultsWorkspace({
       )}
 
       {loading && <p role="status" className="text-sm text-koma-muted">Atualizando resultados…</p>}
-      <div className="grid gap-3 lg:grid-cols-2">
-        <article className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-2.5">
-          <h4 className="text-sm font-bold text-koma-muted">Clientes que voltaram</h4>
-          <strong className="block text-3xl font-black text-emerald-400">{isMeasured ? retorno.clientes_que_voltaram : '—'}</strong>
-          {isMeasured ? <>
-            <p className="text-sm text-koma-muted">De {retorno.clientes_abordados_no_periodo} clientes com contato manual confirmado</p>
-            <div role="img" aria-label={`${retorno.clientes_que_voltaram} de ${retorno.clientes_abordados_no_periodo} clientes voltaram`} className="h-3 overflow-hidden rounded-full bg-koma-raised">
-              <div className="h-full rounded-full bg-emerald-500" style={{width: `${retorno.clientes_abordados_no_periodo > 0 ? Math.min(100, Math.max(0, retorno.clientes_que_voltaram / retorno.clientes_abordados_no_periodo * 100)) : 0}%`}} />
-            </div>
-          </> : <p className="text-sm text-koma-muted">Não medido</p>}
-        </article>
-        <article className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-2.5">
-          <h4 className="text-sm font-bold text-koma-muted">Valor líquido associado</h4>
-          <strong className="block text-3xl font-black text-emerald-400">{hasAssociations ? money(valores.total_liquido_brl) : '—'}</strong>
-          {hasAssociations ? <>
-            <p className="text-sm text-koma-muted">{pedidos?.total ?? '—'} compras associadas</p>
-          </> : <p className="text-sm text-koma-muted">Não medido</p>}
-          <p className="text-xs text-koma-muted">Não representa lucro.</p>
-        </article>
-      </div>
-      <details className="rounded-xl border border-koma-border bg-koma-panel px-4 py-2" aria-label="Análise detalhada dos resultados">
-        <summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold text-koma-foreground">Evolução e origem das compras</summary>
-        <div className="mt-3 space-y-3">
-          <section aria-label="Evolução observada" className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
+      <KomaMetricGroup label="Indicadores de relacionamento" metrics={[
+          {label:'Clientes que voltaram', icon:Repeat2, value:isMeasured ? count(retorno.clientes_que_voltaram) : '—', note:isMeasured ? `${count(retorno.clientes_abordados_no_periodo)} contatos confirmados` : 'Não medido', ratio:isMeasured && retorno.clientes_abordados_no_periodo > 0 ? retorno.clientes_que_voltaram / retorno.clientes_abordados_no_periodo : null},
+          {label:'Valor líquido associado', icon:Wallet, value:hasAssociations ? money(valores.total_liquido_brl) : '—', note:hasAssociations ? `${count(pedidos?.total)} compras · não é lucro` : 'Não medido'},
+          {label:'Clientes recorrentes', icon:Users, value:segundaCompra ? count(segundaCompra.clientes_que_fizeram_segunda_compra) : '—', note:segundaCompra ? `de ${count(segundaCompra.clientes_com_1_compra_base)} compradores · histórico total` : 'Sem histórico', ratio:segundaCompra?.clientes_com_1_compra_base > 0 ? segundaCompra.clientes_que_fizeram_segunda_compra / segundaCompra.clientes_com_1_compra_base : null},
+          {label:'Descontos no período', icon:Ticket, value:descontos ? money(descontos.total_brl) : '—', note:'Em toda a base · não só campanhas'},
+        ]} />
+      {!loading && !error && !isMeasured && !hasAssociations ? <section aria-label="Começar acompanhamento">
+        <KomaEmptyState variant="action" icon={MessageCircle} title="Comece pelos contatos"
+          description="Confirme os contatos feitos para acompanhar quem volta."
+          action={{label:'Abrir campanhas', onClick:onOpenCampaigns, icon:ArrowRight}} />
+      </section> : null}
+      <section aria-label="Análise detalhada dos resultados" className="space-y-3">
+        <h4 className="text-sm font-semibold text-koma-foreground">Evolução e origem das compras</h4>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <section aria-label="Evolução observada" className="min-w-0 rounded-xl bg-koma-panel p-4 space-y-3">
             <h4 className="text-sm font-bold text-koma-foreground">Contatos e retornos</h4>
 
             {temporalSeries.length > 0 ? <>
@@ -188,7 +190,7 @@ export function CustomerResultsWorkspace({
                 <span><span className="mr-1 inline-block h-2 w-3 rounded bg-sky-500" />Clientes com compras posteriores</span>
               </div>
               <div className="overflow-x-auto">
-                <div className="flex min-w-[420px] items-end gap-1.5" role="img" aria-label="Evolução de registros por datas verificadas. Os números estão na tabela acessível abaixo.">
+                <div className="flex min-w-[240px] items-end gap-1.5" role="img" aria-label="Evolução de registros por datas verificadas. Os números estão na tabela acessível abaixo.">
                   {temporalSeries.map(point => <div key={point.key} className="min-w-0 flex-1 text-center" title={point.label + ': ' + point.contacts + ' contatos, ' + point.returns + ' retornos'}>
                     <div className="flex h-28 items-end justify-center gap-1 border-b border-koma-border">
                       <div className="w-2 max-w-[35%] bg-emerald-500 rounded-t-sm" style={{height: (point.contacts / maxEvent * 100) + '%'}} />
@@ -203,49 +205,31 @@ export function CustomerResultsWorkspace({
                   <tbody>{temporalSeries.map(point => <tr key={point.key}><td>{point.label}</td><td>{point.contacts}</td><td>{point.returns}</td></tr>)}</tbody>
                 </table>
               </details>
-            </> : <p className="text-sm text-koma-muted">Sem eventos datados.</p>}
+            </> : <div className="flex min-h-28 items-center justify-center gap-3 text-koma-muted"><ChartNoAxesCombined size={28} aria-hidden="true"/><div><p className="text-sm">Sem eventos datados.</p><p className="mt-1 text-xs">O gráfico aparece com os primeiros registros.</p></div></div>}
           </section>
-          <section aria-label="Compras por evidência" className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
+          <section aria-label="Compras por evidência" className="min-w-0 rounded-xl bg-koma-panel p-4 space-y-3">
             <h4 className="text-sm font-bold text-koma-foreground">Compras associadas por evidência</h4>
             {hasAssociations ? <>
               <div role="img" aria-label={String(pedidos?.comprovados_por_cupom || 0) + ' compras com cupom e ' + String(pedidos?.estimados_por_janela_temporal || 0) + ' compras associadas por data'} className="flex h-3 overflow-hidden rounded-full bg-koma-raised">
                 <div className="bg-emerald-500" style={{width: (totalEvidence ? Number(pedidos?.comprovados_por_cupom || 0) / totalEvidence * 100 : 0) + '%'}} />
                 <div className="bg-sky-500" style={{width: (totalEvidence ? Number(pedidos?.estimados_por_janela_temporal || 0) / totalEvidence * 100 : 0) + '%'}} />
               </div>
-              <p className="text-xs text-koma-muted">{count(pedidos?.comprovados_por_cupom)} usos de cupom vinculado (destes, {count(pedidos?.cupons_sem_contato_confirmado)} sem contato confirmado) · {count(pedidos?.estimados_por_janela_temporal)} associações temporais. Nenhuma compra é contada duas vezes.</p>
+              <dl className="grid grid-cols-2 gap-3 pt-2">
+                <div><dt className="flex items-center gap-2 text-xs text-koma-muted"><span className="h-2 w-2 rounded-full bg-emerald-500"/>Cupom vinculado</dt><dd className="mt-2 text-xl font-bold">{count(pedidos?.comprovados_por_cupom)}</dd><dd className="mt-1 text-xs text-koma-muted">{count(pedidos?.cupons_sem_contato_confirmado)} sem contato confirmado</dd></div>
+                <div><dt className="flex items-center gap-2 text-xs text-koma-muted"><span className="h-2 w-2 rounded-full bg-sky-500"/>Após contato</dt><dd className="mt-2 text-xl font-bold">{count(pedidos?.estimados_por_janela_temporal)}</dd><dd className="mt-1 text-xs text-koma-muted">Associação por data</dd></div>
+              </dl><p className="text-xs text-koma-muted">Nenhuma compra é contada duas vezes.</p>
             </> : <p className="text-sm text-koma-muted">Não medido</p>}
           </section>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <article className="rounded-xl border border-koma-border bg-koma-panel p-4">
-              <h4 className="text-xs font-bold text-koma-muted">Clientes recorrentes · histórico total</h4>
-              <strong className="block mt-2 text-xl">{segundaCompra ? segundaCompra.clientes_que_fizeram_segunda_compra : '—'}</strong>
-              <p className="text-xs text-koma-muted">{segundaCompra ? `De ${segundaCompra.clientes_com_1_compra_base} clientes com compra em todo o histórico; não é conversão do período.` : 'Ainda sem dados'}</p>
-            </article>
-            <article className="rounded-xl border border-koma-border bg-koma-panel p-4">
-              <h4 className="text-xs font-bold text-koma-muted">Descontos no período</h4>
-              <strong className="block mt-2 text-xl">{descontos ? money(descontos.total_brl) : '—'}</strong>
-              <p className="text-xs text-koma-muted">Pedidos válidos com cliente identificado, inclusive fora de campanhas. Não é custo exclusivo das ações.</p>
-            </article>
-          </div>
         </div>
-      </details>
-      <details className="rounded-xl border border-koma-border bg-koma-panel p-3 text-sm text-koma-muted">
-        <summary className="min-h-10 cursor-pointer py-2 font-semibold text-koma-foreground focus-visible:outline-2 focus-visible:outline-emerald-500">Como calculamos os resultados</summary>
-        <div className="mt-3 space-y-2">
-          <p>Compras associadas incluem cupom sem contato confirmado. Associação por cupom ou contato não representa lucro, causalidade ou vendas incrementais comprovadas.</p>
-          <p>Eventos reais por data: contagem de cliente/dia. Ao agrupar dias, uma pessoa pode aparecer em mais de um dia; não equivale ao total de clientes únicos.</p>
-          {hasAssociations && <p>Cupom vinculado: {money(valores.comprovado_cupom_brl)} · Associação temporal: {money(valores.estimado_temporal_brl)}</p>}
+      </section>
+      <section aria-label="Como calculamos os resultados" className="grid gap-x-6 gap-y-3 border-y border-koma-border py-4 text-xs sm:grid-cols-3">
+        <div><h4 className="mb-1 font-semibold text-koma-foreground">Cupom ≠ contato</h4><p className="text-koma-muted">Uso de cupom não confirma conversa ou entrega.</p></div>
+        <div><h4 className="mb-1 font-semibold text-koma-foreground">Associação ≠ causalidade</h4><p className="text-koma-muted">Compra após contato não prova venda gerada pela ação.</p></div>
+        <div><h4 className="mb-1 font-semibold text-koma-foreground">Valor ≠ lucro</h4><p className="text-koma-muted">Valor pago líquido de estornos, sem descontar os custos.</p></div>
+        <p className="text-koma-muted sm:col-span-3">Campanhas mantêm a janela salva. Gráfico conta clientes por dia; recorrência considera todo o histórico.</p>
+      </section>
 
-          <p>{res?.regra_janelas?.explicacao || 'Campanhas usam a janela originalmente salva; a janela geral aplica-se somente a contatos sem campanha.'}</p>
-          <p>{res?.regra_associacao || 'Cada pedido válido pode ser vinculado a no máximo uma evidência; cupom não prova contato.'}</p>
-          <p>{res?.aviso_metodologico || 'Compras após contato sem cupom são associações por período, não comprovam que a campanha causou a venda.'}</p>
-          {isMeasured && <p>Clientes que voltaram: {retorno.clientes_retorno_comprovado_cupom} com cupom · {retorno.clientes_retorno_estimado_temporal} por período após contato.</p>}
-          {segundaCompra?.explicacao && <p>{segundaCompra.explicacao}</p>}
-          {descontos && <p>Descontos em cupons: {money(descontos.cupom_brl)} · Fidelidade: {money(descontos.fidelidade_cashback_brl)}</p>}
-        </div>
-      </details>
-
-      <section aria-label="Resultados por campanha" className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
+      <section aria-label="Resultados por campanha" className="min-w-0 rounded-xl bg-koma-panel p-4 space-y-3">
         <h4 className="text-sm font-semibold text-koma-foreground">Resultados por campanha ({campanhas.length})</h4>
         {campanhas.length > 0 && res?.conciliacao_campanhas && <details className="text-sm text-koma-muted"><summary className="min-h-9 cursor-pointer py-2">Conferir totais por campanha</summary><p>
           Do total associado: {count(res.conciliacao_campanhas.pedidos_com_campanha)} compras em campanhas ({money(res.conciliacao_campanhas.valor_com_campanha_brl)})

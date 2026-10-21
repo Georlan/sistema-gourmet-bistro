@@ -12,7 +12,7 @@ export interface KomaEmptyStateProps {
     icon?: LucideIcon;
     variant?: 'primary' | 'secondary';
   };
-  variant?: 'panel' | 'inline' | 'compact';
+  variant?: 'panel' | 'inline' | 'compact' | 'action';
   className?: string;
 }
 
@@ -61,15 +61,26 @@ export const KomaEmptyState: React.FC<KomaEmptyStateProps> = ({
         type="button"
         onClick={actionObj.onClick}
         className={clsx(
-          'mt-3 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs',
-          isPrimary ? 'koma-btn-success' : 'koma-btn-secondary'
+          variant === 'action' ? 'inline-flex min-h-11 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold' : 'mt-3 inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs',
+          isPrimary ? (variant === 'action' ? 'koma-btn-primary' : 'koma-btn-success') : 'koma-btn-secondary'
         )}
       >
-        {ActionIcon && <ActionIcon size={14} />}
+        {ActionIcon && <ActionIcon size={14} aria-hidden="true" />}
         <span>{actionObj.label}</span>
       </button>
     );
   };
+
+  if (variant === 'action') {
+    const Icon = typeof icon === 'function' || (icon && !React.isValidElement(icon)) ? icon as LucideIcon : null;
+    return <div className={clsx('flex flex-col gap-4 rounded-xl bg-koma-raised p-4 sm:flex-row sm:items-center sm:justify-between', className)}>
+      <div className="flex min-w-0 items-center gap-3">
+        {Icon ? <Icon size={24} aria-hidden="true" className="shrink-0 text-koma-muted" /> : React.isValidElement(icon) ? icon : null}
+        <div><h4 className="text-sm font-semibold text-koma-foreground">{title}</h4>{description && <p className="mt-1 max-w-prose text-sm text-koma-muted">{description}</p>}</div>
+      </div>
+      <div className="shrink-0">{renderAction()}</div>
+    </div>;
+  }
 
   if (isInline) {
     return (

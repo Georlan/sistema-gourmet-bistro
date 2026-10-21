@@ -7,6 +7,10 @@ on:
       - 'src/index.css'
       - 'e2e/cashier-horizontal-navigation.spec.ts'
       - 'src/components/caixa/customers/**'
+      - 'src/components/shared/KomaMetricGroup.tsx'
+      - 'src/components/shared/KomaEmptyState.tsx'
+      - 'src/components/shared/operationalWorkspace.css'
+      - 'e2e/crm-visual-accessibility.spec.ts'
       - 'src/components/clientes/GrowthEconomicsCalculator.tsx'
       - 'src/utils/storeSwitch.ts'
       - 'e2e/relationship-navigation.spec.ts'
@@ -39,6 +43,7 @@ jobs:
           e2e/relationship-navigation.spec.ts
           e2e/loyalty-stage3.spec.ts
           e2e/crm-api-contract.spec.ts
+          e2e/crm-visual-accessibility.spec.ts
           e2e/customer-crm.spec.ts
           e2e/shared-snapshot-requests.spec.ts
           --workers=2 --max-failures=1

@@ -1,3 +1,5 @@
+import { KomaMetricGroup } from '../../shared/KomaMetricGroup';
+import { ArrowRight, ShoppingBag, Gift, Wallet, Users, Coins } from 'lucide-react';
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import GrowthEconomicsCalculator, { type GrowthEconomicsOption } from '../../clientes/GrowthEconomicsCalculator';
 import { LoyaltyImpactPanel } from './LoyaltyImpactPanel';
@@ -66,31 +68,21 @@ export function LoyaltyProgramPanel({
 
         {saved && (
           <>
-            <dl className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
-              <div>
-                <dt className="text-sm text-koma-muted">Recompensa vigente</dt>
-                <dd className="mt-1 text-base font-semibold text-koma-foreground">{saved.tipo_recompensa === 'PONTOS' ? 'Pontos' : 'Cashback'}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-koma-muted">A cada R$ 100 vendidos</dt>
-                <dd className="mt-1 text-xl font-bold text-koma-foreground">{currency(effectiveLoyaltyPercent(saved))}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-koma-muted">Podem resgatar agora</dt>
-                <dd className="mt-1 text-xl font-bold text-emerald-400">{canRedeem} <span className="text-sm font-medium text-koma-muted">{canRedeem === 1 ? 'cliente' : 'clientes'}</span></dd>
-              </div>
-              <div>
-                <dt className="text-sm text-koma-muted">Ainda acumulando</dt>
-                <dd className="mt-1 text-xl font-bold text-koma-foreground">{accumulating} <span className="text-sm font-medium text-koma-muted">{accumulating === 1 ? 'cliente' : 'clientes'}</span></dd>
-              </div>
-            </dl>
-            <p className="text-sm text-koma-muted">
-              {saved.ativo
-                ? saved.tipo_recompensa === 'PONTOS'
-                  ? `${percent(saved.taxa_conversao)} ${saved.taxa_conversao === 1 ? 'ponto' : 'pontos'} por R$ 1; cada ponto vale ${saved.valor_ponto_em_dinheiro.toLocaleString('pt-BR', {style:'currency',currency:'BRL',minimumFractionDigits:4})} no resgate.`
-                  : `${percent(saved.taxa_conversao)}% em cashback nas vendas elegíveis.`
-                : 'Novas vendas não geram pontos ou cashback enquanto o programa estiver pausado.'}
-            </p>
+            <div aria-label="Como o cliente ganha" className="flex flex-wrap items-center gap-3 rounded-xl bg-koma-raised px-4 py-3 text-sm">
+              <span className="inline-flex items-center gap-2"><ShoppingBag size={16} aria-hidden="true"/>R$ 100 em compras</span>
+              <ArrowRight size={16} aria-hidden="true" className="text-koma-muted"/>
+              {saved.ativo ? <>
+                {saved.tipo_recompensa === 'PONTOS' && <><span className="font-semibold">{percent(saved.taxa_conversao * 100)} pontos</span><ArrowRight size={16} aria-hidden="true" className="text-koma-muted"/></>}
+                <span className="inline-flex items-center gap-2 font-semibold text-koma-success-text"><Gift size={16} aria-hidden="true"/>{currency(effectiveLoyaltyPercent(saved))} em benefício</span>
+              </> : <span className="text-koma-muted">Programa pausado · sem novos créditos</span>}
+            </div>
+            <KomaMetricGroup label="Resumo da fidelidade" compact metrics={[
+              {label:'Recompensa', value:saved.tipo_recompensa === 'PONTOS' ? 'Pontos' : 'Cashback', note:saved.ativo ? 'Programa ativo' : 'Novas vendas sem crédito', icon:Gift},
+              {label:'A cada R$ 100', value:currency(effectiveLoyaltyPercent(saved)), note:'Benefício ao cliente', icon:Coins},
+              {label:'Podem resgatar', value:String(canRedeem), note:canRedeem === 1 ? 'cliente' : 'clientes', icon:Wallet},
+              {label:'Acumulando', value:String(accumulating), note:accumulating === 1 ? 'cliente' : 'clientes', icon:Users},
+            ]}/>
+
           </>
         )}
 
@@ -201,8 +193,8 @@ export function LoyaltyProgramPanel({
       </section>
 
       {saved && (
-        <details className="rounded-xl border border-koma-border bg-koma-panel px-4 py-2">
-          <summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold text-koma-foreground">Simulação financeira</summary>
+        <section aria-label="Simulação financeira" className="space-y-3">
+          <h3 className="text-sm font-semibold">Simulação financeira</h3>
           <div className="mt-3 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
 
@@ -223,10 +215,10 @@ export function LoyaltyProgramPanel({
             rewardPercent={simulated ? effectiveLoyaltyPercent(simulated) : 0}
           />
           </div>
-        </details>
+        </section>
       )}
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-koma-muted">
-        <details><summary className="min-h-10 cursor-pointer py-2">Regras de resgate</summary><p className="max-w-xl py-2">Resgate mínimo prático: R$ 1,00 na modalidade vigente. Saldo da modalidade anterior permanece registrado.</p></details>
+        <span className="inline-flex items-center gap-2 text-xs"><Wallet size={15} aria-hidden="true"/>Resgate a partir de R$ 1,00 · saldos preservados</span>
         <button type="button" onClick={onOpenCustomers} className="koma-btn-secondary min-h-11 rounded-lg px-4 text-sm">Ver benefícios por cliente</button>
       </div>
     </div>
