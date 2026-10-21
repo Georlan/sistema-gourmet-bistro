@@ -68,17 +68,21 @@ export function LoyaltyProgramPanel({
 
         {saved && (
           <>
-            <KomaMetricGroup label="Resumo da fidelidade" metrics={[
-              {label:'Recompensa vigente', value:saved.tipo_recompensa === 'PONTOS' ? 'Pontos' : 'Cashback', note:saved.ativo ? 'Programa ativo' : 'Novas vendas sem crédito', icon:Gift},
-              {label:'A cada R$ 100 vendidos', value:currency(effectiveLoyaltyPercent(saved)), note:'Benefício ao cliente', icon:Coins},
-              {label:'Podem resgatar agora', value:String(canRedeem), note:canRedeem === 1 ? 'cliente com saldo disponível' : 'clientes com saldo disponível', icon:Wallet},
-              {label:'Ainda acumulando', value:String(accumulating), note:accumulating === 1 ? 'cliente' : 'clientes', icon:Users},
-            ]}/>
             <div aria-label="Como o cliente ganha" className="flex flex-wrap items-center gap-3 rounded-xl bg-koma-raised px-4 py-3 text-sm">
-              <span className="inline-flex items-center gap-2"><ShoppingBag size={17} aria-hidden="true"/>R$ 1 em compras</span><ArrowRight size={17} aria-hidden="true" className="text-koma-muted"/>
-              <span className="inline-flex items-center gap-2 font-semibold text-koma-success-text"><Gift size={17} aria-hidden="true"/>{saved.ativo ? saved.tipo_recompensa === 'PONTOS' ? `${percent(saved.taxa_conversao)} ${saved.taxa_conversao === 1 ? 'ponto' : 'pontos'}` : `${percent(saved.taxa_conversao)}% cashback` : 'Programa pausado'}</span>
-              {saved.tipo_recompensa === 'PONTOS' && <span className="text-xs text-koma-muted">1 ponto = {saved.valor_ponto_em_dinheiro.toLocaleString('pt-BR', {style:'currency',currency:'BRL',minimumFractionDigits:4})}</span>}
+              <span className="inline-flex items-center gap-2"><ShoppingBag size={16} aria-hidden="true"/>R$ 100 em compras</span>
+              <ArrowRight size={16} aria-hidden="true" className="text-koma-muted"/>
+              {saved.ativo ? <>
+                {saved.tipo_recompensa === 'PONTOS' && <><span className="font-semibold">{percent(saved.taxa_conversao * 100)} pontos</span><ArrowRight size={16} aria-hidden="true" className="text-koma-muted"/></>}
+                <span className="inline-flex items-center gap-2 font-semibold text-koma-success-text"><Gift size={16} aria-hidden="true"/>{currency(effectiveLoyaltyPercent(saved))} em benefício</span>
+              </> : <span className="text-koma-muted">Programa pausado · sem novos créditos</span>}
             </div>
+            <KomaMetricGroup label="Resumo da fidelidade" compact metrics={[
+              {label:'Recompensa', value:saved.tipo_recompensa === 'PONTOS' ? 'Pontos' : 'Cashback', note:saved.ativo ? 'Programa ativo' : 'Novas vendas sem crédito', icon:Gift},
+              {label:'A cada R$ 100', value:currency(effectiveLoyaltyPercent(saved)), note:'Benefício ao cliente', icon:Coins},
+              {label:'Podem resgatar', value:String(canRedeem), note:canRedeem === 1 ? 'cliente' : 'clientes', icon:Wallet},
+              {label:'Acumulando', value:String(accumulating), note:accumulating === 1 ? 'cliente' : 'clientes', icon:Users},
+            ]}/>
+
           </>
         )}
 
