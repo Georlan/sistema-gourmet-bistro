@@ -65,9 +65,7 @@ export function CustomerSatisfactionPanel({
             <MessageSquareHeart size={16} className="text-emerald-600 dark:text-emerald-400" />
             Índice de satisfação do cliente
           </h3>
-          <p className="text-[11px] leading-relaxed text-koma-muted">
-            Monitore o retorno dos clientes e acompanhe quem teve boa ou má experiência para agir rápido.
-          </p>
+
         </div>
 
         <button

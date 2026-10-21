@@ -546,7 +546,7 @@ export function CustomerCampaignsWorkspace({
       <div className="flex flex-wrap items-center justify-between gap-3 py-1">
         <div>
           <h3 className="text-lg font-bold text-koma-foreground">Prepare uma campanha</h3>
-          <p className="mt-1 text-sm text-koma-muted">Escolha o público, revise a mensagem e registre os contatos.</p>
+
         </div>
           <button
             type="button"
@@ -574,7 +574,7 @@ export function CustomerCampaignsWorkspace({
           {/* Etapa 1: Objetivo */}
           <section hidden={step !== 1} className="rounded-xl border border-koma-border bg-koma-panel p-3 sm:p-4 space-y-3">
             <h4 className="text-sm font-semibold text-koma-foreground">
-              Quem você quer trazer de volta?
+              Objetivo
             </h4>
             <select aria-label="Objetivo da campanha" value={objetivo} onChange={e => handleObjectiveChange(e.target.value)} className="min-h-11 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-sm text-koma-foreground">
               {OBJECTIVES.map(obj => <option key={obj.id} value={obj.id}>{obj.label}</option>)}
@@ -583,7 +583,7 @@ export function CustomerCampaignsWorkspace({
 
             <div className="pt-1">
               <label className="block text-sm font-medium text-koma-muted">
-                Identificação da campanha no histórico
+                Nome da campanha
               </label>
               <input
                 type="text"
@@ -603,7 +603,7 @@ export function CustomerCampaignsWorkspace({
                 {selectedCustomers.length === 1 ? 'cliente' : 'clientes'})
               </h4>
               <span className="text-xs text-koma-muted">
-                Respeitamos as preferências e evitamos contatos repetidos
+                Sem contatos repetidos
               </span>
             </div>
 
@@ -878,7 +878,7 @@ export function CustomerCampaignsWorkspace({
             {previewCustomer && (
               <div className="rounded-xl border border-koma-border bg-koma-card p-3 space-y-2">
                 <label className="block text-sm font-medium text-koma-muted" htmlFor="crm-preview-customer">
-                  Prévia para um destinatário selecionado
+                  Prévia da mensagem
                 </label>
                 <select id="crm-preview-customer" value={previewCustomer.id}
                   onChange={event => setPreviewCustomerId(event.target.value)}
@@ -890,12 +890,12 @@ export function CustomerCampaignsWorkspace({
                 </p>
                 {previewLoading && <p role="status" className="text-xs text-koma-muted">Consultando favorito deste cliente…</p>}
                 {templateMensagem.includes('{produto_favorito}') && previewCustomer.produtos_favoritos === undefined && (
-                  <p className="text-xs text-amber-300">Favoritos não consultados nesta listagem. A prévia usa um texto neutro, sem afirmar preferência.</p>
+                  <p className="text-xs text-amber-300">Favorito não consultado · mensagem sem preferência presumida.</p>
                 )}
               </div>
             )}
             <p className="text-xs text-koma-muted">
-              Salvar a campanha registra o objetivo e o modelo, não a lista selecionada. O histórico de destinatários só cresce após cada contato confirmado.
+              Salvar não envia mensagens. Confirme cada contato após o envio.
             </p>
             <button
               type="button"
@@ -907,7 +907,7 @@ export function CustomerCampaignsWorkspace({
                 ? 'Salvando campanha…'
                 : activeCampaignId
                 ? 'Voltar aos contatos da campanha salva'
-                : 'Salvar campanha no histórico e revisar envios'}
+                : 'Salvar e revisar contatos'}
             </button>
           </section>
         </div>
@@ -930,8 +930,7 @@ export function CustomerCampaignsWorkspace({
                 )}
               </div>
               <p className="mt-1 text-xs text-amber-300/90">
-                <strong>Importante:</strong> Solicitar a abertura do WhatsApp não confirma que a conversa foi iniciada nem que a mensagem foi enviada;{' '}
-                <strong>não comprova envio</strong>. Clique em <em>“Registrar contato manual”</em> somente após enviar de fato.
+                Abrir o WhatsApp <strong>não comprova envio</strong>. Registre o contato somente após enviar a mensagem.
               </p>
             </div>
 

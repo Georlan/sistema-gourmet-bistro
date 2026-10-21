@@ -831,9 +831,6 @@ export default function CashierCustomers({
                   <h3 className="text-lg font-bold text-koma-foreground">
                     Quem contatar hoje
                   </h3>
-                  <p className="mt-1 text-sm text-koma-muted">
-                    Escolha um grupo e revise a mensagem antes de entrar em contato.
-                  </p>
                 </div>
                 <button
                   type="button"
@@ -874,13 +871,7 @@ export default function CashierCustomers({
                           </div>
                         </div>
 
-                        <p className="text-sm text-koma-foreground">{({
-                          SECOND_PURCHASE: 'Pergunte como foi o primeiro pedido e convide para pedir novamente.',
-                          CADENCE_RECOVERY: 'Convide o cliente a repetir seu prato favorito.',
-                          BENEFIT_REMINDER: 'Lembre o cliente do benefício que já pode usar.',
-                          VIP_RECOGNITION: 'Agradeça a preferência e apresente uma novidade da casa.',
-                          OCCURRENCE_RECOVERY: 'Entenda o que aconteceu e ofereça ajuda antes de vender.',
-                        } as Record<string, string>)[opp.id] || 'Revise este público e prepare um convite para voltar.'}</p>
+
 
                         {previewCustomers.length > 0 ? (
                           <div className="flex flex-wrap items-center gap-1.5">
@@ -941,7 +932,7 @@ export default function CashierCustomers({
                           onClick={() => handleLaunchOpportunityAction(opp, 'SEM_DESCONTO')}
                           className="koma-btn-primary flex-1 rounded-xl px-3.5 py-2 text-xs font-bold"
                         >
-                          Abrir público e iniciar ação
+                          Preparar ação
                         </button>
                         <button
                           type="button"
@@ -1176,7 +1167,7 @@ export default function CashierCustomers({
 
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-koma-muted">
                 <p>
-                  {filteredLoyaltyUsers.length} de {listTotal} clientes · {customerSort === 'orders' ? 'Mais compras primeiro; desempate pelo total pago.' : 'Compras concluídas e valores líquidos pagos.'}
+                  {filteredLoyaltyUsers.length} de {listTotal} clientes
                 </p>
                 {activeCustomerFilters > 0 && (
                   <button
@@ -1551,11 +1542,8 @@ export default function CashierCustomers({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-bold text-koma-foreground">
-                      Benefícios para a próxima compra
+                      Benefícios
                     </h3>
-                    <p className="text-xs text-koma-muted">
-                      Alterações são revisadas antes de serem salvas. Os saldos concedidos permanecem registrados.
-                    </p>
                   </div>
 
 
@@ -1639,7 +1627,9 @@ export default function CashierCustomers({
                 onRefresh={() => void loadCrmSummary()}
               />
 
-              <div className="space-y-3 pt-2">
+              <details className="rounded-xl border border-koma-border bg-koma-panel px-4 py-2">
+                <summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold text-koma-foreground">Relacionamento e avaliações</summary>
+                <div className="space-y-3 pt-2">
                 <CustomerRelationshipPanel customers={loyaltyUsers} />
                 <CustomerSatisfactionPanel
                   resumo={satisfactionData.resumo}
@@ -1648,6 +1638,7 @@ export default function CashierCustomers({
                   onOpenRegisterModal={handleOpenSatisfactionModal}
                 />
               </div>
+              </details>
             </div>
           )}
         </div>

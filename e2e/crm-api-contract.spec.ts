@@ -39,7 +39,22 @@ test('all CRM workspaces render backend-generated responses without losing the o
   for(const subTab of ['oportunidades','clientes','campanhas','fidelidade','cupons','resultados'] as const){
     await navigateRelationship(page,subTab);
     await expectRelationshipSelected(page,subTab);
+    if (subTab === 'resultados') {
+      const analysis = page.getByLabel('Análise detalhada dos resultados', {exact:true});
+      await expect(analysis).not.toHaveAttribute('open', '');
+      await expect(page.getByRole('region', {name:'Evolução observada'})).toBeHidden();
+      const method = page.locator('details').filter({has: page.locator('summary', {hasText:'Como calculamos os resultados'})});
+      await expect(method).not.toHaveAttribute('open', '');
+      await method.locator('summary').click();
+      await expect(method).toContainText('não representa lucro, causalidade');
+      await method.locator('summary').click();
+    }
+    await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector('.cashier-content')?.scrollTo(0, 0); });
+    for (const entering of await page.locator('.animate-fade-in:visible').all()) await expect(entering).toHaveCSS('opacity', '1');
+    await page.screenshot({path:testInfo.outputPath(`crm-clean-${subTab}-${testInfo.project.name}.png`),animations:'disabled'});
     if(subTab === 'fidelidade'){
+      await expect(page.getByRole('region',{name:'Simulação da fidelidade'})).toBeHidden();
+      await page.getByText('Simulação financeira', {exact:true}).click();
       const simulation=page.getByRole('region',{name:'Simulação da fidelidade'});
       await expect(simulation).toContainText('R$ 5,00');
       await page.getByLabel('Margem de contribuição na simulação').fill('30');
@@ -69,7 +84,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
     await expect(page.getByRole('alert').filter({hasText:'Não foi possível abrir'})).toHaveCount(0);
   }
   await expect(page.getByText('Campanha fixture de contrato',{exact:true}).filter({visible:true})).toBeVisible();
-  await expect(page.getByRole('heading',{name:'Quantos clientes voltaram e quanto compraram?'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Retorno dos clientes'})).toBeVisible();
   await page.screenshot({path:testInfo.outputPath(`relationship-results-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
   const opportunity = contract.summary.oportunidades.find((op: {elegiveis_count:number})=>op.elegiveis_count>0);
   await navigateRelationship(page,'oportunidades');
@@ -82,12 +97,12 @@ test('all CRM workspaces render backend-generated responses without losing the o
   const opportunityCard=page.locator('article').filter({has:page.getByRole('heading',{name:opportunity.titulo,exact:true})});
   const audienceCustomer=contract.customers.find((c:{id:string})=>opportunity.elegiveis_cliente_ids.includes(c.id));
   await expect(opportunityCard).toContainText(audienceCustomer.nome.split(' ')[0]);
-  await opportunityCard.getByRole('button',{name:'Abrir público e iniciar ação',exact:true}).click();
+  await opportunityCard.getByRole('button',{name:'Preparar ação',exact:true}).click();
   await expect(page.getByLabel('Modelo de mensagem da campanha')).toBeHidden();
   await page.getByRole('button',{name:'Continuar para mensagem',exact:true}).click();
   await expect(page.getByLabel('Modelo de mensagem da campanha')).toBeVisible();
   await page.screenshot({path:testInfo.outputPath(`campaign-message-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
-  await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
+  await page.getByRole('button',{name:'Salvar e revisar contatos',exact:true}).click();
   await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
   await expect(page.getByText(/contatos registrados manualmente de .* selecionados nesta sessão/)).toBeVisible();
   await expect.poll(()=>savedCampaign?.abordagem_tipo).toBe('SEM_DESCONTO');
@@ -103,7 +118,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await page.getByLabel('Identificação da campanha').fill('Nova campanha de retorno');
   await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toBeDisabled();
   await page.getByRole('button',{name:'2. Mensagem',exact:true}).click();
-  await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
+  await page.getByRole('button',{name:'Salvar e revisar contatos',exact:true}).click();
   await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
   await expect.poll(()=>campaignCreates).toBe(2);
   expect(savedCampaign?.nome).toBe('Nova campanha de retorno');
@@ -166,7 +181,7 @@ test('relationship keeps missing results distinct from zero and empty audiences 
   await expect(page.locator('#clientes-subtab-beneficios')).toHaveCount(0);
   await navigateRelationship(page, 'resultados');
   const returning=page.locator('article').filter({has:page.getByRole('heading',{name:'Clientes que voltaram',exact:true})});
-  const revenue=page.locator('article').filter({has:page.getByRole('heading',{name:'Valor líquido de compras associadas',exact:true})});
+  const revenue=page.locator('article').filter({has:page.getByRole('heading',{name:'Valor líquido associado',exact:true})});
   await expect(returning.locator('strong')).toHaveText('—');
   // Retorno sem contatos is unmeasured, while observed coupon usage is measured (zero).
   await expect(revenue.locator('strong')).toHaveText('R$ 0,00');
@@ -216,9 +231,9 @@ test('campaign responses cannot unlock edited drafts or carry late contact confi
   await page.locator('.cashier-sidebar:visible').getByRole('button',{name:/^Relacionamento(?: [0-9]+)?$/}).click();
   const opportunity = contract.summary.oportunidades.find((op:{elegiveis_count:number}) => op.elegiveis_count > 0);
   const opportunityCard = page.locator('article').filter({has:page.getByRole('heading',{name:opportunity.titulo,exact:true})});
-  await opportunityCard.getByRole('button',{name:'Abrir público e iniciar ação',exact:true}).click();
+  await opportunityCard.getByRole('button',{name:'Preparar ação',exact:true}).click();
   await page.getByRole('button',{name:'Continuar para mensagem',exact:true}).click();
-  await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
+  await page.getByRole('button',{name:'Salvar e revisar contatos',exact:true}).click();
   await expect.poll(() => campaignCreates).toBe(1);
 
   // The operator can move back and change the draft while the POST is in flight.
@@ -228,7 +243,7 @@ test('campaign responses cannot unlock edited drafts or carry late contact confi
   await expect(page.getByText(/alterou o rascunho durante o salvamento/)).toBeVisible();
   await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toBeDisabled();
   await page.getByRole('button',{name:'2. Mensagem',exact:true}).click();
-  await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
+  await page.getByRole('button',{name:'Salvar e revisar contatos',exact:true}).click();
   await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
   expect(campaignCreates).toBe(2);
 
@@ -240,7 +255,7 @@ test('campaign responses cannot unlock edited drafts or carry late contact confi
   releaseFirstContact();
   await expect(page.getByText(/Contato registrado na campanha anterior/)).toBeVisible();
   await page.getByRole('button',{name:'2. Mensagem',exact:true}).click();
-  await page.getByRole('button',{name:'Salvar campanha no histórico e revisar envios',exact:true}).click();
+  await page.getByRole('button',{name:'Salvar e revisar contatos',exact:true}).click();
   await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
   await expect(page.getByRole('button',{name:'Registrar contato manual',exact:true}).first()).toBeEnabled();
   await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
@@ -344,6 +359,7 @@ test('stage5 Results ignores stale HTTP responses and charts only dated real eve
   await navigateRelationship(page, 'resultados');
   const card = page.locator('article').filter({has: page.getByRole('heading', {name:'Clientes que voltaram'})});
   await expect(card.locator('strong')).toHaveText('1');
+  await page.getByText('Evolução e origem das compras', {exact:true}).click();
   await expect(page.getByRole('region', {name: 'Evolução observada'})).toContainText('08/10');
   await page.getByLabel('Período analisado nos resultados').selectOption('7');
   await expect.poll(() => pendingSeven !== null).toBe(true);
@@ -356,6 +372,7 @@ test('stage5 Results ignores stale HTTP responses and charts only dated real eve
   await expect(page.getByRole('region', {name: 'Evolução observada'})).toContainText('08/10');
   await page.screenshot({path:testInfo.outputPath('stage5-dated-results-' + testInfo.project.name + '.png'),fullPage:true,animations:'disabled'});
   const campaignList = page.getByRole('region', {name: 'Resultados por campanha'});
+  await campaignList.getByText('Conferir totais por campanha', {exact:true}).click();
   await expect(campaignList).toContainText('1 compras em campanhas');
   await expect(campaignList).toContainText('1 sem campanha');
   await campaignList.getByText('Campanha fixture de contrato', {exact:true}).filter({visible:true}).click();
@@ -417,14 +434,14 @@ test('campaign and contact success require a valid server acknowledgement', asyn
   await page.locator('.cashier-sidebar:visible').getByRole('button', {name:/^Relacionamento(?: \d+)?$/}).click();
   const opportunity = contract.summary.oportunidades.find((op:{elegiveis_count:number}) => op.elegiveis_count > 0);
   await page.locator('article').filter({has:page.getByRole('heading', {name:opportunity.titulo, exact:true})})
-    .getByRole('button', {name:'Abrir público e iniciar ação', exact:true}).click();
+    .getByRole('button', {name:'Preparar ação', exact:true}).click();
   await page.getByRole('button', {name:'Continuar para mensagem', exact:true}).click();
-  await page.getByRole('button', {name:'Salvar campanha no histórico e revisar envios', exact:true}).click();
+  await page.getByRole('button', {name:'Salvar e revisar contatos', exact:true}).click();
   await expect(page.getByText('O servidor não confirmou o registro da campanha.', {exact:true})).toBeVisible();
   await expect(page.getByRole('button', {name:'2. Mensagem', exact:true})).toHaveAttribute('aria-current', 'step');
   await expect(page.getByRole('button', {name:'3. Contatos', exact:true})).toBeDisabled();
   validCampaign = true;
-  await page.getByRole('button', {name:'Salvar campanha no histórico e revisar envios', exact:true}).click();
+  await page.getByRole('button', {name:'Salvar e revisar contatos', exact:true}).click();
   const record = page.getByRole('button', {name:'Registrar contato manual', exact:true}).first();
   await record.click();
   await expect(page.getByText('O servidor não confirmou o registro do contato.', {exact:true})).toBeVisible();
