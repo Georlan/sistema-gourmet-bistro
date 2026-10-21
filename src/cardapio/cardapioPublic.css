@@ -41,14 +41,14 @@
 }
 
 .cardapio-public-header__shell {
-  width: min(100%, 1280px);
+  width: min(100%, 1152px);
   margin: 0 auto;
-  padding: 10px 20px 11px;
+  padding: 12px 20px 10px;
 }
 
 .cardapio-public-header__topline {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
 }
@@ -103,7 +103,13 @@
   font-weight: 550;
 }
 
-.cardapio-public-header__context,
+
+/* Store status and delivery conditions are already available in the
+   storefront below. Avoid a second, visually competing status badge here. */
+.cardapio-public-header__context {
+  display: none;
+}
+
 .cardapio-public-actions,
 .cardapio-public-contact-actions {
   display: flex;
@@ -430,24 +436,23 @@
 
 .cardapio-category-nav {
   position: sticky;
-  /* The category bar follows the two-row sticky header; keep both visible
-     without covering the search field at narrow widths. */
+  /* One fully opaque surface with the header: no floating border or blur. */
   top: var(--cardapio-header-height, 114px);
   z-index: 34;
   width: 100%;
   overflow: hidden;
-  border: 1px solid var(--menu-border);
-  border-radius: 16px;
-  padding: 4px 6px;
-  background: color-mix(in srgb, var(--menu-page) 92%, transparent);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  border: 0;
+  border-bottom: 1px solid var(--menu-border);
+  border-radius: 0;
+  padding: 0 8px;
+  background: var(--menu-page);
+  color: var(--menu-text);
 }
 
 .cardapio-category-scroll {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   overflow-x: auto;
   scroll-behavior: smooth;
   scrollbar-width: none;
@@ -458,35 +463,47 @@
 }
 
 .cardapio-category-chip {
+  position: relative;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid transparent;
-  border-radius: 9999px;
-  min-height: 44px;
-  padding: 8px 16px;
+  border: 0;
+  border-radius: 0;
+  min-height: 48px;
+  padding: 10px 16px;
   background: transparent;
   color: var(--menu-muted);
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
-  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: color 160ms ease;
 }
 
 .cardapio-category-chip:hover {
-  border-color: var(--menu-border);
-  background: var(--menu-surface-soft);
   color: var(--menu-text);
 }
 
 .cardapio-category-chip.is-active {
-  border-color: var(--color-brand-primary);
-  background: var(--color-brand-primary);
-  color: #08090C;
+  color: var(--menu-text);
   font-weight: 800;
-  box-shadow: none;
+}
+
+.cardapio-category-chip.is-active::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  bottom: 0;
+  left: 16px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--color-brand-primary);
+}
+
+.cardapio-category-chip:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: -4px;
 }
 
 #catalog-feed {
@@ -957,7 +974,7 @@
     border-right: 0;
     border-left: 0;
     border-radius: 0;
-    padding: 8px 12px;
+    padding: 0 12px;
   }
 
   .cardapio-category-chip {
