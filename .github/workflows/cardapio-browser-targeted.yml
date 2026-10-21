@@ -44,7 +44,8 @@ permissions:
 jobs:
   cardapio-browser:
     name: Cardapio browser smoke
-    runs-on: ubuntu-latest
+    # Playwright 1.58.2 cannot install Chromium deps on ubuntu26.04 runners.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
