@@ -41,6 +41,16 @@ for (const [profile, category, product] of [
     });
     await page.goto(`/c/qa-${profile}`);
     await expect(page.locator('#popular-products-home')).toContainText(product);
+    // Ranked products are image-led, unlike the editorial recommendation list.
+    // Both must stay readable without fabricating photos, prices or review scores.
+    const popularMedia = page.locator('#popular-products-home .cardapio-popular-card__image').first();
+    await expect(popularMedia).toBeVisible();
+    expect((await popularMedia.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(100);
+    const popularName = page.locator('#popular-products-home .cardapio-popular-card__name').first();
+    await expect(popularName).toHaveCSS('text-overflow', 'clip');
+    const editorialMedia = page.locator('#cardapio-recommendations-home .cardapio-editorial-card__image').first();
+    await expect(editorialMedia).toBeVisible();
+    expect((await editorialMedia.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(100);
     await expect(page.locator('#brand-banner-hero')).toHaveCount(0);
     await expect(page.locator('#product-card-902')).toContainText('Hambúrguer artesanal');
     // Solid sticky header: no catalog content should bleed through while scrolling.
