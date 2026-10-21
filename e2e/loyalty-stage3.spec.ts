@@ -47,6 +47,8 @@ test('vigente, sugestão, rascunho, simulador e confirmação ficam isolados at�
   await enterLoyalty(page);
   const current=page.getByRole('region',{name:'Programa vigente'});
   const simulation=page.getByRole('region',{name:'Simulação da fidelidade'});
+  await expect(simulation).toBeHidden();
+  await page.getByText('Simulação financeira', {exact:true}).press('Enter');
   await expect(current).toContainText('R$ 5,00');
   await expect(simulation).toContainText('R$ 5,00');
   await current.locator('summary').filter({hasText:'Ajustar programa'}).click();
