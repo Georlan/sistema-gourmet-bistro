@@ -348,7 +348,9 @@ test('quentinha em celular mantém modal e rodapé no viewport e aceita toques r
     };
   });
   expect(geometry.top).toBeGreaterThanOrEqual(-1);
+  expect(geometry.bottom).toBeGreaterThanOrEqual(geometry.viewportHeight - 2);
   expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportHeight + 2);
+  expect(geometry.footerBottom).toBeGreaterThanOrEqual(geometry.viewportHeight - 2);
   expect(geometry.footerBottom).toBeLessThanOrEqual(geometry.viewportHeight + 2);
   expect(geometry.contentHeight).toBeGreaterThan(100);
   expect(geometry.dialogRight).toBeLessThanOrEqual(geometry.viewportWidth + 2);
