@@ -10,12 +10,14 @@ interface CardapioCategoryNavProps {
   categories: string[];
   activeCategory: string;
   onSelectCategory: (category: string) => void;
+  onSelectHighlights?: () => void;
 }
 
 export default function CardapioCategoryNav({
   categories,
   activeCategory,
   onSelectCategory,
+  onSelectHighlights,
 }: CardapioCategoryNavProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -32,10 +34,20 @@ export default function CardapioCategoryNav({
   }, [activeCategory]);
 
   if (categories.length === 0) return null;
+  const highlightsLabel = categories.some(category => category.trim().toLocaleLowerCase() === "destaques") ? "Início" : "Destaques";
 
   return (
     <nav className="cardapio-category-nav" id="category-nav-container" aria-label="Categorias do cardápio">
       <div ref={containerRef} className="cardapio-category-scroll no-scrollbar" id="category-scroll">
+        {onSelectHighlights && (
+          <button type="button" onClick={onSelectHighlights}
+            ref={node => { if (node) buttonRefs.current.set("", node); else buttonRefs.current.delete(""); }}
+            aria-controls="menu-highlights"
+            className={`cardapio-category-chip ${!activeCategory ? "is-active" : ""}`}
+            aria-current={!activeCategory ? "true" : undefined}>
+            {highlightsLabel}
+          </button>
+        )}
         {categories.map((category) => {
           const isActive = activeCategory === category;
           return (

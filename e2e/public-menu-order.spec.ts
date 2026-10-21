@@ -598,7 +598,7 @@ test('caixa fechado mantém catálogo consultável e bloqueia pedidos', async ({
   });
 
   await page.goto('/cardapio?restaurante_id=2');
-  await expect(page.locator('#brand-banner-hero').getByText('Estabelecimento fechado · aguardando abertura do caixa', { exact: true })).toBeVisible();
+  await expect(page.locator('#menu-availability')).toContainText('Aguardando abertura do caixa.');
   await expect(page.getByText('Estabelecimento fechado. Aguardando abertura do caixa.', { exact: false })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true })).toBeVisible();
   await page.locator('#btn-fast-add-101').click();
@@ -618,7 +618,7 @@ test('modo automático mostra aberto quando a política do servidor aceita pedid
   });
 
   await page.goto('/cardapio?restaurante_id=2');
-  await expect(page.locator('#brand-banner-hero').getByText('Aberto para pedidos', { exact: true })).toBeVisible();
+  await expect(page.locator('.cardapio-order-status')).toHaveText('Aberto');
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
   expect(capturedOrders).toHaveLength(0);

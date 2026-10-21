@@ -100,6 +100,7 @@ export interface BrandConfig {
   slogan: string;
   logo: string;
   bannerImage: string;
+  hasCustomBanner?: boolean;
   phone: string;
   address: string;
   colors: {

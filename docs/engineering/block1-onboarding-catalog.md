@@ -37,7 +37,7 @@
 
 Concluído: investigação dos contratos e das skills, primeiro conjunto de mudanças e testes locais indicados acima. Skills existentes preservadas; novas instruções instaladas sem novas dependências no aplicativo. analytics-tracking corresponde a analytics na origem atual; as duas verticais exigiram apenas adaptação de arquivo Markdown para SKILL.md. O CLI externo do Playwright não foi instalado nem a versão do projeto alterada.
 
-Em andamento: matriz final, revisão e PR desta jornada; redesenho mobile do cardápio público em checkout separado, preservando o catálogo e a montagem existentes.
+Jornada integrada na PR #1183 (14f0c75313ab): matriz final de 261 cenários aprovada; CI e revisões servidas de API/frontend confirmados. Em andamento: redesenho mobile do cardápio público em checkout separado, preservando o catálogo e a montagem existentes.
 
 Próximo: validar visualmente a nova apresentação pública com/sem imagens e nos cinco perfis; testar montagem, sacola, checkout, estado fechado, erro, teclado e responsividade. Não transformar sugestões de logística/estoque/custos das skills em novas regras sem decisão de produto.
 

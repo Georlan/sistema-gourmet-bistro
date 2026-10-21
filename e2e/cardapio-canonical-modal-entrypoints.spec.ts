@@ -269,3 +269,31 @@ test('montar outra diferente começa em uma unidade e mantém a montagem origina
   await expect(cart.locator('#cart-items')).toContainText('PROTEÍNAS: Frango');
   await expect(cart.locator('#cart-items')).toContainText('PROTEÍNAS: Carne');
 });
+
+
+test('Destaques prioriza ranking real sem reconsultar ao navegar nas categorias', async ({ page }) => {
+  await mockCardapio(page);
+  let rankingRequests = 0;
+  await page.route(`${API_ORIGIN}/api/cardapio-digital/populares?**`, async route => {
+    rankingRequests += 1;
+    await route.fulfill({ json: { produtos: [
+      { produto_id: '201', escolhas: 12 },
+      { produto_id: '101', escolhas: 7 },
+      { produto_id: 'produto-removido', escolhas: 3 },
+    ] } });
+  });
+  await page.goto('/cardapio?restaurante_id=2');
+  const popular = page.locator('#popular-products-home');
+  await expect(popular.getByRole('listitem')).toHaveCount(2);
+  await expect(popular.getByRole('listitem').first()).toHaveAttribute('aria-label', 'Abrir Vinho Tinto Sangiovese (Taça)');
+  await expect(page.locator('#brand-banner-hero')).toHaveCount(0);
+  expect(await popular.evaluate(el => el.getBoundingClientRect().top < document.querySelector('#catalog-feed')!.getBoundingClientRect().top)).toBe(true);
+  const initialRankingRequests = rankingRequests;
+  const navigation = page.getByRole('navigation', { name: 'Categorias do cardápio' });
+  await expect(navigation.getByRole('button').first()).toHaveText('Início');
+  await navigation.getByRole('button', { name: 'Bebidas', exact: true }).click();
+  await navigation.getByRole('button', { name: 'Início', exact: true }).click();
+  await expect(navigation.getByRole('button', { name: 'Início', exact: true })).toHaveAttribute('aria-current', 'true');
+  expect(rankingRequests).toBe(initialRankingRequests);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

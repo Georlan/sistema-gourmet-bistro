@@ -330,6 +330,7 @@ export default function CardapioPage() {
         slogan: String(restaurant.subtitulo || ""),
         logo: getRestaurantAssetUrl(restaurant.logo_url || "", true),
         bannerImage: getRestaurantAssetUrl(restaurant.banner_url || "", false),
+        hasCustomBanner: getRestaurantAssetUrl(restaurant.banner_url || "", false) !== getRestaurantAssetUrl("", false),
         phone: whatsappNumber,
         address: String(restaurant.endereco || ""),
         colors: {
@@ -416,7 +417,7 @@ export default function CardapioPage() {
           catalog_load_ms: Math.round(performance.now() - loadStartedAt),
         });
       }
-      setActiveCategory((current) => current && brand.categories.includes(current) ? current : brand.categories[0] || "");
+      setActiveCategory((current) => current && brand.categories.includes(current) ? current : "");
       const rid = Number(brand.id);
       if (Number.isFinite(rid)) {
         const stored = loadStoredOrders(rid);
@@ -1088,49 +1089,14 @@ export default function CardapioPage() {
           </section>
         )}
 
-        <section className="relative h-48 overflow-hidden rounded-3xl border border-koma-border sm:h-60" id="brand-banner-hero">
-          <img src={activeBrand.bannerImage} alt={`${activeBrand.name} — banner`} className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" aria-hidden="true" />
-          <button
-            type="button"
-            onClick={() => setIsStoreInfoOpen(true)}
-            className={clsx(
-              "absolute bottom-4 right-4 inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-black backdrop-blur transition hover:scale-105 sm:bottom-5 sm:right-5",
-              activeBrand.storeStatus === "closed"
-                ? "border-rose-400/30 bg-rose-500/20 text-rose-200"
-                : activeBrand.storeStatus === "open"
-                  ? "border-emerald-400/30 bg-emerald-500/20 text-emerald-200"
-                  : "border-amber-400/30 bg-amber-500/20 text-amber-100"
-            )}
-          >
-            <span className={clsx(
-              "h-2 w-2 rounded-full shrink-0",
-              activeBrand.storeStatus === "open"
-                ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"
-                : activeBrand.storeStatus === "closed"
-                  ? "bg-rose-400"
-                  : "bg-amber-400"
-            )} />
-            <span>
-              {activeBrand.storeStatus === "closed"
-                ? (activeBrand.availabilitySource === "schedule"
-                  ? activeBrand.nextOpeningLabel
-                    ? `Estabelecimento fechado · abre ${activeBrand.nextOpeningLabel}`
-                    : "Estabelecimento fechado"
-                  : activeBrand.availabilitySource === "cash_closed"
-                    ? "Estabelecimento fechado · aguardando abertura do caixa"
-                    : "Pedidos pausados")
-                : activeBrand.storeStatus === "open"
-                  ? "Aberto para pedidos"
-                  : "Ver horários"}
-            </span>
-          </button>
-        </section>
-
-        <CardapioConditionsSummary brand={activeBrand} onOpen={() => setIsStoreInfoOpen(true)} onPromotionSelect={offer => { setEditingPromotionItem(null); setSelectedPromotion(offer); }} />
+        {activeBrand.hasCustomBanner && (
+          <section id="brand-banner-hero" aria-label="Capa do restaurante">
+            <img src={activeBrand.bannerImage} alt={`${activeBrand.name} — banner`} />
+          </section>
+        )}
 
         {activeBrand.storeStatus === "closed" && (
-          <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
+          <div id="menu-availability" className="cardapio-availability-note">
             <strong>
               {activeBrand.availabilitySource === "schedule"
                 ? activeBrand.nextOpeningLabel
@@ -1148,6 +1114,12 @@ export default function CardapioPage() {
         <CardapioCategoryNav
           categories={visibleCategories}
           activeCategory={activeCategory}
+          onSelectHighlights={() => {
+            setActiveCategory("");
+            isProgrammaticScroll.current = true;
+            document.getElementById("menu-highlights")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            window.setTimeout(() => { isProgrammaticScroll.current = false; }, 700);
+          }}
           onSelectCategory={(category) => {
             setActiveCategory(category);
             isProgrammaticScroll.current = true;
@@ -1156,6 +1128,8 @@ export default function CardapioPage() {
             window.setTimeout(() => { isProgrammaticScroll.current = false; }, 700);
           }}
         />
+
+        <CardapioConditionsSummary brand={activeBrand} onOpen={() => setIsStoreInfoOpen(true)} onPromotionSelect={offer => { setEditingPromotionItem(null); setSelectedPromotion(offer); }} />
 
         <div className="flex flex-col gap-9" id="catalog-feed">
           {visibleCategories.length === 0 ? (
@@ -1194,7 +1168,7 @@ export default function CardapioPage() {
             return (
               <section key={category} id={categorySectionId(category)} className="scroll-mt-[10.5rem]">
                 <div className="mb-3 flex items-center justify-between border-b border-koma-border pb-2.5">
-                  <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-tight text-koma-foreground"><span className="h-4 w-1.5 rounded-full bg-emerald-500" />{category}</h2>
+                  <h2 className="cardapio-category-title">{category}</h2>
                   <span className="rounded-full bg-koma-raised px-2.5 py-1 text-[9px] font-bold text-koma-muted">{products.length} {products.length === 1 ? "item" : "itens"}</span>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

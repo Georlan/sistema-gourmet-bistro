@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Facebook, Gift, Globe, Phone, RotateCcw } from "lucide-react";
 import { BrandConfig, LOCAL_LOGO_PLACEHOLDER } from "../CardapioTypes";
 import "../cardapioPublic.css";
@@ -71,6 +71,18 @@ export default function CardapioHeader({
   activeOrdersCount = 0,
 }: CardapioHeaderProps) {
   const [linkCopied, setLinkCopied] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const root = document.documentElement;
+    const update = () => root.style.setProperty('--cardapio-header-height', `${Math.ceil(header.getBoundingClientRect().height)}px`);
+    const observer = new ResizeObserver(update);
+    observer.observe(header);
+    update();
+    return () => { observer.disconnect(); root.style.removeProperty('--cardapio-header-height'); };
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -119,7 +131,7 @@ export default function CardapioHeader({
 
   return (
     <>
-      <header className="cardapio-public-header" id="app-header">
+      <header ref={headerRef} className="cardapio-public-header" id="app-header">
         <div className="cardapio-public-header__shell">
           <div className="cardapio-public-header__topline">
             <button
