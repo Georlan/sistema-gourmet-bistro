@@ -383,3 +383,71 @@ test('quentinha em celular mantém modal e rodapé no viewport e aceita toques r
   await footer.locator('#btn-add-to-cart-action').click();
   await expect(modal).toHaveCount(0);
 });
+
+
+test('Voltar do Android fecha modal de produto e sacola sem sair do cardápio', async ({ page }) => {
+  await mockCardapio(page);
+  await page.goto('/cardapio?restaurante_id=2');
+  const menuUrl = page.url();
+
+  await page.locator('#product-card-101').getByRole('button', { name: /ver detalhes/ }).click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toBeVisible();
+  await expect.poll(() => page.evaluate(() => Boolean(history.state?.__komaPublicMenuOverlay))).toBe(true);
+
+  await page.goBack();
+  await expect(modal).toHaveCount(0);
+  expect(page.url()).toBe(menuUrl);
+  await expect(page.locator('#catalog-feed')).toBeVisible();
+
+  await page.locator('#btn-cart-header').click();
+  const cart = page.locator('#cart-drawer-container');
+  await expect(cart).toBeVisible();
+  await expect.poll(() => page.evaluate(() => Boolean(history.state?.__komaPublicMenuOverlay))).toBe(true);
+
+  await page.goBack();
+  await expect(cart).not.toBeVisible();
+  expect(page.url()).toBe(menuUrl);
+
+  // O fechamento pelo X também deve consumir a entrada artificial.
+  await page.locator('#product-card-101').getByRole('button', { name: /ver detalhes/ }).click();
+  await modal.getByRole('button', { name: 'Fechar detalhes do produto' }).click();
+  await expect(modal).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => !history.state?.__komaPublicMenuOverlay)).toBe(true);
+});
+
+test('Voltar da edição da quentinha preserva a sacola e depois fecha a sacola', async ({ page }) => {
+  await mockCardapio(page);
+  await page.route('**/api/cardapio-digital/public?**', route => route.fulfill({ json: {
+    ...publicMenuPayload,
+    produtos: [{ ...publicMenuPayload.produtos[0], nome: 'Quentinha G', marmitaria: true,
+      grupos_modificadores: [{
+        id: 'proteins', nome: 'Proteínas', min_selecoes: 0, max_selecoes: 2,
+        modo_selecao: 'porcoes', tipo: 'opcional',
+        opcoes: [{ id: 'chicken', nome: 'Frango', ativo: true, preco_adicional: 0 }],
+      }],
+    }],
+  } }));
+  await page.goto('/cardapio?restaurante_id=2');
+  const menuUrl = page.url();
+  const modal = page.locator('#product-details-modal');
+  await page.locator('#product-card-101').getByRole('button', { name: /ver detalhes/ }).click();
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toHaveCount(0);
+
+  const cart = page.locator('#cart-drawer-container');
+  if (!await cart.isVisible()) await page.locator('#btn-cart-header').click();
+  await expect(cart).toBeVisible();
+  await cart.getByRole('button', { name: 'Editar montagem de Quentinha G', exact: true }).click();
+  await expect(modal).toBeVisible();
+
+  await page.goBack();
+  await expect(modal).toHaveCount(0);
+  await expect(cart).toBeVisible();
+  await expect(cart.locator('#cart-items')).toContainText('Quentinha G');
+  expect(page.url()).toBe(menuUrl);
+
+  await page.goBack();
+  await expect(cart).not.toBeVisible();
+  expect(page.url()).toBe(menuUrl);
+});

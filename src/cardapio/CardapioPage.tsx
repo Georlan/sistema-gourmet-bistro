@@ -542,6 +542,8 @@ export default function CardapioPage() {
 
   const hasOpenOverlay = Boolean(
     selectedProduct
+    || selectedPromotion
+    || pixModalOrder
     || isCartOpen
     || isAuthOpen
     || isCheckoutOpen
@@ -550,6 +552,88 @@ export default function CardapioPage() {
     || isOrdersDrawerOpen
     || isBenefitsOpen,
   );
+
+  // Uma entrada no histórico protege o cliente de sair do cardápio ao usar
+  // Voltar no Android/Chrome enquanto uma interface sobreposta está aberta.
+  // O estado de produto/sacola continua sendo canônico no React, nunca na URL.
+  const overlayHistoryToken = useRef(`koma-menu-overlay-${Date.now()}-${Math.random()}`);
+  const overlayHistoryArmed = useRef(false);
+  const overlayBackRef = useRef<() => boolean>(() => false);
+
+  overlayBackRef.current = () => {
+    const overlayCount = [
+      Boolean(selectedProduct), Boolean(selectedPromotion), Boolean(pixModalOrder),
+      isCartOpen, isAuthOpen, isCheckoutOpen, isStoreInfoOpen,
+      isProfileOpen, isOrdersDrawerOpen, isBenefitsOpen,
+    ].filter(Boolean).length;
+
+    if (pixModalOrder) {
+      setPixModalOrder(null);
+    } else if (isAuthOpen) {
+      setIsAuthOpen(false);
+    } else if (selectedProduct) {
+      setSelectedProduct(null);
+      setEditingCartItem(null);
+    } else if (selectedPromotion) {
+      setSelectedPromotion(null);
+      setEditingPromotionItem(null);
+    } else if (isCheckoutOpen) {
+      setIsCheckoutOpen(false);
+      setCheckoutRequest(null);
+      setIsCartOpen(true);
+      return true;
+    } else if (isProfileOpen) {
+      setIsProfileOpen(false);
+    } else if (isStoreInfoOpen) {
+      setIsStoreInfoOpen(false);
+    } else if (isOrdersDrawerOpen) {
+      setIsOrdersDrawerOpen(false);
+    } else if (isBenefitsOpen) {
+      setIsBenefitsOpen(false);
+    } else if (isCartOpen) {
+      setIsCartOpen(false);
+      setCouponToApply("");
+    }
+    // Ao editar um item sobre a sacola, o primeiro Voltar fecha apenas a edição.
+    return overlayCount > 1;
+  };
+
+  const pushOverlayHistoryGuard = () => {
+    const state = window.history.state;
+    const priorState = state && typeof state === "object" && !Array.isArray(state) ? state : {};
+    window.history.pushState(
+      { ...priorState, __komaPublicMenuOverlay: overlayHistoryToken.current },
+      "",
+      window.location.href,
+    );
+    overlayHistoryArmed.current = true;
+  };
+
+  const pushOverlayHistoryGuardRef = useRef(pushOverlayHistoryGuard);
+  pushOverlayHistoryGuardRef.current = pushOverlayHistoryGuard;
+
+  useEffect(() => {
+    const onPopState = () => {
+      if (!overlayHistoryArmed.current) return;
+      overlayHistoryArmed.current = false;
+      const hasUnderlyingOverlay = overlayBackRef.current();
+      // Reprotege a sacola quando o cliente volta da edição de um produto.
+      if (hasUnderlyingOverlay) pushOverlayHistoryGuardRef.current();
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    if (hasOpenOverlay && !overlayHistoryArmed.current) {
+      pushOverlayHistoryGuardRef.current();
+    } else if (!hasOpenOverlay && overlayHistoryArmed.current) {
+      const ownsEntry = window.history.state?.__komaPublicMenuOverlay === overlayHistoryToken.current;
+      overlayHistoryArmed.current = false;
+      // Fechar pelo X ou adicionar produto também consome a entrada temporária.
+      if (ownsEntry) window.history.back();
+    }
+  }, [hasOpenOverlay]);
 
   useEffect(() => {
     if (!hasOpenOverlay) return;
