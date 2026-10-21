@@ -788,8 +788,8 @@ export default function CashierCustomers({
           {crmTab === 'oportunidades' && (
             <div className="space-y-4 animate-fade-in">
               {/* Barra rápida de busca e novo cliente mesmo na tela inicial */}
-              <section className="koma-toolbar max-sm:!grid max-sm:!grid-cols-[minmax(0,1fr)_auto]">
-                <div className="koma-toolbar__search max-sm:col-span-2 max-sm:!min-w-0">
+              <section className="koma-toolbar">
+                <div className="koma-toolbar__search">
                   <Search size={14} aria-hidden="true" />
                   <input
                     value={clientesSearch}
@@ -803,7 +803,7 @@ export default function CashierCustomers({
                     aria-label="Buscar clientes"
                   />
                 </div>
-                <div className="koma-toolbar__actions max-sm:self-end">
+                <div className="koma-toolbar__actions">
                   <button
                     type="button"
                     onClick={() => handleSelectCrmTab('clientes')}
@@ -980,8 +980,8 @@ export default function CashierCustomers({
              ===================================================================== */}
           {crmTab === 'clientes' && (
             <div className="space-y-3.5 animate-fade-in">
-              <section className="koma-toolbar">
-                <div className="koma-toolbar__search">
+              <section className="koma-toolbar max-sm:grid! max-sm:grid-cols-[minmax(0,1fr)_auto]!">
+                <div className="koma-toolbar__search max-sm:col-span-2 max-sm:min-w-0!">
                   <Search size={14} aria-hidden="true" />
                   <input
                     value={clientesSearch}
@@ -1016,7 +1016,7 @@ export default function CashierCustomers({
                     <option value="name">Nome A–Z</option>
                   </select>
                 </label>
-                <div className="koma-toolbar__actions">
+                <div className="koma-toolbar__actions max-sm:self-end">
                   <button
                     type="button"
                     onClick={() => {
