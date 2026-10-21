@@ -166,10 +166,9 @@ export default function CashierCustomers({
           hasMore: res.headers.get('X-Has-More') === 'true', loading: false, error: null,
         });
       } catch (err) {
-        if (!controller.signal.aborted) setSearchResult({
-          query: searchKey, scope: searchScope, data: [], total: 0, hasMore: false,
-          loading: false, error: err instanceof Error ? err.message : 'Pesquisa indisponível',
-        });
+        if (!controller.signal.aborted) setSearchResult(current => current?.query === searchKey && current.scope === searchScope
+          ? { ...current, loading: false, error: err instanceof Error ? err.message : 'Pesquisa indisponível' }
+          : current);
       }
     }, 300);
     return () => { searchGeneration.current += 1; clearTimeout(timer); controller.abort(); };
@@ -755,7 +754,7 @@ export default function CashierCustomers({
 
       {(activeTab === 'clientes' || visitedRelationship) && (
         <div hidden={activeTab !== 'clientes'} style={{ display: activeTab === 'clientes' ? undefined : 'none' }}
-          className="space-y-4 text-left animate-fade-in">
+          className="space-y-4 text-left animate-fade-in [&_button]:scroll-mt-32 [&_input]:scroll-mt-32 [&_select]:scroll-mt-32 [&_summary]:scroll-mt-32">
           {/* Banner Operacional com até 4 indicadores essenciais */}
           <OperationalBanner
             id="customers-heading"
@@ -1208,7 +1207,7 @@ export default function CashierCustomers({
                     </button>
                   </div>
                 )}
-                {activeSearch && queryResult?.error && listUsers.length > 0 && <p role="alert" className="text-sm text-amber-300">{queryResult.error}</p>}
+                {activeSearch && queryResult?.error && listUsers.length > 0 && <p role="alert" className="text-sm text-amber-300">{queryResult.error} <button type="button" className="ml-2 underline" onClick={() => setSearchRetry(value => value + 1)}>Tentar novamente</button></p>}
                 {productQuery.trim() && favoriteSnapshot.scope === searchScope && favoriteSnapshot.loading && (
                   <p role="status" className="my-2 text-sm text-koma-muted">Consultando os produtos dos clientes carregados para aplicar este filtro…</p>
                 )}

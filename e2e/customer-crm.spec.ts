@@ -133,4 +133,6 @@ test('CRM ranks buyers, filters inactivity, searches formatted phones and preser
   await page.evaluate(() => document.querySelector('.cashier-main')?.scrollTo(0, 0));
   await page.getByLabel('Ordenar clientes', { exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath(`crm-${testInfo.project.name}.png`), fullPage: true });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath(`crm-viewport-${testInfo.project.name}.png`), fullPage: false, animations: 'disabled' });
 });
