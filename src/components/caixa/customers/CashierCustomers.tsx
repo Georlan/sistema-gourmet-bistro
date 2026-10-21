@@ -788,8 +788,8 @@ export default function CashierCustomers({
           {crmTab === 'oportunidades' && (
             <div className="space-y-4 animate-fade-in">
               {/* Barra rápida de busca e novo cliente mesmo na tela inicial */}
-              <section className="koma-toolbar">
-                <div className="koma-toolbar__search">
+              <section className="koma-toolbar max-sm:!grid max-sm:!grid-cols-[minmax(0,1fr)_auto]">
+                <div className="koma-toolbar__search max-sm:col-span-2 max-sm:!min-w-0">
                   <Search size={14} aria-hidden="true" />
                   <input
                     value={clientesSearch}
@@ -803,7 +803,7 @@ export default function CashierCustomers({
                     aria-label="Buscar clientes"
                   />
                 </div>
-                <div className="koma-toolbar__actions">
+                <div className="koma-toolbar__actions max-sm:self-end">
                   <button
                     type="button"
                     onClick={() => handleSelectCrmTab('clientes')}
@@ -996,18 +996,18 @@ export default function CashierCustomers({
                   )}
                 </div>
                 {(clientesSearch || filteredLoyaltyUsers.length !== listUsers.length) && (
-                  <p className="shrink-0 text-xs font-medium text-koma-muted">
+                  <p className="shrink-0 text-xs font-medium text-koma-muted max-sm:col-span-2">
                     <strong className="font-mono text-koma-foreground">{filteredLoyaltyUsers.length}</strong> de{' '}
                     {listUsers.length} carregados de {listTotal} encontrados no banco
                   </p>
                 )}
-                <label className="flex flex-col gap-1 text-xs text-koma-muted">
+                <label className="flex min-w-0 flex-col gap-1 text-xs text-koma-muted">
                   Ordenar clientes
                   <select
                     aria-label="Ordenar clientes"
                     value={customerSort}
                     onChange={(event) => setCustomerSort(event.target.value as CustomerSort)}
-                    className="min-h-11 rounded-lg border border-koma-border bg-koma-panel px-3 text-koma-foreground"
+                    className="min-h-11 min-w-0 max-w-full rounded-lg border border-koma-border bg-koma-panel px-3 text-koma-foreground"
                   >
                     <option value="orders">Mais compras concluídas</option>
                     <option value="spent">Maior total pago</option>
@@ -1033,7 +1033,7 @@ export default function CashierCustomers({
               </section>
 
               {/* Atalhos principais. Segmentos menos comuns ficam em Mais filtros. */}
-              <div className="flex flex-wrap gap-1.5" aria-label="Filtrar clientes">
+              <div className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1 [&>button]:shrink-0 sm:flex-wrap" aria-label="Filtrar clientes">
                 {([
                   ['ALL', 'Todos'],
                   ['ATIVO', 'Ativos (até 30 dias)'],
