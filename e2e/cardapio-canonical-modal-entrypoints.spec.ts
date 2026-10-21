@@ -336,19 +336,32 @@ test('quentinha em celular mantém modal e rodapé no viewport e aceita toques r
   const footer = modal.getByTestId('product-modal-footer');
   await expect(dialog).toBeVisible();
   await expect(footer.getByRole('button', { name: /Adicionar 1 × Quentinha G/ })).toBeVisible();
+  // A geometria final só é aferida após a animação de entrada terminar.
+  await dialog.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => undefined)));
+  });
 
   const geometry = await modal.evaluate((overlay) => {
-    const dialogRect = overlay.querySelector('[role="dialog"]')!.getBoundingClientRect();
+    const dialog = overlay.querySelector('[role="dialog"]')!;
+    const dialogRect = dialog.getBoundingClientRect();
     const footerRect = overlay.querySelector('[data-testid="product-modal-footer"]')!.getBoundingClientRect();
     const contentRect = overlay.querySelector('[data-testid="product-modal-scroll"]')!.getBoundingClientRect();
+    const bottomPoint = document.elementFromPoint(window.innerWidth / 2, window.innerHeight - 2);
     return {
+      mountedOnBody: overlay.parentElement === document.body,
+      // O último pixel útil precisa continuar dentro do modal e não revelar o cardápio.
+      bottomCovered: bottomPoint === dialog || dialog.contains(bottomPoint),
       top: dialogRect.top, bottom: dialogRect.bottom, footerBottom: footerRect.bottom,
       contentHeight: contentRect.height, viewportHeight: window.innerHeight,
       viewportWidth: window.innerWidth, dialogRight: dialogRect.right,
     };
   });
+  expect(geometry.mountedOnBody).toBe(true);
+  expect(geometry.bottomCovered).toBe(true);
   expect(geometry.top).toBeGreaterThanOrEqual(-1);
+  expect(geometry.bottom).toBeGreaterThanOrEqual(geometry.viewportHeight - 2);
   expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportHeight + 2);
+  expect(geometry.footerBottom).toBeGreaterThanOrEqual(geometry.viewportHeight - 2);
   expect(geometry.footerBottom).toBeLessThanOrEqual(geometry.viewportHeight + 2);
   expect(geometry.contentHeight).toBeGreaterThan(100);
   expect(geometry.dialogRight).toBeLessThanOrEqual(geometry.viewportWidth + 2);
