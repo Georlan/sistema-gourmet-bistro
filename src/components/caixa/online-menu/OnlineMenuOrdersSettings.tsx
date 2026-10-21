@@ -182,6 +182,10 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
 
   const save = async () => {
     if (guidedMode && !hasLoadedConfig) return;
+    if (onSetupComplete && config.horarios_funcionamento.length === 0) {
+      setFeedback({ type: 'error', text: 'Adicione ao menos um horário para continuar.' });
+      return;
+    }
     if (incompleteHours) {
       setFeedback({ type: 'error', text: 'Preencha os dias e o horário de cada linha ou remova a linha incompleta.' });
       return;
@@ -258,7 +262,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
       <header className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
           <h2 className="text-base font-black text-koma-foreground">{setupMode ? 'Horários do restaurante' : 'Pedidos online'}</h2>
-          <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-koma-muted">
             O cardápio fica disponível para consulta e aceita pedidos quando o caixa está aberto e sincronizado. O horário cadastrado é apenas informativo.
           </p>
         </div>
@@ -295,7 +299,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
       {automaticWithoutHours && (
         <div className="flex items-start gap-2 rounded-2xl border border-amber-500/25 bg-amber-500/[0.08] p-3.5 text-[10px] text-amber-700 dark:text-amber-300">
           <AlertCircle size={14} className="mt-0.5 shrink-0" />
-          <span><strong>Horários ainda não configurados.</strong> Informe os horários na implantação para consulta dos clientes. A abertura para pedidos acompanha o caixa.</span>
+          <span><strong>Horários ainda não configurados.</strong> Adicione os dias e horários abaixo.</span>
         </div>
       )}
 
@@ -308,9 +312,6 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
             <div>
               <h3 className="text-sm font-black text-koma-foreground">Horário do estabelecimento</h3>
               <p className="mt-1 text-xs text-koma-muted">Agrupe dias com o mesmo horário, como “Terça a domingo”. Para passar da meia-noite, use “18:00 - 01:00”. Dias fechados podem ficar fora da lista.</p>
-              <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-                Os horários são informativos para os clientes. O cardápio só aceita pedidos quando o caixa estiver aberto e sincronizado.
-              </p>
             </div>
           </div>
           {!setupMode && (
@@ -356,6 +357,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
                 </label>
                 <button
                   type="button"
+                  disabled={guidedMode && isSaving}
                   onClick={() => setConfig((current) => ({
                     ...current,
                     horarios_funcionamento: current.horarios_funcionamento.filter((item) => item.id !== row.id),
@@ -374,6 +376,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
 
             <button
               type="button"
+              disabled={guidedMode && isSaving}
               onClick={() => setConfig((current) => ({
                 ...current,
                 status_override: 'Automático',
@@ -445,7 +448,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
       {(feedback || hasUnsavedChanges || incompleteHours || onSetupComplete) && (
         <div className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
           {feedback ? (
-            <span className={clsx(
+            <span role={feedback.type === 'error' ? 'alert' : 'status'} className={clsx(
               'mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold',
               feedback.type === 'success'
                 ? 'text-emerald-600 dark:text-emerald-300'

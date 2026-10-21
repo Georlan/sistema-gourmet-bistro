@@ -7,6 +7,7 @@ const viewportMatrix = [
   { name: 'mobile-360', width: 360, height: 640, touch: true },
   { name: 'mobile-390', width: 390, height: 720, touch: true },
   { name: 'mobile-412', width: 412, height: 732, touch: true },
+  { name: 'mobile-430', width: 430, height: 932, touch: true },
   { name: 'tablet-768', width: 768, height: 900, touch: true },
   { name: 'desktop-1024', width: 1024, height: 768, touch: false },
   { name: 'desktop-1366', width: 1366, height: 768, touch: false },
