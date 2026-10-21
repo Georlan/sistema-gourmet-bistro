@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  ShoppingBag,
   Trash2,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -287,7 +288,7 @@ function SettingsSection({
   );
 }
 
-function PhonePreview({ config }: { config: RestaurantConfig }) {
+function PhonePreview({ config, compact = false }: { config: RestaurantConfig; compact?: boolean }) {
   const statusText = config.status_override === 'Forçado Fechado'
     ? 'Pausado'
     : config.status_override === 'Forçado Aberto'
@@ -296,21 +297,21 @@ function PhonePreview({ config }: { config: RestaurantConfig }) {
   const firstHours = config.horarios_funcionamento[0];
 
   return (
-    <aside className="xl:sticky xl:top-4">
-      <div className="mx-auto w-full max-w-[330px] rounded-[2.35rem] border border-koma-border bg-koma-panel p-3 shadow-sm">
-        <div className="mb-2 flex items-center justify-center gap-2 py-1">
+    <aside aria-label="Prévia da identidade do cardápio" className={clsx('xl:sticky xl:top-4', compact && 'order-first xl:order-last')}>
+      <div className={clsx('mx-auto w-full border border-koma-border bg-koma-panel shadow-sm', compact ? 'overflow-hidden rounded-2xl' : 'max-w-[330px] rounded-[2.35rem] p-3')}>
+        {!compact && <div className="mb-2 flex items-center justify-center gap-2 py-1">
           <span className="h-1 w-10 rounded-full bg-koma-border" />
           <span className="h-2 w-2 rounded-full bg-koma-border" />
-        </div>
-        <div className="overflow-hidden rounded-[1.65rem] border border-white/10 bg-[#090a0f] text-white">
-          <div className="relative min-h-36 overflow-hidden p-4">
+        </div>}
+        <div className={clsx('overflow-hidden bg-[#090a0f] text-white', !compact && 'rounded-[1.65rem] border border-white/10')}>
+          <div className={clsx('relative overflow-hidden p-4', compact ? 'min-h-24' : 'min-h-36')}>
             {config.banner_url ? (
               <img src={config.banner_url} alt="Capa" className="absolute inset-0 h-full w-full object-cover" />
             ) : (
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(0,184,148,0.35),transparent_45%),linear-gradient(145deg,#101b17,#090a0f)]" />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/15" />
-            <div className="relative flex min-h-28 items-end gap-2.5">
+            <div className={clsx('relative flex items-end gap-2.5', compact ? 'min-h-16' : 'min-h-28')}>
               <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/20 bg-white text-[9px] font-black text-slate-900">
                 {config.logo_url ? <img src={config.logo_url} alt="Logo" className="h-full w-full object-contain p-1" /> : 'Kôma'}
               </div>
@@ -324,9 +325,9 @@ function PhonePreview({ config }: { config: RestaurantConfig }) {
             </div>
           </div>
 
-          <div className="min-h-[300px] p-3">
+          {!compact && <div className="p-3">
             <div className="flex gap-1.5 overflow-hidden border-b border-white/10 pb-2.5">
-              {['Destaques', 'Pizzas', 'Bebidas'].map((label, index) => (
+              {['Seu cardápio'].map((label, index) => (
                 <span
                   key={label}
                   className={clsx(
@@ -338,20 +339,9 @@ function PhonePreview({ config }: { config: RestaurantConfig }) {
                 </span>
               ))}
             </div>
-            <div className="mt-3 space-y-2">
-              {[
-                ['Produto em destaque', 'Descrição curta e objetiva do produto', 'R$ 39,90'],
-                ['Outra opção do cardápio', 'Informação que ajuda a decidir', 'R$ 24,00'],
-              ].map(([name, description, price]) => (
-                <div key={name} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.045] p-2.5">
-                  <div className="min-w-0 flex-1">
-                    <strong className="block truncate text-[8px] text-white">{name}</strong>
-                    <span className="mt-0.5 block truncate text-[7px] text-white/45">{description}</span>
-                    <span className="mt-1.5 block text-[8px] font-black text-emerald-400">{price}</span>
-                  </div>
-                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-white/5 text-[7px] text-white/35">Foto</div>
-                </div>
-              ))}
+            <div className="mt-3 rounded-xl border border-dashed border-white/15 p-4 text-center">
+              <ShoppingBag size={22} className="mx-auto mb-2 text-white/50" />
+              <p className="text-xs text-white/70">Produtos e preços são definidos no seu cadastro.</p>
             </div>
             {(config.endereco || firstHours) && (
               <div className="mt-3 space-y-1 rounded-xl border border-white/10 bg-white/[0.035] p-2.5 text-[7px] text-white/55">
@@ -363,9 +353,9 @@ function PhonePreview({ config }: { config: RestaurantConfig }) {
                 )}
               </div>
             )}
-          </div>
+          </div>}
         </div>
-        <p className="mt-2 text-center text-[9px] text-koma-subtle">Prévia aproximada do cardápio público</p>
+        <p className="p-2 text-center text-xs text-koma-muted">Prévia da identidade · não publica nem libera pedidos</p>
       </div>
     </aside>
   );
@@ -583,7 +573,7 @@ export function CardapioDigitalSettingsPanel({
         </div>
       )}
 
-      <div className={clsx("grid grid-cols-1 gap-4", !onSetupComplete && "xl:grid-cols-[minmax(0,1fr)_330px] xl:items-start")}>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px] xl:items-start">
         <div className="min-w-0 space-y-4">
           {activeTab === 'perfil' && !readiness.ready && (
             <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3 text-[10px] text-amber-700 dark:text-amber-300">
@@ -993,7 +983,7 @@ export function CardapioDigitalSettingsPanel({
           )}
         </div>
 
-        {!onSetupComplete && <PhonePreview config={config} />}
+        <PhonePreview config={config} compact={Boolean(onSetupComplete)} />
       </div>
     </div>
   );

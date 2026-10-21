@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Edit3, Layers, Plus, Search, Trash2 } from 'lucide-react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Check, Edit3, Layers, Plus, Search, Trash2, X } from 'lucide-react';
 import clsx from 'clsx';
 import { CardapioDiarioEditor } from './CardapioDiarioEditor';
 
@@ -62,6 +62,10 @@ export default function ComplementosTab({
   const [showGroupRules, setShowGroupRules] = useState(false);
   const [catalogError, setCatalogError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const groupNameRef = useRef<HTMLInputElement>(null);
+  const dialogTitleId = useId();
+  const groupNameId = useId();
   const [editingGrupo, setEditingGrupo] = useState<GrupoModificador | null>(null);
 
   const [nome, setNome] = useState('');
@@ -79,6 +83,21 @@ export default function ComplementosTab({
   const [precoNovoOvo, setPrecoNovoOvo] = useState('2');
   const [saving, setSaving] = useState(false);
   const [pendingOptionId, setPendingOptionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!isModalOpen || !dialog) return;
+    const opener = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    if (!dialog.open) dialog.showModal();
+    groupNameRef.current?.focus();
+    return () => {
+      if (dialog.open) dialog.close();
+      document.body.style.overflow = previousOverflow;
+      if (opener?.isConnected) opener.focus();
+    };
+  }, [isModalOpen]);
 
   const fetchCatalogBindings = async () => {
     try {
@@ -526,26 +545,44 @@ export default function ComplementosTab({
 
       </details>}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-fade-in overflow-y-auto">
-          <div className="bg-koma-panel border border-koma-border rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-5 my-8 max-h-[92vh] flex flex-col animate-scale-up">
+        <dialog ref={dialogRef} aria-modal="true" aria-labelledby={dialogTitleId}
+          onCancel={event => { event.preventDefault(); if (!saving) setIsModalOpen(false); }}
+          onClose={() => { if (!dialogRef.current?.open && !saving) setIsModalOpen(false); }}
+          onKeyDown={event => {
+            if (event.key !== 'Tab') return;
+            const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button, input, select, textarea, summary, a[href], [tabindex="0"]'))
+              .filter(control => !control.matches(':disabled') && control.getClientRects().length > 0);
+            const first = controls[0];
+            const last = controls.at(-1);
+            if (!first) { event.preventDefault(); return; }
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+          }}
+          className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-2xl max-h-[calc(100dvh_-_2rem)] overflow-hidden rounded-2xl border border-koma-border bg-koma-panel p-0 text-koma-foreground shadow-2xl backdrop:bg-black/60">
+          <div className="p-4 sm:p-6 space-y-5 max-h-[calc(100dvh_-_2rem)] flex flex-col">
             <div className="flex items-center justify-between border-b border-koma-border pb-3 shrink-0">
-              <h3 className="font-bold text-sm text-koma-foreground flex items-center gap-2">
+              <h3 id={dialogTitleId} className="font-bold text-sm text-koma-foreground flex items-center gap-2">
                 <Layers className="w-4 h-4 text-emerald-500" />
                 {editingGrupo ? 'Editar Grupo de Complementos' : 'Novo Grupo de Complementos'}
               </h3>
               <button
                 type="button"
+                aria-label="Fechar cadastro de complementos"
+                disabled={saving}
                 onClick={() => setIsModalOpen(false)}
-                className="text-koma-muted hover:text-koma-foreground text-sm font-bold"
+                className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-xl text-koma-muted hover:bg-koma-raised hover:text-koma-foreground disabled:opacity-50"
               >
-                ✕
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
 
-            <form id="complement-group-form" onSubmit={handleSaveGrupo} className="space-y-4 overflow-y-auto flex-1 pr-1">
+            <form id="complement-group-form" onSubmit={handleSaveGrupo} className="min-h-0 overflow-y-auto flex-1 pr-1">
+              <fieldset disabled={saving} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-koma-muted mb-1">Nome do Grupo</label>
+                <label htmlFor={groupNameId} className="block text-xs font-bold text-koma-muted mb-1">Nome do Grupo</label>
                 <input
+                  id={groupNameId}
+                  ref={groupNameRef}
                   type="text"
                   placeholder="Ex: Queijos e Cremosos, Molhos, Ponto da Carne"
                   value={nome}
@@ -789,12 +826,14 @@ export default function ComplementosTab({
                 </div>
               </div>
 
+              </fieldset>
             </form>
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-koma-border shrink-0">
                 <button
                   type="button"
+                  disabled={saving}
                   onClick={() => setIsModalOpen(false)}
-                  className="koma-btn-secondary px-4 py-2 text-xs font-bold rounded-xl"
+                  className="koma-btn-secondary min-h-11 px-4 py-2 text-xs font-bold rounded-xl disabled:opacity-50"
                 >
                   Cancelar
                 </button>
@@ -802,13 +841,13 @@ export default function ComplementosTab({
                   type="submit"
                   form="complement-group-form"
                   disabled={saving}
-                  className="koma-btn-primary px-5 py-2 text-xs font-bold rounded-xl disabled:opacity-50"
+                  className="koma-btn-primary min-h-11 px-5 py-2 text-xs font-bold rounded-xl disabled:opacity-50"
                 >
                   {saving ? 'Salvando...' : editingGrupo ? 'Atualizar Grupo' : 'Criar Grupo'}
                 </button>
               </div>
           </div>
-        </div>
+        </dialog>
       )}
     </div>
   );

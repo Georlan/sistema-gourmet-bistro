@@ -3,7 +3,7 @@ import { CardapioDigitalSettingsPanel } from '../cardapio/CardapioDigitalSetting
 import { OnlineMenuOrdersSettings } from '../caixa/online-menu/OnlineMenuOrdersSettings';
 import { SubscriptionControl } from '../assinatura/SubscriptionControl';
 import { CatalogAssistanceUpload, type CatalogAssistanceSnapshot } from './CatalogAssistanceUpload';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   CalendarClock,
@@ -12,6 +12,7 @@ import {
   ChevronDown,
   LockKeyhole,
   CreditCard,
+  Eye,
   Percent,
   Printer,
   RefreshCw,
@@ -143,12 +144,12 @@ type PracticalSetupAction = {
 };
 
 const ONBOARDING_LOAD_TIMEOUT_MS = 10_000;
-const OPERATION_PROFILE_OPTIONS: Array<{ value: OperationProfile; label: string; description: string }> = [
-  { value: 'pizzaria', label: 'Pizzaria', description: 'Tamanhos, sabores, meio a meio, bordas e adicionais.' },
-  { value: 'marmitaria', label: 'Marmitaria / Quentinhas', description: 'Tamanhos e composição de proteínas, guarnições e acompanhamentos.' },
-  { value: 'acai', label: 'Açaí', description: 'Tamanhos, complementos e montagem do produto.' },
-  { value: 'churrasco', label: 'Churrasco', description: 'Cortes, porções, pontos e acompanhamentos.' },
-  { value: 'generic', label: 'Outro tipo de operação', description: 'Experiência neutra, sem atalhos específicos.' },
+const OPERATION_PROFILE_OPTIONS: Array<{ value: OperationProfile; label: string }> = [
+  { value: 'pizzaria', label: 'Pizzaria' },
+  { value: 'marmitaria', label: 'Marmitaria / Quentinhas' },
+  { value: 'acai', label: 'Açaí' },
+  { value: 'churrasco', label: 'Churrasco' },
+  { value: 'generic', label: 'Outro tipo de operação' },
 ];
 
 const ORDER_TYPE_OPTIONS: Array<{ value: OrderType; label: string; description: string }> = [
@@ -242,7 +243,15 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     Accept: 'application/json',
   }), [accessToken]);
 
+  const snapshotRequest = useRef<AbortController | null>(null);
+  const cancelSnapshotLoad = useCallback(() => {
+    snapshotRequest.current?.abort();
+    snapshotRequest.current = null;
+  }, []);
+
   const applySnapshot = useCallback((next: OnboardingStatus) => {
+    // A confirmed save supersedes any status read started before that save.
+    cancelSnapshotLoad();
     setSnapshot(next);
     setOperationProfile(next.restaurant.operationProfile || 'generic');
     setTableCountInput((current) => current || (next.counts.tables > 0 ? String(next.counts.tables) : ''));
@@ -250,9 +259,10 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       setOrderTypes(next.operations.orderTypes);
     }
     setState('ready');
-  }, []);
+  }, [cancelSnapshotLoad]);
 
   const finishGuidedStep = async (step: 'profile' | 'hours' | 'operations') => {
+    cancelSnapshotLoad();
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), ONBOARDING_LOAD_TIMEOUT_MS);
     let response: Response;
@@ -286,9 +296,11 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   }, [accessToken]);
 
   const loadSnapshot = useCallback(async () => {
+    if (snapshotRequest.current) return;
     setState((current) => current === 'ready' ? 'ready' : 'loading');
     setErrorMessage('');
     const controller = new AbortController();
+    snapshotRequest.current = controller;
     const timeoutId = window.setTimeout(() => controller.abort(), ONBOARDING_LOAD_TIMEOUT_MS);
     try {
       const response = await fetch(`${API_BASE_URL}/api/onboarding/status`, {
@@ -297,6 +309,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
         cache: 'no-store',
         signal: controller.signal,
       });
+      if (snapshotRequest.current !== controller) return;
       if ([401, 403, 404].includes(response.status)) {
         setSnapshot(null);
         returnToLogin();
@@ -305,8 +318,11 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       if (!response.ok) {
         throw new Error(await responseDetail(response, 'Não foi possível carregar a implantação inicial.'));
       }
-      applySnapshot(await response.json() as OnboardingStatus);
+      const next = await response.json() as OnboardingStatus;
+      if (snapshotRequest.current !== controller) return;
+      applySnapshot(next);
     } catch (error) {
+      if (snapshotRequest.current !== controller) return;
       setState((current) => current === 'ready' ? 'ready' : 'error');
       setErrorMessage(
         error instanceof DOMException && error.name === 'AbortError'
@@ -317,12 +333,18 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       );
     } finally {
       window.clearTimeout(timeoutId);
+      if (snapshotRequest.current === controller) snapshotRequest.current = null;
     }
   }, [applySnapshot, headers, returnToLogin]);
 
   useEffect(() => {
     void loadSnapshot();
-  }, [loadSnapshot]);
+    return cancelSnapshotLoad;
+  }, [loadSnapshot, cancelSnapshotLoad]);
+
+  useEffect(() => {
+    if (guidedDirty || guidedSaving) cancelSnapshotLoad();
+  }, [guidedDirty, guidedSaving, cancelSnapshotLoad]);
 
   useEffect(() => {
     const shouldWatchRelease = snapshot?.onboarding
@@ -331,7 +353,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     const awaitingCatalog = snapshot?.onboarding?.mode === 'commercial'
       && !snapshot.steps.catalog
       && ['pending', 'processing'].includes(snapshot.catalogAssistance?.status || '');
-    if ((!shouldWatchRelease && !awaitingCatalog) || guidedDirty) return;
+    if ((!shouldWatchRelease && !awaitingCatalog) || guidedDirty || guidedSaving || savingOperationProfile || savingOperations) return;
 
     const timer = window.setInterval(() => {
       if (!document.hidden) void loadSnapshot();
@@ -345,6 +367,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     snapshot?.steps.catalog,
     snapshot?.catalogAssistance?.status,
     guidedDirty,
+    guidedSaving,
+    savingOperationProfile,
+    savingOperations,
   ]);
 
   const openCashierAt = (tab: string, subTab: string, setupMode = true) => {
@@ -735,6 +760,12 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                         ? 'Tudo pronto. Sua operação foi liberada e o período grátis comercial já está em andamento.'
                         : 'Vamos deixar seu restaurante pronto. Complete os quatro itens essenciais; depois a equipe KÔMA faz a liberação e inicia seus 7 dias grátis.'}
                 </p>
+                {guidedMode && snapshot.restaurant.slug && (
+                  <a href={`/c/${encodeURIComponent(snapshot.restaurant.slug)}`} target="_blank" rel="noreferrer"
+                    className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-koma-accent/40 bg-koma-card px-4 text-sm font-bold text-koma-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-koma-accent">
+                    <Eye size={17} aria-hidden="true" /> Ver meu cardápio<span className="sr-only"> (abre em outra aba)</span>
+                  </a>
+                )}
               </div>
               <div className="grid min-w-[250px] grid-cols-2 gap-2">
                 <div className="rounded-2xl border border-koma-border bg-koma-page p-3">
@@ -903,8 +934,8 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                       Tipo atual: {OPERATION_PROFILE_OPTIONS.find((option) => option.value === snapshot.restaurant.operationProfile)?.label || snapshot.restaurant.operationProfile}
                     </span>
                   </div>
-                  <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted">
-                    O KÔMA já recebeu esta classificação durante a contratação ou implantação. Confirme se está correta ou escolha outro tipo antes de montar o cardápio. A alteração não cria, apaga nem muda produtos, preços ou adicionais automaticamente.
+                  <p id="operation-profile-help" className="mt-1 max-w-2xl text-xs leading-relaxed text-koma-muted">
+                    Organiza os atalhos. Você pode mudar depois; produtos, preços e complementos são preservados.
                   </p>
                 </div>
                 <button
@@ -916,26 +947,17 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                   {savingOperationProfile ? 'Salvando…' : operationProfileNotice ? 'Confirmado ✓' : 'Confirmar tipo'}
                 </button>
               </div>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                {OPERATION_PROFILE_OPTIONS.map((option) => {
-                  const selected = operationProfile === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => {
-                        setOperationProfile(option.value);
-                        setOperationProfileNotice('');
-                        setOperationProfileError('');
-                      }}
-                      className={`rounded-xl border px-3 py-3 text-left transition ${selected ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-raised'}`}
-                    >
-                      <span className="block text-xs font-black">{option.label}</span>
-                      <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">{option.description}</span>
-                    </button>
-                  );
-                })}
+              <div className="mt-4 max-w-md">
+                <label htmlFor="operation-profile" className="mb-2 block text-sm font-bold">Perfil do restaurante</label>
+                <select id="operation-profile" value={operationProfile} disabled={savingOperationProfile} aria-describedby="operation-profile-help"
+                  onChange={event => {
+                    setOperationProfile(event.target.value as OperationProfile);
+                    setOperationProfileNotice('');
+                    setOperationProfileError('');
+                  }}
+                  className="min-h-11 w-full rounded-xl border border-koma-border bg-koma-raised px-3 text-sm text-koma-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-koma-accent disabled:opacity-60">
+                  {OPERATION_PROFILE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
               </div>
               {operationProfileNotice && (
                 <p role="status" className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-[10px] font-bold text-emerald-300">

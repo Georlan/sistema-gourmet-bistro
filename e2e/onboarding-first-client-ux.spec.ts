@@ -74,6 +74,110 @@ async function activate(page: Page) {
   await expect(page).toHaveURL(/\?view=ativar$/);
 }
 
+test('prévia da identidade acompanha a edição desde a primeira etapa, sem produtos ou preços fictícios', async ({ page }) => {
+  await page.route('**/api/**', route => route.fulfill({ json: {} }));
+  await page.route('**/api/onboarding/status', route => route.fulfill({ json: baseSnapshot({ mode: 'commercial' }) }));
+  await page.route('**/api/cardapio-digital/config', route => route.fulfill({ json: { nome: 'Minha marmitaria', socials: {}, horarios_funcionamento: [] } }));
+  await activate(page);
+  const publicMenu = page.getByRole('link', { name: 'Ver meu cardápio (abre em outra aba)', exact: true });
+  await expect(publicMenu).toHaveAttribute('href', '/c/primeiro-cliente');
+  await expect(publicMenu).toHaveAttribute('target', '_blank');
+  const preview = page.getByRole('complementary', { name: 'Prévia da identidade do cardápio' });
+  await expect(preview).toBeVisible();
+  await expect(preview).toContainText('Minha marmitaria');
+  await page.getByLabel('Nome público do restaurante', { exact: true }).fill('Marmitaria da Ana');
+  await expect(preview).toContainText('Marmitaria da Ana');
+  await expect(preview).not.toContainText('R$');
+  await expect(preview).not.toContainText('Pizzas');
+  await expect(preview).toContainText('não publica nem libera pedidos');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+for (const profile of ['generic', 'marmitaria', 'pizzaria', 'acai', 'churrasco']) {
+  test(`perfil ${profile}: escolha simples salva somente a classificação`, async ({ page }) => {
+    const snapshot = baseSnapshot({ mode: 'commercial' });
+    const writes: Array<{ url: string; payload: unknown }> = [];
+    await page.route('**/api/**', route => {
+      if (route.request().method() !== 'GET') writes.push({ url: route.request().url(), payload: route.request().postDataJSON() });
+      return route.fulfill({ json: {} });
+    });
+    await page.route('**/api/onboarding/status', route => route.fulfill({ json: snapshot }));
+    await page.route('**/api/onboarding/operation-profile', route => {
+      writes.push({ url: route.request().url(), payload: route.request().postDataJSON() });
+      return route.fulfill({ json: { ...snapshot, restaurant: { ...snapshot.restaurant, operationProfile: profile } } });
+    });
+    await activate(page);
+    await page.getByText('Ajustes adicionais · opcionais nesta inscrição', { exact: true }).click();
+    const select = page.getByLabel('Perfil do restaurante', { exact: true });
+    await expect(select).toHaveCount(1);
+    await expect(select.locator('option')).toHaveCount(5);
+    await select.selectOption(profile);
+    const label = await select.locator('option:checked').textContent();
+    await page.getByRole('button', { name: 'Confirmar tipo', exact: true }).click();
+    await expect(page.getByRole('button', { name: new RegExp(`Tipo de operação ${label}`) })).toBeVisible();
+    expect(writes).toEqual([{ url: expect.stringContaining('/api/onboarding/operation-profile'), payload: { operation_profile: profile } }]);
+    expect(snapshot.trial.startsAt).toBeNull();
+  });
+}
+
+test('consulta lenta da liberação não acumula outra requisição no próximo intervalo', async ({ page }) => {
+  const snapshot = baseSnapshot({ mode: 'commercial', releaseState: 'awaiting_koma', progress: 4, operationsReady: true });
+  let reads = 0;
+  let delayStatus = false;
+  let release: (() => void) | undefined;
+  await page.route('**/api/**', route => route.fulfill({ json: {} }));
+  await page.route('**/api/onboarding/status', async route => {
+    reads++;
+    if (delayStatus) await new Promise<void>(resolve => { release = resolve; });
+    await route.fulfill({ json: snapshot }).catch(() => {});
+  });
+  await page.clock.install();
+  await activate(page);
+  await expect(page.getByText('Sua parte está concluída ✓', { exact: true })).toBeVisible();
+  const initialReads = reads;
+  delayStatus = true;
+  await page.clock.fastForward(8000);
+  await expect.poll(() => reads).toBe(initialReads + 1);
+  await page.clock.fastForward(8000);
+  expect(reads).toBe(initialReads + 1);
+  release?.();
+  await expect(page.getByText('Sua parte está concluída ✓', { exact: true })).toBeVisible();
+});
+
+test('resposta antiga do acompanhamento não desfaz o perfil confirmado', async ({ page }) => {
+  const snapshot = baseSnapshot({ mode: 'commercial', progress: 3, operationsReady: true, orderTypes: ['retirada'] });
+  snapshot.steps.profile = true;
+  snapshot.steps.hours = true;
+  Object.assign(snapshot.restaurant, { operationProfile: 'marmitaria' });
+  Object.assign(snapshot, { catalogAssistance: { id: 'local-menu', filename: 'menu.webp', status: 'processing' } });
+  let release: (() => void) | undefined;
+  let delayStatus = false;
+  await page.route('**/api/**', route => route.fulfill({ json: {} }));
+  await page.route('**/api/onboarding/status', async route => {
+    if (delayStatus) await new Promise<void>(resolve => { release = resolve; });
+    await route.fulfill({ json: snapshot }).catch(() => {});
+  });
+  await page.route('**/api/onboarding/operation-profile', route => route.fulfill({ json: {
+    ...snapshot, restaurant: { ...snapshot.restaurant, operationProfile: 'acai' },
+  } }));
+  await page.clock.install();
+  await activate(page);
+  await expect(page.getByRole('region', { name: 'Cardápio do cadastro' })).toBeVisible();
+  delayStatus = true;
+  await page.clock.fastForward(30000);
+  await expect.poll(() => Boolean(release)).toBe(true);
+  await page.getByText('Ajustes adicionais · opcionais nesta inscrição', { exact: true }).click();
+  await page.getByRole('button', { name: /Tipo de operação Marmitaria .* Editar/ }).click();
+  await page.getByLabel('Perfil do restaurante', { exact: true }).selectOption('acai');
+  const cancelledStatus = page.waitForEvent('requestfailed', request => request.url().includes('/api/onboarding/status'));
+  await page.getByRole('button', { name: 'Confirmar tipo', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Tipo de operação Açaí Recolher/ })).toBeVisible();
+  await cancelledStatus;
+  release?.();
+  await expect(page.getByLabel('Perfil do restaurante', { exact: true })).toHaveValue('acai');
+  expect(snapshot.trial.startsAt).toBeNull();
+});
+
 test('modalidades mostram confirmação persistida e KÔMA Pagamentos fica claramente opcional', async ({ page }) => {
   let snapshot = baseSnapshot();
   await page.route('**/api/subscription', route => route.fulfill({ json: { subscription: null } }));
@@ -192,12 +296,15 @@ test('cadastro comercial salva dados e horários na própria tela e só avança 
   let releaseFailedSave: (() => void) | undefined;
   let failValidation = false;
   let statusReads = 0;
+  let holdHoursSave = false;
+  let releaseHoursSave: (() => void) | undefined;
   await page.route('**/api/onboarding/status', route => {
     statusReads++;
     return route.fulfill(failValidation ? { status: 503, json: {} } : { json: snapshot });
   });
   await page.route('**/api/cardapio-digital/config', async route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: config });
+    if (holdHoursSave) await new Promise<void>(resolve => { releaseHoursSave = resolve; });
     if (failSave) {
       await new Promise<void>(resolve => { releaseFailedSave = resolve; });
       return route.fulfill({ status: 500, json: { detail: 'Falha simulada ao salvar' } });
@@ -210,6 +317,7 @@ test('cadastro comercial salva dados e horários na própria tela e só avança 
   await activate(page);
   const guided = page.getByRole('region', { name: 'Etapa atual do cadastro' });
   await guided.getByLabel('Nome público do restaurante', { exact: true }).fill('Restaurante simulado');
+  const initialStatusReads = statusReads;
   await guided.getByLabel('WhatsApp', { exact: true }).fill('85999999999');
   await guided.getByLabel('Endereço físico', { exact: true }).fill('Rua de teste, 100');
   await guided.getByRole('button', { name: 'Salvar e continuar', exact: true }).click();
@@ -227,15 +335,28 @@ test('cadastro comercial salva dados e horários na própria tela e só avança 
   await expect(guided.getByRole('heading', { name: 'Horários do restaurante' })).toBeVisible();
   await expect(page).toHaveURL(/view=ativar/);
   await expect(guided.getByRole('heading', { name: 'Pedidos agendados' })).toHaveCount(0);
+  const readsBeforeEmptyHours = statusReads;
+  const writesBeforeEmptyHours = config;
+  await guided.getByRole('button', { name: 'Salvar e continuar', exact: true }).click();
+  await expect(guided.getByRole('alert')).toHaveText('Adicione ao menos um horário para continuar.');
+  expect(statusReads).toBe(readsBeforeEmptyHours);
+  expect(config).toBe(writesBeforeEmptyHours);
   await guided.getByRole('button', { name: 'Adicionar horário', exact: true }).click();
   await guided.getByLabel('Dias', { exact: true }).fill('Segunda a Sexta');
   await guided.getByLabel('Horário', { exact: true }).fill('18:00 - 01:00');
+  holdHoursSave = true;
   await guided.getByRole('button', { name: 'Salvar e continuar', exact: true }).click();
+  await expect.poll(() => Boolean(releaseHoursSave)).toBe(true);
+  await expect(guided.getByRole('button', { name: 'Adicionar horário', exact: true })).toBeDisabled();
+  await expect(guided.getByRole('button', { name: 'Remover horário Segunda a Sexta', exact: true })).toBeDisabled();
+  await expect(guided.getByLabel('Dias', { exact: true })).toBeDisabled();
+  releaseHoursSave?.();
+  holdHoursSave = false;
   await expect(guided).toHaveCount(0);
   await expect(page.getByRole('button', { name: /4. Cardápio/ })).toBeVisible();
   expect(snapshot.trial.startsAt).toBeNull();
   expect(snapshot.readyForRelease).toBe(false);
-  expect(statusReads).toBe(5);
+  expect(statusReads).toBe(initialStatusReads + 3);
   await page.getByRole('button', { name: /1. Dados do restaurante/ }).click();
   await guided.getByLabel('Nome público do restaurante', { exact: true }).fill('Alteração não salva');
   page.once('dialog', dialog => dialog.dismiss());
