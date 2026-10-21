@@ -1,6 +1,6 @@
 import CatalogProductImage from './CatalogProductImage';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Flame, Truck } from 'lucide-react';
+import { ArrowRight, Truck } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
 import { CardapioRecommendations } from './CardapioRecommendations';
 import { CardapioHighlights } from './CardapioHighlights';
@@ -76,33 +76,25 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
   };
 
   return (
-    <section aria-labelledby="popular-products-title" className="w-full basis-full border-t border-koma-border pt-3" id="popular-products-home">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
-          <Flame className="h-4 w-4" aria-hidden="true" />
-        </span>
-        <div>
-          <h2 id="popular-products-title" className="text-sm font-black text-koma-foreground">Mais escolhidos</h2>
-        </div>
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none" role="list">
+    <section aria-labelledby="popular-products-title" className="cardapio-popular-section w-full basis-full" id="popular-products-home">
+      <h2 id="popular-products-title" className="cardapio-showcase-heading">Mais escolhidos</h2>
+      <div className="cardapio-popular-list" role="list">
         {products.map((product) => (
           <button
             key={product.id}
             type="button"
             role="listitem"
             onClick={() => openProduct(product)}
-            className="flex min-w-[210px] max-w-[250px] items-center gap-3 rounded-xl border border-koma-border bg-koma-panel p-2.5 text-left transition hover:border-emerald-500/30 hover:bg-koma-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+            className="cardapio-popular-card"
             aria-label={`Abrir ${product.name}`}
           >
             <CatalogProductImage
               image={product.image}
-              className="h-12 w-12 shrink-0 rounded-lg object-cover"
+              className="cardapio-popular-card__image"
             />
-            <span className="min-w-0">
-              <strong className="block truncate text-xs text-koma-foreground">{product.name}</strong>
-              <span className="mt-1 block text-xs font-black text-emerald-400">{money(product.price)}</span>
+            <span className="cardapio-popular-card__content">
+              <strong className="cardapio-popular-card__name">{product.name}</strong>
+              <span className="cardapio-popular-card__price">{money(product.price)}</span>
             </span>
           </button>
         ))}
