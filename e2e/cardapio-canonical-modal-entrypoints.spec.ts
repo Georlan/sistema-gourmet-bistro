@@ -336,6 +336,10 @@ test('quentinha em celular mantém modal e rodapé no viewport e aceita toques r
   const footer = modal.getByTestId('product-modal-footer');
   await expect(dialog).toBeVisible();
   await expect(footer.getByRole('button', { name: /Adicionar 1 × Quentinha G/ })).toBeVisible();
+  // A geometria final só é aferida após a animação de entrada terminar.
+  await dialog.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => undefined)));
+  });
 
   const geometry = await modal.evaluate((overlay) => {
     const dialog = overlay.querySelector('[role="dialog"]')!;
