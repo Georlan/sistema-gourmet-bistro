@@ -201,7 +201,7 @@ test.describe('CRM Visual Evidence Capture', () => {
       }
     ];
 
-    await page.route('**/fidelidade/clientes', route => route.fulfill({ json: mockCustomers }));
+    await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => route.fulfill({ json: mockCustomers }));
 
     // Mock individual customer profile for drawer
     await page.route('**/fidelidade/clientes/c-1/perfil', route => route.fulfill({

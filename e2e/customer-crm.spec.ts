@@ -88,7 +88,7 @@ test('CRM ranks buyers, filters inactivity, searches formatted phones and preser
   await expect(records.first()).toContainText('Ana Frequente');
   await expect(records.first()).toContainText('Burger da casa');
   await expect(records.first()).toContainText('600,00');
-  await records.first().getByText('Ver hábitos de Ana Frequente', { exact: true }).click();
+  await records.first().getByLabel('Ver hábitos de Ana Frequente', { exact: true }).click();
   await expect(records.first()).toContainText('01/09/2026');
   await expect(records.first()).toContainText('3 dias');
 
@@ -133,4 +133,6 @@ test('CRM ranks buyers, filters inactivity, searches formatted phones and preser
   await page.evaluate(() => document.querySelector('.cashier-main')?.scrollTo(0, 0));
   await page.getByLabel('Ordenar clientes', { exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath(`crm-${testInfo.project.name}.png`), fullPage: true });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath(`crm-viewport-${testInfo.project.name}.png`), fullPage: false, animations: 'disabled' });
 });

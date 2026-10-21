@@ -32,7 +32,7 @@ bcrypt==5.0.0
     # via
     #   -c backend/requirements.lock
     #   -r backend/requirements.txt
-certifi==2026.7.22
+certifi==2026.10.19
     # via
     #   -c backend/requirements.lock
     #   httpcore
@@ -109,7 +109,7 @@ multidict==6.9.1
     # via
     #   aiohttp
     #   yarl
-pillow==12.3.0
+pillow==13.0.0
     # via -r backend/requirements.txt
 pillow-heif==1.8.0
     # via -r backend/requirements.txt

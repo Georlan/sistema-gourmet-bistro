@@ -62,9 +62,7 @@ export function CustomerRelationshipPanel({ customers }: Props) {
           <HeartHandshake size={16} className="text-emerald-600 dark:text-emerald-400" />
           Saúde do relacionamento e frequência
         </h3>
-        <p className="text-sm leading-relaxed text-koma-muted">
-          Acompanhe o tempo desde a última compra identificada e saiba quem precisa de atenção antes de esfriar.
-        </p>
+
       </div>
 
       {/* Resumo compacto de segmentos */}

@@ -70,7 +70,7 @@ test('hints próximos de clientes geram uma reconciliação e preservam o snapsh
   let reads = 0;
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
-  await page.route('**/fidelidade/clientes', async route => {
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, async route => {
     reads++;
     if (reads === 2) await pending;
     await route.fulfill({ json: [{ id: 'cli-1', nome: reads === 1 ? 'Cliente E2E' : 'Cliente atualizado', telefone: '85999999999' }] });
@@ -97,9 +97,10 @@ test('falha inicial de clientes não aparece como lista vazia e permite tentar n
   await seedCashierSession(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
   let reads = 0;
-  await page.route('**/fidelidade/clientes', route => {
+  let recovered = false;
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => {
     reads++;
-    return route.fulfill(reads === 1 ? { status: 503, json: {} } : { json: [{ id: 'cli-1', nome: 'Cliente E2E' }] });
+    return route.fulfill(!recovered ? { status: 503, json: {} } : { json: [{ id: 'cli-1', nome: 'Cliente E2E' }] });
   });
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
@@ -108,9 +109,12 @@ test('falha inicial de clientes não aparece como lista vazia e permite tentar n
   await navigateRelationship(page, 'clientes');
   await expect(page.getByText('Não foi possível carregar os clientes')).toBeVisible();
   await expect(page.getByText('Nenhum cliente cadastrado ainda')).toHaveCount(0);
+  // Background reconciliation may retry during navigation; the outage stays real
+  // until the operator retries after recovery. Coalescing is tested separately.
+  recovered = true;
   await page.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
   await expect(page.getByText('Cliente E2E', { exact: true }).filter({ visible: true }).last()).toBeVisible();
-  expect(reads).toBe(2);
+  expect(reads).toBeGreaterThanOrEqual(2);
 });
 
 test('SuperAdmin distingue falha inicial de zero tenants e conserva snapshot após falha de refresh', async ({ page }) => {
@@ -147,7 +151,7 @@ test('nova sessão de Caixa não reaproveita clientes da sessão anterior', asyn
   await seedCashierSession(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
   const tokens: string[] = [];
-  await page.route('**/fidelidade/clientes', route => {
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => {
     const token = route.request().headers().authorization || '';
     tokens.push(token);
     return route.fulfill({ json: [{ id: 'cli-1', nome: token.includes('session-new-fixture') ? 'Cliente da nova sessão' : 'Cliente da sessão antiga' }] });

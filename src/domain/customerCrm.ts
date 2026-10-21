@@ -51,9 +51,23 @@ export function selectCrmCustomers(customers: LoyaltyCustomer[], search: string,
     let difference = 0;
     if (sort === 'orders') difference = (b.pedidos_concluidos ?? 0) - (a.pedidos_concluidos ?? 0) || (b.valor_pago_total ?? 0) - (a.valor_pago_total ?? 0);
     if (sort === 'spent') difference = (b.valor_pago_total ?? 0) - (a.valor_pago_total ?? 0);
-    if (sort === 'recent') difference = (a.dias_sem_comprar ?? Infinity) - (b.dias_sem_comprar ?? Infinity);
-    if (sort === 'absent') difference = (b.dias_sem_comprar ?? -1) - (a.dias_sem_comprar ?? -1);
-    return (Number.isNaN(difference) ? 0 : difference) || a.cliente.localeCompare(b.cliente, 'pt-BR') || a.id.localeCompare(b.id);
+    const lastPurchase = (customer: LoyaltyCustomer) => {
+      const timestamp = customer.ultima_compra_em ? Date.parse(customer.ultima_compra_em) : NaN;
+      return Number.isFinite(timestamp) ? timestamp : customer.dias_sem_comprar != null ? -customer.dias_sem_comprar * 86400000 : null;
+    };
+    if (sort === 'recent' || sort === 'absent') {
+      const first = lastPurchase(a);
+      const second = lastPurchase(b);
+      if (first === null || second === null) difference = first === second ? 0 : first === null ? 1 : -1;
+      else difference = sort === 'recent' ? second - first : first - second;
+    }
+    if (sort === 'name') {
+      const nameKey = (name: string) => name.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('pt-BR');
+      const first = nameKey(a.cliente);
+      const second = nameKey(b.cliente);
+      difference = first < second ? -1 : first > second ? 1 : 0;
+    }
+    return (Number.isNaN(difference) ? 0 : difference) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   });
 }
 
@@ -91,7 +105,7 @@ export function filterCrmCustomersAdvanced(customers: LoyaltyCustomer[], options
     const count = customer.pedidos_concluidos ?? 0;
     const total = customer.valor_pago_total ?? 0;
 
-    if (recency === 'SEM_COMPRA' && (count > 0 || days !== null)) return false;
+    if (recency === 'SEM_COMPRA' && (count > 0 || days != null)) return false;
     if (recency === 'ATE_15' && (days === null || days === undefined || days > 15)) return false;
     if (recency === '16_30' && (days === null || days === undefined || days < 16 || days > 30)) return false;
     if (recency === '31_60' && (days === null || days === undefined || days < 31 || days > 60)) return false;

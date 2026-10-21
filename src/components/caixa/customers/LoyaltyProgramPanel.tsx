@@ -46,8 +46,7 @@ export function LoyaltyProgramPanel({
       <section aria-label="Programa vigente" className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-lg font-bold text-koma-foreground">Seu programa de fidelidade</h3>
-            <p className="mt-1 text-sm text-koma-muted">Regra confirmada pelo servidor, não pelo formulário.</p>
+            <h3 className="text-lg font-bold text-koma-foreground">Programa de fidelidade</h3>
           </div>
           {saved && (
             <span className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${saved.ativo
@@ -78,17 +77,17 @@ export function LoyaltyProgramPanel({
               </div>
               <div>
                 <dt className="text-sm text-koma-muted">Podem resgatar agora</dt>
-                <dd className="mt-1 text-xl font-bold text-emerald-400">{canRedeem} <span className="text-sm font-medium text-koma-muted">clientes</span></dd>
+                <dd className="mt-1 text-xl font-bold text-emerald-400">{canRedeem} <span className="text-sm font-medium text-koma-muted">{canRedeem === 1 ? 'cliente' : 'clientes'}</span></dd>
               </div>
               <div>
                 <dt className="text-sm text-koma-muted">Ainda acumulando</dt>
-                <dd className="mt-1 text-xl font-bold text-koma-foreground">{accumulating} <span className="text-sm font-medium text-koma-muted">clientes</span></dd>
+                <dd className="mt-1 text-xl font-bold text-koma-foreground">{accumulating} <span className="text-sm font-medium text-koma-muted">{accumulating === 1 ? 'cliente' : 'clientes'}</span></dd>
               </div>
             </dl>
             <p className="text-sm text-koma-muted">
               {saved.ativo
                 ? saved.tipo_recompensa === 'PONTOS'
-                  ? `${percent(saved.taxa_conversao)} ponto(s) por R$ 1; cada ponto vale ${saved.valor_ponto_em_dinheiro.toLocaleString('pt-BR', {style:'currency',currency:'BRL',minimumFractionDigits:4})} no resgate.`
+                  ? `${percent(saved.taxa_conversao)} ${saved.taxa_conversao === 1 ? 'ponto' : 'pontos'} por R$ 1; cada ponto vale ${saved.valor_ponto_em_dinheiro.toLocaleString('pt-BR', {style:'currency',currency:'BRL',minimumFractionDigits:4})} no resgate.`
                   : `${percent(saved.taxa_conversao)}% em cashback nas vendas elegíveis.`
                 : 'Novas vendas não geram pontos ou cashback enquanto o programa estiver pausado.'}
             </p>
@@ -97,7 +96,7 @@ export function LoyaltyProgramPanel({
 
         {dirty && (
           <p role="status" className="border-l-2 border-amber-400 pl-3 text-sm font-medium text-amber-300">
-            Alterações pendentes — a regra mostrada acima continua vigente até o salvamento ser confirmado.
+            Alterações pendentes · programa vigente até confirmar.
           </p>
         )}
 
@@ -202,9 +201,11 @@ export function LoyaltyProgramPanel({
       </section>
 
       {saved && (
-        <section className="space-y-3">
+        <details className="rounded-xl border border-koma-border bg-koma-panel px-4 py-2">
+          <summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold text-koma-foreground">Simulação financeira</summary>
+          <div className="mt-3 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-base font-semibold text-koma-foreground">Simulação financeira</h3>
+
             {dirty && (
               <div role="group" aria-label="Cenário da simulação" className="flex gap-1 rounded-lg bg-koma-raised p-1">
                 {(['vigente', 'rascunho'] as const).map(mode => (
@@ -221,10 +222,11 @@ export function LoyaltyProgramPanel({
             active={simulated?.ativo ?? false}
             rewardPercent={simulated ? effectiveLoyaltyPercent(simulated) : 0}
           />
-        </section>
+          </div>
+        </details>
       )}
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-koma-muted">
-        <span>Resgate mínimo prático: R$ 1,00 na modalidade vigente. Saldo da modalidade anterior permanece registrado.</span>
+        <details><summary className="min-h-10 cursor-pointer py-2">Regras de resgate</summary><p className="max-w-xl py-2">Resgate mínimo prático: R$ 1,00 na modalidade vigente. Saldo da modalidade anterior permanece registrado.</p></details>
         <button type="button" onClick={onOpenCustomers} className="koma-btn-secondary min-h-11 rounded-lg px-4 text-sm">Ver benefícios por cliente</button>
       </div>
     </div>

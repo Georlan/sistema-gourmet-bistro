@@ -102,7 +102,7 @@ export function CustomerResultsWorkspace({
       <div className="flex flex-col gap-3 py-1 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h3 className="text-lg font-bold text-koma-foreground">
-            Quantos clientes voltaram e quanto compraram?
+            Retorno dos clientes
           </h3>
         </div>
 
@@ -165,69 +165,77 @@ export function CustomerResultsWorkspace({
             <div role="img" aria-label={`${retorno.clientes_que_voltaram} de ${retorno.clientes_abordados_no_periodo} clientes voltaram`} className="h-3 overflow-hidden rounded-full bg-koma-raised">
               <div className="h-full rounded-full bg-emerald-500" style={{width: `${retorno.clientes_abordados_no_periodo > 0 ? Math.min(100, Math.max(0, retorno.clientes_que_voltaram / retorno.clientes_abordados_no_periodo * 100)) : 0}%`}} />
             </div>
-          </> : <p className="text-sm text-koma-muted">Não medido: confirme contatos na aba Campanhas para acompanhar retornos.</p>}
+          </> : <p className="text-sm text-koma-muted">Não medido</p>}
         </article>
         <article className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-2.5">
-          <h4 className="text-sm font-bold text-koma-muted">Valor líquido de compras associadas</h4>
+          <h4 className="text-sm font-bold text-koma-muted">Valor líquido associado</h4>
           <strong className="block text-3xl font-black text-emerald-400">{hasAssociations ? money(valores.total_liquido_brl) : '—'}</strong>
           {hasAssociations ? <>
-            <p className="text-sm text-koma-muted">{pedidos?.total ?? '—'} compras associadas (inclui cupom sem contato confirmado)</p>
-            <p className="text-xs text-koma-muted">Cupom vinculado: {money(valores.comprovado_cupom_brl)} · Associação temporal: {money(valores.estimado_temporal_brl)}</p>
-          </> : <p className="text-sm text-koma-muted">Ainda sem dados de compras após contatos.</p>}
-          <p className="text-xs text-koma-muted">Compras associadas por cupom ou por contato; não representam lucro, causalidade ou vendas incrementais comprovadas.</p>
+            <p className="text-sm text-koma-muted">{pedidos?.total ?? '—'} compras associadas</p>
+          </> : <p className="text-sm text-koma-muted">Não medido</p>}
+          <p className="text-xs text-koma-muted">Não representa lucro.</p>
         </article>
       </div>
-      <section aria-label="Evolução observada" className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
-        <h4 className="text-sm font-bold text-koma-foreground">Evolução de contatos confirmados e retornos observados</h4>
-        <p className="text-xs text-koma-muted">Eventos reais por data: contagem de cliente/dia. Ao agrupar dias, uma pessoa pode aparecer em mais de um dia; não equivale ao total de clientes únicos.</p>
-        {temporalSeries.length > 0 ? <>
-          <div className="flex flex-wrap gap-3 text-xs text-koma-muted">
-            <span><span className="mr-1 inline-block h-2 w-3 rounded bg-emerald-500" />Contatos manuais</span>
-            <span><span className="mr-1 inline-block h-2 w-3 rounded bg-sky-500" />Clientes com compras posteriores</span>
-          </div>
-          <div className="overflow-x-auto">
-            <div className="flex min-w-[420px] items-end gap-1.5" role="img" aria-label="Evolução de registros por datas verificadas. Os números estão na tabela acessível abaixo.">
-              {temporalSeries.map(point => <div key={point.key} className="min-w-0 flex-1 text-center" title={point.label + ': ' + point.contacts + ' contatos, ' + point.returns + ' retornos'}>
-                <div className="flex h-28 items-end justify-center gap-1 border-b border-koma-border">
-                  <div className="w-2 max-w-[35%] bg-emerald-500 rounded-t-sm" style={{height: (point.contacts / maxEvent * 100) + '%'}} />
-                  <div className="w-2 max-w-[35%] bg-sky-500 rounded-t-sm" style={{height: (point.returns / maxEvent * 100) + '%'}} />
+      <details className="rounded-xl border border-koma-border bg-koma-panel px-4 py-2" aria-label="Análise detalhada dos resultados">
+        <summary className="min-h-10 cursor-pointer py-2 text-sm font-semibold text-koma-foreground">Evolução e origem das compras</summary>
+        <div className="mt-3 space-y-3">
+          <section aria-label="Evolução observada" className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
+            <h4 className="text-sm font-bold text-koma-foreground">Contatos e retornos</h4>
+
+            {temporalSeries.length > 0 ? <>
+              <div className="flex flex-wrap gap-3 text-xs text-koma-muted">
+                <span><span className="mr-1 inline-block h-2 w-3 rounded bg-emerald-500" />Contatos manuais</span>
+                <span><span className="mr-1 inline-block h-2 w-3 rounded bg-sky-500" />Clientes com compras posteriores</span>
+              </div>
+              <div className="overflow-x-auto">
+                <div className="flex min-w-[420px] items-end gap-1.5" role="img" aria-label="Evolução de registros por datas verificadas. Os números estão na tabela acessível abaixo.">
+                  {temporalSeries.map(point => <div key={point.key} className="min-w-0 flex-1 text-center" title={point.label + ': ' + point.contacts + ' contatos, ' + point.returns + ' retornos'}>
+                    <div className="flex h-28 items-end justify-center gap-1 border-b border-koma-border">
+                      <div className="w-2 max-w-[35%] bg-emerald-500 rounded-t-sm" style={{height: (point.contacts / maxEvent * 100) + '%'}} />
+                      <div className="w-2 max-w-[35%] bg-sky-500 rounded-t-sm" style={{height: (point.returns / maxEvent * 100) + '%'}} />
+                    </div>
+                    <span className="block mt-1 text-[10px] text-koma-muted">{point.label}</span>
+                  </div>)}
                 </div>
-                <span className="block mt-1 text-[10px] text-koma-muted">{point.label}</span>
-              </div>)}
-            </div>
+              </div>
+              <details className="text-xs text-koma-muted"><summary className="min-h-10 cursor-pointer py-2">Consultar números do gráfico</summary>
+                <table className="w-full text-left"><thead><tr><th>Data inicial</th><th>Contatos</th><th>Retornos observados</th></tr></thead>
+                  <tbody>{temporalSeries.map(point => <tr key={point.key}><td>{point.label}</td><td>{point.contacts}</td><td>{point.returns}</td></tr>)}</tbody>
+                </table>
+              </details>
+            </> : <p className="text-sm text-koma-muted">Sem eventos datados.</p>}
+          </section>
+          <section aria-label="Compras por evidência" className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
+            <h4 className="text-sm font-bold text-koma-foreground">Compras associadas por evidência</h4>
+            {hasAssociations ? <>
+              <div role="img" aria-label={String(pedidos?.comprovados_por_cupom || 0) + ' compras com cupom e ' + String(pedidos?.estimados_por_janela_temporal || 0) + ' compras associadas por data'} className="flex h-3 overflow-hidden rounded-full bg-koma-raised">
+                <div className="bg-emerald-500" style={{width: (totalEvidence ? Number(pedidos?.comprovados_por_cupom || 0) / totalEvidence * 100 : 0) + '%'}} />
+                <div className="bg-sky-500" style={{width: (totalEvidence ? Number(pedidos?.estimados_por_janela_temporal || 0) / totalEvidence * 100 : 0) + '%'}} />
+              </div>
+              <p className="text-xs text-koma-muted">{count(pedidos?.comprovados_por_cupom)} usos de cupom vinculado (destes, {count(pedidos?.cupons_sem_contato_confirmado)} sem contato confirmado) · {count(pedidos?.estimados_por_janela_temporal)} associações temporais. Nenhuma compra é contada duas vezes.</p>
+            </> : <p className="text-sm text-koma-muted">Não medido</p>}
+          </section>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <article className="rounded-xl border border-koma-border bg-koma-panel p-4">
+              <h4 className="text-xs font-bold text-koma-muted">Clientes recorrentes · histórico total</h4>
+              <strong className="block mt-2 text-xl">{segundaCompra ? segundaCompra.clientes_que_fizeram_segunda_compra : '—'}</strong>
+              <p className="text-xs text-koma-muted">{segundaCompra ? `De ${segundaCompra.clientes_com_1_compra_base} clientes com compra em todo o histórico; não é conversão do período.` : 'Ainda sem dados'}</p>
+            </article>
+            <article className="rounded-xl border border-koma-border bg-koma-panel p-4">
+              <h4 className="text-xs font-bold text-koma-muted">Descontos no período</h4>
+              <strong className="block mt-2 text-xl">{descontos ? money(descontos.total_brl) : '—'}</strong>
+              <p className="text-xs text-koma-muted">Pedidos válidos com cliente identificado, inclusive fora de campanhas. Não é custo exclusivo das ações.</p>
+            </article>
           </div>
-          <details className="text-xs text-koma-muted"><summary className="min-h-10 cursor-pointer py-2">Consultar números do gráfico</summary>
-            <table className="w-full text-left"><thead><tr><th>Data inicial</th><th>Contatos</th><th>Retornos observados</th></tr></thead>
-              <tbody>{temporalSeries.map(point => <tr key={point.key}><td>{point.label}</td><td>{point.contacts}</td><td>{point.returns}</td></tr>)}</tbody>
-            </table>
-          </details>
-        </> : <p className="text-sm text-koma-muted">Sem eventos datados disponíveis para o gráfico. Não estimamos séries a partir de totais.</p>}
-      </section>
-      <section aria-label="Compras por evidência" className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
-        <h4 className="text-sm font-bold text-koma-foreground">Compras associadas por evidência</h4>
-        {hasAssociations ? <>
-          <div role="img" aria-label={String(pedidos?.comprovados_por_cupom || 0) + ' compras com cupom e ' + String(pedidos?.estimados_por_janela_temporal || 0) + ' compras associadas por data'} className="flex h-3 overflow-hidden rounded-full bg-koma-raised">
-            <div className="bg-emerald-500" style={{width: (totalEvidence ? Number(pedidos?.comprovados_por_cupom || 0) / totalEvidence * 100 : 0) + '%'}} />
-            <div className="bg-sky-500" style={{width: (totalEvidence ? Number(pedidos?.estimados_por_janela_temporal || 0) / totalEvidence * 100 : 0) + '%'}} />
-          </div>
-          <p className="text-xs text-koma-muted">{count(pedidos?.comprovados_por_cupom)} usos de cupom vinculado (destes, {count(pedidos?.cupons_sem_contato_confirmado)} sem contato confirmado) · {count(pedidos?.estimados_por_janela_temporal)} associações temporais. Nenhuma compra é contada duas vezes.</p>
-        </> : <p className="text-sm text-koma-muted">Não medido: não há evidência de compras associadas.</p>}
-      </section>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <article className="rounded-xl border border-koma-border bg-koma-panel p-4">
-          <h4 className="text-xs font-bold text-koma-muted">Clientes com 2 ou mais compras · histórico total</h4>
-          <strong className="block mt-2 text-xl">{segundaCompra ? segundaCompra.clientes_que_fizeram_segunda_compra : '—'}</strong>
-          <p className="text-xs text-koma-muted">{segundaCompra ? `De ${segundaCompra.clientes_com_1_compra_base} clientes com compra em todo o histórico; não é conversão do período.` : 'Ainda sem dados'}</p>
-        </article>
-        <article className="rounded-xl border border-koma-border bg-koma-panel p-4">
-          <h4 className="text-xs font-bold text-koma-muted">Descontos em pedidos identificados do período</h4>
-          <strong className="block mt-2 text-xl">{descontos ? money(descontos.total_brl) : '—'}</strong>
-          <p className="text-xs text-koma-muted">Pedidos válidos com cliente identificado, inclusive fora de campanhas. Não é custo exclusivo das ações.</p>
-        </article>
-      </div>
+        </div>
+      </details>
       <details className="rounded-xl border border-koma-border bg-koma-panel p-3 text-sm text-koma-muted">
         <summary className="min-h-10 cursor-pointer py-2 font-semibold text-koma-foreground focus-visible:outline-2 focus-visible:outline-emerald-500">Como calculamos os resultados</summary>
         <div className="mt-3 space-y-2">
+          <p>Compras associadas incluem cupom sem contato confirmado. Associação por cupom ou contato não representa lucro, causalidade ou vendas incrementais comprovadas.</p>
+          <p>Eventos reais por data: contagem de cliente/dia. Ao agrupar dias, uma pessoa pode aparecer em mais de um dia; não equivale ao total de clientes únicos.</p>
+          {hasAssociations && <p>Cupom vinculado: {money(valores.comprovado_cupom_brl)} · Associação temporal: {money(valores.estimado_temporal_brl)}</p>}
+
           <p>{res?.regra_janelas?.explicacao || 'Campanhas usam a janela originalmente salva; a janela geral aplica-se somente a contatos sem campanha.'}</p>
           <p>{res?.regra_associacao || 'Cada pedido válido pode ser vinculado a no máximo uma evidência; cupom não prova contato.'}</p>
           <p>{res?.aviso_metodologico || 'Compras após contato sem cupom são associações por período, não comprovam que a campanha causou a venda.'}</p>
@@ -239,13 +247,13 @@ export function CustomerResultsWorkspace({
 
       <section aria-label="Resultados por campanha" className="rounded-xl border border-koma-border bg-koma-panel p-4 space-y-3">
         <h4 className="text-sm font-semibold text-koma-foreground">Resultados por campanha ({campanhas.length})</h4>
-        {res?.conciliacao_campanhas && <p className="text-sm text-koma-muted">
+        {campanhas.length > 0 && res?.conciliacao_campanhas && <details className="text-sm text-koma-muted"><summary className="min-h-9 cursor-pointer py-2">Conferir totais por campanha</summary><p>
           Do total associado: {count(res.conciliacao_campanhas.pedidos_com_campanha)} compras em campanhas ({money(res.conciliacao_campanhas.valor_com_campanha_brl)})
           {' e '}{count(res.conciliacao_campanhas.pedidos_sem_campanha)} sem campanha ({money(res.conciliacao_campanhas.valor_sem_campanha_brl)}).
           {' '}Clientes únicos podem participar de mais de uma campanha; as contagens de pessoas não devem ser somadas.
-        </p>}
+        </p></details>}
         {campanhas.length === 0 ? (
-          <p className="text-sm text-koma-muted">Nenhuma campanha registrada ainda. Inicie uma ação a partir das abas Hoje ou Campanhas.</p>
+          <p className="text-sm text-koma-muted">Nenhuma campanha registrada.</p>
         ) : <>
           <div className="hidden md:block overflow-x-auto rounded-xl border border-koma-border">
             <table className="w-full text-left text-sm">

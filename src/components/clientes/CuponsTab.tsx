@@ -190,10 +190,10 @@ export default function CuponsTab({ apiBaseUrl, authHeaders, onShowNotification,
         <div>
           <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm">
             <Ticket className="w-5 h-5" />
-            <span>Cupons de Desconto & Campanhas</span>
+            <span>Cupons</span>
           </div>
           <p className="text-xs text-koma-muted mt-1">
-            Crie cupons promocionais para seus clientes usarem no cardápio digital ou balcão.
+            Válidos no cardápio digital e no balcão.
           </p>
         </div>
 
@@ -227,7 +227,7 @@ export default function CuponsTab({ apiBaseUrl, authHeaders, onShowNotification,
           <Ticket className="w-10 h-10 mx-auto text-koma-muted opacity-40 mb-3" />
           <h3 className="text-sm font-bold text-koma-foreground">Nenhum cupom cadastrado</h3>
           <p className="text-xs text-koma-muted mt-1 max-w-sm mx-auto">
-            Crie seu primeiro cupom promocional para incentivar a primeira compra ou reengajar clientes.
+            Ofereça um desconto na próxima compra.
           </p>
           <button
             type="button"
