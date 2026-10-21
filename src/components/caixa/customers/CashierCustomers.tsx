@@ -135,55 +135,63 @@ export default function CashierCustomers({
   // Busca e filtros da aba Clientes
   const [clientesSearch, setClientesSearch] = useState('');
   const searchTerm = clientesSearch.trim();
+  const [customerSort, setCustomerSort] = useState<CustomerSort>('orders');
+  const activeSearch = Boolean(searchTerm) || customerSort !== 'orders';
+  const searchKey = `${customerSort}\u0000${searchTerm}`;
+  const searchGeneration = useRef(0);
+  const [searchRetry, setSearchRetry] = useState(0);
   const [searchResult, setSearchResult] = useState<{
     query: string; scope: string; data: LoyaltyCustomer[]; total: number;
     hasMore: boolean; loading: boolean; error: string | null;
   } | null>(null);
   const searchScope = `${apiBaseUrl}\u0000${authHeaders.Authorization || authHeaders.authorization || ''}`;
   useEffect(() => {
-    if (!searchTerm) { setSearchResult(null); return; }
+    searchGeneration.current += 1;
+    if (!activeSearch || crmTab !== 'clientes') { setSearchResult(null); return; }
     const controller = new AbortController();
-    setSearchResult({ query: searchTerm, scope: searchScope, data: [], total: 0, hasMore: false, loading: true, error: null });
+    setSearchResult(current => current?.query === searchKey && current.scope === searchScope
+      ? { ...current, loading: true, error: null }
+      : { query: searchKey, scope: searchScope, data: [], total: 0, hasMore: false, loading: true, error: null });
     const timer = setTimeout(async () => {
       try {
-        const params = new URLSearchParams({ q: searchTerm, limit: '100', offset: '0' });
+        const params = new URLSearchParams({ q: searchTerm, sort: customerSort, limit: '100', offset: '0' });
         const res = await fetch(`${apiBaseUrl}/fidelidade/clientes?${params}`, { headers: authHeaders, signal: controller.signal });
         if (!res.ok) throw new Error(`Falha na pesquisa (${res.status})`);
         const payload = await res.json();
         if (!Array.isArray(payload)) throw new Error('Pesquisa retornou dados inválidos');
         if (!controller.signal.aborted) setSearchResult({
-          query: searchTerm, scope: searchScope,
+          query: searchKey, scope: searchScope,
           data: mapCustomers(payload, res.headers.get('X-Products-Included') !== 'false'),
           total: Number(res.headers.get('X-Total-Count')) || payload.length,
           hasMore: res.headers.get('X-Has-More') === 'true', loading: false, error: null,
         });
       } catch (err) {
         if (!controller.signal.aborted) setSearchResult({
-          query: searchTerm, scope: searchScope, data: [], total: 0, hasMore: false,
+          query: searchKey, scope: searchScope, data: [], total: 0, hasMore: false,
           loading: false, error: err instanceof Error ? err.message : 'Pesquisa indisponível',
         });
       }
     }, 300);
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [searchTerm, searchScope]);
+    return () => { searchGeneration.current += 1; clearTimeout(timer); controller.abort(); };
+  }, [searchKey, searchScope, crmTab, loyaltyUsers, searchRetry]);
 
-  const activeSearch = Boolean(searchTerm);
-  const queryResult = activeSearch && searchResult?.query === searchTerm && searchResult.scope === searchScope ? searchResult : null;
+  const queryResult = activeSearch && searchResult?.query === searchKey && searchResult.scope === searchScope ? searchResult : null;
   const listUsers = activeSearch ? (queryResult?.data ?? []) : loyaltyUsers;
   const listTotal = activeSearch ? (queryResult?.total ?? 0) : totalCustomers;
   const listHasMore = activeSearch ? Boolean(queryResult?.hasMore) : hasMoreCustomers;
   const loadNextSearchPage = async () => {
     if (!queryResult || queryResult.loading || !queryResult.hasMore) return;
     const previous = queryResult;
+    const generation = searchGeneration.current;
     setSearchResult({ ...previous, loading: true });
     try {
-      const params = new URLSearchParams({ q: searchTerm, limit: '100', offset: String(previous.data.length) });
+      const params = new URLSearchParams({ q: searchTerm, sort: customerSort, limit: '100', offset: String(previous.data.length) });
       const res = await fetch(`${apiBaseUrl}/fidelidade/clientes?${params}`, { headers: authHeaders });
       if (!res.ok) throw new Error(`Falha na próxima página (${res.status})`);
       const payload = await res.json();
       if (!Array.isArray(payload)) throw new Error('Página inválida');
       setSearchResult(current => {
-        if (!current || current.query !== previous.query || current.scope !== previous.scope) return current;
+        if (generation !== searchGeneration.current || !current || current.query !== previous.query || current.scope !== previous.scope) return current;
         const already = new Set(current.data.map(c => c.id));
         const more = mapCustomers(payload, res.headers.get('X-Products-Included') !== 'false').filter(c => !already.has(c.id));
         return { ...current, data: [...current.data, ...more],
@@ -191,11 +199,10 @@ export default function CashierCustomers({
           hasMore: res.headers.get('X-Has-More') === 'true', loading: false, error: null };
       });
     } catch (err) {
-      setSearchResult(current => current?.query === previous.query && current.scope === previous.scope
+      setSearchResult(current => generation === searchGeneration.current && current?.query === previous.query && current.scope === previous.scope
         ? { ...current, loading: false, error: err instanceof Error ? err.message : 'Falha na próxima página' } : current);
     }
   };
-  const [customerSort, setCustomerSort] = useState<CustomerSort>('orders');
   const [customerSegment, setCustomerSegment] = useState<CustomerSegment>('ALL');
   const [recencyFilter, setRecencyFilter] = useState<CrmRecencyFilter>('ALL');
   const [frequencyFilter, setFrequencyFilter] = useState<CrmFrequencyFilter>('ALL');
@@ -258,7 +265,7 @@ export default function CashierCustomers({
     setCampaignDraftSeed(null);
   }, [searchScope]);
   const selectedProfileCustomer = useMemo(
-    () => [...loyaltyUsers, ...listUsers, ...(currentExternalCustomer ? [currentExternalCustomer] : [])].find((u) => u.id === selectedProfileCustomerId) || null,
+    () => [...listUsers, ...loyaltyUsers, ...(currentExternalCustomer ? [currentExternalCustomer] : [])].find((u) => u.id === selectedProfileCustomerId) || null,
     [loyaltyUsers, listUsers, currentExternalCustomer, selectedProfileCustomerId],
   );
 
@@ -381,6 +388,7 @@ export default function CashierCustomers({
   const pageCount = Math.max(1, Math.ceil(filteredLoyaltyUsers.length / pageSize));
   const currentPage = Math.min(customerPage, pageCount);
   const pageCustomers = filteredLoyaltyUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const showFavoriteColumn = pageCustomers.some(customer => customer.produtos_favoritos !== undefined);
   const money = (value?: number) => (value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const relationshipSummary = useMemo(() => {
@@ -1002,7 +1010,7 @@ export default function CashierCustomers({
                     onChange={(event) => setCustomerSort(event.target.value as CustomerSort)}
                     className="min-h-11 rounded-lg border border-koma-border bg-koma-panel px-3 text-koma-foreground"
                   >
-                    <option value="orders">Quem mais pede</option>
+                    <option value="orders">Mais compras concluídas</option>
                     <option value="spent">Maior total pago</option>
                     <option value="recent">Compra mais recente</option>
                     <option value="absent">Mais tempo sem comprar</option>
@@ -1045,7 +1053,7 @@ export default function CashierCustomers({
                 ))}
               </div>
 
-              <details className="rounded-xl border border-koma-border bg-koma-panel p-3 sm:p-4" aria-label="Filtros avançados de clientes">
+              <details className="rounded-lg border border-koma-border bg-koma-panel px-3 py-1" aria-label="Filtros avançados de clientes">
                 <summary className="flex min-h-10 cursor-pointer items-center justify-between gap-2 text-sm font-semibold text-koma-foreground focus-visible:outline-2 focus-visible:outline-emerald-500">
                   <span>Mais filtros</span>
                   <span className="text-xs font-normal text-koma-muted">{activeCustomerFilters ? `${activeCustomerFilters} ativo${activeCustomerFilters === 1 ? '' : 's'}` : 'Segmentos e critérios'}</span>
@@ -1169,7 +1177,7 @@ export default function CashierCustomers({
 
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-koma-muted">
                 <p>
-                  {filteredLoyaltyUsers.length} de {listUsers.length} clientes carregados{listHasMore ? ` · ${listTotal} correspondentes na consulta` : ''} · Compras concluídas e valores líquidos pagos (cancelamentos e estornos excluídos).
+                  {filteredLoyaltyUsers.length} de {listTotal} clientes · {customerSort === 'orders' ? 'Mais compras primeiro; desempate pelo total pago.' : 'Compras concluídas e valores líquidos pagos.'}
                 </p>
                 {activeCustomerFilters > 0 && (
                   <button
@@ -1190,16 +1198,17 @@ export default function CashierCustomers({
                 )}
               </div>
 
-              <div className="bg-koma-panel border border-koma-border rounded-2xl p-3 sm:p-4 space-y-3">
+              <div className="space-y-3">
                 {listHasMore && (
                   <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-koma-panel p-3 text-sm text-koma-muted">
-                    <span>Exibindo {listUsers.length} de {listTotal} clientes {activeSearch ? 'encontrados na pesquisa' : 'cadastrados'}. Ordenação e filtros adicionais consideram apenas os registros carregados.</span>
+                    <span>Exibindo {listUsers.length} de {listTotal} clientes {searchTerm ? 'encontrados na pesquisa' : 'cadastrados'}. Ordenação aplicada à base inteira. Filtros adicionais consideram os registros carregados.</span>
                     <button type="button" disabled={activeSearch ? Boolean(queryResult?.loading) : loadingMoreCustomers} onClick={() => void (activeSearch ? loadNextSearchPage() : loadMoreCustomers())}
                       className="koma-btn-secondary min-h-11 rounded-lg px-3 font-semibold disabled:opacity-40">
                       {activeSearch ? (queryResult?.loading ? 'Carregando…' : 'Carregar mais resultados') : (loadingMoreCustomers ? 'Carregando…' : 'Carregar mais 100 clientes')}
                     </button>
                   </div>
                 )}
+                {activeSearch && queryResult?.error && listUsers.length > 0 && <p role="alert" className="text-sm text-amber-300">{queryResult.error}</p>}
                 {productQuery.trim() && favoriteSnapshot.scope === searchScope && favoriteSnapshot.loading && (
                   <p role="status" className="my-2 text-sm text-koma-muted">Consultando os produtos dos clientes carregados para aplicar este filtro…</p>
                 )}
@@ -1209,9 +1218,9 @@ export default function CashierCustomers({
                   </div>
                 )}
                 {activeSearch && (!queryResult || (queryResult.loading && !listUsers.length)) ? (
-                  <p role="status" className="rounded-xl border border-koma-border bg-koma-panel p-4 text-sm text-koma-muted">Pesquisando clientes no banco…</p>
+                  <p role="status" className="rounded-xl border border-koma-border bg-koma-panel p-4 text-sm text-koma-muted">Carregando clientes na ordem selecionada…</p>
                 ) : activeSearch && queryResult?.error && !listUsers.length ? (
-                  <p role="alert" className="rounded-xl border border-amber-500/30 bg-koma-panel p-4 text-sm text-amber-300">{queryResult.error}</p>
+                  <div role="alert" className="rounded-xl border border-amber-500/30 bg-koma-panel p-4 text-sm text-amber-300">{queryResult.error} <button type="button" className="ml-2 underline" onClick={() => setSearchRetry(value => value + 1)}>Tentar novamente</button></div>
                 ) : filteredLoyaltyUsers.length > 0 ? (
                   <>
                     {/* Lista Mobile Compacta */}
@@ -1235,7 +1244,7 @@ export default function CashierCustomers({
                               <button
                                 type="button"
                                 onClick={() => setSelectedProfileCustomerId(user.id)}
-                                className="koma-btn-primary min-h-10 rounded-lg px-2.5 py-1.5 text-xs font-bold"
+                                className="koma-btn-secondary min-h-10 rounded-lg px-2.5 py-1.5 text-xs font-semibold"
                               >
                                 Ver perfil
                               </button>
@@ -1274,8 +1283,8 @@ export default function CashierCustomers({
                               <dt className="text-[10px] text-koma-muted">Ticket médio</dt>
                               <dd className="mt-1 text-koma-foreground">{money(user.ticket_medio_pago)}</dd>
                             </div>
-                            <div className="col-span-full">
-                              <dt className="text-[10px] text-koma-muted">Mais pede</dt>
+                            {user.produtos_favoritos !== undefined && <div className="col-span-full">
+                              <dt className="text-[10px] text-koma-muted">Produtos mais pedidos</dt>
                               <dd className="mt-1 break-words text-koma-foreground">
                                 {user.produtos_favoritos?.length
                                   ? user.produtos_favoritos
@@ -1283,7 +1292,7 @@ export default function CashierCustomers({
                                       .join(' · ')
                                   : user.produtos_favoritos === undefined ? 'Favoritos ainda não consultados' : 'Sem itens identificados'}
                               </dd>
-                            </div>
+                            </div>}
                             {hasLoyalty && (
                               <div className="col-span-full">
                                 <dt className="text-[10px] text-koma-muted">Benefício (Acumulado vs. Resgatável)</dt>
@@ -1314,7 +1323,7 @@ export default function CashierCustomers({
                             <th className="p-3.5">Última compra</th>
                             <th className="p-3.5">Pedidos</th>
                             <th className="p-3.5">Total pago / ticket médio</th>
-                            <th className="p-3.5">Mais pede</th>
+                            {showFavoriteColumn && <th className="p-3.5">Produtos mais pedidos</th>}
                             {hasLoyalty && <th className="p-3.5 font-mono">Benefício atual</th>}
                             <th className="p-3.5 text-right">Ações</th>
                           </tr>
@@ -1361,7 +1370,7 @@ export default function CashierCustomers({
                                   Média {money(user.ticket_medio_pago)}
                                 </span>
                               </td>
-                              <td className="max-w-56 p-3.5 text-koma-foreground">
+                              {showFavoriteColumn && <td className="max-w-56 p-3.5 text-koma-foreground">
                                 {user.produtos_favoritos?.length ? (
                                   user.produtos_favoritos.map((product) => (
                                     <span className="block" key={product.produto_id}>
@@ -1370,9 +1379,9 @@ export default function CashierCustomers({
                                     </span>
                                   ))
                                 ) : (
-                                  <span className="text-koma-muted">{user.produtos_favoritos === undefined ? 'Favoritos não consultados' : 'Sem itens identificados'}</span>
+                                  <span className="text-koma-muted">{user.produtos_favoritos === undefined ? '—' : 'Sem itens identificados'}</span>
                                 )}
-                              </td>
+                              </td>}
                               {hasLoyalty && (
                                 <td className="p-3.5 font-mono text-xs">
                                   <span className="font-extrabold text-emerald-700 dark:text-emerald-400 block">
@@ -1398,7 +1407,7 @@ export default function CashierCustomers({
                                   <button
                                     type="button"
                                     onClick={() => setSelectedProfileCustomerId(user.id)}
-                                    className="px-3 py-1.5 koma-btn-primary rounded-xl transition-all cursor-pointer font-bold text-xs"
+                                    className="min-h-9 whitespace-nowrap px-3 py-1.5 koma-btn-secondary rounded-lg transition-all cursor-pointer font-semibold text-xs"
                                   >
                                     Ver perfil
                                   </button>

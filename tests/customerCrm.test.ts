@@ -124,3 +124,11 @@ test('buildManualWhatsAppUrl validates Brazilian phone numbers and rejects inval
   assert.equal(buildManualWhatsAppUrl('85999999999', 'Oi'), null);
   assert.equal(buildManualWhatsAppUrl('georlan', 'Oi'), null);
 });
+
+test('recency orders purchases within the same day by their real timestamp', () => {
+  const morning = { ...make('morning', 1, 0), ultima_compra_em: '2026-10-20T09:00:00Z' };
+  const evening = { ...make('evening', 1, 0), ultima_compra_em: '2026-10-20T20:00:00Z' };
+  const noPurchase = make('none', 0, null);
+  assert.deepEqual(selectCrmCustomers([morning, evening, noPurchase], '', 'ALL', 'recent').map(c => c.id), ['evening', 'morning', 'none']);
+  assert.deepEqual(selectCrmCustomers([morning, evening, noPurchase], '', 'ALL', 'absent').map(c => c.id), ['morning', 'evening', 'none']);
+});

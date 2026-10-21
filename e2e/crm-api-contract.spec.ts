@@ -19,7 +19,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await page.routeWebSocket(/\/ws\//,socket=>socket.onMessage(()=>{}));
   await page.route('**/caixa/cupons',route=>route.fulfill({json:[]}));
   await page.route('**/caixa/cupons/economia/recomendacao',route=>route.fulfill({json:{mode:'automatico',source:'conservative_default',suggestion:{effective_reward_percent:2,cashback_percent:2,points_per_real:1,point_value_brl:0.02},evidence:{lookback_days:30,orders_analyzed:0,cost_coverage_percent:0,known_contribution_percent:null},warnings:[],message:'Sugestão de teste isolada'}}));
-  await page.route('**/fidelidade/clientes',route=>route.fulfill({json:contract.customers}));
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/,route=>route.fulfill({json:contract.customers}));
   await page.route('**/fidelidade/crm/resumo**',route=>route.fulfill({json:contract.summary}));
   await page.route('**/fidelidade/clientes/*/perfil',route=>route.fulfill({json:contract.profile}));
   await page.route('**/fidelidade/clientes/*/preferencias', async route=>{
@@ -151,7 +151,7 @@ test('relationship keeps missing results distinct from zero and empty audiences 
   const summary=structuredClone(contract.summary);
   summary.oportunidades=summary.oportunidades.map((op:Record<string,unknown>)=>({...op,elegiveis_count:0,elegiveis_cliente_ids:[]}));
   summary.resultados.retorno_apos_abordagem={status_mensuracao:'NAO_MENSURADO',clientes_abordados_no_periodo:0};
-  await page.route('**/fidelidade/clientes',route=>route.fulfill({json:contract.customers}));
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/,route=>route.fulfill({json:contract.customers}));
   await page.route('**/fidelidade/crm/resumo**',route=>route.fulfill({json:summary}));
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
@@ -182,7 +182,7 @@ test('campaign responses cannot unlock edited drafts or carry late contact confi
     ...cashierConfig, plano:'premium', plano_efetivo:'premium',
     entitlements:{...cashierConfig.entitlements,loyalty:true,coupons:true},
   }}));
-  await page.route('**/fidelidade/clientes', route => route.fulfill({json:contract.customers}));
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => route.fulfill({json:contract.customers}));
   await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json:contract.summary}));
   await page.route('**/caixa/cupons', route => route.fulfill({json:[]}));
 
@@ -282,7 +282,8 @@ test('customer base metadata stays honest beyond the first 100 and pages load on
   await page.locator('.cashier-sidebar:visible').getByRole('button',{name:/^Relacionamento(?: \d+)?$/}).click();
   await navigateRelationship(page, 'clientes');
   await expect(page.getByText('Exibindo 100 de 125 clientes', {exact:false})).toBeVisible();
-  await expect(page.getByText(/Favoritos (ainda )?não consultados/).filter({visible:true}).first()).toBeVisible();
+  await expect(page.getByText(/Favoritos (ainda )?não consultados/).filter({visible:true})).toHaveCount(0);
+  await expect(page.getByRole('columnheader', {name: 'Produtos mais pedidos'})).toHaveCount(0);
   expect(requests).not.toContain(100);
   await page.getByRole('button',{name:'Carregar mais 100 clientes'}).click();
   await expect(page.getByText('125 de 125 clientes', {exact:false}).filter({visible:true}).first()).toBeVisible();
@@ -400,7 +401,7 @@ test('campaign and contact success require a valid server acknowledgement', asyn
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
-  await page.route('**/fidelidade/clientes', route => route.fulfill({json: contract.customers}));
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => route.fulfill({json: contract.customers}));
   await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json: contract.summary}));
   let validCampaign = false;
   let validContact = false;

@@ -15,7 +15,7 @@ async function setupRelationship(page: Page, loyalty: boolean, coupons: boolean)
       entitlements: { ...cashierConfig.entitlements, loyalty, coupons },
     },
   }));
-  await page.route('**/fidelidade/clientes', route => route.fulfill({ json: contract.customers }));
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => route.fulfill({ json: contract.customers }));
   await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({ json: contract.summary }));
   await page.route('**/caixa/cupons', route => route.fulfill({ json: [] }));
   // Match the backend economic recommendation contract used by the existing CRM browser suite.

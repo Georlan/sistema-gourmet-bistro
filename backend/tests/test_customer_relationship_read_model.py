@@ -626,3 +626,65 @@ def test_customer_pages_and_selected_audience_are_bounded_and_tenant_scoped():
         headers=headers,
     )
     assert invalid.status_code == 422
+
+
+@pytest.mark.parametrize("sort, expected", [
+    ("orders", ["rank-old", "rank-new", "rank-zero"]),
+    ("spent", ["rank-new", "rank-old", "rank-zero"]),
+    ("recent", ["rank-new", "rank-old", "rank-zero"]),
+    ("absent", ["rank-old", "rank-new", "rank-zero"]),
+    ("name", ["rank-new", "rank-zero", "rank-old"]),
+])
+def test_customer_ranking_precedes_pagination_and_preserves_tenant(sort, expected):
+    api = TestClient(app)
+    headers = get_auth_headers(api, "caixa_r1")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    with TestingSessionLocal() as db:
+        db.add_all([
+            Cliente(id="rank-old", restaurante_id=1, nome="Zulu", telefone="85912345671", criado_em=now - datetime.timedelta(days=90)),
+            Cliente(id="rank-new", restaurante_id=1, nome="Ágata", telefone="85912345672", criado_em=now),
+            Cliente(id="rank-zero", restaurante_id=1, nome="Bruna", telefone="85912345673", criado_em=now),
+            Cliente(id="rank-private", restaurante_id=2, nome="Privado", telefone="85912345674"),
+        ])
+        db.flush()
+        for i, (cid, paid, hours) in enumerate([
+            ("rank-old", 30, 12), ("rank-old", 30, 11),
+            ("rank-new", 100, 1), ("rank-private", 1000, 0),
+        ]):
+            db.add(Comanda(id=f"rank-order-{i}", restaurante_id=2 if cid == "rank-private" else 1,
+                           cliente_id=cid, garcom_id="user-garcom-1", numero_pedido=800+i,
+                           fechada=True, fechado_em=now-datetime.timedelta(hours=hours), valor_pago=paid))
+        # Neither canceled nor refused purchases may push a customer up the ranking.
+        db.add(Comanda(id="rank-refused", restaurante_id=1, cliente_id="rank-zero", garcom_id="user-garcom-1",
+                       numero_pedido=900, fechada=True, delivery_status="recusado", fechado_em=now, valor_pago=9999))
+        db.commit()
+    pages = [api.get("/fidelidade/clientes", params={"sort": sort, "limit": 1, "offset": offset}, headers=headers) for offset in range(3)]
+    assert all(page.status_code == 200 for page in pages)
+    assert [page.json()[0]["id"] for page in pages] == expected
+    assert all(page.headers["X-Total-Count"] == "3" for page in pages)
+    assert [page.headers["X-Has-More"] for page in pages] == ["true", "true", "false"]
+    searched = api.get("/fidelidade/clientes", params={"q": "a", "sort": sort, "limit": 1}, headers=headers)
+    assert searched.status_code == 200
+    assert searched.json()[0]["id"] in {"rank-new", "rank-zero"}
+    invalid = api.get("/fidelidade/clientes?sort=unknown", headers=headers)
+    assert invalid.status_code == 422
+
+
+def test_old_frequent_customer_is_not_hidden_behind_first_100_registrations():
+    api = TestClient(app)
+    headers = get_auth_headers(api, "caixa_r1")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    with TestingSessionLocal() as db:
+        db.add(Cliente(id="old-frequent", restaurante_id=1, nome="Cliente antigo", telefone="85912345670", criado_em=now-datetime.timedelta(days=100)))
+        db.add_all([Cliente(id=f"new-registration-{i:03d}", restaurante_id=1, nome=f"Cadastro {i}", telefone=f"8599{i:07d}", criado_em=now) for i in range(125)])
+        db.flush()
+        db.add(Comanda(id="old-completed", restaurante_id=1, cliente_id="old-frequent", garcom_id="user-garcom-1", numero_pedido=1000,
+                       fechada=True, fechado_em=now, valor_pago=50))
+        db.commit()
+    legacy = api.get("/fidelidade/clientes", headers=headers)
+    assert "old-frequent" not in {c["id"] for c in legacy.json()}
+    ranked = api.get("/fidelidade/clientes?sort=orders", headers=headers)
+    assert ranked.status_code == 200
+    assert ranked.json()[0]["id"] == "old-frequent"
+    assert ranked.headers["X-Total-Count"] == "126"
+    assert len(ranked.json()) == 100

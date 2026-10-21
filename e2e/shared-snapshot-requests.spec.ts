@@ -70,7 +70,7 @@ test('hints próximos de clientes geram uma reconciliação e preservam o snapsh
   let reads = 0;
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
-  await page.route('**/fidelidade/clientes', async route => {
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, async route => {
     reads++;
     if (reads === 2) await pending;
     await route.fulfill({ json: [{ id: 'cli-1', nome: reads === 1 ? 'Cliente E2E' : 'Cliente atualizado', telefone: '85999999999' }] });
@@ -97,7 +97,7 @@ test('falha inicial de clientes não aparece como lista vazia e permite tentar n
   await seedCashierSession(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
   let reads = 0;
-  await page.route('**/fidelidade/clientes', route => {
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => {
     reads++;
     return route.fulfill(reads === 1 ? { status: 503, json: {} } : { json: [{ id: 'cli-1', nome: 'Cliente E2E' }] });
   });
@@ -147,7 +147,7 @@ test('nova sessão de Caixa não reaproveita clientes da sessão anterior', asyn
   await seedCashierSession(page);
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
   const tokens: string[] = [];
-  await page.route('**/fidelidade/clientes', route => {
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => {
     const token = route.request().headers().authorization || '';
     tokens.push(token);
     return route.fulfill({ json: [{ id: 'cli-1', nome: token.includes('session-new-fixture') ? 'Cliente da nova sessão' : 'Cliente da sessão antiga' }] });

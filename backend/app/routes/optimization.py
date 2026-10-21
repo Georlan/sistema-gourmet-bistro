@@ -2,10 +2,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel
 from decimal import Decimal, ROUND_HALF_UP
 import logging
+import datetime
 
 from ..database import get_db, require_tenant_id
 from ..models import Comanda, Insumo, ConfigFidelizacao, Pagamento, Cliente
@@ -221,6 +222,7 @@ def get_loyalty_clients(
     offset: int = Query(default=0, ge=0),
     q: Optional[str] = Query(default=None, max_length=120),
     include_products: bool = Query(default=False),
+    sort: Optional[Literal["orders", "spent", "recent", "absent", "name"]] = Query(default=None),
     ids: Optional[str] = Query(default=None, max_length=8000),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("clientes:operar"))
@@ -246,6 +248,45 @@ def get_loyalty_clients(
         Cliente.restaurante_id == restaurante_id,
     ).order_by(Cliente.criado_em.desc(), Cliente.id.asc())
 
+    ranked_metrics = None
+    eff_sort = sort if isinstance(sort, str) else None
+
+    def ranked_page(candidate_ids):
+        # Rank the complete tenant-scoped selection BEFORE pagination. Products,
+        # contact history and benefits are still loaded only for the visible page.
+        nonlocal ranked_metrics
+        import unicodedata
+        candidate_ids = [str(cid) for cid in candidate_ids]
+        ranked_metrics = load_customer_relationship_metrics(
+            db, restaurante_id=restaurante_id, cliente_ids=candidate_ids,
+        ) if eff_sort != "name" else None
+        names = {}
+        if eff_sort == "name":
+            names = {
+                str(cid): "".join(ch for ch in unicodedata.normalize("NFD", decrypt_field(name) or "")
+                                  if not unicodedata.combining(ch)).lower()
+                for cid, name in base_query.with_entities(Cliente.id, Cliente._nome)
+                .filter(Cliente.id.in_(candidate_ids)).all()
+            }
+
+        def rank(cid):
+            m = (ranked_metrics or {}).get(cid)
+            count = m.pedidos_concluidos if m else 0
+            paid = m.valor_pago_total if m else 0
+            last = m.ultima_compra_em if m else None
+            if eff_sort == "orders":
+                return (-count, -paid, cid)
+            if eff_sort == "spent":
+                return (-paid, cid)
+            if eff_sort in ("recent", "absent"):
+                timestamp = datetime.datetime.fromisoformat(last).timestamp() if last else 0
+                return (last is None, -timestamp if eff_sort == "recent" else timestamp, cid)
+            return (names.get(cid, ""), cid)
+
+        page_ids = sorted(candidate_ids, key=rank)[eff_offset:eff_offset + eff_limit]
+        selected = {str(c.id): c for c in base_query.filter(Cliente.id.in_(page_ids)).all()} if page_ids else {}
+        return [selected[cid] for cid in page_ids if cid in selected]
+
     if requested_ids:
         selected = base_query.filter(Cliente.id.in_(requested_ids)).all()
         selected_by_id = {str(cliente.id): cliente for cliente in selected}
@@ -259,19 +300,19 @@ def get_loyalty_clients(
             .scalar()
             or 0
         )
-        clientes = base_query.offset(eff_offset).limit(eff_limit).all()
+        clientes = ranked_page(cid for (cid,) in base_query.with_entities(Cliente.id).all()) if eff_sort else base_query.offset(eff_offset).limit(eff_limit).all()
     else:
         digits = "".join(ch for ch in eff_q if ch.isdigit())
         if len(digits) in (10, 11) and digits == eff_q.replace("(", "").replace(")", "").replace("-", "").replace(" ", "").replace("+", ""):
             phone_hash = cliente_telefone_lookup_hash(restaurante_id, digits)
             matched = base_query.filter(Cliente.telefone_hash == phone_hash).all()
             total_count = len(matched)
-            clientes = matched[eff_offset : eff_offset + eff_limit]
+            clientes = ranked_page(c.id for c in matched) if eff_sort else matched[eff_offset : eff_offset + eff_limit]
         elif "@" in eff_q and " " not in eff_q:
             email_hash = pii_lookup_hash("cliente-email", restaurante_id, eff_q.lower())
             matched = base_query.filter(Cliente.email_hash == email_hash).all()
             total_count = len(matched)
-            clientes = matched[eff_offset : eff_offset + eff_limit]
+            clientes = ranked_page(c.id for c in matched) if eff_sort else matched[eff_offset : eff_offset + eff_limit]
         else:
             q_lower = eff_q.lower()
             search_query = (
@@ -298,7 +339,9 @@ def get_loyalty_clients(
 
             total_count = len(matched_ids)
             page_ids = matched_ids[eff_offset : eff_offset + eff_limit]
-            if page_ids:
+            if eff_sort:
+                clientes = ranked_page(matched_ids)
+            elif page_ids:
                 page_clients = {
                     c.id: c
                     for c in base_query.filter(Cliente.id.in_(page_ids)).all()
@@ -314,7 +357,7 @@ def get_loyalty_clients(
         response.headers["X-Has-More"] = "true" if (eff_offset + len(clientes)) < total_count else "false"
         response.headers["X-Products-Included"] = "true" if eff_include_products else "false"
 
-    metrics = load_customer_relationship_metrics(
+    metrics = ranked_metrics if ranked_metrics is not None and not eff_include_products else load_customer_relationship_metrics(
         db,
         restaurante_id=restaurante_id,
         cliente_ids=[c.id for c in clientes],

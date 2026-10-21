@@ -94,7 +94,7 @@ export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
     const flight = (async () => {
     try {
       // O backend aplica autenticação, tenant e RLS antes de devolver as fichas.
-      const response = await fetch(`${apiBaseUrl}/fidelidade/clientes`, {
+      const response = await fetch(`${apiBaseUrl}/fidelidade/clientes?sort=orders`, {
         headers: authHeaders,
         signal: controller.signal,
       });
@@ -144,7 +144,7 @@ export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
     const flight = (async () => {
       setLoadingMoreCustomers(true);
       try {
-        const response = await fetch(`${apiBaseUrl}/fidelidade/clientes?limit=100&offset=${offset}`, {
+        const response = await fetch(`${apiBaseUrl}/fidelidade/clientes?sort=orders&limit=100&offset=${offset}`, {
           headers: authHeaders, signal: controller.signal,
         });
         if (!response.ok) throw new Error(`Falha ao carregar mais clientes (${response.status})`);

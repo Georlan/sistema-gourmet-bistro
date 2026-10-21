@@ -88,7 +88,7 @@ test('CRM ranks buyers, filters inactivity, searches formatted phones and preser
   await expect(records.first()).toContainText('Ana Frequente');
   await expect(records.first()).toContainText('Burger da casa');
   await expect(records.first()).toContainText('600,00');
-  await records.first().getByText('Ver hábitos de Ana Frequente', { exact: true }).click();
+  await records.first().getByLabel('Ver hábitos de Ana Frequente', { exact: true }).click();
   await expect(records.first()).toContainText('01/09/2026');
   await expect(records.first()).toContainText('3 dias');
 
