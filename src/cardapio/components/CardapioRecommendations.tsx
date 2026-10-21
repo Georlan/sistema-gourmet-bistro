@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { BrandConfig, Product } from '../CardapioTypes';
 import CatalogProductImage from './CatalogProductImage';
 
@@ -27,90 +27,123 @@ const SOBREMESA_MATCHER = /(^|\b)(sobremesa|sobremesas|doce|doces|dessert|desser
 export function buildCatalogRecommendations(
   products: Product[],
   categories?: string[],
+  excludeProductIds?: string[] | Set<string>,
 ): Recommendation[] {
   const available = products.filter((product) => product.isAvailable !== false);
   if (available.length === 0) return [];
 
-  const chosenIds = new Set<string>();
-  const recommendations: Recommendation[] = [];
+  const excluded = excludeProductIds
+    ? (excludeProductIds instanceof Set ? excludeProductIds : new Set(excludeProductIds))
+    : new Set<string>();
 
-  const addRecommendation = (product: Product, kind: RecommendationKind, label: string) => {
-    if (chosenIds.has(product.id) || recommendations.length >= 3) return;
-    chosenIds.add(product.id);
-    recommendations.push({ kind, label, product });
+  const pickRecommendations = (filterExcluded: boolean): Recommendation[] => {
+    const chosenIds = new Set<string>();
+    const recs: Recommendation[] = [];
+
+    const addRecommendation = (product: Product, kind: RecommendationKind, label: string) => {
+      if (chosenIds.has(product.id) || recs.length >= 3) return;
+      if (filterExcluded && excluded.has(product.id)) return;
+      chosenIds.add(product.id);
+      recs.push({ kind, label, product });
+    };
+
+    // 1. Destaque / Produto Principal: burger, pizza, prato ou primeiro item da categoria inicial de comida
+    const primaryProduct = available.find((product) => {
+      if (filterExcluded && excluded.has(product.id)) return false;
+      const cat = normalize(product.category || '');
+      return MAIN_CATEGORY_MATCHER.test(cat);
+    }) || available.find((product) => {
+      if (filterExcluded && excluded.has(product.id)) return false;
+      const cat = normalize(product.category || '');
+      return !BEBIDA_MATCHER.test(cat) && !SOBREMESA_MATCHER.test(cat);
+    });
+
+    if (primaryProduct) {
+      addRecommendation(primaryProduct, 'destaque', 'Destaque');
+    }
+
+    // 2. Combo
+    const comboProduct = available.find((product) => {
+      if (chosenIds.has(product.id)) return false;
+      if (filterExcluded && excluded.has(product.id)) return false;
+      const cat = normalize(product.category || '');
+      const name = normalize(product.name || '');
+      return COMBO_MATCHER.test(cat) || COMBO_MATCHER.test(name);
+    });
+
+    if (comboProduct) {
+      addRecommendation(comboProduct, 'combo', 'Combo');
+    }
+
+    // 3. Upsell relevante / Acompanhamento / Porção
+    const upsellProduct = available.find((product) => {
+      if (chosenIds.has(product.id)) return false;
+      if (filterExcluded && excluded.has(product.id)) return false;
+      const cat = normalize(product.category || '');
+      return UPSELL_MATCHER.test(cat);
+    });
+
+    if (upsellProduct) {
+      addRecommendation(upsellProduct, 'upsell', 'Acompanhamento');
+    }
+
+    // 4. Complemento para até 3 itens (priorizando itens de comida antes de bebidas/sobremesas)
+    if (recs.length < 3) {
+      for (const product of available) {
+        if (recs.length >= 3) break;
+        if (chosenIds.has(product.id)) continue;
+        if (filterExcluded && excluded.has(product.id)) continue;
+        const cat = normalize(product.category || '');
+        if (!BEBIDA_MATCHER.test(cat) && !SOBREMESA_MATCHER.test(cat)) {
+          addRecommendation(product, 'destaque', 'Sugestão');
+        }
+      }
+    }
+
+    // 5. Último recurso se o cardápio não possuir itens suficientes de comida
+    if (recs.length < 3) {
+      for (const product of available) {
+        if (recs.length >= 3) break;
+        if (chosenIds.has(product.id)) continue;
+        if (filterExcluded && excluded.has(product.id)) continue;
+        const cat = normalize(product.category || '');
+        if (BEBIDA_MATCHER.test(cat)) {
+          addRecommendation(product, 'bebida', 'Bebida');
+        } else if (SOBREMESA_MATCHER.test(cat)) {
+          addRecommendation(product, 'sobremesa', 'Sobremesa');
+        } else {
+          addRecommendation(product, 'destaque', 'Sugestão');
+        }
+      }
+    }
+
+    return recs;
   };
 
-  // 1. Destaque / Produto Principal: burger, pizza, prato ou primeiro item da categoria inicial de comida
-  const primaryProduct = available.find((product) => {
-    const cat = normalize(product.category || '');
-    return MAIN_CATEGORY_MATCHER.test(cat);
-  }) || available.find((product) => {
-    const cat = normalize(product.category || '');
-    return !BEBIDA_MATCHER.test(cat) && !SOBREMESA_MATCHER.test(cat);
-  });
-
-  if (primaryProduct) {
-    addRecommendation(primaryProduct, 'destaque', 'Destaque');
-  }
-
-  // 2. Combo
-  const comboProduct = available.find((product) => {
-    if (chosenIds.has(product.id)) return false;
-    const cat = normalize(product.category || '');
-    const name = normalize(product.name || '');
-    return COMBO_MATCHER.test(cat) || COMBO_MATCHER.test(name);
-  });
-
-  if (comboProduct) {
-    addRecommendation(comboProduct, 'combo', 'Combo');
-  }
-
-  // 3. Upsell relevante / Acompanhamento / Porção
-  const upsellProduct = available.find((product) => {
-    if (chosenIds.has(product.id)) return false;
-    const cat = normalize(product.category || '');
-    return UPSELL_MATCHER.test(cat);
-  });
-
-  if (upsellProduct) {
-    addRecommendation(upsellProduct, 'upsell', 'Acompanhamento');
-  }
-
-  // 4. Complemento para até 3 itens (priorizando itens de comida antes de bebidas/sobremesas)
-  if (recommendations.length < 3) {
-    for (const product of available) {
-      if (recommendations.length >= 3) break;
-      if (chosenIds.has(product.id)) continue;
-      const cat = normalize(product.category || '');
-      if (!BEBIDA_MATCHER.test(cat) && !SOBREMESA_MATCHER.test(cat)) {
-        addRecommendation(product, 'destaque', 'Sugestão');
-      }
-    }
-  }
-
-  // 5. Último recurso se o cardápio não possuir itens suficientes de comida
-  if (recommendations.length < 3) {
-    for (const product of available) {
-      if (recommendations.length >= 3) break;
-      if (chosenIds.has(product.id)) continue;
-      const cat = normalize(product.category || '');
-      if (BEBIDA_MATCHER.test(cat)) {
-        addRecommendation(product, 'bebida', 'Bebida');
-      } else if (SOBREMESA_MATCHER.test(cat)) {
-        addRecommendation(product, 'sobremesa', 'Sobremesa');
-      } else {
-        addRecommendation(product, 'destaque', 'Sugestão');
-      }
-    }
-  }
-
-  return recommendations;
+  const candidateRecs = excluded.size > 0 ? pickRecommendations(true) : pickRecommendations(false);
+  return candidateRecs.length > 0 ? candidateRecs : pickRecommendations(false);
 }
 
 export function CardapioRecommendations({ brand }: { brand: BrandConfig }) {
+  const [excludedIds, setExcludedIds] = useState<string[] | undefined>(brand.popularProductIds);
+
+  useEffect(() => {
+    if (brand.popularProductIds && brand.popularProductIds.length > 0) {
+      setExcludedIds(brand.popularProductIds);
+    }
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<string[]>).detail;
+      if (Array.isArray(detail)) {
+        setExcludedIds(detail);
+      }
+    };
+    window.addEventListener('koma:popular-products-loaded', handler);
+    return () => window.removeEventListener('koma:popular-products-loaded', handler);
+  }, [brand.popularProductIds]);
+
   const recommendations = useMemo(
-    () => buildCatalogRecommendations(brand.products, brand.categories),
-    [brand.products, brand.categories],
+    () => buildCatalogRecommendations(brand.products, brand.categories, excludedIds ?? brand.popularProductIds),
+    [brand.products, brand.categories, excludedIds, brand.popularProductIds],
   );
 
   if (recommendations.length === 0) return null;
@@ -127,7 +160,10 @@ export function CardapioRecommendations({ brand }: { brand: BrandConfig }) {
 
   return (
     <section aria-labelledby="cardapio-recommendations-title" className="cardapio-editorial-section w-full basis-full" id="cardapio-recommendations-home">
-      <h2 id="cardapio-recommendations-title" className="cardapio-showcase-heading">Destaques do cardápio</h2>
+      <div className="cardapio-showcase-header">
+        <h2 id="cardapio-recommendations-title" className="cardapio-showcase-heading">Combina com seu pedido</h2>
+        <span className="cardapio-showcase-badge">Seleção da casa</span>
+      </div>
       <div className="cardapio-recommendation-list" role="list">
         {recommendations.map(({ kind, label, product }) => (
           <button

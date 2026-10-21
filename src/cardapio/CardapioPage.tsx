@@ -158,6 +158,33 @@ export default function CardapioPage() {
   const isProgrammaticScroll = useRef(false);
   const lastReportedMenuIdRef = useRef<string | number | null>(null);
 
+  const [vitrineVariant, setVitrineVariant] = useState<'editorial' | 'artistic' | 'catalog-first'>(() => {
+    if (typeof window !== 'undefined') {
+      const param = new URLSearchParams(window.location.search).get('vitrine');
+      if (param === 'catalog-first' || param === 'artistic' || param === 'editorial') return param;
+    }
+    return 'editorial';
+  });
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-vitrine-variant', vitrineVariant);
+    }
+  }, [vitrineVariant]);
+
+  const handleVariantChange = useCallback((nextVariant: 'editorial' | 'artistic' | 'catalog-first') => {
+    setVitrineVariant(nextVariant);
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-vitrine-variant', nextVariant);
+    }
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('vitrine', nextVariant);
+      window.history.replaceState(null, '', url.toString());
+      window.dispatchEvent(new CustomEvent('koma:vitrine-variant-change', { detail: nextVariant }));
+    }
+  }, []);
+
   const showNotification = useCallback((message: string) => {
     setNotice(message);
     if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
@@ -326,6 +353,7 @@ export default function CardapioPage() {
       const acceptingOrders = restaurant.aceitando_pedidos === true;
       const brand: BrandConfig = {
         id: String(restaurant.id),
+        slug: String(restaurant.slug || ""),
         name: String(restaurant.nome || "Restaurante"),
         slogan: String(restaurant.subtitulo || ""),
         logo: getRestaurantAssetUrl(restaurant.logo_url || "", true),
@@ -1243,7 +1271,7 @@ export default function CardapioPage() {
                 <p className="text-xs text-koma-muted">Este restaurante ainda não publicou produtos no cardápio.</p>
               )}
             </div>
-          ) : visibleCategories.map((category) => {
+          ) : visibleCategories.map((category, catIndex) => {
             const products = activeBrand.products
               .filter((product) => (
                 product.category === category
@@ -1255,11 +1283,15 @@ export default function CardapioPage() {
                 if (orderA !== orderB) return orderA - orderB;
                 return 0;
               });
+            const indexLabel = String(catIndex + 1).padStart(2, '0');
             return (
-              <section key={category} id={categorySectionId(category)} className="scroll-mt-[10.5rem]">
-                <div className="mb-3 flex items-center justify-between border-b border-koma-border pb-2.5">
-                  <h2 className="cardapio-category-title">{category}</h2>
-                  <span className="rounded-full bg-koma-raised px-2.5 py-1 text-[9px] font-bold text-koma-muted">{products.length} {products.length === 1 ? "item" : "itens"}</span>
+              <section key={category} id={categorySectionId(category)} className="scroll-mt-[10.5rem] cardapio-catalog-category-section">
+                <div className="cardapio-category-header-lockup">
+                  <div className="flex items-center gap-2.5">
+                    <span className="cardapio-category-index" aria-hidden="true">{indexLabel}</span>
+                    <h2 className="cardapio-category-title">{category}</h2>
+                  </div>
+                  <span className="cardapio-category-count-pill">{products.length} {products.length === 1 ? "opção" : "opções"}</span>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {products.map((product) => (
@@ -1606,6 +1638,33 @@ export default function CardapioPage() {
             </p>
           </div>
         </div>
+      )}
+
+      {activeBrand?.slug === 'preview-ui' && typeof window !== 'undefined' && !new URLSearchParams(window.location.search).has('clean') && (
+        <aside aria-label="Controle de prévia de vitrine" className="koma-preview-switcher-bar">
+          <span className="koma-preview-switcher-label">Vitrine:</span>
+          <button
+            type="button"
+            className={`koma-preview-switcher-btn ${vitrineVariant === 'editorial' ? 'is-active' : ''}`}
+            onClick={() => handleVariantChange('editorial')}
+          >
+            1. Base
+          </button>
+          <button
+            type="button"
+            className={`koma-preview-switcher-btn ${vitrineVariant === 'artistic' ? 'is-active' : ''}`}
+            onClick={() => handleVariantChange('artistic')}
+          >
+            2. Com Assets
+          </button>
+          <button
+            type="button"
+            className={`koma-preview-switcher-btn ${vitrineVariant === 'catalog-first' ? 'is-active' : ''}`}
+            onClick={() => handleVariantChange('catalog-first')}
+          >
+            3. Catalog-First
+          </button>
+        </aside>
       )}
     </div>
   );
