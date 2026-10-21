@@ -263,7 +263,7 @@ export default function CardapioProductModal({
       className="fixed inset-0 z-50 flex h-[100dvh] items-end justify-center overflow-hidden bg-black/70 p-0 sm:items-center sm:p-4 animate-fade-in cursor-pointer"
       id="product-details-modal"
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="modal-product-name" className="relative flex h-[calc(100dvh-0.75rem)] min-h-0 w-full flex-col overflow-hidden rounded-t-[24px] border border-koma-border bg-koma-panel shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-[30px] animate-slide-up">
+      <div role="dialog" aria-modal="true" aria-labelledby="modal-product-name" className="absolute inset-x-0 bottom-0 top-3 flex min-h-0 w-full flex-col overflow-hidden rounded-t-[24px] border border-koma-border bg-koma-panel shadow-2xl sm:relative sm:inset-auto sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-[30px] animate-slide-up">
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 h-1.5 w-12 rounded-full bg-white/40 sm:hidden" />
 
         <div className={`relative w-full shrink-0 overflow-hidden bg-koma-card ${allModifiers.length > 0 ? "h-24 sm:h-32" : "h-40 sm:h-60"}`}>
