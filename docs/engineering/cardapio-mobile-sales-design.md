@@ -22,7 +22,7 @@ Tipos, testes unitários e build. Browser: pedidos de visitante, endereço, bloq
 
 Os contadores de consulta comparam antes/depois da interação; StrictMode executa duas montagens iniciais no desenvolvimento, o que não deve ser confundido com consulta disparada pela navegação.
 
-Conferência manual com FastAPI e SQLite locais: navegação mobile, montagem a partir do destaque e bloqueio de inclusão com caixa fechado. A referência visual usa somente dados públicos copiados para tenant local 99120; nenhuma escrita foi feita no restaurante real 6. Produção será conferida por leitura das revisões servidas e do cardápio.
+Conferência manual da PR #1184 com FastAPI e SQLite locais: navegação mobile, montagem a partir do destaque e bloqueio de inclusão com caixa fechado. A referência visual usa somente dados públicos copiados para tenant local 99120; nenhuma escrita foi feita no restaurante real 6. Depois do merge, a PR reportou frontend servido em `c3e7a5f7db6e`, API servida em `14f0c75313ab` (backend não alterado) e smoke não destrutivo de GET/OPTIONS. Isso não é evidência de pedido completo nem de nova execução local nesta etapa.
 
 Reversão: reverter a PR. Não há migração, novos serviços, configuração persistente, preço, pagamento ou alteração de regras de montagem. O efeito sobre ticket médio depende de medição posterior; não é um resultado comprovado desta entrega.
 

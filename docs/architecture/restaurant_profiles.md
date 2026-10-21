@@ -6,7 +6,11 @@ Definir uma arquitetura canônica para adaptar o KÔMA a diferentes operações 
 
 Este documento é contrato de arquitetura. Nesta fase não altera schema, onboarding, preços, estoque, regras de pedido nem dados em produção.
 
-## Estado observado
+## Estado de implementação em 21/10/2026
+
+Este documento nasceu como contrato antes da implementação; a seção histórica abaixo permanece para preservar o raciocínio, mas suas frases no futuro não descrevem o estado atual. O perfil agora é persistido em `restaurante_operation_profiles`, com as chaves `generic`, `marmitaria`, `pizzaria`, `acai` e `churrasco`; seleção explícita no onboarding, atualização com auditoria no Super Admin e prévias de templates sem aplicação automática. Há testes de onboarding e duas marmitarias isoladas. A PR #1183 melhorou o seletor e cadastro de complementos; a #1184 publicou a vitrine mobile. Ainda falta homologação integrada de todos os perfis e da troca de perfil com catálogo híbrido persistido. O perfil continua sendo metadado de UX; o catálogo não pode ser destruído ou filtrado automaticamente.
+
+## Estado observado na proposta original (histórico)
 
 - `Restaurante` é a raiz do tenant e ainda não possui metadado de perfil operacional.
 - `Categoria` e `Produto` já são tenant-local por `restaurante_id`.
@@ -142,15 +146,15 @@ Não implementar até haver contrato específico:
 ### P0
 
 - [x] Definir arquitetura canônica de perfis sem presets automáticos.
-- [ ] Adicionar metadado mínimo e reversível de perfil ao tenant com fallback `generic`.
-- [ ] Adicionar testes de isolamento multi-tenant para leitura/escrita do perfil.
-- [ ] Garantir que onboarding não cria categorias/modificadores automaticamente.
+- [x] Adicionar metadado mínimo e reversível de perfil ao tenant com fallback `generic`.
+- [ ] Completar prova de isolamento leitura/escrita do perfil com papel PostgreSQL restrito; há cobertura SQLite de contratos e tenants de catálogo.
+- [x] Garantir que onboarding não cria categorias/modificadores automaticamente (contratos e testes existentes).
 
 ### P1
 
 - [ ] Criar catálogo central de capabilities por perfil.
-- [ ] Expor seleção explícita de perfil no onboarding/admin.
-- [ ] Criar mecanismo de templates opcionais com preview, confirmação e idempotência.
+- [x] Expor seleção explícita de perfil no onboarding/admin.
+- [ ] Completar aplicação opcional de templates com confirmação e idempotência; prévia sem persistência já existe.
 - [ ] Criar templates iniciais de pizzaria, açaí e churrasco sem preços.
 - [ ] Criar testes de não sobrescrita e não duplicação de catálogo existente.
 
@@ -158,5 +162,5 @@ Não implementar até haver contrato específico:
 
 - [ ] Adaptar UX do editor/cardápio por capabilities, mantendo fallback genérico.
 - [ ] Permitir múltiplos perfis/capabilities por tenant quando houver caso real.
-- [ ] Criar matriz QA por perfil em desktop/mobile.
+- [ ] Homologar matriz QA integrada por perfil em desktop/mobile; as matrizes visuais das #1183/#1184 não percorrem sozinhas o pedido persistido.
 - [ ] Avaliar venda por peso e composição avançada de pizza em documentos de domínio próprios.

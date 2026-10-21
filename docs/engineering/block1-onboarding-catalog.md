@@ -22,7 +22,7 @@
 - Backend completo: 2792 aprovados, 79 ignorados, em SQLite isolado. Os testes ignorados incluem PostgreSQL efêmero e capacidades externas; isso não comprova RLS em produção.
 - Novo teste de integração: duas marmitarias criam grupos/opções homônimos; listagem própria e recusas de edição, exclusão, pausa e vínculo a produtos estrangeiros preservam os registros.
 - Cinco perfis: escolha/salvamento e cadastro de complementos com teclado, cancelamento e salvamento pendente.
-- Matriz anterior à última melhoria de diálogo: 216 cenários aprovados. A matriz final ampliada está em execução, incluindo 360, 390, 412, 430, 768, 1024, 1366, 1440 e 1920 px. Registrar seu resultado antes da integração.
+- Matriz ampliada da PR #1183 concluída antes do merge: 261 cenários aprovados em 360, 390, 412, 430, 768, 1024, 1366, 1440 e 1920 px. A cobertura foi de onboarding e complementos; não equivale à jornada operacional completa.
 - Navegação manual: primeira configuração com API simulada local; catálogo, complementos, disponibilidade diária e cardápio público com FastAPI/SQLite próprios e restaurantes fictícios. O cardápio fechado recusou a inclusão na sacola. Nenhuma configuração, pedido, pagamento ou impressão foi alterado no restaurante real ID 6.
 
 ## Referências aplicadas
@@ -37,10 +37,27 @@
 
 Concluído: investigação dos contratos e das skills, primeiro conjunto de mudanças e testes locais indicados acima. Skills existentes preservadas; novas instruções instaladas sem novas dependências no aplicativo. analytics-tracking corresponde a analytics na origem atual; as duas verticais exigiram apenas adaptação de arquivo Markdown para SKILL.md. O CLI externo do Playwright não foi instalado nem a versão do projeto alterada.
 
-Jornada integrada na PR #1183 (14f0c75313ab): matriz final de 261 cenários aprovada; CI e revisões servidas de API/frontend confirmados. Em andamento: redesenho mobile do cardápio público em checkout separado, preservando o catálogo e a montagem existentes.
+PR #1183 integrada em `14f0c75313ab5a4151fed13076063bd6d4ab9d13`: matriz final de 261 cenários aprovada, conforme evidências daquela PR. PR #1184 integrada em `c3e7a5f7db6e063586951283baee2b259797eb32`: vitrine comercial prioriza ranking canônico, composição mobile compacta e regressões de apresentação aprovadas conforme evidências daquela PR. Não refazer esses entregáveis.
 
-Próximo: validar visualmente a nova apresentação pública com/sem imagens e nos cinco perfis; testar montagem, sacola, checkout, estado fechado, erro, teclado e responsividade. Não transformar sugestões de logística/estoque/custos das skills em novas regras sem decisão de produto.
+## Fronteira de homologação após #1184 — 21/10/2026
 
-Decisões de negócio pendentes nesta entrega: nenhuma. Preço de pizza fracionada, limites comerciais de açaí, venda por peso e regras novas de estoque permanecem fora do escopo.
+**Estado do Bloco 1: em validação; NÃO homologado ponta a ponta.** Testes interceptados de layout e escolha de perfil não substituem frontend + FastAPI + dados isolados com persistência, montagem, sacola, revisão e envio de pedido de teste. Nenhuma dessas jornadas integradas novas foi executada nesta atualização documental.
+
+- [x] Seleção e confirmação dos cinco perfis, segurança do formulário e navegação responsiva: evidências da #1183.
+- [x] Vitrine mobile, ranking real do restaurante, responsividade em nove larguras e montagem já existente em regressões dirigidas: evidências da #1184.
+- [ ] Marmitaria: cadastro/edição P/M/G como produtos, limites por produto, porções/tipos, Sem salada, extras pagos, pausa diária e pedido local até o Order Core.
+- [ ] Pizzaria: tamanhos/sabores/bordas/complementos reais, montagem, sacola, revisão e pedido local; sem decidir fórmula de meio a meio.
+- [ ] Açaí: volumes, toppings e limites explícitos, sem inventar gratuitos ou excedentes.
+- [ ] Churrasco: cortes, preparo e acompanhamentos existentes; sem introduzir venda por peso.
+- [ ] Genérico/hamburgueria: itens simples e montáveis pelo contrato atual.
+- [ ] Catálogo híbrido persistido, alternância de perfil com snapshot dos IDs/vínculos/preços antes/depois e dois tenants do mesmo perfil; negativas canônicas de leitura/escrita e RLS PostgreSQL com role de runtime.
+- [ ] Navegação administrativa real desktop/mobile: foco, teclado, touch, loading, erro, cancelamento, reload, salvamento e comparação de telas antes/depois; coletar evidência visual somente das telas efetivamente alteradas.
+- [ ] Executar jornada em 360, 390, 430, 768, 1024, 1366, 1440 e 1920 px sem perder a largura extra 412; registrar Firefox/WebKit como executados ou não disponíveis, sem inferir aprovação.
+- [ ] Revisar polling, concorrência e consultas por evidência de duplicidade; evitar refatoração sem baseline e regressão de continuidade.
+- [ ] Gate obrigatório `Merge verdict` no SHA final, regressões focais relevantes, conferência de publicação e versão servida de cada nova correção.
+
+Um teste E2E interceptado de catálogo misto por perfil só estabelece visibilidade e navegação sem filtragem pela apresentação; NÃO comprova persistência, troca de perfil, preço/cobrança ou isolamento de banco. O isolamento de duas marmitarias coberto em `backend/tests/test_marmitaria_catalog_tenant_isolation.py` foi informado na #1183, mas não substitui um ensaio do conjunto híbrido em PostgreSQL/RLS.
+
+**Decisões fora do escopo:** preço de pizza meio a meio, adicionais grátis e excedentes de açaí, venda por peso, nova política de estoque e limite ilimitado formal (`max_selecoes=null`). Nenhuma deve ser criada implicitamente. Não transformar sugestões genéricas das skills em regras novas.
 
 Reversão: reverter o PR; sem migrações, flags ou alterações de infraestrutura.
