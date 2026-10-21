@@ -399,22 +399,190 @@
   background: transparent;
 }
 
-#popular-products-home {
-  padding-top: 12px;
+/* Two deliberately distinct storefront treatments:
+   ranked products = photography-led cards; editorial recommendations =
+   text-led cards. No invented popularity scores or fake promotional badges. */
+#popular-products-home,
+#cardapio-recommendations-home {
+  padding-top: 14px;
+  border-top: 1px solid var(--menu-border);
 }
 
+.cardapio-showcase-heading {
+  margin: 0 0 14px;
+  color: var(--menu-text);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+}
+
+.cardapio-popular-list,
 .cardapio-recommendation-list {
   display: flex;
   gap: 12px;
   overflow-x: auto;
-  padding: 2px 2px 8px;
+  padding: 2px 2px 12px;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
 }
 
-.cardapio-recommendation-list > button {
-  flex: 0 0 min(260px, 85%);
+.cardapio-popular-list::-webkit-scrollbar,
+.cardapio-recommendation-list::-webkit-scrollbar {
+  display: none;
+}
+
+.cardapio-popular-card,
+.cardapio-editorial-card {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid var(--menu-border);
+  border-radius: 18px;
+  background: var(--menu-surface);
+  color: var(--menu-text);
+  text-align: left;
+  cursor: pointer;
   scroll-snap-align: start;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.cardapio-popular-card:hover,
+.cardapio-editorial-card:hover {
+  border-color: color-mix(in srgb, var(--color-brand-primary) 40%, var(--menu-border));
+  background: var(--menu-surface-strong);
+}
+
+.cardapio-popular-card:focus-visible,
+.cardapio-editorial-card:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+}
+
+.cardapio-popular-card {
+  flex-basis: clamp(185px, 44vw, 224px);
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+}
+
+.cardapio-popular-card__image {
+  display: block;
+  width: 100%;
+  height: 132px;
+  flex-shrink: 0;
+  background: var(--menu-surface-soft);
+  object-fit: cover;
+}
+
+.cardapio-popular-card__content {
+  display: flex;
+  min-height: 90px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 13px 13px;
+}
+
+.cardapio-popular-card__name,
+.cardapio-editorial-card__name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.38;
+  color: var(--menu-text);
+}
+
+.cardapio-popular-card__price,
+.cardapio-editorial-card__price {
+  display: block;
+  margin-top: auto;
+  color: var(--color-brand-primary);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.cardapio-recommendation-list > .cardapio-editorial-card {
+  flex: 0 0 min(320px, 85%);
+  scroll-snap-align: start;
+}
+
+.cardapio-editorial-card {
+  display: flex;
+  min-height: 152px;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+}
+
+.cardapio-editorial-card::before {
+  /* A single, low-contrast circular backdrop organizes the image region.
+     No glow, false rating or floating decorative object. */
+  content: '';
+  position: absolute;
+  top: -50px;
+  right: -55px;
+  width: 175px;
+  height: 175px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-brand-primary) 9%, transparent);
+  pointer-events: none;
+}
+
+.cardapio-editorial-card__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-self: stretch;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+}
+
+.cardapio-editorial-card__label {
+  color: var(--menu-muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.cardapio-editorial-card__image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 116px;
+  height: 116px;
+  flex: 0 0 116px;
+  border-radius: 13px;
+  background: var(--menu-surface-soft);
+  object-fit: cover;
+}
+
+@media (max-width: 640px) {
+  .cardapio-popular-card {
+    flex-basis: 190px;
+  }
+
+  .cardapio-popular-card__image {
+    height: 116px;
+  }
+
+  .cardapio-editorial-card {
+    min-height: 144px;
+  }
+
+  .cardapio-editorial-card__image {
+    width: 104px;
+    height: 104px;
+    flex-basis: 104px;
+  }
 }
 
 .cardapio-product-card__choose {
