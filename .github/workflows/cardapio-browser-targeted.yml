@@ -93,6 +93,14 @@ jobs:
           --project=desktop-1366
           --workers=2
 
+      - name: Verify hybrid catalog across all nine responsive widths
+        env:
+          KOMA_E2E_PORT: '4289'
+        run: >-
+          npm run test:e2e --
+          e2e/cardapio-mobile-layout.spec.ts
+          --workers=2
+
       - name: Upload browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v6
