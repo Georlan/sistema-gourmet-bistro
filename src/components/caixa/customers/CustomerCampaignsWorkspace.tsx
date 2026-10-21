@@ -553,21 +553,25 @@ export function CustomerCampaignsWorkspace({
             onClick={onOpenResults}
             className="koma-btn-secondary inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold"
           >
-            Ver acompanhamento em Resultados <ArrowRight size={13} />
+            Resultados <ArrowRight size={13} />
           </button>
       </div>
 
       <nav aria-label="Etapas da campanha" className="grid grid-cols-3 gap-2">
-        {([{id:1,label:'Público'},{id:2,label:'Mensagem'},{id:3,label:'Contatos'}] as const).map(item => (
+        {([{id:1,label:'Público',icon:Users},{id:2,label:'Mensagem',icon:MessageSquare},{id:3,label:'Contatos',icon:CheckCircle2}] as const).map(item => (
           <button key={item.id} type="button" aria-current={step === item.id ? 'step' : undefined}
             disabled={item.id > 1 && selectedCustomers.length === 0 || item.id === 3 && !activeCampaignId}
             onClick={() => setStep(item.id)}
             className={`min-h-11 rounded-xl border px-2 py-3 text-sm font-bold disabled:opacity-40 ${step === item.id ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-koma-border text-koma-muted'}`}>
-            {item.id}. {item.label}
+            <span className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-koma-raised"><item.icon size={17} aria-hidden="true"/></span>
+            <span className="block">{item.id}. {item.label}</span>
           </button>
         ))}
       </nav>
-      <p role="status" className="text-sm text-koma-muted">{selectedCustomers.length} clientes selecionados · {tipoAbordagem === 'SEM_DESCONTO' ? 'Sem novo desconto' : tipoAbordagem === 'CUPOM' ? 'Com cupom' : 'Usando saldo de fidelidade'}</p>
+      <div role="status" className="flex flex-wrap items-center gap-2 text-xs text-koma-muted">
+        <span className="inline-flex items-center gap-2 rounded-full bg-koma-raised px-3 py-1.5"><Users size={14} aria-hidden="true"/><strong className="text-koma-foreground">{selectedCustomers.length}</strong> selecionados</span>
+        <span className="inline-flex items-center gap-2 rounded-full bg-koma-raised px-3 py-1.5"><Ticket size={14} aria-hidden="true"/>{tipoAbordagem === 'SEM_DESCONTO' ? 'Sem novo desconto' : tipoAbordagem === 'CUPOM' ? 'Com cupom' : 'Saldo de fidelidade'}</span>
+      </div>
       <div className="space-y-4">
         {/* Coluna Esquerda: Configuração da Ação (Etapas 1 a 4) */}
         <div className="space-y-4">
@@ -579,7 +583,7 @@ export function CustomerCampaignsWorkspace({
             <select aria-label="Objetivo da campanha" value={objetivo} onChange={e => handleObjectiveChange(e.target.value)} className="min-h-11 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-sm text-koma-foreground">
               {OBJECTIVES.map(obj => <option key={obj.id} value={obj.id}>{obj.label}</option>)}
             </select>
-            <details className="text-xs text-koma-muted"><summary className="cursor-pointer">Como este público é selecionado</summary><p className="mt-2">{OBJECTIVES.find(obj => obj.id === objetivo)?.shortRule}</p></details>
+            <p className="flex items-start gap-2 text-xs text-koma-muted"><ShieldCheck size={15} aria-hidden="true" className="shrink-0 text-emerald-500"/>{OBJECTIVES.find(obj => obj.id === objetivo)?.shortRule}</p>
 
             <div className="pt-1">
               <label className="block text-sm font-medium text-koma-muted">

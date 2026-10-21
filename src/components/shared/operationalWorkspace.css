@@ -1,0 +1,30 @@
+/* Opt-in operational workspace: shared theme, keyboard and touch conventions. */
+.koma-workspace :where(button, a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--koma-focus-ring);
+  outline-offset: 3px;
+  scroll-margin-block: 8rem;
+}
+.koma-workspace :where(button, summary) { touch-action: manipulation; }
+.koma-workspace :where(h3, h4) { text-wrap: balance; }
+.koma-workspace :where(th, td, strong) { font-variant-numeric: tabular-nums; }
+.koma-workspace :where(table th) { font-size: 0.75rem; letter-spacing: normal; text-transform: none; }
+/* Existing primary buttons keep brand action tokens and legible foreground in both themes. */
+.koma-workspace .koma-btn-primary {
+  color: var(--koma-action-text) !important;
+  background: var(--koma-action-bg);
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+.koma-workspace .koma-btn-primary:hover { background: var(--koma-action-hover); filter: none; box-shadow: none; }
+.koma-workspace .koma-btn-primary:active { transform: none; }
+@media (pointer: coarse) {
+  .koma-workspace :where(button, summary) { min-width: 44px; }
+  .koma-workspace :where(button, summary, select, input:not([type=checkbox]):not([type=radio])) { min-height: 44px; }
+  .koma-workspace :where(input, select, textarea) { font-size: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .koma-workspace, .koma-workspace *, .koma-workspace *::before, .koma-workspace *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -40,21 +40,17 @@ test('all CRM workspaces render backend-generated responses without losing the o
     await navigateRelationship(page,subTab);
     await expectRelationshipSelected(page,subTab);
     if (subTab === 'resultados') {
-      const analysis = page.getByLabel('Análise detalhada dos resultados', {exact:true});
-      await expect(analysis).not.toHaveAttribute('open', '');
-      await expect(page.getByRole('region', {name:'Evolução observada'})).toBeHidden();
-      const method = page.locator('details').filter({has: page.locator('summary', {hasText:'Como calculamos os resultados'})});
-      await expect(method).not.toHaveAttribute('open', '');
-      await method.locator('summary').click();
-      await expect(method).toContainText('não representa lucro, causalidade');
-      await method.locator('summary').click();
+      await expect(page.getByRole('region', {name:'Evolução observada'})).toBeVisible();
+      const method = page.getByRole('region', {name:'Como calculamos os resultados'});
+      await expect(method).toBeVisible();
+      await expect(method).toContainText('causalidade');
+      await expect(method).toContainText('lucro');
     }
     await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector('.cashier-content')?.scrollTo(0, 0); });
     for (const entering of await page.locator('.animate-fade-in:visible').all()) await expect(entering).toHaveCSS('opacity', '1');
     await page.screenshot({path:testInfo.outputPath(`crm-clean-${subTab}-${testInfo.project.name}.png`),animations:'disabled'});
     if(subTab === 'fidelidade'){
-      await expect(page.getByRole('region',{name:'Simulação da fidelidade'})).toBeHidden();
-      await page.getByText('Simulação financeira', {exact:true}).click();
+      await expect(page.getByRole('region',{name:'Simulação da fidelidade'})).toBeVisible();
       const simulation=page.getByRole('region',{name:'Simulação da fidelidade'});
       await expect(simulation).toContainText('R$ 5,00');
       await page.getByLabel('Margem de contribuição na simulação').fill('30');
@@ -186,6 +182,13 @@ test('relationship keeps missing results distinct from zero and empty audiences 
   // Retorno sem contatos is unmeasured, while observed coupon usage is measured (zero).
   await expect(revenue.locator('strong')).toHaveText('R$ 0,00');
   await page.screenshot({path:testInfo.outputPath(`relationship-no-contacts-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
+  summary.resultados.valor_pago_pedidos_associados.status_mensuracao = 'NAO_MENSURADO';
+  await page.getByRole('button', {name:'Atualizar resultados'}).click();
+  await expect(revenue.locator('strong')).toHaveText('—');
+  await expect(page.getByRole('region', {name:'Começar acompanhamento'})).toBeVisible();
+  await page.screenshot({path:testInfo.outputPath(`results-get-started-${testInfo.project.name}.png`),animations:'disabled'});
+  await page.getByRole('button', {name:'Abrir campanhas',exact:true}).click();
+  await expect(page.getByRole('navigation', {name:'Etapas da campanha'})).toBeVisible();
 });
 
 
@@ -359,12 +362,12 @@ test('stage5 Results ignores stale HTTP responses and charts only dated real eve
   await navigateRelationship(page, 'resultados');
   const card = page.locator('article').filter({has: page.getByRole('heading', {name:'Clientes que voltaram'})});
   await expect(card.locator('strong')).toHaveText('1');
-  await page.getByText('Evolução e origem das compras', {exact:true}).click();
   await expect(page.getByRole('region', {name: 'Evolução observada'})).toContainText('08/10');
   await page.getByLabel('Período analisado nos resultados').selectOption('7');
   await expect.poll(() => pendingSeven !== null).toBe(true);
   await page.getByLabel('Período analisado nos resultados').selectOption('60');
   await expect(card.locator('strong')).toHaveText('2');
+  await page.screenshot({path:test.info().outputPath('results-observed-events.png'),animations:'disabled'});
   // The old response completes last: it must not replace the latest selection.
   await pendingSeven!.fulfill({json: makeSummary(7, 99)});
   await expect(page.getByLabel('Período analisado nos resultados')).toHaveValue('60');
@@ -376,7 +379,7 @@ test('stage5 Results ignores stale HTTP responses and charts only dated real eve
   await expect(campaignList).toContainText('1 compras em campanhas');
   await expect(campaignList).toContainText('1 sem campanha');
   await campaignList.getByText('Campanha fixture de contrato', {exact:true}).filter({visible:true}).click();
-  await expect(campaignList.getByText(/Janela histórica da campanha:/).filter({visible:true})).toBeVisible();
+  await expect(campaignList.getByText(/Janela: 14 dias/).filter({visible:true})).toBeVisible();
 });
 
 test('results recover from forbidden, unauthorized, network and malformed responses without losing navigation', async ({page}) => {
@@ -403,7 +406,7 @@ test('results recover from forbidden, unauthorized, network and malformed respon
   await expect(page.getByRole('heading', {name: 'Resultados por campanha (1)', exact: true})).toBeVisible();
   for (const kind of [401, 403, 'network', 'malformed'] as const) {
     failure = kind;
-    await page.getByRole('button', {name: 'Atualizar', exact: true}).click();
+    await page.getByRole('button', {name: 'Atualizar resultados', exact: true}).click();
     await expect(error).toBeVisible();
     await expect(page.getByRole('heading', {name: 'Resultados por campanha (1)', exact: true})).toBeVisible();
     failure = null;
