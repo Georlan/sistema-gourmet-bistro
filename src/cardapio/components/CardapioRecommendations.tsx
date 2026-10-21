@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import { Sparkles } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
 import CatalogProductImage from './CatalogProductImage';
 
@@ -127,36 +126,26 @@ export function CardapioRecommendations({ brand }: { brand: BrandConfig }) {
   };
 
   return (
-    <section aria-labelledby="cardapio-recommendations-title" className="w-full basis-full border-t border-koma-border pt-3" id="cardapio-recommendations-home">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
-          <Sparkles className="h-4 w-4" aria-hidden="true" />
-        </span>
-        <div>
-          <h2 id="cardapio-recommendations-title" className="text-sm font-black text-koma-foreground">Destaques do cardápio</h2>
-        </div>
-      </div>
-
+    <section aria-labelledby="cardapio-recommendations-title" className="cardapio-editorial-section w-full basis-full" id="cardapio-recommendations-home">
+      <h2 id="cardapio-recommendations-title" className="cardapio-showcase-heading">Destaques do cardápio</h2>
       <div className="cardapio-recommendation-list" role="list">
-        {recommendations.map(({ kind, label, product }) => {
-          return (
-            <button
-              key={`${kind}-${product.id}`}
-              type="button"
-              role="listitem"
-              onClick={() => openProduct(product)}
-              className="flex min-w-0 items-center gap-3 rounded-xl border border-koma-border bg-koma-panel p-2.5 text-left transition hover:border-emerald-500/30 hover:bg-koma-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
-              aria-label={`Abrir ${label.toLowerCase()} ${product.name}`}
-            >
-              <CatalogProductImage image={product.image} className="h-14 w-14 shrink-0 rounded-lg bg-koma-card object-cover" />
-              <span className="min-w-0">
-                <span className="block text-[9px] font-black uppercase tracking-wide text-koma-muted">{label}</span>
-                <strong className="block truncate text-xs text-koma-foreground">{product.name}</strong>
-                <span className="mt-0.5 block text-xs font-black text-emerald-400">{money(product.price)}</span>
-              </span>
-            </button>
-          );
-        })}
+        {recommendations.map(({ kind, label, product }) => (
+          <button
+            key={`${kind}-${product.id}`}
+            type="button"
+            role="listitem"
+            onClick={() => openProduct(product)}
+            className="cardapio-editorial-card"
+            aria-label={`Abrir ${label.toLowerCase()} ${product.name}`}
+          >
+            <span className="cardapio-editorial-card__content">
+              <span className="cardapio-editorial-card__label">{label}</span>
+              <strong className="cardapio-editorial-card__name">{product.name}</strong>
+              <span className="cardapio-editorial-card__price">{money(product.price)}</span>
+            </span>
+            <CatalogProductImage image={product.image} className="cardapio-editorial-card__image" />
+          </button>
+        ))}
       </div>
     </section>
   );
