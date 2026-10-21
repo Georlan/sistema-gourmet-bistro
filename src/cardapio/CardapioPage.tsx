@@ -434,11 +434,13 @@ export default function CardapioPage() {
         // sessionStorage some ao fechar a aba. Reidrata em segundo plano os
         // snapshots cifrados do navegador e devolve ao cliente o acesso ao
         // acompanhamento/chat sem aumentar o payload público do cardápio.
-        void restoreDurableStoredOrders(rid)
-          .then((restored) => setStoredOrders(restored))
-          .catch((resumeError) => {
-            console.warn("Falha ao retomar pedidos salvos neste navegador:", resumeError);
-          });
+        if (!background) {
+          void restoreDurableStoredOrders(rid)
+            .then((restored) => setStoredOrders(restored))
+            .catch((resumeError) => {
+              console.warn("Falha ao retomar pedidos salvos neste navegador:", resumeError);
+            });
+        }
       }
     } catch (error) {
       if (background) {
@@ -566,6 +568,9 @@ export default function CardapioPage() {
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
     let delay = 2000;
+    // O snapshot inicial já foi carregado antes de abrir este socket.
+    // Recarregar no primeiro onopen duplicava a consulta e o render do catálogo.
+    let hasConnected = false;
 
     const connect = () => {
       if (stopped || document.hidden) return;
@@ -573,7 +578,8 @@ export default function CardapioPage() {
       ws = socket;
       socket.onopen = () => {
         delay = 2000;
-        void loadRestaurantData(true);
+        if (hasConnected) void loadRestaurantData(true);
+        hasConnected = true;
         if (reconnectTimer) {
           clearTimeout(reconnectTimer);
           reconnectTimer = undefined;

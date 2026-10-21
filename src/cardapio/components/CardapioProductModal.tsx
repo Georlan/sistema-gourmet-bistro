@@ -56,10 +56,12 @@ interface CardapioProductModalProps {
 
 type QuantityModifier = ProductModifier & { minSelection?: number };
 
-const formatPrice = (value: number) => new Intl.NumberFormat("pt-BR", {
+// Reutiliza o formatador durante toques rápidos em listas extensas.
+const priceFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
-}).format(value);
+});
+const formatPrice = (value: number) => priceFormatter.format(value);
 
 const rulesForModifier = (modifier: QuantityModifier): ModifierQuantityRules => ({
   optionIds: modifier.options.map((option) => option.id),
@@ -210,17 +212,23 @@ export default function CardapioProductModal({
       }
     }
 
-    const nextIds = changeSelectionQuantity(rules, currentIds, option.id, delta);
-    const optionsById = new Map(modifier.options.map((candidate) => [candidate.id, candidate] as const));
-    const nextSelections = nextIds.flatMap((id) => {
-      const selected = optionsById.get(id);
-      return selected ? [selected] : [];
+    // O cálculo deve partir do estado mais recente, não do render anterior.
+    // Dois toques no mesmo frame precisam somar duas porções sem ultrapassar o máximo.
+    setSelectedOptions((current) => {
+      const latestIds = (current[modifier.id] || []).map((selected) => selected.id);
+      const nextIds = changeSelectionQuantity(rules, latestIds, option.id, delta);
+      if (latestIds.length === nextIds.length && latestIds.every((id, index) => id === nextIds[index])) {
+        return current;
+      }
+      const optionsById = new Map(modifier.options.map((candidate) => [candidate.id, candidate] as const));
+      return {
+        ...current,
+        [modifier.id]: nextIds.flatMap((id) => {
+          const selected = optionsById.get(id);
+          return selected ? [selected] : [];
+        }),
+      };
     });
-
-    setSelectedOptions((current) => ({
-      ...current,
-      [modifier.id]: nextSelections,
-    }));
   };
 
   const handleAdd = () => {
@@ -252,13 +260,13 @@ export default function CardapioProductModal({
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4 animate-fade-in cursor-pointer"
+      className="fixed inset-0 z-50 flex h-[100dvh] items-end justify-center overflow-hidden bg-black/70 p-0 sm:items-center sm:p-4 animate-fade-in cursor-pointer"
       id="product-details-modal"
     >
-      <div className="relative flex max-h-[94vh] w-full flex-col overflow-hidden rounded-t-[30px] border border-koma-border bg-koma-panel shadow-2xl sm:max-w-lg sm:rounded-[30px] animate-slide-up">
+      <div role="dialog" aria-modal="true" aria-labelledby="modal-product-name" className="relative flex h-[calc(100dvh-0.75rem)] min-h-0 w-full flex-col overflow-hidden rounded-t-[24px] border border-koma-border bg-koma-panel shadow-2xl sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-[30px] animate-slide-up">
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 h-1.5 w-12 rounded-full bg-white/40 sm:hidden" />
 
-        <div className={`relative w-full shrink-0 overflow-hidden bg-koma-card ${allModifiers.length > 0 ? "h-28 sm:h-32" : "h-52 sm:h-60"}`}>
+        <div className={`relative w-full shrink-0 overflow-hidden bg-koma-card ${allModifiers.length > 0 ? "h-24 sm:h-32" : "h-40 sm:h-60"}`}>
           <img
             src={getProductImageUrl(galleryImages[currentImgIndex] || product.image)}
             alt={product.name}
@@ -333,7 +341,7 @@ export default function CardapioProductModal({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 no-scrollbar">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 no-scrollbar" data-testid="product-modal-scroll">
           {compositionStep && (
             <div className="mb-3" aria-label={`Etapa ${compositionStep.current} de ${compositionStep.total}`}>
               <p className="text-xs font-bold text-emerald-400">
@@ -357,16 +365,18 @@ export default function CardapioProductModal({
           {product.marmitaria === true && allModifiers.some(modifier => (modifier.minSelection ?? 0) > 0) && (
             <div className="mt-3 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-xs text-koma-muted">
               <p className="font-bold text-koma-foreground">Montagem de {product.name}</p>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
               {allModifiers.filter(modifier => (modifier.minSelection ?? 0) > 0).map(modifier => {
                 const min = modifier.minSelection ?? 0;
                 const max = Math.max(1, Number(modifier.maxSelection || 1));
-                return <p key={modifier.id}>{modifier.title}: {min === max ? min : `${min} a ${max}`} {modifier.selectionMode === "porcoes" ? (max === 1 ? "porção" : "porções") : (max === 1 ? "opção" : "opções")}</p>;
+                return <span key={modifier.id}>{modifier.title}: {min === max ? min : `${min} a ${max}`} {modifier.selectionMode === "porcoes" ? (max === 1 ? "porção" : "porções") : (max === 1 ? "opção" : "opções")}</span>;
               })}
+              </div>
             </div>
           )}
 
           {allModifiers.length > 0 && (
-            <div className="mt-6 space-y-5 border-t border-koma-border pt-5">
+            <div className="mt-4 space-y-4 border-t border-koma-border pt-4 sm:mt-6 sm:space-y-5 sm:pt-5">
               {allModifiers.map((modifier) => {
                 const selections = selectedOptions[modifier.id] || [];
                 const selectedIds = selections.map((selection) => selection.id);
@@ -458,7 +468,7 @@ export default function CardapioProductModal({
                         return (
                           <OptionRow
                             key={option.id}
-                            className={`relative flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 transition ${simpleSelection ? "cursor-pointer" : ""} ${
+                            className={`relative flex w-full items-center justify-between gap-3 rounded-xl border p-2.5 sm:p-3.5 transition ${simpleSelection ? "cursor-pointer" : ""} ${
                               selected
                                 ? "border-emerald-500/50 bg-emerald-500/10 shadow-sm"
                                 : optionalSalad && selections.length === 0
@@ -493,24 +503,24 @@ export default function CardapioProductModal({
                                 />
                               </span>
                             ) : (
-                            <span className="relative flex shrink-0 items-center rounded-xl border border-koma-border bg-koma-raised p-1">
+                            <span className="relative flex shrink-0 items-center rounded-xl border border-koma-border bg-koma-raised p-0.5">
                               <button
                                 type="button"
                                 onClick={() => handleOptionQuantity(modifier, option, -1)}
                                 disabled={optionQuantity <= 0}
-                                className="grid h-8 w-8 place-items-center rounded-lg text-koma-muted transition hover:bg-koma-card hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-30"
+                                className="grid h-10 w-10 touch-manipulation place-items-center rounded-lg text-koma-muted transition hover:bg-koma-card hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-30"
                                 aria-label={`Remover uma unidade de ${option.name}`}
                               >
                                 <Minus className="h-4 w-4" />
                               </button>
-                              <span className="w-8 text-center font-mono text-sm font-black text-koma-foreground" aria-label={`${optionQuantity} unidade(s) de ${option.name}`}>
+                              <span className="w-6 text-center font-mono text-sm font-black text-koma-foreground" aria-label={`${optionQuantity} unidade(s) de ${option.name}`}>
                                 {optionQuantity}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => handleOptionQuantity(modifier, option, 1)}
                                 disabled={!canIncrement}
-                                className="grid h-8 w-8 place-items-center rounded-lg text-koma-muted transition hover:bg-koma-card hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-30"
+                                className="grid h-10 w-10 touch-manipulation place-items-center rounded-lg text-koma-muted transition hover:bg-koma-card hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-30"
                                 aria-label={`Adicionar uma unidade de ${option.name}`}
                               >
                                 <Plus className="h-4 w-4" />
@@ -548,7 +558,7 @@ export default function CardapioProductModal({
           )}
         </div>
 
-        <div className="shrink-0 border-t border-koma-border bg-koma-panel p-4 sm:px-6">
+        <div className="shrink-0 border-t border-koma-border bg-koma-panel px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:p-4 sm:px-6" data-testid="product-modal-footer">
           {compositionStep ? (
             <div className="flex items-center gap-2">
               {compositionStep.onBack && (
@@ -573,7 +583,7 @@ export default function CardapioProductModal({
             <button
               type="button"
               onClick={() => setQuantity((current) => Math.max(1, current - 1))}
-              className="grid h-10 w-10 place-items-center rounded-lg text-koma-secondary transition hover:bg-koma-raised disabled:opacity-40"
+              className="grid h-10 w-10 touch-manipulation place-items-center rounded-lg text-koma-secondary transition hover:bg-koma-raised disabled:opacity-40"
               disabled={quantity <= 1}
               id="btn-qty-minus"
               aria-label="Diminuir quantidade"
@@ -584,7 +594,7 @@ export default function CardapioProductModal({
             <button
               type="button"
               onClick={() => setQuantity((current) => current + 1)}
-              className="grid h-10 w-10 place-items-center rounded-lg text-koma-secondary transition hover:bg-koma-raised"
+              className="grid h-10 w-10 touch-manipulation place-items-center rounded-lg text-koma-secondary transition hover:bg-koma-raised"
               id="btn-qty-plus"
               aria-label="Aumentar quantidade"
             >
@@ -595,7 +605,7 @@ export default function CardapioProductModal({
           <button
             type="button"
             onClick={handleAdd}
-            className="flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-500 px-3 text-white shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-600 active:scale-[0.99]"
+            className="flex min-h-14 min-w-0 touch-manipulation flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-500 px-3 text-white shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-600 active:scale-[0.99]"
             id="btn-add-to-cart-action"
             aria-label={`${initialItem ? "Salvar" : "Adicionar"} ${quantity} × ${product.name} · ${formatPrice(totalPrice)}`}
           >

@@ -297,3 +297,76 @@ test('Destaques prioriza ranking real sem reconsultar ao navegar nas categorias'
   expect(rankingRequests).toBe(initialRankingRequests);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+
+test('quentinha em celular mantém modal e rodapé no viewport e aceita toques rápidos', async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.startsWith('mobile'), 'Validação da geometria mobile');
+
+  await mockCardapio(page);
+  await page.route('**/api/cardapio-digital/public?**', route => route.fulfill({ json: {
+    ...publicMenuPayload,
+    produtos: [{
+      ...publicMenuPayload.produtos[0],
+      nome: 'Quentinha G',
+      preco: 14,
+      marmitaria: true,
+      grupos_modificadores: [
+        {
+          id: 'proteins', nome: 'Proteínas', min_selecoes: 2, max_selecoes: 2,
+          tipo: 'obrigatorio', modo_selecao: 'porcoes',
+          opcoes: ['Filé de frango acebolado', 'Carne', 'Ovo', 'Porco'].map((nome, i) => ({
+            id: 'protein-' + i, nome, ativo: true, preco_adicional: 0,
+          })),
+        },
+        {
+          id: 'garnishes', nome: 'Guarnições', min_selecoes: 4, max_selecoes: 4,
+          tipo: 'obrigatorio', modo_selecao: 'porcoes',
+          opcoes: ['Arroz', 'Feijão', 'Macarrão', 'Farofa'].map((nome, i) => ({
+            id: 'garnish-' + i, nome, ativo: true, preco_adicional: 0,
+          })),
+        },
+      ],
+    }],
+  } }));
+
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#product-card-101').getByRole('button', { name: /Quentinha G.*ver detalhes/ }).click();
+  const modal = page.locator('#product-details-modal');
+  const dialog = modal.getByRole('dialog', { name: 'Quentinha G' });
+  const footer = modal.getByTestId('product-modal-footer');
+  await expect(dialog).toBeVisible();
+  await expect(footer.getByRole('button', { name: /Adicionar 1 × Quentinha G/ })).toBeVisible();
+
+  const geometry = await modal.evaluate((overlay) => {
+    const dialogRect = overlay.querySelector('[role="dialog"]')!.getBoundingClientRect();
+    const footerRect = overlay.querySelector('[data-testid="product-modal-footer"]')!.getBoundingClientRect();
+    const contentRect = overlay.querySelector('[data-testid="product-modal-scroll"]')!.getBoundingClientRect();
+    return {
+      top: dialogRect.top, bottom: dialogRect.bottom, footerBottom: footerRect.bottom,
+      contentHeight: contentRect.height, viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth, dialogRight: dialogRect.right,
+    };
+  });
+  expect(geometry.top).toBeGreaterThanOrEqual(-1);
+  expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportHeight + 2);
+  expect(geometry.footerBottom).toBeLessThanOrEqual(geometry.viewportHeight + 2);
+  expect(geometry.contentHeight).toBeGreaterThan(100);
+  expect(geometry.dialogRight).toBeLessThanOrEqual(geometry.viewportWidth + 2);
+
+  const plus = modal.getByRole('button', { name: 'Adicionar uma unidade de Filé de frango acebolado' });
+  // Os dois cliques ocorrem antes de um render: a atualização deve ser funcional.
+  await plus.evaluate((button) => {
+    (button as HTMLButtonElement).click();
+    (button as HTMLButtonElement).click();
+  });
+  await expect(modal.getByLabel('2 unidade(s) de Filé de frango acebolado')).toBeVisible();
+  await expect(plus).toBeDisabled();
+
+  await modal.getByRole('button', { name: 'Adicionar uma unidade de Arroz' }).click();
+  await modal.getByRole('button', { name: 'Adicionar uma unidade de Arroz' }).click();
+  await modal.getByRole('button', { name: 'Adicionar uma unidade de Feijão' }).click();
+  await modal.getByRole('button', { name: 'Adicionar uma unidade de Feijão' }).click();
+  await expect(footer.getByRole('button', { name: /Adicionar 1 × Quentinha G/ })).toBeVisible();
+  await footer.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toHaveCount(0);
+});
