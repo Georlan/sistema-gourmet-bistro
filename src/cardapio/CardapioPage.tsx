@@ -49,6 +49,7 @@ import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
 import CardapioOrdersDrawer from "./components/CardapioOrdersDrawer";
+import CardapioArtisticExperience from "./components/CardapioArtisticExperience";
 import { KomaLoading } from "../components/app/KomaLoading";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import { resolveKomaHost } from "../domain/komaHost";
@@ -158,10 +159,12 @@ export default function CardapioPage() {
   const isProgrammaticScroll = useRef(false);
   const lastReportedMenuIdRef = useRef<string | number | null>(null);
 
-  const [vitrineVariant, setVitrineVariant] = useState<'editorial' | 'artistic' | 'catalog-first'>(() => {
+  const [vitrineVariant, setVitrineVariant] = useState<'editorial' | 'artistic' | 'catalog-first' | 'artistic-total'>(() => {
     if (typeof window !== 'undefined') {
       const param = new URLSearchParams(window.location.search).get('vitrine');
-      if (param === 'catalog-first' || param === 'artistic' || param === 'editorial') return param;
+      if (param === 'artistic-total' || param === 'catalog-first' || param === 'artistic' || param === 'editorial') return param;
+      if (new URLSearchParams(window.location.search).has('artistic')) return 'artistic-total';
+      if (window.location.pathname.includes('/preview-ui')) return 'artistic-total';
     }
     return 'editorial';
   });
@@ -172,7 +175,7 @@ export default function CardapioPage() {
     }
   }, [vitrineVariant]);
 
-  const handleVariantChange = useCallback((nextVariant: 'editorial' | 'artistic' | 'catalog-first') => {
+  const handleVariantChange = useCallback((nextVariant: 'editorial' | 'artistic' | 'catalog-first' | 'artistic-total') => {
     setVitrineVariant(nextVariant);
     if (typeof document !== 'undefined') {
       document.documentElement.setAttribute('data-vitrine-variant', nextVariant);
@@ -1038,20 +1041,46 @@ export default function CardapioPage() {
 
   return (
     <div className="min-h-screen overflow-x-clip bg-bg-app font-sans text-text-app" id="app-root-container">
-      <CardapioHeader
-        activeBrand={activeBrand}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        user={user}
-        onAuthClick={() => user ? setIsProfileOpen(true) : setIsAuthOpen(true)}
-        onLogoClick={() => setIsStoreInfoOpen(true)}
-        onCartToggle={openCart}
-        cartCount={cartCount}
-        onOrdersClick={() => setIsOrdersDrawerOpen(true)}
-        onBenefitsClick={() => setIsBenefitsOpen(true)}
-        ordersCount={storedOrders.length}
-        activeOrdersCount={activeOrders.length}
-      />
+      {vitrineVariant === 'artistic-total' ? (
+        <CardapioArtisticExperience
+          activeBrand={activeBrand}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          selectedCategory={activeCategory}
+          onSelectCategory={(category) => {
+            setActiveCategory(category);
+            isProgrammaticScroll.current = true;
+            const element = document.getElementById(category ? `cat-${category.toLowerCase().replace(/\s+/g, '-')}` : 'koma-art-hero-showcase');
+            element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            window.setTimeout(() => { isProgrammaticScroll.current = false; }, 700);
+          }}
+          onSelectProduct={setSelectedProduct}
+          onFastAdd={handleFastAdd}
+          onFastRemove={handleFastRemove}
+          getProductCartQuantity={getProductCartQuantity}
+          onCartToggle={openCart}
+          cartCount={cartCount}
+          cartTotal={cartTotal}
+          onStoreInfoClick={() => setIsStoreInfoOpen(true)}
+          onOrdersClick={() => setIsOrdersDrawerOpen(true)}
+          activeOrdersCount={activeOrders.length}
+        />
+      ) : (
+        <>
+          <CardapioHeader
+            activeBrand={activeBrand}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            user={user}
+            onAuthClick={() => user ? setIsProfileOpen(true) : setIsAuthOpen(true)}
+            onLogoClick={() => setIsStoreInfoOpen(true)}
+            onCartToggle={openCart}
+            cartCount={cartCount}
+            onOrdersClick={() => setIsOrdersDrawerOpen(true)}
+            onBenefitsClick={() => setIsBenefitsOpen(true)}
+            ordersCount={storedOrders.length}
+            activeOrdersCount={activeOrders.length}
+          />
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6" id="catalog-section">
         {notice && !isCartOpen && !isCheckoutOpen && (
@@ -1346,13 +1375,15 @@ export default function CardapioPage() {
         </nav>
       )}
 
-      {cartCount > 0 && !hasOpenOverlay && (
-        <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[44] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:left-auto lg:right-5 lg:w-80 lg:translate-x-0" id="floating-cart-container">
-          <button type="button" onClick={openCart} className="flex h-14 w-full touch-manipulation select-none items-center justify-between rounded-2xl bg-emerald-500 px-4 text-white shadow-2xl active:scale-[0.99]" id="floating-cart-trigger" aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}>
-            <span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-white/15 text-xs font-black">{cartCount}</span><span className="text-xs font-black">Ver sacola</span></span>
-            <span className="text-sm font-black">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}</span>
-          </button>
-        </div>
+          {cartCount > 0 && !hasOpenOverlay && (
+            <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[44] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:left-auto lg:right-5 lg:w-80 lg:translate-x-0" id="floating-cart-container">
+              <button type="button" onClick={openCart} className="flex h-14 w-full touch-manipulation select-none items-center justify-between rounded-2xl bg-emerald-500 px-4 text-white shadow-2xl active:scale-[0.99]" id="floating-cart-trigger" aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}>
+                <span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-white/15 text-xs font-black">{cartCount}</span><span className="text-xs font-black">Ver sacola</span></span>
+                <span className="text-sm font-black">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}</span>
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {selectedPromotion && (
@@ -1643,6 +1674,13 @@ export default function CardapioPage() {
       {activeBrand?.slug === 'preview-ui' && typeof window !== 'undefined' && !new URLSearchParams(window.location.search).has('clean') && (
         <aside aria-label="Controle de prévia de vitrine" className="koma-preview-switcher-bar">
           <span className="koma-preview-switcher-label">Vitrine:</span>
+          <button
+            type="button"
+            className={`koma-preview-switcher-btn ${vitrineVariant === 'artistic-total' ? 'is-active' : ''}`}
+            onClick={() => handleVariantChange('artistic-total')}
+          >
+            ★ Redesign Total
+          </button>
           <button
             type="button"
             className={`koma-preview-switcher-btn ${vitrineVariant === 'editorial' ? 'is-active' : ''}`}
