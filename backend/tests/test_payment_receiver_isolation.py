@@ -211,3 +211,130 @@ def test_owner_oauth_completion_is_rejected_before_account_mutation(db, monkeypa
     assert denied.value.status_code == 409
     assert account(db, A).access_token == previous
     assert account(db, B).access_token == f'internal-seller-token-{B}'
+
+
+def test_pilot8_owner_receiver_exception_matrix(db, monkeypatch):
+    """Test all facets of owner receiver pilot 8 exception:
+    1. Without opt-in, owner is blocked on restaurant 8 in production.
+    2. With opt-in, owner is permitted ONLY on restaurant 8 in production.
+    3. Restaurant 8 in sandbox remains blocked even with opt-in.
+    4. Other restaurants (e.g. 6, 7, 9, A) remain blocked in production and sandbox.
+    5. Connection status, public capabilities, active_account, and complete agree.
+    """
+    rid = 8
+    owner_acco = 'ACCO_PAGBANK_OWNER_PROD'
+    monkeypatch.setenv('PAGBANK_ENV', 'sandbox')
+    monkeypatch.setenv('PAGBANK_PRODUCTION_APPLICATION_OWNER_ACCOUNT_ID', owner_acco)
+
+    # Setup restaurant 8 in db
+    r8 = db.query(Restaurante).filter_by(id=rid).first()
+    if not r8:
+        db.add(Restaurante(id=rid, nome='D8 Burger', plano='pro'))
+        db.flush()
+    u8 = db.query(Usuario).filter_by(restaurante_id=rid).first()
+    if not u8:
+        u8 = Usuario(id=f'admin-{rid}', restaurante_id=rid, nome='D8 Admin', email='d8@example.test',
+                     senha_hash='unused', role='admin', cargo='admin', status='ativo')
+        db.add(u8)
+        db.flush()
+    s8 = db.query(CaixaTurno).filter_by(restaurante_id=rid).first()
+    if not s8:
+        s8 = CaixaTurno(restaurante_id=rid, aberto_por_id=u8.id, status='aberto', saldo_inicial=0)
+        db.add(s8)
+        db.flush()
+    acc8 = db.query(RestaurantPaymentAccount).filter_by(restaurante_id=rid, provider='pagbank').first()
+    if not acc8:
+        acc8 = RestaurantPaymentAccount(
+            id=f'account-{rid}', restaurante_id=rid, provider='pagbank',
+            provider_environment='production', provider_user_id=owner_acco, status='active',
+        )
+        acc8.access_token = 'seller-token-pilot8'
+        acc8.webhook_secret = acc8.access_token
+        acc8.refresh_token = 'refresh-pilot8'
+        db.add(acc8)
+        db.flush()
+    else:
+        acc8.provider_environment = 'production'
+        acc8.provider_user_id = owner_acco
+        acc8.status = 'active'
+        acc8.access_token = 'seller-token-pilot8'
+        db.flush()
+    db.commit()
+
+    # Case 1: Restaurant 8 in production without opt-in flag -> BLOCKED
+    monkeypatch.setenv('PAGBANK_PRODUCTION_RESTAURANT_IDS', '8')
+    monkeypatch.delenv('PAGBANK_PRODUCTION_OWNER_RECEIVER_PILOT8', raising=False)
+
+    monkeypatch.setattr(pagbank_payments, 'require_tenant_id', lambda: rid)
+    st = pagbank_payments.connection_status(db=db, user=u8)
+    assert st['connected'] is False
+    assert OnlinePaymentService.public_payment_capabilities(db, rid) == (False, False)
+    with pytest.raises(OnlinePaymentConfigurationError, match='proprietária'):
+        OnlinePaymentService.active_account(db, rid)
+
+    # Case 2: Restaurant 8 in production WITH opt-in flag -> PERMITTED
+    monkeypatch.setenv('PAGBANK_PRODUCTION_OWNER_RECEIVER_PILOT8', 'true')
+
+    st = pagbank_payments.connection_status(db=db, user=u8)
+    assert st['connected'] is True
+    assert st['environment'] == 'production'
+    assert OnlinePaymentService.public_payment_capabilities(db, rid) == (True, True)
+    active = OnlinePaymentService.active_account(db, rid)
+    assert active.provider_user_id == owner_acco
+    assert active.access_token == 'seller-token-pilot8'
+
+    # Verify oauth.complete allows connection for restaurant 8 with opt-in
+    monkeypatch.setattr(oauth, 'decode_state', lambda *_: (rid, u8.id))
+    monkeypatch.setattr(oauth, 'exchange', lambda *a, **kw: MercadoPagoOAuthTokens(
+        'new-seller-token-8', 'new-refresh-8', None, owner_acco, 3600))
+    pagbank_payments.complete(
+        pagbank_payments.AuthorizationCompletion(code='valid-code', state='valid-state'),
+        db=db, user=u8,
+    )
+    assert account(db, rid).access_token == 'new-seller-token-8'
+
+    # Case 3: Restaurant 8 in Sandbox with opt-in flag -> BLOCKED
+    # (PAGBANK_PRODUCTION_RESTAURANT_IDS empty so 8 is sandbox)
+    monkeypatch.delenv('PAGBANK_PRODUCTION_RESTAURANT_IDS', raising=False)
+    monkeypatch.setenv('PAGBANK_APPLICATION_OWNER_ACCOUNT_ID', owner_acco)
+    acc8.provider_environment = 'sandbox'
+    db.flush()
+
+    st = pagbank_payments.connection_status(db=db, user=u8)
+    assert st['connected'] is False
+    assert OnlinePaymentService.public_payment_capabilities(db, rid) == (False, False)
+    with pytest.raises(OnlinePaymentConfigurationError, match='proprietária'):
+        OnlinePaymentService.active_account(db, rid)
+
+    with pytest.raises(HTTPException) as denied_sbx:
+        pagbank_payments.complete(
+            pagbank_payments.AuthorizationCompletion(code='valid-code', state='valid-state'),
+            db=db, user=u8,
+        )
+    assert denied_sbx.value.status_code == 409
+
+    # Case 4: Other restaurant (e.g. A = 99571) in production with opt-in flag -> BLOCKED
+    monkeypatch.setenv('PAGBANK_PRODUCTION_RESTAURANT_IDS', '8,99571')
+    user_a = db.query(Usuario).filter_by(restaurante_id=A).one()
+    # Temporarily decouple acc8's provider_user_id so unique constraint (provider, provider_user_id) passes
+    acc8.provider_user_id = 'ACCO_OTHER_8'
+    db.flush()
+    acc_a = account(db, A)
+    acc_a.provider_environment = 'production'
+    acc_a.provider_user_id = owner_acco
+    db.flush()
+
+    monkeypatch.setattr(pagbank_payments, 'require_tenant_id', lambda: A)
+    st_a = pagbank_payments.connection_status(db=db, user=user_a)
+    assert st_a['connected'] is False
+    assert OnlinePaymentService.public_payment_capabilities(db, A) == (False, False)
+    with pytest.raises(OnlinePaymentConfigurationError, match='proprietária'):
+        OnlinePaymentService.active_account(db, A)
+
+    monkeypatch.setattr(oauth, 'decode_state', lambda *_: (A, user_a.id))
+    with pytest.raises(HTTPException) as denied_a:
+        pagbank_payments.complete(
+            pagbank_payments.AuthorizationCompletion(code='valid-code', state='valid-state'),
+            db=db, user=user_a,
+        )
+    assert denied_a.value.status_code == 409
