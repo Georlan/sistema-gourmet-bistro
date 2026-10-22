@@ -263,13 +263,18 @@ export default function CardapioProductModal({
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-end justify-center overflow-hidden bg-black/70 p-0 sm:items-center sm:p-4 animate-fade-in cursor-pointer"
+      className="fixed inset-0 z-50 flex items-end justify-center overflow-hidden bg-black/75 backdrop-blur-sm p-0 sm:items-center sm:p-4 animate-fade-in cursor-pointer"
       id="product-details-modal"
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="modal-product-name" className="absolute inset-x-0 bottom-0 top-3 flex min-h-0 w-full flex-col overflow-hidden rounded-t-[24px] border border-koma-border bg-koma-panel shadow-2xl sm:relative sm:inset-auto sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-[30px] animate-slide-up">
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 h-1.5 w-12 rounded-full bg-white/40 sm:hidden" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-product-name"
+        className="koma-art-modal-sheet absolute inset-x-0 bottom-0 top-3 flex min-h-0 w-full flex-col overflow-hidden rounded-t-[32px] border border-white/10 shadow-2xl sm:relative sm:inset-auto sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-[36px] animate-slide-up"
+      >
+        <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-20 h-1.5 w-12 rounded-full bg-white/30 sm:hidden" />
 
-        <div className={`relative w-full shrink-0 overflow-hidden bg-koma-card ${allModifiers.length > 0 ? "h-24 sm:h-32" : "h-40 sm:h-60"}`}>
+        <div className={`koma-art-modal-hero ${allModifiers.length > 0 ? "h-40 sm:h-52" : "h-52 sm:h-68"}`}>
           <img
             src={getProductImageUrl(galleryImages[currentImgIndex] || product.image)}
             alt={product.name}
@@ -281,13 +286,13 @@ export default function CardapioProductModal({
               event.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
             }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />
+          <div className="koma-art-modal-hero-melt" />
 
-          <div className="absolute right-3 top-3 flex gap-2">
+          <div className="absolute right-3.5 top-3.5 z-10 flex gap-2">
             <button
               type="button"
               onClick={handleShare}
-              className="grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur transition hover:bg-black/70"
+              className="koma-art-glass-btn"
               title="Compartilhar produto"
               aria-label="Compartilhar produto"
               id="btn-share-product"
@@ -297,7 +302,7 @@ export default function CardapioProductModal({
             <button
               type="button"
               onClick={onClose}
-              className="grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur transition hover:bg-black/70"
+              className="koma-art-glass-btn"
               aria-label="Fechar detalhes do produto"
               id="btn-close-modal"
             >
@@ -310,7 +315,7 @@ export default function CardapioProductModal({
               <button
                 type="button"
                 onClick={() => setCurrentImgIndex((current) => current > 0 ? current - 1 : galleryImages.length - 1)}
-                className="absolute left-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur"
+                className="koma-art-glass-btn absolute left-3 top-1/2 -translate-y-1/2 z-10 !w-9 !h-9"
                 aria-label="Foto anterior"
               >
                 <ChevronLeft className="h-5 w-5" />
@@ -318,12 +323,12 @@ export default function CardapioProductModal({
               <button
                 type="button"
                 onClick={() => setCurrentImgIndex((current) => current < galleryImages.length - 1 ? current + 1 : 0)}
-                className="absolute right-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur"
+                className="koma-art-glass-btn absolute right-3 top-1/2 -translate-y-1/2 z-10 !w-9 !h-9"
                 aria-label="Próxima foto"
               >
                 <ChevronRight className="h-5 w-5" />
               </button>
-              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full border border-white/10 bg-black/40 px-2.5 py-1.5 backdrop-blur">
+              <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1.5 rounded-full border border-white/10 bg-black/40 px-2.5 py-1.5 backdrop-blur">
                 {galleryImages.map((_, index) => (
                   <button
                     key={index}
@@ -339,7 +344,7 @@ export default function CardapioProductModal({
         </div>
 
         {showToast && (
-          <div className="absolute left-1/2 top-4 z-50 -translate-x-1/2 rounded-xl border border-emerald-400/30 bg-[#0f241c] px-3 py-2 text-xs font-bold text-emerald-200 shadow-lg">
+          <div className="absolute left-1/2 top-4 z-50 -translate-x-1/2 rounded-full border border-emerald-400/40 bg-[#0f241c] px-4 py-2 text-xs font-bold text-emerald-300 shadow-xl backdrop-blur-md">
             Link copiado
           </div>
         )}
@@ -350,23 +355,23 @@ export default function CardapioProductModal({
               <p className="text-xs font-bold text-emerald-400">
                 Etapa {compositionStep.current} de {compositionStep.total} · {compositionStep.stepLabel}
               </p>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-koma-raised" aria-hidden="true">
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
                 <div className="h-full rounded-full bg-emerald-500" style={{ width: `${(compositionStep.current / compositionStep.total) * 100}%` }} />
               </div>
             </div>
           )}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h2 className="font-display text-xl font-black tracking-tight text-koma-foreground sm:text-2xl" id="modal-product-name">{product.name}</h2>
+              <h2 className="font-serif text-2xl font-black tracking-tight text-koma-foreground sm:text-3xl" id="modal-product-name">{product.name}</h2>
               {product.description && (
                 <p className="mt-2 text-sm leading-relaxed text-koma-muted">{product.description}</p>
               )}
             </div>
-            <strong className="shrink-0 text-sm font-black text-emerald-400">{compositionStep ? "Incluso na promoção" : formatPrice(product.price)}</strong>
+            <strong className="shrink-0 font-serif text-lg font-black text-emerald-400 sm:text-xl">{compositionStep ? "Incluso na promoção" : formatPrice(product.price)}</strong>
           </div>
 
           {product.marmitaria === true && allModifiers.some(modifier => (modifier.minSelection ?? 0) > 0) && (
-            <div className="mt-3 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-xs text-koma-muted">
+            <div className="mt-3.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-xs text-koma-muted">
               <p className="font-bold text-koma-foreground">Montagem de {product.name}</p>
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
               {allModifiers.filter(modifier => (modifier.minSelection ?? 0) > 0).map(modifier => {
@@ -379,7 +384,7 @@ export default function CardapioProductModal({
           )}
 
           {allModifiers.length > 0 && (
-            <div className="mt-4 space-y-4 border-t border-koma-border pt-4 sm:mt-6 sm:space-y-5 sm:pt-5">
+            <div className="mt-4 space-y-4 border-t border-white/10 pt-4 sm:mt-6 sm:space-y-5 sm:pt-5">
               {allModifiers.map((modifier) => {
                 const selections = selectedOptions[modifier.id] || [];
                 const selectedIds = selections.map((selection) => selection.id);
@@ -408,7 +413,7 @@ export default function CardapioProductModal({
                   <section key={modifier.id} tabIndex={-1} aria-label={modifier.title} ref={node => { if (node) groupRefs.current.set(modifier.id, node); else groupRefs.current.delete(modifier.id); }}>
                     <Heading
                       {...(collapsible ? { type: "button" as const, "aria-expanded": expanded, "aria-controls": `modifier-options-${modifier.id}`, onClick: () => setExpandedExtras(current => ({ ...current, [modifier.id]: !expanded })) } : {})}
-                      className={`flex w-full items-start justify-between gap-3 text-left ${collapsible ? "rounded-xl border border-koma-border bg-koma-card p-3" : ""}`}
+                      className={`flex w-full items-start justify-between gap-3 text-left ${collapsible ? "rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 transition hover:border-emerald-500/30" : ""}`}
                     >
                       <div>
                         <h3 className="text-sm font-black text-koma-foreground">{modifier.title}</h3>
@@ -430,10 +435,7 @@ export default function CardapioProductModal({
                               : `${selectedTypes}/${max}`}
                           </span>
                         )}
-                        <span className={modifier.required
-                          ? "rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-400"
-                          : "rounded-lg border border-koma-border bg-koma-card px-2.5 py-1 text-[10px] font-black uppercase text-koma-muted"}
-                        >
+                        <span className={`koma-art-modal-pill-badge ${complete ? "koma-art-modal-pill-badge--complete" : modifier.required ? "koma-art-modal-pill-badge--required" : "koma-art-modal-pill-badge--optional"}`}>
                           {complete ? "Completo" : modifier.required ? "Obrigatório" : "Opcional"}
                         </span>
                       </div>
@@ -442,7 +444,7 @@ export default function CardapioProductModal({
                     <div id={`modifier-options-${modifier.id}`} hidden={!expanded} className="mt-3 space-y-2">
                       {optionalSalad && (
                         <label
-                          className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border p-3.5 transition ${selections.length === 0 ? "border-emerald-500/50 bg-emerald-500/10" : "border-koma-border bg-koma-card"}`}
+                          className={`koma-art-modal-option-card ${selections.length === 0 ? "is-selected" : ""} cursor-pointer`}
                         >
                           <span className="text-sm font-bold text-koma-foreground">Sem salada</span>
                           <span className="flex shrink-0 items-center gap-3">
@@ -456,7 +458,7 @@ export default function CardapioProductModal({
                                 setSelectedOptions(current => ({ ...current, [modifier.id]: [] }));
                                 setFeedback("");
                               }}
-                              className="h-5 w-5 accent-emerald-500"
+                              className="h-5 w-5 accent-emerald-500 rounded cursor-pointer"
                             />
                           </span>
                         </label>
@@ -471,12 +473,12 @@ export default function CardapioProductModal({
                         return (
                           <OptionRow
                             key={option.id}
-                            className={`relative flex w-full items-center justify-between gap-3 rounded-xl border p-2.5 sm:p-3.5 transition ${simpleSelection ? "cursor-pointer" : ""} ${
+                            className={`koma-art-modal-option-card ${simpleSelection ? "cursor-pointer" : ""} ${
                               selected
-                                ? "border-emerald-500/50 bg-emerald-500/10 shadow-sm"
+                                ? "is-selected"
                                 : optionalSalad && selections.length === 0
-                                  ? "border-koma-border bg-koma-raised/40"
-                                  : "border-koma-border bg-koma-card"
+                                  ? "opacity-60"
+                                  : ""
                             }`}
                           >
                             {optionalSalad && !simpleSelection && (
@@ -485,7 +487,7 @@ export default function CardapioProductModal({
                                 aria-label={`Escolher ${option.name}`}
                                 disabled={!canIncrement}
                                 onClick={() => handleOptionQuantity(modifier, option, 1)}
-                                className="absolute inset-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                                className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                               />
                             )}
                             <span className={`relative min-w-0 ${optionalSalad && !simpleSelection ? "pointer-events-none" : ""}`}>
@@ -502,28 +504,28 @@ export default function CardapioProductModal({
                                   checked={selected}
                                   disabled={!selected && !canIncrement}
                                   onChange={() => handleOptionQuantity(modifier, option, selected ? -1 : 1)}
-                                  className="h-5 w-5 accent-emerald-500"
+                                  className="h-5 w-5 accent-emerald-500 rounded cursor-pointer"
                                 />
                               </span>
                             ) : (
-                            <span className="relative flex shrink-0 items-center rounded-xl border border-koma-border bg-koma-raised p-0.5">
+                            <span className="relative flex shrink-0 items-center koma-art-stepper-pill">
                               <button
                                 type="button"
                                 onClick={() => handleOptionQuantity(modifier, option, -1)}
                                 disabled={optionQuantity <= 0}
-                                className="grid h-10 w-10 touch-manipulation place-items-center rounded-lg text-koma-muted transition hover:bg-koma-card hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-30"
+                                className="koma-art-stepper-btn hover:text-rose-400"
                                 aria-label={`Remover uma unidade de ${option.name}`}
                               >
                                 <Minus className="h-4 w-4" />
                               </button>
-                              <span className="w-6 text-center font-mono text-sm font-black text-koma-foreground" aria-label={`${optionQuantity} unidade(s) de ${option.name}`}>
+                              <span className="koma-art-stepper-val" aria-label={`${optionQuantity} unidade(s) de ${option.name}`}>
                                 {optionQuantity}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => handleOptionQuantity(modifier, option, 1)}
                                 disabled={!canIncrement}
-                                className="grid h-10 w-10 touch-manipulation place-items-center rounded-lg text-koma-muted transition hover:bg-koma-card hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-30"
+                                className="koma-art-stepper-btn hover:text-emerald-400"
                                 aria-label={`Adicionar uma unidade de ${option.name}`}
                               >
                                 <Plus className="h-4 w-4" />
@@ -540,7 +542,7 @@ export default function CardapioProductModal({
             </div>
           )}
 
-          <label className="mt-6 block border-t border-koma-border pt-5">
+          <label className="mt-6 block border-t border-white/10 pt-5">
             <span className="text-sm font-black text-koma-foreground">Alguma observação?</span>
             <span className="mt-0.5 block text-xs text-koma-muted">Opcional · até 200 caracteres</span>
             <textarea
@@ -548,31 +550,31 @@ export default function CardapioProductModal({
               placeholder="Ex.: sem cebola, massa bem assada..."
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              className="mt-2.5 min-h-[80px] w-full resize-none rounded-xl border border-koma-border bg-koma-card p-3.5 text-sm leading-relaxed text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500"
+              className="mt-2.5 min-h-[84px] w-full resize-none rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 text-sm leading-relaxed text-koma-foreground outline-none transition placeholder:text-stone-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
               maxLength={200}
             />
           </label>
 
           {feedback && (
-            <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.08] p-3.5 text-xs font-semibold leading-relaxed text-amber-400" role="alert">
+            <div className="mt-4 flex items-start gap-2 rounded-2xl border border-amber-500/25 bg-amber-500/[0.08] p-3.5 text-xs font-semibold leading-relaxed text-amber-400" role="alert">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{feedback}</span>
             </div>
           )}
         </div>
 
-        <div className="shrink-0 border-t border-koma-border bg-koma-panel px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:p-4 sm:px-6" data-testid="product-modal-footer">
+        <div className="shrink-0 border-t border-white/10 bg-black/40 backdrop-blur-md px-4 pt-3.5 pb-[calc(0.85rem+env(safe-area-inset-bottom,0px))] sm:p-5 sm:px-6" data-testid="product-modal-footer">
           {compositionStep ? (
             <div className="flex items-center gap-2">
               {compositionStep.onBack && (
-                <button type="button" onClick={compositionStep.onBack} className="min-h-12 rounded-xl border border-koma-border px-4 text-sm font-bold text-koma-foreground">
+                <button type="button" onClick={compositionStep.onBack} className="min-h-12 rounded-full border border-white/15 px-5 text-sm font-bold text-koma-foreground transition hover:bg-white/5">
                   Voltar
                 </button>
               )}
               <button
                 type="button"
                 onClick={handleAdd}
-                className="min-h-12 min-w-0 flex-1 rounded-xl bg-emerald-500 px-4 text-sm font-black text-white hover:bg-emerald-600"
+                className="min-h-12 min-w-0 flex-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 text-sm font-black text-white hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
                 aria-label={compositionStep.actionLabel}
               >
                 {compositionStep.actionLabel}
@@ -582,22 +584,22 @@ export default function CardapioProductModal({
           <>
           <p className="mb-2 text-xs text-koma-muted">Quantidade de itens{quantity > 1 ? " · Mesma montagem para todas as unidades" : ""}</p>
           <div className="flex items-center gap-3">
-          <div className="flex shrink-0 items-center rounded-xl border border-koma-border bg-koma-card p-1">
+          <div className="flex shrink-0 items-center koma-art-stepper-pill">
             <button
               type="button"
               onClick={() => setQuantity((current) => Math.max(1, current - 1))}
-              className="grid h-10 w-10 touch-manipulation place-items-center rounded-lg text-koma-secondary transition hover:bg-koma-raised disabled:opacity-40"
+              className="koma-art-stepper-btn"
               disabled={quantity <= 1}
               id="btn-qty-minus"
               aria-label="Diminuir quantidade"
             >
               <Minus className="h-4 w-4" />
             </button>
-            <span className="w-8 text-center text-sm font-black text-koma-foreground">{quantity}</span>
+            <span className="koma-art-stepper-val">{quantity}</span>
             <button
               type="button"
               onClick={() => setQuantity((current) => current + 1)}
-              className="grid h-10 w-10 touch-manipulation place-items-center rounded-lg text-koma-secondary transition hover:bg-koma-raised"
+              className="koma-art-stepper-btn"
               id="btn-qty-plus"
               aria-label="Aumentar quantidade"
             >
@@ -608,12 +610,12 @@ export default function CardapioProductModal({
           <button
             type="button"
             onClick={handleAdd}
-            className="flex min-h-14 min-w-0 touch-manipulation flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-500 px-3 text-white shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-600 active:scale-[0.99]"
+            className="flex min-h-12 min-w-0 touch-manipulation flex-1 items-center justify-between gap-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-5 text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] cursor-pointer"
             id="btn-add-to-cart-action"
             aria-label={`${initialItem ? "Salvar" : "Adicionar"} ${quantity} × ${product.name} · ${formatPrice(totalPrice)}`}
           >
             <span className="flex items-center gap-2 text-xs font-black">
-              <ShoppingBag className="hidden h-4 w-4 shrink-0 sm:block" /> {initialItem ? "Salvar" : "Adicionar"} {quantity}×
+              <ShoppingBag className="h-4 w-4 shrink-0" /> {initialItem ? "Salvar" : "Adicionar"} {quantity}×
             </span>
             <strong className="text-sm font-black">{formatPrice(totalPrice)}</strong>
           </button>

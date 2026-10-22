@@ -1670,40 +1670,6 @@ export default function CardapioPage() {
           </div>
         </div>
       )}
-
-      {activeBrand?.slug === 'preview-ui' && typeof window !== 'undefined' && !new URLSearchParams(window.location.search).has('clean') && (
-        <aside aria-label="Controle de prévia de vitrine" className="koma-preview-switcher-bar">
-          <span className="koma-preview-switcher-label">Vitrine:</span>
-          <button
-            type="button"
-            className={`koma-preview-switcher-btn ${vitrineVariant === 'artistic-total' ? 'is-active' : ''}`}
-            onClick={() => handleVariantChange('artistic-total')}
-          >
-            ★ Redesign Total
-          </button>
-          <button
-            type="button"
-            className={`koma-preview-switcher-btn ${vitrineVariant === 'editorial' ? 'is-active' : ''}`}
-            onClick={() => handleVariantChange('editorial')}
-          >
-            1. Base
-          </button>
-          <button
-            type="button"
-            className={`koma-preview-switcher-btn ${vitrineVariant === 'artistic' ? 'is-active' : ''}`}
-            onClick={() => handleVariantChange('artistic')}
-          >
-            2. Com Assets
-          </button>
-          <button
-            type="button"
-            className={`koma-preview-switcher-btn ${vitrineVariant === 'catalog-first' ? 'is-active' : ''}`}
-            onClick={() => handleVariantChange('catalog-first')}
-          >
-            3. Catalog-First
-          </button>
-        </aside>
-      )}
     </div>
   );
 }
