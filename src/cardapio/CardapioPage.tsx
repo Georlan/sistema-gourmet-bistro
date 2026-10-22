@@ -1064,6 +1064,7 @@ export default function CardapioPage() {
           onStoreInfoClick={() => setIsStoreInfoOpen(true)}
           onOrdersClick={() => setIsOrdersDrawerOpen(true)}
           activeOrdersCount={activeOrders.length}
+          hasOpenOverlay={hasOpenOverlay}
         />
       ) : (
         <>
@@ -1424,6 +1425,10 @@ export default function CardapioPage() {
           onFulfillmentChange={(method) => setFulfillmentChoice({ restaurantId: activeBrand.id, method })}
           allProducts={activeBrand.products}
           onAddToCart={handleAddToCart}
+          onSelectProduct={(product) => {
+            setSelectedProduct(product);
+            setIsCartOpen(false);
+          }}
           initialCouponCode={couponToApply}
           onClose={() => { setIsCartOpen(false); setCouponToApply(""); }}
           onUpdateQty={(itemId, quantity) => setCart((current) => quantity <= 0 ? current.filter((item) => item.id !== itemId) : current.map((item) => item.id === itemId ? { ...item, quantity } : item))}

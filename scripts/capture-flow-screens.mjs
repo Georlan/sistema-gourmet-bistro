@@ -197,6 +197,21 @@ async function main() {
     console.log('Saved artistic-flow-cart-empty-390-dark.png');
   }
 
+  // ==========================================
+  // 5. Mobile 360x780 Dark
+  // ==========================================
+  console.log('--- Step 5: Mobile 360x780 Dark ---');
+  const mobile360Context = await browser.newContext({
+    viewport: { width: 360, height: 780 },
+    deviceScaleFactor: 2,
+    colorScheme: 'dark',
+  });
+  const page360 = await mobile360Context.newPage();
+  await page360.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+  await page360.waitForTimeout(1000);
+  await page360.screenshot({ path: path.join(OUT_DIR, 'artistic-flow-home-360-dark.png') });
+  console.log('Saved artistic-flow-home-360-dark.png');
+
   await browser.close();
   console.log('ALL SCREEN CAPTURES COMPLETE!');
 }

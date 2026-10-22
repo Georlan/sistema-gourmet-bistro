@@ -58,6 +58,7 @@ import DeliveryAddressFields from "../../components/shared/DeliveryAddressFields
 import { getDeliveryMinimumRemaining, getDeliveryQuote } from "../deliveryPresentation";
 import CardapioPaymentOptions from "./CardapioPaymentOptions";
 import { getCheckoutPaymentMethods, getPaymentSelectionError, resolvePaymentSelection, type PaymentMethod } from "../paymentMethods";
+import { KomaPrimaryAction } from "./KomaActionPrimitives";
 
 export interface CartItem {
   id: string;
@@ -103,6 +104,7 @@ interface CardapioCartDrawerProps {
   onEditItem?: (item: CartItem) => void;
   onComposeAnother?: (item: CartItem) => void;
   onAddToCart?: (product: Product, quantity: number, options?: Record<string, ProductOption[]>, notes?: string) => void;
+  onSelectProduct?: (product: Product) => void;
   initialCouponCode?: string;
   onPlaceOrder: (orderData: CardapioCheckoutRequest) => void;
   user: any;
@@ -134,6 +136,7 @@ export default function CardapioCartDrawer({
   onEditItem,
   onComposeAnother,
   onAddToCart,
+  onSelectProduct,
   initialCouponCode = "",
   onPlaceOrder,
   user,
@@ -448,6 +451,34 @@ export default function CardapioCartDrawer({
   const customerName = user?.name || (recognizedExistingCustomer ? "Cliente identificado" : guestName);
   const customerPhone = user?.phone || normalizeBrazilianPhone(guestPhone);
 
+  interface CartStepDefinition {
+    id: string;
+    label: string;
+    fullTitle: string;
+    sectionId: string;
+  }
+
+  const visibleSteps = useMemo(() => {
+    const rawSteps: CartStepDefinition[] = [
+      { id: "items", label: "Itens", fullTitle: "Seu pedido", sectionId: "cart-items" },
+      { id: "delivery", label: "Receber", fullTitle: "Como quer receber?", sectionId: "cart-receive-methods" },
+      ...(showDiscounts ? [{ id: "discounts", label: "Descontos", fullTitle: "Descontos & Benefícios", sectionId: "cart-discounts" }] : []),
+      { id: "payment", label: "Pagamento", fullTitle: "Como quer pagar?", sectionId: "cart-payment-methods" },
+      { id: "contact", label: "Contato", fullTitle: "Seu contato", sectionId: "cart-identification" },
+    ];
+
+    return rawSteps.map((step, index) => ({
+      ...step,
+      stepNumber: index + 1,
+      chipLabel: `${index + 1}. ${step.label}`,
+      headingLabel: `${index + 1}. ${step.fullTitle}`,
+    }));
+  }, [showDiscounts]);
+
+  const currentStepIndex = visibleSteps.findIndex((s) => s.sectionId === activeSection);
+  const nextStep = currentStepIndex >= 0 && currentStepIndex < visibleSteps.length - 1 ? visibleSteps[currentStepIndex + 1] : null;
+  const nextSection = nextStep ? nextStep.sectionId : null;
+
   const jumpToSection = (sectionId: string) => {
     setActiveSection(sectionId);
     window.requestAnimationFrame(() => {
@@ -456,10 +487,6 @@ export default function CardapioCartDrawer({
       target?.focus({ preventScroll: true });
     });
   };
-
-  const nextSection = activeSection === "cart-items" ? "cart-receive-methods"
-    : activeSection === "cart-receive-methods" || activeSection === "cart-discounts" ? "cart-payment-methods"
-    : activeSection === "cart-payment-methods" ? "cart-identification" : null;
 
   const validateSection = (sectionId: string) => {
     if (sectionId === "cart-items" && cart.length === 0) {
@@ -516,9 +543,56 @@ export default function CardapioCartDrawer({
     return true;
   };
 
+  const canAdvanceTo = (targetSectionId: string): boolean => {
+    const currentIndex = visibleSteps.findIndex((s) => s.sectionId === activeSection);
+    const targetIndex = visibleSteps.findIndex((s) => s.sectionId === targetSectionId);
+    if (targetIndex <= currentIndex) return true;
+
+    for (let i = currentIndex; i < targetIndex; i++) {
+      const step = visibleSteps[i];
+      if (!validateSection(step.sectionId)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const navigateToStep = (targetSectionId: string) => {
+    clearValidation();
+    jumpToSection(targetSectionId);
+  };
+
   const continueToSection = (sectionId: string) => {
     clearValidation();
     if (validateSection(activeSection)) jumpToSection(sectionId);
+  };
+
+  const handleSuggestedProductAction = (product: Product) => {
+    if (!orderingEnabled) {
+      reportValidationError(orderingMessage);
+      return;
+    }
+    if (product.isAvailable === false) {
+      reportValidationError("Este produto não está disponível no momento.");
+      return;
+    }
+    const hasModifiers = Boolean(
+      (product.modifierGroups && product.modifierGroups.length > 0) ||
+      (product.modifiers && product.modifiers.length > 0)
+    );
+    if (hasModifiers) {
+      if (onSelectProduct) {
+        onSelectProduct(product);
+      }
+    } else {
+      if (onAddToCart) {
+        onAddToCart(product, 1);
+      }
+    }
+  };
+
+  const getStepHeading = (sectionId: string, fallback: string) => {
+    return visibleSteps.find((s) => s.sectionId === sectionId)?.headingLabel || fallback;
   };
 
   const handleCheckout = () => {
@@ -630,24 +704,22 @@ export default function CardapioCartDrawer({
 
         {cart.length > 0 && (
           <nav className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-white/10 px-4 py-2.5 no-scrollbar sm:px-5" aria-label="Partes da sacola">
-            {[
-              ["1. Itens", "cart-items"],
-              ["2. Receber", "cart-receive-methods"],
-              ["3. Cupom", "cart-discounts"],
-              ["4. Pagamento", "cart-payment-methods"],
-              ["5. Contato", "cart-identification"],
-            ].filter(([, sectionId]) => sectionId !== "cart-discounts" || showDiscounts).map(([label, sectionId]) => {
-              const isActive = activeSection === sectionId;
+            {visibleSteps.map((step, index) => {
+              const isActive = activeSection === step.sectionId;
+              const isCompleted = currentStepIndex > index;
               return (
                 <button
-                  key={sectionId}
+                  key={step.sectionId}
                   type="button"
+                  aria-label={step.label}
                   aria-expanded={isActive}
-                  aria-controls={`${sectionId}-content`}
-                  onClick={() => jumpToSection(sectionId)}
-                  className={`koma-art-nav-pill-btn ${isActive ? "is-active" : ""}`}
+                  aria-controls={`${step.sectionId}-content`}
+                  onClick={() => navigateToStep(step.sectionId)}
+                  className={`koma-art-nav-pill-btn ${
+                    isActive ? "is-active" : isCompleted ? "is-completed" : "is-pending"
+                  }`}
                 >
-                  {label}
+                  {step.stepNumber}. {step.label}
                 </button>
               );
             })}
@@ -688,40 +760,45 @@ export default function CardapioCartDrawer({
                   <span>Destaques da Casa</span>
                 </div>
                 <div className="space-y-2.5">
-                  {allProducts.slice(0, 3).map((prod) => (
-                    <div
-                      key={prod.id}
-                      className="koma-art-cart-item-card"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <img
-                          src={getProductImageUrl(prod.image)}
-                          alt={prod.name}
-                          className="koma-art-cart-thumb !w-13 !h-13"
-                          onError={(e) => {
-                            e.currentTarget.onerror = null;
-                            e.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
-                          }}
-                        />
-                        <div className="min-w-0">
-                          <h4 className="text-xs font-bold text-koma-foreground truncate">{prod.name}</h4>
-                          <span className="font-serif text-xs font-black text-emerald-400">{formatPrice(prod.price)}</span>
+                  {allProducts
+                    .filter((p) => p.isAvailable !== false)
+                    .slice(0, 3)
+                    .map((prod) => {
+                      const hasModifiers = Boolean(
+                        (prod.modifierGroups && prod.modifierGroups.length > 0) ||
+                        (prod.modifiers && prod.modifiers.length > 0)
+                      );
+                      return (
+                        <div
+                          key={prod.id}
+                          className="koma-art-cart-item-card"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <img
+                              src={getProductImageUrl(prod.image)}
+                              alt={prod.name}
+                              className="koma-art-cart-thumb !w-13 !h-13"
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
+                              }}
+                            />
+                            <div className="min-w-0">
+                              <h4 className="text-xs font-bold text-koma-foreground truncate">{prod.name}</h4>
+                              <span className="font-serif text-xs font-black text-emerald-400">{formatPrice(prod.price)}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleSuggestedProductAction(prod)}
+                            className="flex items-center gap-1 px-3.5 py-2 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-black shrink-0 transition-all shadow-md shadow-emerald-950/30 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>{hasModifiers ? "Montar" : "Adicionar"}</span>
+                          </button>
                         </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (onAddToCart) {
-                            onAddToCart(prod, 1);
-                          }
-                        }}
-                        className="flex items-center gap-1 px-3.5 py-2 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-black shrink-0 transition-all shadow-md shadow-emerald-950/30 cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Adicionar</span>
-                      </button>
-                    </div>
-                  ))}
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -773,7 +850,17 @@ export default function CardapioCartDrawer({
               {/* Section 1: Cart Items */}
               <section id="cart-items" tabIndex={-1}>
                 <div className="mb-2.5 flex items-center justify-between">
-                  <h3><button type="button" onClick={() => jumpToSection("cart-items")} aria-expanded={activeSection === "cart-items"} aria-controls="cart-items-content" className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted">1. Seu pedido</button></h3>
+                  <h3>
+                    <button
+                      type="button"
+                      onClick={() => navigateToStep("cart-items")}
+                      aria-expanded={activeSection === "cart-items"}
+                      aria-controls="cart-items-content"
+                      className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted"
+                    >
+                      {getStepHeading("cart-items", "1. Seu pedido")}
+                    </button>
+                  </h3>
                   <span className="text-xs font-bold text-koma-subtle">{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
                 </div>
                 <div id="cart-items-content" hidden={activeSection !== "cart-items"}>
@@ -869,7 +956,7 @@ export default function CardapioCartDrawer({
                         </div>
                         <button
                           type="button"
-                          onClick={() => onAddToCart(prod, 1)}
+                          onClick={() => handleSuggestedProductAction(prod)}
                           className="mt-2.5 w-full py-1.5 px-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-black flex items-center justify-center gap-1 transition cursor-pointer"
                         >
                           <Plus className="w-3 h-3" /> Adicionar
@@ -882,7 +969,17 @@ export default function CardapioCartDrawer({
 
               {/* Section 2: Delivery Method & Address */}
               <section className="border-t border-white/10 pt-5" id="cart-receive-methods" tabIndex={-1} aria-describedby={invalidField === "cart-receive-methods" ? "cart-checkout-error" : undefined}>
-                <h3><button type="button" onClick={() => jumpToSection("cart-receive-methods")} aria-expanded={activeSection === "cart-receive-methods"} aria-controls="cart-receive-methods-content" className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted">2. Como quer receber?</button></h3>
+                <h3>
+                  <button
+                    type="button"
+                    onClick={() => navigateToStep("cart-receive-methods")}
+                    aria-expanded={activeSection === "cart-receive-methods"}
+                    aria-controls="cart-receive-methods-content"
+                    className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted"
+                  >
+                    {getStepHeading("cart-receive-methods", "2. Como quer receber?")}
+                  </button>
+                </h3>
                 <div id="cart-receive-methods-content" hidden={activeSection !== "cart-receive-methods"}>
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   <button type="button" disabled={!pickupEnabled} aria-pressed={deliveryMethod === "pickup"} onClick={() => { if (pickupEnabled) setDeliveryMethod("pickup"); clearValidation("cart-receive-methods"); }} className={`koma-art-mode-card ${deliveryMethod === "pickup" ? "is-selected" : ""} disabled:cursor-not-allowed disabled:opacity-50`}>
@@ -951,13 +1048,25 @@ export default function CardapioCartDrawer({
                   </div>
                 )}
 
-                  <button type="button" onClick={() => continueToSection("cart-payment-methods")} className="mt-4 min-h-12 w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 text-xs font-black uppercase tracking-wider text-emerald-400 transition-all cursor-pointer">Continuar para pagamento</button>
+                  <button type="button" onClick={() => nextSection && continueToSection(nextSection)} className="mt-4 min-h-12 w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 text-xs font-black uppercase tracking-wider text-emerald-400 transition-all cursor-pointer">
+                    {nextStep ? `Continuar para ${nextStep.label.toLowerCase()}` : "Continuar"}
+                  </button>
                 </div>
               </section>
 
               {/* Section 3: Cupons & Descontos */}
               {showDiscounts && <section className="border-t border-white/10 pt-5" id="cart-discounts" tabIndex={-1}>
-                <h3><button type="button" onClick={() => jumpToSection("cart-discounts")} aria-expanded={activeSection === "cart-discounts"} aria-controls="cart-discounts-content" className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted">3. Descontos & Benefícios</button></h3>
+                <h3>
+                  <button
+                    type="button"
+                    onClick={() => navigateToStep("cart-discounts")}
+                    aria-expanded={activeSection === "cart-discounts"}
+                    aria-controls="cart-discounts-content"
+                    className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted"
+                  >
+                    {getStepHeading("cart-discounts", "3. Descontos & Benefícios")}
+                  </button>
+                </h3>
                 <div id="cart-discounts-content" hidden={activeSection !== "cart-discounts"}>
 
                 {/* Coupon Box */}
@@ -1032,13 +1141,29 @@ export default function CardapioCartDrawer({
                   </div>
                 )}
 
-                  <button type="button" onClick={() => continueToSection("cart-payment-methods")} className="mt-4 min-h-12 w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 text-xs font-black uppercase tracking-wider text-emerald-400 transition-all cursor-pointer">Continuar para pagamento</button>
+                  <button
+                    type="button"
+                    onClick={() => nextSection && continueToSection(nextSection)}
+                    className="mt-4 min-h-12 w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 text-xs font-black uppercase tracking-wider text-emerald-400 transition-all cursor-pointer"
+                  >
+                    {nextStep ? `Continuar para ${nextStep.label.toLowerCase()}` : "Continuar"}
+                  </button>
                 </div>
               </section>}
 
               {/* Section 4: Forma de Pagamento & Troco */}
               <section className="border-t border-white/10 pt-5" id="cart-payment-methods" tabIndex={-1} aria-describedby={invalidField === "cart-payment-methods" ? "cart-checkout-error" : undefined}>
-                <h3><button type="button" onClick={() => jumpToSection("cart-payment-methods")} aria-expanded={activeSection === "cart-payment-methods"} aria-controls="cart-payment-methods-content" className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted">{showDiscounts ? 4 : 3}. Como quer pagar?</button></h3>
+                <h3>
+                  <button
+                    type="button"
+                    onClick={() => navigateToStep("cart-payment-methods")}
+                    aria-expanded={activeSection === "cart-payment-methods"}
+                    aria-controls="cart-payment-methods-content"
+                    className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted"
+                  >
+                    {getStepHeading("cart-payment-methods", "Como quer pagar?")}
+                  </button>
+                </h3>
                 <div id="cart-payment-methods-content" hidden={activeSection !== "cart-payment-methods"}>
                 <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">{availablePayments.includes("pix") && "Pix é pago agora e só libera o pedido após confirmação. "}{availablePayments.some(method => method !== "pix") && <>Nas opções presenciais, você paga {deliveryMethod === "delivery" ? "na entrega" : deliveryMethod === "dine_in" ? "no restaurante" : "na retirada"}.</>}</p>
 
@@ -1115,13 +1240,29 @@ export default function CardapioCartDrawer({
                   </div>
                 )}
 
-                  <button type="button" onClick={() => continueToSection("cart-identification")} className="mt-4 min-h-12 w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 text-xs font-black uppercase tracking-wider text-emerald-400 transition-all cursor-pointer">Continuar para contato</button>
+                  <button
+                    type="button"
+                    onClick={() => nextSection && continueToSection(nextSection)}
+                    className="mt-4 min-h-12 w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 text-xs font-black uppercase tracking-wider text-emerald-400 transition-all cursor-pointer"
+                  >
+                    {nextStep ? `Continuar para ${nextStep.label.toLowerCase()}` : "Continuar"}
+                  </button>
                 </div>
               </section>
 
               {/* Section 5: Identification */}
               <section className="border-t border-white/10 pt-5" id="cart-identification" tabIndex={-1}>
-                <h3><button type="button" onClick={() => jumpToSection("cart-identification")} aria-expanded={activeSection === "cart-identification"} aria-controls="cart-identification-content" className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted">{showDiscounts ? 5 : 4}. Seu contato</button></h3>
+                <h3>
+                  <button
+                    type="button"
+                    onClick={() => navigateToStep("cart-identification")}
+                    aria-expanded={activeSection === "cart-identification"}
+                    aria-controls="cart-identification-content"
+                    className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted"
+                  >
+                    {getStepHeading("cart-identification", "Seu contato")}
+                  </button>
+                </h3>
                 <div id="cart-identification-content" hidden={activeSection !== "cart-identification"}>
                 {user ? (
                   <div className="mt-3 flex items-start gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3.5">
@@ -1231,11 +1372,17 @@ export default function CardapioCartDrawer({
                 type="button"
                 onClick={() => nextSection ? continueToSection(nextSection) : handleCheckout()}
                 disabled={!orderingEnabled || availablePayments.length === 0}
-                className="mt-4 flex h-13 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-stone-500 cursor-pointer"
+                aria-label={!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextSection ? "Continuar" : "Revisar pedido"}
+                className="mt-4 koma-action-primary flex h-13 w-full items-center justify-between gap-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-stone-500 cursor-pointer"
                 id="btn-confirm-order"
               >
-                <span>{!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextSection ? "Continuar" : "Revisar pedido"}</span>
-                {orderingEnabled && <ArrowRight className="h-4 w-4" />}
+                <span className="flex items-center gap-2">
+                  <span>{!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextSection ? "Continuar" : "Revisar pedido"}</span>
+                  {orderingEnabled && <ArrowRight className="h-4 w-4" />}
+                </span>
+                <span className="shrink-0 rounded-full bg-black/20 px-2.5 py-1 font-mono text-xs font-black text-emerald-100">
+                  {formatPrice(total)}
+                </span>
               </button>
             </div>
           </>

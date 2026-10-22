@@ -349,7 +349,7 @@ export default function CardapioProductModal({
           </div>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 no-scrollbar" data-testid="product-modal-scroll">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-24 sm:p-6 sm:pb-8 no-scrollbar" data-testid="product-modal-scroll">
           {compositionStep && (
             <div className="mb-3" aria-label={`Etapa ${compositionStep.current} de ${compositionStep.total}`}>
               <p className="text-xs font-bold text-emerald-400">
@@ -497,15 +497,25 @@ export default function CardapioProductModal({
                               )}
                             </span>
                             {simpleSelection ? (
-                              <span className="flex min-h-11 min-w-11 shrink-0 items-center justify-center">
+                              <span className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center">
                                 <input
                                   type="checkbox"
                                   aria-label={`Selecionar ${option.name}`}
                                   checked={selected}
                                   disabled={!selected && !canIncrement}
                                   onChange={() => handleOptionQuantity(modifier, option, selected ? -1 : 1)}
-                                  className="h-5 w-5 accent-emerald-500 rounded cursor-pointer"
+                                  className={
+                                    max === 1
+                                      ? "absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                                      : "h-5 w-5 accent-emerald-500 rounded cursor-pointer"
+                                  }
                                 />
+                                {max === 1 && (
+                                  <div
+                                    className={`koma-art-single-choice-indicator ${selected ? "is-selected" : ""}`}
+                                    aria-hidden="true"
+                                  />
+                                )}
                               </span>
                             ) : (
                             <span className="relative flex shrink-0 items-center koma-art-stepper-pill">
@@ -610,7 +620,7 @@ export default function CardapioProductModal({
           <button
             type="button"
             onClick={handleAdd}
-            className="flex min-h-12 min-w-0 touch-manipulation flex-1 items-center justify-between gap-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-5 text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] cursor-pointer"
+            className="koma-action-primary flex min-h-12 min-w-0 touch-manipulation flex-1 items-center justify-between gap-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-5 text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] cursor-pointer"
             id="btn-add-to-cart-action"
             aria-label={`${initialItem ? "Salvar" : "Adicionar"} ${quantity} × ${product.name} · ${formatPrice(totalPrice)}`}
           >

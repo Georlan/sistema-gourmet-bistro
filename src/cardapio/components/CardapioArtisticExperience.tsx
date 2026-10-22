@@ -38,6 +38,7 @@ export interface CardapioArtisticExperienceProps {
   onStoreInfoClick: () => void;
   onOrdersClick?: () => void;
   activeOrdersCount?: number;
+  hasOpenOverlay?: boolean;
 }
 
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
@@ -67,7 +68,7 @@ function ArtisticClocheIllustration() {
         <line x1="14" y1="56" x2="66" y2="56" className="koma-art-cloche__tray" strokeWidth="2.5" strokeLinecap="round" />
         <path d="M36 17C36 14 38 12 40 10" className="koma-art-cloche__steam" strokeWidth="1.8" strokeLinecap="round" />
       </svg>
-      <span className="koma-art-cloche__caption">Receita autoral</span>
+      <span className="koma-art-cloche__caption">Item da casa</span>
     </div>
   );
 }
@@ -88,6 +89,7 @@ export function CardapioArtisticExperience({
   onStoreInfoClick,
   onOrdersClick,
   activeOrdersCount = 0,
+  hasOpenOverlay = false,
 }: CardapioArtisticExperienceProps) {
   // Compartilhar cardápio
   const handleShare = async () => {
@@ -151,6 +153,12 @@ export function CardapioArtisticExperience({
   }, [activeBrand.categories, filteredProducts]);
 
   const heroCartQty = heroProduct ? getProductCartQuantity(heroProduct.id) : 0;
+  const isVerifiedTopRanked = Boolean(
+    activeBrand.popularProductIds &&
+    activeBrand.popularProductIds.length > 0 &&
+    heroProduct &&
+    String(activeBrand.popularProductIds[0]) === String(heroProduct.id)
+  );
 
   return (
     <div className="koma-art-canvas" id="koma-artistic-canvas">
@@ -175,7 +183,7 @@ export function CardapioArtisticExperience({
               )}
               <div className="koma-art-brand-text">
                 <span className="koma-art-brand-name">{activeBrand.name}</span>
-                <span className="koma-art-brand-slogan">{activeBrand.slogan || 'Alta gastronomia artesanal'}</span>
+                <span className="koma-art-brand-slogan">{activeBrand.slogan || 'Cardápio digital'}</span>
               </div>
             </button>
 
@@ -339,10 +347,19 @@ export function CardapioArtisticExperience({
               ) : (
                 <ArtisticClocheIllustration />
               )}
-              {/* Selo Coroa Flutuante */}
+              {/* Selo Destaque / Ranking */}
               <div className="koma-art-seal-crown" role="status">
-                <Crown className="w-3.5 h-3.5 text-amber-300 mr-1" />
-                <span>Nº 1 MAIS PEDIDO</span>
+                {isVerifiedTopRanked ? (
+                  <>
+                    <Crown className="w-3.5 h-3.5 text-amber-300 mr-1" />
+                    <span>Nº 1 MAIS PEDIDO</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-400 mr-1" />
+                    <span>DESTAQUE DO CARDÁPIO</span>
+                  </>
+                )}
               </div>
               {/* Gradiente de Fusão Atmosférica na base da foto */}
               <div className="koma-art-arch-melt" aria-hidden="true" />
@@ -351,7 +368,9 @@ export function CardapioArtisticExperience({
             {/* Conteúdo Editorial do Palco */}
             <div className="koma-art-stage-body">
               <div className="koma-art-stage-headline">
-                <span className="koma-art-stage-eyebrow">★ RECOMENDAÇÃO DO CHEF</span>
+                <span className="koma-art-stage-eyebrow">
+                  {isVerifiedTopRanked ? '★ ITEM MAIS PEDIDO' : '★ DESTAQUE DA CASA'}
+                </span>
                 <h2
                   className="koma-art-stage-title"
                   onClick={() => onSelectProduct(heroProduct)}
@@ -420,10 +439,10 @@ export function CardapioArtisticExperience({
         <section className="koma-art-pairing-section" aria-label="Harmonizações sugeridas">
           <div className="koma-art-section-head">
             <div>
-              <span className="koma-art-section-eyebrow">CURADORIA DA CASA</span>
+              <span className="koma-art-section-eyebrow">SUGESTÕES COMPLEMENTARES</span>
               <h3 className="koma-art-section-title">Combina com seu pedido</h3>
             </div>
-            <span className="koma-art-pairing-hint">Harmonizações perfeitas</span>
+            <span className="koma-art-pairing-hint">Opções para acompanhar</span>
           </div>
 
           <div className="koma-art-pairing-grid">
@@ -605,7 +624,7 @@ export function CardapioArtisticExperience({
           ======================================================== */}
       <footer className="koma-art-footer">
         <strong className="koma-art-footer-name">{activeBrand.name}</strong>
-        <p className="koma-art-footer-copy">Alta gastronomia preparada na hora. Preços sujeitos a alteração.</p>
+        <p className="koma-art-footer-copy">Preços e disponibilidade atualizados pelo restaurante.</p>
         <div className="koma-art-powered-pill">
           Cardápio digital por <strong>KÔMA</strong>
         </div>
@@ -614,45 +633,49 @@ export function CardapioArtisticExperience({
       {/* ========================================================
           DOCK ERGONÔMICO FLUTUANTE (MOBILE-FIRST)
           ======================================================== */}
-      <nav className="koma-art-dock" aria-label="Navegação rápida">
-        <button
-          type="button"
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="koma-art-dock-btn"
-        >
-          <House className="w-4 h-4" />
-          <span>Início</span>
-        </button>
-
-        {onOrdersClick && (
+      {!hasOpenOverlay && (
+        <nav className="koma-art-dock" aria-label="Navegação rápida" id="koma-art-dock">
           <button
             type="button"
-            onClick={onOrdersClick}
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             className="koma-art-dock-btn"
           >
-            <MessageCircle className="w-4 h-4" />
-            <span>Pedidos</span>
-            {activeOrdersCount > 0 && (
-              <span className="koma-art-dock-badge">{activeOrdersCount}</span>
-            )}
+            <House className="w-4 h-4" />
+            <span>Início</span>
           </button>
-        )}
 
-        <button
-          type="button"
-          onClick={onCartToggle}
-          className="koma-art-dock-btn koma-art-dock-btn--bag"
-        >
-          <div className="koma-art-dock-bag-icon">
-            <ShoppingBag className="w-4 h-4" />
-            {cartCount > 0 && <span className="koma-art-dock-badge">{cartCount}</span>}
-          </div>
-          <div className="koma-art-dock-bag-text">
-            <span>Sacola</span>
-            {cartTotal > 0 && <small>{formatPrice(cartTotal)}</small>}
-          </div>
-        </button>
-      </nav>
+          {onOrdersClick && (
+            <button
+              type="button"
+              onClick={onOrdersClick}
+              className="koma-art-dock-btn"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>Pedidos</span>
+              {activeOrdersCount > 0 && (
+                <span className="koma-art-dock-badge">{activeOrdersCount}</span>
+              )}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onCartToggle}
+            className="koma-art-dock-btn koma-art-dock-btn--bag"
+            aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? 'item' : 'itens'}`}
+            id="dock-cart-trigger"
+          >
+            <div className="koma-art-dock-bag-icon">
+              <ShoppingBag className="w-4 h-4" />
+              {cartCount > 0 && <span className="koma-art-dock-badge">{cartCount}</span>}
+            </div>
+            <div className="koma-art-dock-bag-text">
+              <span>Sacola</span>
+              {cartTotal > 0 && <small>Subtotal: {formatPrice(cartTotal)}</small>}
+            </div>
+          </button>
+        </nav>
+      )}
     </div>
   );
 }
