@@ -774,3 +774,24 @@ def test_pagbank_invalid_parameter_logging_is_strictly_sanitized(caplog, paramet
             assert secret not in caplog.text + str(rejected.value)
     finally:
         provider._client.close()
+
+def test_pagbank_pix_expiration_is_utc_rfc3339_seconds():
+    received = []
+    def handle(req):
+        received.append(json.loads(req.content))
+        return httpx.Response(201, json=snapshot())
+    provider = PagBankProvider('seller-token')
+    provider._client.close()
+    provider._client = httpx.Client(base_url=oauth.api_url(), transport=httpx.MockTransport(handle))
+    try:
+        expiry = datetime.datetime(2026, 10, 22, 21, 23, 15, 987654,
+                                   tzinfo=datetime.timezone(datetime.timedelta(hours=-3)))
+        provider.create_pix(amount=Decimal('4.50'), marketplace_fee=Decimal(0),
+            payer_email='buyer@example.test', payer_name='Buyer', payer_tax_id='12345678909',
+            external_reference='intent-test', idempotency_key='unique-123',
+            notification_url='https://api.example.test/payment-webhook', expires_at=expiry)
+        value = received[0]['charges'][0]['payment_method']['pix']['expiration_date']
+        assert value == '2026-10-23T00:23:15Z'
+        assert received[0]['charges'][0]['amount']['value'] == 450
+    finally:
+        provider._client.close()
