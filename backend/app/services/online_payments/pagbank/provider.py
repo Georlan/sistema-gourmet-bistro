@@ -24,16 +24,27 @@ def _failure_reference(response: httpx.Response) -> str:
     if not re.fullmatch(r'[A-Za-z0-9._:-]{1,80}', request_id):
         request_id = ''
     code = ''
+    parameter = ''
     try:
         data = response.json()
         errors = data.get('error_messages', []) if isinstance(data, dict) else []
-        candidate = errors[0].get('code', '') if isinstance(errors, list) and errors and isinstance(errors[0], dict) else ''
+        first_error = errors[0] if isinstance(errors, list) and errors and isinstance(errors[0], dict) else {}
+        candidate = first_error.get('code', '')
         if isinstance(candidate, str) and re.fullmatch(r'[A-Z0-9_-]{1,64}', candidate):
             code = candidate
-    except ValueError:
+        # Never log arbitrary PagBank messages or input values: those may contain buyer PII.
+        # Only capture a syntactically valid field path rooted in the documented Order schema.
+        candidate = first_error.get('parameter_name', '')
+        if isinstance(candidate, str) and re.fullmatch(
+            r'(?:reference_id|customer|items|charges|notification_urls|shipping|qr_codes|metadata)'
+            r'(?:\[\d{1,3}\]|\.[A-Za-z][A-Za-z0-9_]{0,40}){0,12}', candidate
+        ):
+            parameter = candidate
+    except (ValueError, TypeError):
         pass
-    logger.warning('PagBank API failure status=%s provider_code=%s provider_request_id=%s',
-                   response.status_code, code or 'unavailable', request_id or 'unavailable')
+    logger.warning('PagBank API failure status=%s provider_code=%s provider_parameter=%s provider_request_id=%s',
+                   response.status_code, code or 'unavailable', parameter or 'unavailable',
+                   request_id or 'unavailable')
     return ''.join((f' Código: {code}.' if code else '', f' Referência PagBank: {request_id}.' if request_id else ''))
 
 
