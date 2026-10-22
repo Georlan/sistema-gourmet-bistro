@@ -61,5 +61,6 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - run: npm view dompurify@3.4.17 dist.integrity
       - run: npm ci
       - run: npm audit --audit-level=high
