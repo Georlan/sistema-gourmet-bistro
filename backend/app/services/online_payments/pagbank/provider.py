@@ -118,12 +118,13 @@ class PagBankProvider:
             raise PagBankError('PagBank no KÔMA não cobra taxa de plataforma.')
         if not payer_name or not (is_valid_cpf(payer_tax_id) or is_valid_cnpj(payer_tax_id)):
             raise PagBankError('Informe nome e CPF/CNPJ do comprador para gerar o Pix PagBank.')
+        expiration_date = expires_at.astimezone(datetime.timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
         data = self._request('POST', '/orders', headers={'x-idempotency-key': idempotency_key}, json={
             'reference_id': external_reference,
             'customer': {'name': payer_name, 'email': payer_email, 'tax_id': payer_tax_id},
             'items': [{'name': 'Pedido KOMA', 'quantity': 1, 'unit_amount': cents(amount)}],
             'charges': [{'reference_id': external_reference, 'amount': {'value': cents(amount), 'currency': 'BRL'},
-                         'payment_method': {'type': 'PIX', 'pix': {'expiration_date': expires_at.isoformat()}}}],
+                         'payment_method': {'type': 'PIX', 'pix': {'expiration_date': expiration_date}}}],
             'notification_urls': [notification_url],
         })
         payment = self._map(data)
