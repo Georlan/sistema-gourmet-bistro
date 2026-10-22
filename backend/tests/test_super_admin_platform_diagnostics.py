@@ -83,6 +83,18 @@ def test_telegram_invalid_response_is_not_verified(monkeypatch):
     assert asyncio.run(services.TelegramService('token', '-42').get_health())['status'] == 'unverified'
 
 
+def test_telegram_diagnostic_does_not_leak_secret_urls_in_logs_or_telemetry(monkeypatch, caplog):
+    import logging
+    requests = probe(monkeypatch, [{'is_bot': True, 'id': 5}, {'id': -42}, {'status': 'member'}])
+    with caplog.at_level(logging.DEBUG):
+        health = asyncio.run(services.TelegramService('synthetic-secret-token', '-42').get_health())
+    assert health['status'] == 'verified'
+    assert 'synthetic-secret-token' not in caplog.text
+    assert 'synthetic-secret-token' not in json.dumps(health)
+    assert len(requests) == 3
+
+
+
 
 def test_telegram_health_requires_superadmin():
     client = TestClient(app)
