@@ -167,9 +167,7 @@ class Settings:
         float(os.getenv("DB_PRE_PING_FRESH_SECONDS", "5.0")),
     )
     
-    # Sentry DSN
-    SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
-    
+
     # Security
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     if not SECRET_KEY:

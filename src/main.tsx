@@ -203,21 +203,8 @@ if ("serviceWorker" in navigator) {
   }, { once: true });
 }
 
-const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 const isWhatsAppOptOutRoute = ["/whatsapp/avisos", "/w/a"].includes(window.location.pathname);
 if (!isWhatsAppOptOutRoute) {
-  if (sentryDsn) {
-    void import("@sentry/react").then((Sentry) => {
-      Sentry.init({
-        dsn: sentryDsn,
-        // Limita o monitoramento de performance a 10% para nunca estourar o plano gratuito.
-        tracesSampleRate: 0.1,
-      });
-    }).catch((error: unknown) => {
-      console.warn('[monitoring] Monitoramento indisponível.', error);
-    });
-  }
-
   initAnalytics();
 }
 

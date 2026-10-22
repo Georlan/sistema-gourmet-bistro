@@ -7,8 +7,6 @@ import sys
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from time import perf_counter
-
-import sentry_sdk
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -53,13 +51,6 @@ from .routes import (
 
 install_sensitive_query_log_filter()
 
-
-if os.getenv("ENVIRONMENT") != "test" and settings.SENTRY_DSN:
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        send_default_pii=os.getenv("SENTRY_SEND_PII", "False").lower() == "true",
-        traces_sample_rate=0.2,
-    )
 
 
 @asynccontextmanager
@@ -284,7 +275,6 @@ async def add_request_id_and_structured_log(request: Request, call_next):
         else uuid.uuid4().hex
     )
     request.state.request_id = request_id
-    sentry_sdk.set_tag("request_id", request_id)
     started_at = perf_counter()
     request.state.started_at = started_at
     try:
@@ -334,7 +324,7 @@ async def handle_unhandled_exceptions_middleware(request: Request, call_next):
 
 
 @app.middleware("http")
-async def add_sentry_context_and_tenant(request: Request, call_next):
+async def add_request_tenant_context(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
 
@@ -399,8 +389,6 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
                 content={"detail": "Falha na validação do token de autenticação."},
             )
 
-    sentry_sdk.set_tag("tenant_id", tenant_id)
-    sentry_sdk.set_tag("restaurante_id", str(restaurante_id) if restaurante_id is not None else "")
     request.state.restaurante_id = restaurante_id
 
     if restaurante_id is None:
@@ -411,6 +399,9 @@ async def add_sentry_context_and_tenant(request: Request, call_next):
         return await call_next(request)
     finally:
         current_restaurante_id.reset(tenant_context)
+
+
+add_sentry_context_and_tenant = add_request_tenant_context
 
 
 @app.middleware("http")

@@ -38,7 +38,6 @@ certifi==2026.10.19
     #   httpcore
     #   httpx
     #   requests
-    #   sentry-sdk
 cffi==2.1.1 ; platform_python_implementation != 'PyPy'
     # via
     #   -c backend/requirements.lock
@@ -163,10 +162,6 @@ pyyaml==6.0.3
     #   uvicorn
 requests==2.34.2
     # via pywebpush
-sentry-sdk==2.68.1
-    # via
-    #   -c backend/requirements.lock
-    #   -r backend/requirements.txt
 six==1.17.0
     # via python-dateutil
 sqlalchemy==2.0.52
@@ -201,7 +196,6 @@ urllib3==2.8.0
     # via
     #   -c backend/requirements.lock
     #   requests
-    #   sentry-sdk
 uvicorn==0.52.4
     # via
     #   -c backend/requirements.lock
