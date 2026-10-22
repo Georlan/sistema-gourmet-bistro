@@ -738,3 +738,39 @@ def test_bank_failure_keeps_only_safe_code_and_request_reference(caplog, provide
         assert denied.value.status_code == 403 and not denied.value.retryable
     finally:
         provider._client.close()
+
+@pytest.mark.parametrize('parameter,expected', [
+    ('charges[0].payment_method.pix.expiration_date', 'charges[0].payment_method.pix.expiration_date'),
+    ('customer.email', 'customer.email'),
+    ('notification_urls[0]', 'notification_urls[0]'),
+    ('customer.email:secret@example.test', 'unavailable'),
+    ('customer.email\nAuthorization: Bearer private', 'unavailable'),
+    ('secrets.access_token', 'unavailable'),
+])
+def test_pagbank_invalid_parameter_logging_is_strictly_sanitized(caplog, parameter, expected):
+    provider = PagBankProvider('seller-token')
+    provider._client.close()
+    provider._client = httpx.Client(base_url=oauth.api_url(), transport=httpx.MockTransport(
+        lambda req: httpx.Response(400, headers={'x-request-id': 'bank-40002-safe-id'}, json={
+            'error_messages': [{
+                'code': '40002', 'description': 'invalid_parameter: sensitive@example.test',
+                'parameter_name': parameter,
+            }],
+            'customer': {'email': 'sensitive@example.test', 'tax_id': 'never-log-document'},
+            'access_token': 'never-log-token',
+        })))
+    try:
+        with pytest.raises(PagBankError) as rejected:
+            provider.get_payment('ORDE_test')
+        assert rejected.value.status_code == 400
+        assert not rejected.value.retryable
+        assert 'Código: 40002.' in str(rejected.value)
+        assert 'bank-40002-safe-id' in str(rejected.value)
+        assert 'provider_code=40002' in caplog.text
+        assert 'provider_parameter=' + expected in caplog.text
+        assert 'provider_request_id=bank-40002-safe-id' in caplog.text
+        for secret in ('sensitive@example.test', 'never-log-document', 'never-log-token',
+                       'Authorization: Bearer private', 'seller-token'):
+            assert secret not in caplog.text + str(rejected.value)
+    finally:
+        provider._client.close()
