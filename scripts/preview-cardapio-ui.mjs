@@ -38,11 +38,12 @@ const payload = {
     pedido_minimo_valor: 20.0,
     tipos_pedido_ativos: ['delivery', 'retirada', 'mesa'],
     formas_pagamento_aceitas: ['Pix', 'Cartão de Crédito', 'Dinheiro'],
-    beneficios: { coupons: false, loyalty: false, cashback: false },
+    beneficios: { coupons: true, loyalty: true, cashback: true },
     pagamento_online_ativo: false,
     conta_cliente_obrigatoria: false,
     telefone: '(11) 98765-4321',
     whatsapp: '11987654321',
+    socials: JSON.stringify({ instagram: 'komagastronomia', whatsapp: '11987654321' }),
     endereco: 'Rua Harmonia, 123 - Vila Madalena, São Paulo - SP',
     horario_funcionamento: 'Terça a Domingo: 18h00 às 23h30',
     logo_url: '',
@@ -94,7 +95,19 @@ const payload = {
     { id: 990014, nome: 'Batata rústica crocante', descricao: 'Porção individual de batatas rústicas com alecrim fresco e sal de parrilla.', preco: 18.5, imagem_url: '/mock-preview/porcao-fritas.jpg', categoria_id: 3, ordem_exibicao: 4, grupos_modificadores: [] },
     { id: 990015, nome: 'Molho especial da casa', descricao: 'Receita autoral à base de páprica defumada, ervas finas e mostarda dijon.', preco: 6.0, imagem_url: '', categoria_id: 3, ordem_exibicao: 5, grupos_modificadores: [] },
   ],
-  promocoes: [],
+  promocoes: [
+    {
+      id: 'promo-combo-koma',
+      nome: 'Combo Degustação KÔMA',
+      descricao: 'Monte seu combo especial escolhendo 1 Burger artesanal acompanhado de Batatas Rústicas crocantes.',
+      preco: 46.9,
+      componentes: [
+        [990011, 990012],
+        [990014],
+      ],
+      fim_em: null,
+    },
+  ],
   produtos_promocionais: [],
 };
 
