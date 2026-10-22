@@ -5,9 +5,10 @@
 
 import React from "react";
 import { BrandConfig } from "../CardapioTypes";
-import { Clock3, CreditCard, ExternalLink, Info, MapPin, MessageCircle, Store, X } from "lucide-react";
+import { Clock3, CreditCard, ExternalLink, Info, MapPin, MessageCircle, Phone, Store, X } from "lucide-react";
 import { CardapioDeliveryInfo } from "./CardapioOrderConditions";
 import { buildKomaAttributionUrl } from "../komaAttribution";
+import { KomaSocialCameraIcon } from "./KomaPublicIcons";
 
 interface CardapioStoreInfoDrawerProps {
   brand: BrandConfig;
@@ -157,6 +158,47 @@ export default function CardapioStoreInfoDrawer({
                       <ExternalLink className="h-3.5 w-3.5" /> Abrir no Google Maps
                     </a>
                   )}
+                </div>
+              </section>
+            )}
+
+            {((brand.socials && brand.socials.some(s => s.active)) || brand.phone) && (
+              <section className="border-t border-white/10 pt-5">
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="h-4 w-4 text-emerald-400" />
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">Canais e redes sociais</h3>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2.5">
+                  {brand.phone && (
+                    <a
+                      href={`https://wa.me/${String(brand.phone).replace(/\D/g, "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      id="store-info-whatsapp-link"
+                      className="inline-flex h-10 items-center gap-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all cursor-pointer"
+                    >
+                      <Phone className="h-4 w-4" /> WhatsApp
+                    </a>
+                  )}
+                  {brand.socials?.filter(s => s.active).map((social) => (
+                    <a
+                      key={`${social.platform}-${social.url}`}
+                      href={social.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      id={`store-info-social-${social.platform.toLowerCase()}`}
+                      className="inline-flex h-10 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-white/90 hover:border-white/25 hover:text-white transition-all cursor-pointer"
+                      title={social.platform}
+                      aria-label={social.platform}
+                    >
+                      {social.platform.toLowerCase() === 'instagram' ? (
+                        <KomaSocialCameraIcon size={16} />
+                      ) : (
+                        <ExternalLink className="h-3.5 w-3.5 text-white/60" />
+                      )}
+                      <span>{social.platform}</span>
+                    </a>
+                  ))}
                 </div>
               </section>
             )}

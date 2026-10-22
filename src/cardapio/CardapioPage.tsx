@@ -1041,6 +1041,21 @@ export default function CardapioPage() {
 
   return (
     <div className="min-h-screen overflow-x-clip bg-bg-app font-sans text-text-app" id="app-root-container">
+      {notice && !isCartOpen && !isCheckoutOpen && (
+        <div
+          className="fixed top-16 sm:top-20 left-1/2 z-[60] -translate-x-1/2 max-w-[calc(100vw-2rem)] rounded-full border border-emerald-500/30 bg-[#0d1612]/95 backdrop-blur-md px-4 py-2 text-center text-xs font-bold text-emerald-300 shadow-2xl animate-fade-in flex items-center gap-2 pointer-events-auto cursor-pointer"
+          role="status"
+          aria-live="polite"
+          onClick={() => {
+            setNotice("");
+            recentAddedCountRef.current = 0;
+          }}
+        >
+          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+          <span>{notice}</span>
+        </div>
+      )}
+
       {vitrineVariant === 'artistic-total' ? (
         <CardapioArtisticExperience
           activeBrand={activeBrand}
@@ -1065,6 +1080,25 @@ export default function CardapioPage() {
           onOrdersClick={() => setIsOrdersDrawerOpen(true)}
           activeOrdersCount={activeOrders.length}
           hasOpenOverlay={hasOpenOverlay}
+          onPromotionSelect={(offer) => {
+            setEditingPromotionItem(null);
+            setSelectedPromotion(offer);
+          }}
+          user={user}
+          onAuthClick={() => (user ? setIsProfileOpen(true) : setIsAuthOpen(true))}
+          onBenefitsClick={() => setIsBenefitsOpen(true)}
+          activeOrder={activeOrder}
+          activeState={activeState}
+          storedOrders={storedOrders}
+          storedOrdersCount={storedOrders.length}
+          onSelectOrderId={(id) => setSelectedOrderId(id)}
+          onPayPixClick={(order) => setPixModalOrder(order)}
+          onRefreshOrders={() => {
+            if (activeBrand?.id) void checkActiveOrders(Number(activeBrand.id));
+          }}
+          isRefreshingOrders={isRefreshingOrders}
+          onClearTrackedOrder={(id) => clearTrackedOrder(id)}
+          orderingMessage={orderingMessage}
         />
       ) : (
         <>
@@ -1084,20 +1118,6 @@ export default function CardapioPage() {
           />
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6" id="catalog-section">
-        {notice && !isCartOpen && !isCheckoutOpen && (
-          <div
-            className="fixed top-16 sm:top-20 left-1/2 z-[60] -translate-x-1/2 max-w-[calc(100vw-2rem)] rounded-full border border-emerald-500/30 bg-[#0d1612]/95 backdrop-blur-md px-4 py-2 text-center text-xs font-bold text-emerald-300 shadow-2xl animate-fade-in flex items-center gap-2 pointer-events-auto cursor-pointer"
-            role="status"
-            aria-live="polite"
-            onClick={() => {
-              setNotice("");
-              recentAddedCountRef.current = 0;
-            }}
-          >
-            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-            <span>{notice}</span>
-          </div>
-        )}
 
         {activeOrder && activeState && (
           <section className={clsx(

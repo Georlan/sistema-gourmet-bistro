@@ -1867,6 +1867,602 @@ html[data-koma-theme="light"] .koma-art-single-choice-indicator.is-selected::aft
   box-shadow: 0 0 4px rgba(0, 135, 90, 0.3);
 }
 
+/* ========================================================
+   10. PARIDADE COMERCIAL: BANNER, STATUS, TRACKER & PROMOÇÕES
+   ======================================================== */
+
+/* Banner Customizado da Marca */
+.koma-art-brand-banner {
+  max-width: 1180px;
+  margin: 16px auto 0;
+  padding: 0 16px;
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+.koma-art-banner-img {
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Nota de Horário Fechado / Pausado */
+.koma-art-availability-note {
+  max-width: 1180px;
+  margin: 16px auto 0;
+  padding: 14px 20px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #fde68a;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme="light"] .koma-art-availability-note,
+[data-cardapio-tone="light"] .koma-art-availability-note {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+/* Ações Avançadas do Canopy */
+.koma-art-action-pill--whatsapp:hover {
+  background: rgba(37, 211, 102, 0.2);
+  border-color: #25d366;
+  color: #25d366;
+}
+
+.koma-art-action-pill--instagram:hover {
+  background: rgba(225, 48, 108, 0.2);
+  border-color: #e1306c;
+  color: #e1306c;
+}
+
+.koma-art-action-pill--benefits,
+.koma-art-action-pill--repeat,
+.koma-art-action-pill--orders,
+.koma-art-action-pill--auth {
+  width: auto;
+  border-radius: 9999px;
+  padding: 0 12px;
+  gap: 6px;
+}
+
+.koma-art-action-pill--benefits {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+}
+
+.koma-art-action-pill--benefits:hover {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: #f59e0b;
+}
+
+.koma-art-action-pill--orders {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+}
+
+.koma-art-action-pill--orders:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #10b981;
+}
+
+.koma-art-pill-text {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Live Order Tracker Banner */
+.koma-art-order-tracker {
+  max-width: 1180px;
+  margin: 16px auto 0;
+  padding: 16px;
+  border-radius: 24px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: linear-gradient(160deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 18, 12, 0.95) 100%);
+  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.6);
+  position: relative;
+  overflow: hidden;
+}
+
+.koma-art-order-tracker--rejected {
+  border-color: rgba(244, 63, 94, 0.35);
+  background: linear-gradient(160deg, rgba(244, 63, 94, 0.08) 0%, rgba(20, 5, 8, 0.95) 100%);
+}
+
+.koma-art-order-tracker--terminal {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: linear-gradient(160deg, rgba(16, 185, 129, 0.05) 0%, rgba(6, 18, 13, 0.95) 100%);
+}
+
+html[data-theme="light"] .koma-art-order-tracker,
+[data-cardapio-tone="light"] .koma-art-order-tracker {
+  background: #ffffff;
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 12px 30px rgba(0, 80, 50, 0.08);
+}
+
+.koma-art-tracker-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+
+html[data-theme="light"] .koma-art-tracker-tabs,
+[data-cardapio-tone="light"] .koma-art-tracker-tabs {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+.koma-art-tracker-tabs-scroll {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.koma-art-tracker-tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--art-text-sec);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.koma-art-tracker-tab-pill.is-selected {
+  background: #10b981;
+  border-color: #10b981;
+  color: #ffffff;
+}
+
+.koma-art-tracker-tab-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.koma-art-tracker-view-all {
+  font-size: 11px;
+  font-weight: 700;
+  color: #34d399;
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.koma-art-tracker-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (min-width: 640px) {
+  .koma-art-tracker-main {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+}
+
+.koma-art-tracker-status-box {
+  flex: 1;
+}
+
+.koma-art-tracker-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.koma-art-tracker-num {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #34d399;
+}
+
+.koma-art-order-tracker--rejected .koma-art-tracker-num {
+  color: #fb7185;
+}
+
+.koma-art-tracker-sublink {
+  font-size: 10px;
+  color: var(--art-text-muted);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.koma-art-tracker-title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--art-text-main);
+  margin: 0;
+}
+
+.koma-art-tracker-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--art-text-sec);
+  margin: 4px 0 0;
+  max-width: 580px;
+}
+
+.koma-art-tracker-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--art-text-muted);
+  margin-top: 6px;
+}
+
+.koma-art-tracker-sep {
+  opacity: 0.5;
+}
+
+.koma-art-tracker-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.koma-art-tracker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid transparent;
+}
+
+.koma-art-tracker-btn--pix {
+  background: #10b981;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.koma-art-tracker-btn--pix:hover {
+  background: #059669;
+}
+
+.koma-art-tracker-btn--chat {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.koma-art-tracker-btn--chat:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.koma-art-tracker-btn--refresh {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--art-text-sec);
+}
+
+.koma-art-tracker-btn--refresh:hover {
+  color: var(--art-text-main);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.koma-art-tracker-btn--new {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.koma-art-tracker-pix-note {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 11px;
+  color: #fde68a;
+}
+
+.koma-art-tracker-pix-note strong {
+  display: block;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 2px;
+}
+
+.koma-art-tracker-stepper {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 8px;
+}
+
+html[data-theme="light"] .koma-art-tracker-stepper,
+[data-cardapio-tone="light"] .koma-art-tracker-stepper {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.koma-art-tracker-stepper.is-delivery {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.koma-art-tracker-stepper.is-takeout {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.koma-art-step-node {
+  text-align: center;
+}
+
+.koma-art-step-bar {
+  height: 5px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+html[data-theme="light"] .koma-art-step-bar,
+[data-cardapio-tone="light"] .koma-art-step-bar {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.koma-art-step-node.is-passed .koma-art-step-bar {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.koma-art-step-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  margin-top: 4px;
+  color: var(--art-text-muted);
+}
+
+.koma-art-step-node.is-passed .koma-art-step-label {
+  color: #34d399;
+}
+
+/* Vitrine de Promoções Artísticas */
+.koma-art-promotions-section {
+  max-width: 1180px;
+  margin: 20px auto 28px;
+  padding: 0 16px;
+}
+
+.koma-art-promo-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.koma-art-promo-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f59e0b;
+}
+
+.koma-art-promo-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--art-text-main);
+  margin: 2px 0 0;
+}
+
+.koma-art-promo-subtitle {
+  font-size: 11px;
+  color: var(--art-text-sec);
+  margin: 2px 0 0;
+}
+
+.koma-art-promo-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 768px) {
+  .koma-art-promo-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.koma-art-promo-card {
+  background: linear-gradient(145deg, rgba(245, 158, 11, 0.08) 0%, rgba(12, 28, 20, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  box-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.5), 0 0 16px rgba(245, 158, 11, 0.08);
+  border-radius: 24px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html[data-theme="light"] .koma-art-promo-card,
+[data-cardapio-tone="light"] .koma-art-promo-card {
+  background: #ffffff;
+  border-color: rgba(245, 158, 11, 0.35);
+  box-shadow: 0 10px 28px -4px rgba(245, 158, 11, 0.12);
+}
+
+.koma-art-promo-card:hover {
+  transform: translateY(-3px);
+  border-color: #f59e0b;
+  box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.6), 0 0 24px rgba(245, 158, 11, 0.18);
+}
+
+.koma-art-promo-media {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  background: #000000;
+  overflow: hidden;
+}
+
+.koma-art-promo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.koma-art-promo-tag {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.koma-art-promo-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.koma-art-promo-eyebrow {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #f59e0b;
+}
+
+.koma-art-promo-name {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--art-text-main);
+  letter-spacing: -0.02em;
+  margin: 2px 0 0;
+}
+
+.koma-art-promo-desc {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--art-text-sec);
+  margin: 4px 0 0;
+}
+
+.koma-art-promo-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="light"] .koma-art-promo-footer,
+[data-cardapio-tone="light"] .koma-art-promo-footer {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.koma-art-promo-price-label {
+  display: block;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--art-text-muted);
+}
+
+.koma-art-promo-price-val {
+  font-size: 18px;
+  font-weight: 900;
+  color: #34d399;
+}
+
+.koma-art-promo-cta {
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  border-radius: 9999px;
+  padding: 8px 18px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.koma-art-promo-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.4);
+}
+
+/* Link de Atribuição KÔMA */
+.koma-art-attribution-link {
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.koma-art-attribution-link:hover {
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+/* Cards Esgotados */
+.koma-art-catalog-card.is-unavailable {
+  opacity: 0.65;
+  filter: grayscale(0.2);
+}
+
 /* Suporte a prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after {
@@ -1876,3 +2472,4 @@ html[data-koma-theme="light"] .koma-art-single-choice-indicator.is-selected::aft
     scroll-behavior: auto !important;
   }
 }
+
