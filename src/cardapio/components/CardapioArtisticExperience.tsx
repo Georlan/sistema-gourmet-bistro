@@ -31,6 +31,8 @@ import {
 import { CustomerProfile } from '../customerSession';
 import { OrderStateContract, StoredOrder, orderFulfillmentLabel } from '../orderTracking';
 import { buildKomaAttributionUrl } from '../komaAttribution';
+import { getPairingRecommendations } from '../pairingRecommendations';
+import type { CartItem } from './CardapioCartDrawer';
 import CatalogProductImage from './CatalogProductImage';
 import {
   KomaBagIcon,
@@ -56,6 +58,7 @@ export interface CardapioArtisticExperienceProps {
   onCartToggle: () => void;
   cartCount: number;
   cartTotal?: number;
+  cart?: CartItem[];
   onStoreInfoClick: () => void;
   onOrdersClick?: () => void;
   activeOrdersCount?: number;
@@ -122,6 +125,7 @@ export function CardapioArtisticExperience({
   onCartToggle,
   cartCount,
   cartTotal = 0,
+  cart = [],
   onStoreInfoClick,
   onOrdersClick,
   activeOrdersCount = 0,
@@ -141,7 +145,9 @@ export function CardapioArtisticExperience({
   onClearTrackedOrder,
   orderingMessage = '',
 }: CardapioArtisticExperienceProps) {
-  // Compartilhar cardápio
+  const [shareToastVisible, setShareToastVisible] = useState(false);
+
+  // Compartilhar cardápio com feedback ao usuário
   const handleShare = async () => {
     const shareData = {
       title: activeBrand.name,
@@ -153,12 +159,14 @@ export function CardapioArtisticExperience({
         await navigator.share(shareData);
         return;
       } catch {
-        // ignore abort
+        // Usuário cancelou ou navegador recusou compartilhamento nativo; tenta fallback
       }
     }
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       try {
         await navigator.clipboard.writeText(window.location.href);
+        setShareToastVisible(true);
+        setTimeout(() => setShareToastVisible(false), 2500);
       } catch {
         // fallback
       }
@@ -211,17 +219,16 @@ export function CardapioArtisticExperience({
     return activeBrand.products.find((p) => p.isAvailable !== false) || activeBrand.products[0] || null;
   }, [activeBrand.products, popularIds, activeBrand.popularProductIds]);
 
-  // Produtos de harmonização / recomendação complementar
+  // Produtos de harmonização / recomendação complementar contextual
   const pairingProducts = useMemo<Product[]>(() => {
-    if (!activeBrand.products) return [];
-    if (offers.length > 0) {
-      // Quando promoções tomam o destaque principal, os pratos mais pedidos vão para combinações
-      return activeBrand.products.filter((p) => p.isAvailable !== false).slice(0, 4);
-    }
-    return activeBrand.products
-      .filter((p) => p.id !== heroProduct?.id && p.isAvailable !== false)
-      .slice(0, 4);
-  }, [activeBrand.products, heroProduct, offers.length]);
+    const cartProductIds = (cart || []).map((item) => item.product.id);
+    return getPairingRecommendations({
+      catalog: activeBrand.products || [],
+      cartProductIds,
+      focusedProductId: heroProduct?.id,
+      limit: 4,
+    });
+  }, [activeBrand.products, cart, heroProduct?.id]);
 
   // Filtragem de catálogo com busca
   const filteredProducts = useMemo<Product[]>(() => {
@@ -287,13 +294,13 @@ export function CardapioArtisticExperience({
             </button>
 
             <div className="koma-art-canopy__actions">
-              {/* Contato WhatsApp Discreto */}
+              {/* Contato WhatsApp (visível em telas médias e acima; mobile acessa em Informações da Loja) */}
               {whatsappUrl && (
                 <a
                   href={whatsappUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="koma-art-action-pill koma-art-action-pill--whatsapp"
+                  className="koma-art-action-pill koma-art-action-pill--whatsapp hidden md:inline-flex"
                   title="Falar no WhatsApp"
                   aria-label="Falar no WhatsApp"
                   id="btn-whatsapp-header"
@@ -302,13 +309,13 @@ export function CardapioArtisticExperience({
                 </a>
               )}
 
-              {/* Instagram Discreto */}
+              {/* Instagram (visível em telas médias e acima) */}
               {instagramSocial && (
                 <a
                   href={instagramSocial.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="koma-art-action-pill koma-art-action-pill--instagram"
+                  className="koma-art-action-pill koma-art-action-pill--instagram hidden md:inline-flex"
                   title="Instagram do restaurante"
                   aria-label="Instagram do restaurante"
                   id="btn-instagram-header"
@@ -317,11 +324,11 @@ export function CardapioArtisticExperience({
                 </a>
               )}
 
-              {/* Compartilhar */}
+              {/* Compartilhar (desktop / tablet) */}
               <button
                 type="button"
                 onClick={handleShare}
-                className="koma-art-action-pill"
+                className="koma-art-action-pill koma-art-action-pill--share hidden md:inline-flex"
                 title="Compartilhar cardápio"
                 aria-label="Compartilhar cardápio"
                 id="btn-share-header"
@@ -333,19 +340,20 @@ export function CardapioArtisticExperience({
               <button
                 type="button"
                 onClick={onStoreInfoClick}
-                className="koma-art-action-pill"
+                className="koma-art-action-pill koma-art-action-pill--store-info hidden sm:inline-flex"
                 title="Horários e informações"
                 aria-label="Horários e informações"
+                id="btn-store-info-header"
               >
                 <KomaInfoIcon size={15} />
               </button>
 
-              {/* Benefícios (Ofertas, Créditos, Pontos) */}
+              {/* Benefícios (Ofertas, Créditos, Pontos) - desktop */}
               {(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty) && onBenefitsClick && (
                 <button
                   type="button"
                   onClick={onBenefitsClick}
-                  className="koma-art-action-pill koma-art-action-pill--benefits"
+                  className="koma-art-action-pill koma-art-action-pill--benefits hidden md:inline-flex"
                   title="Ofertas, créditos e pontos"
                   aria-label="Abrir benefícios do restaurante"
                   id="btn-benefits-header"
@@ -360,7 +368,7 @@ export function CardapioArtisticExperience({
                 <button
                   type="button"
                   onClick={onAuthClick}
-                  className="koma-art-action-pill koma-art-action-pill--repeat"
+                  className="koma-art-action-pill koma-art-action-pill--repeat hidden lg:inline-flex"
                   id="btn-order-again-home"
                   title="Abrir seus pedidos para pedir novamente"
                   aria-label="Abrir seus pedidos para pedir novamente"
@@ -370,12 +378,12 @@ export function CardapioArtisticExperience({
                 </button>
               )}
 
-              {/* Acompanhar pedidos e Chat do KÔMA */}
+              {/* Acompanhar pedidos e Chat do KÔMA - desktop */}
               {storedOrdersCount > 0 && onOrdersClick && (
                 <button
                   type="button"
                   onClick={onOrdersClick}
-                  className="koma-art-action-pill koma-art-action-pill--orders"
+                  className="koma-art-action-pill koma-art-action-pill--orders hidden md:inline-flex"
                   title="Abrir acompanhamento e chat dos pedidos"
                   aria-label={`Abrir acompanhamento e chat dos pedidos${activeOrdersCount > 0 ? `, ${activeOrdersCount} em andamento` : ''}`}
                   id="btn-my-orders-header"
@@ -413,7 +421,7 @@ export function CardapioArtisticExperience({
                 onClick={onCartToggle}
                 className="koma-art-action-pill koma-art-action-pill--cart"
                 title="Ver sacola"
-                aria-label={`Ver sacola de compras, ${cartCount} ${cartCount === 1 ? 'item' : 'itens'}`}
+                aria-label={cartCount === 1 ? 'Sua sacola, 1 item' : `Sua sacola, ${cartCount} itens`}
                 id="btn-cart-header"
               >
                 <KomaBagIcon size={16} />
@@ -423,6 +431,13 @@ export function CardapioArtisticExperience({
               </button>
             </div>
           </div>
+
+          {/* Toast de Compartilhamento */}
+          {shareToastVisible && (
+            <div className="koma-art-share-toast" role="status" aria-live="polite">
+              <span>Link do cardápio copiado!</span>
+            </div>
+          )}
 
           {/* Cápsula de Busca Integrada */}
           <div className="koma-art-search-wrap">
@@ -932,7 +947,11 @@ export function CardapioArtisticExperience({
           ZONA 4: CÁPSULAS DE HARMONIZAÇÃO ("COMBINA COM SEU PEDIDO")
           ======================================================== */}
       {pairingProducts.length > 0 && !searchQuery && (
-        <section className="koma-art-pairing-section" aria-label="Harmonizações sugeridas">
+        <section
+          className="koma-art-pairing-section"
+          aria-label="Harmonizações sugeridas"
+          id="cardapio-recommendations-home"
+        >
           <div className="koma-art-section-head">
             <div>
               <span className="koma-art-section-eyebrow">SUGESTÕES COMPLEMENTARES</span>
@@ -1163,8 +1182,15 @@ export function CardapioArtisticExperience({
           aria-label="Conhecer o KÔMA, plataforma deste cardápio digital"
           className="koma-art-powered-pill koma-art-attribution-link"
         >
-          Cardápio digital por <strong>KÔMA</strong>
-          <span aria-hidden="true">↗</span>
+          <span className="koma-art-attribution-emblem" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 4C7.03 4 3 8.03 3 13H21C21 8.03 16.97 4 12 4Z" fill="#10B981" />
+              <path d="M2 17H22V19H2V17Z" fill="#10B981" />
+              <circle cx="12" cy="2.5" r="1.5" fill="#10B981" />
+            </svg>
+          </span>
+          <span>Cardápio digital por <strong>KÔMA</strong></span>
+          <span className="koma-art-attribution-arrow" aria-hidden="true">↗</span>
         </a>
       </footer>
 

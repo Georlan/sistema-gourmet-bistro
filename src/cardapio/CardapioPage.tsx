@@ -1076,6 +1076,7 @@ export default function CardapioPage() {
           onCartToggle={openCart}
           cartCount={cartCount}
           cartTotal={cartTotal}
+          cart={cart}
           onStoreInfoClick={() => setIsStoreInfoOpen(true)}
           onOrdersClick={() => setIsOrdersDrawerOpen(true)}
           activeOrdersCount={activeOrders.length}
@@ -1502,6 +1503,8 @@ export default function CardapioPage() {
         <CardapioAuthModal
           restaurantId={activeBrand.id}
           accountRequired={activeBrand.customerAccountRequired === true}
+          hasBenefits={Boolean(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty)}
+          restaurantName={activeBrand.name}
           onClose={() => setIsAuthOpen(false)}
           onLoginSuccess={handleLoginSuccess}
         />

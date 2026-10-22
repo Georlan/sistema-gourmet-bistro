@@ -18,7 +18,8 @@ async function main() {
   });
   const page = await mobileDarkContext.newPage();
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(1000);
+  await page.waitForSelector('text=Burger clássico artesanal', { timeout: 10000 });
+  await page.waitForTimeout(500);
 
   // Home screen Dark
   await page.screenshot({ path: path.join(OUT_DIR, 'artistic-flow-home-390-dark.png') });
@@ -26,18 +27,46 @@ async function main() {
 
   // Store Info Drawer
   console.log('Opening store info drawer...');
-  const storeTrigger = page.locator('.koma-art-brand-badge, button[title*="Horários"]').first();
+  const storeTrigger = page.locator('#header-brand-info-trigger').first();
   if (await storeTrigger.isVisible()) {
     await storeTrigger.click();
     await page.waitForTimeout(600);
     await page.screenshot({ path: path.join(OUT_DIR, 'artistic-flow-store-info-390-dark.png') });
     console.log('Saved artistic-flow-store-info-390-dark.png');
     // Close store info
-    const closeStoreBtn = page.locator('#btn-close-store-info, [aria-label*="Fechar" i]').first();
+    const closeStoreBtn = page.locator('#btn-close-store-info').first();
     if (await closeStoreBtn.isVisible()) {
       await closeStoreBtn.click();
       await page.waitForTimeout(400);
     }
+  }
+
+  // Auth Modal
+  console.log('Opening auth modal...');
+  const authTrigger = page.locator('#btn-login-trigger, #btn-user-profile').first();
+  if (await authTrigger.isVisible()) {
+    await authTrigger.click();
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: path.join(OUT_DIR, 'artistic-flow-auth-390-dark.png') });
+    console.log('Saved artistic-flow-auth-390-dark.png');
+    // Close auth modal
+    const closeAuthBtn = page.locator('#auth-modal-overlay button[aria-label="Fechar"]').first();
+    if (await closeAuthBtn.isVisible()) {
+      await closeAuthBtn.click();
+      await page.waitForTimeout(400);
+    }
+  }
+
+  // Footer / Attribution
+  console.log('Capturing footer attribution...');
+  const footerEl = page.locator('.koma-art-footer').first();
+  if (await footerEl.isVisible()) {
+    await footerEl.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(OUT_DIR, 'artistic-flow-footer-390-dark.png') });
+    console.log('Saved artistic-flow-footer-390-dark.png');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(300);
   }
 
   // Open Product Modal (Burger clássico artesanal)
@@ -126,12 +155,13 @@ async function main() {
   });
   const lightPage = await lightContext.newPage();
   await lightPage.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+  await lightPage.waitForSelector('text=Burger clássico artesanal', { timeout: 10000 });
   await lightPage.evaluate(() => {
     document.documentElement.setAttribute('data-theme', 'light');
     document.documentElement.setAttribute('data-koma-theme', 'light');
     document.documentElement.setAttribute('data-cardapio-tone', 'light');
   });
-  await lightPage.waitForTimeout(800);
+  await lightPage.waitForTimeout(600);
   await lightPage.screenshot({ path: path.join(OUT_DIR, 'artistic-flow-home-390-light.png') });
   console.log('Saved artistic-flow-home-390-light.png');
 
@@ -173,7 +203,8 @@ async function main() {
   });
   const deskPage = await deskContext.newPage();
   await deskPage.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
-  await deskPage.waitForTimeout(1000);
+  await deskPage.waitForSelector('text=Burger clássico artesanal', { timeout: 10000 });
+  await deskPage.waitForTimeout(600);
   await deskPage.screenshot({ path: path.join(OUT_DIR, 'artistic-flow-home-1280-dark.png') });
   console.log('Saved artistic-flow-home-1280-dark.png');
 
@@ -188,7 +219,8 @@ async function main() {
   });
   const emptyPage = await emptyContext.newPage();
   await emptyPage.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
-  await emptyPage.waitForTimeout(800);
+  await emptyPage.waitForSelector('text=Burger clássico artesanal', { timeout: 10000 });
+  await emptyPage.waitForTimeout(600);
   const emptyCartTrigger = emptyPage.locator('.koma-art-dock-btn--bag, .koma-art-action-pill--cart').first();
   if (await emptyCartTrigger.isVisible()) {
     await emptyCartTrigger.click();
@@ -208,7 +240,8 @@ async function main() {
   });
   const page360 = await mobile360Context.newPage();
   await page360.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
-  await page360.waitForTimeout(1000);
+  await page360.waitForSelector('text=Burger clássico artesanal', { timeout: 10000 });
+  await page360.waitForTimeout(600);
   await page360.screenshot({ path: path.join(OUT_DIR, 'artistic-flow-home-360-dark.png') });
   console.log('Saved artistic-flow-home-360-dark.png');
 

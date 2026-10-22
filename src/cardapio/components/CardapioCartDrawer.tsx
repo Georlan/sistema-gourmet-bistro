@@ -58,6 +58,7 @@ import DeliveryAddressFields from "../../components/shared/DeliveryAddressFields
 import { getDeliveryMinimumRemaining, getDeliveryQuote } from "../deliveryPresentation";
 import CardapioPaymentOptions from "./CardapioPaymentOptions";
 import { getCheckoutPaymentMethods, getPaymentSelectionError, resolvePaymentSelection, type PaymentMethod } from "../paymentMethods";
+import { getPairingRecommendations } from "../pairingRecommendations";
 import { KomaPrimaryAction } from "./KomaActionPrimitives";
 
 export interface CartItem {
@@ -383,13 +384,15 @@ export default function CardapioCartDrawer({
   const trocoValorNum = parseFloat(trocoPara) || 0;
   const trocoCalculado = precisaTroco && trocoValorNum > total ? trocoValorNum - total : 0;
 
-  // Upselling suggestions (items from other categories not currently in cart)
+  // Upselling suggestions usando motor determinístico de recomendações complementares
   const upsellSuggestions = useMemo(() => {
     if (!allProducts || allProducts.length === 0) return [];
-    const cartProductIds = new Set(cart.map((item) => item.product.id));
-    return allProducts
-      .filter((p) => !cartProductIds.has(p.id) && p.isAvailable !== false && !p.modifiers?.length && !p.modifierGroups?.length && /bebida|sobremesa|suco|refrigerante|cerveja|drink|doce|sorvete/.test(p.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()))
-      .slice(0, 4);
+    const cartProductIds = cart.map((item) => item.product.id);
+    return getPairingRecommendations({
+      catalog: allProducts,
+      cartProductIds,
+      limit: 4,
+    });
   }, [allProducts, cart]);
 
   // Handle Coupon Validation
@@ -719,7 +722,14 @@ export default function CardapioCartDrawer({
                     isActive ? "is-active" : isCompleted ? "is-completed" : "is-pending"
                   }`}
                 >
-                  {step.stepNumber}. {step.label}
+                  {isCompleted ? (
+                    <span className="flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>{step.label}</span>
+                    </span>
+                  ) : (
+                    <span>{step.stepNumber}. {step.label}</span>
+                  )}
                 </button>
               );
             })}
@@ -923,10 +933,8 @@ export default function CardapioCartDrawer({
                     );
                   })}
                 </div>
-
-                  <button type="button" onClick={() => continueToSection("cart-receive-methods")} className="mt-4 min-h-12 w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 text-xs font-black uppercase tracking-wider text-emerald-400 transition-all cursor-pointer">Continuar para recebimento</button>
-                </div>
-              </section>
+              </div>
+            </section>
 
               {/* Upselling / Cross-selling Carousel */}
               {activeSection === "cart-items" && upsellSuggestions.length > 0 && onAddToCart && (

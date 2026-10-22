@@ -95,6 +95,7 @@ html[data-koma-theme="light"] .koma-art-canvas,
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .koma-art-brand-badge {
@@ -106,6 +107,8 @@ html[data-koma-theme="light"] .koma-art-canvas,
   cursor: pointer;
   text-align: left;
   padding: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .koma-art-brand-logo {
@@ -115,6 +118,7 @@ html[data-koma-theme="light"] .koma-art-canvas,
   object-fit: cover;
   background: #ffffff;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
 }
 
 .koma-art-brand-logo--fallback {
@@ -129,11 +133,14 @@ html[data-koma-theme="light"] .koma-art-canvas,
   font-weight: 900;
   font-size: 20px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
 }
 
 .koma-art-brand-text {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .koma-art-brand-name {
@@ -141,20 +148,29 @@ html[data-koma-theme="light"] .koma-art-canvas,
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #ffffff;
-  line-height: 1.2;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .koma-art-brand-slogan {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.75);
   font-weight: 500;
-  line-height: 1.2;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .koma-art-canopy__actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .koma-art-action-pill {
@@ -172,6 +188,25 @@ html[data-koma-theme="light"] .koma-art-canvas,
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
+  flex-shrink: 0;
+}
+
+.koma-art-action-pill.hidden,
+.koma-art-action-pill[hidden] {
+  display: none !important;
+}
+
+/* Em telas móveis (< 768px), ocultar botões secundários para priorizar a identidade da marca */
+@media (max-width: 767px) {
+  .koma-art-action-pill--whatsapp,
+  .koma-art-action-pill--instagram,
+  .koma-art-action-pill--share,
+  .koma-art-action-pill--store-info,
+  .koma-art-action-pill--benefits,
+  .koma-art-action-pill--orders,
+  .koma-art-action-pill--repeat {
+    display: none !important;
+  }
 }
 
 .koma-art-action-pill:hover {
@@ -1044,7 +1079,7 @@ html[data-theme="light"] .koma-art-cloche__tray {
 .koma-art-footer {
   max-width: 1180px;
   margin: 40px auto 0;
-  padding: 24px 18px;
+  padding: 24px 18px calc(115px + env(safe-area-inset-bottom, 24px));
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   text-align: center;
   display: flex;
@@ -1071,14 +1106,81 @@ html[data-theme="light"] .koma-art-footer {
 .koma-art-powered-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9999px;
-  padding: 4px 12px;
-  font-size: 10px;
+  padding: 6px 16px;
+  font-size: 11px;
   color: var(--art-text-sec);
-  margin-top: 6px;
+  margin-top: 8px;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.koma-art-powered-pill:hover {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.koma-art-attribution-emblem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.koma-art-attribution-brand {
+  color: #ffffff;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.koma-art-attribution-arrow {
+  font-size: 11px;
+  opacity: 0.7;
+  transition: transform 0.2s ease;
+}
+
+.koma-art-powered-pill:hover .koma-art-attribution-arrow {
+  transform: translate(2px, -2px);
+  opacity: 1;
+  color: #34d399;
+}
+
+/* Toast de Compartilhamento */
+.koma-art-share-toast {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: #06110d;
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(16, 185, 129, 0.2);
+  border-radius: 9999px;
+  padding: 8px 18px;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  animation: komaArtFadeInDown 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes komaArtFadeInDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 /* ========================================================
