@@ -36,8 +36,10 @@ def _failure_reference(response: httpx.Response) -> str:
         # Only capture a syntactically valid field path rooted in the documented Order schema.
         candidate = first_error.get('parameter_name', '')
         if isinstance(candidate, str) and re.fullmatch(
-            r'(?:reference_id|customer|items|charges|notification_urls|shipping|qr_codes|metadata)'
-            r'(?:\[\d{1,3}\]|\.[A-Za-z][A-Za-z0-9_]{0,40}){0,12}', candidate
+            r'(?:reference_id|customer|items|charges|notification_urls)'
+            r'(?:\[\d{1,2}\]|\.(?:reference_id|name|email|tax_id|quantity|unit_amount|'
+            r'description|amount|value|currency|payment_method|type|pix|expiration_date)){0,12}',
+            candidate
         ):
             parameter = candidate
     except (ValueError, TypeError):
