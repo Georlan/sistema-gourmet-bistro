@@ -141,3 +141,25 @@ def test_campaign_crossing_closing_time_during_provider_verification_never_sends
     assert not dispatch_single_outbox_event(db, row)
     assert not calls
     assert row.status == 'dead_letter'
+
+
+def test_marketing_cancellation_preserves_order_notices_and_other_restaurants(flow):
+    db, patch = flow
+    activate(patch)
+    campaign, client, _ = seed(db)
+    from app.services.whatsapp_opt_out import create_opt_out_token, resolve_opt_out_token, marketing_only_capability, block_contact
+    from app.services.customer_whatsapp_dispatch import opted_out
+    token = create_opt_out_token(701, client.telefone, db, marketing_only=True)
+    db.commit()
+    rid, digest = resolve_opt_out_token(token, db)
+    assert rid == 701 and marketing_only_capability(token, db, rid)
+    block_contact(db, rid, digest, marketing_only=True); db.commit()
+    assert not opted_out(db, 701, digest)
+    assert opted_out(db, 701, digest, include_marketing=True)
+    assert not opted_out(db, 702, central.recipient_fingerprint(702, client.telefone), include_marketing=True)
+    with pytest.raises(HTTPException): campaigns.enqueue_campaign(db, 701, campaign.id, client.id)
+    # An all-notices cancellation strengthens an existing promotional one;
+    # subsequent promotional replays cannot silently turn order notices on.
+    block_contact(db, rid, digest); db.commit()
+    block_contact(db, rid, digest, marketing_only=True); db.commit()
+    assert opted_out(db, 701, digest)

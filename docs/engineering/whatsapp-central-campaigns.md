@@ -5,7 +5,7 @@ Preparação separada dos avisos de pedidos. O transporte promocional permanece 
 ## Regras aprovadas
 
 - Mensagem recebida comprovada nos últimos 21 dias, vinculada ao telefone atual e ao restaurante. Compra, cadastro, clique ou abertura de conversa não comprovam interação.
-- Autorização promocional separada e respeito ao cancelamento. A API de preferências do operador não permite fabricar autorização nem histórico recebido.
+- Autorização promocional separada e respeito ao cancelamento. O link promocional cancela somente promoções daquela loja; não cancela avisos de pedidos nem altera a escolha para outras lojas. Cancelamentos antigos mais amplos não são enfraquecidos por esse link. A API de preferências do operador não permite fabricar autorização nem histórico recebido.
 - Intervalo conservador de 7 dias por cliente, contado desde a reserva da tentativa e considerando contatos manuais confirmados anteriores.
 - Até 5 tentativas promocionais no total do remetente por dia de Fortaleza, com reserva sob o mesmo bloqueio global usado pelos avisos operacionais. Comandas não consomem essa cota.
 - Janela das 10h (inclusive) às 21h (exclusive), America/Fortaleza. Fora da janela ou após a quinta tentativa, reagendar para a próxima janela sem chamar o provedor nem gastar tentativa. A mensagem preparada expira em 48 horas; excedentes não são mantidos indefinidamente.
@@ -22,6 +22,6 @@ O adaptador de mensagens recebidas autenticadas ainda não existe. Os novos camp
 
 ## Migração e reversão
 
-`e5f6a7b8c9d0` adiciona campos às preferências CRM e dois contadores à tabela global do remetente; mantém dados existentes e não concede autorização. Rodar migração antes dos workers. Em reversão, desligar o transporte promocional, reverter a aplicação e só depois remover as colunas. Não reabrir envios manuais nem recuperar mensagens antigas como compensação.
+`e5f6a7b8c9d0` adiciona campos às preferências CRM e dois contadores à tabela global do remetente; mantém dados existentes e não concede autorização. Rodar migração antes dos workers. Em reversão, desligar primeiro o transporte promocional. Se já houver descadastros exclusivamente promocionais, manter o leitor que distingue os escopos; não voltar ao leitor antigo que considera todo descadastro amplo. O downgrade recusa remover essa distinção enquanto houver registros promocionais, para não transformar cancelamento de ofertas em cancelamento de avisos de pedidos. Preservar esses registros antes de qualquer remoção de colunas. Nesta etapa não são gerados descadastros promocionais reais porque o transporte permanece desligado. Não reabrir envios manuais nem recuperar mensagens antigas como compensação.
 
 Validação: testes locais de autorização e fila, concorrência PostgreSQL entre restaurantes pela quinta vaga, upgrade/downgrade com dados existentes, contrato CRM no celular e desktop, lint, unitários e build. Nenhuma mensagem real ou alteração de teste no ID 6.

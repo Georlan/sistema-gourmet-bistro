@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db, tenant_session_scope
 from ..models import Restaurante
 from ..services.restaurant_public_label import restaurant_public_label
-from ..services.whatsapp_opt_out import block_contact, resolve_opt_out_token
+from ..services.whatsapp_opt_out import block_contact, resolve_opt_out_token, marketing_only_capability
 
 # Bounded, per-process abuse guard, shared by preview and confirmation. No DB
 # writes for opens/invalid links and no IPs/capabilities retained in cleartext.
@@ -70,7 +70,10 @@ def preview_opt_out(response: Response, body: OptOutRequest = Depends(_body), db
         restaurant = db.query(Restaurante).filter_by(id=rid).one_or_none()
         if restaurant is None:
             raise HTTPException(404, 'Link de descadastro inválido ou expirado.')
-        return {'restaurant_name': restaurant_public_label(restaurant)}
+        result = {'restaurant_name': restaurant_public_label(restaurant)}
+        if marketing_only_capability(body.token, db, rid):
+            result['marketing_only'] = True
+        return result
 
 
 @router.post('/opt-out')
@@ -81,6 +84,6 @@ def apply_opt_out(body: OptOutRequest = Depends(_body), db: Session = Depends(ge
     with tenant_session_scope(db, rid):
         if db.query(Restaurante.id).filter_by(id=rid).scalar() is None:
             raise HTTPException(404, 'Link de descadastro inválido ou expirado.')
-        block_contact(db, rid, digest)
+        block_contact(db, rid, digest, marketing_only=marketing_only_capability(body.token, db, rid))
         db.commit()
     return {'disabled': True}

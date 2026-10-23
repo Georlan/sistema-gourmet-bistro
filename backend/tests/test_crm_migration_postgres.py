@@ -87,8 +87,15 @@ def test_restricted_runtime_migration_and_tenant_isolation():
      # Global tables were initialized from current metadata above; reset only
      # these new columns so the real additive migration is tested once.
      c.execute(text('ALTER TABLE central_whatsapp_sender_state DROP COLUMN campaign_day, DROP COLUMN campaign_attempts'))
+     for table in ('whatsapp_contact_opt_outs','whatsapp_opt_out_capabilities'):
+      c.execute(text(f'ALTER TABLE {table} DROP COLUMN marketing_only'))
      with Operations.context(MigrationContext.configure(c)): campaign_migration.upgrade()
      assert c.execute(text("SELECT whatsapp_marketing_opt_in FROM crm_clientes_preferencias WHERE cliente_id='crm-upgrade-fixture'")).scalar() is False
+     c.execute(text("INSERT INTO whatsapp_contact_opt_outs (restaurante_id,phone_hash,created_at,marketing_only) VALUES (6,repeat('a',64),now(),true)"))
+     with pytest.raises(RuntimeError, match='descadastros promocionais'):
+      with Operations.context(MigrationContext.configure(c)): campaign_migration.downgrade()
+     assert 'marketing_only' in {column['name'] for column in inspect(c).get_columns('whatsapp_contact_opt_outs')}
+     c.execute(text("DELETE FROM whatsapp_contact_opt_outs WHERE restaurante_id=6 AND phone_hash=repeat('a',64)"))
      with Operations.context(MigrationContext.configure(c)): campaign_migration.downgrade()
      assert c.execute(text("SELECT count(*) FROM crm_clientes_preferencias WHERE cliente_id='crm-upgrade-fixture'")).scalar()==1
      with Operations.context(MigrationContext.configure(c)): campaign_migration.upgrade()

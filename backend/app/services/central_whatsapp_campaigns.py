@@ -107,7 +107,7 @@ def eligible(db, rid, campaign_id, customer_id, *, now=None, reserved_event_id=N
         digest = recipient_fingerprint(rid, client.telefone)
     except (ValueError, TypeError):
         raise HTTPException(409, 'Telefone inválido; nenhum envio criado.') from None
-    if pref is None or pref.opt_out_marketing or opted_out(db, rid, digest):
+    if pref is None or pref.opt_out_marketing or opted_out(db, rid, digest, include_marketing=True):
         raise HTTPException(409, 'Cliente sem autorização de marketing ou com descadastro ativo.')
     interaction = to_utc(pref.whatsapp_interaction_at)
     if (pref.whatsapp_marketing_opt_in is not True or pref.whatsapp_interaction_phone_hash != digest
@@ -180,7 +180,7 @@ def resolve_campaign(db, snapshot, *, include_link=False):
     restaurant = db.query(Restaurante).filter_by(id=rid).one()
     label = ' '.join(restaurant.nome.split())[:100]
     from .whatsapp_opt_out import opt_out_url
-    link = opt_out_url(rid, client.telefone, db) if include_link else ''
+    link = opt_out_url(rid, client.telefone, db, marketing_only=True) if include_link else ''
     return client.telefone, f'*KÔMA | {label}*\n\n{text}\n\nPromoção enviada pelo KÔMA em nome de {label}.\nParar de receber: {link}'
 
 
