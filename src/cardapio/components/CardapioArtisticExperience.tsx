@@ -31,7 +31,7 @@ import {
 import { CustomerProfile } from '../customerSession';
 import { OrderStateContract, StoredOrder, orderFulfillmentLabel } from '../orderTracking';
 import { buildKomaAttributionUrl } from '../komaAttribution';
-import { getPairingRecommendations } from '../pairingRecommendations';
+import { getPairingRecommendations, classifyProduct } from '../pairingRecommendations';
 import type { CartItem } from './CardapioCartDrawer';
 import CatalogProductImage from './CatalogProductImage';
 import {
@@ -227,8 +227,18 @@ export function CardapioArtisticExperience({
       cartProductIds,
       focusedProductId: heroProduct?.id,
       limit: 4,
+      excludeCartItems: false,
     });
   }, [activeBrand.products, cart, heroProduct?.id]);
+
+  const pairingHint = useMemo(() => {
+    const types = new Set(pairingProducts.map(classifyProduct));
+    if (types.has('beverage') && types.has('dessert')) return 'Bebidas e sobremesas';
+    if (types.has('beverage')) return 'Bebidas geladas para harmonizar';
+    if (types.has('dessert')) return 'Sobremesas artesanais';
+    if (types.has('side')) return 'Acompanhamentos e porções';
+    return 'Opções para acompanhar';
+  }, [pairingProducts]);
 
   // Filtragem de catálogo com busca
   const filteredProducts = useMemo<Product[]>(() => {
@@ -706,17 +716,24 @@ export function CardapioArtisticExperience({
           ======================================================== */}
       <nav className="koma-art-category-bar" aria-label="Categorias do cardápio" id="koma-art-category-nav">
         <div className="koma-art-category-scroll">
-          <button
-            type="button"
-            onClick={() => {
-              onSelectCategory('');
-              const el = document.getElementById(offers.length > 0 ? 'cardapio-promotions-home' : 'koma-art-hero-showcase');
-              el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }}
-            className={`koma-art-category-pill ${!selectedCategory ? 'is-active' : ''}`}
-          >
-            ★ Destaques
-          </button>
+          {(() => {
+            const hasDestaquesCategory = visibleCategories.some((c) => c.trim().toLowerCase() === 'destaques');
+            const highlightsLabel = hasDestaquesCategory ? 'Início' : '★ Destaques';
+            return (
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectCategory('');
+                  const el = document.getElementById(offers.length > 0 ? 'cardapio-promotions-home' : 'koma-art-hero-showcase');
+                  el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className={`koma-art-category-pill ${!selectedCategory ? 'is-active' : ''}`}
+                aria-current={!selectedCategory ? 'true' : undefined}
+              >
+                {highlightsLabel}
+              </button>
+            );
+          })()}
           {visibleCategories.map((cat) => {
             const isActive = selectedCategory === cat;
             return (
@@ -729,6 +746,7 @@ export function CardapioArtisticExperience({
                   el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }}
                 className={`koma-art-category-pill ${isActive ? 'is-active' : ''}`}
+                aria-current={isActive ? 'true' : undefined}
               >
                 {cat}
               </button>
@@ -957,7 +975,7 @@ export function CardapioArtisticExperience({
               <span className="koma-art-section-eyebrow">SUGESTÕES COMPLEMENTARES</span>
               <h3 className="koma-art-section-title">Combina com seu pedido</h3>
             </div>
-            <span className="koma-art-pairing-hint">Opções para acompanhar</span>
+            <span className="koma-art-pairing-hint">{pairingHint}</span>
           </div>
 
           <div className="koma-art-pairing-grid">
@@ -967,10 +985,11 @@ export function CardapioArtisticExperience({
                 (item.modifierGroups && item.modifierGroups.length > 0) ||
                 (item.modifiers && item.modifiers.length > 0)
               );
+              const isAvailable = item.isAvailable !== false;
               return (
                 <div
                   key={item.id}
-                  id={`product-card-${item.id}`}
+                  id={`pairing-card-${item.id}`}
                   className="koma-art-pebble-card"
                   onClick={() => onSelectProduct(item)}
                 >
@@ -991,7 +1010,9 @@ export function CardapioArtisticExperience({
                     <h4 className="koma-art-pebble-title">{item.name}</h4>
                     <div className="koma-art-pebble-footer">
                       <span className="koma-art-pebble-price">{formatPrice(item.price)}</span>
-                      {qty > 0 ? (
+                      {!isAvailable ? (
+                        <span className="koma-art-pebble-unavailable">Esgotado</span>
+                      ) : qty > 0 && !hasMods ? (
                         <div
                           className="koma-art-pebble-stepper"
                           onClick={(e) => e.stopPropagation()}
@@ -1000,22 +1021,36 @@ export function CardapioArtisticExperience({
                             type="button"
                             onClick={(e) => onFastRemove(item, e)}
                             className="koma-art-pebble-step-btn"
-                            id={`btn-fast-dec-${item.id}`}
+                            id={`btn-pairing-fast-dec-${item.id}`}
                             aria-label={`Diminuir ${item.name}`}
                           >
                             <Minus className="w-3 h-3" />
                           </button>
-                          <span className="koma-art-pebble-qty" id={`qty-${item.id}`}>{qty}</span>
+                          <span className="koma-art-pebble-qty" id={`pairing-qty-${item.id}`}>{qty}</span>
                           <button
                             type="button"
                             onClick={(e) => onFastAdd(item, e)}
                             className="koma-art-pebble-step-btn"
-                            id={`btn-fast-inc-${item.id}`}
+                            id={`btn-pairing-fast-inc-${item.id}`}
                             aria-label={`Aumentar ${item.name}`}
                           >
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
+                      ) : qty > 0 && hasMods ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectProduct(item);
+                          }}
+                          className="koma-art-pebble-custom-btn"
+                          id={`btn-pairing-edit-${item.id}`}
+                          aria-label={`Montar outra ${item.name}`}
+                        >
+                          <span className="koma-art-pebble-qty-badge">{qty}</span>
+                          <span>Montar outra</span>
+                        </button>
                       ) : (
                         <button
                           type="button"
@@ -1028,7 +1063,7 @@ export function CardapioArtisticExperience({
                             }
                           }}
                           className="koma-art-pebble-add-btn"
-                          id={`btn-fast-add-${item.id}`}
+                          id={`btn-pairing-fast-add-${item.id}`}
                           aria-label={`Adicionar ${item.name}`}
                         >
                           <Plus className="w-4 h-4" />

@@ -22,11 +22,12 @@ export default function CardapioPaymentOptions({ available, selected, onSelect }
             key={method}
             type="button"
             aria-pressed={isSelected}
+            aria-label={PAYMENT_LABELS[method]}
             onClick={() => onSelect(method)}
             className={`koma-art-pay-card ${isSelected ? 'is-selected' : ''}`}
           >
             {method === 'pix' && (
-              <span className="koma-art-pix-badge">Imediato</span>
+              <span className="koma-art-pix-badge" aria-hidden="true">Imediato</span>
             )}
             <Icon className={`w-5 h-5 ${isSelected ? 'text-emerald-400' : 'text-koma-muted'}`} aria-hidden="true" />
             <span className="text-xs font-bold leading-snug">{PAYMENT_LABELS[method]}</span>

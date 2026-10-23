@@ -58,7 +58,7 @@ import DeliveryAddressFields from "../../components/shared/DeliveryAddressFields
 import { getDeliveryMinimumRemaining, getDeliveryQuote } from "../deliveryPresentation";
 import CardapioPaymentOptions from "./CardapioPaymentOptions";
 import { getCheckoutPaymentMethods, getPaymentSelectionError, resolvePaymentSelection, type PaymentMethod } from "../paymentMethods";
-import { getPairingRecommendations } from "../pairingRecommendations";
+import { getPairingRecommendations, classifyProduct } from "../pairingRecommendations";
 import { KomaPrimaryAction } from "./KomaActionPrimitives";
 
 export interface CartItem {
@@ -392,8 +392,29 @@ export default function CardapioCartDrawer({
       catalog: allProducts,
       cartProductIds,
       limit: 4,
+      excludeCartItems: false,
     });
   }, [allProducts, cart]);
+
+  const upsellHeading = useMemo(() => {
+    const types = new Set(upsellSuggestions.map(classifyProduct));
+    if (types.has("beverage") && (types.has("dessert") || types.has("side"))) {
+      return "Bebida ou acompanhamento para sua refeição?";
+    }
+    if (types.has("beverage") && types.has("dessert")) {
+      return "Uma bebida ou sobremesa para acompanhar?";
+    }
+    if (types.has("beverage")) {
+      return "Uma bebida bem gelada para acompanhar?";
+    }
+    if (types.has("dessert")) {
+      return "Uma sobremesa artesanal para finalizar?";
+    }
+    if (types.has("side")) {
+      return "Um acompanhamento para seu pedido?";
+    }
+    return "Combina com seu pedido";
+  }, [upsellSuggestions]);
 
   // Handle Coupon Validation
   const handleApplyCoupon = async (e?: React.FormEvent) => {
@@ -457,6 +478,7 @@ export default function CardapioCartDrawer({
   interface CartStepDefinition {
     id: string;
     label: string;
+    accessibleName?: string;
     fullTitle: string;
     sectionId: string;
   }
@@ -465,7 +487,7 @@ export default function CardapioCartDrawer({
     const rawSteps: CartStepDefinition[] = [
       { id: "items", label: "Itens", fullTitle: "Seu pedido", sectionId: "cart-items" },
       { id: "delivery", label: "Receber", fullTitle: "Como quer receber?", sectionId: "cart-receive-methods" },
-      ...(showDiscounts ? [{ id: "discounts", label: "Descontos", fullTitle: "Descontos & Benefícios", sectionId: "cart-discounts" }] : []),
+      ...(showDiscounts ? [{ id: "discounts", label: "Descontos", accessibleName: "Cupom", fullTitle: "Descontos & Benefícios", sectionId: "cart-discounts" }] : []),
       { id: "payment", label: "Pagamento", fullTitle: "Como quer pagar?", sectionId: "cart-payment-methods" },
       { id: "contact", label: "Contato", fullTitle: "Seu contato", sectionId: "cart-identification" },
     ];
@@ -714,7 +736,7 @@ export default function CardapioCartDrawer({
                 <button
                   key={step.sectionId}
                   type="button"
-                  aria-label={step.label}
+                  aria-label={step.accessibleName || step.label}
                   aria-expanded={isActive}
                   aria-controls={`${step.sectionId}-content`}
                   onClick={() => navigateToStep(step.sectionId)}
@@ -938,39 +960,94 @@ export default function CardapioCartDrawer({
 
               {/* Upselling / Cross-selling Carousel */}
               {activeSection === "cart-items" && upsellSuggestions.length > 0 && onAddToCart && (
-                <section className="border-t border-white/10 pt-4">
+                <section className="border-t border-white/10 pt-4" aria-label="Sugestões para acompanhar">
                   <div className="flex items-center gap-1.5 mb-2.5">
                     <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">Uma bebida ou sobremesa para acompanhar?</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">{upsellHeading}</h3>
                   </div>
                   <div className="flex gap-2.5 overflow-x-auto pb-2 no-scrollbar">
-                    {upsellSuggestions.map((prod) => (
-                      <div
-                        key={prod.id}
-                        className="min-w-[145px] max-w-[145px] bg-white/[0.03] border border-white/10 rounded-2xl p-2.5 flex flex-col justify-between shrink-0"
-                      >
-                        <img
-                          src={getProductImageUrl(prod.image)}
-                          alt={prod.name}
-                          className="h-18 w-full rounded-xl object-cover mb-2"
-                          onError={(e) => {
-                            e.currentTarget.onerror = null;
-                            e.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
-                          }}
-                        />
-                        <div>
-                          <h4 className="text-xs font-bold text-koma-foreground line-clamp-1">{prod.name}</h4>
-                          <span className="font-serif text-xs font-black text-emerald-400 block mt-0.5">{formatPrice(prod.price)}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleSuggestedProductAction(prod)}
-                          className="mt-2.5 w-full py-1.5 px-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-black flex items-center justify-center gap-1 transition cursor-pointer"
+                    {upsellSuggestions.map((prod) => {
+                      const cartItem = cart.find((item) => String(item.product.id) === String(prod.id));
+                      const qty = cartItem ? cartItem.quantity : 0;
+                      const hasModifiers = Boolean(
+                        (prod.modifierGroups && prod.modifierGroups.length > 0) ||
+                        (prod.modifiers && prod.modifiers.length > 0)
+                      );
+                      const isAvailable = prod.isAvailable !== false;
+
+                      return (
+                        <div
+                          key={prod.id}
+                          id={`upsell-card-${prod.id}`}
+                          className="min-w-[145px] max-w-[145px] bg-white/[0.03] border border-white/10 rounded-2xl p-2.5 flex flex-col justify-between shrink-0"
                         >
-                          <Plus className="w-3 h-3" /> Adicionar
-                        </button>
-                      </div>
-                    ))}
+                          <img
+                            src={getProductImageUrl(prod.image)}
+                            alt={prod.name}
+                            className="h-18 w-full rounded-xl object-cover mb-2"
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
+                            }}
+                          />
+                          <div>
+                            <h4 className="text-xs font-bold text-koma-foreground line-clamp-1">{prod.name}</h4>
+                            <span className="font-serif text-xs font-black text-emerald-400 block mt-0.5">{formatPrice(prod.price)}</span>
+                          </div>
+
+                          {!isAvailable ? (
+                            <span className="mt-2.5 w-full py-1 px-2 text-center text-[10px] font-bold text-stone-500 bg-white/5 rounded-full">
+                              Indisponível
+                            </span>
+                          ) : qty > 0 && !hasModifiers ? (
+                            <div className="mt-2.5 flex items-center justify-between w-full rounded-full bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-1">
+                              <button
+                                type="button"
+                                onClick={() => onUpdateQty(cartItem!.id, qty - 1)}
+                                className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-emerald-500/30 text-emerald-300 cursor-pointer"
+                                aria-label={`Diminuir ${prod.name}`}
+                                id={`btn-upsell-dec-${prod.id}`}
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <span className="font-mono text-xs font-black text-emerald-300" id={`upsell-qty-${prod.id}`}>
+                                {qty}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => onUpdateQty(cartItem!.id, qty + 1)}
+                                className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-emerald-500/30 text-emerald-300 cursor-pointer"
+                                aria-label={`Aumentar ${prod.name}`}
+                                id={`btn-upsell-inc-${prod.id}`}
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : qty > 0 && hasModifiers ? (
+                            <button
+                              type="button"
+                              onClick={() => handleSuggestedProductAction(prod)}
+                              className="mt-2.5 w-full py-1.5 px-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-full text-[10px] font-black flex items-center justify-center gap-1 transition cursor-pointer"
+                              id={`btn-upsell-edit-${prod.id}`}
+                              aria-label={`Montar outra ${prod.name}`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                              <span>Montar outra ({qty})</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSuggestedProductAction(prod)}
+                              className="mt-2.5 w-full py-1.5 px-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-black flex items-center justify-center gap-1 transition cursor-pointer"
+                              id={`btn-upsell-add-${prod.id}`}
+                              aria-label={`Adicionar ${prod.name}`}
+                            >
+                              <Plus className="w-3 h-3" /> {hasModifiers ? "Montar" : "Adicionar"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
               )}
@@ -1381,16 +1458,11 @@ export default function CardapioCartDrawer({
                 onClick={() => nextSection ? continueToSection(nextSection) : handleCheckout()}
                 disabled={!orderingEnabled || availablePayments.length === 0}
                 aria-label={!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextSection ? "Continuar" : "Revisar pedido"}
-                className="mt-4 koma-action-primary flex h-13 w-full items-center justify-between gap-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-stone-500 cursor-pointer"
+                className="mt-4 koma-action-primary flex h-13 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-stone-500 cursor-pointer"
                 id="btn-confirm-order"
               >
-                <span className="flex items-center gap-2">
-                  <span>{!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextSection ? "Continuar" : "Revisar pedido"}</span>
-                  {orderingEnabled && <ArrowRight className="h-4 w-4" />}
-                </span>
-                <span className="shrink-0 rounded-full bg-black/20 px-2.5 py-1 font-mono text-xs font-black text-emerald-100">
-                  {formatPrice(total)}
-                </span>
+                <span>{!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextSection ? "Continuar" : "Revisar pedido"}</span>
+                {orderingEnabled && <ArrowRight className="h-4 w-4" />}
               </button>
             </div>
           </>

@@ -102,13 +102,6 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
     target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
-  const product = products[0];
-  const actionLabel = product.marmitaria
-    ? 'Montar'
-    : (product.modifierGroups?.length || product.modifiers?.length)
-      ? 'Escolher'
-      : 'Pedir';
-
   return (
     <section aria-labelledby="popular-products-title" className="cardapio-popular-section w-full basis-full" id="popular-products-home">
       <div className="cardapio-showcase-header">
@@ -116,81 +109,94 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
         <span className="cardapio-showcase-badge">Favoritos dos clientes</span>
       </div>
 
-      <div className={`cardapio-popular-layout cardapio-popular-layout--${variant}`}>
-        {variant === 'catalog-first' ? (
-          /* Alternativa Compacta: Ribbon Integrado */
-          <button
-            key={product.id}
-            type="button"
-            role="listitem"
-            onClick={() => openProduct(product)}
-            className="cardapio-popular-card cardapio-popular-card--compact-ribbon"
-            aria-label={`Abrir ${product.name}`}
-          >
-            <div className="cardapio-popular-card__media-wrap">
-              <CatalogProductImage
-                image={product.image}
-                className="cardapio-popular-card__image"
-              />
-              <span className="cardapio-popular-card__rank-pill">#1</span>
-            </div>
-            <span className="cardapio-popular-card__content">
-              <span className="cardapio-popular-card__ribbon-eyebrow">
-                ★ Mais pedido da casa
-              </span>
-              <strong className="cardapio-popular-card__name">{product.name}</strong>
-              <span className="cardapio-popular-card__bottom">
-                <span className="cardapio-popular-card__price">{money(product.price)}</span>
-                <span className="cardapio-popular-card__action-btn">
-                  <span>{actionLabel}</span>
-                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+      <div className={`cardapio-popular-layout cardapio-popular-layout--${variant}`} role="list">
+        {products.map((product, index) => {
+          const actionLabel = product.marmitaria
+            ? 'Montar'
+            : (product.modifierGroups?.length || product.modifiers?.length)
+              ? 'Escolher'
+              : 'Pedir';
+          const isFirst = index === 0;
+          const rank = `#${index + 1}`;
+
+          if (variant === 'catalog-first' || !isFirst) {
+            return (
+              <button
+                key={product.id}
+                type="button"
+                role="listitem"
+                onClick={() => openProduct(product)}
+                className="cardapio-popular-card cardapio-popular-card--compact-ribbon"
+                aria-label={`Abrir ${product.name}`}
+              >
+                <div className="cardapio-popular-card__media-wrap">
+                  <CatalogProductImage
+                    image={product.image}
+                    className="cardapio-popular-card__image"
+                  />
+                  <span className="cardapio-popular-card__rank-pill">{rank}</span>
+                </div>
+                <span className="cardapio-popular-card__content">
+                  <span className="cardapio-popular-card__ribbon-eyebrow">
+                    {isFirst ? '★ Mais pedido da casa' : `★ Favorito ${rank}`}
+                  </span>
+                  <strong className="cardapio-popular-card__name">{product.name}</strong>
+                  <span className="cardapio-popular-card__bottom">
+                    <span className="cardapio-popular-card__price">{money(product.price)}</span>
+                    <span className="cardapio-popular-card__action-btn">
+                      <span>{actionLabel}</span>
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </span>
+                  </span>
                 </span>
-              </span>
-            </span>
-          </button>
-        ) : (
+              </button>
+            );
+          }
+
           /* Palco Culinário Artístico Principal (Hero de Alto Protagonismo com Geometria Orgânica) */
-          <button
-            key={product.id}
-            type="button"
-            role="listitem"
-            onClick={() => openProduct(product)}
-            className="cardapio-popular-card cardapio-popular-card--hero cardapio-popular-card--artistic"
-            aria-label={`Abrir ${product.name}`}
-          >
-            <KomaOrganicBackplate className="cardapio-popular-card__backplate" />
-            <div className="cardapio-popular-card__media-wrap">
-              <CatalogProductImage
-                image={product.image}
-                className="cardapio-popular-card__image"
-              />
-              <KomaSeloBadge
-                label="Nº 1 mais pedido"
-                icon="crown"
-                rank="#1"
-                className="cardapio-popular-card__selo-badge"
-              />
-            </div>
-            <span className="cardapio-popular-card__content">
-              <span className="cardapio-popular-card__copy">
-                <span className="cardapio-popular-card__eyebrow">
-                  ★ Destaque da cozinha
+          return (
+            <button
+              key={product.id}
+              type="button"
+              role="listitem"
+              onClick={() => openProduct(product)}
+              className="cardapio-popular-card cardapio-popular-card--hero cardapio-popular-card--artistic"
+              aria-label={`Abrir ${product.name}`}
+            >
+              <KomaOrganicBackplate className="cardapio-popular-card__backplate" />
+              <div className="cardapio-popular-card__media-wrap">
+                <CatalogProductImage
+                  image={product.image}
+                  className="cardapio-popular-card__image"
+                />
+                <KomaSeloBadge
+                  label="Nº 1 mais pedido"
+                  icon="crown"
+                  rank="#1"
+                  className="cardapio-popular-card__selo-badge"
+                />
+              </div>
+              <span className="cardapio-popular-card__content">
+                <span className="cardapio-popular-card__copy">
+                  <span className="cardapio-popular-card__eyebrow">
+                    ★ Destaque da cozinha
+                  </span>
+                  <strong className="cardapio-popular-card__name">{product.name}</strong>
+                  {product.description && (
+                    <span className="cardapio-popular-card__description">{product.description}</span>
+                  )}
                 </span>
-                <strong className="cardapio-popular-card__name">{product.name}</strong>
-                {product.description && (
-                  <span className="cardapio-popular-card__description">{product.description}</span>
-                )}
-              </span>
-              <span className="cardapio-popular-card__bottom">
-                <span className="cardapio-popular-card__price">{money(product.price)}</span>
-                <span className="cardapio-popular-card__action-btn">
-                  <span>{actionLabel}</span>
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                <span className="cardapio-popular-card__bottom">
+                  <span className="cardapio-popular-card__price">{money(product.price)}</span>
+                  <span className="cardapio-popular-card__action-btn">
+                    <span>{actionLabel}</span>
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </span>
                 </span>
               </span>
-            </span>
-          </button>
-        )}
+            </button>
+          );
+        })}
       </div>
     </section>
   );

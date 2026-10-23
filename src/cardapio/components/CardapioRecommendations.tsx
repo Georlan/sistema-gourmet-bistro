@@ -121,6 +121,11 @@ export function buildCatalogRecommendations(
   };
 
   const candidateRecs = excluded.size > 0 ? pickRecommendations(true) : pickRecommendations(false);
+  const hasRealPhoto = (img?: string) => Boolean(img) && !img?.startsWith('data:image/svg+xml');
+  const hasPhotoProducts = available.some((p) => hasRealPhoto(p.image));
+  if (hasPhotoProducts && !candidateRecs.some((r) => hasRealPhoto(r.product.image))) {
+    return pickRecommendations(false);
+  }
   return candidateRecs.length > 0 ? candidateRecs : pickRecommendations(false);
 }
 

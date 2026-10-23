@@ -53,6 +53,8 @@ const payload = {
     { id: 1, nome: 'Burgers' },
     { id: 2, nome: 'Combos' },
     { id: 3, nome: 'Porções' },
+    { id: 4, nome: 'Bebidas' },
+    { id: 5, nome: 'Sobremesas' },
   ],
   produtos: [
     {
@@ -94,6 +96,10 @@ const payload = {
     { id: 990013, nome: 'Combo da casa KÔMA', descricao: 'Burger artesanal, batata rústica crocante e bebida gelada à sua escolha.', preco: 44.9, imagem_url: '/mock-preview/drink-combo.jpg', categoria_id: 2, ordem_exibicao: 3, grupos_modificadores: [] },
     { id: 990014, nome: 'Batata rústica crocante', descricao: 'Porção individual de batatas rústicas com alecrim fresco e sal de parrilla.', preco: 18.5, imagem_url: '/mock-preview/porcao-fritas.jpg', categoria_id: 3, ordem_exibicao: 4, grupos_modificadores: [] },
     { id: 990015, nome: 'Molho especial da casa', descricao: 'Receita autoral à base de páprica defumada, ervas finas e mostarda dijon.', preco: 6.0, imagem_url: '', categoria_id: 3, ordem_exibicao: 5, grupos_modificadores: [] },
+    { id: 990016, nome: 'Suco de Laranja Natural 400ml', descricao: 'Frutas frescas da estação espremidas na hora, servido bem gelado.', preco: 12.0, imagem_url: '/mock-preview/drink-combo.jpg', categoria_id: 4, ordem_exibicao: 6, grupos_modificadores: [] },
+    { id: 990017, nome: 'Refrigerante Artesanal de Guaraná', descricao: 'Xarope natural de guaraná da Amazônia com gaseificação suave e toque cítrico.', preco: 9.5, imagem_url: '/mock-preview/drink-combo.jpg', categoria_id: 4, ordem_exibicao: 7, grupos_modificadores: [] },
+    { id: 990018, nome: 'Pudim de Leite KÔMA', descricao: 'Textura acetinada sem furinhos com abundante caramelo de cumaru.', preco: 14.5, imagem_url: '/mock-preview/burger-hero.jpg', categoria_id: 5, ordem_exibicao: 8, grupos_modificadores: [] },
+    { id: 990019, nome: 'Brownie artesanal com calda de chocolate', descricao: 'Cacau 70% com castanhas tostadas e calda morna aveludada.', preco: 17.0, imagem_url: '/mock-preview/smash-duplo.jpg', categoria_id: 5, ordem_exibicao: 9, grupos_modificadores: [] },
   ],
   promocoes: [
     {

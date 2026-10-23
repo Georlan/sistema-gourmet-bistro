@@ -42,6 +42,7 @@ export interface PairingRecommendationsParams {
   cartProductIds?: (string | number)[];
   focusedProductId?: string | number | null;
   limit?: number;
+  excludeCartItems?: boolean;
 }
 
 /**
@@ -50,21 +51,28 @@ export interface PairingRecommendationsParams {
  *
  * Invariantes:
  * - Nunca recomenda o produto atualmente em foco.
- * - Nunca recomenda produtos já adicionados na sacola.
+ * - Nunca recomenda pratos principais (mains como burgers/pizzas/marmitas) em seções de harmonização/upsell.
+ * - Se excludeCartItems for false (padrão), mantém as recomendações estáveis sem fazer cards sumirem ao adicionar.
  * - Nunca recomenda produtos indisponíveis (isAvailable === false).
- * - Retorna lista determinística e respeita o limite solicitado.
+ * - Se não houver complementos relevantes suficientes, retorna menos ou zero itens (nunca preenche com burgers).
  */
 export function getPairingRecommendations({
   catalog,
   cartProductIds = [],
   focusedProductId = null,
   limit = 4,
+  excludeCartItems = false,
 }: PairingRecommendationsParams): Product[] {
   if (!catalog || catalog.length === 0 || limit <= 0) return [];
 
-  const excludedIds = new Set(cartProductIds.map(String));
+  const excludedIds = new Set<string>();
   if (focusedProductId != null) {
     excludedIds.add(String(focusedProductId));
+  }
+  if (excludeCartItems) {
+    for (const id of cartProductIds) {
+      excludedIds.add(String(id));
+    }
   }
 
   // Apenas produtos disponíveis e não excluídos
@@ -74,29 +82,28 @@ export function getPairingRecommendations({
 
   if (eligible.length === 0) return [];
 
-  // Mapear produtos por categoria
+  // Mapear apenas complementos reais (bebidas, acompanhamentos, sobremesas e itens complementares)
+  // Pratos principais (mains) são expressamente excluídos de recomendações complementares
   const sides: Product[] = [];
   const beverages: Product[] = [];
   const desserts: Product[] = [];
   const others: Product[] = [];
-  const mains: Product[] = [];
 
   for (const product of eligible) {
     const classification = classifyProduct(product);
     if (classification === 'side') sides.push(product);
     else if (classification === 'beverage') beverages.push(product);
     else if (classification === 'dessert') desserts.push(product);
-    else if (classification === 'main') mains.push(product);
-    else others.push(product);
+    else if (classification === 'other') others.push(product);
   }
 
-  // Avaliar o que já está na sacola para balancear
-  const cartProducts = catalog.filter((p) =>
-    cartProductIds.map(String).includes(String(p.id))
-  );
+  // Avaliar o que já está na sacola para balancear sugestões
+  const cartProductSet = new Set(cartProductIds.map(String));
+  const cartProducts = catalog.filter((p) => cartProductSet.has(String(p.id)));
   const cartClassifications = new Set(cartProducts.map(classifyProduct));
   const hasBeverageInCart = cartClassifications.has('beverage');
   const hasSideInCart = cartClassifications.has('side');
+  const hasDessertInCart = cartClassifications.has('dessert');
 
   const result: Product[] = [];
   const selectedIds = new Set<string>();
@@ -109,28 +116,40 @@ export function getPairingRecommendations({
     result.push(prod);
   };
 
-  // 1. Se não tem acompanhamento no carrinho, oferecer o primeiro acompanhamento disponível
+  // Separação entre complementos ainda NÃO adicionados vs já adicionados na sacola
+  const unaddedSides = sides.filter((p) => !cartProductSet.has(String(p.id)));
+  const unaddedBeverages = beverages.filter((p) => !cartProductSet.has(String(p.id)));
+  const unaddedDesserts = desserts.filter((p) => !cartProductSet.has(String(p.id)));
+  const unaddedOthers = others.filter((p) => !cartProductSet.has(String(p.id)));
+
+  // 1. Se não tem acompanhamento no carrinho, oferecer acompanhamento
   if (!hasSideInCart && sides.length > 0) {
     pushIfEligible(sides[0]);
   }
 
-  // 2. Se não tem bebida no carrinho, oferecer a primeira bebida disponível
+  // 2. Se não tem bebida no carrinho, oferecer bebida
   if (!hasBeverageInCart && beverages.length > 0) {
     pushIfEligible(beverages[0]);
   }
 
-  // 3. Oferecer sobremesa
-  if (desserts.length > 0) {
+  // 3. Se não tem sobremesa no carrinho, oferecer sobremesa
+  if (!hasDessertInCart && desserts.length > 0) {
     pushIfEligible(desserts[0]);
   }
 
-  // 4. Preencher com demais bebidas e acompanhamentos alternativos
+  // 4. Se excludeCartItems for falso, incluir os complementos já presentes na sacola para manter estabilidade dos cards
+  if (!excludeCartItems) {
+    if (hasSideInCart && sides.length > 0) pushIfEligible(sides[0]);
+    if (hasBeverageInCart && beverages.length > 0) pushIfEligible(beverages[0]);
+    if (hasDessertInCart && desserts.length > 0) pushIfEligible(desserts[0]);
+  }
+
+  // 5. Preencher com demais complementos
   const candidatePool = [
-    ...beverages.slice(hasBeverageInCart ? 0 : 1),
-    ...sides.slice(hasSideInCart ? 0 : 1),
-    ...desserts.slice(1),
+    ...beverages,
+    ...sides,
+    ...desserts,
     ...others,
-    ...mains,
   ];
 
   for (const candidate of candidatePool) {

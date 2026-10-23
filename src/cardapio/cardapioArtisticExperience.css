@@ -820,6 +820,50 @@ html[data-theme="light"] .koma-art-stage-action-row {
   text-align: center;
 }
 
+.koma-art-pebble-custom-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 9999px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--art-emerald);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.koma-art-pebble-custom-btn:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: var(--art-emerald);
+}
+
+.koma-art-pebble-qty-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--art-emerald);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.koma-art-pebble-unavailable {
+  font-size: 10px;
+  font-weight: 800;
+  color: #78716c;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 3px 8px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+
 /* ========================================================
    6. ZONA 5: CATÁLOGO INDEXADO
    ======================================================== */

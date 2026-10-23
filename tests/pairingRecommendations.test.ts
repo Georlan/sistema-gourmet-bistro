@@ -111,3 +111,47 @@ test('getPairingRecommendations handles empty catalog or zero limit gracefully',
   assert.deepEqual(getPairingRecommendations({ catalog: [], limit: 4 }), []);
   assert.deepEqual(getPairingRecommendations({ catalog: mockCatalog, limit: 0 }), []);
 });
+
+test('getPairingRecommendations never fills slots with main dishes (burgers/pizzas)', () => {
+  const onlyBurgersAndOneDrink: Product[] = [
+    mockCatalog[0], // Burger Clássico (main)
+    mockCatalog[2], // Coca-Cola (beverage)
+  ];
+  const recs = getPairingRecommendations({
+    catalog: onlyBurgersAndOneDrink,
+    focusedProductId: null,
+    cartProductIds: [],
+    limit: 4,
+  });
+  // Should only return Coca-Cola, NEVER burger
+  assert.equal(recs.length, 1);
+  assert.equal(recs[0].id, '3');
+  assert.ok(!recs.some((p) => p.id === '1'));
+});
+
+test('getPairingRecommendations keeps recommended items stable when adding to cart', () => {
+  const recsInitial = getPairingRecommendations({
+    catalog: mockCatalog,
+    focusedProductId: '1',
+    cartProductIds: [],
+    limit: 3,
+    excludeCartItems: false,
+  });
+  assert.equal(recsInitial.length, 3);
+
+  // User adds Batata (id 2) to cart
+  const recsAfterAdd = getPairingRecommendations({
+    catalog: mockCatalog,
+    focusedProductId: '1',
+    cartProductIds: ['2'],
+    limit: 3,
+    excludeCartItems: false,
+  });
+
+  const idsAfter = recsAfterAdd.map((r) => r.id);
+  // Batata remains in the recommendation list without disappearing
+  assert.ok(idsAfter.includes('2'));
+  assert.ok(idsAfter.includes('3'));
+  assert.ok(idsAfter.includes('5'));
+});
+
