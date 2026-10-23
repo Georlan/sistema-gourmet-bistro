@@ -32,7 +32,7 @@ def _now() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
-def create_opt_out_token(restaurant_id: int, phone: str, db: Session) -> str:
+def create_opt_out_token(restaurant_id: int, phone: str, db: Session, *, marketing_only: bool = False) -> str:
     """One random 192-bit capability per actual send, reusable for 90 days.
 
     No plaintext token is stored, so it cannot be recovered or reused for later
@@ -46,6 +46,7 @@ def create_opt_out_token(restaurant_id: int, phone: str, db: Session) -> str:
         token_hash=hashlib.sha256(token.encode("ascii")).hexdigest(),
         restaurante_id=restaurant_id,
         phone_hash=recipient_fingerprint(restaurant_id, phone),
+        marketing_only=marketing_only,
         expires_at=_now() + dt.timedelta(days=90),
     ))
     db.flush()
@@ -118,19 +119,34 @@ def resolve_opt_out_token(token: str, db: Session | None = None) -> tuple[int, s
         raise ValueError("Link de descadastro inválido ou expirado.") from None
 
 
-def opt_out_url(restaurant_id: int, phone: str, db: Session) -> str:
+def opt_out_url(restaurant_id: int, phone: str, db: Session, *, marketing_only: bool = False) -> str:
     base = settings.KOMA_PUBLIC_APP_URL.rstrip("/")
     if not base.startswith("https://"):
         raise ValueError("URL pública segura não configurada.")
-    return f"{base}/w/a#{create_opt_out_token(restaurant_id, phone, db)}"
+    return f"{base}/w/a#{create_opt_out_token(restaurant_id, phone, db, marketing_only=marketing_only)}"
 
 
-def block_contact(db: Session, restaurant_id: int, digest: str) -> None:
+def marketing_only_capability(token: str, db: Session, restaurant_id: int) -> bool:
+    # Called only after signature/expiry/tenant resolution. Old compact/signed
+    # capabilities retain their original all-notices meaning.
+    if not re.fullmatch(r"[A-Za-z0-9_-]{32}", token):
+        return False
+    with tenant_session_scope(db, restaurant_id):
+        return db.query(WhatsAppOptOutCapability.marketing_only).filter_by(
+            token_hash=hashlib.sha256(token.encode("ascii")).hexdigest(),
+            restaurante_id=restaurant_id).scalar() is True
+
+
+def block_contact(db: Session, restaurant_id: int, digest: str, *, marketing_only: bool = False) -> None:
     # Dialect-native idempotency also handles simultaneous unsubscribe clicks.
     table = WhatsAppContactOptOut.__table__
     if db.get_bind().dialect.name == "postgresql":
         from sqlalchemy.dialects.postgresql import insert
     else:
         from sqlalchemy.dialects.sqlite import insert
-    db.execute(insert(table).values(restaurante_id=restaurant_id, phone_hash=digest,
-        created_at=dt.datetime.now(dt.timezone.utc)).on_conflict_do_nothing())
+    statement = insert(table).values(restaurante_id=restaurant_id, phone_hash=digest,
+        marketing_only=marketing_only, created_at=dt.datetime.now(dt.timezone.utc))
+    # An existing broader cancellation can never be weakened by a promo link.
+    db.execute(statement.on_conflict_do_update(
+        index_elements=[table.c.restaurante_id, table.c.phone_hash],
+        set_={"marketing_only": table.c.marketing_only & statement.excluded.marketing_only}))

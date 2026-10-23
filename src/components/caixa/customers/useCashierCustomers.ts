@@ -41,6 +41,7 @@ export function mapCustomers(clientes: any[], productsIncluded: boolean): Loyalt
             dias_sem_comprar: typeof c.dias_sem_comprar === 'number' ? c.dias_sem_comprar : null,
             segmento_relacionamento: c.segmento_relacionamento || 'SEM_COMPRA',
             telefone_valido_whatsapp: Boolean(c.telefone_valido_whatsapp),
+            whatsapp_campaign_interaction_verified: c.whatsapp_campaign_interaction_verified === true,
             opt_out_marketing: Boolean(c.opt_out_marketing),
             motivo_opt_out: c.motivo_opt_out ?? null,
             canal_preferido: c.canal_preferido || 'WHATSAPP',

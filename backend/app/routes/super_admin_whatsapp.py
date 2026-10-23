@@ -32,7 +32,7 @@ from ..services.whatsapp_sender_gate import _key, minimum_interval_seconds
 from .super_admin import _discover_restaurant_ids, get_current_admin
 
 router = APIRouter(prefix="/super-admin/whatsapp", tags=["SuperAdmin - WhatsApp"])
-_EVENTS = ("koma.whatsapp.central_operator_order", "koma.whatsapp.customer_status")
+_EVENTS = ("koma.whatsapp.central_operator_order", "koma.whatsapp.customer_status", "koma.whatsapp.campaign")
 _PENDING = ("pending", "failed", "processing")
 
 
@@ -117,12 +117,12 @@ def _queue_summary(db, rid: int, now: dt.datetime) -> dict:
     oldest_seconds = 0
     near_expiry = 0
     for event_name, status, notice_kind, count, oldest in rows:
-        label = "operador" if event_name == _EVENTS[0] else str(notice_kind or "cliente")
+        label = "campanha" if event_name == "koma.whatsapp.campaign" else "operador" if event_name == _EVENTS[0] else str(notice_kind or "cliente")
         by_kind[label] = by_kind.get(label, 0) + int(count)
         pending += int(count)
         age = max(0, int((now - (_as_utc(oldest) or now)).total_seconds()))
         oldest_seconds = max(oldest_seconds, age)
-        ttl = 600 if label in ("operador", "customer_received") else 1800
+        ttl = 172800 if label == "campanha" else 600 if label in ("operador", "customer_received") else 1800
         if age >= int(ttl * 0.8):
             # Lower bound: grouping retains the oldest timestamp, not each age.
             near_expiry += 1

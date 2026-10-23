@@ -5,7 +5,6 @@ import {
   ArrowRight,
   CheckCircle2,
   Copy,
-  ExternalLink,
   Gift,
   MessageSquare,
   Send,
@@ -15,7 +14,6 @@ import {
   Users,
 } from 'lucide-react';
 import {
-  buildManualWhatsAppUrl,
   DEFAULT_CRM_TEMPLATES,
   interpolateCrmTemplate,
   matchesCustomerSegment,
@@ -141,9 +139,21 @@ export function CustomerCampaignsWorkspace({
   // Estado de campanha salva e contatos registrados na sessão
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null);
   const [savingCampaign, setSavingCampaign] = useState(false);
+  const [centralCampaignsEnabled, setCentralCampaignsEnabled] = useState(false);
+  const campaignAuthKey = JSON.stringify(authHeaders);
+  useEffect(() => {
+    const controller = new AbortController();
+    setCentralCampaignsEnabled(false);
+    void fetch(`${apiBaseUrl}/fidelidade/crm/whatsapp/policy`, {
+      headers: JSON.parse(campaignAuthKey), signal: controller.signal,
+    }).then(async response => {
+      const policy = response.ok ? await response.json() : {};
+      if (!controller.signal.aborted) setCentralCampaignsEnabled(policy.enabled === true);
+    }).catch(() => { /* Fail closed; opening/sending stays blocked. */ });
+    return () => controller.abort();
+  }, [apiBaseUrl, campaignAuthKey]);
   const [recordingByCustomer, setRecordingByCustomer] = useState<Record<string, boolean>>({});
   const [recordedCustomerIds, setRecordedCustomerIds] = useState<Record<string, string>>({});
-  const [openedWhatsAppIds, setOpenedWhatsAppIds] = useState<Record<string, boolean>>({});
   const [awaitingInitialCustomers, setAwaitingInitialCustomers] = useState(false);
   // Refs are synchronous guards: React state alone does not prevent double clicks
   // or late responses from an older draft from unlocking the current contact queue.
@@ -157,7 +167,6 @@ export function CustomerCampaignsWorkspace({
     draftGenerationRef.current += 1;
     setActiveCampaignId(null);
     setRecordedCustomerIds({});
-    setOpenedWhatsAppIds({});
     setCopiedMessageIds({});
   };
 
@@ -444,9 +453,8 @@ export function CustomerCampaignsWorkspace({
       }
       setActiveCampaignId(data.id);
       setRecordedCustomerIds({});
-      setOpenedWhatsAppIds({});
-      setStep(3);
-      showToast('Campanha registrada! Use a fila abaixo para copiar ou abrir o WhatsApp individual e registrar cada ação.');
+        setStep(3);
+      showToast('Campanha registrada! Revise as mensagens na fila abaixo. O envio pelo KÔMA depende das autorizações e da interação comprovada.');
     } catch (err: any) {
       showToast(err.message || 'Erro ao salvar campanha.', 'error');
     } finally {
@@ -465,18 +473,7 @@ export function CustomerCampaignsWorkspace({
     }
   };
 
-  const handleOpenWhatsApp = (customer: LoyaltyCustomer, text: string) => {
-    const url = buildManualWhatsAppUrl(customer.telefone, text);
-    if (!url) {
-      showToast('Telefone inválido para abertura no WhatsApp.', 'error');
-      return;
-    }
-    // Browser popup success is not proof of a delivered or even sent message.
-    window.open(url, '_blank', 'noopener,noreferrer');
-    setOpenedWhatsAppIds((prev) => ({ ...prev, [customer.id]: true }));
-  };
-
-  const handleConfirmManualContact = async (customer: LoyaltyCustomer, renderedMessage: string) => {
+  const handleQueueCentralCampaign = async (customer: LoyaltyCustomer) => {
     const campaignId = activeCampaignId;
     if (!campaignId) {
       showToast('Salve a campanha antes de registrar contatos.', 'error');
@@ -487,29 +484,10 @@ export function CustomerCampaignsWorkspace({
     pendingContactIdsRef.current.add(customer.id);
     try {
       setRecordingByCustomer((prev) => ({ ...prev, [customer.id]: true }));
-      const beneficioResumo =
-        tipoAbordagem === 'SEM_DESCONTO'
-          ? 'Sem desconto (relacionamento)'
-          : tipoAbordagem === 'CUPOM' && selectedCoupon
-          ? `Cupom ${selectedCoupon.codigo}`
-          : customer.beneficio_disponivel || 'Saldo de fidelidade';
-
-      const res = await fetch(`${apiBaseUrl}/fidelidade/crm/contatos`, {
+      const res = await fetch(`${apiBaseUrl}/fidelidade/crm/campanhas/${encodeURIComponent(campaignId)}/whatsapp`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cliente_id: customer.id,
-          campanha_id: campaignId,
-          objetivo,
-          canal: 'WHATSAPP_MANUAL',
-          abordagem_tipo: tipoAbordagem,
-          acao_executada: 'CONTATO_MANUAL_CONFIRMADO',
-          observacao: beneficioResumo,
-          cupom_id: tipoAbordagem === 'CUPOM' ? selectedCupomId : null,
-          cupom_codigo: tipoAbordagem === 'CUPOM' && selectedCoupon ? selectedCoupon.codigo : null,
-          mensagem_personalizada: renderedMessage,
-          confirmado_pelo_operador: true,
-        }),
+        body: JSON.stringify({ cliente_id: customer.id }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -521,9 +499,9 @@ export function CustomerCampaignsWorkspace({
       }
       if (draftGenerationRef.current === draftGeneration) {
         setRecordedCustomerIds((prev) => ({ ...prev, [customer.id]: saved.id }));
-        showToast(`Contato manual com ${customer.cliente} registrado no histórico!`);
+        showToast(`Campanha preparada para ${customer.cliente}. Isso não comprova envio ou entrega.`);
       } else {
-        showToast('Contato registrado na campanha anterior; o novo rascunho continua sem esse registro.', 'info');
+        showToast('Preparação vinculada à campanha anterior; confira a fila antes de repetir.', 'info');
       }
       await onRefreshCustomers();
     } catch (err: any) {
@@ -543,6 +521,11 @@ export function CustomerCampaignsWorkspace({
 
   return (
     <div className="space-y-4 text-left animate-fade-in">
+      <p className="rounded-xl border border-koma-border p-3 text-xs text-koma-muted">
+        Campanhas saem pelo número do KÔMA: interação recebida e verificada nos últimos 21 dias,
+        intervalo de 7 dias por cliente e até 5 mensagens promocionais por dia no total, das 10h às 21h (Fortaleza).
+        Sem essa comprovação, o envio fica bloqueado. Os avisos de pedidos têm fila própria.
+      </p>
       <div className="flex flex-wrap items-center justify-between gap-3 py-1">
         <div>
           <h3 className="text-lg font-bold text-koma-foreground">Prepare uma campanha</h3>
@@ -919,7 +902,7 @@ export function CustomerCampaignsWorkspace({
         {/* Coluna Direita: Etapa 5 — Revisão, Prévia Individual e Registro Manual */}
         <div hidden={step !== 3} className="space-y-4">
           <p role="status" className="text-sm text-koma-muted">
-            {selectedCustomers.filter(c => recordedCustomerIds[c.id]).length} contatos registrados manualmente de {selectedCustomers.length} selecionados nesta sessão.
+            {selectedCustomers.filter(c => recordedCustomerIds[c.id]).length} preparações na fila central de {selectedCustomers.length} selecionados nesta sessão.
           </p>
           <section className="rounded-xl border border-koma-border bg-koma-panel p-3 sm:p-4 space-y-3">
             <div className="border-b border-koma-border pb-3">
@@ -934,13 +917,13 @@ export function CustomerCampaignsWorkspace({
                 )}
               </div>
               <p className="mt-1 text-xs text-amber-300/90">
-                Abrir o WhatsApp <strong>não comprova envio</strong>. Registre o contato somente após enviar a mensagem.
+                Revise a mensagem antes de preparar o envio central. Entrar na fila <strong>não comprova entrega</strong>.
               </p>
             </div>
 
             {selectedCustomers.length === 0 ? (
               <div className="rounded-xl border border-koma-border bg-koma-card p-6 text-center text-xs text-koma-muted">
-                Selecione uma oportunidade na aba <strong>Hoje</strong> ou escolha um objetivo com clientes elegíveis para liberar a fila individual.
+                Selecione uma oportunidade na aba <strong>Hoje</strong> ou escolha um objetivo com clientes elegíveis para preparar as mensagens da campanha.
               </div>
             ) : (
               <div className="space-y-3 max-h-[620px] overflow-y-auto pr-1">
@@ -950,10 +933,8 @@ export function CustomerCampaignsWorkspace({
                     customer,
                     benefitOverrideLabel,
                   );
-                  const waUrl = buildManualWhatsAppUrl(customer.telefone, previewText);
                   const isRecorded = Boolean(recordedCustomerIds[customer.id]);
                   const isRecording = Boolean(recordingByCustomer[customer.id]);
-                  const wasOpened = Boolean(openedWhatsAppIds[customer.id]);
 
                   return (
                     <article
@@ -983,14 +964,12 @@ export function CustomerCampaignsWorkspace({
 
                         {isRecorded ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-1 text-xs font-bold text-emerald-300">
-                            <CheckCircle2 size={12} /> Registro manual confirmado
+                            <CheckCircle2 size={12} /> Preparado na fila central
                           </span>
                         ) : customer.contato_recente ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-bold text-amber-300">
                             Contato recente ({customer.dias_desde_ultimo_contato ?? 0}d)
                           </span>
-                        ) : wasOpened ? (
-                          <span className="text-xs text-koma-muted">WhatsApp solicitado · envio não confirmado</span>
                         ) : copiedMessageIds[customer.id] ? (
                           <span className="text-xs text-koma-muted">Mensagem copiada · envio não confirmado</span>
                         ) : (
@@ -1002,18 +981,11 @@ export function CustomerCampaignsWorkspace({
                         {previewText}
                       </div>
 
-                      {!waUrl && (
-                        <p className="text-xs text-rose-400">
-                          Telefone inválido para abrir conversa no WhatsApp. Corrija o cadastro antes de abordar.
-                        </p>
-                      )}
 
-                      {wasOpened && !isRecorded && (
-                        <p className="text-xs text-amber-300">
-                          Abertura do WhatsApp solicitada. Isso não comprova envio; confirme abaixo apenas depois de enviar a mensagem.
-                        </p>
-                      )}
-
+                      {(!centralCampaignsEnabled || customer.whatsapp_campaign_interaction_verified !== true) &&
+                        <p role="status" className="text-xs text-koma-muted">
+                          {!centralCampaignsEnabled ? 'Campanhas centrais aguardam liberação do KÔMA.' : 'Bloqueado: falta interação recebida e verificada nos últimos 21 dias.'}
+                        </p>}
                       <div className="flex flex-wrap items-center gap-2 pt-1">
                         <button
                           type="button"
@@ -1025,32 +997,24 @@ export function CustomerCampaignsWorkspace({
 
                         <button
                           type="button"
-                          disabled={!waUrl || Boolean(customer.opt_out_marketing)}
-                          onClick={() => handleOpenWhatsApp(customer, previewText)}
-                          className="koma-btn-secondary inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold disabled:opacity-40"
-                        >
-                          <ExternalLink size={12} /> Abrir WhatsApp
-                        </button>
-
-                        <button
-                          type="button"
                           disabled={
+                            !centralCampaignsEnabled ||
+                            customer.whatsapp_campaign_interaction_verified !== true ||
                             isRecording ||
                             isRecorded ||
                             !activeCampaignId ||
-                            !waUrl ||
                             Boolean(customer.opt_out_marketing) ||
                             Boolean(customer.contato_recente)
                           }
-                          onClick={() => void handleConfirmManualContact(customer, previewText)}
+                          onClick={() => void handleQueueCentralCampaign(customer)}
                           className="koma-btn-primary inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold disabled:opacity-40"
                         >
                           <Send size={12} />
                           {isRecorded
-                            ? 'Contato manual registrado'
+                            ? 'Preparado na fila central'
                             : isRecording
                             ? 'Registrando…'
-                            : 'Registrar contato manual'}
+                            : 'Preparar envio pelo KÔMA'}
                         </button>
                       </div>
                     </article>

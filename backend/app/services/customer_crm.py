@@ -341,6 +341,9 @@ def enrich_customer_crm_payloads(
             ):
                 raw_phone = decrypt_field(enc_phone)
 
+        from .central_whatsapp_campaigns import interaction_verified
+        copy_item["whatsapp_campaign_interaction_verified"] = interaction_verified(pref, restaurante_id, raw_phone, utc_now)
+
         copy_item.update(
             {
                 "telefone_valido_whatsapp": is_valid_whatsapp_phone(raw_phone),

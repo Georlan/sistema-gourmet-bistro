@@ -43,3 +43,22 @@ test('falha na prévia bloqueia confirmação', async ({ page }) => {
   await expect(page.getByRole('alert')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Link indisponível' })).toBeDisabled();
 });
+
+test('saída de promoções preserva avisos de pedidos e outros restaurantes', async ({page}, info) => {
+  const requests: string[] = [];
+  await page.route('**/api/cardapio/whatsapp/opt-out**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    requests.push(pathname);
+    return route.fulfill({json: pathname.endsWith('/preview') ?
+      {restaurant_name:'Loja de teste', marketing_only:true} : {disabled:true}});
+  });
+  await page.goto('/w/a#'+'D'.repeat(32));
+  await expect(page.getByRole('heading',{name:'Parar promoções pelo WhatsApp'})).toBeVisible();
+  await expect(page.getByText('Confirme para parar somente as promoções deste restaurante.',{exact:false})).toBeVisible();
+  expect(requests.every(p=>p.endsWith('/preview'))).toBe(true);
+  await page.getByRole('button',{name:'Parar promoções de Loja de teste',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Promoções desativadas'})).toBeVisible();
+  await expect(page.getByText('Os avisos dos seus pedidos continuam disponíveis.',{exact:false})).toBeVisible();
+  expect(requests.filter(p=>!p.endsWith('/preview'))).toHaveLength(1);
+  if(process.env.KOMA_VISUAL_OUTPUT_DIR) await page.screenshot({path:pathModule.join(process.env.KOMA_VISUAL_OUTPUT_DIR,`saida-promocoes-${info.project.name}.png`),fullPage:true});
+});
