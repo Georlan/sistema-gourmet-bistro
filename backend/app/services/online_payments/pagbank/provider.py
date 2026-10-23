@@ -24,16 +24,29 @@ def _failure_reference(response: httpx.Response) -> str:
     if not re.fullmatch(r'[A-Za-z0-9._:-]{1,80}', request_id):
         request_id = ''
     code = ''
+    parameter = ''
     try:
         data = response.json()
         errors = data.get('error_messages', []) if isinstance(data, dict) else []
-        candidate = errors[0].get('code', '') if isinstance(errors, list) and errors and isinstance(errors[0], dict) else ''
+        first_error = errors[0] if isinstance(errors, list) and errors and isinstance(errors[0], dict) else {}
+        candidate = first_error.get('code', '')
         if isinstance(candidate, str) and re.fullmatch(r'[A-Z0-9_-]{1,64}', candidate):
             code = candidate
-    except ValueError:
+        # Never log arbitrary PagBank messages or input values: those may contain buyer PII.
+        # Only capture a syntactically valid field path rooted in the documented Order schema.
+        candidate = first_error.get('parameter_name', '')
+        if isinstance(candidate, str) and re.fullmatch(
+            r'(?:reference_id|customer|items|charges|notification_urls)'
+            r'(?:\[\d{1,2}\]|\.(?:reference_id|name|email|tax_id|quantity|unit_amount|'
+            r'description|amount|value|currency|payment_method|type|pix|expiration_date)){0,12}',
+            candidate
+        ):
+            parameter = candidate
+    except (ValueError, TypeError):
         pass
-    logger.warning('PagBank API failure status=%s provider_code=%s provider_request_id=%s',
-                   response.status_code, code or 'unavailable', request_id or 'unavailable')
+    logger.warning('PagBank API failure status=%s provider_code=%s provider_parameter=%s provider_request_id=%s',
+                   response.status_code, code or 'unavailable', parameter or 'unavailable',
+                   request_id or 'unavailable')
     return ''.join((f' Código: {code}.' if code else '', f' Referência PagBank: {request_id}.' if request_id else ''))
 
 
@@ -105,12 +118,13 @@ class PagBankProvider:
             raise PagBankError('PagBank no KÔMA não cobra taxa de plataforma.')
         if not payer_name or not (is_valid_cpf(payer_tax_id) or is_valid_cnpj(payer_tax_id)):
             raise PagBankError('Informe nome e CPF/CNPJ do comprador para gerar o Pix PagBank.')
+        expiration_date = expires_at.astimezone(datetime.timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
         data = self._request('POST', '/orders', headers={'x-idempotency-key': idempotency_key}, json={
             'reference_id': external_reference,
             'customer': {'name': payer_name, 'email': payer_email, 'tax_id': payer_tax_id},
             'items': [{'name': 'Pedido KOMA', 'quantity': 1, 'unit_amount': cents(amount)}],
             'charges': [{'reference_id': external_reference, 'amount': {'value': cents(amount), 'currency': 'BRL'},
-                         'payment_method': {'type': 'PIX', 'pix': {'expiration_date': expires_at.isoformat()}}}],
+                         'payment_method': {'type': 'PIX', 'pix': {'expiration_date': expiration_date}}}],
             'notification_urls': [notification_url],
         })
         payment = self._map(data)

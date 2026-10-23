@@ -28,7 +28,7 @@ from .mercado_pago import MercadoPagoError, MercadoPagoProvider
 from .provider_registry import UnsupportedPaymentProviderError, provider_for_account
 from .oauth import MercadoPagoOAuthError, refresh_access_token
 from .account_connection import is_marketplace_owner_account
-from .pagbank.oauth import PagBankOAuthError, refresh_access_token as refresh_pagbank, environment_for_restaurant as pagbank_environment, is_application_owner, credential as pagbank_credential
+from .pagbank.oauth import PagBankOAuthError, refresh_access_token as refresh_pagbank, environment_for_restaurant as pagbank_environment, is_application_owner, credential as pagbank_credential, owner_receiver_blocked, owner_receiver_pilot_enabled
 
 
 MONEY = Decimal("0.01")
@@ -193,12 +193,13 @@ class OnlinePaymentService:
         ).exists()
         environment = pagbank_environment(restaurant_id)
         application_owner = pagbank_credential('APPLICATION_OWNER_ACCOUNT_ID', environment)
+        owner_allowed = owner_receiver_pilot_enabled(restaurant_id, environment=environment)
         pagbank = db.query(RestaurantPaymentAccount.id).filter(
             RestaurantPaymentAccount.restaurante_id == restaurant_id,
             RestaurantPaymentAccount.provider == "pagbank",
             RestaurantPaymentAccount.provider_environment == environment,
             RestaurantPaymentAccount.status == "active",
-            RestaurantPaymentAccount.provider_user_id != application_owner if application_owner else True,
+            RestaurantPaymentAccount.provider_user_id != application_owner if (application_owner and not owner_allowed) else True,
         ).exists()
         mercado_pago = db.query(RestaurantPaymentAccount.id).filter(
             RestaurantPaymentAccount.restaurante_id == restaurant_id,
@@ -275,7 +276,7 @@ class OnlinePaymentService:
             if _token_needs_refresh(account.token_expires_at):
                 account = cls._refresh_account_credentials(db, account)
         elif account.provider == "pagbank":
-            if is_application_owner(account.provider_user_id, environment=account.provider_environment):
+            if owner_receiver_blocked(restaurant_id, account.provider_user_id, environment=account.provider_environment):
                 raise OnlinePaymentConfigurationError('A conta proprietária da aplicação KÔMA não pode receber vendas como restaurante.')
             if account.provider_environment != pagbank_environment(restaurant_id):
                 raise OnlinePaymentConfigurationError("Reconecte o PagBank no ambiente atual antes de receber Pix.")

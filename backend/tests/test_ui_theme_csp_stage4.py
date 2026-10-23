@@ -95,16 +95,16 @@ def test_koma_logo_uses_explicit_background_variants_and_semantic_text_color():
     assert 'href="/logo-koma.png"' in html
 
 
-def test_sentry_is_optional_and_csp_allows_only_ingestion_not_remote_scripts():
+def test_sentry_is_completely_removed_and_csp_forbids_remote_scripts():
     main = source("src/main.tsx")
     headers = source("public/_headers")
     index = source("index.html")
     env_example = source(".env.example")
     lowered = (headers + "\n" + index).lower()
 
-    assert "const sentryDsn = import.meta.env.VITE_SENTRY_DSN" in main
-    assert "if (sentryDsn)" in main
-    assert 'VITE_SENTRY_DSN=""' in env_example
+    assert "sentryDsn" not in main
+    assert "@sentry/react" not in main
+    assert "VITE_SENTRY_DSN" not in env_example
 
     assert "script-src 'self';" in headers
     script_src = headers.split("script-src", 1)[1].split(";", 1)[0]
@@ -113,9 +113,7 @@ def test_sentry_is_optional_and_csp_allows_only_ingestion_not_remote_scripts():
     assert "cloudflareinsights" not in lowered
     assert "beacon.min.js" not in lowered
 
-    assert "https://*.ingest.sentry.io" in headers
-    assert "https://*.ingest.us.sentry.io" in headers
-    assert "https://*.ingest.de.sentry.io" in headers
+    assert "sentry.io" not in headers
 
 
 def test_csp_preserves_required_integrations_and_postal_code_lookup():

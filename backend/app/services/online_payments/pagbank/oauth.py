@@ -154,6 +154,26 @@ def is_application_owner(account_id: str | None, *, environment: str) -> bool:
     return bool(owner and account_id and hmac.compare_digest(owner, str(account_id)))
 
 
+def owner_receiver_pilot_enabled(restaurant_id: int, *, environment: str) -> bool:
+    """Opt-in exclusively for restaurant 8 in production, never for other tenants/Sandbox.
+
+    This does NOT supply a seller token. The PagBank seller must independently
+    authorize Connect and the account must stay bound to the same restaurant.
+    """
+    return (
+        int(restaurant_id) == 8
+        and environment == 'production'
+        and environment_for_restaurant(8) == 'production'
+        and env('PAGBANK_PRODUCTION_OWNER_RECEIVER_PILOT8') == 'true'
+    )
+
+
+def owner_receiver_blocked(restaurant_id: int, account_id: str | None, *, environment: str) -> bool:
+    return is_application_owner(account_id, environment=environment) and not owner_receiver_pilot_enabled(
+        restaurant_id, environment=environment,
+    )
+
+
 def _return_origins() -> dict[str, str]:
     # Short signed identifiers keep state within Connect's 128-character limit.
     return {**{str(i): value for i, value in enumerate(OFFICIAL_PUBLIC_FRONTEND_ORIGINS)}, 'c': settings.KOMA_PUBLIC_APP_URL}

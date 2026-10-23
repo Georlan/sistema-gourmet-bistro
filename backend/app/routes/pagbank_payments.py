@@ -39,10 +39,11 @@ def _account(db, rid):
 
 @router.get('/pagbank/status')
 def connection_status(db: Session = Depends(get_db), user: Usuario = Depends(require_permission('configuracoes:administrar'))):
-    environment = oauth.environment_for_restaurant(require_tenant_id())
-    account = _account(db, require_tenant_id())
+    rid = require_tenant_id()
+    environment = oauth.environment_for_restaurant(rid)
+    account = _account(db, rid)
     return {'provider': 'pagbank', 'configured': oauth.configured(environment), 'environment': environment,
-            'connected': bool(account and account.access_token and account.status == 'active' and account.provider_environment == environment and not oauth.is_application_owner(account.provider_user_id, environment=environment)), 'status': account.status if account else 'disconnected',
+            'connected': bool(account and account.access_token and account.status == 'active' and account.provider_environment == environment and not oauth.owner_receiver_blocked(rid, account.provider_user_id, environment=environment)), 'status': account.status if account else 'disconnected',
             'provider_user_id': account.provider_user_id if account else None}
 
 
@@ -103,7 +104,7 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
                 oauth.log_sandbox_oauth_evidence('connection_evidence_only', restaurant_id=rid, state=state)
                 return {'status': 'sandbox_evidence_captured'}
 
-            if oauth.is_application_owner(tokens.provider_user_id, environment=environment):
+            if oauth.owner_receiver_blocked(rid, tokens.provider_user_id, environment=environment):
                 oauth.log_sandbox_oauth_evidence('connection_rejected_owner', restaurant_id=rid, state=state)
                 raise HTTPException(409, 'A conta proprietária da aplicação KÔMA não pode receber vendas como restaurante.')
             guard_receiver_change(db, restaurant_id=rid, provider='pagbank',
