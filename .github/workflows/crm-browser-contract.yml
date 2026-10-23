@@ -7,6 +7,12 @@ on:
       - 'backend/app/services/customer_crm.py'
       - 'e2e/customer-crm.spec.ts'
       - 'e2e/crm-api-contract.spec.ts'
+      - 'e2e/whatsapp-marketing-consent.spec.ts'
+      - 'e2e/cardapio-whatsapp-optout.spec.ts'
+      - 'src/cardapio/WhatsAppConsentPage.tsx'
+      - 'src/cardapio/WhatsAppOptOutPage.tsx'
+      - 'src/cardapio/whatsappOptOutToken.ts'
+      - 'src/main.tsx'
       - 'e2e/fixtures/crm-api-contract.json'
       - '.github/workflows/crm-browser-contract.yml'
   workflow_dispatch:
@@ -15,7 +21,9 @@ permissions:
 jobs:
   crm-browser:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Hosted runner provisioning took >5 min before the 90-case CRM matrix.
+    # Keep the full matrix plus private consent/opt-out checks within one job.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,6 +36,10 @@ jobs:
         env:
           KOMA_E2E_PORT: '4299'
         run: npm run test:e2e -- --workers=2 e2e/customer-crm.spec.ts e2e/crm-api-contract.spec.ts
+      - name: Consent invitation and scoped opt-out on mobile and desktop
+        env:
+          KOMA_E2E_PORT: '4299'
+        run: npm run test:e2e -- --workers=2 --project=mobile-390 --project=desktop-1366 e2e/whatsapp-marketing-consent.spec.ts e2e/cardapio-whatsapp-optout.spec.ts
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

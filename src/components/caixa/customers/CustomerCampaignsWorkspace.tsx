@@ -140,17 +140,34 @@ export function CustomerCampaignsWorkspace({
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null);
   const [savingCampaign, setSavingCampaign] = useState(false);
   const [centralCampaignsEnabled, setCentralCampaignsEnabled] = useState(false);
+  const [consentAvailable, setConsentAvailable] = useState(false);
+  const [invitationLinks, setInvitationLinks] = useState<Record<string,string>>({});
+  const [preparingConsentId, setPreparingConsentId] = useState<string|null>(null);
+  const [checkingConsentId, setCheckingConsentId] = useState<string|null>(null);
+  const [consentChecks, setConsentChecks] = useState<Record<string,{phone:string;verified:boolean;optedOut:boolean}>>({});
+  const consentEpochRef = useRef(0);
+  const consentPendingRef = useRef(false);
   const campaignAuthKey = JSON.stringify(authHeaders);
   useEffect(() => {
     const controller = new AbortController();
     setCentralCampaignsEnabled(false);
+    setConsentAvailable(false);
+    setInvitationLinks({});
+    setConsentChecks({});
+    setCheckingConsentId(null);
+    consentEpochRef.current += 1;
+    consentPendingRef.current = false;
+    setPreparingConsentId(null);
     void fetch(`${apiBaseUrl}/fidelidade/crm/whatsapp/policy`, {
       headers: JSON.parse(campaignAuthKey), signal: controller.signal,
     }).then(async response => {
       const policy = response.ok ? await response.json() : {};
-      if (!controller.signal.aborted) setCentralCampaignsEnabled(policy.enabled === true);
+      if (!controller.signal.aborted) {
+        setCentralCampaignsEnabled(policy.enabled === true);
+        setConsentAvailable(policy.consent_available === true);
+      }
     }).catch(() => { /* Fail closed; opening/sending stays blocked. */ });
-    return () => controller.abort();
+    return () => { controller.abort(); consentEpochRef.current += 1; };
   }, [apiBaseUrl, campaignAuthKey]);
   const [recordingByCustomer, setRecordingByCustomer] = useState<Record<string, boolean>>({});
   const [recordedCustomerIds, setRecordedCustomerIds] = useState<Record<string, string>>({});
@@ -460,6 +477,53 @@ export function CustomerCampaignsWorkspace({
     } finally {
       savingCampaignRef.current = false;
       setSavingCampaign(false);
+    }
+  };
+
+  const prepareConsent = async (customer: LoyaltyCustomer) => {
+    if (!consentAvailable || consentPendingRef.current || customer.opt_out_marketing) return;
+    const epoch = consentEpochRef.current;
+    consentPendingRef.current = true;
+    setPreparingConsentId(customer.id);
+    try {
+      const response = await fetch(`${apiBaseUrl}/fidelidade/crm/clientes/${encodeURIComponent(customer.id)}/whatsapp/consent`, {
+        method:'POST', headers:authHeaders,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Não foi possível preparar o convite.');
+      const link = new URL(data.url);
+      if (link.protocol !== 'https:' || link.pathname !== '/w/c' || link.hash.length < 33 || data.consent_confirmed !== false) throw new Error('O servidor não confirmou um convite válido.');
+      if (epoch !== consentEpochRef.current) return;
+      setInvitationLinks(current=>({...current,[customer.id]:data.url}));
+      showToast('Convite preparado. O cliente precisa confirmar pelo próprio WhatsApp. Nenhuma mensagem foi enviada.');
+    } catch (error) {
+      if (epoch === consentEpochRef.current) showToast(error instanceof Error ? error.message : 'Falha ao preparar convite.');
+    } finally {
+      if (epoch === consentEpochRef.current) {consentPendingRef.current=false;setPreparingConsentId(null);}
+    }
+  };
+
+  const checkConsent = async (customer: LoyaltyCustomer) => {
+    if (consentPendingRef.current) return;
+    const epoch=consentEpochRef.current;
+    consentPendingRef.current=true;
+    setCheckingConsentId(customer.id);
+    try {
+      const query=new URLSearchParams({ids:customer.id,limit:'1',offset:'0'});
+      const response=await fetch(`${apiBaseUrl}/fidelidade/clientes?${query}`,{headers:authHeaders,cache:'no-store'});
+      if(!response.ok)throw new Error('Não foi possível conferir o aceite.');
+      const data=await response.json();
+      if(!Array.isArray(data))throw new Error('Resposta de clientes inválida.');
+      const current=mapCustomers(data,response.headers.get('X-Products-Included')!=='false').find(item=>item.id===customer.id);
+      if(!current)throw new Error('Cliente indisponível nesta consulta.');
+      if(epoch!==consentEpochRef.current)return;
+      const verified=current.whatsapp_campaign_interaction_verified===true;
+      setConsentChecks(previous=>({...previous,[customer.id]:{phone:current.telefone,verified,optedOut:Boolean(current.opt_out_marketing)}}));
+      showToast(verified ? 'Confirmação recebida. O envio ainda depende das regras da campanha.' : 'A confirmação ainda não foi recebida para este telefone.');
+    } catch(error) {
+      if(epoch===consentEpochRef.current)showToast(error instanceof Error ? error.message : 'Falha ao conferir aceite.');
+    } finally {
+      if(epoch===consentEpochRef.current){consentPendingRef.current=false;setCheckingConsentId(null);}
     }
   };
 
@@ -935,6 +999,11 @@ export function CustomerCampaignsWorkspace({
                   );
                   const isRecorded = Boolean(recordedCustomerIds[customer.id]);
                   const isRecording = Boolean(recordingByCustomer[customer.id]);
+                  const consentCheck=consentChecks[customer.id];
+                  const interactionVerified=consentCheck
+                    ? consentCheck.phone===customer.telefone && consentCheck.verified
+                    : customer.whatsapp_campaign_interaction_verified===true;
+                  const contactOptedOut=Boolean(customer.opt_out_marketing || consentCheck?.optedOut);
 
                   return (
                     <article
@@ -982,10 +1051,27 @@ export function CustomerCampaignsWorkspace({
                       </div>
 
 
-                      {(!centralCampaignsEnabled || customer.whatsapp_campaign_interaction_verified !== true) &&
+                      {(!centralCampaignsEnabled || !interactionVerified) &&
                         <p role="status" className="text-xs text-koma-muted">
                           {!centralCampaignsEnabled ? 'Campanhas centrais aguardam liberação do KÔMA.' : 'Bloqueado: falta interação recebida e verificada nos últimos 21 dias.'}
                         </p>}
+                      {consentAvailable && !interactionVerified && !contactOptedOut &&
+                        <div className="space-y-2 rounded-xl border border-koma-border p-3 text-xs">
+                          <p>Se o cliente pediu ofertas desta loja, prepare um convite para ele confirmar pelo próprio WhatsApp. Não envie convites em massa.</p>
+                          <button type="button" className="koma-btn-secondary rounded-xl px-3 py-2 font-bold disabled:opacity-40"
+                            disabled={preparingConsentId !== null || checkingConsentId !== null} onClick={()=>void prepareConsent(customer)}>
+                            {preparingConsentId===customer.id ? 'Preparando convite…' : 'Preparar convite de aceite'}
+                          </button>
+                          {invitationLinks[customer.id] && <>
+                            <input aria-label={`Convite de ofertas para ${customer.cliente}`} readOnly value={invitationLinks[customer.id]} className="w-full rounded-lg border border-koma-border bg-koma-panel p-2" />
+                            <button type="button" className="koma-btn-secondary rounded-xl px-3 py-2 font-bold"
+                              onClick={()=>{void navigator.clipboard.writeText(invitationLinks[customer.id]).then(()=>showToast('Convite copiado. O aceite continua pendente.'),()=>showToast('Não foi possível copiar. Selecione o link no campo.'));}}>Copiar convite</button>
+                            <button type="button" className="koma-btn-secondary rounded-xl px-3 py-2 font-bold disabled:opacity-40"
+                              disabled={preparingConsentId!==null || checkingConsentId!==null} onClick={()=>void checkConsent(customer)}>
+                              {checkingConsentId===customer.id ? 'Conferindo aceite…' : 'Conferir aceite'}
+                            </button>
+                          </>}
+                        </div>}
                       <div className="flex flex-wrap items-center gap-2 pt-1">
                         <button
                           type="button"
@@ -999,11 +1085,11 @@ export function CustomerCampaignsWorkspace({
                           type="button"
                           disabled={
                             !centralCampaignsEnabled ||
-                            customer.whatsapp_campaign_interaction_verified !== true ||
+                            !interactionVerified ||
                             isRecording ||
                             isRecorded ||
                             !activeCampaignId ||
-                            Boolean(customer.opt_out_marketing) ||
+                            contactOptedOut ||
                             Boolean(customer.contato_recente)
                           }
                           onClick={() => void handleQueueCentralCampaign(customer)}

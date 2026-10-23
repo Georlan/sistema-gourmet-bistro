@@ -44,4 +44,4 @@ jobs:
           DATABASE_URL: sqlite:///./crm_ci_test.db
           CRM_POSTGRES_TEST_URL: postgresql+psycopg2://postgres:crm-local-test-only@127.0.0.1:5432/koma_crm
           PYTHONPATH: backend
-        run: python -m pytest backend/tests/test_crm_migration_postgres.py backend/tests/test_crm_contact_concurrency_postgres.py backend/tests/test_crm_operational_evolution.py -q -ra
+        run: python -m pytest backend/tests/test_crm_migration_postgres.py backend/tests/test_crm_contact_concurrency_postgres.py backend/tests/test_crm_whatsapp_consent_postgres.py backend/tests/test_crm_operational_evolution.py -q -ra

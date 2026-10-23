@@ -25,6 +25,7 @@ from ..models import (
     Lancamento,
     Pagamento,
     Produto,
+    WhatsAppContactOptOut,
 )
 from ..timezone_utils import get_utc_now, to_utc
 from .customer_relationship import (
@@ -228,6 +229,15 @@ def enrich_customer_crm_payloads(
         .all()
     )
     prefs_by_cid = {str(row.cliente_id): row for row in prefs_rows}
+    # Only proven contacts need the shared WhatsApp cancellation lookup. One
+    # bounded query for the whole page; no new SQL for unproven customers.
+    proof_hashes={row.whatsapp_interaction_phone_hash for row in prefs_rows
+        if row.whatsapp_marketing_opt_in and row.whatsapp_interaction_phone_hash}
+    blocked_proof_hashes=set()
+    if proof_hashes:
+        blocked_proof_hashes={row[0] for row in db.query(WhatsAppContactOptOut.phone_hash).filter(
+            WhatsAppContactOptOut.restaurante_id==restaurante_id,
+            WhatsAppContactOptOut.phone_hash.in_(proof_hashes)).all()}
 
     # 2. Último contato registrado por cliente
     contatos_rows = (
@@ -342,7 +352,17 @@ def enrich_customer_crm_payloads(
                 raw_phone = decrypt_field(enc_phone)
 
         from .central_whatsapp_campaigns import interaction_verified
-        copy_item["whatsapp_campaign_interaction_verified"] = interaction_verified(pref, restaurante_id, raw_phone, utc_now)
+        proof_valid=interaction_verified(pref, restaurante_id, raw_phone, utc_now)
+        if pref and pref.whatsapp_interaction_phone_hash in blocked_proof_hashes:
+            from .central_whatsapp import recipient_fingerprint
+            try:
+                same_phone=recipient_fingerprint(restaurante_id,raw_phone)==pref.whatsapp_interaction_phone_hash
+            except (ValueError,TypeError):
+                same_phone=False
+            if same_phone:
+                opt_out=True
+                motivo_opt_out=motivo_opt_out or "Cancelamento de promoções pelo WhatsApp."
+        copy_item["whatsapp_campaign_interaction_verified"] = proof_valid and not opt_out
 
         copy_item.update(
             {

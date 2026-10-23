@@ -27,6 +27,7 @@ class CrmClientePreferencia(Base):
 
     __tablename__ = "crm_clientes_preferencias"
     __table_args__ = (
+        Index("ix_crm_whatsapp_consent_nonce", "restaurante_id", "whatsapp_consent_nonce_hash", unique=True),
         UniqueConstraint(
             "restaurante_id",
             "cliente_id",
@@ -55,6 +56,10 @@ class CrmClientePreferencia(Base):
     cliente_id = Column(String, nullable=False, index=True)
     opt_out_marketing = Column(Boolean, default=False, nullable=False)
     # Only an authenticated inbound adapter may write interaction proof.
+    whatsapp_consent_nonce_hash = Column(String(64), nullable=True)
+    whatsapp_consent_expires_at = Column(DateTime(timezone=True), nullable=True)
+    whatsapp_consent_message_hash = Column(String(64), nullable=True)
+    whatsapp_marketing_consented_at = Column(DateTime(timezone=True), nullable=True)
     whatsapp_interaction_at = Column(DateTime(timezone=True), nullable=True)
     whatsapp_interaction_phone_hash = Column(String(64), nullable=True)
     whatsapp_marketing_opt_in = Column(Boolean, nullable=False, default=False, server_default="false")

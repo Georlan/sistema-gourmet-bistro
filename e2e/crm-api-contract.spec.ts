@@ -493,3 +493,50 @@ test('campanha sem interação verificada não abre WhatsApp nem cria envio cent
   expect(popups).toBe(0);
   if(process.env.KOMA_EVIDENCE_DIR) await page.screenshot({path:`${process.env.KOMA_EVIDENCE_DIR}/campanha-bloqueada-${info.project.name}.png`,fullPage:true});
 });
+
+test('preparar convite não habilita campanha nem comprova consentimento', async ({page}, info) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.route('**/fidelidade/crm/whatsapp/policy', route => route.fulfill({json:{enabled:true,consent_available:true}}));
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  let proofReceived=false;
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => route.fulfill({json:contract.customers.map((customer:any)=>({...customer,whatsapp_campaign_interaction_verified:proofReceived}))}));
+  await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json:contract.summary}));
+  await page.route('**/fidelidade/crm/campanhas', route => route.fulfill({json:{id:'blocked-campaign'}}));
+  let sends = 0;
+  let invites=0;
+  await page.route('**/fidelidade/crm/clientes/*/whatsapp/consent',route=>{invites++;return route.fulfill({json:{url:'https://app.komafood.com.br/w/c#'+'fixture-invitation-token'.repeat(4),consent_confirmed:false}});});
+  let popups = 0;
+  page.on('popup', () => popups++);
+  await page.route('**/fidelidade/crm/campanhas/*/whatsapp', route => { sends++; return route.fulfill({json:{id:'must-not-queue'}}); });
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  if (!(await page.locator('.cashier-sidebar:visible').count())) {
+    const menu=page.getByRole('button',{name:'Abrir menu completo',exact:true});
+    if(await menu.isVisible()) await menu.click();
+    else await page.getByRole('button',{name:'Abrir menu principal',exact:true}).click();
+  }
+  await page.locator('.cashier-sidebar:visible').getByRole('button',{name:/^Relacionamento(?: \d+)?$/}).click();
+  const opportunity=contract.summary.oportunidades.find((op:{elegiveis_count:number})=>op.elegiveis_count>0);
+  await page.locator('article').filter({has:page.getByRole('heading',{name:opportunity.titulo,exact:true})}).getByRole('button',{name:'Preparar ação',exact:true}).click();
+  await page.getByRole('button',{name:'Continuar para mensagem',exact:true}).click();
+  await page.getByRole('button',{name:'Salvar e revisar contatos',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Preparar envio pelo KÔMA',exact:true}).first()).toBeDisabled();
+  await expect(page.getByText('Bloqueado: falta interação recebida e verificada nos últimos 21 dias.').first()).toBeVisible();
+  await expect(page.getByRole('button',{name:'Abrir WhatsApp',exact:true})).toHaveCount(0);
+  expect(sends).toBe(0);
+  expect(popups).toBe(0);
+  await page.getByRole('button',{name:'Preparar convite de aceite',exact:true}).first().click();
+  await expect(page.getByRole('button',{name:'Copiar convite',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Preparar envio pelo KÔMA',exact:true}).first()).toBeDisabled();
+  await page.getByRole('button',{name:'Conferir aceite',exact:true}).first().click();
+  await expect(page.getByText('A confirmação ainda não foi recebida para este telefone.',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Preparar envio pelo KÔMA',exact:true}).first()).toBeDisabled();
+  proofReceived=true;
+  await page.getByRole('button',{name:'Conferir aceite',exact:true}).first().click();
+  await expect(page.getByRole('button',{name:'Preparar envio pelo KÔMA',exact:true}).first()).toBeEnabled();
+  expect(invites).toBe(1);
+  expect(sends).toBe(0);
+  expect(popups).toBe(0);
+  if(process.env.KOMA_EVIDENCE_DIR) await page.screenshot({path:`${process.env.KOMA_EVIDENCE_DIR}/convite-pendente-${info.project.name}.png`,fullPage:true});
+});

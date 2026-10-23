@@ -51,7 +51,7 @@ function isPublicCommercialRoute(): boolean {
 
 function isOperationalUtilityRoute(): boolean {
   const pathname = window.location.pathname;
-  return (pathname === "/whatsapp/avisos" || pathname === "/w/a")
+  return (pathname === "/whatsapp/avisos" || pathname === "/w/a" || pathname === "/w/c")
     || pathname === "/recuperar-senha"
     || pathname === "/confirmar-cadastro"
     || pathname.startsWith("/ferramentas/simulador-impressao")
@@ -125,6 +125,7 @@ function bypassTenantSuspensionBoundary(): boolean {
   const resolved = resolveKomaHost();
 
   return pathname === "/w/a"
+    || pathname === "/w/c"
     || pathname === "/whatsapp/avisos"
     || pathname === "/recuperar-senha"
     || pathname === "/confirmar-cadastro"
@@ -203,8 +204,8 @@ if ("serviceWorker" in navigator) {
   }, { once: true });
 }
 
-const isWhatsAppOptOutRoute = ["/whatsapp/avisos", "/w/a"].includes(window.location.pathname);
-if (!isWhatsAppOptOutRoute) {
+const isWhatsAppPrivateRoute = ["/whatsapp/avisos", "/w/a", "/w/c"].includes(window.location.pathname);
+if (!isWhatsAppPrivateRoute) {
   initAnalytics();
 }
 
@@ -243,7 +244,9 @@ if (
 }
 
 const RootApp = React.lazy(
-  (pathname === "/whatsapp/avisos" || pathname === "/w/a")
+  pathname === "/w/c"
+    ? () => import("./cardapio/WhatsAppConsentPage")
+    : (pathname === "/whatsapp/avisos" || pathname === "/w/a" || pathname === "/w/c")
     ? () => import("./cardapio/WhatsAppOptOutPage")
     : pathname === "/recuperar-senha"
     ? () => import("./components/auth/PasswordResetPage")
@@ -278,7 +281,7 @@ const RouteLoading = () => (pathname === "/recuperar-senha" || pathname === "/co
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <AnalyticsProvider disabled={isWhatsAppOptOutRoute}>
+    <AnalyticsProvider disabled={isWhatsAppPrivateRoute}>
       <AppRecoveryBoundary>
       <TenantSuspensionBoundary disabled={bypassTenantSuspensionBoundary()}>
         <React.Suspense fallback={<RouteLoading />}>
