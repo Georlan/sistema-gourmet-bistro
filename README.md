@@ -17,7 +17,7 @@ O objetivo do KÔMA é reduzir a fragmentação de sistemas em estabelecimentos 
 
 - **Operação de Salão & Caixa**: Agilidade no atendimento de mesas e comandas com fechamento cego de caixa.
 - **Autoatendimento & Delivery**: Cardápio digital direto no navegador do cliente via checkout web integrado, sem necessidade de baixar aplicativos ou de ter WhatsApp obrigatório para comprar.
-- **Engajamento & WhatsApp**: Fluxo de identificação por OTP e notificações projetado para a Meta WhatsApp Cloud API oficial, condicionado à configuração e aprovação do provedor.
+- **Clientes & Avisos Opcionais**: Reconhecimento limitado por telefone no checkout, sem exigir login ou WhatsApp para comprar. Avisos pelo número central do KÔMA são condicionados à autorização do restaurante, consentimento quando aplicável, configuração do canal e disponibilidade do transporte; não representam entrega garantida ao destinatário.
 - **Cozinha Inteligente (KDS)**: Kanban de produção com cronômetros visuais por pedido e setorização de pratos.
 - **Logística Integrada**: Portal PWA otimizado para motoboys acompanharem entregas com rota direta no Waze/Google Maps.
 
@@ -60,11 +60,12 @@ O catálogo comercial do KÔMA é governado pelo contrato canônico de produto (
 - Carrossel de múltiplas fotos por produto, variações e adicionais.
 - Campo de observações de itens e recado no carrinho salvo no pedido e impresso no cupom.
 
-### 🔐 Autenticação OTP & Notificações por WhatsApp
-- **Meta WhatsApp Cloud API Oficial**: Integração prevista via `graph.facebook.com`, dependente de credenciais, templates e aprovação válidos.
-- Login de clientes no cardápio digital via código OTP de 6 dígitos enviado ao WhatsApp.
-- Envio automático de status do pedido (*Em Preparo*, *Pronto para Retirada*, *Saiu para Entrega*, *Recusado*).
-- Handshake de validação de Webhook integrado e verificado.
+### 📲 Reconhecimento do Cliente & WhatsApp Opcional
+- O checkout público aceita compras sem conta, aplicativo ou WhatsApp. A consulta tenant-scoped por telefone em `POST /cardapio/clientes/reconhecer` retorna apenas `found` e **não autentica nem revela dados privados**; ver [`backend/app/routes/cardapio_customer_recognition.py`](backend/app/routes/cardapio_customer_recognition.py).
+- Avisos operacionais usam a arquitetura de **número central do KÔMA**, sem pareamento individual do restaurante; o envio exige permissões, destinatário cadastrado e verificação do remetente. Não confundir aceite HTTP do conector com mensagem entregue no aparelho.
+- Notificações para consumidores exigem disponibilidade do canal, autorização da plataforma e do restaurante, consentimento por pedido quando aplicável e ausência de opt-out. Sem essas condições, o pedido e seu acompanhamento continuam funcionando sem WhatsApp.
+- A Meta WhatsApp Cloud API permanece integração opcional/sujeita a homologação; não anunciar OTP obrigatório, envio automático universal nem entrega garantida.
+- Contratos técnicos: [`whatsapp-central-only.md`](docs/engineering/whatsapp-central-only.md), [`whatsapp-registered-routing.md`](docs/engineering/whatsapp-registered-routing.md) e [`customer-whatsapp-status-contract.md`](docs/engineering/customer-whatsapp-status-contract.md).
 
 ### 🍳 KDS (Kitchen Display System / Monitor de Cozinha)
 - Kanban de produção de pratos com atualização em tempo real via WebSockets.
@@ -111,10 +112,12 @@ Esses controles precisam ser verificados por ambiente e não representam, isolad
            ┌────────────────────────────┼────────────────────────────┐
            ▼                            ▼                            ▼
 ┌────────────────────┐       ┌────────────────────┐       ┌────────────────────┐
-│ Supabase PostgreSQL│       │ Meta WhatsApp API  │       │ Agente Impressão   │
-│ (RLS por ambiente) │       │  (Cloud API / OTP) │       │   Python USB/Rede  │
+│ Supabase PostgreSQL│       │ Avisos WhatsApp*   │       │ Agente Impressão   │
+│ (RLS por ambiente) │       │ Central / opcional │       │   Python USB/Rede  │
 └────────────────────┘       └────────────────────┘       └────────────────────┘
 ```
+
+*Canal de avisos condicionado a configuração, permissões, consentimento e disponibilidade do provedor; não é pré-requisito do checkout.*
 
 ### Frontend
 - **Framework**: React 19 + TypeScript + Vite
@@ -125,13 +128,13 @@ Esses controles precisam ser verificados por ambiente e não representam, isolad
 ### Backend
 - **Framework**: FastAPI (Python 3.12)
 - **ORM & Banco**: SQLAlchemy 2.0 + Alembic
-- **Serviço HTTP**: HTTPX (Integração Meta Cloud API & Evolution API)
+- **Serviço HTTP**: HTTPX para integrações externas configuradas, incluindo os conectores de mensageria opcionais
 - **Deploy**: Railway
 
 ### Banco de Dados & Infraestrutura
 - **Alvo de produção**: PostgreSQL gerenciado; região e políticas RLS devem ser verificadas por ambiente
 - **Desenvolvimento Local**: SQLite (`bistro.db`)
-- **Mensageria & Notificações**: WebSockets + Meta Cloud API Webhook Handshake
+- **Mensageria & Notificações**: WebSockets e filas/outbox internas; transportes externos de WhatsApp dependem dos gates de autorização e configuração
 
 ---
 
