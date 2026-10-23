@@ -2115,6 +2115,8 @@ class CentralWhatsAppSenderState(Base):
     # Contains neither phone numbers nor credentials or message content.
     __tablename__ = "central_whatsapp_sender_state"
     sender_key = Column(String(64), primary_key=True)
+    suspended_at = Column(DateTime(timezone=True), nullable=True)
+    accept_events_after = Column(DateTime(timezone=True), nullable=True)
     next_send_at = Column(DateTime(timezone=True), nullable=True)
     circuit_open_until = Column(DateTime(timezone=True), nullable=True)
     failures = Column(Integer, nullable=False, default=0, server_default="0")

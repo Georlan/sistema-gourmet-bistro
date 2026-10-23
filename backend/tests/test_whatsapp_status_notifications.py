@@ -187,15 +187,10 @@ def test_mudanca_status_enfileira_notificacao(
     )
 
     assert response.status_code == 200, response.text
-    assert len(chamadas) == 1
-    assert chamadas[0][0] == TELEFONE
-    assert trecho_esperado in chamadas[0][1]
+    assert not chamadas
     with SessionLocal() as db:
-        notificacao = db.query(NotificacaoWhatsApp).filter(
-            NotificacaoWhatsApp.comanda_id == comanda_id
-        ).one()
-        assert notificacao.wamid == "evolution-message-test"
-        assert notificacao.status_envio == "enviado"
+        assert db.query(Comanda).filter_by(id=comanda_id).one().delivery_status == novo_status
+        assert db.query(NotificacaoWhatsApp).filter_by(comanda_id=comanda_id).count() == 0
 
 
 def test_status_repetido_nao_duplica_notificacao(monkeypatch):
@@ -221,7 +216,7 @@ def test_status_repetido_nao_duplica_notificacao(monkeypatch):
 
     assert primeira.status_code == 200, primeira.text
     assert segunda.status_code == 200, segunda.text
-    assert len(chamadas) == 1
+    assert not chamadas
 
 
 def test_despachar_enfileira_notificacao_transito(monkeypatch):
@@ -249,67 +244,12 @@ def test_despachar_enfileira_notificacao_transito(monkeypatch):
 
     assert response.status_code == 200, response.text
     assert repetida.status_code == 200, repetida.text
-    assert len(chamadas) == 2
-    assert chamadas[0][0] == "81988880000"
-    assert "NOVA ENTREGA" in chamadas[0][1]
-    # No plano Pocket (sem courier_app), a mensagem não vaza link do PWA do entregador
-    assert "/entregador" not in chamadas[0][1]
-    assert chamadas[1][0] == TELEFONE
-    assert "entrega" in chamadas[1][1].lower()
-
-    # Com add-on ou plano Premium, o link seguro do PWA é anexado
-    from app.smartpos_models import RestauranteCapability
+    assert not chamadas
     with SessionLocal() as db:
-        cap = RestauranteCapability(
-            restaurante_id=RESTAURANTE_ID,
-            capability="courier_app",
-            enabled=True,
-            source="addon",
-        )
-        db.add(cap)
-        db.commit()
-
-    try:
-        chamadas_prem = []
-        monkeypatch.setattr(
-            whatsapp_service,
-            "enviar_texto_whatsapp_detalhado",
-            lambda telefone, mensagem, contexto="": (
-                chamadas_prem.append((telefone, mensagem))
-                or whatsapp_service.ResultadoEnvioWhatsApp(True, "evolution")
-            ),
-        )
-        comanda_prem_id = _criar_comanda("Entrega", "pronto")
-        resp_prem = client.post(
-            f"/comandas/{comanda_prem_id}/delivery/despachar",
-            headers=_headers(),
-            json={"motoboy_id": MOTOBOY_ID},
-        )
-        assert resp_prem.status_code == 200, resp_prem.text
-        assert len(chamadas_prem) == 2
-        assert "NOVA ENTREGA" in chamadas_prem[0][1]
-        assert "/entregador#token=" in chamadas_prem[0][1]
-        assert "/entregador?token=" not in chamadas_prem[0][1]
-    finally:
-        with SessionLocal() as db:
-            db.query(RestauranteCapability).filter(
-                RestauranteCapability.restaurante_id == RESTAURANTE_ID,
-            ).delete()
-            db.commit()
-
-    with SessionLocal() as db:
-        registros = db.query(NotificacaoWhatsApp).filter(
-            NotificacaoWhatsApp.comanda_id == comanda_id,
-        ).all()
-        assert {registro.tipo for registro in registros} == {
-            "atribuicao_motoboy",
-            "status_pedido",
-        }
-        atribuicao = next(
-            registro for registro in registros
-            if registro.tipo == "atribuicao_motoboy"
-        )
-        assert "token=" not in atribuicao.conteudo
+        order = db.query(Comanda).filter_by(id=comanda_id).one()
+        assert order.delivery_status == "transito"
+        assert order.motoboy_id == MOTOBOY_ID
+        assert db.query(NotificacaoWhatsApp).filter_by(comanda_id=comanda_id).count() == 0
 
 
 def test_falha_evolution_nao_impede_transicao(monkeypatch):

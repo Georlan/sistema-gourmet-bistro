@@ -93,6 +93,9 @@ def enqueue_customer_notice(db: Session, event, event_name: str):
     tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one_or_none()
     if not customer_notices_enabled(rid, tenant) or not event.check_id:
         return None
+    from .whatsapp_sender_gate import sender_available
+    if not sender_available(db, transport_configuration()):
+        return None
     order = db.query(Comanda).filter_by(restaurante_id=rid, id=str(event.check_id)).one_or_none()
     if order is None or not _released(db, rid, str(event.order_id)):
         return None

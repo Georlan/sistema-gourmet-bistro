@@ -89,6 +89,21 @@ export function SuperAdminWhatsAppPanel() {
 
   useEffect(() => { void refresh(false, 0); }, []); // No polling: explicit refresh only.
 
+  const resumeSender = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await superAdminFetch('/api/super-admin/whatsapp/sender/resume', { method: 'POST' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail || 'Não foi possível retomar os avisos.');
+      await refresh();
+    } catch (err) {
+      setError(superAdminErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const change = async (tenant: Tenant, channel: "operator" | "customer") => {
     if (reason.trim().length < 3) {
       setError("Informe um motivo com pelo menos três caracteres antes de alterar permissões.");
@@ -149,7 +164,14 @@ export function SuperAdminWhatsAppPanel() {
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-koma-border p-3 text-xs">
             <div className="text-koma-muted">Canal</div>
-            <strong>{data.sender.state === "configured" ? "Configurado" : "Desligado / indisponível"}</strong>
+            <strong>{data.sender.state === "suspended" ? "Envios suspensos — reconecte o WhatsApp do KÔMA" : data.sender.state === "configured" ? "Configurado" : "Desligado / indisponível"}</strong>
+            {data.sender.state === 'suspended' && <div role="status" className="mt-2">
+              <p>Os pedidos continuam no painel. Após reconectar, retome apenas os novos avisos.</p>
+              <button type="button" disabled={loading} onClick={() => void resumeSender()}
+                className="mt-2 min-h-11 rounded-lg border border-koma-border px-3 py-2 disabled:opacity-50">
+                Verificar conexão e retomar
+              </button>
+            </div>}
             <p className="mt-1 text-koma-muted">Sessão: {data.sender.connection === "matched" ? "Identidade verificada (cache até 30s)"
               : data.sender.connection === "not_verified" ? "Não verificada nesta consulta"
               : data.sender.connection === "mismatch" ? "Remetente divergente: bloqueie envios e confira a sessão"
