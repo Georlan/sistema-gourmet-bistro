@@ -88,7 +88,7 @@ export default function CardapioProductModal({
   const [showToast, setShowToast] = useState(false);
   const [expandedExtras, setExpandedExtras] = useState<Record<string, boolean>>({});
   const draftOptionsRef = useRef(selectedOptions);
-  const initializedDraftRef = useRef<{ productId: Product['id']; restaurantId: typeof restaurantId; initialItem: typeof initialItem } | null>(null);
+  const [draftIdentity, setDraftIdentity] = useState<{ productId: Product['id']; restaurantId: typeof restaurantId; initialItem: typeof initialItem } | null>(null);
   useEffect(() => { draftOptionsRef.current = selectedOptions; }, [selectedOptions]);
 
   const reportedViewRef = useRef(false);
@@ -143,7 +143,7 @@ export default function CardapioProductModal({
   }, [product]);
 
   useEffect(() => {
-    const previous = initializedDraftRef.current;
+    const previous = draftIdentity;
     const newDraft = !previous || previous.productId !== product.id
       || previous.restaurantId !== restaurantId || previous.initialItem !== initialItem;
     const source = newDraft ? initialItem?.selectedOptions || {} : draftOptionsRef.current;
@@ -154,15 +154,21 @@ export default function CardapioProductModal({
     });
     setSelectedOptions(initial);
     const previousCount = Object.values(source).flat().length;
-    setFeedback(previousCount > Object.values(initial).flat().length ? "Algumas opções não estão mais disponíveis. Confira a montagem antes de salvar." : "");
+    if (previousCount > Object.values(initial).flat().length) {
+      setFeedback("Algumas opções não estão mais disponíveis. Confira a montagem antes de salvar.");
+    } else if (newDraft) {
+      setFeedback("");
+    }
     if (newDraft) {
       setQuantity(initialItem?.quantity || 1);
       setNotes(initialItem?.notes || "");
       setCurrentImgIndex(0);
       setExpandedExtras({});
+      // Estado, em vez de ref, mantém a inicialização idempotente no replay
+      // de efeitos do StrictMode antes do primeiro commit das escolhas.
+      setDraftIdentity({ productId: product.id, restaurantId, initialItem });
     }
-    initializedDraftRef.current = { productId: product.id, restaurantId, initialItem };
-  }, [allModifiers, product, initialItem, restaurantId]);
+  }, [allModifiers, product, initialItem, restaurantId, draftIdentity]);
 
   const unitPrice = useMemo(() => {
     let value = product.price;
