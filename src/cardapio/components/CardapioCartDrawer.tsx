@@ -195,6 +195,17 @@ export default function CardapioCartDrawer({
     });
   };
 
+  // Captura input nativo além de change: a primeira edição após abrir o
+  // drawer não pode ser perdida quando outro campo dispara um render.
+  const handleGuestPhoneInput = (event: React.FormEvent<HTMLInputElement>) => {
+    setGuestPhone(formatBrazilianPhone(event.currentTarget.value));
+    clearValidation("input-guest-phone");
+  };
+  const handleGuestNameInput = (event: React.FormEvent<HTMLInputElement>) => {
+    setGuestName(event.currentTarget.value);
+    clearValidation("input-guest-name");
+  };
+
   // Payment detail & Change (Troco)
   const availablePayments = useMemo(() => {
     return getCheckoutPaymentMethods(
@@ -1379,7 +1390,7 @@ export default function CardapioCartDrawer({
                   <div className="mt-3 space-y-3">
                     <label className="block">
                       <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Celular com DDD</span>
-                      <span className="relative block"><Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="tel" inputMode="numeric" autoComplete="tel" placeholder="(00) 00000-0000" value={guestPhone} onChange={(event) => { setGuestPhone(formatBrazilianPhone(event.target.value)); clearValidation("input-guest-phone"); }} aria-invalid={invalidField === "input-guest-phone"} aria-describedby={invalidField === "input-guest-phone" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-2xl border bg-white/[0.03] pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-stone-500 focus:border-emerald-500 ${invalidField === "input-guest-phone" ? "border-rose-500" : "border-white/10"}`} id="input-guest-phone" /></span>
+                      <span className="relative block"><Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="tel" inputMode="numeric" autoComplete="tel" placeholder="(00) 00000-0000" value={guestPhone} onInput={handleGuestPhoneInput} onChange={handleGuestPhoneInput} aria-invalid={invalidField === "input-guest-phone"} aria-describedby={invalidField === "input-guest-phone" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-2xl border bg-white/[0.03] pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-stone-500 focus:border-emerald-500 ${invalidField === "input-guest-phone" ? "border-rose-500" : "border-white/10"}`} id="input-guest-phone" /></span>
                     </label>
                     <p className="text-xs leading-relaxed text-koma-muted">Usamos seu celular para identificar o pedido e permitir que o restaurante entre em contato se precisar.</p>
                     {customerRecognition === "checking" && (
@@ -1397,7 +1408,7 @@ export default function CardapioCartDrawer({
                     {customerRecognition !== "found" && (
                       <label className="block">
                         <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Seu nome</span>
-                        <span className="relative block"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="text" autoComplete="name" maxLength={100} placeholder="Como devemos chamar você?" value={guestName} onChange={(event) => { setGuestName(event.target.value); clearValidation("input-guest-name"); }} aria-invalid={invalidField === "input-guest-name"} aria-describedby={invalidField === "input-guest-name" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-2xl border bg-white/[0.03] pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-stone-500 focus:border-emerald-500 ${invalidField === "input-guest-name" ? "border-rose-500" : "border-white/10"}`} id="input-guest-name" /></span>
+                        <span className="relative block"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="text" autoComplete="name" maxLength={100} placeholder="Como devemos chamar você?" value={guestName} onInput={handleGuestNameInput} onChange={handleGuestNameInput} aria-invalid={invalidField === "input-guest-name"} aria-describedby={invalidField === "input-guest-name" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-2xl border bg-white/[0.03] pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-stone-500 focus:border-emerald-500 ${invalidField === "input-guest-name" ? "border-rose-500" : "border-white/10"}`} id="input-guest-name" /></span>
                       </label>
                     )}
                     {onAuthClick && <button type="button" onClick={onAuthClick} className="text-left text-xs font-semibold leading-relaxed text-koma-muted transition hover:text-emerald-400">{brandConfig?.benefits?.loyalty ? "Quer acompanhar seus benefícios? " : "Já tem cadastro? "}<strong className="text-emerald-400">Entrar na conta.</strong></button>}

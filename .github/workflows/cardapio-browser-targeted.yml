@@ -105,6 +105,16 @@ jobs:
           e2e/cardapio-mobile-layout.spec.ts
           --workers=2
 
+      - name: Verify native contact input in Firefox production build
+        env:
+          KOMA_E2E_PORT: '4288'
+          KOMA_E2E_FIREFOX: 'true'
+          KOMA_E2E_PREVIEW: 'true'
+        run: |
+          npx playwright install --with-deps firefox
+          npm run build
+          npm run test:e2e -- e2e/cardapio-artistic-parity.spec.ts --grep "contato preserva" --project=firefox-390 --workers=2
+
       - name: Upload browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v6

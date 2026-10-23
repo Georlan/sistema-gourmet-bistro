@@ -11,6 +11,7 @@ Decisão confirmada pelo usuário: entrega, retirada e consumo no local são mod
 - Ranking artístico agora consulta a rota pública por restaurante, cancela resposta de escopo anterior e preserva o fallback de catálogo.
 - Recomendações mantêm inclusão e ordem durante adição, remoção e chegada atrasada do ranking; não confundem ingrediente de um prato principal com acompanhamento nem usam itens desconhecidos como preenchimento.
 - Hero e catálogo têm IDs distintos. Detalhes possuem botão de teclado independente da adição, com nome/preço acessíveis.
+- Contato usa input nativo e change para conservar o primeiro campo no Firefox quando o segundo provoca um render. Há regressão das duas ordens de preenchimento no build de produção.
 - Incrementos na sacola são aplicados ao estado atual, inclusive em eventos agrupados.
 - Promoções usam a mesma expiração temporal nas duas apresentações.
 - Busca reutiliza a normalização canônica, informa resultados vazios e permite limpar.
@@ -23,7 +24,7 @@ Decisão confirmada pelo usuário: entrega, retirada e consumo no local são mod
 - Matriz de jornadas antiga/nova: 148 aprovações e 10 skips por viewport. CEP foi executado separadamente no viewport previsto, com quatro aprovações. Os demais skips são toque mobile em desktop.
 - Regressão adicional de composição, promoção, ranking atrasado, padrão/rollback e chat: 77 aprovações e um skip por viewport. Há sobreposição entre as matrizes; os totais não representam casos únicos.
 - Backend: 57 testes focais aprovados de payload público, histórico, isolamento, ranking e WebSocket. Nenhuma mudança de código backend. A execução geral foi interrompida após 308 aprovações e um skip; não equivale à suíte backend completa.
-- Capturas locais revisadas em 320/360/390/430/1366 px, dark/light. Ensaios de outros engines e estado do CI devem ser registrados na entrega/PR com o SHA final.
+- Capturas locais revisadas em 320/360/390/430/1366 px, dark/light. Firefox e WebKit também chegaram à revisão na prévia HTTP, sem envio real. O CI inclui regressão de contato no build de produção Firefox. Conferir o SHA final dos checks antes de integrar.
 - Nenhum pedido, pagamento, impressão ou alteração de configuração em produção; restaurante 6 preservado. Escritas de navegador foram interceptadas por fixtures locais.
 
 ## Liberação e reversão

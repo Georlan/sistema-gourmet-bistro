@@ -179,3 +179,28 @@ test('rota padrão usa o novo cardápio e mantém retorno explícito ao editoria
   await expect(page.locator('#koma-artistic-canvas')).toHaveCount(0);
   await expect(page.locator('#catalog-feed')).toBeVisible();
 });
+
+for (const firstField of ['phone','name'] as const) {
+  test(`contato preserva os dois campos começando por ${firstField}`,async({page})=>{
+    const state=await menu(page);
+    await page.locator('#btn-fast-add-201').click();
+    if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#btn-cart-header').click();
+    const cart=page.locator('#cart-drawer-container');
+    await cart.getByRole('button',{name:'Contato',exact:true}).click();
+    for(const field of firstField==='phone'?['phone','name']:['name','phone']) {
+      await page.locator(`#input-guest-${field}`).fill(field==='phone'?'85999999999':'Cliente local');
+    }
+    await expect(page.locator('#input-guest-phone')).toHaveValue('(85) 99999-9999');
+    await expect(page.locator('#input-guest-name')).toHaveValue('Cliente local');
+    await cart.getByRole('button',{name:'Receber',exact:true}).click();
+    await cart.getByRole('button',{name:/^Retirada/}).click();
+    await cart.getByRole('button',{name:'Pagamento',exact:true}).click();
+    await cart.getByRole('button',{name:'Dinheiro',exact:true}).click();
+    await cart.getByRole('button',{name:'Contato',exact:true}).click();
+    await cart.locator('#btn-confirm-order').click();
+    await page.locator('#btn-place-order-final').click();
+    await expect(page.getByText('Pedido recebido',{exact:true})).toBeVisible();
+    expect(state.orders).toHaveLength(1);
+    expect(state.orders[0]).toMatchObject({cliente_nome:'Cliente local',cliente_telefone:'85999999999'});
+  });
+}
