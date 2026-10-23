@@ -140,17 +140,9 @@ def test_agendar_notificacao_status_task(monkeypatch):
         nome_restaurante="Bistrô Agendado",
         restaurante_id=1,
     )
-    assert len(bg.tasks) == 1
-
-    func, args, kwargs = bg.tasks[0]
-    func(*args, **kwargs)
-
+    assert not bg.tasks  # Legacy operational scheduling is retired.
     with SessionLocal() as db:
-        notificacao = db.query(NotificacaoWhatsApp).filter(
-            NotificacaoWhatsApp.comanda_id == "201"
-        ).one()
-        assert notificacao.restaurante_id == 1
-        assert notificacao.wamid == "scheduled-message-id"
+        assert db.query(NotificacaoWhatsApp).filter_by(comanda_id="201").count() == 0
 
 
 def test_background_notification_failure_is_logged_and_does_not_escape(caplog):

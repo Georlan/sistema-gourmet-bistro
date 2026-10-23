@@ -52,8 +52,9 @@ def test_provider_never_holds_read_connection(char_setup, monkeypatch, operation
         else:
             response = handlers[operation]()
             if operation == 'status':
-                assert response['state'] == ('error' if provider_fails else 'connected')
-        assert calls
+                assert response['state'] == 'not_configured'
+                assert response['mode'] == 'central'
+        assert bool(calls) is (operation != 'status')
         assert not any(calls)
         db.rollback()
         stored = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one()

@@ -333,9 +333,13 @@ def dispatch_single_claimed_snapshot(
             return False
 
     if snapshot.get("event_name") == "koma.whatsapp.order_created":
-        from ..tenant_order_whatsapp import dispatch_alert
+        # Historical individual-channel work remains auditable but must never
+        # reconnect a tenant device or send outside the central registration.
         with tenant_session_scope(db, int(rid)):
-            return dispatch_alert(db, snapshot)
+            settle_outbox_event(db, outbox_id, status="dead_letter",
+                last_error="Canal individual encerrado; nenhum envio ou reconexão.",
+                worker_id=worker_id)
+        return False
 
     if snapshot.get("event_name") == "koma.whatsapp.central_operator_order":
         from ..central_whatsapp import dispatch_operator_alert

@@ -87,12 +87,11 @@ def test_revocation_between_queue_and_task_prevents_send(policy_db, monkeypatch)
     db, config, order = policy_db
     background = BackgroundTasks()
     notices.agendar_notificacao_status_task(background, order.id, "pronto", order.delivery_telefone, "Fixture", restaurante_id=991)
-    assert len(background.tasks) == 1
+    assert not background.tasks  # Central outbox owns the remaining transport.
     order.whatsapp_status_opt_in = False
     db.commit()
     provider = MagicMock(side_effect=AssertionError("revoked consent"))
     monkeypatch.setattr(whatsapp, "enviar_texto_whatsapp_detalhado", provider)
-    background.tasks[0].func()
     assert db.query(NotificacaoWhatsApp).filter_by(comanda_id=order.id).count() == 0
     provider.assert_not_called()
 

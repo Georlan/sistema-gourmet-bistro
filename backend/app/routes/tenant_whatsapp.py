@@ -88,23 +88,10 @@ def get_status(
             "phone_ending": phone[-4:] or None,
             "mode": "central", **customer_fields,
         }
-    _release_before_provider(db, config)
-    state = "error"
-    try:
-        provider_state = wa.connection_state(user.restaurante_id)
-        if provider_state == "open":
-            state = "connected" if wa.phones_match(
-                wa.owner_phone(user.restaurante_id),
-                config.whatsapp_recipient_phone,
-            ) else "error"
-        elif provider_state in {"connecting", "close"}:
-            state = "connecting" if provider_state == "connecting" else "disconnected"
-        else:
-            state = "waiting_qr"
-    except Exception:
-        state = "error"
-    phone = config.whatsapp_recipient_phone or ""
-    return {"state": state, "enabled": bool(config.whatsapp_alerts_enabled), "phone_ending": phone[-4:] or None, "mode": "individual", **customer_fields}
+    # Legacy individual associations are not a receiving registration. Do not
+    # query Evolution merely because an old instance name remains in history.
+    return {"state": "not_configured", "enabled": False, "phone_ending": None,
+            "mode": "central", "legacy_individual": True, **customer_fields}
 
 
 def _cancel_pending_central_notices(db: Session, restaurant_id: int) -> None:
@@ -180,11 +167,14 @@ def register_central_recipient(
 
     config = _config(db, user)
     config = wa._locked_whatsapp_config_query(db, user.restaurante_id).populate_existing().one()
-    if config.whatsapp_instance_name not in (None, CENTRAL_INSTANCE_MARKER):
-        raise HTTPException(
-            status_code=409,
-            detail="Desconecte a integração individual antes de cadastrar o destinatário central.",
-        )
+    # No provider logout/reconnect: switch only the explicit recipient
+    # registration; a central opt-in never operates the restaurant's device.
+    db.query(IntegrationOutbox).filter(
+        IntegrationOutbox.restaurante_id == user.restaurante_id,
+        IntegrationOutbox.event_name == wa.EVENT_NAME,
+        IntegrationOutbox.status.in_(["pending", "failed", "processing"]),
+    ).update({"status": "dead_letter", "locked_by": None, "locked_at": None,
+              "last_error": "Canal individual encerrado; cadastro central explícito."}, synchronize_session=False)
     _cancel_pending_central_notices(db, user.restaurante_id)
     config.whatsapp_instance_name = CENTRAL_INSTANCE_MARKER
     config.whatsapp_recipient_phone = phone
@@ -215,7 +205,7 @@ def remove_central_recipient(
     return {"state": "not_configured", "mode": "central", "enabled": False}
 
 
-@router.post("/configure")
+# Retired individual connection endpoint: /configure
 def configure(
     body: ConfigureRequest,
     db: Session = Depends(get_db),
@@ -290,7 +280,7 @@ def configure(
     }
 
 
-@router.post("/qr")
+# Retired individual connection endpoint: /qr
 def refresh_qr(
     db: Session = Depends(get_db),
     user: Usuario = Depends(require_permission("configuracoes:administrar")),
@@ -306,7 +296,7 @@ def refresh_qr(
     return {"state": "waiting_qr", "qr_code": _safe_qr(data)}
 
 
-@router.post("/pairing-code")
+# Retired individual connection endpoint: /pairing-code
 def refresh_pairing_code(
     db: Session = Depends(get_db),
     user: Usuario = Depends(require_permission("configuracoes:administrar")),
@@ -328,7 +318,7 @@ def refresh_pairing_code(
     return {"state": "connecting", "pairing_code": code}
 
 
-@router.post("/enable")
+# Retired individual connection endpoint: /enable
 def enable(
     db: Session = Depends(get_db),
     user: Usuario = Depends(require_permission("configuracoes:administrar")),

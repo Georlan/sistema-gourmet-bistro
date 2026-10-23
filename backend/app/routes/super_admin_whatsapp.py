@@ -170,7 +170,9 @@ def _sender_snapshot(db, cfg) -> dict:
         return {"state": "disabled", "connection": "not_verified"}
     state = db.query(CentralWhatsAppSenderState).filter_by(sender_key=_key(cfg)).one_or_none()
     return {
-        "state": "configured", "connection": "not_verified",
+        "state": "suspended" if state and state.suspended_at else "configured", "connection": "not_verified",
+        "suspended_at": _iso(state.suspended_at) if state else None,
+        "accept_events_after": _iso(state.accept_events_after) if state else None,
         "interval_seconds": minimum_interval_seconds(),
         "failures": int(state.failures) if state else 0,
         "next_send_at": _iso(state.next_send_at) if state else None,
@@ -338,5 +340,31 @@ def update_platform_permissions(
     except Exception:
         db.rollback()
         raise HTTPException(status_code=503, detail="Não foi possível atualizar a autorização.")
+    finally:
+        db.close()
+
+
+@router.post("/sender/resume")
+def resume_central_sender(admin: dict = Depends(get_current_admin)):
+    """Explicit admin action; a fresh provider proof precedes new-event resumption."""
+    cfg = transport_configuration()
+    if cfg is None:
+        raise HTTPException(status_code=409, detail="Canal central desativado.")
+    # Never reuse the overview's 30-second cache for a state-changing operation.
+    if _probe_connection(cfg) != "matched":
+        raise HTTPException(status_code=409, detail="Reconecte o WhatsApp do KÔMA e confira o número antes de retomar.")
+    db = SessionLocal()
+    try:
+        from ..services.whatsapp_sender_gate import resume_sender
+        if cfg != transport_configuration():
+            raise HTTPException(status_code=409, detail="Configuração do canal alterada; verifique novamente.")
+        resumed = resume_sender(db, cfg)
+        db.commit()
+        import logging
+        logging.getLogger("koma.whatsapp").info("Central WhatsApp resumed by %r; new events only", admin.get("user", "superadmin"))
+        return {"resumed": resumed, "new_events_only": True}
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
