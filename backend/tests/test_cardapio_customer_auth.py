@@ -394,7 +394,7 @@ def test_guest_checkout_remains_unblocked_without_account():
             db.add(cat)
             db.commit()
 
-        prod = db.query(Produto).filter(Produto.restaurante_id == 101).first()
+        prod = db.query(Produto).filter(Produto.restaurante_id == 101, Produto.id == "prod-auth-101").first()
         if not prod:
             prod = Produto(
                 id="prod-auth-101",

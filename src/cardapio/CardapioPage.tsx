@@ -495,6 +495,18 @@ export default function CardapioPage() {
   }, [loadRestaurantData]);
 
   useEffect(() => {
+    if (!activeBrand || !selectedProduct) return;
+    const current = activeBrand.products.find(product => String(product.id) === String(selectedProduct.id) && product.isAvailable !== false);
+    if (!current) {
+      setSelectedProduct(null);
+      setEditingCartItem(null);
+      setNotice("Este produto não está mais disponível. Consulte o cardápio atualizado.");
+    } else if (current !== selectedProduct) {
+      setSelectedProduct(current);
+    }
+  }, [activeBrand, selectedProduct]);
+
+  useEffect(() => {
     if (!activeBrand?.id) return;
     let cancelled = false;
     const session = loadCustomerSession(activeBrand.id);

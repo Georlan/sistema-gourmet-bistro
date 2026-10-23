@@ -11,6 +11,11 @@ on:
       - 'backend/app/services/online_order_control.py'
       - 'backend/app/routes/online_order_control.py'
       - 'backend/app/adapters/orders/web_adapter.py'
+      - 'backend/app/domain/orders/validation.py'
+      - 'backend/app/application/orders/validation_loader.py'
+      - 'backend/tests/domain/test_validation_service.py'
+      - 'backend/tests/adapters/test_web_adapter.py'
+      - 'backend/tests/test_websocket_segmentation.py'
       - 'backend/app/services/online_payments/service.py'
       - 'backend/app/services/scheduled_orders.py'
       - 'backend/app/services/atendimentos.py'
@@ -70,6 +75,13 @@ jobs:
           backend/tests/test_web_push_unit.py
           backend/tests/test_online_order_operational_safety.py
           backend/tests/test_atendimento_identity.py
+          backend/tests/domain/test_validation_service.py
+          backend/tests/adapters/test_web_adapter.py
+          backend/tests/test_modificadores.py
+          backend/tests/test_marmitaria_catalog_tenant_isolation.py
+          backend/tests/test_order_read_modifiers.py
+          backend/tests/test_modifier_consumption.py
+          backend/tests/test_websocket_segmentation.py
 
   frontend:
     name: Digital order frontend regressions
