@@ -21,7 +21,9 @@ permissions:
 jobs:
   crm-browser:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Hosted runner provisioning took >5 min before the 90-case CRM matrix.
+    # Keep the full matrix plus private consent/opt-out checks within one job.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
