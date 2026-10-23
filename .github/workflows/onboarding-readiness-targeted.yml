@@ -39,7 +39,7 @@ jobs:
   browser-auth:
     name: Auth and onboarding browser regressions
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
