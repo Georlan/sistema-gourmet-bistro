@@ -100,3 +100,16 @@ def test_restricted_runtime_migration_and_tenant_isolation():
      assert c.execute(text("SELECT count(*) FROM crm_clientes_preferencias WHERE cliente_id='crm-upgrade-fixture'")).scalar()==1
      with Operations.context(MigrationContext.configure(c)): campaign_migration.upgrade()
     print('PASS: campaign upgrade/downgrade preserves preferences and defaults marketing permission to false')
+
+    consent_path=Path(__file__).resolve().parents[1] / 'alembic/versions/f6a7b8c9d0e1_whatsapp_consent_receipts.py'
+    spec=importlib.util.spec_from_file_location('consent_migration',consent_path); consent_migration=importlib.util.module_from_spec(spec); spec.loader.exec_module(consent_migration)
+    with admin.begin() as c:
+     with Operations.context(MigrationContext.configure(c)): consent_migration.upgrade()
+     assert c.execute(text("SELECT whatsapp_consent_nonce_hash FROM crm_clientes_preferencias WHERE cliente_id='crm-upgrade-fixture'")).scalar() is None
+     c.execute(text("UPDATE crm_clientes_preferencias SET whatsapp_marketing_consented_at=now() WHERE cliente_id='crm-upgrade-fixture'"))
+     with pytest.raises(RuntimeError, match='comprovantes de consentimento'):
+      with Operations.context(MigrationContext.configure(c)): consent_migration.downgrade()
+     c.execute(text("UPDATE crm_clientes_preferencias SET whatsapp_marketing_consented_at=NULL WHERE cliente_id='crm-upgrade-fixture'"))
+     with Operations.context(MigrationContext.configure(c)): consent_migration.downgrade()
+     with Operations.context(MigrationContext.configure(c)): consent_migration.upgrade()
+    print('PASS: consent receipts round trip preserves existing preferences without granting consent')

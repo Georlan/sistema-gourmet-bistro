@@ -51,8 +51,13 @@ def enabled() -> bool:
     return os.getenv('KOMA_CENTRAL_WA_CAMPAIGNS_ENABLED', 'false').lower() == 'true'
 
 
-def policy():
-    return dict(enabled=enabled(), interaction_days=INTERACTION_DAYS, cooldown_days=COOLDOWN_DAYS,
+def policy(*, restaurant_id=None):
+    from .whatsapp_marketing_consent import gate
+    available=False
+    if restaurant_id is not None:
+        try: gate(restaurant_id); available=True
+        except HTTPException: pass
+    return dict(consent_available=available,enabled=enabled(), interaction_days=INTERACTION_DAYS, cooldown_days=COOLDOWN_DAYS,
                 daily_limit=DAILY_LIMIT, daily_scope='shared_sender', proof_required=True, start_hour=10, end_hour=21, timezone='America/Fortaleza')
 
 
