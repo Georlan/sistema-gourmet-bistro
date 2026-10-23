@@ -495,3 +495,42 @@ def test_public_validation_rejection_is_correlated_without_customer_data(char_cl
     diagnostic = json.dumps(entries)
     for private in ['private-customer-name', '11999990007', 'private-product-note', 'private-address-and-phone']:
         assert private not in diagnostic
+
+
+def test_web_order_unbound_drink_rejects_restaurant_modifier_without_creating_order(char_client, char_setup):
+    """Mesmo tenant não basta: o complemento precisa pertencer ao produto."""
+    from app.database import tenant_session_scope
+    from app.models import Categoria
+
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, CHAR_RESTAURANT_ID):
+            db.add(Categoria(id='cat-char-no-modifiers', restaurante_id=CHAR_RESTAURANT_ID, nome='Bebidas sem montagem'))
+            db.flush()
+            db.add(Produto(id='drink-char-no-modifiers', restaurante_id=CHAR_RESTAURANT_ID,
+                           categoria_id='cat-char-no-modifiers', nome='Refrigerante sem montagem', preco=6, ativo=True))
+            db.commit()
+    finally:
+        db.close()
+    payload = {
+        'restaurante_id': CHAR_RESTAURANT_ID, 'cliente_nome': 'Teste isolado vínculo',
+        'cliente_telefone': '11999990007', 'tipo_pedido': 'retirada',
+        'itens': [{'produto_id': 'drink-char-no-modifiers', 'quantidade': 1, 'modificador_ids': []}],
+    }
+    with patch('app.adapters.orders.web_adapter._enforce_public_order_rate_limits'):
+        assert char_client.post('/cardapio/pedidos', json=payload).status_code == 201
+        db = SessionLocal()
+        try:
+            with tenant_session_scope(db, CHAR_RESTAURANT_ID):
+                before = db.query(Comanda).filter_by(restaurante_id=CHAR_RESTAURANT_ID).count()
+        finally:
+            db.close()
+        payload['itens'][0]['modificador_ids'] = ['mod-char-bacon']
+        response = char_client.post('/cardapio/pedidos', json=payload)
+        assert response.status_code == 404, response.text
+        db = SessionLocal()
+        try:
+            with tenant_session_scope(db, CHAR_RESTAURANT_ID):
+                assert db.query(Comanda).filter_by(restaurante_id=CHAR_RESTAURANT_ID).count() == before
+        finally:
+            db.close()

@@ -377,3 +377,22 @@ class TestOrderValidationService:
         assert quote.coupon_discount == Decimal("10.60")
         assert quote.delivery_fee == Decimal("6.00")
         assert quote.total == Decimal("101.40")
+
+
+def test_explicitly_unbound_product_rejects_same_tenant_modifier():
+    """Um produto sem vínculos não herda todos os complementos do restaurante."""
+    product = ValidationProduct(
+        id="drink", restaurant_id=1, name="Refrigerante", price=Decimal("6.00"),
+        is_active=True, allowed_modifier_group_ids=(),
+    )
+    modifier = ValidationModifier(
+        id="protein", group_id="proteins", restaurant_id=1,
+        name="Frango", price=Decimal("0.00"), is_active=True,
+    )
+    context = ValidationContext(
+        restaurant_id=1, fulfillment=FulfillmentType.PICKUP,
+        items=(OrderValidationInputItem(product_id="drink", quantity=1, modifier_ids=("protein",)),),
+        catalog_products={"drink": product}, catalog_modifiers={"protein": modifier},
+    )
+    with pytest.raises(ModifierGroupMismatchError):
+        OrderValidationService.validate(context)

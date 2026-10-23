@@ -87,6 +87,9 @@ export default function CardapioProductModal({
   const [feedback, setFeedback] = useState("");
   const [showToast, setShowToast] = useState(false);
   const [expandedExtras, setExpandedExtras] = useState<Record<string, boolean>>({});
+  const draftOptionsRef = useRef(selectedOptions);
+  const [draftIdentity, setDraftIdentity] = useState<{ productId: Product['id']; restaurantId: typeof restaurantId; initialItem: typeof initialItem } | null>(null);
+  useEffect(() => { draftOptionsRef.current = selectedOptions; }, [selectedOptions]);
 
   const reportedViewRef = useRef(false);
   useEffect(() => {
@@ -140,19 +143,32 @@ export default function CardapioProductModal({
   }, [product]);
 
   useEffect(() => {
+    const previous = draftIdentity;
+    const newDraft = !previous || previous.productId !== product.id
+      || previous.restaurantId !== restaurantId || previous.initialItem !== initialItem;
+    const source = newDraft ? initialItem?.selectedOptions || {} : draftOptionsRef.current;
     const initial: Record<string, ProductOption[]> = {};
     allModifiers.forEach((modifier) => {
       const options = new Map(modifier.options.map(option => [option.id, option]));
-      initial[modifier.id] = (initialItem?.selectedOptions[modifier.id] || []).flatMap(option => options.has(option.id) ? [options.get(option.id)!] : []);
+      initial[modifier.id] = (source[modifier.id] || []).flatMap(option => options.has(option.id) ? [options.get(option.id)!] : []);
     });
     setSelectedOptions(initial);
-    setQuantity(initialItem?.quantity || 1);
-    setNotes(initialItem?.notes || "");
-    const previousCount = Object.values(initialItem?.selectedOptions || {}).flat().length;
-    setFeedback(previousCount > Object.values(initial).flat().length ? "Algumas opções não estão mais disponíveis. Confira a montagem antes de salvar." : "");
-    setCurrentImgIndex(0);
-    setExpandedExtras({});
-  }, [allModifiers, product, initialItem]);
+    const previousCount = Object.values(source).flat().length;
+    if (previousCount > Object.values(initial).flat().length) {
+      setFeedback("Algumas opções não estão mais disponíveis. Confira a montagem antes de salvar.");
+    } else if (newDraft) {
+      setFeedback("");
+    }
+    if (newDraft) {
+      setQuantity(initialItem?.quantity || 1);
+      setNotes(initialItem?.notes || "");
+      setCurrentImgIndex(0);
+      setExpandedExtras({});
+      // Estado, em vez de ref, mantém a inicialização idempotente no replay
+      // de efeitos do StrictMode antes do primeiro commit das escolhas.
+      setDraftIdentity({ productId: product.id, restaurantId, initialItem });
+    }
+  }, [allModifiers, product, initialItem, restaurantId, draftIdentity]);
 
   const unitPrice = useMemo(() => {
     let value = product.price;

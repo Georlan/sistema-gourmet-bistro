@@ -260,8 +260,8 @@ class OrderValidationService:
                 if not mod.is_active:
                     raise ModifierInactiveError(mid)
 
-                # Se o produto possui grupos permitidos definidos, verificar vínculo
-                if prod.allowed_modifier_group_ids and mod.group_id not in prod.allowed_modifier_group_ids:
+                # Ausência de vínculos não autoriza complementos de outros produtos.
+                if mod.group_id not in prod.allowed_modifier_group_ids:
                     raise ModifierGroupMismatchError(mid, prod.id)
 
                 mod_price = to_money_decimal(mod.price)

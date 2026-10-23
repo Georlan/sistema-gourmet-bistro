@@ -104,3 +104,19 @@ def test_internal_websocket_negotiates_auth_subprotocol():
         socket.accept.assert_awaited_once_with(subprotocol="koma-auth")
 
     asyncio.run(exercise())
+
+
+def test_catalog_invalidation_never_reaches_another_tenant():
+    async def exercise():
+        manager = ConnectionManager()
+        own_internal, own_client, foreign_internal, foreign_client = [AsyncMock() for _ in range(4)]
+        for socket, tenant, audience in [(own_internal, 501, 'internal'), (own_client, 501, 'client'),
+                                         (foreign_internal, 502, 'internal'), (foreign_client, 502, 'client')]:
+            await manager.connect(socket, tenant, client_type=audience)
+        event = {'event': 'catalog_updated'}
+        await manager.broadcast(event, 501)
+        own_internal.send_json.assert_awaited_once_with(event)
+        own_client.send_json.assert_awaited_once_with(event)
+        foreign_internal.send_json.assert_not_awaited()
+        foreign_client.send_json.assert_not_awaited()
+    asyncio.run(exercise())
