@@ -12,7 +12,7 @@ O catálogo comercial canônico vigente para novas contratações (`product-cont
 
 A cobrança da mensalidade fixa segue a mesma regra em qualquer forma de pagamento disponibilizada no checkout:
 
-- **R$ 0 de mensalidade fixa no ato da contratação ("hoje")**: nenhuma cobrança é efetuada no momento da adesão;
+- **Sem cobrança da mensalidade no momento da adesão**: o plano contratado tem valor mensal ou anual definido, mas a primeira cobrança fica para depois da implantação e dos 7 dias de teste, conforme o método de pagamento; não se trata de plano gratuito;
 - contratos históricos anteriores preservam suas condições aceitas (ex.: contratos de versão anterior com mensalidade fixa de R$ 0 não criam recorrência de valor zero no provedor);
 - no cartão, o cliente autoriza a recorrência antes da liberação e ela fica **pausada durante a implantação inicial**;
 - no Pix, o cliente apenas seleciona a modalidade; **nenhum QR é gerado nem pago na adesão**;
