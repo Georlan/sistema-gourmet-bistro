@@ -15,11 +15,12 @@ test('all CRM workspaces render backend-generated responses without losing the o
   page.on('pageerror',error=>errors.push(error.message));
   await mockCashierBackend(page);
   await seedCashierSession(page);
+  await page.route('**/fidelidade/crm/whatsapp/policy', route => route.fulfill({json:{enabled:true,interaction_days:21,cooldown_days:7,daily_limit:5,daily_scope:'shared_sender'}}));
   await page.route('**/caixa/configuracoes',route=>route.fulfill({json:{...cashierConfig,plano:'premium',plano_efetivo:'premium',entitlements:{...cashierConfig.entitlements,loyalty:true,coupons:true}}}));
   await page.routeWebSocket(/\/ws\//,socket=>socket.onMessage(()=>{}));
   await page.route('**/caixa/cupons',route=>route.fulfill({json:[]}));
   await page.route('**/caixa/cupons/economia/recomendacao',route=>route.fulfill({json:{mode:'automatico',source:'conservative_default',suggestion:{effective_reward_percent:2,cashback_percent:2,points_per_real:1,point_value_brl:0.02},evidence:{lookback_days:30,orders_analyzed:0,cost_coverage_percent:0,known_contribution_percent:null},warnings:[],message:'Sugestão de teste isolada'}}));
-  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/,route=>route.fulfill({json:contract.customers}));
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/,route=>route.fulfill({json:contract.customers.map((c: object) => ({...c,whatsapp_campaign_interaction_verified:true}))}));
   await page.route('**/fidelidade/crm/resumo**',route=>route.fulfill({json:contract.summary}));
   await page.route('**/fidelidade/clientes/*/perfil',route=>route.fulfill({json:contract.profile}));
   await page.route('**/fidelidade/clientes/*/preferencias', async route=>{
@@ -27,7 +28,7 @@ test('all CRM workspaces render backend-generated responses without losing the o
     await route.fulfill({json:{ok:true}});
   });
   await page.route('**/fidelidade/crm/campanhas', async route=>{savedCampaign=route.request().postDataJSON(); campaignCreates++; await route.fulfill({json:{id:`created-fixture-${campaignCreates}`}});});
-  await page.route('**/fidelidade/crm/contatos', async route=>{savedContact=route.request().postDataJSON(); await route.fulfill({json:{id:'contact-fixture'}});});
+  await page.route('**/fidelidade/crm/campanhas/*/whatsapp', async route=>{savedContact={...route.request().postDataJSON(),campanha_id:decodeURIComponent(new URL(route.request().url()).pathname.split('/').at(-2)!)}; await route.fulfill({json:{id:'contact-fixture'}});});
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
   if (!(await page.locator('.cashier-sidebar:visible').count())) {
@@ -100,13 +101,13 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await page.screenshot({path:testInfo.outputPath(`campaign-message-${testInfo.project.name}.png`),fullPage:true,animations:'disabled'});
   await page.getByRole('button',{name:'Salvar e revisar contatos',exact:true}).click();
   await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
-  await expect(page.getByText(/contatos registrados manualmente de .* selecionados nesta sessão/)).toBeVisible();
+  await expect(page.getByText(/preparações na fila central de .* selecionados nesta sessão/)).toBeVisible();
   await expect.poll(()=>savedCampaign?.abordagem_tipo).toBe('SEM_DESCONTO');
   await expect.poll(()=>savedCampaign?.segmento_filtro).toBe(opportunity.id);
-  await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
-  await expect.poll(()=>savedContact?.canal).toBe('WHATSAPP_MANUAL');
-  await expect.poll(()=>savedContact?.acao_executada).toBe('CONTATO_MANUAL_CONFIRMADO');
-  expect(savedContact?.mensagem_personalizada).toEqual(expect.any(String));
+  await page.getByRole('button',{name:'Preparar envio pelo KÔMA',exact:true}).first().click();
+  await expect.poll(()=>savedContact?.cliente_id).toEqual(expect.any(String));
+  expect(savedContact).not.toHaveProperty('mensagem_personalizada');
+  expect(savedContact).not.toHaveProperty('canal');
   expect(savedContact?.campanha_id).toBe('created-fixture-1');
 
   // Editing after a recorded contact must not attach new contacts to the old campaign.
@@ -118,8 +119,8 @@ test('all CRM workspaces render backend-generated responses without losing the o
   await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
   await expect.poll(()=>campaignCreates).toBe(2);
   expect(savedCampaign?.nome).toBe('Nova campanha de retorno');
-  await expect(page.getByRole('button',{name:'Registrar contato manual',exact:true}).first()).toBeEnabled();
-  await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
+  await expect(page.getByRole('button',{name:'Preparar envio pelo KÔMA',exact:true}).first()).toBeEnabled();
+  await page.getByRole('button',{name:'Preparar envio pelo KÔMA',exact:true}).first().click();
   await expect.poll(()=>savedContact?.campanha_id).toBe('created-fixture-2');
 
   // Returning to the saved message without edits must not create a duplicate campaign.
@@ -158,11 +159,12 @@ test('all CRM workspaces render backend-generated responses without losing the o
 test('relationship keeps missing results distinct from zero and empty audiences collapsed',async ({page},testInfo)=>{
   await mockCashierBackend(page);
   await seedCashierSession(page);
+  await page.route('**/fidelidade/crm/whatsapp/policy', route => route.fulfill({json:{enabled:true,interaction_days:21,cooldown_days:7,daily_limit:5,daily_scope:'shared_sender'}}));
   await page.routeWebSocket(/\/ws\//,socket=>socket.onMessage(()=>{}));
   const summary=structuredClone(contract.summary);
   summary.oportunidades=summary.oportunidades.map((op:Record<string,unknown>)=>({...op,elegiveis_count:0,elegiveis_cliente_ids:[]}));
   summary.resultados.retorno_apos_abordagem={status_mensuracao:'NAO_MENSURADO',clientes_abordados_no_periodo:0};
-  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/,route=>route.fulfill({json:contract.customers}));
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/,route=>route.fulfill({json:contract.customers.map((c: object) => ({...c,whatsapp_campaign_interaction_verified:true}))}));
   await page.route('**/fidelidade/crm/resumo**',route=>route.fulfill({json:summary}));
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
@@ -195,12 +197,13 @@ test('relationship keeps missing results distinct from zero and empty audiences 
 test('campaign responses cannot unlock edited drafts or carry late contact confirmations forward', async ({page}) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
+  await page.route('**/fidelidade/crm/whatsapp/policy', route => route.fulfill({json:{enabled:true,interaction_days:21,cooldown_days:7,daily_limit:5,daily_scope:'shared_sender'}}));
   await page.routeWebSocket(/[/]ws[/]/, socket => socket.onMessage(() => {}));
   await page.route('**/caixa/configuracoes', route => route.fulfill({json:{
     ...cashierConfig, plano:'premium', plano_efetivo:'premium',
     entitlements:{...cashierConfig.entitlements,loyalty:true,coupons:true},
   }}));
-  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => route.fulfill({json:contract.customers}));
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => route.fulfill({json:contract.customers.map((c: object) => ({...c,whatsapp_campaign_interaction_verified:true}))}));
   await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json:contract.summary}));
   await page.route('**/caixa/cupons', route => route.fulfill({json:[]}));
 
@@ -217,9 +220,9 @@ test('campaign responses cannot unlock edited drafts or carry late contact confi
   let releaseFirstContact!: () => void;
   const firstContactGate = new Promise<void>(resolve => { releaseFirstContact = resolve; });
   const contactCampaignIds: string[] = [];
-  await page.route('**/fidelidade/crm/contatos', async route => {
+  await page.route('**/fidelidade/crm/campanhas/*/whatsapp', async route => {
     const payload = route.request().postDataJSON();
-    contactCampaignIds.push(payload.campanha_id);
+    contactCampaignIds.push(decodeURIComponent(new URL(route.request().url()).pathname.split('/').at(-2)!));
     if (contactCampaignIds.length === 1) await firstContactGate;
     await route.fulfill({json:{id:`contact-fixture-${contactCampaignIds.length}`}});
   });
@@ -251,17 +254,17 @@ test('campaign responses cannot unlock edited drafts or carry late contact confi
   expect(campaignCreates).toBe(2);
 
   // A late confirmation for the old campaign must not mark the newly edited draft.
-  await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
+  await page.getByRole('button',{name:'Preparar envio pelo KÔMA',exact:true}).first().click();
   await expect.poll(() => contactCampaignIds.length).toBe(1);
   await page.getByRole('button',{name:'1. Público',exact:true}).click();
   await page.getByLabel('Identificação da campanha').fill('Terceira campanha');
   releaseFirstContact();
-  await expect(page.getByText(/Contato registrado na campanha anterior/)).toBeVisible();
+  await expect(page.getByText(/Preparação vinculada à campanha anterior/)).toBeVisible();
   await page.getByRole('button',{name:'2. Mensagem',exact:true}).click();
   await page.getByRole('button',{name:'Salvar e revisar contatos',exact:true}).click();
   await expect(page.getByRole('button',{name:'3. Contatos',exact:true})).toHaveAttribute('aria-current','step');
-  await expect(page.getByRole('button',{name:'Registrar contato manual',exact:true}).first()).toBeEnabled();
-  await page.getByRole('button',{name:'Registrar contato manual',exact:true}).first().click();
+  await expect(page.getByRole('button',{name:'Preparar envio pelo KÔMA',exact:true}).first()).toBeEnabled();
+  await page.getByRole('button',{name:'Preparar envio pelo KÔMA',exact:true}).first().click();
   await expect.poll(() => contactCampaignIds.length).toBe(2);
   expect(contactCampaignIds).toEqual(['campaign-fixture-2','campaign-fixture-3']);
   expect(campaignCreates).toBe(3);
@@ -270,6 +273,7 @@ test('campaign responses cannot unlock edited drafts or carry late contact confi
 test('customer base metadata stays honest beyond the first 100 and pages load only on request', async ({page}) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
+  await page.route('**/fidelidade/crm/whatsapp/policy', route => route.fulfill({json:{enabled:true,interaction_days:21,cooldown_days:7,daily_limit:5,daily_scope:'shared_sender'}}));
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
   const data = Array.from({length: 125}, (_, index) => ({
     ...contract.customers[0],
@@ -312,6 +316,7 @@ test('customer base metadata stays honest beyond the first 100 and pages load on
 test('stage5 Results ignores stale HTTP responses and charts only dated real events', async ({page}, testInfo) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
+  await page.route('**/fidelidade/crm/whatsapp/policy', route => route.fulfill({json:{enabled:true,interaction_days:21,cooldown_days:7,daily_limit:5,daily_scope:'shared_sender'}}));
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
   let pendingSeven: import('@playwright/test').Route | null = null;
   const makeSummary = (days: number, returns: number) => {
@@ -385,6 +390,7 @@ test('stage5 Results ignores stale HTTP responses and charts only dated real eve
 test('results recover from forbidden, unauthorized, network and malformed responses without losing navigation', async ({page}) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
+  await page.route('**/fidelidade/crm/whatsapp/policy', route => route.fulfill({json:{enabled:true,interaction_days:21,cooldown_days:7,daily_limit:5,daily_scope:'shared_sender'}}));
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
   let failure: number | 'network' | 'malformed' | null = null;
   await page.route('**/fidelidade/crm/resumo**', async route => {
@@ -420,13 +426,14 @@ test('results recover from forbidden, unauthorized, network and malformed respon
 test('campaign and contact success require a valid server acknowledgement', async ({page}) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
+  await page.route('**/fidelidade/crm/whatsapp/policy', route => route.fulfill({json:{enabled:true,interaction_days:21,cooldown_days:7,daily_limit:5,daily_scope:'shared_sender'}}));
   await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
-  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => route.fulfill({json: contract.customers}));
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => route.fulfill({json: contract.customers.map((c: object) => ({...c,whatsapp_campaign_interaction_verified:true}))}));
   await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json: contract.summary}));
   let validCampaign = false;
   let validContact = false;
   await page.route('**/fidelidade/crm/campanhas', route => route.fulfill({json: validCampaign ? {id:'ack-campaign'} : {}}));
-  await page.route('**/fidelidade/crm/contatos', route => route.fulfill({json: validContact ? {id:'ack-contact'} : {}}));
+  await page.route('**/fidelidade/crm/campanhas/*/whatsapp', route => route.fulfill({json: validContact ? {id:'ack-contact'} : {}}));
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
   if (!(await page.locator('.cashier-sidebar:visible').count())) {
@@ -445,12 +452,44 @@ test('campaign and contact success require a valid server acknowledgement', asyn
   await expect(page.getByRole('button', {name:'3. Contatos', exact:true})).toBeDisabled();
   validCampaign = true;
   await page.getByRole('button', {name:'Salvar e revisar contatos', exact:true}).click();
-  const record = page.getByRole('button', {name:'Registrar contato manual', exact:true}).first();
+  const record = page.getByRole('button', {name:'Preparar envio pelo KÔMA', exact:true}).first();
   await record.click();
   await expect(page.getByText('O servidor não confirmou o registro do contato.', {exact:true})).toBeVisible();
   await expect(record).toBeEnabled();
-  await expect(page.getByText('Contato manual registrado', {exact:true})).toHaveCount(0);
+  await expect(page.getByText('Preparado na fila central', {exact:true})).toHaveCount(0);
   validContact = true;
   await record.click();
-  await expect(page.getByRole('button', {name:'Contato manual registrado', exact:true}).first()).toBeDisabled();
+  await expect(page.getByRole('button', {name:'Preparado na fila central', exact:true}).first()).toBeDisabled();
+});
+
+test('campanha sem interação verificada não abre WhatsApp nem cria envio central', async ({page}, info) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.route('**/fidelidade/crm/whatsapp/policy', route => route.fulfill({json:{enabled:true}}));
+  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  await page.route(/\/fidelidade\/clientes(?:\?.*)?$/, route => route.fulfill({json:contract.customers}));
+  await page.route('**/fidelidade/crm/resumo**', route => route.fulfill({json:contract.summary}));
+  await page.route('**/fidelidade/crm/campanhas', route => route.fulfill({json:{id:'blocked-campaign'}}));
+  let sends = 0;
+  let popups = 0;
+  page.on('popup', () => popups++);
+  await page.route('**/fidelidade/crm/campanhas/*/whatsapp', route => { sends++; return route.fulfill({json:{id:'must-not-queue'}}); });
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  if (!(await page.locator('.cashier-sidebar:visible').count())) {
+    const menu=page.getByRole('button',{name:'Abrir menu completo',exact:true});
+    if(await menu.isVisible()) await menu.click();
+    else await page.getByRole('button',{name:'Abrir menu principal',exact:true}).click();
+  }
+  await page.locator('.cashier-sidebar:visible').getByRole('button',{name:/^Relacionamento(?: \d+)?$/}).click();
+  const opportunity=contract.summary.oportunidades.find((op:{elegiveis_count:number})=>op.elegiveis_count>0);
+  await page.locator('article').filter({has:page.getByRole('heading',{name:opportunity.titulo,exact:true})}).getByRole('button',{name:'Preparar ação',exact:true}).click();
+  await page.getByRole('button',{name:'Continuar para mensagem',exact:true}).click();
+  await page.getByRole('button',{name:'Salvar e revisar contatos',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Preparar envio pelo KÔMA',exact:true}).first()).toBeDisabled();
+  await expect(page.getByText('Bloqueado: falta interação recebida e verificada nos últimos 21 dias.').first()).toBeVisible();
+  await expect(page.getByRole('button',{name:'Abrir WhatsApp',exact:true})).toHaveCount(0);
+  expect(sends).toBe(0);
+  expect(popups).toBe(0);
+  if(process.env.KOMA_EVIDENCE_DIR) await page.screenshot({path:`${process.env.KOMA_EVIDENCE_DIR}/campanha-bloqueada-${info.project.name}.png`,fullPage:true});
 });

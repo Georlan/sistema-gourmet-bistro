@@ -241,3 +241,23 @@ def record_crm_contact_endpoint(
         target_audience="internal",
     )
     return result
+
+
+class CentralCampaignRequest(BaseModel):
+    cliente_id: str = Field(min_length=1)
+
+
+@router.get("/fidelidade/crm/whatsapp/policy")
+def central_campaign_policy(user: Usuario = Depends(require_permission("clientes:operar"))):
+    from ..services.central_whatsapp_campaigns import policy
+    return policy()
+
+
+@router.post("/fidelidade/crm/campanhas/{campaign_id}/whatsapp", status_code=202)
+def prepare_central_campaign(campaign_id: str, body: CentralCampaignRequest,
+    db: Session = Depends(get_db), user: Usuario = Depends(require_permission("clientes:operar"))):
+    from ..services.central_whatsapp_campaigns import enqueue_campaign
+    row = enqueue_campaign(db, require_tenant_id(), campaign_id, body.cliente_id)
+    db.commit()
+    return {"id": row.id, "status": row.status, "queued": row.status in {"pending", "processing", "failed"},
+            "delivered_to_device": False}
