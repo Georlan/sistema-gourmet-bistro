@@ -407,11 +407,9 @@ def test_delivery_dispatch_operational_flow_preserved_on_pocket(monkeypatch, wha
                 NotificacaoWhatsApp.comanda_id == cmd_id,
                 NotificacaoWhatsApp.tipo == "atribuicao_motoboy",
             ).first()
-            if whatsapp_enabled:
-                assert notif is not None
-                assert notif.status_envio == "enviado"
-            else:
-                assert notif is None
+            # The retired global background sender no longer generates courier
+            # messages. Status/assignment and plan-specific PWA proof remain below.
+            assert notif is None
     finally:
         current_restaurante_id.reset(token)
 

@@ -79,7 +79,11 @@ def test_central_recipient_enrollment_never_contacts_evolution(char_setup, monke
         db.close()
 
 
-def test_existing_individual_session_cannot_be_overwritten(char_setup):
+def test_explicit_central_enrollment_replaces_legacy_registration_without_provider(char_setup, monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Cadastro central não pode operar a sessão do restaurante")
+    for name in ("create_instance", "connect_instance", "connection_state", "owner_phone", "delete_instance", "logout_instance"):
+        monkeypatch.setattr(routes.wa, name, forbidden)
     rid = CHAR_RESTAURANT_ID
     db = SessionLocal(restaurante_id=rid)
     user = SimpleNamespace(restaurante_id=rid)
@@ -89,16 +93,16 @@ def test_existing_individual_session_cannot_be_overwritten(char_setup):
         config.whatsapp_recipient_phone = "5511987654321"
         config.whatsapp_alerts_enabled = True
         db.commit()
-        with pytest.raises(HTTPException) as existing:
-            routes.register_central_recipient(
-                routes.RecipientRegistrationRequest(
-                    phone="21987654321", confirm_receiving=True,
-                ), db, user,
-            )
-        assert existing.value.status_code == 409
+        response = routes.register_central_recipient(
+            routes.RecipientRegistrationRequest(
+                phone="21987654321", confirm_receiving=True,
+            ), db, user,
+        )
+        assert response["mode"] == "central"
         db.refresh(config)
-        assert config.whatsapp_alerts_enabled
-        assert config.whatsapp_instance_name == routes.wa.instance_name(rid)
+        assert config.whatsapp_alerts_enabled is False
+        assert config.whatsapp_instance_name == CENTRAL_INSTANCE_MARKER
+        assert config.whatsapp_recipient_phone == "5521987654321"
     finally:
         db.rollback()
         db.close()
