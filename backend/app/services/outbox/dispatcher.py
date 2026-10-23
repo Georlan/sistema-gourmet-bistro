@@ -55,7 +55,7 @@ def recover_stale_outbox_claims(
     count = len(stale_events)
     if count > 0:
         for ev in stale_events:
-            if ev.event_name in {"koma.whatsapp.order_created", "koma.whatsapp.central_operator_order", "koma.whatsapp.customer_status"} and ev.attempts > 0:
+            if ev.event_name in {"koma.whatsapp.order_created", "koma.whatsapp.central_operator_order", "koma.whatsapp.customer_status", "koma.whatsapp.campaign"} and ev.attempts > 0:
                 ev.status = "dead_letter"
                 ev.last_error = "Tentativa incerta após interrupção; reenvio automático bloqueado."
                 ev.locked_at = None
@@ -100,7 +100,7 @@ def _whatsapp_priority(event) -> int:
             return 1
         if kind == "customer_received":
             return 3
-    return 2
+    return 4 if event.event_name == "koma.whatsapp.campaign" else 2
 
 
 def fair_claim_candidates(events, batch_size: int):
@@ -158,6 +158,7 @@ def claim_outbox_batch(
         (IntegrationOutbox.event_name == "koma.whatsapp.central_operator_order", 0),
         (and_(customer_notice, IntegrationOutbox.payload["kind"].as_string() == "customer_cancelled"), 1),
         (and_(customer_notice, IntegrationOutbox.payload["kind"].as_string() == "customer_received"), 3),
+        (IntegrationOutbox.event_name == "koma.whatsapp.campaign", 4),
         else_=2,
     )
     # Bounded over-fetch gives other tenants a slot even under a busy restaurant.
@@ -233,7 +234,7 @@ def settle_outbox_event(
         record.next_retry_at = next_retry_at
     if status in {"delivered", "dead_letter"}:
         record.processed_at = now
-    if record.event_name in {"koma.whatsapp.central_operator_order", "koma.whatsapp.customer_status"}:
+    if record.event_name in {"koma.whatsapp.central_operator_order", "koma.whatsapp.customer_status", "koma.whatsapp.campaign"}:
         from ..whatsapp_usage import record_outcome
         if status == "delivered":
             outcome = "accepted"  # Evolution 2xx, not handset delivery.
@@ -241,7 +242,7 @@ def settle_outbox_event(
             outcome = "discarded"
         elif status == "failed":
             outcome = "deferred" if (
-                (last_error or "").startswith(("Remetente central em pausa", "Limite de vazão"))
+                (last_error or "").startswith(("Remetente central em pausa", "Limite de vazão", "Campanha aguardando"))
             ) else "failed"
         else:
             outcome = ""
@@ -345,6 +346,11 @@ def dispatch_single_claimed_snapshot(
         from ..central_whatsapp import dispatch_operator_alert
         with tenant_session_scope(db, int(rid)):
             return dispatch_operator_alert(db, snapshot)
+
+    if snapshot.get("event_name") == "koma.whatsapp.campaign":
+        from ..central_whatsapp_campaigns import dispatch_campaign
+        with tenant_session_scope(db, int(rid)):
+            return dispatch_campaign(db, snapshot)
 
     if snapshot.get("event_name") == "koma.whatsapp.customer_status":
         from ..customer_whatsapp_dispatch import dispatch_customer_notice

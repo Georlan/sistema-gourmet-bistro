@@ -2117,6 +2117,8 @@ class CentralWhatsAppSenderState(Base):
     sender_key = Column(String(64), primary_key=True)
     suspended_at = Column(DateTime(timezone=True), nullable=True)
     accept_events_after = Column(DateTime(timezone=True), nullable=True)
+    campaign_day = Column(String(10), nullable=True)
+    campaign_attempts = Column(Integer, nullable=False, default=0, server_default="0")
     next_send_at = Column(DateTime(timezone=True), nullable=True)
     circuit_open_until = Column(DateTime(timezone=True), nullable=True)
     failures = Column(Integer, nullable=False, default=0, server_default="0")
@@ -2124,12 +2126,14 @@ class CentralWhatsAppSenderState(Base):
 
 class WhatsAppContactOptOut(Base):
     __tablename__ = "whatsapp_contact_opt_outs"
+    marketing_only = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), primary_key=True, default=lambda: current_restaurante_id.get())
     phone_hash = Column(String(64), primary_key=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 
 class WhatsAppOptOutCapability(Base):
+    marketing_only = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     # Only a SHA-256 digest of the random capability is retained.
     __tablename__ = "whatsapp_opt_out_capabilities"
     __table_args__ = (Index("ix_wa_optout_capability_tenant", "restaurante_id"),)

@@ -54,6 +54,12 @@ class CrmClientePreferencia(Base):
     )
     cliente_id = Column(String, nullable=False, index=True)
     opt_out_marketing = Column(Boolean, default=False, nullable=False)
+    # Only an authenticated inbound adapter may write interaction proof.
+    whatsapp_interaction_at = Column(DateTime(timezone=True), nullable=True)
+    whatsapp_interaction_phone_hash = Column(String(64), nullable=True)
+    whatsapp_marketing_opt_in = Column(Boolean, nullable=False, default=False, server_default="false")
+    whatsapp_campaign_last_sent_at = Column(DateTime(timezone=True), nullable=True)
+    whatsapp_campaign_last_event_id = Column(String(36), nullable=True)
     motivo_opt_out = Column(String(255), nullable=True)
     canal_preferido = Column(String(32), nullable=True)
     observacoes_declaradas = Column(Text, nullable=True)

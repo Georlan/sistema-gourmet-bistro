@@ -56,6 +56,7 @@ export interface LoyaltyCustomer {
     | 'ATENCAO'
     | 'REATIVAR';
   telefone_valido_whatsapp?: boolean;
+  whatsapp_campaign_interaction_verified?: boolean;
   opt_out_marketing?: boolean;
   motivo_opt_out?: string | null;
   canal_preferido?: string;

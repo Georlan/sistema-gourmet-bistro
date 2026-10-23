@@ -298,7 +298,7 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
 
 def dispatch_registered_message(
     db: Session, snapshot: dict, config: CentralConfiguration, target: str, message: str,
-    *, customer: bool = False,
+    *, customer: bool = False, campaign: bool = False,
 ) -> bool:
     """Persistent shared sender lane for operator and status notices.
 
@@ -319,7 +319,14 @@ def dispatch_registered_message(
     settings = _locked_whatsapp_config_query(db, rid).populate_existing().one_or_none()
     if settings is None:
         return settle("dead_letter", "Configuração do restaurante ausente.")
-    if customer:
+    if campaign:
+        from .central_whatsapp_campaigns import resolve_campaign
+        from fastapi import HTTPException
+        try:
+            target, message = resolve_campaign(db, snapshot)
+        except HTTPException:
+            return settle("dead_letter", "Campanha sem autorização/interação comprovada.")
+    elif customer:
         from .customer_whatsapp_dispatch import customer_notices_enabled
         if not customer_notices_enabled(rid, settings):
             return settle("dead_letter", "Autorização para avisos ao cliente revogada.")
@@ -343,6 +350,16 @@ def dispatch_registered_message(
     key = os.getenv("EVOLUTION_API_KEY", "").strip()
     if not (base.startswith("https://") or base.startswith("http://")) or not key:
         return settle("dead_letter", "Evolution não configurada.")
+
+    if campaign:
+        from .central_whatsapp_campaigns import reserve_campaign, CampaignDeferred
+        from fastapi import HTTPException
+        try:
+            reserve_campaign(db, snapshot, sender_state)
+        except CampaignDeferred as deferred:
+            return settle("failed", "Campanha aguardando horário ou cota diária; sem consulta ao provedor.", retry_at=deferred.until)
+        except HTTPException:
+            return settle("dead_letter", "Campanha bloqueada por frequência, prova de interação ou limite diário.")
 
     pilot_rid, sender, instance = rid, config.sender, config.instance
     headers = {"apikey": key, "Accept": "application/json"}
@@ -404,7 +421,16 @@ def dispatch_registered_message(
         return settle("dead_letter", "Remetente suspenso durante a verificação; nenhum envio.", attempts=attempt_number)
     if current != config:
         return settle("dead_letter", "Liberação do remetente alterada antes do envio.", attempts=attempt_number)
-    if customer:
+    if campaign:
+        from .central_whatsapp_campaigns import resolve_campaign
+        from fastapi import HTTPException
+        try:
+            resolved = resolve_campaign(db, snapshot, include_link=True)
+        except HTTPException:
+            return settle("dead_letter", "Campanha revogada ou contato alterado durante verificação.", attempts=attempt_number)
+        if not phones_match(resolved[0], target):
+            return settle("dead_letter", "Contato da campanha alterado durante verificação.", attempts=attempt_number)
+    elif customer:
         from .customer_whatsapp_dispatch import customer_notices_enabled
         if not customer_notices_enabled(rid, latest_settings):
             return settle("dead_letter", "Autorização do restaurante revogada antes do envio.", attempts=attempt_number)
@@ -415,11 +441,11 @@ def dispatch_registered_message(
         resolved = resolve_customer_notice(db, snapshot)
         if resolved is None or not phones_match(resolved[0], target):
             return settle("dead_letter", "Consentimento, contato ou estado alterado antes do envio.", attempts=attempt_number)
-    else:
+    elif not campaign:
         latest_target = registered_operator_phone(latest_settings, config.sender)
         if not phones_match(latest_target, target):
             return settle("dead_letter", "Destinatário alterado durante a tentativa; aguarde um novo pedido.", attempts=attempt_number)
-    if customer:
+    if customer or campaign:
         target, message = resolved
         db.commit()  # Persist the capability before HTTP; release all SQL locks.
     else:

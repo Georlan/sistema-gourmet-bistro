@@ -56,8 +56,11 @@ def customer_notices_enabled(restaurant_id: int, tenant: ConfiguracaoRestaurante
     return bool(config and tenant is not None and tenant.whatsapp_customer_notices_enabled is True)
 
 
-def opted_out(db: Session, rid: int, digest: str) -> bool:
-    return db.query(WhatsAppContactOptOut).filter_by(restaurante_id=rid, phone_hash=digest).first() is not None
+def opted_out(db: Session, rid: int, digest: str, *, include_marketing: bool = False) -> bool:
+    query = db.query(WhatsAppContactOptOut).filter_by(restaurante_id=rid, phone_hash=digest)
+    if not include_marketing:
+        query = query.filter(WhatsAppContactOptOut.marketing_only.is_(False))
+    return query.first() is not None
 
 
 def _recipient(db: Session, rid: int, order: Comanda) -> str | None:

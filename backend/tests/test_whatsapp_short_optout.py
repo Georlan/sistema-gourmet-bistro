@@ -128,3 +128,21 @@ def test_legacy_rejects_other_types_and_expiry():
         token = jwt.encode({'type': kind, 'rid': 701, 'contact': 'a' * 64, 'exp': exp}, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         with pytest.raises(ValueError):
             optout.resolve_opt_out_token(token)
+
+
+def test_promotional_capability_cancels_only_promotions_via_real_http(flow):
+    engine, client = flow
+    with Session(engine) as db:
+        token = optout.create_opt_out_token(701, '5511999999999', db, marketing_only=True)
+        db.commit()
+    preview = client.post('/api/cardapio/whatsapp/opt-out/preview', json={'token': token})
+    assert preview.json() == {'restaurant_name': 'D8 Burger', 'marketing_only': True}
+    with Session(engine) as db: assert db.query(WhatsAppContactOptOut).count() == 0
+    for _ in range(2):
+        assert client.post('/api/cardapio/whatsapp/opt-out', json={'token': token}).json() == {'disabled': True}
+    with Session(engine) as db:
+        from app.services.customer_whatsapp_dispatch import opted_out
+        digest = recipient_fingerprint(701, '5511999999999')
+        assert opted_out(db, 701, digest, include_marketing=True)
+        assert not opted_out(db, 701, digest)
+        assert not opted_out(db, 702, recipient_fingerprint(702, '5511999999999'), include_marketing=True)
