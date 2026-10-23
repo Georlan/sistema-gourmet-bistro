@@ -16,6 +16,8 @@ A interface prepara o envio central e bloqueia clientes sem comprovação. Não 
 
 ## Limitação deliberada desta entrega
 
+Decisão adicional do titular: o aceite deve ser separado por restaurante, com cancelamento independente, e confirmado pelo próprio cliente em mensagem recebida pelo número do KÔMA que identifique essa loja. Abrir um link ou marcar uma opção não confirma o aceite. A mensagem precisa chegar pelo adaptador autenticado, vinculada ao telefone atual; não reaproveitar consentimento de outra loja.
+
 O adaptador de mensagens recebidas autenticadas ainda não existe. Os novos campos começam vazios e a autorização promocional começa falsa. Por isso nenhum cliente real fica elegível e nenhum envio promocional deve ser ativado nesta publicação. É necessário integrar a fonte autenticada, registrar a autorização com evidência e validar um piloto autorizado antes da ativação. Fixtures locais com evidência simulada só demonstram as regras de bloqueio e concorrência.
 
 ## Migração e reversão
