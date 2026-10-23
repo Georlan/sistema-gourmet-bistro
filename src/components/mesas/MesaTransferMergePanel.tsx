@@ -170,7 +170,7 @@ export function MesaTransferMergePanel({
                         !hasSelected
                           ? 'bg-koma-panel/40 border-koma-border/40 text-gray-600 cursor-not-allowed'
                           : isConfirming
-                            ? 'bg-amber-500/20 border border-amber-500/40 animate-pulse text-amber-800 dark:text-amber-300 cursor-pointer hover:scale-102 font-bold'
+                            ? 'bg-cyan-500/20 border border-cyan-500/40 animate-pulse text-cyan-300 cursor-pointer hover:scale-102 font-bold'
                             : 'bg-koma-panel hover:bg-emerald-500/15 border border-koma-border hover:border-emerald-500/40 text-koma-foreground cursor-pointer hover:scale-102'
                       }`}
                     >
@@ -215,8 +215,8 @@ export function MesaTransferMergePanel({
               </div>
             </div>
           ) : (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 text-xs text-amber-600 dark:text-amber-300 font-sans flex items-start gap-2">
-              <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+            <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-2xl p-3.5 text-xs text-cyan-300 font-sans flex items-start gap-2">
+              <AlertTriangle size={15} className="shrink-0 mt-0.5 text-cyan-400" />
               <span>A mesclagem une as comandas. Use a aba <strong>Transferência → Selecionar Itens</strong> se quiser mover itens específicos sem mesclar a conta.</span>
             </div>
           )}

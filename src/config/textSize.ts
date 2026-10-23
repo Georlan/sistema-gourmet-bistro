@@ -5,12 +5,24 @@ export function normalizeKomaTextSize(value: unknown): KomaTextSize {
   return value === 'grande' || value === 'gigante' ? value : 'padrao';
 }
 export function readKomaTextSize(): KomaTextSize {
-  try { return normalizeKomaTextSize(localStorage.getItem('koma_font_size')); }
-  catch { return 'padrao'; }
+  try {
+    const storage = typeof window !== 'undefined' && window.localStorage ? window.localStorage : (typeof localStorage !== 'undefined' ? localStorage : null);
+    return normalizeKomaTextSize(storage?.getItem('koma_font_size'));
+  } catch {
+    return 'padrao';
+  }
 }
 export function persistKomaTextSize(value: KomaTextSize): KomaTextSize {
   const size = normalizeKomaTextSize(value);
-  try { localStorage.setItem('koma_font_size', size); } catch { /* Preference still works for this session. */ }
-  window.dispatchEvent(new CustomEvent(KOMA_TEXT_SIZE_EVENT, { detail: size }));
+  try {
+    const storage = typeof window !== 'undefined' && window.localStorage ? window.localStorage : (typeof localStorage !== 'undefined' ? localStorage : null);
+    storage?.setItem('koma_font_size', size);
+  } catch { /* Preference still works for this session. */ }
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      const event = typeof CustomEvent === 'function' ? new CustomEvent(KOMA_TEXT_SIZE_EVENT, { detail: size }) : new Event(KOMA_TEXT_SIZE_EVENT);
+      window.dispatchEvent(event);
+    }
+  } catch { /* Event dispatch failure is non-fatal. */ }
   return size;
 }

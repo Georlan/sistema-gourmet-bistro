@@ -609,7 +609,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                             <div className="space-y-2">
                               {settings.exibirImagens && product.imagem && <div className="w-full h-32 rounded-xl overflow-hidden border border-koma-border bg-koma-raised"><img src={product.imagem} alt={product.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" /></div>}
                               <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0"><h4 className="font-serif font-bold text-sm text-koma-foreground">{product.nome}</h4>{groups.length > 0 && <span className={`mt-1 inline-flex px-1.5 py-0.5 rounded border text-[9px] font-bold ${requiredConfig ? 'bg-amber-500/10 border-amber-500/25 text-amber-300' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>{requiredConfig ? 'Escolhas obrigatórias' : `Personalizável${recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}`}</span>}</div>
+                                <div className="min-w-0"><h4 className="font-serif font-bold text-sm text-koma-foreground">{product.nome}</h4>{groups.length > 0 && <span className={`mt-1 inline-flex px-1.5 py-0.5 rounded border text-[9px] font-bold ${requiredConfig ? 'bg-cyan-500/10 border-cyan-500/25 text-cyan-300' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>{requiredConfig ? 'Escolhas obrigatórias' : `Personalizável${recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}`}</span>}</div>
                                 <span className="font-mono text-xs font-bold text-emerald-400 whitespace-nowrap">R$ {money(Number(product.preco))}</span>
                               </div>
                               {settings.exibirDescricoes && product.descricao && <p className="text-[11px] text-koma-subtle leading-relaxed line-clamp-2">{product.descricao}</p>}
@@ -657,7 +657,11 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                 type="button"
                                 disabled={isSubmitting}
                                 onClick={() => requiredConfig ? handleOpenConfig(product) : handleQuickAdd(product)}
-                                className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-500 text-xs font-bold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                className={`inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl text-xs font-bold transition shadow-xs active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${
+                                  requiredConfig
+                                    ? 'border border-emerald-500/40 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/50 hover:border-emerald-500/60'
+                                    : 'bg-emerald-500 text-zinc-950 hover:bg-emerald-400 font-extrabold'
+                                }`}
                                 aria-label={requiredConfig ? `Configurar ${product.nome}` : `Adicionar ${product.nome}`}
                               >
                                 {requiredConfig ? <Settings2 size={14} /> : <Plus size={14} />}
@@ -690,7 +694,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
       {selectedProductToConfigure && (
         <div className="fixed inset-0 z-[80] bg-koma-overlay flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={(event) => event.target === event.currentTarget && closeProductConfig()}>
           <div data-testid="waiter-product-config" role="dialog" aria-modal="true" aria-label={`Configurar ${selectedProductToConfigure.nome}`} className="flex w-full max-w-lg max-h-[92dvh] flex-col overflow-hidden bg-koma-card border border-koma-border rounded-t-3xl sm:rounded-3xl shadow-2xl">
-            <div className="shrink-0 flex items-start justify-between gap-3 border-b border-koma-border p-4 sm:px-6"><div><span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span><h4 className="font-serif font-bold text-lg text-koma-foreground">{selectedProductToConfigure.nome}</h4>{editingDraftItemId && <span className="text-[9px] uppercase font-bold text-amber-400">Editando item do pedido</span>}</div><button type="button" disabled={isSubmitting} onClick={closeProductConfig} className="p-1.5 rounded-full text-koma-muted hover:text-koma-foreground disabled:opacity-50" aria-label="Fechar configuração"><X size={18} /></button></div>
+            <div className="shrink-0 flex items-start justify-between gap-3 border-b border-koma-border p-4 sm:px-6"><div><span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span><h4 className="font-serif font-bold text-lg text-koma-foreground">{selectedProductToConfigure.nome}</h4>{editingDraftItemId && <span className="text-[9px] uppercase font-bold text-cyan-400">Editando item do pedido</span>}</div><button type="button" disabled={isSubmitting} onClick={closeProductConfig} className="p-1.5 rounded-full text-koma-muted hover:text-koma-foreground disabled:opacity-50" aria-label="Fechar configuração"><X size={18} /></button></div>
             <div data-testid="waiter-product-config-body" className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
             {selectedProductToConfigure.descricao && <p className="text-[11px] leading-relaxed text-koma-subtle bg-koma-raised border border-koma-border rounded-xl p-3">{selectedProductToConfigure.descricao}</p>}
 

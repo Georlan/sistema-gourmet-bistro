@@ -64,7 +64,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
         fillHeight
         showItemCount={false}
       >
-        <span className="mt-auto inline-flex w-full min-w-0 max-w-full items-center justify-center whitespace-normal rounded-lg border border-current/20 bg-black/5 px-2 py-1 text-center text-[9px] font-bold uppercase leading-tight tracking-wide dark:bg-white/5">
+        <span className="mt-auto inline-flex w-full min-w-0 max-w-full items-center justify-center whitespace-normal rounded-xl border border-current/20 bg-black/5 px-2 py-1.5 text-center text-[9px] font-bold uppercase leading-tight tracking-wide dark:bg-white/5 shadow-xs transition-colors group-hover:bg-black/10 dark:group-hover:bg-white/10">
           {actionLabel}
         </span>
       </SharedTableCard>

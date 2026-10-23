@@ -3429,8 +3429,17 @@ body {
   .cashier-subnav--shared .cashier-subnav__arrow { flex-basis: 44px; }
 }
 
-/* Inherited text participates too; dimensions are not zoomed. */
-body { font-size: calc(1rem * var(--koma-text-scale, 1)); }
+/* Text scale applies at root so rem units scale across the entire application */
+html {
+  font-size: calc(100% * var(--koma-text-scale, 1));
+}
+html[data-koma-text-size="grande"] {
+  font-size: 120%;
+}
+html[data-koma-text-size="gigante"] {
+  font-size: 140%;
+}
+body { font-size: 1rem; }
 html[data-koma-text-size]:not([data-koma-text-size="padrao"]) .cashier-subnav__button {
   line-height: 1.4;
   height: auto;

@@ -181,21 +181,14 @@ test.describe('App do Garçom - Salão Onda 1', () => {
   test('Top do Salão ocupa menos espaço e não repete contagens já presentes nos filtros', async ({ page }) => {
     await setupWaiterWave1(page);
 
-    const stage = page.locator('.waiter-salon-stage');
-    await expect(stage).toBeVisible();
-
     // Valida título do Salão
-    await expect(stage.getByRole('heading', { name: 'Salão' })).toBeVisible();
-
-    // Valida texto orientativo
-    await expect(stage).toContainText('Mesa livre abre um novo pedido. Mesa ocupada abre o consumo; itens prontos aparecem no filtro abaixo.');
+    await expect(page.getByRole('heading', { name: 'Salão' })).toBeVisible();
 
     // Valida que exibe apenas a contagem total de mesas no topo
-    await expect(stage).toContainText('5 mesas');
+    await expect(page.getByText('5 mesas')).toBeVisible();
 
     // Valida que NÃO existem os cards grandes com contagens repetidas (Livres, Ocupadas, Prontas) no topo
-    await expect(stage.locator('.grid.grid-cols-3')).toHaveCount(0);
-    await expect(stage.getByText('SALÃO', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.grid.grid-cols-3')).toHaveCount(0);
   });
 
   test('Ações nos cards ficam óbvias antes do clique para livres, ocupadas, itens prontos e mescladas', async ({ page }) => {

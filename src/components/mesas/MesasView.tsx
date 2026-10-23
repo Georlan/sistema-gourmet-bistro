@@ -109,103 +109,125 @@ export function MesasView({
   ];
 
   return (
-    <div className="w-full text-koma-foreground font-sans select-none space-y-3 sm:space-y-4">
-      <section className="waiter-salon-stage relative overflow-hidden rounded-[20px] sm:rounded-[24px] border border-koma-border bg-koma-panel px-4 py-4 sm:px-6 sm:py-5">
-        <div className="waiter-salon-stage__plane" aria-hidden="true" />
-        <span className="waiter-salon-stage__word" aria-hidden="true">SALÃO</span>
-
-        <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
-          <div className="min-w-0 max-w-2xl">
-            <div className="flex items-end gap-3">
-              <h2 className="font-serif text-2xl sm:text-3xl font-black tracking-[-0.045em] leading-none text-koma-foreground">
-                Salão
-              </h2>
-              <span className="mb-1 hidden h-1 w-10 -rotate-2 bg-koma-accent sm:inline-block" aria-hidden="true" />
-            </div>
-            <p className="mt-1.5 max-w-2xl text-[11px] sm:text-xs text-koma-subtle leading-relaxed">
-              Mesa livre abre um novo pedido. Mesa ocupada abre o consumo; itens prontos aparecem no filtro abaixo.
-            </p>
-          </div>
-
-          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-koma-border bg-koma-card px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-koma-muted shadow-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-koma-accent" aria-hidden="true" />
+    <div className="w-full text-koma-foreground font-sans select-none space-y-2.5 sm:space-y-3">
+      {/* Top operational toolbar: Title + counter + search */}
+      <div className="flex items-center justify-between gap-3 pt-0.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight leading-none text-koma-foreground font-sans">
+            Salão
+          </h2>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-koma-border bg-koma-card px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 shadow-xs">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
             {counts.todos} {counts.todos === 1 ? 'mesa' : 'mesas'}
           </span>
         </div>
-      </section>
 
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-koma-border-subtle pb-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-2 text-koma-subtle">
-          <Activity size={14} className="text-koma-accent" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Filtrar mesas</span>
+        {!readOnly && !searchOpen && (
+          <button
+            id="waiter-table-search-toggle"
+            type="button"
+            onClick={openSearch}
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-2.5 text-[10px] font-bold text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground shadow-xs"
+            aria-label="Ir para uma mesa"
+          >
+            <Search size={13} /> Ir para mesa
+          </button>
+        )}
 
-          {!readOnly && !searchOpen && (
+        {!readOnly && searchOpen && (
+          <div className="relative min-w-[180px] flex-1 sm:flex-initial">
+            <Search size={13} className="pointer-events-none absolute left-2.5 top-2.5 text-koma-muted" />
+            <input
+              id="waiter-table-search-input"
+              autoFocus
+              inputMode="numeric"
+              value={tableQuery}
+              onChange={(event) => setTableQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') openSearchResult();
+                if (event.key === 'Escape') closeSearch();
+              }}
+              placeholder="Mesa 27..."
+              aria-label="Buscar mesa por número ou nome"
+              className="h-8 w-full rounded-xl border border-koma-border bg-koma-input pl-8 pr-8 text-xs text-koma-foreground outline-none focus:border-emerald-500 sm:w-48"
+            />
             <button
-              id="waiter-table-search-toggle"
               type="button"
-              onClick={openSearch}
-              className="ml-1 inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-2.5 text-[10px] font-bold text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground"
-              aria-label="Ir para uma mesa"
+              onClick={closeSearch}
+              className="absolute right-1.5 top-1.5 rounded-lg p-1 text-koma-muted hover:text-koma-foreground"
+              aria-label="Fechar busca de mesa"
             >
-              <Search size={13} /> Ir para mesa
+              <X size={13} />
             </button>
-          )}
-
-          {!readOnly && searchOpen && (
-            <div className="relative ml-1 min-w-[180px] flex-1 sm:flex-initial">
-              <Search size={13} className="pointer-events-none absolute left-2.5 top-2.5 text-koma-muted" />
-              <input
-                id="waiter-table-search-input"
-                autoFocus
-                inputMode="numeric"
-                value={tableQuery}
-                onChange={(event) => setTableQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') openSearchResult();
-                  if (event.key === 'Escape') closeSearch();
-                }}
-                placeholder="Mesa 27..."
-                aria-label="Buscar mesa por número ou nome"
-                className="h-8 w-full rounded-xl border border-koma-border bg-koma-input pl-8 pr-8 text-xs text-koma-foreground outline-none focus:border-emerald-500 sm:w-48"
-              />
-              <button
-                type="button"
-                onClick={closeSearch}
-                className="absolute right-1.5 top-1.5 rounded-lg p-1 text-koma-muted hover:text-koma-foreground"
-                aria-label="Fechar busca de mesa"
-              >
-                <X size={13} />
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div role="group" aria-label="Filtrar mesas por status" className="flex w-full min-w-0 max-w-full gap-1.5 overflow-x-auto rounded-xl p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 lg:w-auto">
-          {filters.map((filter) => {
-            const isActive = currentFilter === filter.id;
-            return (
-              <button
-                key={filter.id}
-                id={`waiter-filter-${filter.id}`}
-                type="button"
-                onClick={() => !readOnly && handleFilterSelect(filter.id)}
-                aria-pressed={isActive}
-                className={`shrink-0 whitespace-nowrap px-3 py-2.5 sm:px-2.5 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center border ${
-                  readOnly ? 'cursor-default' : 'cursor-pointer'
-                } ${
-                  isActive
-                    ? 'bg-koma-accent text-white border-koma-accent shadow-sm'
-                    : 'bg-koma-card text-koma-muted hover:text-koma-foreground hover:bg-koma-raised border-koma-border'
-                }`}
-              >
-                {filter.label} <span className={`font-mono text-[9px] ${isActive ? 'text-white/80' : 'text-koma-muted'}`}>{filter.count}</span>
-              </button>
-            );
-          })}
-        </div>
+          </div>
+        )}
       </div>
 
-      <div className="grid w-full auto-rows-[208px] grid-cols-2 items-stretch gap-2.5 min-[380px]:grid-cols-3 sm:auto-rows-[184px] sm:grid-cols-4 sm:gap-3.5 md:grid-cols-5 xl:grid-cols-6">
+      {/* Urgent Ready Orders Banner (renders ONLY when counts.prontas > 0) */}
+      {showOperationalStatus && counts.prontas > 0 && (
+        <div
+          role="status"
+          onClick={() => !readOnly && handleFilterSelect('prontas')}
+          className={`flex items-center justify-between gap-3 rounded-2xl border border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30 px-3.5 py-2.5 transition-all shadow-xs ${
+            readOnly ? 'cursor-default' : 'cursor-pointer hover:border-emerald-500/60 hover:bg-emerald-100/60 dark:hover:bg-emerald-950/40 active:scale-[0.99]'
+          }`}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+            </span>
+            <p className="text-xs font-bold text-emerald-800 dark:text-emerald-200">
+              {counts.prontas} {counts.prontas === 1 ? 'pedido pronto para servir' : 'pedidos prontos para servir'}
+            </p>
+          </div>
+          <span className="shrink-0 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+            Ver prontas →
+          </span>
+        </div>
+      )}
+
+      {/* Status filter chips */}
+      <div role="group" aria-label="Filtrar mesas por status" className="flex w-full min-w-0 max-w-full gap-1.5 overflow-x-auto rounded-xl p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 lg:w-auto">
+        {filters.map((filter) => {
+          const isActive = currentFilter === filter.id;
+          return (
+            <button
+              key={filter.id}
+              id={`waiter-filter-${filter.id}`}
+              type="button"
+              onClick={() => !readOnly && handleFilterSelect(filter.id)}
+              aria-pressed={isActive}
+              className={`inline-flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap px-3 py-2 sm:px-3 sm:py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center border ${
+                readOnly ? 'cursor-default' : 'cursor-pointer'
+              } ${
+                isActive
+                  ? 'bg-emerald-500 text-zinc-950 border-emerald-400 shadow-sm font-extrabold'
+                  : 'bg-koma-card text-koma-muted hover:text-koma-foreground hover:bg-koma-raised border-koma-border'
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  filter.id === 'livres'
+                    ? 'bg-emerald-500'
+                    : filter.id === 'ocupadas'
+                    ? 'bg-rose-500'
+                    : filter.id === 'prontas'
+                    ? 'bg-emerald-400 animate-pulse'
+                    : 'bg-zinc-400'
+                }`}
+                aria-hidden="true"
+              />
+              {filter.label}{' '}
+              <span className={`font-mono text-[9px] ${isActive ? 'text-zinc-950 font-black' : 'text-koma-subtle'}`}>
+                {filter.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid w-full auto-rows-[208px] grid-cols-2 min-[380px]:grid-cols-3 items-stretch gap-2.5 sm:auto-rows-[184px] sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6">
         {filteredRows.length === 0 ? (
           <div className="col-span-full py-16 rounded-2xl border border-dashed border-koma-border text-center text-koma-muted text-sm">
             {tableQuery.trim() ? 'Nenhuma mesa encontrada para esta busca.' : 'Nenhuma mesa encontrada neste status.'}

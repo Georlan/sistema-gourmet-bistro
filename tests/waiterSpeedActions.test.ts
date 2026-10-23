@@ -24,17 +24,13 @@ test('toque na mesa usa a navegação canônica: livre abre Pedido e ocupada abr
   assert.match(modal, /orders\.length === 0 \? 'lancamento' : 'consumo'/);
 });
 
-test('salão mantém orientação compacta e recupera o padrão visual KÔMA', () => {
+test('salão mantém orientação compacta e padrão visual KÔMA', () => {
   const view = readFileSync(new URL('../src/components/mesas/MesasView.tsx', import.meta.url), 'utf8');
 
-  assert.match(view, /waiter-salon-stage relative overflow-hidden/);
-  assert.match(view, /waiter-salon-stage__plane/);
-  assert.match(view, /waiter-salon-stage__word/);
-  assert.match(view, />SALÃO<\/span>/);
-  assert.match(view, /Mesa livre abre um novo pedido/);
   assert.match(view, /\{counts\.todos\} \{counts\.todos === 1 \? 'mesa' : 'mesas'\}/);
   assert.doesNotMatch(view, /Grid2X2|CheckCircle2|Utensils/);
   assert.doesNotMatch(view, /grid grid-cols-3 gap-px overflow-hidden/);
+  assert.doesNotMatch(view, /waiter-salon-stage/);
 });
 
 test('card da mesa comunica a ação antes do toque sem criar segundo caminho operacional', () => {

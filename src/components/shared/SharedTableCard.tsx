@@ -1,6 +1,7 @@
 import { TablePresenceNotice } from './TablePresenceNotice';
 import React from 'react';
 import { Clock3, FileText, GitMerge, UsersRound } from 'lucide-react';
+import { KomaWaiterGlyph } from './KomaWaiterGlyphs';
 import type { Order, Table } from '../../types';
 import type { TableOperationalProjection } from '../../domain/operationalState';
 import { describeTableOrders, getTableCheckNumbers } from '../../domain/tableReadModel';
@@ -17,12 +18,12 @@ export function tableCardPresentation(state: TableOperationalProjection, showPro
 }
 
 const tones: Record<string, string> = {
-  free: 'koma-table-free-card text-emerald-800 dark:text-emerald-300',
-  occupied: 'border-rose-400/70 bg-rose-50 dark:border-rose-900 dark:bg-[#1b0d10] text-rose-900 dark:text-rose-300',
-  ready: 'border-amber-400/80 bg-amber-50 dark:border-amber-800/60 dark:bg-[#211707] text-amber-900 dark:text-amber-300',
-  payment: 'border-sky-400/80 bg-sky-50 dark:border-sky-800/60 dark:bg-[#0b1621] text-sky-900 dark:text-sky-300',
-  served: 'border-koma-border bg-koma-panel text-koma-secondary',
-  merged: 'border-dashed border-koma-border bg-koma-panel text-koma-muted',
+  free: 'koma-table-free-card border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0d1210] hover:border-emerald-500/50 text-emerald-700 dark:text-emerald-400 shadow-xs',
+  occupied: 'border-rose-200 dark:border-rose-900/50 bg-rose-50/70 dark:bg-[#160d11] text-rose-800 dark:text-rose-300 shadow-xs',
+  ready: 'border-emerald-300 dark:border-emerald-500/60 bg-emerald-50 dark:bg-[#0c1a14] text-emerald-800 dark:text-emerald-300 ring-1 ring-emerald-500/25 shadow-xs',
+  payment: 'border-sky-200 dark:border-cyan-500/50 bg-sky-50 dark:bg-[#09151c] text-sky-800 dark:text-cyan-300 shadow-xs',
+  served: 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-zinc-700 dark:text-zinc-300 shadow-xs',
+  merged: 'border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40 text-zinc-600 dark:text-zinc-400 shadow-xs',
 };
 
 interface Props {
@@ -89,7 +90,7 @@ export function SharedTableCard({
       data-table-status={filterStatus}
       data-operational-state={presentation.key}
       data-density={density}
-      className={`group relative flex min-w-0 min-h-[132px] flex-col justify-between overflow-hidden rounded-2xl border text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${fillHeight ? 'h-full' : ''} ${compact ? 'gap-2 p-3' : 'gap-3 p-3 sm:p-4'} ${tones[presentation.key]} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
+      className={`group relative flex min-w-0 min-h-[132px] flex-col justify-between overflow-hidden rounded-2xl border text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${fillHeight ? 'h-full' : ''} ${compact ? 'gap-2 p-3' : 'gap-2 p-3 sm:gap-2 sm:p-3.5'} ${tones[presentation.key]} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
     >
       <span className="absolute left-0 top-0 h-[3px] w-full bg-current opacity-70" aria-hidden="true" />
       <div className={compact ? 'flex items-start justify-between gap-2' : 'min-w-0'}>
@@ -98,7 +99,32 @@ export function SharedTableCard({
             <span className="block text-[9px] font-mono font-bold uppercase tracking-widest text-koma-muted">
               {emphasizeOrder ? tableDisplayName : 'Mesa'}
             </span>
-            {!compact && primaryCheckNumber != null && !emphasizeOrder && <span className="shrink-0 whitespace-nowrap rounded-md border border-current/20 px-1 py-1 text-[8px] font-mono" title={`${identityLabel} ${numbersText}`}>{identityLabel === 'Pedido' ? 'Ped.' : identityLabel} {primaryCheckNumber}</span>}
+            {!compact && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                {primaryCheckNumber != null && !emphasizeOrder && (
+                  <span className="shrink-0 whitespace-nowrap rounded-md border border-current/20 px-1 py-1 text-[8px] font-mono" title={`${identityLabel} ${numbersText}`}>
+                    {identityLabel === 'Pedido' ? 'Ped.' : identityLabel} {primaryCheckNumber}
+                  </span>
+                )}
+                <KomaWaiterGlyph
+                  name={
+                    presentation.key === 'ready'
+                      ? 'table-ready'
+                      : presentation.key === 'payment'
+                      ? 'table-payment'
+                      : presentation.key === 'merged'
+                      ? 'table-merged'
+                      : presentation.key === 'served'
+                      ? 'table-served'
+                      : presentation.key === 'occupied'
+                      ? 'table-service'
+                      : 'table-free'
+                  }
+                  size={16}
+                  className="opacity-70"
+                />
+              </div>
+            )}
           </div>
           <strong
             className={`block min-w-0 text-koma-foreground ${emphasizeOrder ? 'whitespace-nowrap text-sm leading-tight' : customName ? 'whitespace-normal break-words text-sm leading-tight' : 'whitespace-nowrap font-serif text-3xl leading-none'}`}
@@ -110,10 +136,24 @@ export function SharedTableCard({
         </div>
         {compact && occupied && <strong className="shrink-0 whitespace-nowrap font-mono text-xs text-koma-foreground">{formattedTotal}</strong>}
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <div className="flex flex-wrap items-center justify-between gap-1">
-          <span className={`${compact ? 'text-[11px]' : 'text-[9px]'} font-bold uppercase tracking-wide`}>{presentation.label}</span>
-          {draftCount > 0 && <span className="inline-flex items-center gap-1 rounded-md border border-current/20 px-1.5 text-[10px]"><FileText size={10} />{draftCount}</span>}
+          <span className={`${compact ? 'text-[11px]' : 'text-[9px]'} font-bold uppercase tracking-wide inline-flex items-center gap-1.5`}>
+            {presentation.key === 'ready' && (
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+              </span>
+            )}
+            {presentation.key === 'free' && (
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            )}
+            {presentation.key === 'occupied' && (
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+            )}
+            {presentation.label}
+          </span>
+          {draftCount > 0 && <span className="inline-flex items-center gap-1 rounded-md border border-cyan-500/40 bg-cyan-950/30 px-1.5 py-0.5 text-[9px] font-bold text-cyan-300" title={`${draftCount} no rascunho`}><FileText size={10} />{draftCount}</span>}
         </div>
         {occupied && compact && <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-koma-secondary">
           <span className="inline-flex items-center gap-1 font-mono"><Clock3 size={11} aria-hidden="true" />{operational.elapsed}</span>

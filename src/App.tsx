@@ -24,6 +24,13 @@ import { OperationalLogin } from './components/auth/OperationalLogin';
 import { MesasView } from './components/mesas/MesasView';
 import { API_BASE_URL, WS_BASE_URL } from './config/api';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
+import {
+  KOMA_TEXT_SCALES,
+  KOMA_TEXT_SIZE_EVENT,
+  persistKomaTextSize,
+  readKomaTextSize,
+  type KomaTextSize,
+} from './config/textSize';
 import { RESTAURANT_CONFIG } from './data';
 import { countWaiterSalonTables, projectWaiterSalonTables } from './domain/waiterSalonProjection';
 import { isCentralSupportOperationalBridge, resolveKomaHost } from './domain/komaHost';
@@ -508,30 +515,11 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   // Sidebar Open State
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
 
-  const [fontSize, setFontSize] = useState<'padrao' | 'grande' | 'gigante'>(() => {
-    return (localStorage.getItem('koma_font_size') as any) || 'padrao';
-  });
+  const [fontSize, setFontSize] = useState<KomaTextSize>(() => readKomaTextSize());
 
-  const changeFontSize = (size: 'padrao' | 'grande' | 'gigante') => {
-    localStorage.setItem('koma_font_size', size);
-    setFontSize(size);
-    window.dispatchEvent(new Event('koma_font_size_changed'));
+  const changeFontSize = (size: KomaTextSize) => {
+    setFontSize(persistKomaTextSize(size));
   };
-
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const stored = localStorage.getItem('koma_font_size') as any;
-      if (stored && ['padrao', 'grande', 'gigante'].includes(stored)) {
-        setFontSize(stored);
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('koma_font_size_changed', handleStorageChange);
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('koma_font_size_changed', handleStorageChange);
-    };
-  }, []);
 
   const [theme, setTheme] = useState<KomaTheme>(() => readKomaTheme());
 
@@ -540,14 +528,23 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   };
 
   useEffect(() => {
-    const handleThemeChange = () => setTheme(readKomaTheme());
-    window.addEventListener('storage', handleThemeChange);
-    window.addEventListener(KOMA_THEME_CHANGED_EVENT, handleThemeChange);
-    return () => {
-      window.removeEventListener('storage', handleThemeChange);
-      window.removeEventListener(KOMA_THEME_CHANGED_EVENT, handleThemeChange);
+    const root = document.documentElement;
+    root.style.setProperty('--koma-text-scale', String(KOMA_TEXT_SCALES[fontSize]));
+    root.setAttribute('data-koma-text-size', fontSize);
+
+    const handleStorageChange = () => {
+      setFontSize(readKomaTextSize());
+      setTheme(readKomaTheme());
     };
-  }, []);
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener(KOMA_TEXT_SIZE_EVENT, handleStorageChange);
+    window.addEventListener(KOMA_THEME_CHANGED_EVENT, handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener(KOMA_TEXT_SIZE_EVENT, handleStorageChange);
+      window.removeEventListener(KOMA_THEME_CHANGED_EVENT, handleStorageChange);
+    };
+  }, [fontSize]);
 
   // 1.5. Dynamic Salon Tables State and Fetcher
   const [fetchError, setFetchError] = useState<string | null>(null);

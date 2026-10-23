@@ -111,24 +111,36 @@ export default function ModifierPicker({
               key={group.id}
               data-testid="modifier-group"
               data-group-id={group.id}
-              className={`rounded-xl border p-3 ${valid ? 'border-koma-border bg-koma-raised/40' : 'border-amber-500/40 bg-amber-500/5'}`}
+              className={`rounded-2xl border p-3.5 transition-all ${
+                valid
+                  ? 'border-koma-border bg-koma-card/80'
+                  : 'border-rose-500/30 bg-rose-950/10'
+              }`}
             >
-              <div className="mb-2 flex items-start justify-between gap-3">
+              <div className="mb-2.5 flex items-start justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-xs font-bold text-koma-foreground">{group.nome}</span>
                     {(min > 0 || group.tipo === 'obrigatorio' || recommended) && (
-                      <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-emerald-400">
-                        {min > 0 || group.tipo === 'obrigatorio' ? 'Obrigatório' : 'Recomendado'}
+                      <span
+                        className={`rounded-md px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider border ${
+                          min > 0 || group.tipo === 'obrigatorio'
+                            ? valid
+                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                              : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                            : 'bg-koma-raised border-koma-border text-koma-muted'
+                        }`}
+                      >
+                        {min > 0 || group.tipo === 'obrigatorio' ? (valid ? 'Concluído' : 'Obrigatório') : 'Recomendado'}
                       </span>
                     )}
                   </div>
-                  <span className="block text-[9px] text-koma-muted">
+                  <span className="block text-[9px] text-koma-muted mt-0.5">
                     {group.modo_selecao
                       ? `Escolha de ${min} até ${max} ${group.modo_selecao === "porcoes" ? "porções (pode repetir)" : "tipos diferentes"}`
                       : quantityMode
                       ? max === 1
-                        ? 'Escolha uma opção'
+                        ? 'Escolha 1 opção'
                         : min > 0
                           ? `Escolha de ${min} a ${max} tipos · quantidade livre por adicional`
                           : `Até ${max} tipos · quantidade livre por adicional`
@@ -137,7 +149,11 @@ export default function ModifierPicker({
                         : `Escolha até ${max}`}
                   </span>
                 </div>
-                <span className={`text-[9px] font-bold ${valid ? 'text-emerald-400' : 'text-amber-400'}`}>
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border ${
+                  valid
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                    : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                }`}>
                   {quantityMode && max > 1 ? `${selectedCount}/${max} ${group.modo_selecao === "porcoes" ? "porções" : "tipos"}` : `${selectedCount}/${max}`}
                 </span>
               </div>
@@ -152,32 +168,63 @@ export default function ModifierPicker({
                     return (
                       <div
                         key={option.id}
-                        className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 transition ${selected ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-card'}`}
+                        className={`group flex w-full items-center justify-between gap-3 rounded-xl border p-2.5 transition-all ${
+                          selected
+                            ? 'border-emerald-500/50 bg-emerald-500/10 shadow-xs'
+                            : 'border-koma-border bg-koma-card hover:border-emerald-500/30'
+                        }`}
                       >
-                        <div className="min-w-0">
-                          <span className="block truncate text-xs font-medium text-koma-foreground">{option.nome}</span>
-                          <span className="font-mono text-[10px] font-bold text-emerald-400">
-                            {Number(option.preco_adicional || 0) > 0 ? `+ R$ ${Number(option.preco_adicional).toFixed(2)} cada` : 'Grátis'}
+                        <div
+                          className="min-w-0 flex-1 cursor-pointer select-none flex items-center gap-2.5"
+                          onClick={() => {
+                            if (optionQuantity === 0 && canIncrement) {
+                              onQuantityChange(group, option.id, 1);
+                            } else if (max === 1 && selected) {
+                              if (min === 0) onQuantityChange(group, option.id, -1);
+                            }
+                          }}
+                        >
+                          <span
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-all ${
+                              selected
+                                ? 'border-emerald-400 bg-emerald-400 text-zinc-950'
+                                : 'border-koma-border bg-koma-raised group-hover:border-emerald-500/40'
+                            }`}
+                          >
+                            {selected && <span className="h-1.5 w-1.5 rounded-full bg-zinc-950" />}
                           </span>
+                          <div className="min-w-0">
+                            <span className={`block truncate text-xs ${selected ? 'font-bold text-koma-foreground' : 'font-medium text-koma-foreground'}`}>
+                              {option.nome}
+                            </span>
+                            <span className="font-mono text-[10px] font-bold text-emerald-400">
+                              {Number(option.preco_adicional || 0) > 0 ? `+ R$ ${Number(option.preco_adicional).toFixed(2)}${max > 1 ? ' cada' : ''}` : 'Incluso'}
+                            </span>
+                          </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-1 rounded-lg border border-koma-border bg-koma-raised p-0.5">
                           <button
                             type="button"
                             onClick={() => onQuantityChange(group, option.id, -1)}
                             disabled={optionQuantity <= 0}
-                            className="grid h-7 w-7 place-items-center rounded-md text-koma-muted transition hover:bg-koma-card hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-30"
+                            className="grid h-7 w-7 place-items-center rounded-md text-koma-muted transition hover:bg-koma-card hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-20"
                             aria-label={`Remover uma unidade de ${option.nome}`}
                           >
                             <Minus size={12} />
                           </button>
-                          <span className="w-6 text-center font-mono text-xs font-bold text-koma-foreground" aria-label={`${optionQuantity} unidade(s) de ${option.nome}`}>
+                          <span
+                            className={`w-6 text-center font-mono text-xs font-bold ${
+                              selected ? 'text-emerald-400' : 'text-koma-muted'
+                            }`}
+                            aria-label={`${optionQuantity} unidade(s) de ${option.nome}`}
+                          >
                             {optionQuantity}
                           </span>
                           <button
                             type="button"
                             onClick={() => onQuantityChange(group, option.id, 1)}
                             disabled={!canIncrement}
-                            className="grid h-7 w-7 place-items-center rounded-md text-koma-muted transition hover:bg-koma-card hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-30"
+                            className="grid h-7 w-7 place-items-center rounded-md text-koma-muted transition hover:bg-koma-card hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-20"
                             aria-label={`Adicionar uma unidade de ${option.nome}`}
                           >
                             <Plus size={12} />
@@ -201,7 +248,7 @@ export default function ModifierPicker({
                         <span className="truncate text-xs font-medium text-koma-foreground">{option.nome}</span>
                       </span>
                       <span className="whitespace-nowrap font-mono text-[11px] font-bold text-emerald-400">
-                        {Number(option.preco_adicional || 0) > 0 ? `+ R$ ${Number(option.preco_adicional).toFixed(2)}` : 'Grátis'}
+                        {Number(option.preco_adicional || 0) > 0 ? `+ R$ ${Number(option.preco_adicional).toFixed(2)}` : 'Incluso'}
                       </span>
                     </button>
                   );
