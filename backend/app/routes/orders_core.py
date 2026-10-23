@@ -84,60 +84,9 @@ def _agendar_notificacao_whatsapp_status(
     status_anterior: Optional[str],
     novo_status: str,
 ) -> None:
-    from ..config import settings
-    if not settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
-        return
-    if status_anterior == novo_status:
-        return
-
-    from ..services.notificacoes import status_recipient_eligible
-    if not status_recipient_eligible(db, comanda.restaurante_id, comanda.id, comanda.delivery_telefone or ""):
-        return
-    telefone = (comanda.delivery_telefone or "").strip()
-    if not telefone:
-        logger.warning(
-            "[NOTIFICAÇÃO WA] Notificação de status ignorada para comanda_id=%s: telefone ausente.",
-            comanda.id,
-        )
-        return
-
-    restaurante = db.query(Restaurante).filter(
-        Restaurante.id == comanda.restaurante_id
-    ).first()
-
-    nome_restaurante = restaurante.nome if restaurante else "restaurante"
-    tel_restaurante = getattr(restaurante, "telefone", None) if restaurante else None
-
-    status_map = {
-        "pendente": "recebido",
-        "recebido": "recebido",
-        "producao": "em_preparo",
-        "preparando": "em_preparo",
-        "em_preparo": "em_preparo",
-        "pronto": "pronto",
-        "transito": "saiu_entrega",
-        "saiu_entrega": "saiu_entrega",
-        "entregue": "entregue",
-        "finalizado": "entregue",
-        "recusado": "recusado",
-        "cancelado": "recusado",
-    }
-    key_status = status_map.get((novo_status or "").lower(), novo_status)
-
-    from ..services.notificacoes import agendar_notificacao_status_task
-
-    agendar_notificacao_status_task(
-        background_tasks=background_tasks,
-        comanda_id=comanda.id,
-        novo_status=key_status,
-        telefone_cliente=telefone,
-        nome_restaurante=nome_restaurante,
-        link_rastreamento=None,
-        telefone_restaurante=tel_restaurante,
-        restaurante_id=comanda.restaurante_id,
-        numero_pedido=comanda.numero_pedido,
-        modalidade=comanda.tipo,
-    )
+    # Compatibility hook for existing order routes. The central transactional
+    # outbox owns notices; legacy per-status background sends are retired.
+    return
 
 # ----------------- READ ENDPOINTS -----------------
 

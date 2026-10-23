@@ -149,11 +149,14 @@ def test_whatsapp_alert_snapshots_customer_items_notes_and_online_number(char_se
             ),
         )
 
-        row = db.query(IntegrationOutbox).filter(
-            IntegrationOutbox.restaurante_id == rid,
-            IntegrationOutbox.event_name == EVENT_NAME,
-            IntegrationOutbox.aggregate_id == str(dto.order_id),
-        ).one()
+        # Production order publication no longer schedules an individual alert.
+        assert db.query(IntegrationOutbox).filter_by(restaurante_id=rid, event_name=EVENT_NAME, aggregate_id=str(dto.order_id)).count() == 0
+        # Legacy payload formatter remains readable for historical queue records.
+        source = _order(rid, str(dto.order_id))
+        from dataclasses import replace
+        source = replace(source, check_id=str(dto.check_id), customer_name="Sarah", check_number=dto.display_number, fulfillment=FulfillmentType.PICKUP)
+        row = enqueue_order_alert(db, source)
+        db.commit()
 
         assert row.payload["display_number"] == dto.display_number
         assert "-" not in row.payload["display_number"]
@@ -300,12 +303,12 @@ def test_connected_status_accepts_baileys_legacy_mobile_jid(char_client, char_se
 
     response = char_client.get("/caixa/configuracoes/whatsapp", headers=admin)
     assert response.status_code == 200, response.text
-    assert response.json()["state"] == "connected"
-    assert response.json()["phone_ending"] == "6937"
+    assert response.json()["state"] == "not_configured"
+    assert response.json()["mode"] == "central"
+    assert response.json()["phone_ending"] is None
 
     enable = char_client.post("/caixa/configuracoes/whatsapp/enable", headers=admin)
-    assert enable.status_code == 200, enable.text
-    assert enable.json() == {"enabled": True}
+    assert enable.status_code == 404, enable.text
 
     with SessionLocal(restaurante_id=rid) as db:
         config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
@@ -390,95 +393,27 @@ def test_recreate_pairing_session_deletes_unpaired_instance(monkeypatch):
 
 
 def test_mobile_pairing_configure_returns_pairing_code(char_client, char_setup, monkeypatch):
+    from unittest.mock import MagicMock
     from app.services import tenant_order_whatsapp as wa
+    provider = MagicMock(side_effect=AssertionError("Individual provisioning is retired"))
+    monkeypatch.setattr(wa, "create_instance_with_pairing_code", provider)
+    response = char_client.post("/caixa/configuracoes/whatsapp/configure", headers=char_setup["headers"], json={"phone": "11999999999", "mode": "pairing_code"})
+    assert response.status_code == 404
+    provider.assert_not_called()
 
-    rid = CHAR_RESTAURANT_ID
-    admin = char_setup["headers"]
-    with SessionLocal(restaurante_id=rid) as db:
-        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
-        config.whatsapp_alerts_enabled = False
-        config.whatsapp_instance_name = None
-        config.whatsapp_recipient_phone = None
-        db.commit()
 
-    monkeypatch.setattr(
-        wa,
-        "create_instance_with_pairing_code",
-        lambda restaurant_id, phone: (
-            {"qrcode": {"code": "qr-value", "pairingCode": "12345678"}},
-            "12345678",
-        ),
-    )
-
-    response = char_client.post(
-        "/caixa/configuracoes/whatsapp/configure",
-        headers=admin,
-        json={"phone": "(11) 99999-9999", "mode": "pairing_code"},
-    )
-
-    assert response.status_code == 200, response.text
-    assert response.json() == {
-        "state": "connecting",
-        "enabled": False,
-        "qr_code": None,
-        "pairing_code": "12345678",
-    }
-
-    with SessionLocal(restaurante_id=rid) as db:
-        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
-        assert config.whatsapp_instance_name == instance_name(rid)
-        assert config.whatsapp_recipient_phone == "5511999999999"
-        assert config.whatsapp_alerts_enabled is False
-        config.whatsapp_instance_name = None
-        config.whatsapp_recipient_phone = None
-        db.commit()
 
 
 def test_mobile_pairing_recovers_stale_provider_instance(char_client, char_setup, monkeypatch):
+    from unittest.mock import MagicMock
     from app.services import tenant_order_whatsapp as wa
+    provider = MagicMock(side_effect=AssertionError("Individual provisioning is retired"))
+    monkeypatch.setattr(wa, "create_instance_with_pairing_code", provider)
+    response = char_client.post("/caixa/configuracoes/whatsapp/configure", headers=char_setup["headers"], json={"phone": "11999999999", "mode": "pairing_code"})
+    assert response.status_code == 404
+    provider.assert_not_called()
 
-    rid = CHAR_RESTAURANT_ID
-    admin = char_setup["headers"]
-    with SessionLocal(restaurante_id=rid) as db:
-        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
-        config.whatsapp_alerts_enabled = False
-        config.whatsapp_instance_name = None
-        config.whatsapp_recipient_phone = None
-        db.commit()
 
-    request = httpx.Request("POST", "https://provider.test/instance/create")
-    response = httpx.Response(403, request=request)
-
-    def duplicate_instance(*args, **kwargs):
-        raise httpx.HTTPStatusError("duplicate", request=request, response=response)
-
-    calls = []
-    monkeypatch.setattr(wa, "create_instance_with_pairing_code", duplicate_instance)
-    monkeypatch.setattr(
-        wa,
-        "recreate_instance_with_pairing_code",
-        lambda restaurant_id, phone: (
-            calls.append((restaurant_id, phone))
-            or ({"qrcode": {"pairingCode": "24681357"}}, "24681357")
-        ),
-    )
-
-    result = char_client.post(
-        "/caixa/configuracoes/whatsapp/configure",
-        headers=admin,
-        json={"phone": "(88) 99961-6937", "mode": "pairing_code"},
-    )
-
-    assert result.status_code == 200, result.text
-    assert result.json()["pairing_code"] == "24681357"
-    assert calls == [(rid, "5588999616937")]
-
-    with SessionLocal(restaurante_id=rid) as db:
-        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
-        config.whatsapp_instance_name = None
-        config.whatsapp_recipient_phone = None
-        config.whatsapp_alerts_enabled = False
-        db.commit()
 
 
 def test_disconnect_removes_provider_instance(char_client, char_setup, monkeypatch):
@@ -520,177 +455,31 @@ def test_connection_settings_require_manager_and_never_expose_provider_key(char_
     waiter_token = create_access_token("usr-char-garcom", CHAR_RESTAURANT_ID, role="garcom")
     waiter = {"Authorization": f"Bearer {waiter_token}"}
     assert char_client.get("/caixa/configuracoes/whatsapp", headers=waiter).status_code == 403
-    assert char_client.post("/caixa/configuracoes/whatsapp/enable", headers=waiter).status_code == 403
+    assert char_client.post("/caixa/configuracoes/whatsapp/recipient", headers=waiter, json={"phone":"11999999999", "confirm_receiving":True}).status_code == 403
 
 
-def test_order_alerts_are_paced_per_restaurant(char_setup, monkeypatch):
-    from app.config import settings
-    from app.services import tenant_order_whatsapp as wa
-
-    rid = CHAR_RESTAURANT_ID
-    db = SessionLocal(restaurante_id=rid)
-
-    class Response:
-        status_code = 200
-
-    class SuccessClient:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-        def post(self, *args, **kwargs):
-            assert not db.in_transaction(), "Provider send must not hold SQL"
-            assert kwargs["json"]["number"] == "5511999999999"
-            return Response()
-
-    try:
-        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
-        config.whatsapp_alerts_enabled = True
-        config.whatsapp_instance_name = instance_name(rid)
-        config.whatsapp_recipient_phone = "5511999999999"
-        config.whatsapp_next_send_at = None
-        config.whatsapp_circuit_open_until = None
-        config.whatsapp_consecutive_failures = 0
-        db.query(IntegrationOutbox).filter_by(
-            restaurante_id=rid,
-            aggregate_id="wa-paced-test",
-        ).delete()
-        db.commit()
-
-        event = enqueue_order_alert(db, _order(rid, "wa-paced-test"))
-        db.commit()
-        before = dt.datetime.now(dt.timezone.utc)
-        monkeypatch.setattr(settings, "TENANT_WHATSAPP_MIN_SEND_INTERVAL_SECONDS", 13)
-        def connection_state(_):
-            assert not db.in_transaction(), "Provider status must not hold SQL"
-            return "open"
-
-        def owner_phone(_):
-            assert not db.in_transaction(), "Provider identity must not hold SQL"
-            return "5511999999999"
-
-        monkeypatch.setattr(wa, "connection_state", connection_state)
-        monkeypatch.setattr(wa, "owner_phone", owner_phone)
-        monkeypatch.setattr(wa, "_provider", lambda: ("https://provider.test", {"header": "value"}))
-        monkeypatch.setattr(wa.httpx, "Client", SuccessClient)
-
-        assert dispatch_single_outbox_event(db, event) is True
-        db.refresh(config)
-        next_send = config.whatsapp_next_send_at
-        if next_send.tzinfo is None:
-            next_send = next_send.replace(tzinfo=dt.timezone.utc)
-        assert next_send >= before + dt.timedelta(seconds=12)
-        assert next_send <= before + dt.timedelta(seconds=15)
-    finally:
-        db.rollback()
-        db.query(IntegrationOutbox).filter_by(
-            restaurante_id=rid,
-            aggregate_id="wa-paced-test",
-        ).delete()
-        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
-        if config:
-            config.whatsapp_alerts_enabled = False
-            config.whatsapp_instance_name = None
-            config.whatsapp_recipient_phone = None
-            config.whatsapp_next_send_at = None
-            config.whatsapp_circuit_open_until = None
-            config.whatsapp_consecutive_failures = 0
-        db.commit()
-        db.close()
-
-
-def test_uncertain_send_is_not_replayed_after_timeout_or_worker_restart(char_setup, monkeypatch):
-    from app.services import tenant_order_whatsapp as wa
-
-    rid = CHAR_RESTAURANT_ID
-    db = SessionLocal(restaurante_id=rid)
-    calls = []
-
-    class TimeoutClient:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return False
-
-        def post(self, *args, **kwargs):
-            calls.append(kwargs)
-            raise httpx.TimeoutException("uncertain")
-
-    try:
-        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
-        config.whatsapp_alerts_enabled = True
-        config.whatsapp_instance_name = instance_name(rid)
-        config.whatsapp_recipient_phone = "5511999999999"
-        config.whatsapp_next_send_at = None
-        config.whatsapp_circuit_open_until = None
-        config.whatsapp_consecutive_failures = 0
-        db.query(IntegrationOutbox).filter_by(restaurante_id=rid, aggregate_id="wa-timeout-test").delete()
-        db.commit()
-        event = enqueue_order_alert(db, _order(rid, "wa-timeout-test"))
-        db.commit()
-        monkeypatch.setattr(wa, "connection_state", lambda _: "open")
-        monkeypatch.setattr(wa, "owner_phone", lambda _: "5511999999999")
-        monkeypatch.setattr(wa, "_provider", lambda: ("https://provider.test", {"apikey": "test"}))
-        monkeypatch.setattr(wa.httpx, "Client", TimeoutClient)
-        assert dispatch_single_outbox_event(db, event) is False
-        db.refresh(event)
-        assert event.status == "dead_letter"
-        assert event.attempts == 1
-        assert len(calls) == 1
-        assert dispatch_single_outbox_event(db, event) is False
-        assert len(calls) == 1
-
-        event.status = "processing"
-        event.locked_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=5)
-        db.commit()
-        recover_stale_outbox_claims(db, restaurant_id=rid)
-        db.refresh(event)
-        assert event.status == "dead_letter"
-    finally:
-        db.rollback()
-        db.query(IntegrationOutbox).filter_by(restaurante_id=rid, aggregate_id="wa-timeout-test").delete()
-        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
-        if config:
-            config.whatsapp_alerts_enabled = False
-            config.whatsapp_instance_name = None
-            config.whatsapp_recipient_phone = None
-            config.whatsapp_next_send_at = None
-            config.whatsapp_circuit_open_until = None
-            config.whatsapp_consecutive_failures = 0
-        db.commit()
-        db.close()
-
-
-def test_expired_operator_notice_cannot_replay_on_reconnection(char_setup, monkeypatch):
-    from app.services import tenant_order_whatsapp as wa
+def test_old_individual_queue_never_calls_provider_after_retirement(char_setup, monkeypatch):
     from unittest.mock import MagicMock
+    from app.services import tenant_order_whatsapp as wa
     rid = CHAR_RESTAURANT_ID
+    provider = MagicMock(side_effect=AssertionError("retired individual transport"))
+    monkeypatch.setattr(wa, "connection_state", provider)
+    monkeypatch.setattr(wa.httpx, "Client", provider)
     with SessionLocal(restaurante_id=rid) as db:
-        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).first()
-        config.whatsapp_alerts_enabled = True
-        config.whatsapp_instance_name = instance_name(rid)
-        config.whatsapp_recipient_phone = "5511999999999"
+        cfg = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one()
+        cfg.whatsapp_alerts_enabled = True
+        cfg.whatsapp_instance_name = instance_name(rid)
+        cfg.whatsapp_recipient_phone = "5511999999999"
+        db.flush()
+        row = enqueue_order_alert(db, _order(rid, "retired-individual-test"))
         db.commit()
-        import uuid
-        event = enqueue_order_alert(db, _order(rid, "expired-" + uuid.uuid4().hex))
-        event.created_at = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=11)
-        db.commit()
-        provider = MagicMock(side_effect=AssertionError("expired notice must not query connection"))
-        monkeypatch.setattr(wa, "connection_state", provider)
-        assert dispatch_single_outbox_event(db, event) is True
-        db.refresh(event)
-        assert event.status == "delivered"  # terminal compatibility; reason says ignored
-        assert "Ignorado" in event.last_error
-        assert event.attempts == 1  # one internal worker decision, zero provider calls
+        assert not dispatch_single_outbox_event(db, row)
+        db.refresh(row)
+        assert row.status == "dead_letter"
+        assert row.attempts == 0
+        assert not dispatch_single_outbox_event(db, row)
         provider.assert_not_called()
-        config.whatsapp_alerts_enabled = False
+        cfg.whatsapp_alerts_enabled = False
+        cfg.whatsapp_instance_name = None
+        cfg.whatsapp_recipient_phone = None
         db.commit()

@@ -46,7 +46,7 @@ jobs:
       - run: python -m alembic -c backend/alembic.ini upgrade head
       - run: python -m pytest backend/tests/test_staff_push_postgres.py -q -ra
   android-browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6

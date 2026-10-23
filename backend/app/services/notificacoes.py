@@ -310,29 +310,8 @@ def agendar_notificacao_whatsapp_task(
 ) -> None:
     """Agenda um envio genérico sem reutilizar a sessão da requisição."""
 
-    if not settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
-        return
-
-    if db is not None and not operational_notices_enabled(db, restaurante_id):
-        return
-
-    async def _runner():
-        db = SessionLocal(restaurante_id=restaurante_id)
-        try:
-            await enviar_notificacao_whatsapp(
-                db,
-                telefone=telefone,
-                conteudo=conteudo,
-                tipo=tipo,
-                restaurante_id=restaurante_id,
-                comanda_id=comanda_id,
-                conteudo_auditoria=conteudo_auditoria,
-                contexto=contexto,
-            )
-        finally:
-            db.close()
-
-    _agendar_corrotina(background_tasks, _runner)
+    # Retired operational sender. Central transactional notices own delivery.
+    return
 
 
 def agendar_notificacao_status_task(
@@ -349,25 +328,5 @@ def agendar_notificacao_status_task(
 ) -> None:
     """Agenda o envio sem reutilizar a sessão ligada à requisição HTTP."""
 
-    if not settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
-        return
-
-    async def _runner():
-        db = SessionLocal(restaurante_id=restaurante_id)
-        try:
-            await notificar_cliente_status_pedido(
-                db=db,
-                comanda_id=comanda_id,
-                novo_status=novo_status,
-                telefone_cliente=telefone_cliente,
-                nome_restaurante=nome_restaurante,
-                link_rastreamento=link_rastreamento,
-                telefone_restaurante=telefone_restaurante,
-                restaurante_id=restaurante_id,
-                numero_pedido=numero_pedido,
-                modalidade=modalidade,
-            )
-        finally:
-            db.close()
-
-    _agendar_corrotina(background_tasks, _runner)
+    # Do not allocate a session/task for a retired per-status transport.
+    return

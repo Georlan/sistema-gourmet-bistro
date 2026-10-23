@@ -37,7 +37,6 @@ from ..models import Comanda, DeliveryCourierReassignmentAudit, Lancamento, Moto
 from ..schemas import ComandaResponse
 from ..security import motoboy_rate_limiter, require_permission, verify_motoboy_token
 from ..services.inventory import alertas_estoque_dos_itens
-from ..services.notificacoes import agendar_notificacao_whatsapp_task
 from ..services.plan_entitlements import (
     ENTITLEMENT_COURIER_APP,
     has_plan_entitlement,
@@ -601,37 +600,6 @@ def despachar_delivery(
     db.commit()
     db.refresh(comanda)
 
-    restaurante = db.query(Restaurante).filter(Restaurante.id == rid).first()
-    nome_restaurante = restaurante.nome if restaurante else "Kôma"
-    total_pedido = sum(
-        float(item.preco_unit or 0)
-        for item in comanda.itens
-        if item.status != "cancelado"
-    ) + float(comanda.delivery_taxa or 0)
-    valor_a_cobrar = max(0.0, total_pedido - float(comanda.valor_pago or 0))
-    mensagem_motoboy = (
-        f"*NOVA ENTREGA - {nome_restaurante}*\n\n"
-        f"*Pedido:* #{comanda.numero_pedido or comanda.id}\n"
-        f"*Cliente:* {comanda.identificador or 'Cliente'}\n"
-        f"*Endereço:* {comanda.delivery_endereco or 'Não informado'}\n"
-        f"*Telefone do cliente:* {comanda.delivery_telefone or 'Não informado'}\n"
-        f"*Valor a cobrar:* R$ {valor_a_cobrar:.2f}"
-    )
-    if acesso_motoboy:
-        mensagem_motoboy += f"\n\n*Painel do entregador:* {acesso_motoboy['link_publico']}"
-    agendar_notificacao_whatsapp_task(
-        background_tasks,
-        telefone=motoboy.telefone,
-        conteudo=mensagem_motoboy,
-        tipo="atribuicao_motoboy",
-        db=db,
-        restaurante_id=rid,
-        comanda_id=comanda.id,
-        conteudo_auditoria=(
-            f"Atribuição do pedido {comanda.id} ao motoboy {motoboy.id}."
-        ),
-        contexto=f"atribuição de entrega (comanda #{comanda.id})",
-    )
     _agendar_notificacao_whatsapp_status(
         background_tasks,
         db,

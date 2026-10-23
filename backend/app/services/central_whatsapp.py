@@ -134,6 +134,9 @@ def enqueue_operator_alert(db: Session, order: OrderCreated):
     tenant = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=order.restaurant_id).one_or_none()
     if not platform_operator_enabled(order.restaurant_id, tenant) or registered_operator_phone(tenant, config.sender) is None:
         return None
+    from .whatsapp_sender_gate import sender_available
+    if not sender_available(db, config):
+        return None
     event = CentralOperatorAlert(
         restaurant_id=order.restaurant_id,
         order_id=str(order.order_id),
@@ -270,6 +273,11 @@ def dispatch_operator_alert(db: Session, snapshot: dict) -> bool:
     if int(snapshot["payload"].get("restaurant_id", -1)) != rid:
         return settle("dead_letter", "Evento e restaurante divergentes.")
 
+    from .whatsapp_sender_gate import sender_available
+    from .customer_whatsapp_dispatch import snapshot_time
+    if not sender_available(db, config, created_at=snapshot_time(snapshot)):
+        return settle("dead_letter", "Remetente suspenso ou aviso anterior à retomada; nenhum envio.")
+
     from ..models import Lancamento
     check = db.query(Comanda).filter_by(restaurante_id=rid, id=str(snapshot["payload"].get("check_id"))).one_or_none()
     source = db.query(Lancamento).filter_by(restaurante_id=rid,
@@ -319,6 +327,10 @@ def dispatch_registered_message(
         return settle("dead_letter", "Avisos operacionais sem autorização ou cadastro.")
     from .whatsapp_sender_gate import lock_sender, wait_until
     sender_state = lock_sender(db, config)
+    from .customer_whatsapp_dispatch import snapshot_time
+    from .whatsapp_sender_gate import sender_available
+    if not sender_available(db, config, created_at=snapshot_time(snapshot)):
+        return settle("dead_letter", "Remetente suspenso ou aviso anterior à retomada; nenhum envio.")
     pause = wait_until(sender_state)
     if pause is not None:
         return settle("failed", "Remetente central em pausa; aviso mantido na fila.", retry_at=pause)
@@ -360,14 +372,9 @@ def dispatch_registered_message(
     db.commit()  # Release all SQL locks BEFORE provider HTTP requests.
 
     def unavailable(reason: str) -> bool:
-        from .whatsapp_sender_gate import note_failure
-        note_failure(db, config)
-        if attempt_number >= int(snapshot["max_attempts"]):
-            return settle("dead_letter", reason, attempts=attempt_number)
-        return settle(
-            "failed", reason, attempts=attempt_number,
-            retry_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=5),
-        )
+        from .whatsapp_sender_gate import suspend_sender
+        suspend_sender(db, config)
+        return settle("dead_letter", reason + " Reconecte e retome no SuperAdmin; sem repetição automática.", attempts=attempt_number)
 
     try:
         with httpx.Client(timeout=4.0) as client:
@@ -393,6 +400,8 @@ def dispatch_registered_message(
         return False
     current = transport_configuration()
     latest_settings = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=rid).one_or_none()
+    if not sender_available(db, config, created_at=snapshot_time(snapshot)):
+        return settle("dead_letter", "Remetente suspenso durante a verificação; nenhum envio.", attempts=attempt_number)
     if current != config:
         return settle("dead_letter", "Liberação do remetente alterada antes do envio.", attempts=attempt_number)
     if customer:

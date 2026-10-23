@@ -52,3 +52,38 @@ def clear_failures(db: Session, config) -> None:
     state = lock_sender(db, config)
     state.failures = 0
     # Never shorten a shared pause opened by another in-flight request.
+
+
+def sender_available(db: Session, config, *, created_at=None) -> bool:
+    """Read local durable state only; no provider probe, insert or reservation."""
+    if config is None:
+        return False
+    state = db.query(CentralWhatsAppSenderState).filter_by(sender_key=_key(config)).populate_existing().one_or_none()
+    if state is None:
+        return True
+    if state.suspended_at is not None:
+        return False
+    if state.accept_events_after is not None and created_at is not None:
+        def utc(value):
+            return value.replace(tzinfo=dt.timezone.utc) if value.tzinfo is None else value
+        return utc(created_at) >= utc(state.accept_events_after)
+    return True
+
+
+def suspend_sender(db: Session, config) -> None:
+    state = lock_sender(db, config)
+    if state.suspended_at is None:
+        state.suspended_at = dt.datetime.now(dt.timezone.utc)
+    state.failures += 1
+
+
+def resume_sender(db: Session, config) -> bool:
+    state = lock_sender(db, config)
+    if state.suspended_at is None:
+        return False  # Repeated clicks must not move the cutoff past new events.
+    state.suspended_at = None
+    state.accept_events_after = dt.datetime.now(dt.timezone.utc)
+    state.circuit_open_until = None
+    state.next_send_at = None
+    state.failures = 0
+    return True
