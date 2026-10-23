@@ -152,8 +152,8 @@ def register_central_recipient(
     """Record an explicitly authorized destination; NO Evolution session or send.
 
     Registering is independent of the operator's own WhatsApp account and
-    never enables delivery implicitly. Existing individual connections must
-    be disconnected explicitly, so no live session is silently replaced.
+    never enables delivery implicitly. Explicit enrollment replaces only the
+    legacy local registration and never operates the restaurant's device.
     """
     if not body.confirm_receiving:
         raise HTTPException(
