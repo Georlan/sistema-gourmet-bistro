@@ -106,17 +106,20 @@ obrigatória.
 
 ## 5. Pagamento online e cobrança do plano
 
-Confirme no contrato o ciclo e o valor fixo do Pocket: R$ 39 mensais ou
-R$ 421,20 pelo ciclo anual com 10% de desconto no componente fixo. A taxa de
-1,79% só se aplica aos pagamentos online elegíveis e não recebe desconto anual.
+Confirme no contrato o ciclo e o valor fixo do Pocket: R$ 79,90 mensais ou
+R$ 862,92 pelo ciclo anual com 10% de desconto no componente fixo. A comissão KÔMA
+sobre pedidos online é de 0% (zero comissão nos três planos); tarifas do provedor
+de pagamento permanecem separadas e são pagas pelo estabelecimento diretamente ao
+provedor conectado (Mercado Pago / PagBank).
 Registre a tela de revisão e o valor autorizado no provedor antes de concluir
 a contratação; não trate uma simulação como cobrança real.
 
 Se o restaurante habilitar Pix online, faça com ele uma transação controlada e
 um estorno, com consentimento e valores combinados. Confira no provedor e no
-KÔMA o valor bruto, a taxa KÔMA efetiva, o líquido do restaurante, o estado do
+KÔMA o valor bruto, a comissão KÔMA efetiva (0,00%), o líquido do restaurante, o estado do
 pedido e o retorno do estorno. Verifique explicitamente o estado da trava
-`ONLINE_PAYMENT_PLAN_FEES_ENABLED` em produção. Se Pix online não fizer parte
+`ONLINE_PAYMENT_PLAN_FEES_ENABLED` em produção (permanece desligada por padrão,
+e mesmo que habilitada, a comissão canônica é 0%). Se Pix online não fizer parte
 da implantação, registre `NÃO APLICÁVEL` para a transação e não anuncie a
 taxa como receita já validada.
 

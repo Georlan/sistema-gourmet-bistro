@@ -7,11 +7,11 @@ const QUESTIONS = [
   },
   {
     question: 'Posso atender mesas e delivery juntos?',
-    answer: 'Sim, inclusive no Pocket. Os pedidos do cardápio digital chegam ao Kôma; pedidos de WhatsApp ou telefone são lançados por você. O delivery com endereço, taxa e status funciona em todos os planos. O app do entregador faz parte do Premium.',
+    answer: 'Sim, inclusive no Pocket. Os pedidos do cardápio digital chegam pelo checkout web integrado (o cliente não precisa de WhatsApp para comprar); pedidos de WhatsApp ou telefone são lançados por você. O delivery com endereço, taxa e status funciona em todos os planos. O app do entregador faz parte do Premium.',
   },
   {
-    question: 'Tem taxa de implantação ou módulos extras?',
-    answer: 'Não. A oferta atual não cobra taxa de implantação e não vende add-ons. Se você precisar de recursos avançados que não estão no seu plano, o caminho é subir de plano.',
+    question: 'Tem taxa de implantação, comissão ou módulos extras?',
+    answer: 'Não. A oferta atual tem 0% de comissão KÔMA sobre pedidos online nos três planos, não cobra taxa de implantação e não vende add-ons. Se você precisar de recursos avançados que não estão no seu plano, o caminho é subir de plano.',
   },
   {
     question: 'Precisa de internet?',
@@ -19,7 +19,7 @@ const QUESTIONS = [
   },
   {
     question: 'Quanto tempo leva para começar?',
-    answer: 'Depende do cardápio, da equipe e dos equipamentos. Combinamos o prazo e o escopo da configuração inicial antes da ativação.',
+    answer: 'Depende do cardápio, da equipe e dos equipamentos. O período de teste de 7 dias grátis no componente fixo só começa após a implantação dos 4 itens essenciais e liberação pelo SuperAdmin.',
   },
   {
     question: 'Como funciona o suporte?',

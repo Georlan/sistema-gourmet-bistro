@@ -4,9 +4,16 @@
 
 Plano e ciclo → dados mínimos salvos → aceite jurídico → **cartão autorizado ou Pix selecionado** → alerta único ao proprietário (e-mail + Telegram) → liberação de acesso pelo SuperAdmin → convite para criar senha → implantação essencial → liberação operacional pelo SuperAdmin → 7 dias grátis → **cobrança automática no cartão ou QR Pix a pagar** → operação normal.
 
-A mensalidade fixa do KÔMA segue a mesma regra em qualquer forma de pagamento disponibilizada no checkout:
+O catálogo comercial canônico vigente para novas contratações (`product-contract.json`, versão `2026-10-zero-commission`) é:
+- **Pocket:** R$ 79,90/mês (anual: R$ 862,92/ano, equiv. R$ 71,91/mês) · 0% de comissão KÔMA por pedido online;
+- **Pro:** R$ 179,90/mês (anual: R$ 1.942,92/ano, equiv. R$ 161,91/mês) · 0% de comissão KÔMA por pedido online;
+- **Premium:** R$ 329,90/mês (anual: R$ 3.562,92/ano, equiv. R$ 296,91/mês) · 0% de comissão KÔMA por pedido online.
+- Sem taxa de implantação e sem add-ons obrigatórios. Tarifas de provedores de pagamento (ex: Mercado Pago, PagBank) são independentes.
 
-- **R$ 0 de mensalidade fixa hoje**;
+A cobrança da mensalidade fixa segue a mesma regra em qualquer forma de pagamento disponibilizada no checkout:
+
+- **R$ 0 de mensalidade fixa no ato da contratação ("hoje")**: nenhuma cobrança é efetuada no momento da adesão;
+- contratos históricos anteriores preservam suas condições aceitas (ex.: contratos de versão anterior com mensalidade fixa de R$ 0 não criam recorrência de valor zero no provedor);
 - no cartão, o cliente autoriza a recorrência antes da liberação e ela fica **pausada durante a implantação inicial**;
 - no Pix, o cliente apenas seleciona a modalidade; **nenhum QR é gerado nem pago na adesão**;
 - cadastro, criação de senha, perfil, horários e preparação do primeiro cardápio **não consomem nenhum dia grátis**;

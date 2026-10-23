@@ -16,10 +16,29 @@ O **KÔMA** é uma plataforma SaaS multi-tenant em desenvolvimento para a gestã
 O objetivo do KÔMA é reduzir a fragmentação de sistemas em estabelecimentos de alimentação, reunindo os fluxos operacionais em uma arquitetura em nuvem multi-tenant.
 
 - **Operação de Salão & Caixa**: Agilidade no atendimento de mesas e comandas com fechamento cego de caixa.
-- **Autoatendimento & Delivery**: Cardápio digital direto no navegador do cliente sem necessidade de baixar aplicativos.
+- **Autoatendimento & Delivery**: Cardápio digital direto no navegador do cliente via checkout web integrado, sem necessidade de baixar aplicativos ou de ter WhatsApp obrigatório para comprar.
 - **Engajamento & WhatsApp**: Fluxo de identificação por OTP e notificações projetado para a Meta WhatsApp Cloud API oficial, condicionado à configuração e aprovação do provedor.
 - **Cozinha Inteligente (KDS)**: Kanban de produção com cronômetros visuais por pedido e setorização de pratos.
 - **Logística Integrada**: Portal PWA otimizado para motoboys acompanharem entregas com rota direta no Waze/Google Maps.
+
+---
+
+## 💼 Planos Comerciais e Contrato Canônico
+
+O catálogo comercial do KÔMA é governado pelo contrato canônico de produto ([`product-contract.json`](product-contract.json)) e refletido no frontend ([`src/config/subscriptionPlans.ts`](src/config/subscriptionPlans.ts)) e na versão jurídica vigente ([`src/legal/legalContentV35.ts`](src/legal/legalContentV35.ts)):
+
+| Plano | Mensalidade | Comissão KÔMA por pedido online | Resumo de recursos |
+|---|---:|---:|---|
+| **Pocket** | R$ 79,90 | **0%** | Mesas, comandas, balcão, App do Garçom, equipe, cardápio digital, retirada/delivery, fila de preparo na tela e caixa. |
+| **Pro** | R$ 179,90 | **0%** | Tudo do Pocket, mais KDS dedicado, impressão térmica automática, estoque, fichas técnicas e relatórios analíticos. |
+| **Premium** | R$ 329,90 | **0%** | Tudo do Pro, mais PWA do entregador, fidelidade, cashback, cupons e atendimento prioritário. |
+
+- **Zero comissão KÔMA**: 0% de comissão sobre pagamentos online em todos os planos.
+- **Sem taxa de implantação** e sem add-ons comerciais na oferta vigente.
+- **Modalidade anual**: 10% de desconto sobre o componente fixo da assinatura.
+- **Período de teste**: 7 dias grátis no componente fixo, iniciados após a conclusão dos quatro itens essenciais de implantação e a liberação pelo SuperAdmin.
+- **Tarifas de terceiros**: taxas de gateways de pagamento (Mercado Pago, PagBank) são independentes e pagas diretamente ao provedor.
+- **Contratos históricos**: tenants anteriores com contratos já formalizados preservam integralmente seus snapshots aceitos.
 
 ---
 

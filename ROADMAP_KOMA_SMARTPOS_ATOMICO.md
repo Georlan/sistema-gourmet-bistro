@@ -1,5 +1,8 @@
 # Kôma SmartPOS — Roadmap Atômico de Implementação
 
+> [!NOTE]
+> **Status do recurso:** Este documento é um roteiro técnico interno de engenharia e desenvolvimento incremental (simulação, adaptadores e contratos). A integração SmartPOS física está em fase experimental/desenvolvimento e **não está liberada comercialmente** nos planos públicos vigentes (Pocket, Pro, Premium) para operação em produção.
+
 **Objetivo:** desenvolver o SmartPOS do Kôma em incrementos pequenos, testáveis, reversíveis e com baixo custo de contexto/tokens, evitando quebrar o sistema existente.
 
 **Regra principal:**
