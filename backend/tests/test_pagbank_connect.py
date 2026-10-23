@@ -738,3 +738,60 @@ def test_bank_failure_keeps_only_safe_code_and_request_reference(caplog, provide
         assert denied.value.status_code == 403 and not denied.value.retryable
     finally:
         provider._client.close()
+
+@pytest.mark.parametrize('parameter,expected', [
+    ('charges[0].payment_method.pix.expiration_date', 'charges[0].payment_method.pix.expiration_date'),
+    ('customer.email', 'customer.email'),
+    ('notification_urls[0]', 'notification_urls[0]'),
+    ('customer.email:secret@example.test', 'unavailable'),
+    ('customer.email\nAuthorization: Bearer private', 'unavailable'),
+    ('secrets.access_token', 'unavailable'),
+])
+def test_pagbank_invalid_parameter_logging_is_strictly_sanitized(caplog, parameter, expected):
+    provider = PagBankProvider('seller-token')
+    provider._client.close()
+    provider._client = httpx.Client(base_url=oauth.api_url(), transport=httpx.MockTransport(
+        lambda req: httpx.Response(400, headers={'x-request-id': 'bank-40002-safe-id'}, json={
+            'error_messages': [{
+                'code': '40002', 'description': 'invalid_parameter: sensitive@example.test',
+                'parameter_name': parameter,
+            }],
+            'customer': {'email': 'sensitive@example.test', 'tax_id': 'never-log-document'},
+            'access_token': 'never-log-token',
+        })))
+    try:
+        with pytest.raises(PagBankError) as rejected:
+            provider.get_payment('ORDE_test')
+        assert rejected.value.status_code == 400
+        assert not rejected.value.retryable
+        assert 'Código: 40002.' in str(rejected.value)
+        assert 'bank-40002-safe-id' in str(rejected.value)
+        assert 'provider_code=40002' in caplog.text
+        assert 'provider_parameter=' + expected in caplog.text
+        assert 'provider_request_id=bank-40002-safe-id' in caplog.text
+        for secret in ('sensitive@example.test', 'never-log-document', 'never-log-token',
+                       'Authorization: Bearer private', 'seller-token'):
+            assert secret not in caplog.text + str(rejected.value)
+    finally:
+        provider._client.close()
+
+def test_pagbank_pix_expiration_is_utc_rfc3339_seconds():
+    received = []
+    def handle(req):
+        received.append(json.loads(req.content))
+        return httpx.Response(201, json=snapshot())
+    provider = PagBankProvider('seller-token')
+    provider._client.close()
+    provider._client = httpx.Client(base_url=oauth.api_url(), transport=httpx.MockTransport(handle))
+    try:
+        expiry = datetime.datetime(2026, 10, 22, 21, 23, 15, 987654,
+                                   tzinfo=datetime.timezone(datetime.timedelta(hours=-3)))
+        provider.create_pix(amount=Decimal('4.50'), marketplace_fee=Decimal(0),
+            payer_email='buyer@example.test', payer_name='Buyer', payer_tax_id='12345678909',
+            external_reference='intent-test', idempotency_key='unique-123',
+            notification_url='https://api.example.test/payment-webhook', expires_at=expiry)
+        value = received[0]['charges'][0]['payment_method']['pix']['expiration_date']
+        assert value == '2026-10-23T00:23:15Z'
+        assert received[0]['charges'][0]['amount']['value'] == 450
+    finally:
+        provider._client.close()
