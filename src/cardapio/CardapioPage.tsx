@@ -49,6 +49,7 @@ import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
 import CardapioOrdersDrawer from "./components/CardapioOrdersDrawer";
+import CardapioArtisticExperience from "./components/CardapioArtisticExperience";
 import { KomaLoading } from "../components/app/KomaLoading";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import { resolveKomaHost } from "../domain/komaHost";
@@ -157,6 +158,35 @@ export default function CardapioPage() {
   const recentAddedCountRef = useRef(0);
   const isProgrammaticScroll = useRef(false);
   const lastReportedMenuIdRef = useRef<string | number | null>(null);
+
+  const [vitrineVariant, setVitrineVariant] = useState<'editorial' | 'artistic' | 'catalog-first' | 'artistic-total'>(() => {
+    if (typeof window !== 'undefined') {
+      const param = new URLSearchParams(window.location.search).get('vitrine');
+      if (param === 'artistic-total' || param === 'catalog-first' || param === 'artistic' || param === 'editorial') return param;
+      if (new URLSearchParams(window.location.search).has('artistic')) return 'artistic-total';
+      if (window.location.pathname.includes('/preview-ui')) return 'artistic-total';
+    }
+    return 'artistic-total';
+  });
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-vitrine-variant', vitrineVariant);
+    }
+  }, [vitrineVariant]);
+
+  const handleVariantChange = useCallback((nextVariant: 'editorial' | 'artistic' | 'catalog-first' | 'artistic-total') => {
+    setVitrineVariant(nextVariant);
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-vitrine-variant', nextVariant);
+    }
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('vitrine', nextVariant);
+      window.history.replaceState(null, '', url.toString());
+      window.dispatchEvent(new CustomEvent('koma:vitrine-variant-change', { detail: nextVariant }));
+    }
+  }, []);
 
   const showNotification = useCallback((message: string) => {
     setNotice(message);
@@ -326,6 +356,7 @@ export default function CardapioPage() {
       const acceptingOrders = restaurant.aceitando_pedidos === true;
       const brand: BrandConfig = {
         id: String(restaurant.id),
+        slug: String(restaurant.slug || ""),
         name: String(restaurant.nome || "Restaurante"),
         slogan: String(restaurant.subtitulo || ""),
         logo: getRestaurantAssetUrl(restaurant.logo_url || "", true),
@@ -722,17 +753,17 @@ export default function CardapioPage() {
       if (isProgrammaticScroll.current) return;
       entries.forEach((entry) => {
         if (!entry.isIntersecting) return;
-        const category = activeBrand.categories.find((item) => categorySectionId(item) === entry.target.id);
+        const category = (entry.target as HTMLElement).dataset.menuCategory || activeBrand.categories.find((item) => categorySectionId(item) === entry.target.id);
         if (category) setActiveCategory(category);
       });
     }, { rootMargin: "-100px 0px -62% 0px", threshold: 0 });
 
     visibleCategories.forEach((category) => {
-      const element = document.getElementById(categorySectionId(category));
+      const element = document.getElementById(vitrineVariant === "artistic-total" ? `cat-${category.toLowerCase().replace(/\s+/g, "-")}` : categorySectionId(category));
       if (element) observer.observe(element);
     });
     return () => observer.disconnect();
-  }, [activeBrand, visibleCategories]);
+  }, [activeBrand, visibleCategories, vitrineVariant]);
 
   const orderingEnabled = activeBrand?.acceptingOrders !== false && activeBrand?.storeStatus !== "closed";
   const orderingMessage = activeBrand?.orderingMessage || "O restaurante pausou novos pedidos por enquanto.";
@@ -1010,36 +1041,84 @@ export default function CardapioPage() {
 
   return (
     <div className="min-h-screen overflow-x-clip bg-bg-app font-sans text-text-app" id="app-root-container">
-      <CardapioHeader
-        activeBrand={activeBrand}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        user={user}
-        onAuthClick={() => user ? setIsProfileOpen(true) : setIsAuthOpen(true)}
-        onLogoClick={() => setIsStoreInfoOpen(true)}
-        onCartToggle={openCart}
-        cartCount={cartCount}
-        onOrdersClick={() => setIsOrdersDrawerOpen(true)}
-        onBenefitsClick={() => setIsBenefitsOpen(true)}
-        ordersCount={storedOrders.length}
-        activeOrdersCount={activeOrders.length}
-      />
+      {notice && !isCartOpen && !isCheckoutOpen && (
+        <div
+          className="fixed top-16 sm:top-20 left-1/2 z-[60] -translate-x-1/2 max-w-[calc(100vw-2rem)] rounded-full border border-emerald-500/30 bg-[#0d1612]/95 backdrop-blur-md px-4 py-2 text-center text-xs font-bold text-emerald-300 shadow-2xl animate-fade-in flex items-center gap-2 pointer-events-auto cursor-pointer"
+          role="status"
+          aria-live="polite"
+          onClick={() => {
+            setNotice("");
+            recentAddedCountRef.current = 0;
+          }}
+        >
+          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+          <span>{notice}</span>
+        </div>
+      )}
+
+      {vitrineVariant === 'artistic-total' ? (
+        <CardapioArtisticExperience
+          activeBrand={activeBrand}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          selectedCategory={activeCategory}
+          onSelectCategory={(category) => {
+            setActiveCategory(category);
+            isProgrammaticScroll.current = true;
+            const element = document.getElementById(category ? `cat-${category.toLowerCase().replace(/\s+/g, '-')}` : 'koma-art-hero-showcase');
+            element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            window.setTimeout(() => { isProgrammaticScroll.current = false; }, 700);
+          }}
+          onSelectProduct={setSelectedProduct}
+          onFastAdd={handleFastAdd}
+          onFastRemove={handleFastRemove}
+          getProductCartQuantity={getProductCartQuantity}
+          onCartToggle={openCart}
+          cartCount={cartCount}
+          cartTotal={cartTotal}
+          cart={cart}
+          onStoreInfoClick={() => setIsStoreInfoOpen(true)}
+          onOrdersClick={() => setIsOrdersDrawerOpen(true)}
+          activeOrdersCount={activeOrders.length}
+          hasOpenOverlay={hasOpenOverlay}
+          onPromotionSelect={(offer) => {
+            setEditingPromotionItem(null);
+            setSelectedPromotion(offer);
+          }}
+          user={user}
+          onAuthClick={() => (user ? setIsProfileOpen(true) : setIsAuthOpen(true))}
+          onBenefitsClick={() => setIsBenefitsOpen(true)}
+          activeOrder={activeOrder}
+          activeState={activeState}
+          storedOrders={storedOrders}
+          storedOrdersCount={storedOrders.length}
+          onSelectOrderId={(id) => setSelectedOrderId(id)}
+          onPayPixClick={(order) => setPixModalOrder(order)}
+          onRefreshOrders={() => {
+            if (activeBrand?.id) void checkActiveOrders(Number(activeBrand.id));
+          }}
+          isRefreshingOrders={isRefreshingOrders}
+          onClearTrackedOrder={(id) => clearTrackedOrder(id)}
+          orderingMessage={orderingMessage}
+        />
+      ) : (
+        <>
+          <CardapioHeader
+            activeBrand={activeBrand}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            user={user}
+            onAuthClick={() => user ? setIsProfileOpen(true) : setIsAuthOpen(true)}
+            onLogoClick={() => setIsStoreInfoOpen(true)}
+            onCartToggle={openCart}
+            cartCount={cartCount}
+            onOrdersClick={() => setIsOrdersDrawerOpen(true)}
+            onBenefitsClick={() => setIsBenefitsOpen(true)}
+            ordersCount={storedOrders.length}
+            activeOrdersCount={activeOrders.length}
+          />
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6" id="catalog-section">
-        {notice && !isCartOpen && !isCheckoutOpen && (
-          <div
-            className="fixed top-16 sm:top-20 left-1/2 z-[60] -translate-x-1/2 max-w-[calc(100vw-2rem)] rounded-full border border-emerald-500/30 bg-[#0d1612]/95 backdrop-blur-md px-4 py-2 text-center text-xs font-bold text-emerald-300 shadow-2xl animate-fade-in flex items-center gap-2 pointer-events-auto cursor-pointer"
-            role="status"
-            aria-live="polite"
-            onClick={() => {
-              setNotice("");
-              recentAddedCountRef.current = 0;
-            }}
-          >
-            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-            <span>{notice}</span>
-          </div>
-        )}
 
         {activeOrder && activeState && (
           <section className={clsx(
@@ -1243,7 +1322,7 @@ export default function CardapioPage() {
                 <p className="text-xs text-koma-muted">Este restaurante ainda não publicou produtos no cardápio.</p>
               )}
             </div>
-          ) : visibleCategories.map((category) => {
+          ) : visibleCategories.map((category, catIndex) => {
             const products = activeBrand.products
               .filter((product) => (
                 product.category === category
@@ -1255,11 +1334,15 @@ export default function CardapioPage() {
                 if (orderA !== orderB) return orderA - orderB;
                 return 0;
               });
+            const indexLabel = String(catIndex + 1).padStart(2, '0');
             return (
-              <section key={category} id={categorySectionId(category)} className="scroll-mt-[10.5rem]">
-                <div className="mb-3 flex items-center justify-between border-b border-koma-border pb-2.5">
-                  <h2 className="cardapio-category-title">{category}</h2>
-                  <span className="rounded-full bg-koma-raised px-2.5 py-1 text-[9px] font-bold text-koma-muted">{products.length} {products.length === 1 ? "item" : "itens"}</span>
+              <section key={category} id={categorySectionId(category)} className="scroll-mt-[10.5rem] cardapio-catalog-category-section">
+                <div className="cardapio-category-header-lockup">
+                  <div className="flex items-center gap-2.5">
+                    <span className="cardapio-category-index" aria-hidden="true">{indexLabel}</span>
+                    <h2 className="cardapio-category-title">{category}</h2>
+                  </div>
+                  <span className="cardapio-category-count-pill">{products.length} {products.length === 1 ? "opção" : "opções"}</span>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {products.map((product) => (
@@ -1314,13 +1397,15 @@ export default function CardapioPage() {
         </nav>
       )}
 
-      {cartCount > 0 && !hasOpenOverlay && (
-        <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[44] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:left-auto lg:right-5 lg:w-80 lg:translate-x-0" id="floating-cart-container">
-          <button type="button" onClick={openCart} className="flex h-14 w-full touch-manipulation select-none items-center justify-between rounded-2xl bg-emerald-500 px-4 text-white shadow-2xl active:scale-[0.99]" id="floating-cart-trigger" aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}>
-            <span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-white/15 text-xs font-black">{cartCount}</span><span className="text-xs font-black">Ver sacola</span></span>
-            <span className="text-sm font-black">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}</span>
-          </button>
-        </div>
+          {cartCount > 0 && !hasOpenOverlay && (
+            <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[44] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:left-auto lg:right-5 lg:w-80 lg:translate-x-0" id="floating-cart-container">
+              <button type="button" onClick={openCart} className="flex h-14 w-full touch-manipulation select-none items-center justify-between rounded-2xl bg-emerald-500 px-4 text-white shadow-2xl active:scale-[0.99]" id="floating-cart-trigger" aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}>
+                <span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-white/15 text-xs font-black">{cartCount}</span><span className="text-xs font-black">Ver sacola</span></span>
+                <span className="text-sm font-black">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}</span>
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {selectedPromotion && (
@@ -1361,8 +1446,17 @@ export default function CardapioPage() {
           onFulfillmentChange={(method) => setFulfillmentChoice({ restaurantId: activeBrand.id, method })}
           allProducts={activeBrand.products}
           onAddToCart={handleAddToCart}
+          onSelectProduct={(product) => {
+            setSelectedProduct(product);
+            setIsCartOpen(false);
+          }}
           initialCouponCode={couponToApply}
           onClose={() => { setIsCartOpen(false); setCouponToApply(""); }}
+          onAdjustQty={(itemId, delta) => setCart(current => current.flatMap(item => {
+            if (item.id !== itemId) return [item];
+            const quantity = item.quantity + delta;
+            return quantity > 0 ? [{ ...item, quantity }] : [];
+          }))}
           onUpdateQty={(itemId, quantity) => setCart((current) => quantity <= 0 ? current.filter((item) => item.id !== itemId) : current.map((item) => item.id === itemId ? { ...item, quantity } : item))}
           onEditItem={item => {
             if (item.promotionId) {
@@ -1414,6 +1508,8 @@ export default function CardapioPage() {
         <CardapioAuthModal
           restaurantId={activeBrand.id}
           accountRequired={activeBrand.customerAccountRequired === true}
+          hasBenefits={Boolean(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty)}
+          restaurantName={activeBrand.name}
           onClose={() => setIsAuthOpen(false)}
           onLoginSuccess={handleLoginSuccess}
         />

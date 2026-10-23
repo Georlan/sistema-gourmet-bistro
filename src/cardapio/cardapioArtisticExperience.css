@@ -1,0 +1,2653 @@
+/**
+ * KÔMA — Experiência Artística do Cardápio Online
+ * Direção de Arte Editorial & Arquitetura Orgânica Macro
+ */
+
+/* ========================================================
+   1. CANVAS & TOKENS DE COR
+   ======================================================== */
+:root,
+.koma-art-canvas {
+  --art-bg: #040a07;
+  --art-canopy-grad: linear-gradient(175deg, #021a12 0%, #05291d 45%, #083c2a 85%, #0a4833 100%);
+  --art-wave-fill: #040a07;
+  --art-pod-bg: linear-gradient(150deg, #0c1c14 0%, #07120e 100%);
+  --art-pod-border: rgba(16, 185, 129, 0.22);
+  --art-pod-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.7), 0 0 24px rgba(16, 185, 129, 0.08);
+  --art-arch-melt: linear-gradient(to bottom, rgba(12, 28, 20, 0) 55%, #0c1c14 100%);
+  --art-card-bg: #091610;
+  --art-card-border: rgba(255, 255, 255, 0.07);
+  --art-card-shadow: 0 10px 24px -6px rgba(0, 0, 0, 0.4);
+  --art-text-main: #f3fbf7;
+  --art-text-sec: #94a3b8;
+  --art-text-muted: #64748b;
+  --art-emerald: #10b981;
+  --art-emerald-hover: #34d399;
+  --art-emerald-glow: rgba(16, 185, 129, 0.35);
+  --art-watermark: rgba(16, 185, 129, 0.09);
+  --art-dock-bg: rgba(6, 18, 13, 0.88);
+  --art-dock-border: rgba(16, 185, 129, 0.25);
+}
+
+.koma-art-canvas {
+  min-height: 100vh;
+  background-color: var(--art-bg);
+  color: var(--art-text-main);
+  font-family: inherit;
+  overflow-x: hidden;
+  padding-bottom: 96px;
+  position: relative;
+}
+
+/* Suporte ao Light Mode (tokens adaptados para contraste premium em fundo claro) */
+html[data-theme="light"],
+html[data-koma-theme="light"],
+[data-cardapio-tone="light"],
+html[data-theme="light"] .koma-art-canvas,
+html[data-koma-theme="light"] .koma-art-canvas,
+[data-cardapio-tone="light"] .koma-art-canvas {
+  --art-bg: #f5f8f6;
+  --art-canopy-grad: linear-gradient(175deg, #013825 0%, #004d34 50%, #006241 100%);
+  --art-wave-fill: #f5f8f6;
+  --art-pod-bg: #ffffff;
+  --art-pod-border: rgba(0, 0, 0, 0.06);
+  --art-pod-shadow: 0 20px 40px -10px rgba(0, 60, 40, 0.1), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --art-arch-melt: linear-gradient(to bottom, rgba(255, 255, 255, 0) 55%, #ffffff 100%);
+  --art-card-bg: #ffffff;
+  --art-card-border: rgba(0, 0, 0, 0.06);
+  --art-card-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.06);
+  --art-text-main: #061d15;
+  --art-text-sec: #475569;
+  --art-text-muted: #64748b;
+  --art-emerald: #00875a;
+  --art-emerald-hover: #006c48;
+  --art-emerald-glow: rgba(0, 135, 90, 0.25);
+  --art-watermark: rgba(0, 135, 90, 0.08);
+  --art-dock-bg: rgba(255, 255, 255, 0.92);
+  --art-dock-border: rgba(0, 0, 0, 0.1);
+
+  --koma-text-primary: #061d15;
+  --koma-text-secondary: #334155;
+  --koma-text-muted: #52606a;
+}
+
+/* ========================================================
+   2. ZONA 1: O DOSSEL GASTRONÔMICO (CANOPY)
+   ======================================================== */
+.koma-art-canopy {
+  background: var(--art-canopy-grad);
+  position: relative;
+  padding-top: 12px;
+  color: #ffffff;
+}
+
+.koma-art-canopy__shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.koma-art-canopy__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.koma-art-brand-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.koma-art-brand-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  object-fit: cover;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+}
+
+.koma-art-brand-logo--fallback {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: #10b981;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 20px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+}
+
+.koma-art-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.koma-art-brand-name {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.koma-art-brand-slogan {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.koma-art-canopy__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.koma-art-action-pill {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.koma-art-action-pill.hidden, .koma-art-action-pill[hidden] { display: none; }
+@media (min-width: 768px) {
+  .koma-art-action-pill.md\:inline-flex { display: inline-flex; }
+}
+.koma-art-action-pill[hidden] { display: none; }
+
+/* Em telas móveis (< 768px), ocultar botões secundários para priorizar a identidade da marca */
+@media (max-width: 767px) {
+  .koma-art-action-pill--whatsapp,
+  .koma-art-action-pill--instagram,
+  .koma-art-action-pill--share,
+  .koma-art-action-pill--store-info,
+  .koma-art-action-pill--benefits,
+  .koma-art-action-pill--orders,
+  .koma-art-action-pill--repeat {
+    display: none !important;
+  }
+}
+
+.koma-art-action-pill:hover {
+  background: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.koma-art-cart-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  background: #10b981;
+  color: #04140b;
+  font-size: 10px;
+  font-weight: 900;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Chamada Editorial */
+.koma-art-canopy__intro {
+  margin-top: 4px;
+}
+
+.koma-art-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #34d399;
+  margin-bottom: 4px;
+}
+
+.koma-art-canopy__title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: #ffffff;
+  max-width: 480px;
+}
+
+/* Cápsula de Busca */
+.koma-art-search-wrap {
+  width: 100%;
+}
+
+.koma-art-search-capsule {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 9999px;
+  height: 42px;
+  padding: 0 14px;
+  transition: all 0.25s ease;
+}
+
+.koma-art-search-capsule:focus-within {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: #34d399;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.25);
+}
+
+.koma-art-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  margin-left: 10px;
+}
+
+.koma-art-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.koma-art-search-clear {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+/* Faixa de Hospitalidade Integrada */
+.koma-art-hospitality-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  padding-bottom: 12px;
+}
+
+.koma-art-hospitality-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.koma-art-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+  animation: koma-art-pulse 2s infinite ease-in-out;
+}
+
+@keyframes koma-art-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.koma-art-hospitality-sep {
+  opacity: 0.4;
+}
+
+.koma-art-hospitality-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.koma-art-hospitality-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+/* Divisor em Onda Macro */
+.koma-art-wave-boundary {
+  width: 100%;
+  overflow: hidden;
+  line-height: 0;
+  transform: translateY(1px);
+}
+
+.koma-art-wave-svg {
+  display: block;
+  width: 100%;
+  height: 32px;
+}
+
+.koma-art-wave-fill {
+  fill: var(--art-wave-fill);
+}
+
+/* ========================================================
+   3. ZONA 2: FITA ORGÂNICA DE CATEGORIAS (STICKY)
+   ======================================================== */
+.koma-art-category-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--art-bg);
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+html[data-theme="light"] .koma-art-category-bar {
+  border-bottom-color: rgba(0, 0, 0, 0.05);
+}
+
+.koma-art-category-scroll {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 18px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.koma-art-category-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.koma-art-category-pill {
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--art-text-sec);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.koma-art-category-pill:hover {
+  color: var(--art-text-main);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.koma-art-category-pill.is-active {
+  background: var(--art-emerald);
+  color: #ffffff;
+  box-shadow: 0 4px 14px var(--art-emerald-glow);
+  border-color: transparent;
+}
+
+/* ========================================================
+   4. ZONA 3: PALCO CULINÁRIO ARQUITETURAL (HERO)
+   ======================================================== */
+.koma-art-hero-stage {
+  max-width: 1180px;
+  margin: 10px auto 24px;
+  padding: 0 16px;
+}
+
+.koma-art-stage-pod {
+  background: var(--art-pod-bg);
+  border: 1px solid var(--art-pod-border);
+  box-shadow: var(--art-pod-shadow);
+  border-radius: 36px 36px 24px 24px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.koma-art-arch-window {
+  position: relative;
+  width: 100%;
+  height: 205px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #020704;
+}
+
+.koma-art-arch-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.koma-art-stage-pod:hover .koma-art-arch-img {
+  transform: scale(1.03);
+}
+
+.koma-art-arch-melt {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: var(--art-arch-melt);
+  pointer-events: none;
+}
+
+.koma-art-seal-crown {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(5, 18, 12, 0.88);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 9999px;
+  padding: 5px 12px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #f3fbf7;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+/* Corpo Editorial do Palco */
+.koma-art-stage-body {
+  padding: 12px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  z-index: 2;
+}
+
+.koma-art-stage-eyebrow {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--art-emerald);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.koma-art-stage-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--art-text-main);
+  line-height: 1.2;
+  cursor: pointer;
+  margin: 0;
+}
+
+.koma-art-stage-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--art-text-sec);
+  margin-top: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.koma-art-stage-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme="light"] .koma-art-stage-action-row {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.koma-art-stage-price-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.koma-art-stage-price-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--art-text-muted);
+  font-weight: 700;
+}
+
+.koma-art-stage-price-val {
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--art-emerald);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.koma-art-cta-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--art-emerald);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 12px 24px;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 6px 18px var(--art-emerald-glow);
+  transition: all 0.2s ease;
+}
+
+.koma-art-cta-pill:hover {
+  background: var(--art-emerald-hover);
+  transform: translateY(-1px);
+}
+
+/* Stepper da Hero */
+.koma-art-stepper-capsule {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid var(--art-emerald);
+  border-radius: 9999px;
+  padding: 4px;
+  gap: 8px;
+}
+
+.koma-art-stepper-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--art-emerald);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.koma-art-stepper-count {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--art-emerald);
+  padding: 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ========================================================
+   5. ZONA 4: CÁPSULAS DE HARMONIZAÇÃO (PEBBLES)
+   ======================================================== */
+.koma-art-pairing-section {
+  max-width: 1180px;
+  margin: 0 auto 32px;
+  padding: 0 18px;
+}
+
+.koma-art-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.koma-art-section-eyebrow {
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--art-emerald);
+  display: block;
+}
+
+.koma-art-section-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--art-text-main);
+  margin: 2px 0 0;
+}
+
+.koma-art-pairing-hint {
+  font-size: 11px;
+  color: var(--art-text-muted);
+  font-weight: 600;
+}
+
+.koma-art-pairing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .koma-art-pairing-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.koma-art-pebble-card {
+  background: var(--art-card-bg);
+  border: 1px solid var(--art-card-border);
+  box-shadow: var(--art-card-shadow);
+  border-radius: 24px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.koma-art-pebble-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.koma-art-pebble-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #000000;
+}
+
+.koma-art-pebble-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.koma-art-pebble-tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  color: #34d399;
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 9999px;
+}
+
+.koma-art-pebble-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.koma-art-pebble-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--art-text-main);
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 32px;
+}
+
+.koma-art-pebble-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.koma-art-pebble-price {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--art-emerald);
+  font-variant-numeric: tabular-nums;
+}
+
+.koma-art-pebble-add-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid var(--art-emerald);
+  color: var(--art-emerald);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.koma-art-pebble-add-btn:hover {
+  background: var(--art-emerald);
+  color: #ffffff;
+}
+
+.koma-art-pebble-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(16, 185, 129, 0.15);
+  border-radius: 9999px;
+  padding: 2px 4px;
+}
+
+.koma-art-pebble-step-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--art-emerald);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.koma-art-pebble-qty {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--art-emerald);
+  min-width: 14px;
+  text-align: center;
+}
+
+.koma-art-pebble-custom-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 9999px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--art-emerald);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.koma-art-pebble-custom-btn:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: var(--art-emerald);
+}
+
+.koma-art-pebble-qty-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--art-emerald);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.koma-art-pebble-unavailable {
+  font-size: 10px;
+  font-weight: 800;
+  color: #78716c;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 3px 8px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+
+/* ========================================================
+   6. ZONA 5: CATÁLOGO INDEXADO
+   ======================================================== */
+.koma-art-catalog-main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.koma-art-cat-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scroll-margin-top: 70px;
+}
+
+.koma-art-cat-monument {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  position: relative;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 8px;
+}
+
+html[data-theme="light"] .koma-art-cat-monument {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+.koma-art-cat-watermark {
+  font-size: 36px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--art-watermark);
+  letter-spacing: -0.04em;
+  font-family: inherit;
+  user-select: none;
+}
+
+.koma-art-cat-monument__info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.koma-art-cat-monument__title {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--art-text-main);
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.koma-art-cat-monument__count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--art-text-muted);
+}
+
+.koma-art-catalog-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .koma-art-catalog-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .koma-art-catalog-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.koma-art-catalog-card {
+  background: var(--art-card-bg);
+  border: 1px solid var(--art-card-border);
+  box-shadow: var(--art-card-shadow);
+  border-radius: 22px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.koma-art-catalog-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.koma-art-card-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.koma-art-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--art-text-main);
+  line-height: 1.25;
+  margin: 0;
+}
+
+.koma-art-card-desc {
+  font-size: 11px;
+  color: var(--art-text-sec);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.koma-art-card-pricing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.koma-art-card-price {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--art-emerald);
+  font-variant-numeric: tabular-nums;
+}
+
+.koma-art-card-add-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid var(--art-emerald);
+  color: var(--art-emerald);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.koma-art-card-add-btn:hover {
+  background: var(--art-emerald);
+  color: #ffffff;
+}
+
+.koma-art-card-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(16, 185, 129, 0.15);
+  border-radius: 9999px;
+  padding: 2px 4px;
+}
+
+.koma-art-card-step-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--art-emerald);
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.koma-art-card-qty {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--art-emerald);
+  min-width: 16px;
+  text-align: center;
+}
+
+.koma-art-card-media-pod {
+  width: 98px;
+  height: 98px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #000000;
+  flex-shrink: 0;
+}
+
+.koma-art-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ========================================================
+   7. FALLBACK ARTÍSTICO DE CLOCHE (ITENS SEM FOTO)
+   ======================================================== */
+.koma-art-cloche {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, rgba(16, 185, 129, 0.12) 0%, rgba(5, 18, 12, 0.8) 75%);
+  color: #94a3b8;
+  padding: 8px;
+  text-align: center;
+}
+
+.koma-art-cloche__svg {
+  width: 44px;
+  height: 44px;
+}
+
+.koma-art-cloche__handle {
+  fill: #10b981;
+}
+
+.koma-art-cloche__dome,
+.koma-art-cloche__tray {
+  stroke: rgba(255, 255, 255, 0.35);
+}
+
+html[data-theme="light"] .koma-art-cloche__dome,
+html[data-theme="light"] .koma-art-cloche__tray {
+  stroke: rgba(0, 77, 52, 0.35);
+}
+
+.koma-art-cloche__steam {
+  stroke: #10b981;
+}
+
+.koma-art-cloche__caption {
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #10b981;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+/* ========================================================
+   8. RODAPÉ EDITORIAL
+   ======================================================== */
+.koma-art-footer {
+  max-width: 1180px;
+  margin: 40px auto 0;
+  padding: 24px 18px calc(115px + env(safe-area-inset-bottom, 24px));
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+html[data-theme="light"] .koma-art-footer {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.koma-art-footer-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--art-text-main);
+}
+
+.koma-art-footer-copy {
+  font-size: 10px;
+  color: var(--art-text-muted);
+}
+
+.koma-art-powered-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--art-text-sec);
+  margin-top: 8px;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.koma-art-powered-pill:hover {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.koma-art-attribution-emblem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.koma-art-attribution-brand {
+  color: #ffffff;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.koma-art-attribution-arrow {
+  font-size: 11px;
+  opacity: 0.7;
+  transition: transform 0.2s ease;
+}
+
+.koma-art-powered-pill:hover .koma-art-attribution-arrow {
+  transform: translate(2px, -2px);
+  opacity: 1;
+  color: #34d399;
+}
+
+/* Toast de Compartilhamento */
+.koma-art-share-toast {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: #06110d;
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(16, 185, 129, 0.2);
+  border-radius: 9999px;
+  padding: 8px 18px;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  animation: komaArtFadeInDown 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes komaArtFadeInDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ========================================================
+   9. DOCK ERGONÔMICO FLUTUANTE (MOBILE-FIRST)
+   ======================================================== */
+.koma-art-dock {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 420px;
+  height: 56px;
+  background: var(--art-dock-bg);
+  border: 1px solid var(--art-dock-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 9999px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 4px 10px;
+  z-index: 50;
+}
+
+.koma-art-dock-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  color: var(--art-text-sec);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.koma-art-dock-btn:hover {
+  color: var(--art-text-main);
+}
+
+.koma-art-dock-badge {
+  position: absolute;
+  top: 2px;
+  right: 10px;
+  background: var(--art-emerald);
+  color: #04140b;
+  font-size: 9px;
+  font-weight: 900;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+
+.koma-art-dock-btn--bag {
+  background: var(--art-emerald);
+  color: #ffffff;
+  padding: 6px 18px;
+  flex-direction: row;
+  gap: 8px;
+  box-shadow: 0 4px 14px var(--art-emerald-glow);
+}
+
+.koma-art-dock-btn--bag:hover {
+  background: var(--art-emerald-hover);
+  color: #ffffff;
+}
+
+.koma-art-dock-bag-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.koma-art-dock-btn--bag .koma-art-dock-badge {
+  top: -6px;
+  right: -8px;
+  background: #ffffff;
+  color: #04140b;
+}
+
+.koma-art-dock-bag-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+
+.koma-art-dock-bag-text span {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.koma-art-dock-bag-text small {
+  font-size: 9px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+/* ========================================================
+   10. AJUSTES RESPONSIVOS (360px & DESKTOP)
+   ======================================================== */
+@media (max-width: 375px) {
+  .koma-art-canopy__shell {
+    padding: 0 14px;
+    gap: 12px;
+  }
+  .koma-art-canopy__title {
+    font-size: 20px;
+  }
+  .koma-art-arch-window {
+    height: 190px;
+  }
+  .koma-art-stage-title {
+    font-size: 20px;
+  }
+  .koma-art-stage-body {
+    padding: 14px 16px 18px;
+  }
+  .koma-art-stage-price-val {
+    font-size: 20px;
+  }
+  .koma-art-cta-pill {
+    padding: 10px 18px;
+    font-size: 12px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .koma-art-stage-pod {
+    flex-direction: row;
+    border-radius: 40px;
+    align-items: stretch;
+  }
+  .koma-art-arch-window {
+    width: 50%;
+    height: 360px;
+  }
+  .koma-art-arch-melt {
+    width: 90px;
+    height: 100%;
+    right: 0;
+    left: auto;
+    bottom: 0;
+    background: linear-gradient(to right, rgba(12, 28, 20, 0) 0%, #0c1c14 100%);
+  }
+  html[data-theme="light"] .koma-art-arch-melt {
+    background: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, #ffffff 100%);
+  }
+  .koma-art-stage-body {
+    width: 50%;
+    padding: 36px 40px;
+    justify-content: center;
+  }
+  .koma-art-stage-title {
+    font-size: 32px;
+  }
+  .koma-art-stage-desc {
+    font-size: 14px;
+    -webkit-line-clamp: 3;
+  }
+  .koma-art-stage-price-val {
+    font-size: 28px;
+  }
+}
+
+/* ========================================================
+   11. PRODUTO MODAL ARTÍSTICO (.koma-art-modal-*)
+   ======================================================== */
+.koma-art-modal-sheet {
+  background: #07120e;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.85), 0 0 35px rgba(16, 185, 129, 0.08);
+  color: #f3fbf7;
+}
+
+html[data-theme="light"] .koma-art-modal-sheet,
+html[data-koma-theme="light"] .koma-art-modal-sheet,
+[data-cardapio-tone="light"] .koma-art-modal-sheet {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 20px 50px -15px rgba(0, 60, 40, 0.15), 0 0 25px rgba(0, 0, 0, 0.05);
+  color: #061d15;
+}
+
+html[data-theme="light"] .text-koma-foreground,
+html[data-koma-theme="light"] .text-koma-foreground,
+[data-cardapio-tone="light"] .text-koma-foreground {
+  color: #061d15;
+}
+
+html[data-theme="light"] .text-koma-muted,
+html[data-koma-theme="light"] .text-koma-muted,
+[data-cardapio-tone="light"] .text-koma-muted {
+  color: #52606a;
+}
+
+.koma-art-modal-hero {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: #030806;
+}
+
+.koma-art-modal-hero-melt {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(7, 18, 14, 0) 30%, rgba(7, 18, 14, 0.6) 70%, #07120e 100%),
+              linear-gradient(to top, rgba(7, 18, 14, 0.4) 0%, transparent 40%);
+}
+
+html[data-theme="light"] .koma-art-modal-hero-melt,
+[data-cardapio-tone="light"] .koma-art-modal-hero-melt {
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.7) 70%, #ffffff 100%),
+              linear-gradient(to top, rgba(0, 0, 0, 0.25) 0%, transparent 35%);
+}
+
+.koma-art-glass-btn {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(4, 12, 9, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #ffffff;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.koma-art-glass-btn:hover {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: rgba(16, 185, 129, 0.4);
+  transform: scale(1.05);
+}
+
+.koma-art-glass-btn:active {
+  transform: scale(0.96);
+}
+
+.koma-art-modal-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  line-height: 1.2;
+}
+
+.koma-art-modal-pill-badge--required {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.koma-art-modal-pill-badge--complete {
+  background: #10b981;
+  border: 1px solid #10b981;
+  color: #04140b;
+}
+
+.koma-art-modal-pill-badge--optional {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+}
+
+html[data-theme="light"] .koma-art-modal-pill-badge--optional,
+[data-cardapio-tone="light"] .koma-art-modal-pill-badge--optional {
+  background: #f1f5f3;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #64748b;
+}
+
+.koma-art-modal-option-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.025);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.koma-art-modal-option-card:hover {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.035);
+}
+
+.koma-art-modal-option-card.is-selected {
+  border-color: rgba(16, 185, 129, 0.55);
+  background: rgba(16, 185, 129, 0.085);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.08);
+}
+
+html[data-theme="light"] .koma-art-modal-option-card,
+[data-cardapio-tone="light"] .koma-art-modal-option-card {
+  border-color: rgba(0, 0, 0, 0.07);
+  background: #fbfdfc;
+}
+
+html[data-theme="light"] .koma-art-modal-option-card:hover,
+[data-cardapio-tone="light"] .koma-art-modal-option-card:hover {
+  border-color: rgba(0, 135, 90, 0.3);
+  background: rgba(0, 135, 90, 0.03);
+}
+
+html[data-theme="light"] .koma-art-modal-option-card.is-selected,
+[data-cardapio-tone="light"] .koma-art-modal-option-card.is-selected {
+  border-color: rgba(0, 135, 90, 0.5);
+  background: rgba(0, 135, 90, 0.07);
+  box-shadow: 0 4px 14px rgba(0, 135, 90, 0.06);
+}
+
+.koma-art-stepper-pill {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(4, 12, 9, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  padding: 3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+html[data-theme="light"] .koma-art-stepper-pill,
+[data-cardapio-tone="light"] .koma-art-stepper-pill {
+  background: #f1f5f3;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.koma-art-stepper-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.koma-art-stepper-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+html[data-theme="light"] .koma-art-stepper-btn:hover:not(:disabled),
+[data-cardapio-tone="light"] .koma-art-stepper-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.05);
+  color: #0f172a;
+}
+
+.koma-art-stepper-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.koma-art-stepper-val {
+  min-width: 32px;
+  text-align: center;
+  font-family: monospace;
+  font-size: 14px;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+
+html[data-theme="light"] .koma-art-stepper-val,
+[data-cardapio-tone="light"] .koma-art-stepper-val {
+  color: #0f172a;
+}
+
+/* ========================================================
+   12. SACOLA / CART DRAWER ARTÍSTICO (.koma-art-drawer-*)
+   ======================================================== */
+.koma-art-drawer-sheet {
+  background: #06110d;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: -15px 0 50px rgba(0, 0, 0, 0.75);
+}
+
+html[data-theme="light"] .koma-art-drawer-sheet,
+[data-cardapio-tone="light"] .koma-art-drawer-sheet {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: -12px 0 40px rgba(0, 60, 40, 0.1);
+}
+
+.koma-art-nav-pill-btn {
+  min-height: 38px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.koma-art-nav-pill-btn:hover {
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #f3fbf7;
+}
+
+.koma-art-nav-pill-btn.is-active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #34d399;
+}
+
+html[data-theme="light"] .koma-art-nav-pill-btn,
+[data-cardapio-tone="light"] .koma-art-nav-pill-btn {
+  background: #f1f5f3;
+  border-color: rgba(0, 0, 0, 0.06);
+  color: #64748b;
+}
+
+html[data-theme="light"] .koma-art-nav-pill-btn:hover,
+[data-cardapio-tone="light"] .koma-art-nav-pill-btn:hover {
+  border-color: rgba(0, 135, 90, 0.35);
+  color: #061d15;
+}
+
+html[data-theme="light"] .koma-art-nav-pill-btn.is-active,
+[data-cardapio-tone="light"] .koma-art-nav-pill-btn.is-active {
+  background: rgba(0, 135, 90, 0.12);
+  border-color: rgba(0, 135, 90, 0.35);
+  color: #00875a;
+}
+
+.koma-art-cart-item-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.025);
+  transition: all 0.2s ease;
+}
+
+.koma-art-cart-item-card:hover {
+  border-color: rgba(16, 185, 129, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html[data-theme="light"] .koma-art-cart-item-card,
+[data-cardapio-tone="light"] .koma-art-cart-item-card {
+  border-color: rgba(0, 0, 0, 0.06);
+  background: #fbfdfc;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+html[data-theme="light"] .koma-art-cart-item-card:hover,
+[data-cardapio-tone="light"] .koma-art-cart-item-card:hover {
+  border-color: rgba(0, 135, 90, 0.2);
+  background: #ffffff;
+}
+
+.koma-art-cart-thumb {
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+html[data-theme="light"] .koma-art-cart-thumb,
+[data-cardapio-tone="light"] .koma-art-cart-thumb {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.koma-art-mode-card {
+  border-radius: 20px;
+  padding: 14px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  text-align: left;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+
+.koma-art-mode-card:hover:not(:disabled) {
+  border-color: rgba(16, 185, 129, 0.3);
+  transform: translateY(-2px);
+}
+
+.koma-art-mode-card.is-selected {
+  border-color: rgba(16, 185, 129, 0.55);
+  background: rgba(16, 185, 129, 0.1);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.08);
+}
+
+html[data-theme="light"] .koma-art-mode-card,
+[data-cardapio-tone="light"] .koma-art-mode-card {
+  border-color: rgba(0, 0, 0, 0.07);
+  background: #fbfdfc;
+}
+
+html[data-theme="light"] .koma-art-mode-card:hover:not(:disabled),
+[data-cardapio-tone="light"] .koma-art-mode-card:hover:not(:disabled) {
+  border-color: rgba(0, 135, 90, 0.3);
+}
+
+html[data-theme="light"] .koma-art-mode-card.is-selected,
+[data-cardapio-tone="light"] .koma-art-mode-card.is-selected {
+  border-color: rgba(0, 135, 90, 0.5);
+  background: rgba(0, 135, 90, 0.08);
+}
+
+/* ========================================================
+   13. FORMAS DE PAGAMENTO ARTÍSTICAS (.koma-art-pay-*)
+   ======================================================== */
+.koma-art-pay-card {
+  min-height: 84px;
+  padding: 14px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  text-align: center;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  position: relative;
+}
+
+.koma-art-pay-card:hover {
+  border-color: rgba(16, 185, 129, 0.3);
+  transform: translateY(-2px);
+}
+
+.koma-art-pay-card.is-selected {
+  border-color: rgba(16, 185, 129, 0.55);
+  background: rgba(16, 185, 129, 0.1);
+  box-shadow: 0 4px 18px rgba(16, 185, 129, 0.1);
+  color: #34d399;
+}
+
+html[data-theme="light"] .koma-art-pay-card,
+[data-cardapio-tone="light"] .koma-art-pay-card {
+  border-color: rgba(0, 0, 0, 0.07);
+  background: #fbfdfc;
+}
+
+html[data-theme="light"] .koma-art-pay-card:hover,
+[data-cardapio-tone="light"] .koma-art-pay-card:hover {
+  border-color: rgba(0, 135, 90, 0.3);
+}
+
+html[data-theme="light"] .koma-art-pay-card.is-selected,
+[data-cardapio-tone="light"] .koma-art-pay-card.is-selected {
+  border-color: rgba(0, 135, 90, 0.5);
+  background: rgba(0, 135, 90, 0.08);
+  color: #00875a;
+}
+
+.koma-art-pix-badge {
+  position: absolute;
+  top: -8px;
+  right: 8px;
+  background: #10b981;
+  color: #04140b;
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+}
+
+/* ========================================================
+   14. STORE INFO DRAWER ARTÍSTICO (.koma-art-store-*)
+   ======================================================== */
+.koma-art-store-sheet {
+  background: #06110d;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="light"] .koma-art-store-sheet,
+[data-cardapio-tone="light"] .koma-art-store-sheet {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.koma-art-status-beacon {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(4, 12, 9, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.koma-art-beacon-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  position: relative;
+}
+
+.koma-art-beacon-dot--open {
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+}
+
+.koma-art-beacon-dot--closed {
+  background: #f43f5e;
+  box-shadow: 0 0 10px #f43f5e;
+}
+
+.koma-art-beacon-dot--paused {
+  background: #f59e0b;
+  box-shadow: 0 0 10px #f59e0b;
+}
+
+.koma-art-store-hours-table {
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+html[data-theme="light"] .koma-art-store-hours-table,
+html[data-koma-theme="light"] .koma-art-store-hours-table,
+[data-cardapio-tone="light"] .koma-art-store-hours-table {
+  border-color: rgba(0, 0, 0, 0.06);
+  background: #fbfdfc;
+}
+
+/* ========================================================
+   15. SISTEMA PROPRIETÁRIO DE AÇÕES KÔMA (.koma-action-*)
+   ======================================================== */
+.koma-action-primary {
+  background: linear-gradient(135deg, #10b981 0%, #0d9488 100%);
+  box-shadow: 0 4px 18px rgba(16, 185, 129, 0.35);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.koma-action-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #34d399 0%, #14b8a6 100%);
+  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.45);
+  transform: translateY(-1px);
+}
+
+.koma-action-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+html[data-theme="light"] .koma-action-primary,
+html[data-koma-theme="light"] .koma-action-primary,
+[data-cardapio-tone="light"] .koma-action-primary {
+  background: linear-gradient(135deg, #00875a 0%, #00745f 100%);
+  box-shadow: 0 4px 16px rgba(0, 135, 90, 0.25);
+}
+
+html[data-theme="light"] .koma-action-primary:hover:not(:disabled),
+html[data-koma-theme="light"] .koma-action-primary:hover:not(:disabled),
+[data-cardapio-tone="light"] .koma-action-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #009966 0%, #00875a 100%);
+  box-shadow: 0 6px 20px rgba(0, 135, 90, 0.35);
+}
+
+/* Chips de Navegação de Etapas: Atual, Concluída, Pendente */
+.koma-art-nav-pill-btn.is-completed {
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.koma-art-nav-pill-btn.is-completed:hover {
+  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.koma-art-nav-pill-btn.is-pending {
+  color: #64748b;
+  border-color: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
+  opacity: 0.65;
+}
+
+html[data-theme="light"] .koma-art-nav-pill-btn.is-completed,
+html[data-koma-theme="light"] .koma-art-nav-pill-btn.is-completed,
+[data-cardapio-tone="light"] .koma-art-nav-pill-btn.is-completed {
+  color: #00875a;
+  border-color: rgba(0, 135, 90, 0.3);
+  background: rgba(0, 135, 90, 0.06);
+}
+
+html[data-theme="light"] .koma-art-nav-pill-btn.is-pending,
+html[data-koma-theme="light"] .koma-art-nav-pill-btn.is-pending,
+[data-cardapio-tone="light"] .koma-art-nav-pill-btn.is-pending {
+  color: #94a3b8;
+  border-color: rgba(0, 0, 0, 0.04);
+  background: #f8faf9;
+  opacity: 0.6;
+}
+
+/* Indicador de Rádio Autêntico para Escolha Única (max === 1) */
+.koma-art-single-choice-indicator {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  display: grid;
+  place-items: center;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.koma-art-single-choice-indicator.is-selected {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.koma-art-single-choice-indicator.is-selected::after {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background-color: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
+html[data-theme="light"] .koma-art-single-choice-indicator,
+html[data-koma-theme="light"] .koma-art-single-choice-indicator,
+[data-cardapio-tone="light"] .koma-art-single-choice-indicator {
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+html[data-theme="light"] .koma-art-single-choice-indicator.is-selected,
+html[data-koma-theme="light"] .koma-art-single-choice-indicator.is-selected,
+[data-cardapio-tone="light"] .koma-art-single-choice-indicator.is-selected {
+  border-color: #00875a;
+  background: rgba(0, 135, 90, 0.1);
+}
+
+html[data-theme="light"] .koma-art-single-choice-indicator.is-selected::after,
+html[data-koma-theme="light"] .koma-art-single-choice-indicator.is-selected::after,
+[data-cardapio-tone="light"] .koma-art-single-choice-indicator.is-selected::after {
+  background-color: #00875a;
+  box-shadow: 0 0 4px rgba(0, 135, 90, 0.3);
+}
+
+/* ========================================================
+   10. PARIDADE COMERCIAL: BANNER, STATUS, TRACKER & PROMOÇÕES
+   ======================================================== */
+
+/* Banner Customizado da Marca */
+.koma-art-brand-banner {
+  max-width: 1180px;
+  margin: 16px auto 0;
+  padding: 0 16px;
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+.koma-art-banner-img {
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Nota de Horário Fechado / Pausado */
+.koma-art-availability-note {
+  max-width: 1180px;
+  margin: 16px auto 0;
+  padding: 14px 20px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #fde68a;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme="light"] .koma-art-availability-note,
+[data-cardapio-tone="light"] .koma-art-availability-note {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+/* Ações Avançadas do Canopy */
+.koma-art-action-pill--whatsapp:hover {
+  background: rgba(37, 211, 102, 0.2);
+  border-color: #25d366;
+  color: #25d366;
+}
+
+.koma-art-action-pill--instagram:hover {
+  background: rgba(225, 48, 108, 0.2);
+  border-color: #e1306c;
+  color: #e1306c;
+}
+
+.koma-art-action-pill--benefits,
+.koma-art-action-pill--repeat,
+.koma-art-action-pill--orders,
+.koma-art-action-pill--auth {
+  width: auto;
+  border-radius: 9999px;
+  padding: 0 12px;
+  gap: 6px;
+}
+
+.koma-art-action-pill--benefits {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fde68a;
+}
+
+.koma-art-action-pill--benefits:hover {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: #f59e0b;
+}
+
+.koma-art-action-pill--orders {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+}
+
+.koma-art-action-pill--orders:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #10b981;
+}
+
+.koma-art-pill-text {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Live Order Tracker Banner */
+.koma-art-order-tracker {
+  max-width: 1180px;
+  margin: 16px auto 0;
+  padding: 16px;
+  border-radius: 24px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: linear-gradient(160deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 18, 12, 0.95) 100%);
+  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.6);
+  position: relative;
+  overflow: hidden;
+}
+
+.koma-art-order-tracker--rejected {
+  border-color: rgba(244, 63, 94, 0.35);
+  background: linear-gradient(160deg, rgba(244, 63, 94, 0.08) 0%, rgba(20, 5, 8, 0.95) 100%);
+}
+
+.koma-art-order-tracker--terminal {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: linear-gradient(160deg, rgba(16, 185, 129, 0.05) 0%, rgba(6, 18, 13, 0.95) 100%);
+}
+
+html[data-theme="light"] .koma-art-order-tracker,
+[data-cardapio-tone="light"] .koma-art-order-tracker {
+  background: #ffffff;
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 12px 30px rgba(0, 80, 50, 0.08);
+}
+
+.koma-art-tracker-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+
+html[data-theme="light"] .koma-art-tracker-tabs,
+[data-cardapio-tone="light"] .koma-art-tracker-tabs {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+.koma-art-tracker-tabs-scroll {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.koma-art-tracker-tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--art-text-sec);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.koma-art-tracker-tab-pill.is-selected {
+  background: #10b981;
+  border-color: #10b981;
+  color: #ffffff;
+}
+
+.koma-art-tracker-tab-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.koma-art-tracker-view-all {
+  font-size: 11px;
+  font-weight: 700;
+  color: #34d399;
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.koma-art-tracker-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (min-width: 640px) {
+  .koma-art-tracker-main {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+}
+
+.koma-art-tracker-status-box {
+  flex: 1;
+}
+
+.koma-art-tracker-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.koma-art-tracker-num {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #34d399;
+}
+
+.koma-art-order-tracker--rejected .koma-art-tracker-num {
+  color: #fb7185;
+}
+
+.koma-art-tracker-sublink {
+  font-size: 10px;
+  color: var(--art-text-muted);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.koma-art-tracker-title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--art-text-main);
+  margin: 0;
+}
+
+.koma-art-tracker-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--art-text-sec);
+  margin: 4px 0 0;
+  max-width: 580px;
+}
+
+.koma-art-tracker-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--art-text-muted);
+  margin-top: 6px;
+}
+
+.koma-art-tracker-sep {
+  opacity: 0.5;
+}
+
+.koma-art-tracker-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.koma-art-tracker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid transparent;
+}
+
+.koma-art-tracker-btn--pix {
+  background: #10b981;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.koma-art-tracker-btn--pix:hover {
+  background: #059669;
+}
+
+.koma-art-tracker-btn--chat {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.koma-art-tracker-btn--chat:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.koma-art-tracker-btn--refresh {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--art-text-sec);
+}
+
+.koma-art-tracker-btn--refresh:hover {
+  color: var(--art-text-main);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.koma-art-tracker-btn--new {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.koma-art-tracker-pix-note {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 11px;
+  color: #fde68a;
+}
+
+.koma-art-tracker-pix-note strong {
+  display: block;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 2px;
+}
+
+.koma-art-tracker-stepper {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 8px;
+}
+
+html[data-theme="light"] .koma-art-tracker-stepper,
+[data-cardapio-tone="light"] .koma-art-tracker-stepper {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.koma-art-tracker-stepper.is-delivery {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.koma-art-tracker-stepper.is-takeout {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.koma-art-step-node {
+  text-align: center;
+}
+
+.koma-art-step-bar {
+  height: 5px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+html[data-theme="light"] .koma-art-step-bar,
+[data-cardapio-tone="light"] .koma-art-step-bar {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.koma-art-step-node.is-passed .koma-art-step-bar {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.koma-art-step-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  margin-top: 4px;
+  color: var(--art-text-muted);
+}
+
+.koma-art-step-node.is-passed .koma-art-step-label {
+  color: #34d399;
+}
+
+/* Vitrine de Promoções Artísticas */
+.koma-art-promotions-section {
+  max-width: 1180px;
+  margin: 20px auto 28px;
+  padding: 0 16px;
+}
+
+.koma-art-promo-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.koma-art-promo-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f59e0b;
+}
+
+.koma-art-promo-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--art-text-main);
+  margin: 2px 0 0;
+}
+
+.koma-art-promo-subtitle {
+  font-size: 11px;
+  color: var(--art-text-sec);
+  margin: 2px 0 0;
+}
+
+.koma-art-promo-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 768px) {
+  .koma-art-promo-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.koma-art-promo-card {
+  background: linear-gradient(145deg, rgba(245, 158, 11, 0.08) 0%, rgba(12, 28, 20, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  box-shadow: 0 12px 32px -6px rgba(0, 0, 0, 0.5), 0 0 16px rgba(245, 158, 11, 0.08);
+  border-radius: 24px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html[data-theme="light"] .koma-art-promo-card,
+[data-cardapio-tone="light"] .koma-art-promo-card {
+  background: #ffffff;
+  border-color: rgba(245, 158, 11, 0.35);
+  box-shadow: 0 10px 28px -4px rgba(245, 158, 11, 0.12);
+}
+
+.koma-art-promo-card:hover {
+  transform: translateY(-3px);
+  border-color: #f59e0b;
+  box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.6), 0 0 24px rgba(245, 158, 11, 0.18);
+}
+
+.koma-art-promo-media {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  background: #000000;
+  overflow: hidden;
+}
+
+.koma-art-promo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.koma-art-promo-tag {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.koma-art-promo-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.koma-art-promo-eyebrow {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #f59e0b;
+}
+
+.koma-art-promo-name {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--art-text-main);
+  letter-spacing: -0.02em;
+  margin: 2px 0 0;
+}
+
+.koma-art-promo-desc {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--art-text-sec);
+  margin: 4px 0 0;
+}
+
+.koma-art-promo-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="light"] .koma-art-promo-footer,
+[data-cardapio-tone="light"] .koma-art-promo-footer {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+.koma-art-promo-price-label {
+  display: block;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--art-text-muted);
+}
+
+.koma-art-promo-price-val {
+  font-size: 18px;
+  font-weight: 900;
+  color: #34d399;
+}
+
+.koma-art-promo-cta {
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  border-radius: 9999px;
+  padding: 8px 18px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.koma-art-promo-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.4);
+}
+
+/* Link de Atribuição KÔMA */
+.koma-art-attribution-link {
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.koma-art-attribution-link:hover {
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+/* Cards Esgotados */
+.koma-art-catalog-card.is-unavailable {
+  opacity: 0.65;
+  filter: grayscale(0.2);
+}
+
+/* Suporte a prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+/* Foco visível nos controles da vitrine; validar contraste em ambos os tons. */
+.koma-art-canvas button:focus-visible,
+.koma-art-canvas a:focus-visible,
+.koma-art-canvas input:focus-visible {
+  outline: 3px solid var(--art-emerald);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .koma-art-canvas *, .koma-art-canvas *::before, .koma-art-canvas *::after {
+    animation-duration: 0.01ms;
+    transition-duration: 0.01ms;
+    scroll-behavior: auto;
+  }
+}
+
+.koma-art-details-trigger { font: inherit; color: inherit; text-align: left; cursor: pointer; border: 0; background: none; padding: 0; min-height: 44px; }
+.koma-art-details-trigger:disabled { cursor: not-allowed; }
+
+/* O hitbox canônico é absoluto; na vitrine artística o título é o botão. */
+.koma-art-catalog-card .cardapio-product-card__details-hitbox { position: static; inset: auto; z-index: auto; }
+.koma-art-cat-group { scroll-margin-top: 80px; }
+.koma-art-empty-catalog { padding: 32px 18px; color: var(--art-text-main); }
+.koma-art-empty-catalog p { color: var(--art-text-sec); margin-block: 12px; }
+.koma-art-empty-catalog button { min-height: 44px; color: var(--art-emerald); font-weight: 700; }
+
+/* Mantém um único indicador de status e respeita a ação reservada ao desktop. */
+.koma-art-status-text.cardapio-order-status::before { content: none; }
+@media (min-width: 1024px) {
+  .koma-art-action-pill.lg\:inline-flex { display: inline-flex; }
+}

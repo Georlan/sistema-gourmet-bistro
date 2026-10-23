@@ -1,11 +1,12 @@
 import CatalogProductImage from './CatalogProductImage';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Flame, Truck } from 'lucide-react';
+import { ArrowRight, Truck } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
 import { CardapioRecommendations } from './CardapioRecommendations';
 import { CardapioHighlights } from './CardapioHighlights';
 import CardapioPromotions from './CardapioPromotions';
 import type { CatalogPromotion } from '../CardapioTypes';
+import { KomaWaveDivider, KomaOrganicBackplate, KomaHeroCorner, KomaSeloBadge } from './CardapioOrganicShapes';
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -31,6 +32,28 @@ type PopularProductsPayload = {
 
 function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
   const [rankedIds, setRankedIds] = useState<string[]>([]);
+  const [variant, setVariant] = useState<'editorial' | 'artistic' | 'catalog-first'>(() => {
+    if (typeof window !== 'undefined') {
+      const param = new URLSearchParams(window.location.search).get('vitrine');
+      if (param === 'catalog-first' || param === 'artistic' || param === 'editorial') return param;
+    }
+    return 'editorial';
+  });
+
+  useEffect(() => {
+    const handler = () => {
+      const param = new URLSearchParams(window.location.search).get('vitrine');
+      if (param === 'catalog-first' || param === 'artistic' || param === 'editorial') {
+        setVariant(param);
+      }
+    };
+    window.addEventListener('popstate', handler);
+    window.addEventListener('koma:vitrine-variant-change', handler);
+    return () => {
+      window.removeEventListener('popstate', handler);
+      window.removeEventListener('koma:vitrine-variant-change', handler);
+    };
+  }, []);
 
   useEffect(() => {
     if (!brand.id) return;
@@ -50,6 +73,10 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
           ? payload.produtos.map((item) => String(item.produto_id || '')).filter(Boolean)
           : [];
         setRankedIds(ids);
+        brand.popularProductIds = ids;
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('koma:popular-products-loaded', { detail: ids }));
+        }
       })
       .catch((error) => {
         if ((error as Error)?.name !== 'AbortError') setRankedIds([]);
@@ -76,36 +103,100 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
   };
 
   return (
-    <section aria-labelledby="popular-products-title" className="w-full basis-full border-t border-koma-border pt-3" id="popular-products-home">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
-          <Flame className="h-4 w-4" aria-hidden="true" />
-        </span>
-        <div>
-          <h2 id="popular-products-title" className="text-sm font-black text-koma-foreground">Mais escolhidos</h2>
-        </div>
+    <section aria-labelledby="popular-products-title" className="cardapio-popular-section w-full basis-full" id="popular-products-home">
+      <div className="cardapio-showcase-header">
+        <h2 id="popular-products-title" className="cardapio-showcase-heading">Mais escolhidos</h2>
+        <span className="cardapio-showcase-badge">Favoritos dos clientes</span>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none" role="list">
-        {products.map((product) => (
-          <button
-            key={product.id}
-            type="button"
-            role="listitem"
-            onClick={() => openProduct(product)}
-            className="flex min-w-[210px] max-w-[250px] items-center gap-3 rounded-xl border border-koma-border bg-koma-panel p-2.5 text-left transition hover:border-emerald-500/30 hover:bg-koma-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
-            aria-label={`Abrir ${product.name}`}
-          >
-            <CatalogProductImage
-              image={product.image}
-              className="h-12 w-12 shrink-0 rounded-lg object-cover"
-            />
-            <span className="min-w-0">
-              <strong className="block truncate text-xs text-koma-foreground">{product.name}</strong>
-              <span className="mt-1 block text-xs font-black text-emerald-400">{money(product.price)}</span>
-            </span>
-          </button>
-        ))}
+      <div className={`cardapio-popular-layout cardapio-popular-layout--${variant}`} role="list">
+        {products.map((product, index) => {
+          const actionLabel = product.marmitaria
+            ? 'Montar'
+            : (product.modifierGroups?.length || product.modifiers?.length)
+              ? 'Escolher'
+              : 'Pedir';
+          const isFirst = index === 0;
+          const rank = `#${index + 1}`;
+
+          if (variant === 'catalog-first' || !isFirst) {
+            return (
+              <button
+                key={product.id}
+                type="button"
+                role="listitem"
+                onClick={() => openProduct(product)}
+                className="cardapio-popular-card cardapio-popular-card--compact-ribbon"
+                aria-label={`Abrir ${product.name}`}
+              >
+                <div className="cardapio-popular-card__media-wrap">
+                  <CatalogProductImage
+                    image={product.image}
+                    className="cardapio-popular-card__image"
+                  />
+                  <span className="cardapio-popular-card__rank-pill">{rank}</span>
+                </div>
+                <span className="cardapio-popular-card__content">
+                  <span className="cardapio-popular-card__ribbon-eyebrow">
+                    {isFirst ? '★ Mais pedido da casa' : `★ Favorito ${rank}`}
+                  </span>
+                  <strong className="cardapio-popular-card__name">{product.name}</strong>
+                  <span className="cardapio-popular-card__bottom">
+                    <span className="cardapio-popular-card__price">{money(product.price)}</span>
+                    <span className="cardapio-popular-card__action-btn">
+                      <span>{actionLabel}</span>
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </span>
+                  </span>
+                </span>
+              </button>
+            );
+          }
+
+          /* Palco Culinário Artístico Principal (Hero de Alto Protagonismo com Geometria Orgânica) */
+          return (
+            <button
+              key={product.id}
+              type="button"
+              role="listitem"
+              onClick={() => openProduct(product)}
+              className="cardapio-popular-card cardapio-popular-card--hero cardapio-popular-card--artistic"
+              aria-label={`Abrir ${product.name}`}
+            >
+              <KomaOrganicBackplate className="cardapio-popular-card__backplate" />
+              <div className="cardapio-popular-card__media-wrap">
+                <CatalogProductImage
+                  image={product.image}
+                  className="cardapio-popular-card__image"
+                />
+                <KomaSeloBadge
+                  label="Nº 1 mais pedido"
+                  icon="crown"
+                  rank="#1"
+                  className="cardapio-popular-card__selo-badge"
+                />
+              </div>
+              <span className="cardapio-popular-card__content">
+                <span className="cardapio-popular-card__copy">
+                  <span className="cardapio-popular-card__eyebrow">
+                    ★ Destaque da cozinha
+                  </span>
+                  <strong className="cardapio-popular-card__name">{product.name}</strong>
+                  {product.description && (
+                    <span className="cardapio-popular-card__description">{product.description}</span>
+                  )}
+                </span>
+                <span className="cardapio-popular-card__bottom">
+                  <span className="cardapio-popular-card__price">{money(product.price)}</span>
+                  <span className="cardapio-popular-card__action-btn">
+                    <span>{actionLabel}</span>
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -114,15 +205,31 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
 export function CardapioConditionsSummary({ brand, onOpen, onPromotionSelect }: { brand: BrandConfig; onOpen: () => void; onPromotionSelect?: (promotion: CatalogPromotion) => void }) {
   const deliveryEnabled = brand.deliveryEnabled !== false;
   return (
-    <section id="menu-highlights" aria-label="Condições do pedido" className="cardapio-conditions-summary flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      {brand.storeStatus === 'open' && <span className="cardapio-order-status">Aberto</span>}
+    <section id="menu-highlights" aria-label="Condições do pedido" className="cardapio-conditions-summary cardapio-hospitality-bar flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      {brand.storeStatus === 'open' && (
+        <span className="cardapio-order-status cardapio-hospitality-pill">
+          <span className="cardapio-hospitality-dot" aria-hidden="true" />
+          Aberto
+        </span>
+      )}
       {!deliveryEnabled ? (
-        <span className="text-xs font-semibold text-koma-secondary">Somente retirada</span>
+        <span className="cardapio-hospitality-meta text-xs font-semibold text-koma-secondary">Somente retirada</span>
       ) : (brand.pedidoMinimo ?? 0) > 0 ? (
-        <div className="min-w-0 py-1"><span className="block text-xs text-koma-muted">{brand.pedidoMinimoRetirada ? 'Pedido mínimo' : 'Mínimo para entrega'}</span><strong className="mt-0.5 block text-sm text-koma-foreground">{money(brand.pedidoMinimo!)}</strong></div>
-      ) : <span className="text-xs font-semibold text-koma-secondary">Entrega e retirada</span>}
-      <button type="button" aria-label="Ver condições de entrega" onClick={onOpen} className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-1 text-left text-xs font-bold text-emerald-500 transition hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
-        <span>{deliveryEnabled ? 'Taxas de entrega' : 'Ver detalhes'}</span><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <div className="min-w-0 py-1 cardapio-hospitality-meta">
+          <span className="block text-xs text-koma-muted">{brand.pedidoMinimoRetirada ? 'Pedido mínimo' : 'Mínimo para entrega'}</span>
+          <strong className="mt-0.5 block text-sm text-koma-foreground">{money(brand.pedidoMinimo!)}</strong>
+        </div>
+      ) : (
+        <span className="cardapio-hospitality-meta text-xs font-semibold text-koma-secondary">Entrega e retirada</span>
+      )}
+      <button
+        type="button"
+        aria-label="Ver condições de entrega"
+        onClick={onOpen}
+        className="cardapio-hospitality-action inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-1 text-left text-xs font-bold text-emerald-500 transition hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+      >
+        <span>{deliveryEnabled ? 'Taxas de entrega' : 'Ver detalhes'}</span>
+        <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
       </button>
       <PopularProductsPreview brand={brand} />
       {onPromotionSelect && <CardapioPromotions brand={brand} onSelect={onPromotionSelect} />}

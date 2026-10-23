@@ -1,5 +1,7 @@
 import { expect, Page, test } from '@playwright/test';
 
+for (const variant of ['editorial', 'artistic-total'] as const) {
+test.describe(variant, () => {
 const API_ORIGIN = 'http://127.0.0.1:8000';
 
 const publicMenuPayload = {
@@ -93,7 +95,7 @@ test('Benefícios refletem configuração alterada no Caixa ao reabrir o painel'
 });
 
 async function openBenefits(page: Page) {
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.locator((page.viewportSize()?.width || 0) <= 640 ? '#mobile-nav-benefits' : '#btn-benefits-header').click();
   await expect(page.locator('#cardapio-benefits-drawer')).toBeVisible();
 }
@@ -164,7 +166,7 @@ test('sem benefícios habilitados não mostra acesso nem cupom na sacola', async
   let benefitRequests = 0;
   await mockCardapio(page, { cupons: [], programa: null }, false);
   page.on('request', request => { if (request.url().includes('/cupons/')) benefitRequests++; });
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await expect(page.locator('#btn-benefits-header, #mobile-nav-benefits')).toHaveCount(0);
   await page.locator('.cardapio-product-card__details-hitbox').first().click();
   await page.locator('#product-details-modal').getByRole('button', { name: /Adicionar/ }).click();
@@ -186,7 +188,7 @@ const couponChoices = {
 };
 
 async function prepareCouponCart(page: Page) {
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.locator('#btn-fast-add-101').click();
   if (!(await page.locator('#cart-drawer-container').isVisible())) {
     await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
@@ -254,3 +256,6 @@ test('resposta atrasada do cupom anterior não aplica desconto após trocar o c�
   await expect(cart.getByRole('button', { name: 'Remover cupom' })).toHaveCount(0);
   await expect(cart.getByText(/R\$\s*43,00/, { exact: true })).toHaveCount(0);
 });
+
+});
+}

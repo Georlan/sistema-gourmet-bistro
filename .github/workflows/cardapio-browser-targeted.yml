@@ -44,8 +44,9 @@ permissions:
 jobs:
   cardapio-browser:
     name: Cardapio browser smoke
+    # Playwright 1.58.2 cannot install Chromium deps on ubuntu26.04 runners.
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -68,6 +69,9 @@ jobs:
         run: >-
           npm run test:e2e --
           e2e/image-upload-optimization.spec.ts
+          e2e/cardapio-promotion-expiry.spec.ts
+          e2e/cardapio-promotion-mixed-cart.spec.ts
+          e2e/cardapio-artistic-parity.spec.ts
           e2e/cardapio-canonical-modal-entrypoints.spec.ts
           e2e/cardapio-catalog-images.spec.ts
           e2e/cardapio-exclusive-edit.spec.ts
@@ -100,6 +104,16 @@ jobs:
           npm run test:e2e --
           e2e/cardapio-mobile-layout.spec.ts
           --workers=2
+
+      - name: Verify native contact input in Firefox production build
+        env:
+          KOMA_E2E_PORT: '4288'
+          KOMA_E2E_FIREFOX: 'true'
+          KOMA_E2E_PREVIEW: 'true'
+        run: |
+          npx playwright install --with-deps firefox
+          npm run build
+          npm run test:e2e -- e2e/cardapio-artistic-parity.spec.ts --grep "contato preserva" --project=firefox-390 --workers=2
 
       - name: Upload browser diagnostics
         if: failure()

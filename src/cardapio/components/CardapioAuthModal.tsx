@@ -5,7 +5,7 @@ import { PasswordRecoveryHelp } from "../../components/auth/PasswordRecoveryHelp
  */
 
 import React, { useState } from "react";
-import { ArrowRight, Coins, Lock, Mail, Phone, Sparkles, User, X } from "lucide-react";
+import { ArrowRight, Coins, Gift, Lock, Mail, Phone, Sparkles, User, X } from "lucide-react";
 import { API_BASE_URL } from "../../config/api";
 import { authFetch, authRequestErrorMessage } from "../../utils/authRequest";
 import {
@@ -18,6 +18,8 @@ import {
 interface CardapioAuthModalProps {
   restaurantId: string | number;
   accountRequired?: boolean;
+  hasBenefits?: boolean;
+  restaurantName?: string;
   onClose: () => void;
   onLoginSuccess: (profile: CustomerProfile, token: string) => void;
 }
@@ -27,6 +29,8 @@ export const PASSWORD_RECOVERY = "ATIVO";
 export default function CardapioAuthModal({
   restaurantId,
   accountRequired = false,
+  hasBenefits = false,
+  restaurantName,
   onClose,
   onLoginSuccess,
 }: CardapioAuthModalProps) {
@@ -168,16 +172,26 @@ export default function CardapioAuthModal({
           <X className="h-5 w-5" />
         </button>
 
-        {/* Header com Ícone e Benefícios */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shadow-inner">
-            {tab === "login" ? <Coins className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
+        {/* Header com Direção Editorial Starbucks / KÔMA */}
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shadow-inner">
+            {hasBenefits ? (
+              <Gift className="h-6 w-6" />
+            ) : tab === "login" ? (
+              <User className="h-6 w-6" />
+            ) : (
+              <Sparkles className="h-6 w-6" />
+            )}
           </div>
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
-              Clube de Vantagens
+          <div className="min-w-0">
+            <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-emerald-400">
+              {hasBenefits
+                ? "Programa de Benefícios & Fidelidade"
+                : restaurantName
+                  ? `Sua Conta · ${restaurantName}`
+                  : "Acesso do Cliente"}
             </span>
-            <h2 className="font-display text-lg font-black tracking-tight text-white" id="auth-modal-title">
+            <h2 className="font-serif text-xl font-black tracking-tight text-white" id="auth-modal-title">
               {tab === "login" ? "Entrar na Minha Conta" : "Criar Minha Conta"}
             </h2>
           </div>
@@ -186,7 +200,9 @@ export default function CardapioAuthModal({
         <p className="mt-2.5 text-xs leading-relaxed text-gray-300">
           {accountRequired
             ? "Para enviar pedidos, entre na sua conta ou crie uma nova e confirme o cadastro pelo e-mail."
-            : "Acompanhe seus pedidos e consulte os benefícios disponíveis neste restaurante. Você também pode comprar como visitante."}
+            : hasBenefits
+              ? "Acompanhe seus pedidos em tempo real, resgate cupons e acumule benefícios neste restaurante. Você também pode comprar como visitante."
+              : "Acesse seu histórico, repita pedidos com agilidade e salve seus dados de entrega. Você também pode comprar como visitante."}
         </p>
 
         {/* Seletor de Abas (Entrar / Criar Conta) */}
@@ -199,7 +215,7 @@ export default function CardapioAuthModal({
             }}
             className={`min-h-11 flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
               tab === "login"
-                ? "bg-emerald-500 text-white shadow-md"
+                ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-950/40"
                 : "text-gray-400 hover:text-white"
             }`}
           >
@@ -213,7 +229,7 @@ export default function CardapioAuthModal({
             }}
             className={`min-h-11 flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
               tab === "register"
-                ? "bg-emerald-500 text-white shadow-md"
+                ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-950/40"
                 : "text-gray-400 hover:text-white"
             }`}
           >
@@ -276,7 +292,7 @@ export default function CardapioAuthModal({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 hover:shadow-emerald-500/30 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60 cursor-pointer"
             >
               <span>{isSubmitting ? "Entrando..." : "Entrar"}</span>
               {!isSubmitting && <ArrowRight className="h-4 w-4" />}
@@ -324,7 +340,7 @@ export default function CardapioAuthModal({
                   </div>
                 </label>
                 <button type="submit" disabled={isSubmitting}
-                  className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60 cursor-pointer">
+                  className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60 cursor-pointer">
                   <span>{isSubmitting ? "Enviando..." : "Criar conta"}</span>
                   {!isSubmitting && <ArrowRight className="h-4 w-4" />}
                 </button>

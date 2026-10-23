@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 440" role="img" aria-label="Superfície orgânica KÔMA">
+ <path d="M540 0H220C340 41 358 100 319 170C265 258 335 357 540 440Z" fill="var(--koma-hero-accent, #087A62)"/>
+ <path d="M540 0H302C384 59 394 127 365 194C338 256 377 339 540 381Z" fill="var(--koma-hero-mid, #0C473E)"/>
+ <path d="M540 359C399 319 346 267 365 187" fill="none" stroke="var(--koma-hero-line, #78DAC2)" stroke-width="3" opacity=".8"/>
+</svg>

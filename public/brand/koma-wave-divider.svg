@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 290" role="img" aria-label="Curva orgânica KÔMA">
+ <path d="M0 0H1200V144C1045 84 933 248 770 222C583 192 537 94 355 136C210 169 148 244 0 193Z" fill="var(--koma-wave-base, #06241F)"/>
+ <path d="M0 145C138 222 241 103 354 125C538 163 557 243 744 237C951 230 1037 116 1200 160" fill="none" stroke="var(--koma-wave-accent, #00B894)" stroke-width="5" opacity=".9"/>
+</svg>

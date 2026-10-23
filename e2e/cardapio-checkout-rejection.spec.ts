@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+for (const variant of ['editorial', 'artistic-total'] as const) {
+test.describe(variant, () => {
 for (const rejection of [400, 404, 503]) {
   test(`rejeição ${rejection} fica visível e permite corrigir ou repetir sem perder a sacola`, async ({ page }, testInfo) => {
     const keys: string[] = [];
@@ -26,7 +28,7 @@ for (const rejection of [400, 404, 503]) {
         await route.fulfill({ json: path.includes('populares') ? { produtos: [] } : {} });
       }
     });
-    await page.goto('/cardapio?restaurante_id=901');
+    await page.goto(`/cardapio?restaurante_id=901&vitrine=${variant}`);
     await page.locator('#btn-fast-add-101').click();
     const cart = page.locator('#cart-drawer-container');
     if (!await cart.isVisible()) await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
@@ -77,4 +79,7 @@ for (const rejection of [400, 404, 503]) {
       expect(keys[1]).toBe(keys[0]);
     }
   });
+}
+
+});
 }

@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+for (const variant of ['editorial', 'artistic-total'] as const) {
+test.describe(variant, () => {
 test('Pitulinha exclusiva não aparece avulsa, mas é montável no combo G + Pitulinha', async ({ page }) => {
   await page.route('http://127.0.0.1:8000/**', async route => {
     const path = new URL(route.request().url()).pathname;
@@ -35,9 +37,9 @@ test('Pitulinha exclusiva não aparece avulsa, mas é montável no combo G + Pit
     await route.fulfill({ json: {} });
   });
 
-  await page.goto('/cardapio?restaurante_id=6');
+  await page.goto(`/cardapio?restaurante_id=6&vitrine=${variant}`);
   await expect(page.locator('#product-card-pitulinha')).toHaveCount(0);
-  await expect(page.locator('#cardapio-recommendations-home')).not.toContainText('Pitulinha');
+  await expect(page.locator('#cardapio-recommendations-home').filter({hasText:'Pitulinha'})).toHaveCount(0);
 
   const promotions = page.locator('#cardapio-promotions-home');
   await expect(promotions).toBeVisible();
@@ -63,3 +65,6 @@ test('Pitulinha exclusiva não aparece avulsa, mas é montável no combo G + Pit
   await expect(cart).toContainText('R$ 16,00');
   await expect(cart).toContainText('Guaraná');
 });
+
+});
+}
