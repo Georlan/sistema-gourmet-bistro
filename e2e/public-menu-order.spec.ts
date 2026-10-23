@@ -1,6 +1,8 @@
 import { expect, Page, test } from '@playwright/test';
 import { ORDERING_BLOCK_CONFLICT_DETAIL } from '../src/cardapio/orderingBlockUi';
 
+for (const variant of ['editorial', 'artistic-total'] as const) {
+test.describe(variant, () => {
 const API_ORIGIN = 'http://127.0.0.1:8000';
 
 const basePublicMenuPayload = {
@@ -193,7 +195,7 @@ test('tempo do catálogo mede a requisição real sem duplicar abertura nem cria
     await new Promise(resolve => setTimeout(resolve, 200));
     await route.fallback();
   });
-  await page.goto('/?view=cardapio&restaurante_id=2');
+  await page.goto(`/?view=cardapio&restaurante_id=2&vitrine=${variant}`);
   await expect(page.getByText('Pizza Margherita', { exact: true }).first()).toBeVisible();
   const events = await page.evaluate(() => window.__KOMA_ANALYTICS_EVENTS__?.filter(event => event.event === 'public_menu_viewed') || []);
   expect(events).toHaveLength(1);
@@ -205,7 +207,7 @@ test('tempo do catálogo mede a requisição real sem duplicar abertura nem cria
 test('bloqueio autoritativo encerra o checkout sem reenviar o pedido', async ({ page }) => {
   const capturedOrders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, capturedOrders, { orderConflictDetail: ORDERING_BLOCK_CONFLICT_DETAIL });
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
@@ -245,11 +247,11 @@ test('sacola abre no primeiro toque real pela navegação móvel', async ({ page
   test.skip(testInfo.project.name !== 'mobile-390', 'Regressão de toque coberta no viewport mobile com touch real.');
 
   await mockPublicMenuBackend(page, []);
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.locator('#btn-fast-add-101').tap();
 
   const cartTrigger = page.locator('#mobile-nav-cart');
-  const mobileNav = page.locator('#cardapio-mobile-nav');
+  const mobileNav = page.locator(variant === 'artistic-total' ? '#koma-art-dock' : '#cardapio-mobile-nav');
   await expect(cartTrigger).toBeVisible();
   await expect(mobileNav).toBeVisible();
   await expect(page.locator('#floating-cart-trigger')).toBeHidden();
@@ -295,7 +297,7 @@ test('cartão do produto mantém detalhes e adição como controles separados', 
   const capturedOrders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, capturedOrders);
 
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   const card = page.locator('#product-card-101');
   await expect(card).not.toHaveAttribute('role', 'button');
   await expect(card.locator('button button, [role="button"] button')).toHaveCount(0);
@@ -327,7 +329,7 @@ test('sacola orienta o visitante até cada campo inválido e bloqueia a página 
     restaurant: { pagamento_online_ativo: true },
   });
 
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await expect(page.locator('#btn-cart-header')).toHaveAttribute('aria-label', 'Sua sacola, 0 itens');
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
@@ -373,11 +375,11 @@ test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos d
   const capturedOrders: CapturedOrder[] = [];
   const backend = await mockPublicMenuBackend(page, capturedOrders);
 
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
 
   await expect(page.getByText('Pizzeria Bella Italia', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true })).toBeVisible();
-  await expect(page.getByPlaceholder('O que você quer pedir?')).toBeVisible();
+  await expect(page.getByRole('searchbox')).toBeVisible();
   await expect(page.getByText('Pizzas & Massas', { exact: true }).first()).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
@@ -432,7 +434,7 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
   const capturedOrders: CapturedOrder[] = [];
   const backend = await mockPublicMenuBackend(page, capturedOrders);
 
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
@@ -473,7 +475,7 @@ test('consulta de CEP alimenta o snapshot universal e permite correção manual'
     localidade: 'Fortaleza', uf: 'CE',
   } }));
 
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
@@ -518,7 +520,7 @@ test('consulta de CEP ignora resposta antiga que chega fora de ordem', async ({ 
     });
   });
 
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
@@ -542,8 +544,8 @@ test('delivery pausado mantém retirada abaixo do mínimo e cartão presencial',
     },
   });
 
-  await page.goto('/cardapio?restaurante_id=2');
-  await expect(page.getByText('Somente retirada', { exact: true })).toBeVisible();
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
+  await expect(page.getByText(variant === 'artistic-total' ? 'Retirada · Consumo local' : 'Somente retirada', { exact: true })).toBeVisible();
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
 
@@ -578,7 +580,7 @@ test('loja pausada mantém catálogo consultável e bloqueia criação de pedido
   const capturedOrders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, capturedOrders, { statusOverride: 'Forçado Fechado' });
 
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await expect(page.getByText('Pedidos pausados.', { exact: false })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true })).toBeVisible();
   await page.locator('#btn-fast-add-101').click();
@@ -597,7 +599,7 @@ test('caixa fechado mantém catálogo consultável e bloqueia pedidos', async ({
     },
   });
 
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await expect(page.locator('#menu-availability')).toContainText('Aguardando abertura do caixa.');
   await expect(page.getByText('Estabelecimento fechado. Aguardando abertura do caixa.', { exact: false })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true })).toBeVisible();
@@ -617,8 +619,8 @@ test('modo automático mostra aberto quando a política do servidor aceita pedid
     },
   });
 
-  await page.goto('/cardapio?restaurante_id=2');
-  await expect(page.locator('.cardapio-order-status')).toHaveText('Aberto');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
+  await expect(page.locator('.cardapio-order-status')).toHaveText(variant === 'artistic-total' ? 'Aberto para pedidos' : 'Aberto');
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
   expect(capturedOrders).toHaveLength(0);
@@ -640,7 +642,7 @@ test('pedido recusado continua visível em vez de desaparecer', async ({ page })
   });
   await mockPublicMenuBackend(page, capturedOrders, { orderStatus: 'recusado', orderClosed: true });
 
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await expect(page.getByText('Pedido não aceito', { exact: true })).toBeVisible();
   await expect(page.getByText(/não conseguiu aceitar este pedido/i)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Fazer novo pedido', exact: true })).toBeVisible();
@@ -679,7 +681,7 @@ test('cliente consegue acompanhar múltiplos pedidos e alternar entre eles', asy
   });
   await mockPublicMenuBackend(page, capturedOrders);
 
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
 
   // Banner com seletor de múltiplos pedidos
   await expect(page.locator('#active-order-banner')).toBeVisible();
@@ -701,7 +703,7 @@ test('cliente consegue acompanhar múltiplos pedidos e alternar entre eles', asy
 test('observação do produto chega à revisão e ao envio', async ({ page }) => {
   const capturedOrders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, capturedOrders);
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.getByRole('button', { name: /Pizza Margherita.*ver detalhes/ }).click();
   await page.locator('#notes-textarea').fill('Sem manjericão');
   await page.getByRole('button', { name: /Adicionar/ }).last().click();
@@ -732,7 +734,7 @@ test('recuperação do cardápio envia o restaurante e mantém visitante dispon�
     submitted = route.request().postDataJSON();
     await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'Recuperação de senha indisponível no momento. Tente novamente mais tarde.' }) });
   });
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.getByRole('button', { name: 'Entrar na conta' }).click();
   await page.getByRole('button', { name: 'Esqueci minha senha' }).click();
   await page.getByLabel('E-mail da conta', { exact: true }).fill('customer@example.test');
@@ -748,23 +750,25 @@ test('sugestões usam bebidas e sobremesas do catálogo real e adicionam sem err
     categorias: [...basePublicMenuPayload.categorias, { id: 11, nome: 'Bebidas' }, { id: 12, nome: 'Sobremesas' }],
     produtos: [product, { ...product, id: 102, nome: 'Suco de laranja', categoria_id: 11 }, { ...product, id: 103, nome: 'Pudim', categoria_id: 12 }],
   } });
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Itens', exact: true }).click();
-  const suggestions = page.getByRole('heading', { name: 'Uma bebida ou sobremesa para acompanhar?' }).locator('../..');
+  const suggestions = page.getByRole('region', { name: 'Sugestões para acompanhar' });
   await expect(suggestions).toContainText('Suco de laranja');
   await expect(suggestions).toContainText('Pudim');
   await expect(suggestions).not.toContainText('Pizza Margherita');
-  await suggestions.getByRole('button', { name: 'Adicionar', exact: true }).first().click();
-  await expect(suggestions).not.toContainText('Suco de laranja');
+  const before = await suggestions.locator('[id^=upsell-card-]').evaluateAll(es => es.map(e => e.id));
+  await suggestions.getByRole('button', { name: 'Adicionar Suco de laranja', exact: true }).click();
+  await expect(suggestions.locator('#upsell-qty-102')).toHaveText('1');
+  expect(await suggestions.locator('[id^=upsell-card-]').evaluateAll(es => es.map(e => e.id))).toEqual(before);
   await expect(page.getByText('Suco de laranja', { exact: true }).last()).toBeVisible();
 });
 
 test('default entrega e escolha manual sobrevivem ao fechamento da sacola e revisão', async ({ page }) => {
   const orders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, orders);
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
   const delivery = page.getByRole('button', { name: /^Entrega\b/ });
@@ -825,7 +829,7 @@ test('configuração assíncrona não seleciona retirada antes de carregar', asy
 test('avançar valida entrega e troco antes da revisão, preservando os dados', async ({ page }) => {
   const orders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, orders);
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
   const cart = page.locator('#cart-drawer-container');
@@ -861,7 +865,7 @@ test('avançar valida entrega e troco antes da revisão, preservando os dados', 
 
 test('mínimo é validado ao avançar e retirada ignora endereço de entrega', async ({ page }) => {
   await mockPublicMenuBackend(page, [], { restaurant: { pedido_minimo: 100 } });
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
   const cart = page.locator('#cart-drawer-container');
@@ -878,7 +882,7 @@ for (const optedIn of [false, true]) {
   test(`WhatsApp voluntário por pedido: escolha ${optedIn} sem cadastro ou OTP`, async ({ page }) => {
     const captured: CapturedOrder[] = [];
     const backend = await mockPublicMenuBackend(page, captured, { restaurant: { avisos_whatsapp_disponiveis: true } });
-    await page.goto('/cardapio?restaurante_id=2');
+    await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
     await page.locator('#btn-fast-add-101').click();
     await openCart(page);
     await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
@@ -900,4 +904,7 @@ for (const optedIn of [false, true]) {
     expect(captured[0].whatsapp_status_opt_in).toBe(optedIn);
     expect(backend.getOtpRequests()).toBe(0);
   });
+}
+
+});
 }

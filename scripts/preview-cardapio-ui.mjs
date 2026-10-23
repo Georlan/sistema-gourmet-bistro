@@ -36,7 +36,7 @@ const payload = {
     tempo_retirada_estimado_min: 15,
     tempo_retirada_estimado_max: 25,
     pedido_minimo_valor: 20.0,
-    tipos_pedido_ativos: ['delivery', 'retirada', 'mesa'],
+    tipos_pedido_ativos: ['delivery', 'retirada', 'consumo_local'],
     formas_pagamento_aceitas: ['Pix', 'Cartão de Crédito', 'Dinheiro'],
     beneficios: { coupons: true, loyalty: true, cashback: true },
     pagamento_online_ativo: false,

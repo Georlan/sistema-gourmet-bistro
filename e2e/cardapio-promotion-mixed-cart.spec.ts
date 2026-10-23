@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+for (const variant of ['editorial', 'artistic-total'] as const) {
+test.describe(variant, () => {
 test('combo e quentinha avulsa enviam composição separada no checkout', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-10-16T15:00:00Z') });
   await page.route('http://127.0.0.1:8000/**', async route => {
@@ -42,7 +44,7 @@ test('combo e quentinha avulsa enviam composição separada no checkout', async 
     }
     await route.fulfill({ json: {} });
   });
-  await page.goto('/cardapio?restaurante_id=6');
+  await page.goto(`/cardapio?restaurante_id=6&vitrine=${variant}`);
   const promotions = page.locator('#cardapio-promotions-home');
   await expect(promotions).toBeVisible();
   await promotions.getByRole('button', { name: /Montar promoção Quentinha G \+ Quentinha M/ }).click();
@@ -53,7 +55,7 @@ test('combo e quentinha avulsa enviam composição separada no checkout', async 
   await expect(modal.locator('#modal-product-name')).toHaveText('Quentinha M');
   await modal.getByRole('checkbox', { name: 'Selecionar Alface' }).check();
   await modal.getByRole('button', { name: 'Revisar promoção' }).click();
-  await expect(page.getByRole('heading', { name: 'Quentinha G + Quentinha M' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Quentinha G + Quentinha M', exact: true }).getByRole('heading', { name: 'Quentinha G + Quentinha M', exact: true })).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Quentinha G + Quentinha M' })).toContainText('R$ 22,00');
   await page.getByRole('button', { name: 'Adicionar promoção' }).click();
   const cart = page.locator('#cart-drawer-container');
@@ -77,3 +79,6 @@ test('combo e quentinha avulsa enviam composição separada no checkout', async 
   await page.locator('#btn-place-order-final').click();
   await expect(page.locator('#checkout-card')).toContainText('Pedido recebido');
 });
+
+});
+}

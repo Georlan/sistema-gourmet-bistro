@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+for (const variant of ['editorial', 'artistic-total'] as const) {
+test.describe(variant, () => {
 test('checkout reconciles approval after hidden pause without resubmitting the order', async ({ page }) => {
   let statusReads = 0;
   let submissions = 0;
@@ -28,7 +30,7 @@ test('checkout reconciles approval after hidden pause without resubmitting the o
     }
   });
   await page.clock.install();
-  await page.goto('/cardapio?restaurante_id=901');
+  await page.goto(`/cardapio?restaurante_id=901&vitrine=${variant}`);
   await page.locator('#btn-fast-add-101').click();
   if (!await page.locator('#cart-drawer-container').isVisible()) {
     await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
@@ -61,3 +63,6 @@ test('checkout reconciles approval after hidden pause without resubmitting the o
   await page.clock.runFor(30_000);
   expect(statusReads).toBe(terminalReads);
 });
+
+});
+}

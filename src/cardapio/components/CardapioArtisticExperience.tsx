@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useActivePromotions } from '../useActivePromotions';
+import { getFulfillmentAvailability } from '../fulfillment';
+import { smartSearchMatch } from '../../domain';
+import { API_BASE_URL } from '../../config/api';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -177,23 +181,23 @@ export function CardapioArtisticExperience({
   const [popularIds, setPopularIds] = useState<string[]>(() => activeBrand.popularProductIds || []);
 
   useEffect(() => {
-    const handler = (e: Event) => {
-      const custom = e as CustomEvent<string[]>;
-      if (Array.isArray(custom.detail)) {
-        setPopularIds(custom.detail);
-      }
-    };
-    window.addEventListener('koma:popular-products-loaded', handler);
-    return () => window.removeEventListener('koma:popular-products-loaded', handler);
-  }, []);
+    setPopularIds([]);
+    if (!activeBrand.id) return;
+    const controller = new AbortController();
+    void fetch(`${API_BASE_URL}/api/cardapio-digital/populares?restaurante_id=${encodeURIComponent(activeBrand.id)}`, {
+      signal: controller.signal,
+    }).then(async response => response.ok ? response.json() : null)
+      .then(payload => {
+        if (controller.signal.aborted || !payload) return;
+        setPopularIds(Array.isArray(payload.produtos)
+          ? payload.produtos.map((item: { produto_id: string | number }) => String(item.produto_id))
+          : []);
+      }).catch(() => { /* O hero continua disponível pelo catálogo. */ });
+    return () => controller.abort();
+  }, [activeBrand.id]);
 
   // Promoções vigentes da marca (combos por composição)
-  const offers = useMemo(() => {
-    const campaigns = activeBrand.promotions || [];
-    return campaigns.filter(
-      (offer) => !offer.fim_em || Date.parse(offer.fim_em) > Date.now()
-    );
-  }, [activeBrand.promotions]);
+  const offers = useActivePromotions(activeBrand.promotions);
 
   // Canais de contato verificados
   const whatsappUrl = useMemo(() => {
@@ -207,7 +211,7 @@ export function CardapioArtisticExperience({
     );
   }, [activeBrand.socials]);
 
-  // Identificação do produto Hero (seleciona o #1 em vendas ou o primeiro disponível)
+  // Identificação do produto Hero (seleciona o #1 em escolhas registradas ou o primeiro disponível)
   const heroProduct = useMemo<Product | null>(() => {
     if (!activeBrand.products || activeBrand.products.length === 0) return null;
     const effectivePopularIds = popularIds.length > 0 ? popularIds : (activeBrand.popularProductIds || []);
@@ -216,7 +220,7 @@ export function CardapioArtisticExperience({
       const found = activeBrand.products.find((p) => String(p.id) === topId && p.isAvailable !== false);
       if (found) return found;
     }
-    return activeBrand.products.find((p) => p.isAvailable !== false) || activeBrand.products[0] || null;
+    return activeBrand.products.find((p) => p.isAvailable !== false) || null;
   }, [activeBrand.products, popularIds, activeBrand.popularProductIds]);
 
   // Produtos de harmonização / recomendação complementar contextual
@@ -225,11 +229,10 @@ export function CardapioArtisticExperience({
     return getPairingRecommendations({
       catalog: activeBrand.products || [],
       cartProductIds,
-      focusedProductId: heroProduct?.id,
       limit: 4,
       excludeCartItems: false,
     });
-  }, [activeBrand.products, cart, heroProduct?.id]);
+  }, [activeBrand.products, cart]);
 
   const pairingHint = useMemo(() => {
     const types = new Set(pairingProducts.map(classifyProduct));
@@ -243,10 +246,7 @@ export function CardapioArtisticExperience({
   // Filtragem de catálogo com busca
   const filteredProducts = useMemo<Product[]>(() => {
     if (!searchQuery.trim()) return activeBrand.products;
-    const q = searchQuery.toLowerCase().trim();
-    return activeBrand.products.filter(
-      (p) => p.name.toLowerCase().includes(q) || (p.description && p.description.toLowerCase().includes(q))
-    );
+    return activeBrand.products.filter(product => smartSearchMatch(`${product.name} ${product.description || ''}`, searchQuery));
   }, [activeBrand.products, searchQuery]);
 
   // Categorias ativas
@@ -257,6 +257,9 @@ export function CardapioArtisticExperience({
     });
     return (activeBrand.categories || []).filter((c) => catsWithProducts.has(c));
   }, [activeBrand.categories, filteredProducts]);
+
+  const fulfillment = getFulfillmentAvailability(activeBrand);
+  const fulfillmentLabel = [fulfillment.delivery && 'Entrega', fulfillment.pickup && 'Retirada', fulfillment.dine_in && 'Consumo local'].filter(Boolean).join(' · ');
 
   const heroCartQty = heroProduct ? getProductCartQuantity(heroProduct.id) : 0;
   const isVerifiedTopRanked = Boolean(
@@ -480,18 +483,18 @@ export function CardapioArtisticExperience({
           <div className="koma-art-hospitality-strip">
             <div className="koma-art-hospitality-status">
               <span className="koma-art-pulse-dot" aria-hidden="true" />
-              <span className="koma-art-status-text">
+              <span className="koma-art-status-text cardapio-order-status">
                 {activeBrand.storeStatus === 'closed' ? 'Fechado no momento' : 'Aberto para pedidos'}
               </span>
             </div>
             <span className="koma-art-hospitality-sep">•</span>
             <span className="koma-art-hospitality-detail">
-              {activeBrand.deliveryEnabled ? 'Entrega & Retirada' : 'Somente retirada'}
+              {fulfillmentLabel || 'Modalidades indisponíveis'}
             </span>
-            {activeBrand.pedidoMinimo ? (
+            {activeBrand.pedidoMinimo && (fulfillment.delivery || activeBrand.pedidoMinimoRetirada) ? (
               <>
                 <span className="koma-art-hospitality-sep">•</span>
-                <span className="koma-art-hospitality-detail">Mín. {formatPrice(activeBrand.pedidoMinimo)}</span>
+                <span className="koma-art-hospitality-detail">{activeBrand.pedidoMinimoRetirada ? 'Mín.' : 'Mín. para entrega'} {formatPrice(activeBrand.pedidoMinimo)}</span>
               </>
             ) : null}
             <button
@@ -538,7 +541,7 @@ export function CardapioArtisticExperience({
           AVISO DE INDISPONIBILIDADE / HORÁRIO FECHADO
           ======================================================== */}
       {activeBrand.storeStatus === 'closed' && (
-        <div id="menu-availability" className="koma-art-availability-note cardapio-availability-note" role="status">
+        <div id="menu-availability" className="koma-art-availability-note cardapio-availability-note">
           <strong>
             {activeBrand.availabilitySource === 'schedule'
               ? activeBrand.nextOpeningLabel
@@ -869,7 +872,7 @@ export function CardapioArtisticExperience({
                 <ArtisticClocheIllustration />
               )}
               {/* Selo Destaque / Ranking */}
-              <div className="koma-art-seal-crown" role="status">
+              <div className="koma-art-seal-crown">
                 {isVerifiedTopRanked ? (
                   <>
                     <Crown className="w-3.5 h-3.5 text-amber-300 mr-1" />
@@ -916,19 +919,19 @@ export function CardapioArtisticExperience({
                       type="button"
                       onClick={(e) => onFastRemove(heroProduct, e)}
                       className="koma-art-stepper-btn"
-                      id={`btn-fast-dec-${heroProduct.id}`}
+                      id={`btn-hero-fast-dec-${heroProduct.id}`}
                       aria-label="Diminuir quantidade"
                     >
                       <Minus className="w-3.5 h-3.5" />
                     </button>
-                    <span className="koma-art-stepper-count" id={`qty-${heroProduct.id}`}>
+                    <span className="koma-art-stepper-count" id={`hero-qty-${heroProduct.id}`}>
                       {heroCartQty}
                     </span>
                     <button
                       type="button"
                       onClick={(e) => onFastAdd(heroProduct, e)}
                       className="koma-art-stepper-btn"
-                      id={`btn-fast-inc-${heroProduct.id}`}
+                      id={`btn-hero-fast-inc-${heroProduct.id}`}
                       aria-label="Aumentar quantidade"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -948,7 +951,7 @@ export function CardapioArtisticExperience({
                       }
                     }}
                     className="koma-art-cta-pill"
-                    id={`btn-fast-add-${heroProduct.id}`}
+                    id={`btn-hero-fast-add-${heroProduct.id}`}
                     aria-label={`Pedir ${heroProduct.name}`}
                   >
                     <span>Pedir agora</span>
@@ -1007,7 +1010,7 @@ export function CardapioArtisticExperience({
                   </div>
 
                   <div className="koma-art-pebble-content">
-                    <h4 className="koma-art-pebble-title">{item.name}</h4>
+                    <h4 className="koma-art-pebble-title"><button type="button" className="koma-art-details-trigger" aria-label={`${item.name}, ver detalhes`} onClick={event => { event.stopPropagation(); onSelectProduct(item); }}>{item.name}</button></h4>
                     <div className="koma-art-pebble-footer">
                       <span className="koma-art-pebble-price">{formatPrice(item.price)}</span>
                       {!isAvailable ? (
@@ -1082,13 +1085,20 @@ export function CardapioArtisticExperience({
           ZONA 5: CATÁLOGO INDEXADO EDITORIALMENTE
           ======================================================== */}
       <main className="koma-art-catalog-main" id="koma-art-catalog">
+        {visibleCategories.length === 0 && (
+          <section className="koma-art-empty-catalog" role="status">
+            <h2>{searchQuery ? `Nenhum item encontrado para “${searchQuery}”` : 'Cardápio em preparação'}</h2>
+            <p>{searchQuery ? 'Tente outros termos ou limpe a busca para ver o cardápio.' : 'Este restaurante ainda não publicou produtos.'}</p>
+            {searchQuery && <button type="button" onClick={() => setSearchQuery('')}>Limpar busca</button>}
+          </section>
+        )}
         {visibleCategories.map((category, catIndex) => {
           const catProducts = filteredProducts.filter((p) => p.category === category);
           const indexFormatted = String(catIndex + 1).padStart(2, '0');
           const catDomId = `cat-${category.toLowerCase().replace(/\s+/g, '-')}`;
 
           return (
-            <section key={category} id={catDomId} className="koma-art-cat-group">
+            <section key={category} id={catDomId} data-menu-category={category} className="koma-art-cat-group">
               {/* Marcador Monumental da Categoria */}
               <div className="koma-art-cat-monument">
                 <span className="koma-art-cat-watermark" aria-hidden="true">
@@ -1123,7 +1133,7 @@ export function CardapioArtisticExperience({
                     >
                       <div className="koma-art-card-left">
                         <div className="flex items-center gap-2">
-                          <h4 className="koma-art-card-title">{product.name}</h4>
+                          <h4 className="koma-art-card-title"><button type="button" disabled={!isAvail} className="cardapio-product-card__details-hitbox koma-art-details-trigger" aria-label={`${product.name}, ${formatPrice(product.price)}, ver detalhes`} onClick={event => { event.stopPropagation(); onSelectProduct(product); }}>{product.name}</button></h4>
                           {!isAvail && (
                             <span className="rounded-md bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-rose-400">
                               Esgotado
@@ -1175,7 +1185,7 @@ export function CardapioArtisticExperience({
                               }}
                               className="koma-art-card-add-btn"
                               id={`btn-fast-add-${product.id}`}
-                              aria-label={`Adicionar ${product.name}`}
+                              aria-label={`Adicionar ${product.name} à sacola`}
                             >
                               <Plus className="w-4 h-4" />
                             </button>

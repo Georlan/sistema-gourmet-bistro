@@ -96,7 +96,8 @@ test('getPairingRecommendations avoids suggesting beverages if one is already in
   const recs = getPairingRecommendations({
     catalog: mockCatalog,
     focusedProductId: '1',
-    cartProductIds: ['1', '3'], // Burger e Coca já no carrinho
+    excludeCartItems: true,
+    cartProductIds: ['1', '3'], // Modo adaptativo exclui itens já adicionados
     limit: 2,
   });
 
@@ -155,3 +156,25 @@ test('getPairingRecommendations keeps recommended items stable when adding to ca
   assert.ok(idsAfter.includes('5'));
 });
 
+
+test('pratos principais com ingredientes complementares nunca viram harmonização', () => {
+  for (const [name, category] of [['Pizza de batata', 'Pizzas'], ['Hambúrguer com molho', 'Burgers'], ['Marmita com suco', 'Marmitas']]) {
+    const product = { ...mockCatalog[0], name, category };
+    assert.equal(classifyProduct(product), 'main');
+    assert.deepEqual(getPairingRecommendations({ catalog: [product] }), []);
+  }
+});
+
+test('recomendações persistentes preservam inclusão e ordem após cada adição e remoção', () => {
+  for (const limit of [1, 2, 3, 4]) {
+    const initial = getPairingRecommendations({ catalog: mockCatalog, limit });
+    for (const product of initial) {
+      assert.deepEqual(getPairingRecommendations({ catalog: mockCatalog, limit, cartProductIds: [product.id] }), initial);
+    }
+    assert.deepEqual(getPairingRecommendations({ catalog: mockCatalog, limit, cartProductIds: initial.map(p => p.id) }), initial);
+  }
+});
+
+test('itens desconhecidos não preenchem vagas de acompanhamento', () => {
+  assert.deepEqual(getPairingRecommendations({ catalog: [{ ...mockCatalog[0], name: 'Especial da casa', category: 'Especiais' }] }), []);
+});

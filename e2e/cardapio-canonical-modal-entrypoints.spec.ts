@@ -110,7 +110,7 @@ async function closeProductModal(page: Page) {
 
 test('Mais escolhidos e Destaques abrem exatamente o mesmo modal canônico do card tradicional', async ({ page }) => {
   await mockCardapio(page);
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto('/cardapio?restaurante_id=2&vitrine=editorial');
 
   const traditionalCard = page.locator('#product-card-101');
   const traditionalTrigger = traditionalCard.getByRole('button', {
@@ -140,7 +140,7 @@ test('Mais escolhidos e Destaques abrem exatamente o mesmo modal canônico do ca
 
 test('Complete seu pedido abre o mesmo modal canônico do produto recomendado', async ({ page }) => {
   await mockCardapio(page);
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto('/cardapio?restaurante_id=2&vitrine=editorial');
 
   const traditionalCard = page.locator('#product-card-201');
   await traditionalCard.getByRole('button', {
@@ -168,7 +168,7 @@ test(`marmita grande respeita contagem por ${mode} e limita a duas escolhas`, as
       opcoes: ['Frango', 'Carne', 'Peixe'].map((nome, index) => ({ id: `protein-${index}`, nome, ativo: true, preco_adicional: 0 })),
     }] }],
   } }));
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto('/cardapio?restaurante_id=2&vitrine=editorial');
   await page.locator('#product-card-101').getByRole('button', { name: /Marmita grande.*ver detalhes/ }).click();
   const modal = page.locator('#product-details-modal');
   await modal.getByRole(mode === 'tipos' ? 'checkbox' : 'button', { name: mode === 'tipos' ? 'Selecionar Frango' : 'Adicionar uma unidade de Frango', exact: true }).click();
@@ -196,7 +196,7 @@ test('editar montagem preserva quantidade e contato; cancelar não altera a saco
         ] }],
     }],
   } }));
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto('/cardapio?restaurante_id=2&vitrine=editorial');
   await page.locator('#product-card-101').getByRole('button', { name: /ver detalhes/ }).click();
   const modal = page.locator('#product-details-modal');
   await modal.getByRole('button', { name: 'Adicionar uma unidade de Frango', exact: true }).click();
@@ -249,7 +249,7 @@ test('montar outra diferente começa em uma unidade e mantém a montagem origina
         ] }],
     }],
   } }));
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto('/cardapio?restaurante_id=2&vitrine=editorial');
   await page.locator('#product-card-101').getByRole('button', { name: /ver detalhes/ }).click();
   const modal = page.locator('#product-details-modal');
   await modal.getByRole('checkbox', { name: 'Selecionar Frango', exact: true }).check();
@@ -282,7 +282,7 @@ test('Destaques prioriza ranking real sem reconsultar ao navegar nas categorias'
       { produto_id: 'produto-removido', escolhas: 3 },
     ] } });
   });
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto('/cardapio?restaurante_id=2&vitrine=editorial');
   const popular = page.locator('#popular-products-home');
   await expect(popular.getByRole('listitem')).toHaveCount(2);
   await expect(popular.getByRole('listitem').first()).toHaveAttribute('aria-label', 'Abrir Vinho Tinto Sangiovese (Taça)');
@@ -329,7 +329,7 @@ test('quentinha em celular mantém modal e rodapé no viewport e aceita toques r
     }],
   } }));
 
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto('/cardapio?restaurante_id=2&vitrine=editorial');
   await page.locator('#product-card-101').getByRole('button', { name: /Quentinha G.*ver detalhes/ }).click();
   const modal = page.locator('#product-details-modal');
   const dialog = modal.getByRole('dialog', { name: 'Quentinha G' });
@@ -387,7 +387,7 @@ test('quentinha em celular mantém modal e rodapé no viewport e aceita toques r
 
 test('Voltar do Android fecha modal de produto e sacola sem sair do cardápio', async ({ page }) => {
   await mockCardapio(page);
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto('/cardapio?restaurante_id=2&vitrine=editorial');
   const menuUrl = page.url();
 
   await page.locator('#product-card-101').getByRole('button', { name: /ver detalhes/ }).click();
@@ -428,7 +428,7 @@ test('Voltar da edição da quentinha preserva a sacola e depois fecha a sacola'
       }],
     }],
   } }));
-  await page.goto('/cardapio?restaurante_id=2');
+  await page.goto('/cardapio?restaurante_id=2&vitrine=editorial');
   const menuUrl = page.url();
   const modal = page.locator('#product-details-modal');
   await page.locator('#product-card-101').getByRole('button', { name: /ver detalhes/ }).click();

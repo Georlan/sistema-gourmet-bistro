@@ -166,7 +166,7 @@ export default function CardapioPage() {
       if (new URLSearchParams(window.location.search).has('artistic')) return 'artistic-total';
       if (window.location.pathname.includes('/preview-ui')) return 'artistic-total';
     }
-    return 'editorial';
+    return 'artistic-total';
   });
 
   useEffect(() => {
@@ -753,17 +753,17 @@ export default function CardapioPage() {
       if (isProgrammaticScroll.current) return;
       entries.forEach((entry) => {
         if (!entry.isIntersecting) return;
-        const category = activeBrand.categories.find((item) => categorySectionId(item) === entry.target.id);
+        const category = (entry.target as HTMLElement).dataset.menuCategory || activeBrand.categories.find((item) => categorySectionId(item) === entry.target.id);
         if (category) setActiveCategory(category);
       });
     }, { rootMargin: "-100px 0px -62% 0px", threshold: 0 });
 
     visibleCategories.forEach((category) => {
-      const element = document.getElementById(categorySectionId(category));
+      const element = document.getElementById(vitrineVariant === "artistic-total" ? `cat-${category.toLowerCase().replace(/\s+/g, "-")}` : categorySectionId(category));
       if (element) observer.observe(element);
     });
     return () => observer.disconnect();
-  }, [activeBrand, visibleCategories]);
+  }, [activeBrand, visibleCategories, vitrineVariant]);
 
   const orderingEnabled = activeBrand?.acceptingOrders !== false && activeBrand?.storeStatus !== "closed";
   const orderingMessage = activeBrand?.orderingMessage || "O restaurante pausou novos pedidos por enquanto.";
@@ -1452,6 +1452,11 @@ export default function CardapioPage() {
           }}
           initialCouponCode={couponToApply}
           onClose={() => { setIsCartOpen(false); setCouponToApply(""); }}
+          onAdjustQty={(itemId, delta) => setCart(current => current.flatMap(item => {
+            if (item.id !== itemId) return [item];
+            const quantity = item.quantity + delta;
+            return quantity > 0 ? [{ ...item, quantity }] : [];
+          }))}
           onUpdateQty={(itemId, quantity) => setCart((current) => quantity <= 0 ? current.filter((item) => item.id !== itemId) : current.map((item) => item.id === itemId ? { ...item, quantity } : item))}
           onEditItem={item => {
             if (item.promotionId) {

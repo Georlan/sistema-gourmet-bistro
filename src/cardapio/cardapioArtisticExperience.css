@@ -174,8 +174,8 @@ html[data-koma-theme="light"] .koma-art-canvas,
 }
 
 .koma-art-action-pill {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -191,10 +191,11 @@ html[data-koma-theme="light"] .koma-art-canvas,
   flex-shrink: 0;
 }
 
-.koma-art-action-pill.hidden,
-.koma-art-action-pill[hidden] {
-  display: none !important;
+.koma-art-action-pill.hidden, .koma-art-action-pill[hidden] { display: none; }
+@media (min-width: 768px) {
+  .koma-art-action-pill.md\:inline-flex { display: inline-flex; }
 }
+.koma-art-action-pill[hidden] { display: none; }
 
 /* Em telas móveis (< 768px), ocultar botões secundários para priorizar a identidade da marca */
 @media (max-width: 767px) {
@@ -2619,3 +2620,34 @@ html[data-theme="light"] .koma-art-promo-footer,
   }
 }
 
+
+/* Foco visível nos controles da vitrine; validar contraste em ambos os tons. */
+.koma-art-canvas button:focus-visible,
+.koma-art-canvas a:focus-visible,
+.koma-art-canvas input:focus-visible {
+  outline: 3px solid var(--art-emerald);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .koma-art-canvas *, .koma-art-canvas *::before, .koma-art-canvas *::after {
+    animation-duration: 0.01ms;
+    transition-duration: 0.01ms;
+    scroll-behavior: auto;
+  }
+}
+
+.koma-art-details-trigger { font: inherit; color: inherit; text-align: left; cursor: pointer; border: 0; background: none; padding: 0; min-height: 44px; }
+.koma-art-details-trigger:disabled { cursor: not-allowed; }
+
+/* O hitbox canônico é absoluto; na vitrine artística o título é o botão. */
+.koma-art-catalog-card .cardapio-product-card__details-hitbox { position: static; inset: auto; z-index: auto; }
+.koma-art-cat-group { scroll-margin-top: 80px; }
+.koma-art-empty-catalog { padding: 32px 18px; color: var(--art-text-main); }
+.koma-art-empty-catalog p { color: var(--art-text-sec); margin-block: 12px; }
+.koma-art-empty-catalog button { min-height: 44px; color: var(--art-emerald); font-weight: 700; }
+
+/* Mantém um único indicador de status e respeita a ação reservada ao desktop. */
+.koma-art-status-text.cardapio-order-status::before { content: none; }
+@media (min-width: 1024px) {
+  .koma-art-action-pill.lg\:inline-flex { display: inline-flex; }
+}

@@ -39,7 +39,7 @@ for (const [profile, category, product] of [
       }
       return route.fulfill({ json: {} });
     });
-    await page.goto(`/c/qa-${profile}`);
+    await page.goto(`/c/qa-${profile}?vitrine=editorial`);
     await expect(page.locator('#popular-products-home')).toContainText(product);
     // Ranked products are image-led, unlike the editorial recommendation list.
     // Both must stay readable without fabricating photos, prices or review scores.

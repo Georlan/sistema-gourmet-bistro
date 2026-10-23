@@ -30,6 +30,8 @@ export function classifyProduct(product: Product): ProductClassification {
   const cat = normalize(product.category);
   const name = normalize(product.name);
 
+  // Um ingrediente no nome nunca transforma um prato principal em complemento.
+  if (MAIN_MATCHER.test(cat) || MAIN_MATCHER.test(name)) return 'main';
   if (BEVERAGE_MATCHER.test(cat) || BEVERAGE_MATCHER.test(name)) return 'beverage';
   if (SIDE_MATCHER.test(cat) || SIDE_MATCHER.test(name)) return 'side';
   if (DESSERT_MATCHER.test(cat) || DESSERT_MATCHER.test(name)) return 'dessert';
@@ -82,80 +84,25 @@ export function getPairingRecommendations({
 
   if (eligible.length === 0) return [];
 
-  // Mapear apenas complementos reais (bebidas, acompanhamentos, sobremesas e itens complementares)
-  // Pratos principais (mains) são expressamente excluídos de recomendações complementares
-  const sides: Product[] = [];
-  const beverages: Product[] = [];
-  const desserts: Product[] = [];
-  const others: Product[] = [];
-
+  const groups = { side: [] as Product[], beverage: [] as Product[], dessert: [] as Product[] };
   for (const product of eligible) {
-    const classification = classifyProduct(product);
-    if (classification === 'side') sides.push(product);
-    else if (classification === 'beverage') beverages.push(product);
-    else if (classification === 'dessert') desserts.push(product);
-    else if (classification === 'other') others.push(product);
+    const kind = classifyProduct(product);
+    if (kind === 'side' || kind === 'beverage' || kind === 'dessert') groups[kind].push(product);
   }
-
-  // Avaliar o que já está na sacola para balancear sugestões
-  const cartProductSet = new Set(cartProductIds.map(String));
-  const cartProducts = catalog.filter((p) => cartProductSet.has(String(p.id)));
-  const cartClassifications = new Set(cartProducts.map(classifyProduct));
-  const hasBeverageInCart = cartClassifications.has('beverage');
-  const hasSideInCart = cartClassifications.has('side');
-  const hasDessertInCart = cartClassifications.has('dessert');
-
-  const result: Product[] = [];
-  const selectedIds = new Set<string>();
-
-  const pushIfEligible = (prod?: Product) => {
-    if (!prod) return;
-    if (result.length >= limit) return;
-    if (selectedIds.has(String(prod.id))) return;
-    selectedIds.add(String(prod.id));
-    result.push(prod);
-  };
-
-  // Separação entre complementos ainda NÃO adicionados vs já adicionados na sacola
-  const unaddedSides = sides.filter((p) => !cartProductSet.has(String(p.id)));
-  const unaddedBeverages = beverages.filter((p) => !cartProductSet.has(String(p.id)));
-  const unaddedDesserts = desserts.filter((p) => !cartProductSet.has(String(p.id)));
-  const unaddedOthers = others.filter((p) => !cartProductSet.has(String(p.id)));
-
-  // 1. Se não tem acompanhamento no carrinho, oferecer acompanhamento
-  if (!hasSideInCart && sides.length > 0) {
-    pushIfEligible(sides[0]);
-  }
-
-  // 2. Se não tem bebida no carrinho, oferecer bebida
-  if (!hasBeverageInCart && beverages.length > 0) {
-    pushIfEligible(beverages[0]);
-  }
-
-  // 3. Se não tem sobremesa no carrinho, oferecer sobremesa
-  if (!hasDessertInCart && desserts.length > 0) {
-    pushIfEligible(desserts[0]);
-  }
-
-  // 4. Se excludeCartItems for falso, incluir os complementos já presentes na sacola para manter estabilidade dos cards
-  if (!excludeCartItems) {
-    if (hasSideInCart && sides.length > 0) pushIfEligible(sides[0]);
-    if (hasBeverageInCart && beverages.length > 0) pushIfEligible(beverages[0]);
-    if (hasDessertInCart && desserts.length > 0) pushIfEligible(desserts[0]);
-  }
-
-  // 5. Preencher com demais complementos
-  const candidatePool = [
-    ...beverages,
-    ...sides,
-    ...desserts,
-    ...others,
+  // A lista persistente não depende da sacola: trocar + por quantidade não
+  // desloca cards nem remove o item que o cliente acabou de adicionar.
+  const kinds = ['side', 'beverage', 'dessert'] as const;
+  const cartIds = new Set(cartProductIds.map(String));
+  const present = new Set(catalog.filter(p => cartIds.has(String(p.id))).map(classifyProduct));
+  const firstKinds = excludeCartItems ? kinds.filter(kind => !present.has(kind)) : kinds;
+  const candidates = [
+    ...firstKinds.map(kind => groups[kind][0]),
+    ...groups.beverage, ...groups.side, ...groups.dessert,
   ];
-
-  for (const candidate of candidatePool) {
-    if (result.length >= limit) break;
-    pushIfEligible(candidate);
-  }
-
-  return result;
+  const seen = new Set<string>();
+  return candidates.filter((product): product is Product => {
+    if (!product || seen.has(String(product.id))) return false;
+    seen.add(String(product.id));
+    return true;
+  }).slice(0, limit);
 }

@@ -101,6 +101,7 @@ interface CardapioCartDrawerProps {
   allProducts?: Product[];
   onClose: () => void;
   onUpdateQty: (itemId: string, newQty: number) => void;
+  onAdjustQty?: (itemId: string, delta: number) => void;
   onRemoveItem: (itemId: string) => void;
   onEditItem?: (item: CartItem) => void;
   onComposeAnother?: (item: CartItem) => void;
@@ -133,6 +134,7 @@ export default function CardapioCartDrawer({
   allProducts = [],
   onClose,
   onUpdateQty,
+  onAdjustQty,
   onRemoveItem,
   onEditItem,
   onComposeAnother,
@@ -942,11 +944,11 @@ export default function CardapioCartDrawer({
                             <Trash2 className="h-4 w-4" />
                           </button>
                           {!item.promotionId && <div className="koma-art-stepper-pill">
-                            <button type="button" onClick={() => onUpdateQty(item.id, item.quantity - 1)} className="koma-art-stepper-btn !w-7 !h-7 hover:text-rose-400" aria-label={`Diminuir ${item.product.name}`}>
+                            <button type="button" onClick={() => (onAdjustQty ? onAdjustQty(item.id, -1) : onUpdateQty(item.id, item.quantity - 1))} className="koma-art-stepper-btn !w-7 !h-7 hover:text-rose-400" aria-label={`Diminuir ${item.product.name}`}>
                               <Minus className="h-3 w-3" />
                             </button>
                             <span className="koma-art-stepper-val !min-w-[24px] !text-xs">{item.quantity}</span>
-                            <button type="button" onClick={() => onUpdateQty(item.id, item.quantity + 1)} className="koma-art-stepper-btn !w-7 !h-7 hover:text-emerald-400" aria-label={`Aumentar ${item.product.name}`}>
+                            <button type="button" onClick={() => (onAdjustQty ? onAdjustQty(item.id, 1) : onUpdateQty(item.id, item.quantity + 1))} className="koma-art-stepper-btn !w-7 !h-7 hover:text-emerald-400" aria-label={`Aumentar ${item.product.name}`}>
                               <Plus className="h-3 w-3" />
                             </button>
                           </div>}
@@ -1003,7 +1005,7 @@ export default function CardapioCartDrawer({
                             <div className="mt-2.5 flex items-center justify-between w-full rounded-full bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-1">
                               <button
                                 type="button"
-                                onClick={() => onUpdateQty(cartItem!.id, qty - 1)}
+                                onClick={() => (onAdjustQty ? onAdjustQty(cartItem!.id, -1) : onUpdateQty(cartItem!.id, qty - 1))}
                                 className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-emerald-500/30 text-emerald-300 cursor-pointer"
                                 aria-label={`Diminuir ${prod.name}`}
                                 id={`btn-upsell-dec-${prod.id}`}
@@ -1015,7 +1017,7 @@ export default function CardapioCartDrawer({
                               </span>
                               <button
                                 type="button"
-                                onClick={() => onUpdateQty(cartItem!.id, qty + 1)}
+                                onClick={() => (onAdjustQty ? onAdjustQty(cartItem!.id, 1) : onUpdateQty(cartItem!.id, qty + 1))}
                                 className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-emerald-500/30 text-emerald-300 cursor-pointer"
                                 aria-label={`Aumentar ${prod.name}`}
                                 id={`btn-upsell-inc-${prod.id}`}
