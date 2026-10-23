@@ -1,0 +1,60 @@
+export const publicMenuPayload = {
+  restaurante: {
+    id: 2,
+    nome: 'Pizzeria Bella Italia',
+    slug: 'bella-italia',
+    logo_url: '',
+    banner_url: '',
+    subtitulo: 'Pizza artesanal no forno a lenha',
+    sobre_nos: 'Pizzas artesanais preparadas na hora.',
+    endereco: 'Av. Principal, 100 - Centro',
+    google_maps_url: '',
+    status_override: 'Forçado Aberto',
+    aceitando_pedidos: true,
+    delivery_ativo: true,
+    pagamento_online_ativo: false,
+    formas_pagamento_aceitas: ['Dinheiro', 'Cartão de crédito'],
+  },
+  categorias: [
+    { id: 10, nome: 'Destaques' },
+    { id: 20, nome: 'Bebidas' },
+  ],
+  produtos: [
+    {
+      id: 101,
+      nome: 'Pizza Margherita Especial',
+      descricao: 'Molho San Marzano, muçarela de búfala fresca e manjericão.',
+      preco: 48,
+      imagem_url: '',
+      imagens_galeria: [],
+      categoria_id: 10,
+      grupos_modificadores: [
+        {
+          id: 'borda',
+          nome: 'Borda',
+          min_selecoes: 1,
+          max_selecoes: 1,
+          tipo: 'obrigatorio',
+          opcoes: [
+            {
+              id: 'borda-catupiry',
+              nome: 'Catupiry',
+              preco_adicional: 5,
+              ativo: true,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 201,
+      nome: 'Vinho Tinto Sangiovese (Taça)',
+      descricao: 'Taça de vinho tinto seco da Toscana.',
+      preco: 24,
+      imagem_url: '',
+      imagens_galeria: [],
+      categoria_id: 20,
+      grupos_modificadores: [],
+    },
+  ],
+};

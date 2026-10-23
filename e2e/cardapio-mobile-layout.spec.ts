@@ -39,12 +39,35 @@ for (const [profile, category, product] of [
       }
       return route.fulfill({ json: {} });
     });
-    await page.goto(`/c/qa-${profile}`);
+    await page.goto(`/c/qa-${profile}?vitrine=editorial`);
     await expect(page.locator('#popular-products-home')).toContainText(product);
+    // Ranked products are image-led, unlike the editorial recommendation list.
+    // Both must stay readable without fabricating photos, prices or review scores.
+    const popularMedia = page.locator('#popular-products-home .cardapio-popular-card__image').first();
+    await expect(popularMedia).toBeVisible();
+    expect((await popularMedia.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(100);
+    const popularName = page.locator('#popular-products-home .cardapio-popular-card__name').first();
+    await expect(popularName).toHaveCSS('text-overflow', 'clip');
+    const editorialMedia = page.locator('#cardapio-recommendations-home .cardapio-editorial-card__image').first();
+    await expect(editorialMedia).toBeVisible();
+    expect((await editorialMedia.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(100);
     await expect(page.locator('#brand-banner-hero')).toHaveCount(0);
     await expect(page.locator('#product-card-902')).toContainText('Hambúrguer artesanal');
+    // Solid sticky header: no catalog content should bleed through while scrolling.
+    await expect(page.locator('#app-header')).toHaveCSS('backdrop-filter', 'none');
+    await expect(page.locator('#app-header')).toHaveCSS('background-color', /^rgb\(/);
     const initialReads = { menuReads, rankingReads };
     const nav = page.getByRole('navigation', { name: 'Categorias do cardápio' });
+    // Navigation and header form one opaque, uncluttered visual system.
+    await expect(nav).toHaveCSS('backdrop-filter', 'none');
+    await expect(nav).toHaveCSS('border-radius', '0px');
+    await expect(nav).toHaveCSS('background-color', /^rgb\(/);
+    const activeChip = nav.locator('.cardapio-category-chip.is-active');
+    await expect(activeChip).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(activeChip).toHaveCSS('border-radius', '0px');
+    await expect.poll(() => activeChip.evaluate((element) =>
+      getComputedStyle(element, '::after').height,
+    )).toBe('3px');
     await nav.getByRole('button', { name: category, exact: true }).click();
     await expect.poll(async () => page.locator('#category-nav-container').evaluate(el =>
       el.getBoundingClientRect().top >= document.querySelector('#app-header')!.getBoundingClientRect().bottom - 1,

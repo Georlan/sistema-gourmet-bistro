@@ -31,14 +31,17 @@ export default defineConfig({
     trace: 'retain-on-failure',
     video: 'retain-on-failure',
   },
-  projects: viewportMatrix.map(({ name, width, height, touch }) => ({
+  projects: [...viewportMatrix.map(({ name, width, height, touch }) => ({
     name,
     use: {
       viewport: { width, height },
       hasTouch: touch,
       isMobile: touch,
     },
-  })),
+  })), ...(process.env.KOMA_E2E_FIREFOX === 'true' ? [{
+    name: 'firefox-390',
+    use: { browserName: 'firefox' as const, viewport: { width: 390, height: 720 } },
+  }] : [])],
   webServer: {
     env: {
       KOMA_E2E: 'true',

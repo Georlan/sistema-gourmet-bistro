@@ -96,6 +96,7 @@ export interface OperatingHours {
 
 export interface BrandConfig {
   id: string;
+  slug?: string;
   name: string;
   slogan: string;
   logo: string;
@@ -113,6 +114,7 @@ export interface BrandConfig {
   };
   categories: string[];
   products: Product[];
+  popularProductIds?: string[];
   promotions?: CatalogPromotion[];
   explicitPromotionComposition?: boolean;
   promotionProducts?: Product[];
@@ -189,7 +191,9 @@ export function getProductImageUrl(imagePath: string): string {
   if (
     imagePath.startsWith("http://") ||
     imagePath.startsWith("https://") ||
-    imagePath.startsWith("data:")
+    imagePath.startsWith("data:") ||
+    imagePath.startsWith("/") ||
+    imagePath.startsWith("./")
   ) {
     return imagePath;
   }
@@ -203,7 +207,9 @@ export function getRestaurantAssetUrl(urlOrPath: string | null | undefined, isLo
   if (
     urlOrPath.startsWith("http://") ||
     urlOrPath.startsWith("https://") ||
-    urlOrPath.startsWith("data:")
+    urlOrPath.startsWith("data:") ||
+    urlOrPath.startsWith("/") ||
+    urlOrPath.startsWith("./")
   ) {
     return urlOrPath;
   }
