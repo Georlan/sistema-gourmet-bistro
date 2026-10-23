@@ -250,7 +250,7 @@ class CentralCampaignRequest(BaseModel):
 @router.get("/fidelidade/crm/whatsapp/policy")
 def central_campaign_policy(user: Usuario = Depends(require_permission("clientes:operar"))):
     from ..services.central_whatsapp_campaigns import policy
-    return policy()
+    return policy(restaurant_id=user.restaurante_id)
 
 
 @router.post("/fidelidade/crm/campanhas/{campaign_id}/whatsapp", status_code=202)
@@ -261,3 +261,12 @@ def prepare_central_campaign(campaign_id: str, body: CentralCampaignRequest,
     db.commit()
     return {"id": row.id, "status": row.status, "queued": row.status in {"pending", "processing", "failed"},
             "delivered_to_device": False}
+
+
+@router.post('/fidelidade/crm/clientes/{cliente_id}/whatsapp/consent', status_code=201)
+def prepare_whatsapp_marketing_consent(cliente_id:str,
+    db:Session=Depends(get_db),user:Usuario=Depends(require_permission('clientes:operar'))):
+    from ..services.whatsapp_marketing_consent import prepare_invitation
+    result=prepare_invitation(db,require_tenant_id(),cliente_id)
+    db.commit()
+    return result
