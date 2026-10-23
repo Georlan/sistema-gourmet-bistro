@@ -204,3 +204,26 @@ for (const firstField of ['phone','name'] as const) {
     expect(state.orders[0]).toMatchObject({cliente_nome:'Cliente local',cliente_telefone:'85999999999'});
   });
 }
+
+test('contato preserva foco quando a navegação chega atrasada',async({page})=>{
+  await menu(page);
+  await page.locator('#btn-fast-add-201').click();
+  if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#btn-cart-header').click();
+  await page.evaluate(()=>{
+    const state=window as any;
+    state.__komaFocusFrames=[];
+    state.__komaOriginalFrame=window.requestAnimationFrame;
+    window.requestAnimationFrame=callback=>{state.__komaFocusFrames.push(callback);return state.__komaFocusFrames.length;};
+  });
+  await page.locator('#cart-drawer-container').getByRole('button',{name:'Contato',exact:true}).click();
+  await page.locator('#input-guest-phone').fill('85999999999');
+  await expect(page.locator('#input-guest-phone')).toBeFocused();
+  await page.evaluate(()=>{
+    const state=window as any;
+    window.requestAnimationFrame=state.__komaOriginalFrame;
+    for(const callback of state.__komaFocusFrames.splice(0))callback(performance.now());
+  });
+  await expect(page.locator('#input-guest-phone')).toBeFocused();
+  await page.locator('#input-guest-name').fill('Cliente local');
+  await expect(page.locator('#input-guest-phone')).toHaveValue('(85) 99999-9999');
+});

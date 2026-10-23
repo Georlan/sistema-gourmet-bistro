@@ -11,7 +11,7 @@ Decisão confirmada pelo usuário: entrega, retirada e consumo no local são mod
 - Ranking artístico agora consulta a rota pública por restaurante, cancela resposta de escopo anterior e preserva o fallback de catálogo.
 - Recomendações mantêm inclusão e ordem durante adição, remoção e chegada atrasada do ranking; não confundem ingrediente de um prato principal com acompanhamento nem usam itens desconhecidos como preenchimento.
 - Hero e catálogo têm IDs distintos. Detalhes possuem botão de teclado independente da adição, com nome/preço acessíveis.
-- Contato usa input nativo e change para conservar o primeiro campo no Firefox quando o segundo provoca um render. Há regressão das duas ordens de preenchimento no build de produção.
+- A navegação de etapas conserva o foco quando o cliente já começou a editar um campo; cancela frames de foco anteriores e não redireciona a digitação no Firefox. Há regressão das duas ordens de preenchimento no build de produção.
 - Incrementos na sacola são aplicados ao estado atual, inclusive em eventos agrupados.
 - Promoções usam a mesma expiração temporal nas duas apresentações.
 - Busca reutiliza a normalização canônica, informa resultados vazios e permite limpar.
