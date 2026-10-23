@@ -462,16 +462,6 @@ async def get_db(request: Request = None):
     if request:
         tenant_id = request.headers.get("X-Tenant-ID", "default")
 
-    try:
-        import sentry_sdk
-
-        sentry_sdk.set_tag("tenant_id", tenant_id)
-        sentry_sdk.set_tag(
-            "restaurante_id",
-            str(restaurante_id) if restaurante_id is not None else "",
-        )
-    except Exception:
-        pass
 
     # O dependency HTTP sempre fixa explicitamente o tenant resolvido pelo JWT.
     # Sessões de request portanto não acompanham trocas acidentais de ContextVar.

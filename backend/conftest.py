@@ -15,7 +15,6 @@ if not USE_EXTERNAL_TEST_DATABASE:
         Path(f"{TEST_DB_PATH}{suffix}").unlink(missing_ok=True)
     os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
     os.environ["MIGRATION_DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
-os.environ["SENTRY_DSN"] = ""
 os.environ.setdefault(
     "SECRET_KEY",
     "test_secret_key_for_testing_purposes_only_123456789",

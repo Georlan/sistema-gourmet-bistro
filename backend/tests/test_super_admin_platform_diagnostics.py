@@ -6,8 +6,6 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
-import sentry_sdk
-from sentry_sdk.integrations.stdlib import StdlibIntegration
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from app.main import app
@@ -85,23 +83,17 @@ def test_telegram_invalid_response_is_not_verified(monkeypatch):
     assert asyncio.run(services.TelegramService('token', '-42').get_health())['status'] == 'unverified'
 
 
-def test_telegram_secret_urls_are_not_recorded_by_active_sentry_integration(monkeypatch):
-    outer_client = sentry_sdk.Client(dsn='', default_integrations=False, integrations=[StdlibIntegration()])
+def test_telegram_diagnostic_does_not_leak_secret_urls_in_logs_or_telemetry(monkeypatch, caplog):
+    import logging
     requests = probe(monkeypatch, [{'is_bot': True, 'id': 5}, {'id': -42}, {'status': 'member'}])
-    open_url = services.urllib.request.urlopen
-    def private_read(*args, **kwargs):
-        client = sentry_sdk.get_client()
-        assert client is not outer_client
-        assert not client.dsn
-        assert client.get_integration(StdlibIntegration) is None
-        return open_url(*args, **kwargs)
-    monkeypatch.setattr(services.urllib.request, 'urlopen', private_read)
-    with sentry_sdk.new_scope() as scope:
-        scope.set_client(outer_client)
-        health = asyncio.run(services.TelegramService('token', '-42').get_health())
-        assert sentry_sdk.get_client() is outer_client
+    with caplog.at_level(logging.DEBUG):
+        health = asyncio.run(services.TelegramService('synthetic-secret-token', '-42').get_health())
     assert health['status'] == 'verified'
+    assert 'synthetic-secret-token' not in caplog.text
+    assert 'synthetic-secret-token' not in json.dumps(health)
     assert len(requests) == 3
+
+
 
 
 def test_telegram_health_requires_superadmin():

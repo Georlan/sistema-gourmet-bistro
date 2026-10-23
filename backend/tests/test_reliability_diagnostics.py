@@ -91,7 +91,8 @@ def test_auth_rejection_uses_route_template_without_token(monkeypatch):
 ])
 def test_middleware_preserves_rejection_and_classifies_jwt(monkeypatch, failure, reason):
     import jwt
-    from app.main import add_sentry_context_and_tenant
+    from app.main import add_request_tenant_context, add_sentry_context_and_tenant
+    assert add_sentry_context_and_tenant is add_request_tenant_context
     errors = {'expired': jwt.ExpiredSignatureError, 'signature': jwt.InvalidSignatureError,
               'decode': jwt.DecodeError}
     monkeypatch.setattr(jwt, 'decode', Mock(side_effect=errors[failure]('SECRET_SENTINEL')))
@@ -101,7 +102,7 @@ def test_middleware_preserves_rejection_and_classifies_jwt(monkeypatch, failure,
                        'headers': [(b'authorization', b'Bearer SECRET_SENTINEL')]})
     next_handler = Mock()
     import asyncio
-    response = asyncio.run(add_sentry_context_and_tenant(request, next_handler))
+    response = asyncio.run(add_request_tenant_context(request, next_handler))
     assert response.status_code == 401
     next_handler.assert_not_called()
     assert json.loads(logger.warning.call_args.args[0])['reason'] == reason

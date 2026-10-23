@@ -13,7 +13,6 @@ Fonte: `package.json` e `package-lock.json`. A coluna “licença declarada” r
 | Pacote | Faixa declarada | Licença declarada |
 |---|---:|---|
 | `@number-flow/react` | `^0.6.2` | MIT |
-| `@sentry/react` | `^10.64.0` | MIT |
 | `@tailwindcss/vite` | `^4.1.14` | MIT |
 | `@vitejs/plugin-react` | `^5.0.4` | MIT |
 | `clsx` | `^2.1.1` | MIT |
@@ -53,7 +52,6 @@ Fonte: `backend/requirements.txt` e `backend/requirements-dev.txt`. Como esses m
 | `pywin32` (Windows) | `>=306` | Python Software Foundation License |
 | `python-multipart` | `>=0.0.9` | Apache-2.0 |
 | `cryptography` | `>=42.0.0` | Apache-2.0 OR BSD-3-Clause |
-| `sentry-sdk` | `>=1.40.0` | MIT |
 | `psycopg2-binary` | `>=2.9.0` | LGPL com exceções, conforme metadados do pacote |
 | `alembic` | `>=1.13.0` | MIT |
 | `httpx` | `>=0.27.0` | BSD-3-Clause |

@@ -15,11 +15,6 @@ export type CashierChatHealth = 'idle' | 'loading' | 'healthy' | 'degraded';
 
 function reportUnreadFailure(error: unknown) {
   console.warn('Falha ao atualizar não lidas do chat do Caixa:', error);
-  void import('@sentry/react')
-    .then((Sentry) => Sentry.captureException(error, {
-      tags: { feature: 'cashier_chat', operation: 'unread_count' },
-    }))
-    .catch(() => {});
 }
 
 export function useCashierChat(apiBaseUrl: string, authorization: string) {
