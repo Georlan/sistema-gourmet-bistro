@@ -1,6 +1,9 @@
-# Oferta comercial — atualizada em 24/09/2026
+# Oferta comercial — atualizada em 24/09/2026 (substituída em outubro de 2026)
 
-## Decisão
+> [!NOTE]
+> **Registro histórico arquivado:** Esta oferta reflete o catálogo comercial praticado em setembro de 2026 (v2.8–v3.0). Ela foi sucedida em outubro de 2026 pelo contrato canônico de **comissão zero** (`version: "2026-10-zero-commission"` em [`product-contract.json`](../product-contract.json)), no qual os planos vigentes são **Pocket R$ 79,90/mês**, **Pro R$ 179,90/mês** e **Premium R$ 329,90/mês**, todos com **0% de comissão KÔMA** sobre pedidos online. A versão jurídica vigente correspondente é a [Legal v3.5](../src/legal/legalContentV35.ts). Este arquivo é preservado inalterado abaixo para proveniência e rastreabilidade histórica.
+
+## Decisão histórica
 
 A oferta comercial vigente do KÔMA usa três planos sem taxa de implantação e sem add-ons. O Pocket é a porta de entrada com mensalidade de R$ 39 e já inclui App do Garçom, delivery e gestão de equipe; Pro e Premium adicionam módulos operacionais avançados e reduzem a taxa KÔMA conforme o restaurante cresce.
 
