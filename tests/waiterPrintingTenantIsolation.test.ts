@@ -25,7 +25,8 @@ test('waiter print UI fails closed and only renders with explicit printing entit
   assert.doesNotMatch(modal, /printing !== false/);
   assert.doesNotMatch(consumption, /printing !== false/);
   assert.match(modal, /\{hasPrinting && <MesaPrintDialogs/);
-  assert.match(consumption, /\{hasPrinting && <div className="grid grid-cols-2 gap-2">/);
+  assert.match(modal, /activeRole === 'garcom' && activeTab === 'consumo' && hasPrinting && orders.length > 0/);
+  assert.match(consumption, /\{hasPrinting && activeRole !== 'garcom' && <MesaPrintActions/);
 });
 
 test('backend remains the authority for tenant and waiter printing permission', () => {

@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relativePath: string) => readFileSync(path.join(root, relativePath), 'utf8');
 
 test('waiter table actions distinguish reprint from Conta da Mesa', () => {
-  const source = read('src/components/mesas/MesaConsumptionPanel.tsx');
+  const source = read('src/components/mesas/MesaPrintActions.tsx');
 
   assert.match(source, /<span>Reimpressão<\/span>/);
   assert.match(source, /<span>Conta da Mesa<\/span>/);

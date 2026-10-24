@@ -680,3 +680,42 @@ for (const movement of ['total', 'parcial', 'mesclar'] as const) {
     expect(state.unexpectedApiRequests).toEqual([]);
   });
 }
+
+
+test('conta e reimpressão permanecem numa barra fora da rolagem do consumo', async ({ page }) => {
+  await openWaiterScenario(page);
+  await page.locator('#mesa-card-7').click();
+  const rail = page.getByRole('toolbar', { name: 'Ações da mesa' });
+  await expect(rail.locator('#quick-print-values-btn')).toBeVisible();
+  await expect(rail.locator('#print-invoice-preview-btn')).toBeVisible();
+  await expect(page.locator('.kw-flow-body #quick-print-values-btn')).toHaveCount(0);
+  await page.locator('.kw-flow-overlay').evaluate(async node => {
+    await Promise.all(node.getAnimations({ subtree: true }).filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => {})));
+  });
+  const before = await rail.boundingBox();
+  await page.locator('.kw-flow-body').evaluate(node => { node.scrollTop = node.scrollHeight; });
+  const after = await rail.boundingBox();
+  expect(after!.y).toBeCloseTo(before!.y, 1);
+  const modal = await page.locator('.kw-flow').boundingBox();
+  expect(after!.y + after!.height).toBeLessThanOrEqual(modal!.y + modal!.height + 1);
+  expect(after!.y + after!.height).toBeLessThanOrEqual(page.viewportSize()!.height + 1);
+  await expect(rail.locator('#quick-print-values-btn')).toBeInViewport();
+});
+
+
+test('111-A e 111-B reimprimem só seu lançamento; barra inferior imprime a mesa completa', async ({ page }) => {
+  const state = await openWaiterScenario(page, ['preparando', 'pronto'], { checkNumber: 111, displayNumbers: ['111-A', '111-B'] });
+  await page.locator('#mesa-card-7').click();
+  for (const [number, id] of [['111-A', LAUNCH_A], ['111-B', LAUNCH_B]]) {
+    await page.locator('[id^="placed-order-"]').filter({ hasText: `Pedido ${number}` }).getByRole('button', { name: 'Reimprimir', exact: true }).click();
+    await page.getByRole('button', { name: 'Imprimir Via Cozinha', exact: true }).click();
+    await expect.poll(() => state.writes.at(-1)?.path).toBe(`/comandas/lancamentos/${id}/reimprimir`);
+  }
+  await page.getByRole('toolbar', { name: 'Ações da mesa' }).getByRole('button', { name: 'Reimpressão', exact: true }).click();
+  await expect.poll(() => state.writes).toEqual([
+    { method: 'POST', path: `/comandas/lancamentos/${LAUNCH_A}/reimprimir`, status: null, tableId: '7' },
+    { method: 'POST', path: `/comandas/lancamentos/${LAUNCH_B}/reimprimir`, status: null, tableId: '7' },
+    { method: 'POST', path: '/mesas/7/imprimir-recibo', status: null, tableId: '7', valuesOnly: 'false' },
+  ]);
+  expect(state.check.fechada).toBe(false);
+});

@@ -1,3 +1,4 @@
+import { MesaPrintActions } from './MesaPrintActions';
 import { planWaiterRepeat } from '../../domain/waiterRepeatItem';
 import { OrderItemComposition } from '../shared/OrderItemComposition';
 /**
@@ -6,7 +7,7 @@ import { OrderItemComposition } from '../shared/OrderItemComposition';
  */
 
 import React from 'react';
-import { ShoppingBag, PlusCircle, Zap, Printer, CheckCircle2, Move, GitMerge, Edit3, Trash2, Plus } from 'lucide-react';
+import { ShoppingBag, PlusCircle, Printer, CheckCircle2, Move, GitMerge, Edit3, Trash2, Plus } from 'lucide-react';
 import type { AppRole, Order, OrderItem, OrderItemModifier, Table, Product } from '../../types';
 import type { getCustomerSubtotals } from '../../domain';
 import { deriveOrderOperationalState } from '../../domain/operationalState';
@@ -181,38 +182,16 @@ export function MesaConsumptionPanel({
               })()}
 
               {/* Direct Print Feedback Toast */}
-              {hasPrinting && directPrintToast && (
+              {activeRole !== 'garcom' && hasPrinting && directPrintToast && (
                 <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 px-3 py-1.5 rounded-xl text-center text-xs font-bold font-sans animate-fade-in">
                   {directPrintToast}
                 </div>
               )}
 
               {/* Action Row 1: impressão só existe quando o plano possui essa capacidade */}
-              {hasPrinting && <div className="grid grid-cols-2 gap-2">
-                <button
-                  id="quick-print-values-btn"
-                  type="button"
-                  disabled={isPrintingDirect}
-                  onClick={onPrintValues}
-                  className="min-h-[42px] py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
-                  title="Imprimir Conta da Mesa"
-                >
-                  <Zap size={14} className="shrink-0 text-emerald-400" />
-                  <span>Conta da Mesa</span>
-                </button>
-
-                <button
-                  id="print-invoice-preview-btn"
-                  type="button"
-                  disabled={isPrintingDirect}
-                  onClick={onPrintPreview}
-                  className="min-h-[42px] py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
-                  title="Reimprimir todos os itens ativos da mesa"
-                >
-                  <Printer size={14} className="text-emerald-400 shrink-0" />
-                  <span>Reimpressão</span>
-                </button>
-              </div>}
+              {hasPrinting && activeRole !== 'garcom' && <MesaPrintActions
+                isPrintingDirect={isPrintingDirect} onPrintValues={onPrintValues} onPrintPreview={onPrintPreview}
+              />}
 
               {/* Action Row 2: Adicionar Itens e encerramento da Mesa (Dinâmico sem buracos vazios) */}
               {(() => {

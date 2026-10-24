@@ -319,3 +319,9 @@ html[data-koma-text-context="garcom"][data-koma-text-size] {font-size:100%}
 .waiter-shell .kw-movement > div > span {text-align:left;letter-spacing:0;text-transform:none;font-size:.75rem}
 @media(min-width:360px) {.waiter-shell .kw-movement-grid {grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(min-width:768px) {.waiter-shell .kw-movement-grid {grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+/* The print rail is outside the scrolling consumption, within the modal shell. */
+.waiter-shell .kw-consumption-actions {flex-shrink:0;border-top:1px solid var(--kw-line);background:var(--kw-canvas);padding:8px 12px max(8px,env(safe-area-inset-bottom));box-shadow:0 -4px 12px rgb(0 0 0 / .08)}
+.waiter-shell .kw-consumption-actions button {min-height:44px;min-width:0;border-radius:16px;font-size:.75rem;line-height:1.25;box-shadow:0 2px 0 rgb(0 0 0 / .16)}
+
+.waiter-shell .kw-consumption-actions__feedback {font-size:.75rem;color:var(--kw-ink);text-align:center;margin-bottom:8px}
