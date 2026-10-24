@@ -176,7 +176,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     onSubmitDraft(orderType);
   };
   const [quickClient, setQuickClient] = useState('');
-  const tableQuickClients = useMemo(() => getTableQuickClients(draftItems, existingOrders), [draftItems, existingOrders]);
+  const tableQuickClients = useMemo(() => getTableQuickClients(draftItems, existingOrders, tableId), [draftItems, existingOrders, tableId]);
   const quickEntryClient = standardQuickEntry && !tableQuickClients.includes(quickClient) ? '' : quickClient;
   const standardQuickDrafts = useMemo(() => projectStandardQuickDrafts(draftItems, quickEntryClient), [draftItems, quickEntryClient]);
   const quickClientLabel = quickEntryClient || 'a mesa';
@@ -239,6 +239,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   }, [categoriesList, selectedCategory]);
 
   const combinedSuggestions = useMemo(() => {
+    if (standardQuickEntry) return tableQuickClients;
     const names = new Map<string, string>();
     const pushName = (rawName?: string) => {
       const name = (rawName || '').trim();
@@ -250,7 +251,38 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     existingOrders.forEach((order) => order.itens.forEach((item) => pushName(item.clienteNome)));
     draftItems.forEach((item) => pushName(item.clienteNome));
     return Array.from(names.values());
-  }, [draftItems, existingOrders, historicClients]);
+  }, [draftItems, existingOrders, historicClients, standardQuickEntry, tableQuickClients]);
+
+  const reviewClient = (
+    <div className={standardQuickEntry ? "kw-review-client kw-review-client--compact space-y-2" : "kw-review-client p-3 space-y-2"}>
+      <label htmlFor="overall-client-name" className={standardQuickEntry ? "sr-only" : "text-[10px] font-bold text-koma-muted uppercase tracking-wider"}>
+        Cliente do pedido <span className="normal-case font-normal">(opcional)</span>
+      </label>
+      <input
+        id="overall-client-name"
+        value={standardQuickEntry && (draftItems[0]?.clienteNome || '').trim().toLocaleLowerCase('pt-BR') === 'consumo geral' ? '' : draftItems[0]?.clienteNome || ''}
+        disabled={isSubmitting}
+        onChange={(event) => { setQuickClient(event.target.value); draftItems.forEach((item) => onUpdateDraftItem(item.id, { clienteNome: event.target.value })); }}
+        placeholder={standardQuickEntry ? "Cliente (opcional)" : "Ex: Pedro, Cláudia, Família..."}
+        className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+      />
+      {combinedSuggestions.length > 0 && (
+        <div className={standardQuickEntry ? "kw-review-client-suggestions" : "flex flex-wrap gap-1"}>
+          {combinedSuggestions.map((name) => (
+            <button
+              key={name}
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => { setQuickClient(name); draftItems.forEach((item) => onUpdateDraftItem(item.id, { clienteNome: name })); }}
+              className="px-2 py-1 text-[9px] rounded-lg border border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground disabled:opacity-50"
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   const totalDraftQty = draftItems.reduce((sum, item) => sum + (item.quantidade || 1), 0);
   const draftTotal = draftItems.reduce(
@@ -467,34 +499,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             </div>
           ) : (
             <div className="flex-1 min-h-0 flex flex-col gap-4 pt-4">
-              <div className="kw-review-client p-3 space-y-2">
-                <label htmlFor="overall-client-name" className="text-[10px] font-bold text-koma-muted uppercase tracking-wider">
-                  Cliente do pedido <span className="normal-case font-normal">(opcional)</span>
-                </label>
-                <input
-                  id="overall-client-name"
-                  value={draftItems[0]?.clienteNome || ''}
-                  disabled={isSubmitting}
-                  onChange={(event) => { setQuickClient(event.target.value); draftItems.forEach((item) => onUpdateDraftItem(item.id, { clienteNome: event.target.value })); }}
-                  placeholder="Ex: Pedro, Cláudia, Família..."
-                  className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 disabled:opacity-50"
-                />
-                {combinedSuggestions.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {combinedSuggestions.map((name) => (
-                      <button
-                        key={name}
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => { setQuickClient(name); draftItems.forEach((item) => onUpdateDraftItem(item.id, { clienteNome: name })); }}
-                        className="px-2 py-1 text-[9px] rounded-lg border border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground disabled:opacity-50"
-                      >
-                        {name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {!standardQuickEntry && reviewClient}
 
               <div className="space-y-2">
                 {draftItems.map((item, index) => {
@@ -548,6 +553,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               </div>
 
               <div className="kw-review-total mt-auto pt-4 space-y-3">
+                {standardQuickEntry && reviewClient}
                 {allowExternalOrders && (
                   <div>
                     <span className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-koma-muted">Destino</span>
@@ -800,7 +806,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               </div>
             </div>
 
-            <div className="space-y-2"><label htmlFor="config-client-name" className="text-[10px] uppercase font-bold text-koma-muted">Identificar cliente (opcional)</label><input id="config-client-name" value={configClient} disabled={isSubmitting} onChange={(event) => setConfigClient(event.target.value)} placeholder="Ex: Pedro, Cláudia, Mesa Direita..." className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 disabled:opacity-50" />{combinedSuggestions.length > 0 && <div className="flex flex-wrap gap-1">{combinedSuggestions.map((name) => <button key={name} type="button" disabled={isSubmitting} onClick={() => setConfigClient(name)} className="px-2 py-1 text-[9px] rounded-lg border border-koma-border bg-koma-raised text-koma-muted disabled:opacity-40">{name}</button>)}</div>}</div>
+            <div className="space-y-2"><label htmlFor="config-client-name" className="text-[10px] uppercase font-bold text-koma-muted">Identificar cliente (opcional)</label><input id="config-client-name" value={standardQuickEntry && configClient.trim().toLocaleLowerCase('pt-BR') === 'consumo geral' ? '' : configClient} disabled={isSubmitting} onChange={(event) => setConfigClient(event.target.value)} placeholder="Ex: Pedro, Cláudia, Mesa Direita..." className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 disabled:opacity-50" />{combinedSuggestions.length > 0 && <div className="flex flex-wrap gap-1">{combinedSuggestions.map((name) => <button key={name} type="button" disabled={isSubmitting} onClick={() => setConfigClient(name)} className="px-2 py-1 text-[9px] rounded-lg border border-koma-border bg-koma-raised text-koma-muted disabled:opacity-40">{name}</button>)}</div>}</div>
 
             </div>
             <div data-testid="waiter-product-config-footer" className="shrink-0 px-4 sm:px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-koma-card border-t border-koma-border flex items-center gap-3">

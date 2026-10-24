@@ -158,7 +158,7 @@ test('Pocket waiter UI removes physical-print actions while preserving the waite
   assert.match(mesaDetails, /const hasPrinting = restauranteConfig\?\.entitlements\?\.printing === true/);
   assert.match(mesaDetails, /\{hasPrinting && <MesaPrintDialogs/);
   assert.match(mesaConsumption, /const hasPrinting = restauranteConfig\?\.entitlements\?\.printing === true/);
-  assert.match(mesaConsumption, /\{hasPrinting && <div className="grid grid-cols-2 gap-2">/);
+  assert.match(mesaConsumption, /\{hasPrinting && activeRole !== 'garcom' && <MesaPrintActions/);
   assert.match(mesaConsumption, /\{hasPrinting && \([\s\S]*Reimprimir/);
 });
 

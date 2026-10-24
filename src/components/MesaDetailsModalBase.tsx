@@ -1,3 +1,4 @@
+import { MesaPrintActions } from './mesas/MesaPrintActions';
 import { findRepeatedDraft, planWaiterRepeat, type RepeatConfiguration } from '../domain/waiterRepeatItem';
 import { WaiterServiceArtwork } from './mesas/WaiterServiceArtwork';
 import { TablePresenceNotice } from './shared/TablePresenceNotice';
@@ -438,6 +439,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           )}
 
           <MesaTransferMergePanel
+            compact={activeRole === 'garcom'}
             activeTab={activeTab}
             table={table}
             orders={orders}
@@ -459,6 +461,12 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
         </div>
 
+        {activeRole === 'garcom' && activeTab === 'consumo' && hasPrinting && orders.length > 0 && (
+          <div className="kw-consumption-actions" role="toolbar" aria-label="Ações da mesa">
+            {directPrintToast && <p className="kw-consumption-actions__feedback" role="status">{directPrintToast}</p>}
+            <MesaPrintActions isPrintingDirect={isPrintingDirect} onPrintValues={handleDirectPrint} onPrintPreview={handleDirectFullPrint} />
+          </div>
+        )}
       </div>
 
       {hasPrinting && <MesaPrintDialogs

@@ -9,6 +9,7 @@ import type { Order, Table } from '../../types';
 import { projectWaiterSalonTables } from '../../domain/waiterSalonProjection';
 
 interface MesaTransferMergePanelProps {
+  compact?: boolean;
   activeTab: 'consumo' | 'lancamento' | 'transferir' | 'mesclar';
   table: Table;
   orders: Order[];
@@ -30,7 +31,7 @@ interface MesaTransferMergePanelProps {
 
 /** Both movement tabs share selection and confirmation state held by the modal. */
 export function MesaTransferMergePanel({
-  activeTab, table, orders, allOrders, salonTables, originIds, canTransferTables, canTransferItems,
+  compact = false, activeTab, table, orders, allOrders, salonTables, originIds, canTransferTables, canTransferItems,
   transferType, selectedItemsForTransfer, confirmTransferTo,
   setTransferType, setSelectedItemsForTransfer, setConfirmTransferTo,
   onTransferTable, onTransferItems, onMergeTables,
@@ -49,7 +50,8 @@ export function MesaTransferMergePanel({
     <>
       {/* TAB 3: TRANSFERIR MESA */}
       {activeTab === 'transferir' && (
-        <div className="space-y-6 max-w-2xl mx-auto py-4">
+        <div className={compact ? "kw-movement max-w-2xl mx-auto" : "space-y-6 max-w-2xl mx-auto py-4"}>
+          {compact ? <h3 className="kw-movement-title">Transferir para</h3> : (
           <div className="text-center space-y-2">
             <div className="p-3 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-full inline-block border border-emerald-500/30">
               <Move size={24} />
@@ -59,6 +61,7 @@ export function MesaTransferMergePanel({
               Selecione o tipo de transferência e a mesa de destino abaixo.
             </p>
           </div>
+          )}
 
           {/* Selector for transfer type */}
           <div className="flex bg-koma-panel p-1 border border-koma-border rounded-xl font-sans text-xs">
@@ -129,8 +132,8 @@ export function MesaTransferMergePanel({
 
           {/* Target tables grid */}
           <div className="space-y-2">
-            <span className="text-[10px] text-koma-subtle block font-bold uppercase tracking-wider text-center">Mesa de Destino:</span>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
+            <span className={compact ? "sr-only" : "text-[10px] text-koma-subtle block font-bold uppercase tracking-wider text-center"}>{compact ? 'Destino' : 'Mesa de Destino:'}</span>
+            <div className={`${compact ? 'kw-movement-grid ' : ''}grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1`}>
               {availableTablesForTransfer.length === 0 ? (
                 <div className="col-span-full py-8 text-center text-koma-subtle text-sm italic font-sans">
                   Nenhuma mesa disponível no momento.
@@ -146,7 +149,7 @@ export function MesaTransferMergePanel({
                       type="button"
                       disabled={!hasSelected}
                       id={`transfer-target-mesa-${t.id}`}
-                      aria-label={`Mesa ${t.id} · ${isOccupied ? 'Ocupada' : 'Livre'}${isConfirming ? ' · Confirmar?' : ''}`}
+                      aria-label={`${compact ? t.nome?.trim() || `Mesa ${t.id}` : `Mesa ${t.id}`} · ${isOccupied ? 'Ocupada' : 'Livre'}${isConfirming ? ' · Confirmar?' : ''}`}
                       data-table-status={isOccupied ? 'occupied' : 'free'}
                       onClick={() => {
                         if (!hasSelected) return;
@@ -175,13 +178,13 @@ export function MesaTransferMergePanel({
                       }`}
                     >
                       <span className={`text-base font-bold ${hasSelected ? 'text-koma-foreground group-hover:text-emerald-700 dark:text-emerald-400' : 'text-gray-600'}`}>
-                        {`Mesa ${t.id}`}{isConfirming && ' · Confirmar?'}
+                        {compact ? t.nome?.trim() || `Mesa ${t.id}` : `Mesa ${t.id}`}{isConfirming && ' · Confirmar?'}
                       </span>
                       <span className={`text-[10px] font-bold ${isOccupied ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
                         {isOccupied ? '● Ocupada' : '○ Livre'}
                       </span>
                       {isConfirming && (
-                        <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
+                        !compact && <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
                       )}
                     </button>
                   );
@@ -194,7 +197,8 @@ export function MesaTransferMergePanel({
 
       {/* TAB 4: MESCLAR MESA */}
       {activeTab === 'mesclar' && (
-        <div className="space-y-6 max-w-2xl mx-auto py-4">
+        <div className={compact ? "kw-movement max-w-2xl mx-auto" : "space-y-6 max-w-2xl mx-auto py-4"}>
+          {compact ? <div className="kw-movement-heading"><h3 className="kw-movement-title">Juntar com outra mesa</h3><p>Une os pedidos e libera esta mesa.</p></div> : (
           <div className="text-center space-y-2">
             <div className="p-3 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-full inline-block border border-emerald-500/30">
               <GitMerge size={24} />
@@ -204,17 +208,18 @@ export function MesaTransferMergePanel({
               Todo o consumo desta mesa será incorporado à mesa de destino. A mesa origem ficará livre.
             </p>
           </div>
+          )}
 
           {/* Info banner ou bloqueio por limite de mesclagem */}
           {originIds.length > 0 ? (
             <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 text-xs text-rose-600 dark:text-rose-300 font-sans flex items-start gap-2 max-w-md mx-auto">
               <span className="text-sm shrink-0">🚫</span>
               <div>
-                <strong className="block text-rose-400 font-bold mb-0.5">Limite de Mesclagem Excedido</strong>
-                <span>Esta mesa já possui consumo mesclado da <strong>Mesa {originIds.join(', ')}</strong>. O limite máximo é de 2 mesas mescladas juntas.</span>
+                <strong className="block text-rose-400 font-bold mb-0.5">{compact ? 'Mesclagem indisponível' : 'Limite de Mesclagem Excedido'}</strong>
+                <span>{compact ? `Já está unida à mesa ${originIds.join(', ')}. Limite de 2 mesas.` : <>Esta mesa já possui consumo mesclado da <strong>Mesa {originIds.join(', ')}</strong>. O limite máximo é de 2 mesas mescladas juntas.</>}</span>
               </div>
             </div>
-          ) : (
+          ) : !compact && (
             <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-2xl p-3.5 text-xs text-cyan-300 font-sans flex items-start gap-2">
               <AlertTriangle size={15} className="shrink-0 mt-0.5 text-cyan-400" />
               <span>A mesclagem une as comandas. Use a aba <strong>Transferência → Selecionar Itens</strong> se quiser mover itens específicos sem mesclar a conta.</span>
@@ -223,15 +228,16 @@ export function MesaTransferMergePanel({
 
           {originIds.length === 0 && (
             <>
+              {compact && availableTablesForTransfer.length === 0 && <p className="text-sm text-koma-muted">Nenhuma mesa disponível.</p>}
               {/* Occupied tables (recommended for merge) */}
-              <div className="space-y-2">
-                <span className="text-[10px] text-koma-subtle block font-bold uppercase tracking-wider text-center">Mesa Destino — Mesas Ocupadas:</span>
+              {(!compact || tablesWithOrders.length > 0) && <div className="space-y-2">
+                <span className="text-[10px] text-koma-subtle block font-bold uppercase tracking-wider text-center">{compact ? 'Em atendimento' : 'Mesa Destino — Mesas Ocupadas:'}</span>
                 {tablesWithOrders.length === 0 ? (
                   <div className="py-6 text-center text-koma-subtle text-sm italic font-sans bg-koma-panel/40 rounded-2xl border border-koma-border/40">
                     Nenhuma outra mesa está ocupada no momento.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
+                  <div className={`${compact ? 'kw-movement-grid ' : ''}grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1`}>
                     {tablesWithOrders.map((t) => {
                       const isConfirming = confirmTransferTo === t.id;
                       const isTargetAlreadyMerged = allOrders?.some(o => o.mesaId === t.id && o.mesaOrigemId !== null && o.mesaOrigemId !== t.id);
@@ -260,26 +266,26 @@ export function MesaTransferMergePanel({
                           }`}
                         >
                           <span className={`text-base font-bold text-koma-foreground ${!isTargetAlreadyMerged && 'group-hover:text-emerald-400'}`}>
-                            {`Mesa ${t.id}`}{isConfirming && ' · Confirmar?'}
+                            {compact ? t.nome?.trim() || `Mesa ${t.id}` : `Mesa ${t.id}`}{isConfirming && ' · Confirmar?'}
                           </span>
                           <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300">● Ocupada</span>
                           {isTargetAlreadyMerged ? (
                             <span className="text-[8px] text-koma-muted font-bold uppercase tracking-wider">Limite Atingido</span>
                           ) : isConfirming ? (
-                            <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
+                            !compact && <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
                           ) : null}
                         </button>
                       );
                     })}
                   </div>
                 )}
-              </div>
+              </div>}
 
               {/* Empty tables (less common for merge, but allowed) */}
               {tablesWithoutOrders.length > 0 && (
                 <div className="space-y-2">
-                  <span className="text-[10px] text-koma-subtle block font-bold uppercase tracking-wider text-center">Mesas Livres (mesclar criará consumo nelas):</span>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1">
+                  <span className="text-[10px] text-koma-subtle block font-bold uppercase tracking-wider text-center">{compact ? 'Livres' : 'Mesas Livres (mesclar criará consumo nelas):'}</span>
+                  <div className={`${compact ? 'kw-movement-grid ' : ''}grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-1`}>
                     {tablesWithoutOrders.map((t) => {
                       const isConfirming = confirmTransferTo === t.id;
                       const isTargetAlreadyMerged = allOrders?.some(o => o.mesaId === t.id && o.mesaOrigemId !== null && o.mesaOrigemId !== t.id);
@@ -308,13 +314,13 @@ export function MesaTransferMergePanel({
                           }`}
                         >
                           <span className="text-base font-bold text-koma-foreground group-hover:text-emerald-400">
-                            {`Mesa ${t.id}`}{isConfirming && ' · Confirmar?'}
+                            {compact ? t.nome?.trim() || `Mesa ${t.id}` : `Mesa ${t.id}`}{isConfirming && ' · Confirmar?'}
                           </span>
                           <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">○ Livre</span>
                           {isTargetAlreadyMerged ? (
                             <span className="text-[8px] text-koma-muted font-bold uppercase tracking-wider">Limite Atingido</span>
                           ) : isConfirming ? (
-                            <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
+                            !compact && <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
                           ) : null}
                         </button>
                       );

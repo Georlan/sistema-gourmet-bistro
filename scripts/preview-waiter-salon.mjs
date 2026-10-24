@@ -11,10 +11,13 @@ const orders = structuredClone(mockOrders).map(order => ({ ...order, criado_em: 
 const products = [{ id: 'prod-1', nome: 'Hambúrguer Gourmet', preco: 45, ativo: true, categoria_id: 'cat-1' }, { id: 'prod-2', nome: 'Porção Batata Frita', preco: 30, ativo: true, categoria_id: 'cat-1' }, { id: 'prod-3', nome: 'Pudim', preco: 25, ativo: true, categoria_id: 'cat-1' }];
 // Local example for the approved repeat-from-consumption flow.
 products.push({ id: 'preview-juice', nome: 'Suco de laranja', preco: 12, ativo: true, categoria_id: 'cat-1' });
-orders[0].itens.push({ id: 'preview-juice-item', lancamento_id: 'launch-2-1', produto_id: 'preview-juice', preco_unit: 12, status: 'entregue', pago: false, cliente_nome: 'Consumo Geral', produto: { id: 'preview-juice', nome: 'Suco de laranja', preco: 12, ativo: true } });
-// Explicit fictional identities for the isolated history preview only.
-const previewHistoryNumbers = { 'launch-2-1': '102-A', 'launch-3-1': '103-A', 'launch-4-1': '104-A', 'launch-6-1': '106-A' };
-const historyLaunches = order => order.lancamentos || [...new Set(order.itens.map(item => item.lancamento_id))].filter(Boolean).map(id => ({ id, display_number: previewHistoryNumbers[id] || null }));
+orders[0].itens.push({ id: 'preview-juice-item', lancamento_id: 'launch-2-2', produto_id: 'preview-juice', preco_unit: 12, status: 'entregue', pago: false, cliente_nome: 'Consumo Geral', produto: { id: 'preview-juice', nome: 'Suco de laranja', preco: 12, ativo: true } });
+// Persisted-identity fixtures for separate launch reprints and the full table receipt.
+orders[0].numero_pedido = 111;
+orders[0].lancamentos = ['launch-2-1', 'launch-2-2'].map(id => ({ id, comanda_id: orders[0].id, origem: 'garcom', timestamp: orders[0].criado_em }));
+// Explicit fictional identities for the isolated preview only.
+const previewHistoryNumbers = { 'launch-2-1': '111-A', 'launch-2-2': '111-B', 'launch-3-1': '103-A', 'launch-4-1': '104-A', 'launch-6-1': '106-A' };
+const historyLaunches = order => (order.lancamentos || [...new Set(order.itens.map(item => item.lancamento_id))].filter(Boolean).map(id => ({ id }))).map(launch => ({ ...launch, display_number: previewHistoryNumbers[launch.id] || launch.display_number || null }));
 const categories = [{ id: 'cat-1', nome: 'Cozinha', destino_impressao: 'COZINHA' }];
 const bootstrap = `
 const key='koma_operator_session_garcom';
@@ -53,10 +56,13 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/mesas/') return json(res, tables);
     if (pathname === '/comandas/detalhes/todos') return json(res, orders);
     if (pathname.startsWith('/comandas/check-')) return json(res, orders.find(order => order.id === pathname.split('/')[2]) || orders[0]);
-    if (pathname.startsWith('/atendimentos/mesas/')) return json(res, { familias: [] });
+    if (pathname.startsWith('/atendimentos/mesas/')) {
+      const tableId = Number(pathname.split('/').at(-1));
+      return json(res, { familias: orders.filter(order => order.mesa_id === tableId).map(order => ({ numero_conta: order.numero_pedido, lancamentos: historyLaunches(order).map((launch, index) => ({ lancamento_id: launch.id, pedido_id: previewHistoryNumbers[launch.id] || launch.display_number, sequencia: index + 1 })) })) });
+    }
     if (pathname === '/produtos/catalogo') return json(res, { categorias: categories, produtos: products });
     if (pathname === '/produtos/categorias') return json(res, categories);
-    if (pathname === '/caixa/configuracoes') return json(res, { perm_garcom_status: true, perm_garcom_print: false, perm_garcom_fechar: false, perm_garcom_editar: true, perm_garcom_cancelar: true, perm_garcom_transferir_mesa: true, perm_garcom_transferir_item: true, taxa_servico_ativa: false });
+    if (pathname === '/caixa/configuracoes') return json(res, { perm_garcom_status: true, entitlements: { printing: true }, perm_garcom_print: true, perm_garcom_fechar: false, perm_garcom_editar: true, perm_garcom_cancelar: true, perm_garcom_transferir_mesa: true, perm_garcom_transferir_item: true, taxa_servico_ativa: false });
     if (pathname === '/caixa/pagamentos/pendentes') return json(res, []);
     return json(res, {});
   }
