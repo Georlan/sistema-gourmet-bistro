@@ -399,10 +399,16 @@ export function OperationalDrawer({
 
               <div className="border-b border-koma-border px-3 py-3">
                 <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-semibold text-koma-foreground">Tamanho do texto</span><span className="text-[9px] text-koma-muted">Acessibilidade</span></div>
-                <div className="grid grid-cols-3 gap-1 rounded-xl border border-koma-border bg-koma-panel p-1">
-                  {([['padrao', 'Padrão'], ['grande', 'Grande'], ['gigante', 'Gigante']] as const).map(([value, label]) => (
-                    <button key={value} id={`drawer-font-${value}`} type="button" onClick={() => changeFontSize(value)} aria-pressed={fontSize === value} className={clsx('rounded-lg px-2 py-1.5 text-[9px] font-bold transition-colors', fontSize === value ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'text-koma-muted hover:text-koma-foreground')}>{label}</button>
-                  ))}
+                <div className={clsx('grid gap-1 rounded-xl border border-koma-border bg-koma-panel p-1', portal === 'garcom' ? 'grid-cols-2' : 'grid-cols-3')}>
+                  {(portal === 'garcom'
+                    ? ([['padrao', 'Padrão'], ['grande', 'Grande']] as const)
+                    : ([['padrao', 'Padrão'], ['grande', 'Grande'], ['gigante', 'Gigante']] as const)
+                  ).map(([value, label]) => {
+                    const effectiveActive = (portal === 'garcom' && fontSize === 'gigante' ? 'grande' : fontSize) === value;
+                    return (
+                      <button key={value} id={`drawer-font-${value}`} type="button" onClick={() => changeFontSize(value)} aria-pressed={effectiveActive} className={clsx('rounded-lg px-2 py-1.5 text-[9px] font-bold transition-colors', effectiveActive ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'text-koma-muted hover:text-koma-foreground')}>{label}</button>
+                    );
+                  })}
                 </div>
               </div>
 

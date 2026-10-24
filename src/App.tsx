@@ -529,8 +529,9 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
   useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty('--koma-text-scale', String(KOMA_TEXT_SCALES[fontSize]));
-    root.setAttribute('data-koma-text-size', fontSize);
+    const effectiveSize = portal === 'garcom' && fontSize === 'gigante' ? 'grande' : fontSize;
+    root.style.setProperty('--koma-text-scale', String(KOMA_TEXT_SCALES[effectiveSize]));
+    root.setAttribute('data-koma-text-size', effectiveSize);
 
     const handleStorageChange = () => {
       setFontSize(readKomaTextSize());
@@ -643,15 +644,26 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     return saved ? parseInt(saved, 10) : null;
   });
 
-  const handleTableClick = useCallback((tableId: number) => {
+  const targetModalTabRef = useRef<'consumo' | 'lancamento' | undefined>(undefined);
+
+  const handleTableClick = useCallback((tableId: number, targetTab?: 'consumo' | 'lancamento') => {
     if (!isOperationalSnapshotReady) return;
     const targetMesaId = ordersRef.current.find(o => o.mesaOrigemId === tableId)?.mesaId;
+    targetModalTabRef.current = targetTab;
     if (targetMesaId) {
       setSelectedTableId(targetMesaId);
     } else {
       setSelectedTableId(tableId);
     }
   }, [isOperationalSnapshotReady]);
+
+  const handleOpenOrderEntry = useCallback((tableId: number) => {
+    handleTableClick(tableId, 'lancamento');
+  }, [handleTableClick]);
+
+  const handleOpenConsumption = useCallback((tableId: number) => {
+    handleTableClick(tableId, 'consumo');
+  }, [handleTableClick]);
 
   useEffect(() => {
     const key = `koma_${portal}_selected_table_v3`;
@@ -1715,37 +1727,57 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     <div className={`waiter-shell min-h-screen bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
       <SupportSessionBanner />
       {/* GLOBAL TOP HEADER */}
-      <header className="bg-koma-page/95 backdrop-blur-xl border-b border-koma-border-subtle text-koma-foreground shrink-0 sticky top-0 z-30">
-        <div className="max-w-[1680px] mx-auto px-3 sm:px-6 lg:px-10 py-3.5">
+      <header className="relative bg-koma-page/95 dark:bg-[#0c0f11]/95 backdrop-blur-xl border-b border-koma-border-subtle text-koma-foreground shrink-0 sticky top-0 z-30 overflow-hidden">
+        {/* Subtle decorative architectural motif in the background for Garçom portal */}
+        {portal === 'garcom' && (
+          <div className="absolute right-0 top-0 bottom-0 pointer-events-none opacity-20 dark:opacity-15 flex items-center overflow-hidden" aria-hidden="true">
+            <svg width="240" height="60" viewBox="0 0 240 60" fill="none" className="text-emerald-500">
+              <path d="M40 0L240 0V60H0L40 0Z" fill="currentColor" fillOpacity="0.15" />
+              <path d="M60 0L100 60M120 0L160 60M180 0L220 60" stroke="currentColor" strokeOpacity="0.25" strokeWidth="1" strokeDasharray="4 4" />
+            </svg>
+          </div>
+        )}
+        <div className="max-w-[1680px] mx-auto px-3 sm:px-6 lg:px-10 py-2.5 sm:py-3 relative z-10">
           <div className="flex justify-between items-center">
 
             {/* Left: Settings Button + Logo + Title */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3.5">
               <button
                 id="open-sidebar-btn"
                 onClick={() => setIsSidebarOpen(true)}
-                className="p-2.5 bg-white/[0.04] text-[#00b894] hover:bg-[#00b894] hover:text-black rounded-xl cursor-pointer border border-koma-border flex items-center justify-center transition-all"
-                title="Operação & Configurações do Caixa"
+                className="p-2 sm:p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 rounded-xl cursor-pointer border border-emerald-500/30 flex items-center justify-center transition-all shadow-xs active:scale-95 shrink-0"
+                title={portal === 'garcom' ? 'Central do Garçom' : 'Operação & Configurações do Caixa'}
               >
-                <SlidersHorizontal size={18} />
+                <SlidersHorizontal size={17} />
               </button>
 
               <div className="flex items-center gap-2.5">
-                <KomaLogo size="lg" />
-                <div>
-                  <h1 className="font-serif text-base sm:text-lg font-black tracking-[-0.03em] text-koma-foreground leading-tight">
-                    {restaurantName}
-                  </h1>
-                  <p className="text-[9px] text-koma-muted font-sans leading-none mt-0.5 font-medium">
-                    {activeWaiter.nome}
-                  </p>
-                </div>
+                {portal === 'garcom' ? (
+                  <KomaLogo withText size="md" className="h-7" />
+                ) : (
+                  <>
+                    <KomaLogo size="lg" />
+                    <div>
+                      <h1 className="font-serif text-base sm:text-lg font-black tracking-[-0.03em] text-koma-foreground leading-tight">
+                        {restaurantName}
+                      </h1>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Right: Network Status Badge */}
+            {/* Right: Asymmetric Live Indicator for Waiter */}
             <div className="flex items-center gap-2">
-
+              {portal === 'garcom' && (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-zinc-200/80 dark:border-white/10 bg-zinc-100/90 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 text-[11px] font-medium shadow-xs">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  <span className="font-sans font-semibold tracking-tight">Salão</span>
+                </div>
+              )}
             </div>
 
           </div>
@@ -1828,6 +1860,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             activeWaiterId={activeWaiterId}
             currentTime={currentTime}
             onTableClick={handleTableClick}
+            onOpenOrderEntry={handleOpenOrderEntry}
+            onOpenConsumption={handleOpenConsumption}
             tableFilter={tableFilter}
             onFilterChange={setTableFilter}
             showOperationalStatus={isConfigLoaded && restauranteConfig?.perm_garcom_status !== false}
@@ -1863,6 +1897,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
         return (
           <MesaDetailsModal
+            key={`${selectedTable.id}-${targetModalTabRef.current || 'default'}`}
+            initialTab={targetModalTabRef.current}
             table={selectedTable}
             orders={selectedTableOrders}
             allOrders={orders}
@@ -1875,7 +1911,10 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             activeWaiterId={activeWaiterId}
             activeWaiterNome={activeWaiter.nome}
             currentTime={currentTime}
-            onClose={() => setSelectedTableId(null)}
+            onClose={() => {
+              targetModalTabRef.current = undefined;
+              setSelectedTableId(null);
+            }}
             onUpdateSettings={setSettings}
             onAddToDraft={(product, qty, obs, client) => handleAddToDraft(selectedTable.id, product, qty, obs, client)}
             onRemoveFromDraft={(draftItemId) => handleRemoveFromDraft(selectedTable.id, draftItemId)}

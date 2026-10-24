@@ -16,7 +16,9 @@ interface MesaCardProps {
   otherWaitersServing?: string[];
   currentTime: number;
   activeWaiterId: string;
-  onClick: (tableId: number) => void;
+  onClick: (tableId: number, targetTab?: 'consumo' | 'lancamento') => void;
+  onOpenOrderEntry?: (tableId: number) => void;
+  onOpenConsumption?: (tableId: number) => void;
   hasPendingPayment?: boolean;
   mergedSources?: number[];
   mergedIntoMesaId?: number | null;
@@ -26,7 +28,8 @@ interface MesaCardProps {
 
 /** Waiter variant owns only its navigation callback, not cashier actions. */
 export const MesaCard = React.memo<MesaCardProps>(({
-  table, orders, currentTime, onClick, hasPendingPayment = false, mergedIntoMesaId = null,
+  table, orders, currentTime, onClick, onOpenOrderEntry, onOpenConsumption,
+  hasPendingPayment = false, mergedIntoMesaId = null,
   operational: projectedState, ...view
 }) => {
   const operational = projectedState ?? deriveTableOperationalState({
@@ -45,13 +48,34 @@ export const MesaCard = React.memo<MesaCardProps>(({
         ? 'Ver itens prontos'
         : 'Ver consumo';
 
+  const isFree = operational.occupancy === 'FREE';
+  const isMerged = Boolean(operational.mergedIntoMesaId);
+  const isPayment = operational.financial === 'AWAITING_PAYMENT' || operational.hasPendingConfirmation || hasPendingPayment;
+  const canAppendOrder = !isMerged && !isPayment;
+
+  const handlePrimaryClick = () => {
+    if (isFree) {
+      if (onOpenOrderEntry) onOpenOrderEntry(table.id);
+      else onClick(table.id);
+    } else {
+      if (onOpenConsumption) onOpenConsumption(table.id);
+      else onClick(table.id);
+    }
+  };
+
+  const handleOrderEntryClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onOpenOrderEntry) onOpenOrderEntry(table.id);
+    else onClick(table.id);
+  };
+
   return (
     <div
       id={`mesa-card-${table.id}`}
       role="region"
       aria-label={accessibleLabel}
       data-waiter-action={actionLabel}
-      onClick={() => onClick(table.id)}
+      onClick={handlePrimaryClick}
       className="relative h-full w-full min-w-0"
     >
       <SharedTableCard
@@ -64,20 +88,35 @@ export const MesaCard = React.memo<MesaCardProps>(({
         fillHeight
         showItemCount={false}
       >
-        <span className="mt-auto inline-flex w-full min-w-0 max-w-full items-center justify-center whitespace-normal rounded-xl border border-current/20 bg-black/5 px-2 py-1.5 text-center text-[9px] font-bold uppercase leading-tight tracking-wide dark:bg-white/5 shadow-xs transition-colors group-hover:bg-black/10 dark:group-hover:bg-white/10">
-          {actionLabel}
-        </span>
+        <div className="mt-auto pt-2 w-full min-w-0 max-w-full">
+          {isFree ? (
+            <span
+              aria-label={`${actionLabel} na ${tableLabel}`}
+              className="inline-flex h-8 w-full min-w-0 max-w-full items-center justify-center whitespace-normal rounded-xl border border-dashed border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-center text-[9px] font-bold uppercase leading-tight tracking-wide text-emerald-700 dark:text-emerald-400 shadow-xs"
+            >
+              {actionLabel}
+            </span>
+          ) : canAppendOrder ? (
+            <button
+              type="button"
+              id={`mesa-card-launch-${table.id}`}
+              onClick={handleOrderEntryClick}
+              aria-label={`Lançar pedido na ${tableLabel}`}
+              title={`+ Lançar pedido · ${tableLabel}`}
+              className="inline-flex h-8 w-full min-w-0 max-w-full items-center justify-center whitespace-nowrap rounded-xl border border-emerald-500/40 bg-emerald-500/15 dark:bg-emerald-500/20 px-2.5 py-1 text-center text-xs font-bold leading-tight tracking-wide text-emerald-800 dark:text-emerald-200 transition-all hover:bg-emerald-500/30 active:scale-[0.98] shadow-xs cursor-pointer"
+            >
+              + Lançar
+            </button>
+          ) : (
+            <span
+              aria-label={`${actionLabel} na ${tableLabel}`}
+              className="inline-flex h-8 w-full min-w-0 max-w-full items-center justify-center whitespace-normal rounded-xl border border-current/20 bg-black/5 px-2 py-1 text-center text-[9px] font-bold uppercase leading-tight tracking-wide dark:bg-white/5 shadow-xs"
+            >
+              {actionLabel}
+            </span>
+          )}
+        </div>
       </SharedTableCard>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onClick(table.id);
-        }}
-        aria-label={`${actionLabel} na ${tableLabel}`}
-        title={`${actionLabel} · ${tableLabel}`}
-        className="absolute inset-0 z-10 h-full w-full rounded-2xl bg-transparent transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-      />
     </div>
   );
 });

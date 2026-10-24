@@ -18,16 +18,19 @@ test('toque na mesa usa a navegação canônica: livre abre Pedido e ocupada abr
   const view = readFileSync(new URL('../src/components/mesas/MesasView.tsx', import.meta.url), 'utf8');
   const modal = readFileSync(new URL('../src/components/MesaDetailsModalBase.tsx', import.meta.url), 'utf8');
 
-  assert.match(card, /onClick=\{\(\) => onClick\(table\.id\)\}/);
-  assert.doesNotMatch(card, /onQuickOrder|quickOrderAction|quick-order-table-|Novo pedido na Mesa/);
-  assert.doesNotMatch(view, /openWaiterQuickOrder|onQuickOrder/);
+  assert.match(card, /onClick=\{handlePrimaryClick\}/);
+  assert.match(card, /handleOrderEntryClick/);
+  assert.match(card, /onOpenOrderEntry/);
+  assert.match(card, /onOpenConsumption/);
   assert.match(modal, /orders\.length === 0 \? 'lancamento' : 'consumo'/);
+  assert.match(modal, /initialTab/);
 });
 
 test('salão mantém orientação compacta e padrão visual KÔMA', () => {
   const view = readFileSync(new URL('../src/components/mesas/MesasView.tsx', import.meta.url), 'utf8');
 
-  assert.match(view, /\{counts\.todos\} \{counts\.todos === 1 \? 'mesa' : 'mesas'\}/);
+  assert.match(view, /waiter-filter-\$\{filter\.id\}/);
+  assert.match(view, /Filtrar mesas por status/);
   assert.doesNotMatch(view, /Grid2X2|CheckCircle2|Utensils/);
   assert.doesNotMatch(view, /grid grid-cols-3 gap-px overflow-hidden/);
   assert.doesNotMatch(view, /waiter-salon-stage/);
@@ -45,7 +48,8 @@ test('card da mesa comunica a ação antes do toque sem criar segundo caminho op
   assert.match(card, /w-full min-w-0 max-w-full/);
   assert.match(card, /justify-center whitespace-normal/);
   assert.match(card, /text-center text-\[9px\].*leading-tight/);
-  assert.equal((card.match(/onClick\(table\.id\)/g) || []).length, 2);
+  assert.match(card, /\+ Lançar pedido/);
+  assert.match(card, /e\.stopPropagation\(\)/);
 });
 
 test('produto esgotado continua bloqueado e só ganha visibilidade durante busca', () => {
@@ -85,7 +89,7 @@ test('grade do salão padroniza largura e altura de todos os cards sem cortar co
   assert.match(view, /sm:auto-rows-\[184px\]/);
   assert.match(view, /items-stretch/);
   assert.match(card, /relative h-full w-full min-w-0/);
-  assert.match(card, /absolute inset-0 z-10 h-full w-full/);
+  assert.doesNotMatch(card, /absolute inset-0 z-10/);
   assert.match(card, /fillHeight/);
   assert.match(shared, /fillHeight\?: boolean/);
   assert.match(shared, /fillHeight = false/);

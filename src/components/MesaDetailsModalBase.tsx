@@ -27,6 +27,7 @@ interface MesaDetailsModalProps {
   activeRole: AppRole;
   activeWaiterId: string;
   activeWaiterNome: string;
+  initialTab?: 'consumo' | 'lancamento' | 'transferir' | 'mesclar';
   currentTime: number;
   onClose: () => void;
   onUpdateSettings: (settings: AppSettings) => void;
@@ -73,6 +74,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   activeRole,
   activeWaiterId,
   activeWaiterNome,
+  initialTab,
   currentTime,
   onClose,
   onUpdateSettings,
@@ -103,9 +105,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   onMergeTables,
   onUnmergeTable,
 }) => {
-  // Dynamic default tab based on whether table is active or empty
+  // Dynamic default tab based on whether table is active or empty, or explicit initialTab
   const [activeTab, setActiveTab] = useState<'consumo' | 'lancamento' | 'transferir' | 'mesclar'>(
-    orders.length === 0 ? 'lancamento' : 'consumo'
+    initialTab ?? (orders.length === 0 ? 'lancamento' : 'consumo')
   );
   const [showPrintPreview, setShowPrintPreview] = useState<boolean>(false);
   const [selectedOrderToPrint, setSelectedOrderToPrint] = useState<Order | null>(null);
