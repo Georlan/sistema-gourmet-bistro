@@ -220,11 +220,7 @@ test.describe('App do Garçom - Salão Onda 1', () => {
     await expect(card4).toHaveAttribute('data-waiter-action', 'Ver atendimento');
     await expect(card4.getByText('Ver mesa', { exact: true })).toBeVisible();
 
-    if (page.viewportSize()?.width === 390) {
-      await page.screenshot({ path: '/home/testuser/.gemini/antigravity/brain/7af21423-1a1c-472c-912d-77c093671571/waiter_salon_mobile_overview.png' });
-    } else if (page.viewportSize()?.width === 1024) {
-      await page.screenshot({ path: '/home/testuser/.gemini/antigravity/brain/7af21423-1a1c-472c-912d-77c093671571/waiter_salon_desktop_overview.png' });
-    }
+    await page.screenshot({ path: test.info().outputPath('waiter-salon-overview.png') });
   });
 
   test('Filtros filtram corretamente mesas livres, ocupadas e prontas', async ({ page }) => {
