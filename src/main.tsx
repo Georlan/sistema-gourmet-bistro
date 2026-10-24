@@ -220,10 +220,11 @@ const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacy
 const isOnboardingAwareManagementRoute = isHostedManagementEntryRoute();
 const isInternalSupportOperationalRoute =
   isCentralSupportOperationalBridge() && hasInternalSupportSessionContext();
+const isEmbeddedOperationalPreview = pathname === '/' && ['garcom', 'caixa'].includes(new URLSearchParams(window.location.search).get('view') || '');
 const hasCustomerSupportSurface =
   !pathname.startsWith("/super-admin")
   && !isInternalSupportOperationalRoute
-  && (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isSmartPosRoute);
+  && (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isSmartPosRoute || isEmbeddedOperationalPreview);
 
 // O Chrome mobile pode esconder path/query na barra e fazer links legados
 // parecerem o domínio puro. Em produção, antes de montar o shell, removemos

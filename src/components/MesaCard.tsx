@@ -16,7 +16,9 @@ interface MesaCardProps {
   otherWaitersServing?: string[];
   currentTime: number;
   activeWaiterId: string;
-  onClick: (tableId: number) => void;
+  onClick: (tableId: number, targetTab?: 'consumo' | 'lancamento') => void;
+  onOpenOrderEntry?: (tableId: number) => void;
+  onOpenConsumption?: (tableId: number) => void;
   hasPendingPayment?: boolean;
   mergedSources?: number[];
   mergedIntoMesaId?: number | null;
@@ -26,7 +28,8 @@ interface MesaCardProps {
 
 /** Waiter variant owns only its navigation callback, not cashier actions. */
 export const MesaCard = React.memo<MesaCardProps>(({
-  table, orders, currentTime, onClick, hasPendingPayment = false, mergedIntoMesaId = null,
+  table, orders, currentTime, onClick, onOpenOrderEntry, onOpenConsumption,
+  hasPendingPayment = false, mergedIntoMesaId = null,
   operational: projectedState, ...view
 }) => {
   const operational = projectedState ?? deriveTableOperationalState({
@@ -45,14 +48,43 @@ export const MesaCard = React.memo<MesaCardProps>(({
         ? 'Ver itens prontos'
         : 'Ver consumo';
 
+  const isFree = operational.occupancy === 'FREE';
+  const isMerged = Boolean(operational.mergedIntoMesaId);
+  const isPayment = operational.financial === 'AWAITING_PAYMENT' || operational.hasPendingConfirmation || hasPendingPayment;
+  const canAppendOrder = !isMerged && !isPayment;
+
+  const handlePrimaryClick = () => {
+    if (isFree) {
+      if (onOpenOrderEntry) onOpenOrderEntry(table.id);
+      else onClick(table.id);
+    } else {
+      if (onOpenConsumption) onOpenConsumption(table.id);
+      else onClick(table.id);
+    }
+  };
+
+  const handleOrderEntryClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onOpenOrderEntry) onOpenOrderEntry(table.id);
+    else onClick(table.id);
+  };
+
   return (
     <div
       id={`mesa-card-${table.id}`}
       role="region"
       aria-label={accessibleLabel}
       data-waiter-action={actionLabel}
-      onClick={() => onClick(table.id)}
-      className="relative h-full w-full min-w-0"
+      onClick={handlePrimaryClick}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          handlePrimaryClick();
+        }
+      }}
+      className={`kw-table-target relative h-full w-full min-w-0 ${getTableTotal(orders) >= 100000 ? 'min-[360px]:col-span-2' : ''}`}
     >
       <SharedTableCard
         {...view}
@@ -61,23 +93,39 @@ export const MesaCard = React.memo<MesaCardProps>(({
         operational={operational}
         total={getTableTotal(orders)}
         identityLabel="Pedido"
+        waiterOverview
         fillHeight
         showItemCount={false}
       >
-        <span className="mt-auto inline-flex w-full min-w-0 max-w-full items-center justify-center whitespace-normal rounded-lg border border-current/20 bg-black/5 px-2 py-1 text-center text-[9px] font-bold uppercase leading-tight tracking-wide dark:bg-white/5">
-          {actionLabel}
-        </span>
+        <div className="kw-table__footer mt-auto w-full min-w-0 max-w-full">
+          {isFree ? (
+            <span
+              aria-label={`${actionLabel} na ${tableLabel}`}
+              className="kw-table__action "
+            >
+              {actionLabel}
+            </span>
+          ) : canAppendOrder ? (
+            <button
+              type="button"
+              id={`mesa-card-launch-${table.id}`}
+              onClick={handleOrderEntryClick}
+              aria-label={`Lançar pedido na ${tableLabel}`}
+              title={`+ Lançar pedido · ${tableLabel}`}
+              className="kw-table__action kw-table__action--launch"
+            >
+              Lançar
+            </button>
+          ) : (
+            <span
+              aria-label={`${actionLabel} na ${tableLabel}`}
+              className="kw-table__action "
+            >
+              {isMerged ? 'Ver mesa' : actionLabel}
+            </span>
+          )}
+        </div>
       </SharedTableCard>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onClick(table.id);
-        }}
-        aria-label={`${actionLabel} na ${tableLabel}`}
-        title={`${actionLabel} · ${tableLabel}`}
-        className="absolute inset-0 z-10 h-full w-full rounded-2xl bg-transparent transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-      />
     </div>
   );
 });

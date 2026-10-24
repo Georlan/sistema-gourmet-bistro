@@ -27,7 +27,7 @@ export function AnalyticsProvider({ children, disabled = false }: AnalyticsProvi
       if (!client) return;
 
       try {
-        const reactMod = await import('@posthog/react');
+        const reactMod = await import('@posthog/react/slim');
         if (!cancelled && reactMod.PostHogProvider) {
           setProviderState({
             Provider: reactMod.PostHogProvider,

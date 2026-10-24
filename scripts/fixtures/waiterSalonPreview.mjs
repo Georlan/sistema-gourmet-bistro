@@ -1,0 +1,128 @@
+export const NOW = new Date('2026-08-30T15:00:00.000Z');
+
+export const mockTables = [
+  { id: 1, nome: 'Mesa 1', capacidade: 4, status: 'livre' },
+  { id: 2, nome: 'Mesa 2', capacidade: 4, status: 'ocupada' },
+  { id: 3, nome: 'Mesa 3', capacidade: 4, status: 'ocupada' },
+  { id: 4, nome: 'Mesa 4', capacidade: 2, status: 'ocupada' },
+  { id: 5, nome: 'Varanda Nobre', capacidade: 6, status: 'livre' },
+  { id: 6, nome: 'Mesa 6', capacidade: 2, status: 'ocupada' },
+];
+
+export const mockOrders = [
+  // Mesa 2: Ocupada normal (preparando)
+  {
+    id: 'check-mesa-2',
+    restaurante_id: 99001,
+    mesa_id: 2,
+    garcom_id: 'waiter-phase7',
+    criada_por: { nome: 'Garçom Teste' },
+    tipo: 'Consumo no Local',
+    numero_pedido: 102,
+    fechada: false,
+    valor_pago: 0,
+    criado_em: new Date(NOW.getTime() - 10 * 60_000).toISOString(),
+    status_comanda: null,
+    itens: [
+      {
+        id: 'item-2-1',
+        lancamento_id: 'launch-2-1',
+        produto_id: 'prod-1',
+        preco_unit: 45,
+        status: 'preparando',
+        pago: false,
+        cliente_nome: 'Consumo Geral',
+        produto: { id: 'prod-1', nome: 'Hambúrguer Gourmet', preco: 45, ativo: true },
+      },
+    ],
+  },
+  // Mesa 3: Ocupada com itens prontos
+  {
+    id: 'check-mesa-3',
+    restaurante_id: 99001,
+    mesa_id: 3,
+    garcom_id: 'waiter-phase7',
+    criada_por: { nome: 'Garçom Teste' },
+    tipo: 'Consumo no Local',
+    numero_pedido: 103,
+    fechada: false,
+    valor_pago: 0,
+    criado_em: new Date(NOW.getTime() - 20 * 60_000).toISOString(),
+    status_comanda: null,
+    itens: [
+      {
+        id: 'item-3-1',
+        lancamento_id: 'launch-3-1',
+        produto_id: 'prod-2',
+        preco_unit: 30,
+        status: 'pronto',
+        pago: false,
+        cliente_nome: 'Consumo Geral',
+        produto: { id: 'prod-2', nome: 'Porção Batata Frita', preco: 30, ativo: true },
+      },
+    ],
+  },
+  // Mesa 4: Mesclada para Mesa 2
+  {
+    id: 'check-mesa-4-merged',
+    restaurante_id: 99001,
+    mesa_id: 2,
+    mesa_origem_id: 4,
+    garcom_id: 'waiter-phase7',
+    criada_por: { nome: 'Garçom Teste' },
+    tipo: 'Consumo no Local',
+    numero_pedido: 104,
+    fechada: false,
+    valor_pago: 0,
+    criado_em: new Date(NOW.getTime() - 15 * 60_000).toISOString(),
+    status_comanda: null,
+    itens: [
+      {
+        id: 'item-4-1',
+        lancamento_id: 'launch-4-1',
+        produto_id: 'prod-3',
+        preco_unit: 25,
+        status: 'entregue',
+        pago: false,
+        cliente_nome: 'Consumo Geral',
+        produto: { id: 'prod-3', nome: 'Sobremesa Pudim', preco: 25, ativo: true },
+      },
+    ],
+  },
+  // Mesa 6: Aguardando Pagamento
+  {
+    id: 'check-mesa-6',
+    restaurante_id: 99001,
+    mesa_id: 6,
+    garcom_id: 'waiter-phase7',
+    criada_por: { nome: 'Garçom Teste' },
+    tipo: 'Consumo no Local',
+    numero_pedido: 106,
+    fechada: false,
+    valor_pago: 0,
+    criado_em: new Date(NOW.getTime() - 35 * 60_000).toISOString(),
+    status_comanda: 'aguardando_pagamento',
+    itens: [
+      {
+        id: 'item-6-1',
+        lancamento_id: 'launch-6-1',
+        produto_id: 'prod-1',
+        preco_unit: 45,
+        status: 'entregue',
+        pago: false,
+        cliente_nome: 'Consumo Geral',
+        produto: { id: 'prod-1', nome: 'Hambúrguer Gourmet', preco: 45, ativo: true },
+      },
+      {
+        id: 'item-6-2',
+        lancamento_id: 'launch-6-2',
+        produto_id: 'prod-2',
+        preco_unit: 30,
+        status: 'entregue',
+        pago: false,
+        cliente_nome: 'Consumo Geral',
+        produto: { id: 'prod-2', nome: 'Porção Batata Frita', preco: 30, ativo: true },
+      },
+    ],
+  },
+];

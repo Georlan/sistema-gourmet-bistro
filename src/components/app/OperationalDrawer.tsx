@@ -1,3 +1,4 @@
+import { WaiterDrawer } from './WaiterDrawer';
 import {
   LEGACY_OPERATIONAL_DRAFTS_KEY,
 } from './drafts/operationalDraftStorage';
@@ -24,5 +25,6 @@ export function OperationalDrawer(props: OperationalDrawerProps) {
   // Keep the historical direct-call contract used by lightweight unit tests.
   // The implementation is hook-free, so invoking it here does not create a
   // second component boundary or bypass React hook rules.
+  if (props.portal === 'garcom') return WaiterDrawer(props);
   return OperationalDrawerLegacy(props);
 }

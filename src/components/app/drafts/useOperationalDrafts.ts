@@ -127,6 +127,20 @@ export function useOperationalDrafts({
     }));
   };
 
+  const handleRestoreDraftItem = (mesaId: number, item: DraftItem, index: number): boolean => {
+    // Never restore a snapshot from a previous login or during submission.
+    if (!storageKey || resolveOperationalDraftStorageKey() !== storageKey
+      || loadedStorageKeyRef.current !== storageKey || submittingMesaIdsRef.current.has(mesaId)) return false;
+    setDrafts((prev) => {
+      const existing = prev[mesaId] || [];
+      if (existing.some((candidate) => candidate.id === item.id)) return prev;
+      const next = [...existing];
+      next.splice(Math.max(0, Math.min(index, next.length)), 0, item);
+      return { ...prev, [mesaId]: next };
+    });
+    return true;
+  };
+
   const handleUpdateDraftItem = (mesaId: number, draftItemId: string, fields: Partial<DraftItem>) => {
     setDrafts((prev) => ({
       ...prev,
@@ -312,10 +326,12 @@ export function useOperationalDrafts({
 
   return {
     isSubmittingMesa,
+    draftScopeKey: storageKey,
     drafts,
     getDraftItems,
     handleAddToDraft,
     handleRemoveFromDraft,
+    handleRestoreDraftItem,
     handleUpdateDraftItem,
     handleEditDraftItems,
     handleSubmitDraft,

@@ -181,21 +181,15 @@ test.describe('App do Garçom - Salão Onda 1', () => {
   test('Top do Salão ocupa menos espaço e não repete contagens já presentes nos filtros', async ({ page }) => {
     await setupWaiterWave1(page);
 
-    const stage = page.locator('.waiter-salon-stage');
-    await expect(stage).toBeVisible();
+    // Valida grupo de filtros visíveis imediatamente no topo
+    const filterGroup = page.getByRole('group', { name: 'Filtrar mesas por status' });
+    await expect(filterGroup).toBeVisible();
 
-    // Valida título do Salão
-    await expect(stage.getByRole('heading', { name: 'Salão' })).toBeVisible();
+    // Valida que exibe as contagens reais nos chips
+    await expect(filterGroup.getByRole('button', { name: /^Todas/ })).toBeVisible();
 
-    // Valida texto orientativo
-    await expect(stage).toContainText('Mesa livre abre um novo pedido. Mesa ocupada abre o consumo; itens prontos aparecem no filtro abaixo.');
-
-    // Valida que exibe apenas a contagem total de mesas no topo
-    await expect(stage).toContainText('5 mesas');
-
-    // Valida que NÃO existem os cards grandes com contagens repetidas (Livres, Ocupadas, Prontas) no topo
-    await expect(stage.locator('.grid.grid-cols-3')).toHaveCount(0);
-    await expect(stage.getByText('SALÃO', { exact: true })).toHaveCount(0);
+    // Valida que NÃO existem os cards grandes com contagens repetidas no topo
+    await expect(page.locator('.grid.grid-cols-3')).toHaveCount(0);
   });
 
   test('Ações nos cards ficam óbvias antes do clique para livres, ocupadas, itens prontos e mescladas', async ({ page }) => {
@@ -206,34 +200,27 @@ test.describe('App do Garçom - Salão Onda 1', () => {
     await expect(card1).toBeVisible();
     await expect(card1).toHaveAttribute('data-waiter-action', 'Novo pedido');
     await expect(card1.getByText('Novo pedido', { exact: true })).toBeVisible();
-    await expect(card1.getByRole('button')).toHaveAttribute('aria-label', /Novo pedido na Mesa 1/i);
 
-    // 2. Mesa Ocupada (Mesa 2): Ação deve ser "Ver consumo"
+    // 2. Mesa Ocupada (Mesa 2): Ação deve ser "Ver consumo" e ter botão "+ Lançar pedido"
     const card2 = page.locator('#mesa-card-2');
     await expect(card2).toBeVisible();
     await expect(card2).toHaveAttribute('data-waiter-action', 'Ver consumo');
-    await expect(card2.getByText('Ver consumo', { exact: true })).toBeVisible();
-    await expect(card2.getByRole('button')).toHaveAttribute('aria-label', /Ver consumo na Mesa 2/i);
+    await expect(card2.locator('#mesa-card-launch-2')).toBeVisible();
+    await expect(card2.getByText('Lançar', { exact: true })).toBeVisible();
 
-    // 3. Mesa com Itens Prontos (Mesa 3): Ação deve ser "Ver itens prontos"
+    // 3. Mesa com Itens Prontos (Mesa 3): Ação deve ser "Ver itens prontos" e ter botão "+ Lançar pedido"
     const card3 = page.locator('#mesa-card-3');
     await expect(card3).toBeVisible();
     await expect(card3).toHaveAttribute('data-waiter-action', 'Ver itens prontos');
-    await expect(card3.getByText('Ver itens prontos', { exact: true })).toBeVisible();
-    await expect(card3.getByRole('button')).toHaveAttribute('aria-label', /Ver itens prontos na Mesa 3/i);
+    await expect(card3.locator('#mesa-card-launch-3')).toBeVisible();
 
     // 4. Mesa Mesclada (Mesa 4): Ação deve ser "Ver atendimento"
     const card4 = page.locator('#mesa-card-4');
     await expect(card4).toBeVisible();
     await expect(card4).toHaveAttribute('data-waiter-action', 'Ver atendimento');
-    await expect(card4.getByText('Ver atendimento', { exact: true })).toBeVisible();
-    await expect(card4.getByRole('button')).toHaveAttribute('aria-label', /Ver atendimento na Mesa 4/i);
+    await expect(card4.getByText('Ver mesa', { exact: true })).toBeVisible();
 
-    if (page.viewportSize()?.width === 390) {
-      await page.screenshot({ path: '/home/testuser/.gemini/antigravity/brain/7af21423-1a1c-472c-912d-77c093671571/waiter_salon_mobile_overview.png' });
-    } else if (page.viewportSize()?.width === 1024) {
-      await page.screenshot({ path: '/home/testuser/.gemini/antigravity/brain/7af21423-1a1c-472c-912d-77c093671571/waiter_salon_desktop_overview.png' });
-    }
+    await page.screenshot({ path: test.info().outputPath('waiter-salon-overview.png') });
   });
 
   test('Filtros filtram corretamente mesas livres, ocupadas e prontas', async ({ page }) => {
@@ -273,41 +260,22 @@ test.describe('App do Garçom - Salão Onda 1', () => {
     await expect(page.locator('#mesa-card-5')).toHaveCount(0);
   });
 
-  test('Busca por número e nome filtra e tecla Enter abre a mesa', async ({ page }) => {
+  test('Dois destinos diretos em mesa ocupada: card abre Consumo e botão abre Pedido', async ({ page }) => {
     await setupWaiterWave1(page);
 
-    // Abre a busca
-    await page.locator('#waiter-table-search-toggle').click();
-    const input = page.locator('#waiter-table-search-input');
-    await expect(input).toBeVisible();
-
-    // Busca por número "3"
-    await input.fill('3');
-    await expect(page.locator('#mesa-card-3')).toBeVisible();
-    await expect(page.locator('#mesa-card-1')).toHaveCount(0);
-    await expect(page.locator('#mesa-card-2')).toHaveCount(0);
-
-    // Pressiona Enter para abrir
-    await input.press('Enter');
+    // 1. Toque na superfície principal de Mesa Ocupada (Mesa 2) abre diretamente Consumo
+    await page.locator('#mesa-card-2').click();
     await expect(page.locator('#modal-outer-overlay')).toBeVisible();
-    await expect(page.getByRole('heading', { name: /Mesa 3/ })).toBeVisible();
-
-    // Fecha o modal
+    await expect(page.getByRole('heading', { name: /Mesa 2/ })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Consumo/i })).toHaveAttribute('aria-selected', 'true');
     await page.locator('#close-mesa-modal-btn').click();
     await expect(page.locator('#modal-outer-overlay')).toHaveCount(0);
 
-    // Reabre busca e busca por nome "Varanda"
-    await page.locator('#waiter-table-search-toggle').click();
-    const input2 = page.locator('#waiter-table-search-input');
-    await input2.fill('Varanda');
-    await expect(page.locator('#mesa-card-5')).toBeVisible();
-    await expect(page.locator('#mesa-card-1')).toHaveCount(0);
-
-    // Pressiona Enter para abrir a mesa encontrada por nome
-    await input2.press('Enter');
+    // 2. Toque no botão "+ Lançar pedido" da Mesa 2 abre diretamente a aba de Pedido / Cardápio
+    await page.locator('#mesa-card-launch-2').click();
     await expect(page.locator('#modal-outer-overlay')).toBeVisible();
-    await expect(page.getByRole('heading', { name: /Mesa 5/ })).toBeVisible();
-
+    await expect(page.getByRole('heading', { name: /Mesa 2/ })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Cardápio|Novo Pedido/i })).toHaveAttribute('aria-selected', 'true');
     await page.locator('#close-mesa-modal-btn').click();
     await expect(page.locator('#modal-outer-overlay')).toHaveCount(0);
   });
@@ -350,4 +318,61 @@ test.describe('App do Garçom - Salão Onda 1', () => {
     await page.locator('#close-mesa-modal-btn').click();
     await expect(page.locator('#modal-outer-overlay')).toHaveCount(0);
   });
+  test('Busca encontra número e nome configurado no Caixa e pode ser limpa', async ({ page }) => {
+    await setupWaiterWave1(page);
+    const search = page.getByRole('textbox', { name: 'Ir para mesa' });
+    await search.fill('Varanda');
+    await expect(page.locator('#mesa-card-5')).toBeVisible();
+    await expect(page.locator('#mesa-card-2')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Limpar busca de mesa' }).click();
+    await search.fill('Mesa 2');
+    await expect(page.locator('#mesa-card-2')).toBeVisible();
+    await expect(page.locator('#mesa-card-5')).toHaveCount(0);
+    await page.locator('#mesa-card-2').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('tab', { name: /Consumo/i })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('Nome atualizado pelo contrato de mesas do Caixa aparece no Garçom sem trocar identidade', async ({ page }) => {
+    await setupWaiterWave1(page);
+    await page.route('**/mesas/', async route => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mockTables.map(table => table.id === 2 ? { ...table, nome: 'Varanda externa fundos' } : table)) });
+    });
+    await page.reload();
+    await expect(page.locator('#mesa-card-2')).toContainText('Varanda externa fundos');
+    await page.getByRole('textbox', { name: 'Ir para mesa' }).fill('externa');
+    await expect(page.locator('#mesa-card-2')).toBeVisible();
+    await page.locator('#mesa-card-launch-2').click();
+    await expect(page.getByRole('tab', { name: /Cardápio|Novo Pedido/i })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('Escala efetiva persiste após reload e Central mantém navegação, foco e tema', async ({ page }) => {
+    await setupWaiterWave1(page);
+    for (const [size, scale] of [['padrao', 1], ['grande', 1.2], ['gigante', 1.4]] as const) {
+      await page.locator('#open-sidebar-btn').click();
+      const drawer = page.getByRole('dialog', { name: 'Central do Garçom' });
+      await expect(drawer).toBeVisible();
+      await expect(page.locator('.kw-preferences')).not.toHaveAttribute('open', '');
+      await page.locator('.kw-preferences > summary').click();
+      await page.locator(`#drawer-font-${size}`).click();
+      await expect(page.locator('html')).toHaveAttribute('data-koma-text-size', size);
+      const numberFont = await page.locator('.kw-table__number').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+      expect(numberFont).toBeCloseTo(30 * scale, 1);
+      await page.keyboard.press('Escape');
+      await expect(drawer).toHaveCount(0);
+      await page.reload();
+      await expect(page.locator('html')).toHaveAttribute('data-koma-text-size', size);
+    }
+    await page.locator('#open-sidebar-btn').click();
+    await page.locator('.kw-preferences > summary').click();
+    await page.getByTitle('Mudar para Modo Claro').click();
+    await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'light');
+    await page.locator('#close-sidebar-btn').click();
+    await page.getByRole('textbox', { name: 'Ir para mesa' }).fill('Varanda');
+    await page.locator('#open-sidebar-btn').click();
+    await page.locator('#close-sidebar-btn').click();
+    await page.getByRole('button', { name: 'Limpar busca de mesa' }).click();
+    await expect(page.locator('#mesa-card-2')).toBeVisible();
+  });
+
 });

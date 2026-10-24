@@ -36,7 +36,11 @@ test('produto com escolha obrigatória nunca usa quick add inválido', () => {
 test('revisão e envio mostram mesa, quantidade e valor na ação principal', () => {
   const source = readFileSync(new URL('../src/components/MenuPanel.tsx', import.meta.url), 'utf8');
 
-  assert.match(source, /Mesa \{tableId\} · Revisar pedido/);
+  assert.match(source, />Revisar pedido</);
+  assert.match(source, /para a Mesa \$\{tableId\}/);
+  const modal = readFileSync(new URL('../src/components/MesaDetailsModalBase.tsx', import.meta.url), 'utf8');
+  assert.match(modal, /kw-flow-title/);
+  assert.match(modal, /Mesa \$\{table.id\}/);
   assert.match(source, /Revisar \$\{totalDraftQty\} \$\{itemWord\} · R\$ \$\{money\(draftTotal\)\}/);
   assert.match(source, /Lançar \$\{totalDraftQty\} \$\{itemWord\} · R\$ \$\{money\(draftTotal\)\}/);
   assert.match(source, /Total deste lançamento/);

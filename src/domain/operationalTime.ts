@@ -27,5 +27,10 @@ export function formatElapsedTime(
   }
   const hours = Math.floor(diffMins / 60);
   const remainingMins = diffMins % 60;
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const remHours = hours % 24;
+    return `${days}d ${remHours}h`;
+  }
   return `${hours}h ${remainingMins}m`;
 }

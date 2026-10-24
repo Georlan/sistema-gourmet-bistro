@@ -204,18 +204,18 @@ export function MesaPrintDialogs({
                 id="finalize-physical-print-btn"
                 disabled={!onPrintReceipt}
                 onClick={() => onPrintReceipt?.(false)}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-500/20 transition-all shadow-lg shadow-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 py-3 bg-koma-raised hover:bg-koma-panel text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-koma-border transition-all disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Printer size={13} className="text-koma-foreground" />
+                <Printer size={13} className="text-koma-muted" />
                 <span>Reimpressão total</span>
               </button>
 
               <button
                 disabled={!onPrintReceipt}
                 onClick={() => onPrintReceipt?.(true)}
-                className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-amber-500/20 transition-all shadow-lg shadow-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-400/40 transition-all shadow-lg shadow-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Printer size={13} className="text-koma-foreground" />
+                <Printer size={13} className="text-zinc-950" />
                 <span>Imprimir Conta</span>
               </button>
             </div>

@@ -24,15 +24,20 @@ import {
 } from 'lucide-react';
 import { KomaLogo } from '../KomaLogo';
 import { LoginButton } from '../auth/LoginButton';
+import { KomaWaiterGlyph } from '../shared/KomaWaiterGlyphs';
 import type { AppSettings, CaixaTurnoResumo, DraftItem, Order } from '../../types';
 import type { KomaTheme } from '../../config/theme';
+import {
+  KOMA_TEXT_SIZE_EVENT,
+  persistKomaTextSize,
+  readKomaTextSize,
+  type KomaTextSize,
+} from '../../config/textSize';
 import { deriveProductionState, getOrderItems } from '../../domain/operationalState';
 import { openCustomerSupport } from './customerSupportEvents';
 
 const LOCAL_STORAGE_DRAFTS_KEY = 'koma_drafts_vFinal_v3';
-const LOCAL_STORAGE_FONT_SIZE_KEY = 'koma_font_size';
 
-type FontSize = 'padrao' | 'grande' | 'gigante';
 type TableFilter = 'todos' | 'livres' | 'ocupadas' | 'prontas';
 
 type DraftSummary = {
@@ -42,6 +47,7 @@ type DraftSummary = {
 
 export interface OperationalDrawerProps {
   portal: 'garcom' | 'caixa';
+  showOperationalStatus?: boolean;
   restaurantName: string;
   activeWaiterName: string;
   waiterAvailable: boolean;
@@ -56,6 +62,8 @@ export interface OperationalDrawerProps {
   onClose: () => void;
   onLogout: () => void;
   onSyncSalon: () => void;
+  onOpenHistory?: () => void;
+  onOpenTable?: (tableId: number, targetTab?: 'consumo' | 'lancamento') => void;
 }
 
 function readDraftSummaries(): DraftSummary[] {
@@ -78,11 +86,6 @@ function readDraftSummaries(): DraftSummary[] {
   }
 }
 
-function readFontSize(): FontSize {
-  if (typeof window === 'undefined' || !window.localStorage) return 'padrao';
-  const stored = window.localStorage.getItem(LOCAL_STORAGE_FONT_SIZE_KEY);
-  return stored === 'grande' || stored === 'gigante' ? stored : 'padrao';
-}
 
 /** Drawer operacional compartilhado. O App continua dono dos dados e das mutações. */
 export function OperationalDrawer({
@@ -102,12 +105,18 @@ export function OperationalDrawer({
   onLogout,
   onSyncSalon,
 }: OperationalDrawerProps) {
+  const totalMesasCount = tableCounts.libre + tableCounts.ocupada + tableCounts.pronto;
   const mesasOcupadasCount = tableCounts.ocupada + tableCounts.pronto;
   const mesasLivresCount = tableCounts.libre;
   const pratosProntosCount = deriveProductionState(orders.flatMap(getOrderItems)).readyItemCount;
   const comandasAbertasCount = orders.filter((order) => Number(order.mesaId) > 0).length;
   const draftSummaries = portal === 'garcom' ? readDraftSummaries() : [];
-  const fontSize = readFontSize();
+  
+  const fontSize = readKomaTextSize();
+
+  const changeFontSize = (next: KomaTextSize) => {
+    persistKomaTextSize(next);
+  };
 
   const deliveryPendentesCount = orders.filter((order: any) =>
     (order.tipo === 'DELIVERY' || order.tipo === 'BALCAO')
@@ -138,12 +147,6 @@ export function OperationalDrawer({
     });
   };
 
-  const changeFontSize = (next: FontSize) => {
-    if (typeof window === 'undefined' || !window.localStorage) return;
-    window.localStorage.setItem(LOCAL_STORAGE_FONT_SIZE_KEY, next);
-    window.dispatchEvent(new Event('koma_font_size_changed'));
-  };
-
   const sectionTitle = 'flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.15em] text-emerald-700 dark:text-emerald-400';
   const quickAction = 'group flex min-h-[76px] w-full flex-col justify-between rounded-2xl border border-koma-border bg-koma-card p-3 text-left transition-all hover:border-emerald-500/35 hover:bg-koma-raised active:scale-[0.99]';
 
@@ -169,17 +172,17 @@ export function OperationalDrawer({
 
         <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
           {portal === 'garcom' ? (
-            <div className="space-y-5">
-              <section className="rounded-[22px] border border-emerald-500/20 bg-koma-card p-3.5 shadow-sm">
+            <div className="space-y-4">
+              <section className="rounded-2xl border border-koma-border bg-koma-card p-3 shadow-xs">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-sm font-black text-emerald-700 dark:text-emerald-300">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-sm font-black text-emerald-700 dark:text-emerald-300">
                     {(activeWaiterName || 'G').trim().charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-extrabold text-koma-foreground">{activeWaiterName || 'Garçom'}</p>
-                    <p className="mt-0.5 text-[10px] text-koma-subtle">Atendimento • Salão principal</p>
+                    <p className="text-[10px] text-koma-subtle">Atendimento • Salão principal</p>
                   </div>
-                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[8px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Garçom</span>
+                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Garçom</span>
                 </div>
 
                 <button
@@ -187,65 +190,125 @@ export function OperationalDrawer({
                   type="button"
                   onClick={() => onWaiterAvailabilityChange(!waiterAvailable)}
                   className={clsx(
-                    'mt-3 flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-xs font-bold transition-all',
+                    'mt-2.5 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs font-bold transition-all',
                     waiterAvailable
                       ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
-                      : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300',
+                      : 'border-rose-500/30 bg-rose-500/10 text-rose-300',
                   )}
                 >
                   <span className="flex items-center gap-2">
-                    {waiterAvailable ? <UserCheck size={15} /> : <UserX size={15} />}
+                    {waiterAvailable ? <UserCheck size={14} /> : <UserX size={14} />}
                     {waiterAvailable ? 'Disponível no Salão' : 'Ocupado / Em Atendimento'}
                   </span>
-                  <span className={clsx('h-2 w-2 rounded-full', waiterAvailable ? 'bg-emerald-400' : 'bg-amber-400')} />
+                  <span className={clsx('h-2 w-2 rounded-full', waiterAvailable ? 'bg-emerald-400' : 'bg-rose-400')} />
                 </button>
               </section>
 
-              <section className="space-y-2.5">
+              <section className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className={sectionTitle}><ClipboardList size={13} /> Salão agora</h3>
                   <span className="text-[9px] text-koma-muted">tempo real</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-2xl border border-koma-border bg-koma-card p-3">
-                    <div className="flex items-center gap-1.5 text-koma-muted"><Grid2X2 size={13} /><span className="text-[9px] font-bold uppercase">Mesas</span></div>
-                    <strong className="mt-2 block font-mono text-xl text-emerald-700 dark:text-emerald-300">{mesasOcupadasCount}</strong>
-                    <p className="mt-0.5 text-[9px] text-koma-subtle">ocupadas • {mesasLivresCount} livres</p>
+                  <div className="rounded-xl border border-koma-border bg-koma-card p-2 text-center">
+                    <span className="text-[9px] font-bold uppercase text-koma-muted">Mesas</span>
+                    <strong className="block font-mono text-base text-emerald-600 dark:text-emerald-400">{mesasOcupadasCount}</strong>
+                    <p className="mt-0.5 text-[8px] text-koma-subtle leading-tight">ocupadas • {mesasLivresCount} livres</p>
                   </div>
-                  <div className={clsx('rounded-2xl border bg-koma-card p-3', pratosProntosCount > 0 ? 'border-amber-500/30' : 'border-koma-border')}>
-                    <div className={clsx('flex items-center gap-1.5', pratosProntosCount > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-koma-muted')}><CheckCircle2 size={13} /><span className="text-[9px] font-bold uppercase">Prontos</span></div>
-                    <strong className={clsx('mt-2 block font-mono text-xl', pratosProntosCount > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-koma-foreground')}>{pratosProntosCount}</strong>
-                    <p className="mt-0.5 text-[9px] text-koma-subtle">p/ servir</p>
+                  <div className="rounded-xl border border-koma-border bg-koma-card p-2 text-center">
+                    <span className="text-[9px] font-bold uppercase text-koma-muted">Prontos</span>
+                    <strong className="block font-mono text-base text-emerald-500">{pratosProntosCount}</strong>
+                    <p className="mt-0.5 text-[8px] text-koma-subtle leading-tight">p/ servir</p>
                   </div>
-                  <div className="rounded-2xl border border-koma-border bg-koma-card p-3">
-                    <div className="flex items-center gap-1.5 text-koma-muted"><ClipboardList size={13} /><span className="text-[9px] font-bold uppercase">Comandas</span></div>
-                    <strong className="mt-2 block font-mono text-xl text-koma-foreground">{comandasAbertasCount}</strong>
-                    <p className="mt-0.5 text-[9px] text-koma-subtle">abertas</p>
+                  <div className="rounded-xl border border-koma-border bg-koma-card p-2 text-center">
+                    <span className="text-[9px] font-bold uppercase text-koma-muted">Comandas</span>
+                    <strong className="block font-mono text-base text-koma-foreground">{comandasAbertasCount}</strong>
+                    <p className="mt-0.5 text-[8px] text-koma-subtle leading-tight">abertas</p>
                   </div>
                 </div>
               </section>
 
-              <section className="space-y-2.5">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className={sectionTitle}><Utensils size={13} /> Ações rápidas</h3>
-                  <span className="text-[9px] text-koma-muted">1 toque</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button id="drawer-show-all-tables" type="button" onClick={() => openSalonFilter('todos')} className={quickAction}>
-                    <span className="flex items-center justify-between"><Grid2X2 size={17} className="text-emerald-700 dark:text-emerald-400" /><ChevronRight size={14} className="text-koma-muted transition-transform group-hover:translate-x-0.5" /></span>
-                    <span><strong className="block text-[11px] text-koma-foreground">Todas as mesas</strong><span className="mt-0.5 block text-[9px] text-koma-muted">Salão completo</span></span>
+              <section className="space-y-2">
+                <h3 className={sectionTitle}><Utensils size={13} /> Ações rápidas</h3>
+                <div className="overflow-hidden rounded-2xl border border-koma-border bg-koma-card divide-y divide-koma-border shadow-xs">
+                  <button
+                    id="drawer-show-all-tables"
+                    type="button"
+                    onClick={() => openSalonFilter('todos')}
+                    className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-koma-raised group"
+                  >
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <span className="rounded-lg bg-emerald-500/10 p-1.5 text-emerald-600 dark:text-emerald-400">
+                        <KomaWaiterGlyph name="focus-table" size={17} />
+                      </span>
+                      <strong className="text-xs font-bold text-koma-foreground">Todas as mesas</strong>
+                    </span>
+                    <span className="flex items-center gap-1.5 shrink-0">
+                      <span className="font-mono text-xs font-bold text-koma-muted">{totalMesasCount} mesas</span>
+                      <ChevronRight size={14} className="text-koma-subtle transition-transform group-hover:translate-x-0.5" />
+                    </span>
                   </button>
-                  <button id="drawer-show-ready-tables" type="button" onClick={() => openSalonFilter('prontas')} className={quickAction}>
-                    <span className="flex items-center justify-between"><CheckCircle2 size={17} className="text-amber-700 dark:text-amber-300" /><span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 font-mono text-[9px] font-bold text-amber-700 dark:text-amber-300">{pratosProntosCount}</span></span>
-                    <span><strong className="block text-[11px] text-koma-foreground">Itens prontos</strong><span className="mt-0.5 block text-[9px] text-koma-muted">Mesas para servir</span></span>
+
+                  <button
+                    id="drawer-show-ready-tables"
+                    type="button"
+                    onClick={() => openSalonFilter('prontas')}
+                    className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-koma-raised group"
+                  >
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <span className={clsx('rounded-lg p-1.5', pratosProntosCount > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-koma-panel text-koma-muted')}>
+                        <KomaWaiterGlyph name="orders-ready" size={17} />
+                      </span>
+                      <span className="min-w-0">
+                        <strong className="block text-xs font-bold text-koma-foreground">Itens prontos</strong>
+                        <span className="block text-[9px] text-koma-subtle">Para servir na mesa</span>
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-1.5 shrink-0">
+                      {pratosProntosCount > 0 ? (
+                        <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 font-mono text-[10px] font-extrabold text-emerald-800 dark:text-emerald-300 animate-pulse">
+                          {pratosProntosCount} p/ servir
+                        </span>
+                      ) : (
+                        <span className="font-mono text-xs text-koma-subtle">0</span>
+                      )}
+                      <ChevronRight size={14} className="text-koma-subtle transition-transform group-hover:translate-x-0.5" />
+                    </span>
                   </button>
-                  <button id="drawer-show-occupied-tables" type="button" onClick={() => openSalonFilter('ocupadas')} className={quickAction}>
-                    <span className="flex items-center justify-between"><Utensils size={17} className="text-koma-danger-text" /><span className="font-mono text-[9px] font-bold text-koma-muted">{mesasOcupadasCount}</span></span>
-                    <span><strong className="block text-[11px] text-koma-foreground">Mesas ocupadas</strong><span className="mt-0.5 block text-[9px] text-koma-muted">Focar atendimentos</span></span>
+
+                  <button
+                    id="drawer-show-occupied-tables"
+                    type="button"
+                    onClick={() => openSalonFilter('ocupadas')}
+                    className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-koma-raised group"
+                  >
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <span className="rounded-lg bg-rose-500/10 p-1.5 text-rose-500">
+                        <KomaWaiterGlyph name="table-service" size={17} />
+                      </span>
+                      <strong className="text-xs font-bold text-koma-foreground">Mesas ocupadas</strong>
+                    </span>
+                    <span className="flex items-center gap-1.5 shrink-0">
+                      <span className="font-mono text-xs font-bold text-rose-600 dark:text-rose-400">{mesasOcupadasCount}</span>
+                      <ChevronRight size={14} className="text-koma-subtle transition-transform group-hover:translate-x-0.5" />
+                    </span>
                   </button>
-                  <button id="drawer-sync-salon" type="button" onClick={() => { onClose(); onSyncSalon(); }} className={quickAction}>
-                    <span className="flex items-center justify-between"><RefreshCw size={17} className="text-blue-700 dark:text-blue-300" /><span className="rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase text-blue-700 dark:text-blue-300">manual</span></span>
-                    <span><strong className="block text-[11px] text-koma-foreground">Sincronizar Salão</strong><span className="mt-0.5 block text-[9px] text-koma-muted">Atualizar agora</span></span>
+
+                  <button
+                    id="drawer-sync-salon"
+                    type="button"
+                    onClick={() => { onClose(); onSyncSalon(); }}
+                    className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-koma-raised group"
+                  >
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <span className="rounded-lg bg-sky-500/10 p-1.5 text-sky-500">
+                        <KomaWaiterGlyph name="sync" size={17} />
+                      </span>
+                      <strong className="text-xs font-bold text-koma-foreground">Sincronizar Salão</strong>
+                    </span>
+                    <span className="rounded-lg bg-sky-500/10 px-2 py-0.5 text-[9px] font-bold uppercase text-sky-700 dark:text-sky-300">
+                      Atualizar
+                    </span>
                   </button>
                 </div>
               </section>
@@ -291,7 +354,7 @@ export function OperationalDrawer({
                 <div className="space-y-2 rounded-2xl border border-koma-border bg-koma-card p-3">
                   <div className="flex items-center justify-between rounded-xl border border-koma-border p-2 text-xs"><div className="flex items-center gap-2"><TrendingUp size={13} className="text-emerald-700 dark:text-emerald-400" /><span className="text-[11px] font-medium text-koma-secondary">Vendas do Turno</span></div><span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">R$ {(turnoResumo?.total_vendas ?? totalVendasTurno).toFixed(2)}</span></div>
                   <div className="flex items-center justify-between rounded-xl border border-koma-border p-2 text-xs"><div className="flex items-center gap-2"><Utensils size={13} className="text-blue-700 dark:text-blue-300" /><span className="text-[11px] font-medium text-koma-secondary">Comandas Abertas</span></div><span className="font-mono font-bold text-koma-foreground">{turnoResumo?.comandas_abertas_count ?? totalComandasAbertas} ativas</span></div>
-                  {deliveryPendentesCount > 0 && <div className="flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50 p-2 text-xs dark:border-amber-800/30 dark:bg-amber-950/20"><div className="flex items-center gap-2"><ShoppingBag size={13} className="text-amber-700 dark:text-amber-300" /><span className="text-[11px] font-medium text-amber-600 dark:text-amber-300">Delivery Pendente</span></div><span className="rounded bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-600 dark:text-amber-300">{deliveryPendentesCount} p/ aceitar</span></div>}
+                  {deliveryPendentesCount > 0 && <div className="flex items-center justify-between rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-2 text-xs"><div className="flex items-center gap-2"><ShoppingBag size={13} className="text-cyan-400" /><span className="text-[11px] font-medium text-cyan-300">Delivery Pendente</span></div><span className="rounded bg-cyan-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-cyan-300">{deliveryPendentesCount} p/ aceitar</span></div>}
                 </div>
               </section>
 
@@ -333,16 +396,22 @@ export function OperationalDrawer({
               <div className="flex items-center justify-between gap-3 border-b border-koma-border px-3 py-3">
                 <div><span className="block text-[11px] font-semibold text-koma-foreground">Tema Visual</span><span className="mt-0.5 block text-[9px] text-koma-muted">Claro ou escuro</span></div>
                 <button type="button" onClick={onToggleTheme} className="flex items-center gap-1.5 rounded-xl border border-koma-border bg-koma-panel px-2.5 py-2 text-[10px] font-bold uppercase text-koma-foreground transition-colors hover:bg-koma-raised" title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}>
-                  {theme === 'dark' ? <Sun size={13} className="text-amber-400" /> : <Moon size={13} className="text-sky-500" />}{theme === 'dark' ? 'Escuro' : 'Claro'}
+                  {theme === 'dark' ? <Sun size={13} className="text-zinc-200" /> : <Moon size={13} className="text-sky-500" />}{theme === 'dark' ? 'Escuro' : 'Claro'}
                 </button>
               </div>
 
               <div className="border-b border-koma-border px-3 py-3">
                 <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-semibold text-koma-foreground">Tamanho do texto</span><span className="text-[9px] text-koma-muted">Acessibilidade</span></div>
-                <div className="grid grid-cols-3 gap-1 rounded-xl border border-koma-border bg-koma-panel p-1">
-                  {([['padrao', 'Padrão'], ['grande', 'Grande'], ['gigante', 'Gigante']] as const).map(([value, label]) => (
-                    <button key={value} id={`drawer-font-${value}`} type="button" onClick={() => changeFontSize(value)} aria-pressed={fontSize === value} className={clsx('rounded-lg px-2 py-1.5 text-[9px] font-bold transition-colors', fontSize === value ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'text-koma-muted hover:text-koma-foreground')}>{label}</button>
-                  ))}
+                <div className={clsx('grid gap-1 rounded-xl border border-koma-border bg-koma-panel p-1', portal === 'garcom' ? 'grid-cols-2' : 'grid-cols-3')}>
+                  {(portal === 'garcom'
+                    ? ([['padrao', 'Padrão'], ['grande', 'Grande']] as const)
+                    : ([['padrao', 'Padrão'], ['grande', 'Grande'], ['gigante', 'Gigante']] as const)
+                  ).map(([value, label]) => {
+                    const effectiveActive = (portal === 'garcom' && fontSize === 'gigante' ? 'grande' : fontSize) === value;
+                    return (
+                      <button key={value} id={`drawer-font-${value}`} type="button" onClick={() => changeFontSize(value)} aria-pressed={effectiveActive} className={clsx('rounded-lg px-2 py-1.5 text-[9px] font-bold transition-colors', effectiveActive ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'text-koma-muted hover:text-koma-foreground')}>{label}</button>
+                    );
+                  })}
                 </div>
               </div>
 

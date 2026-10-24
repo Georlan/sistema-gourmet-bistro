@@ -4,9 +4,10 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { Activity, Search, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Table, Order, DraftItem } from '../../types';
 import { MesaCard } from '../MesaCard';
+import { KomaWaiterGlyph } from '../shared/KomaWaiterGlyphs';
 import { countWaiterSalonTables, projectWaiterSalonTables, type WaiterSalonRow } from '../../domain/waiterSalonProjection';
 
 export interface MesasViewProps {
@@ -17,7 +18,9 @@ export interface MesasViewProps {
   pagamentosPendentes?: any[];
   activeWaiterId?: string;
   currentTime?: number;
-  onTableClick?: (tableId: number) => void;
+  onTableClick?: (tableId: number, targetTab?: 'consumo' | 'lancamento') => void;
+  onOpenOrderEntry?: (tableId: number) => void;
+  onOpenConsumption?: (tableId: number) => void;
   tableFilter?: 'todos' | 'livres' | 'ocupadas' | 'prontas';
   onFilterChange?: (filter: 'todos' | 'livres' | 'ocupadas' | 'prontas') => void;
   showOperationalStatus?: boolean;
@@ -44,6 +47,8 @@ export function MesasView({
   activeWaiterId = '',
   currentTime = Date.now(),
   onTableClick,
+  onOpenOrderEntry,
+  onOpenConsumption,
   tableFilter: externalFilter,
   onFilterChange,
   showOperationalStatus = true,
@@ -51,9 +56,9 @@ export function MesasView({
   rows,
 }: MesasViewProps) {
   const [internalFilter, setInternalFilter] = useState<'todos' | 'livres' | 'ocupadas' | 'prontas'>('todos');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [tableQuery, setTableQuery] = useState('');
-  const currentFilter = externalFilter ?? internalFilter;
+  const requestedFilter = externalFilter ?? internalFilter;
+  const currentFilter = !showOperationalStatus && requestedFilter === 'prontas' ? 'todos' : requestedFilter;
+  const [query, setQuery] = useState('');
 
   const tableRows = useMemo(() =>
     rows ?? projectWaiterSalonTables(salonTables, orders, pagamentosPendentes, currentTime),
@@ -63,42 +68,16 @@ export function MesasView({
     [tableRows, showOperationalStatus]);
 
   const filteredRows = useMemo(() => tableRows.filter(({ table, operationalState }) => {
-    if (!waiterTableMatchesQuery(table, tableQuery)) return false;
+    if (!waiterTableMatchesQuery(table, query)) return false;
     if (currentFilter === 'livres') return operationalState.occupancy === 'FREE';
     if (currentFilter === 'ocupadas') return operationalState.occupancy === 'IN_SERVICE';
     if (currentFilter === 'prontas') return showOperationalStatus && operationalState.production.hasReadyItems;
     return true;
-  }), [currentFilter, tableRows, showOperationalStatus, tableQuery]);
+  }), [currentFilter, tableRows, showOperationalStatus, query]);
 
   const handleFilterSelect = (filter: typeof currentFilter) => {
     if (onFilterChange) onFilterChange(filter);
     else setInternalFilter(filter);
-  };
-
-  const openSearch = () => {
-    setSearchOpen(true);
-    if (currentFilter !== 'todos') handleFilterSelect('todos');
-  };
-
-  const closeSearch = () => {
-    setTableQuery('');
-    setSearchOpen(false);
-  };
-
-  const openSearchResult = () => {
-    if (readOnly || !onTableClick || !tableQuery.trim()) return;
-    const queryTrimmed = tableQuery.trim();
-    const normalized = queryTrimmed.toLocaleLowerCase('pt-BR').replace(/^mesa\s*/i, '').trim();
-    const queryLower = queryTrimmed.toLocaleLowerCase('pt-BR');
-    const exact = filteredRows.find(({ table }) =>
-      String(table.id) === normalized ||
-      table.nome?.trim().toLocaleLowerCase('pt-BR') === queryLower
-    );
-    const target = exact || (filteredRows.length === 1 ? filteredRows[0] : undefined);
-    if (target) {
-      closeSearch();
-      onTableClick(target.table.id);
-    }
   };
 
   const filters = [
@@ -109,106 +88,28 @@ export function MesasView({
   ];
 
   return (
-    <div className="w-full text-koma-foreground font-sans select-none space-y-3 sm:space-y-4">
-      <section className="waiter-salon-stage relative overflow-hidden rounded-[20px] sm:rounded-[24px] border border-koma-border bg-koma-panel px-4 py-4 sm:px-6 sm:py-5">
-        <div className="waiter-salon-stage__plane" aria-hidden="true" />
-        <span className="waiter-salon-stage__word" aria-hidden="true">SALÃO</span>
+    <div className="w-full text-koma-foreground font-sans select-none space-y-2">
+      <h2 className="sr-only">Salão</h2>
 
-        <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
-          <div className="min-w-0 max-w-2xl">
-            <div className="flex items-end gap-3">
-              <h2 className="font-serif text-2xl sm:text-3xl font-black tracking-[-0.045em] leading-none text-koma-foreground">
-                Salão
-              </h2>
-              <span className="mb-1 hidden h-1 w-10 -rotate-2 bg-koma-accent sm:inline-block" aria-hidden="true" />
-            </div>
-            <p className="mt-1.5 max-w-2xl text-[11px] sm:text-xs text-koma-subtle leading-relaxed">
-              Mesa livre abre um novo pedido. Mesa ocupada abre o consumo; itens prontos aparecem no filtro abaixo.
-            </p>
-          </div>
-
-          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-koma-border bg-koma-card px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-koma-muted shadow-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-koma-accent" aria-hidden="true" />
-            {counts.todos} {counts.todos === 1 ? 'mesa' : 'mesas'}
-          </span>
+      <div className="kw-salon-tools">
+        <div role="group" aria-label="Filtrar mesas por status" className="kw-filters">
+          {filters.filter(filter => showOperationalStatus || filter.id !== 'prontas').map((filter) => <button key={filter.id} id={`waiter-filter-${filter.id}`} type="button"
+            aria-pressed={currentFilter === filter.id} onClick={() => !readOnly && handleFilterSelect(filter.id)}>
+            <span>{filter.label}</span><span className="kw-filter-count">{filter.count}</span>
+          </button>)}
         </div>
-      </section>
-
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-koma-border-subtle pb-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-2 text-koma-subtle">
-          <Activity size={14} className="text-koma-accent" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Filtrar mesas</span>
-
-          {!readOnly && !searchOpen && (
-            <button
-              id="waiter-table-search-toggle"
-              type="button"
-              onClick={openSearch}
-              className="ml-1 inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-2.5 text-[10px] font-bold text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground"
-              aria-label="Ir para uma mesa"
-            >
-              <Search size={13} /> Ir para mesa
-            </button>
-          )}
-
-          {!readOnly && searchOpen && (
-            <div className="relative ml-1 min-w-[180px] flex-1 sm:flex-initial">
-              <Search size={13} className="pointer-events-none absolute left-2.5 top-2.5 text-koma-muted" />
-              <input
-                id="waiter-table-search-input"
-                autoFocus
-                inputMode="numeric"
-                value={tableQuery}
-                onChange={(event) => setTableQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') openSearchResult();
-                  if (event.key === 'Escape') closeSearch();
-                }}
-                placeholder="Mesa 27..."
-                aria-label="Buscar mesa por número ou nome"
-                className="h-8 w-full rounded-xl border border-koma-border bg-koma-input pl-8 pr-8 text-xs text-koma-foreground outline-none focus:border-emerald-500 sm:w-48"
-              />
-              <button
-                type="button"
-                onClick={closeSearch}
-                className="absolute right-1.5 top-1.5 rounded-lg p-1 text-koma-muted hover:text-koma-foreground"
-                aria-label="Fechar busca de mesa"
-              >
-                <X size={13} />
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div role="group" aria-label="Filtrar mesas por status" className="flex w-full min-w-0 max-w-full gap-1.5 overflow-x-auto rounded-xl p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 lg:w-auto">
-          {filters.map((filter) => {
-            const isActive = currentFilter === filter.id;
-            return (
-              <button
-                key={filter.id}
-                id={`waiter-filter-${filter.id}`}
-                type="button"
-                onClick={() => !readOnly && handleFilterSelect(filter.id)}
-                aria-pressed={isActive}
-                className={`shrink-0 whitespace-nowrap px-3 py-2.5 sm:px-2.5 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all text-center border ${
-                  readOnly ? 'cursor-default' : 'cursor-pointer'
-                } ${
-                  isActive
-                    ? 'bg-koma-accent text-white border-koma-accent shadow-sm'
-                    : 'bg-koma-card text-koma-muted hover:text-koma-foreground hover:bg-koma-raised border-koma-border'
-                }`}
-              >
-                {filter.label} <span className={`font-mono text-[9px] ${isActive ? 'text-white/80' : 'text-koma-muted'}`}>{filter.count}</span>
-              </button>
-            );
-          })}
-        </div>
+        <label className="kw-search">
+          <KomaWaiterGlyph name="salon-locator" size={18} />
+          <input aria-label="Ir para mesa" placeholder="Número ou nome da mesa" value={query}
+            onChange={(event) => setQuery(event.target.value)} readOnly={readOnly} />
+          {query && <button type="button" aria-label="Limpar busca de mesa" onClick={() => setQuery('')}><X size={16} /></button>}
+        </label>
       </div>
-
-      <div className="grid w-full auto-rows-[208px] grid-cols-2 items-stretch gap-2.5 min-[380px]:grid-cols-3 sm:auto-rows-[184px] sm:grid-cols-4 sm:gap-3.5 md:grid-cols-5 xl:grid-cols-6">
+      {/* Responsive contract reference: grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4 */}
+      <div className="kw-table-grid grid w-full grid-cols-2 min-[360px]:grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 items-stretch gap-2">
         {filteredRows.length === 0 ? (
           <div className="col-span-full py-16 rounded-2xl border border-dashed border-koma-border text-center text-koma-muted text-sm">
-            {tableQuery.trim() ? 'Nenhuma mesa encontrada para esta busca.' : 'Nenhuma mesa encontrada neste status.'}
+            Nenhuma mesa encontrada.
           </div>
         ) : filteredRows.map(({ table, tableOrders, operationalState }) => {
           const waiterDrafts = draftItemsMap[table.id] || [];
@@ -232,9 +133,14 @@ export function MesasView({
               otherWaitersServing={otherWaitersServing}
               currentTime={tableOrders.length > 0 ? currentTime : 0}
               activeWaiterId={activeWaiterId}
-              onClick={(id) => {
-                if (!readOnly && onTableClick) onTableClick(id);
+              onClick={(id, tab) => {
+                if (readOnly) return;
+                if (tab === 'lancamento' && onOpenOrderEntry) onOpenOrderEntry(id);
+                else if (tab === 'consumo' && onOpenConsumption) onOpenConsumption(id);
+                else if (onTableClick) onTableClick(id, tab);
               }}
+              onOpenOrderEntry={!readOnly ? onOpenOrderEntry : undefined}
+              onOpenConsumption={!readOnly ? onOpenConsumption : undefined}
               hasPendingPayment={hasPendingPayment}
               mergedSources={mergedSources}
               mergedIntoMesaId={mergedIntoMesaId}

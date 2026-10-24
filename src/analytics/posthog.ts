@@ -155,7 +155,11 @@ export function initAnalytics(): Promise<boolean> {
     }
 
     try {
-      const mod = await import('posthog-js');
+      // Bundle the error observer locally; never inject remote scripts under script-src 'self'.
+      const [mod] = await Promise.all([
+        import('posthog-js/no-external'),
+        import('posthog-js/dist/exception-autocapture'),
+      ]);
       const posthog = (mod.default ?? mod) as PostHog;
       posthog.init(projectToken, {
         api_host: host,
