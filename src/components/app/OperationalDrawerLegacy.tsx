@@ -47,6 +47,7 @@ type DraftSummary = {
 
 export interface OperationalDrawerProps {
   portal: 'garcom' | 'caixa';
+  showOperationalStatus?: boolean;
   restaurantName: string;
   activeWaiterName: string;
   waiterAvailable: boolean;
@@ -61,6 +62,8 @@ export interface OperationalDrawerProps {
   onClose: () => void;
   onLogout: () => void;
   onSyncSalon: () => void;
+  onOpenHistory?: () => void;
+  onOpenTable?: (tableId: number, targetTab?: 'consumo' | 'lancamento') => void;
 }
 
 function readDraftSummaries(): DraftSummary[] {

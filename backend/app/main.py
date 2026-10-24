@@ -474,6 +474,8 @@ app.include_router(atendimentos.router)
 app.include_router(atendimento_printing.router)
 app.include_router(tables.router)
 app.include_router(orders.router)
+from .routes import waiter_history
+app.include_router(waiter_history.router)
 app.include_router(websocket.router)
 # Compatibility GET retains its existing payload without shadowing another route.
 app.include_router(cardapio_config_bridge.router)

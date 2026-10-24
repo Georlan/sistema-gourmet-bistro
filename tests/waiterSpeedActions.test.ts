@@ -46,8 +46,9 @@ test('card da mesa comunica a ação antes do toque sem criar segundo caminho op
   assert.match(card, /data-waiter-action=\{actionLabel\}/);
   assert.match(card, /aria-label=\{`\$\{actionLabel\} na \$\{tableLabel\}`\}/);
   assert.match(card, /w-full min-w-0 max-w-full/);
-  assert.match(card, /justify-center whitespace-normal/);
-  assert.match(card, /text-center text-\[9px\].*leading-tight/);
+  assert.match(card, /kw-table__action/);
+  const css = readFileSync(new URL('../src/components/mesas/waiterOperational.css', import.meta.url), 'utf8');
+  assert.match(css, /kw-table__action[^}]*min-height:44px/);
   assert.match(card, /\+ Lançar pedido/);
   assert.match(card, /e\.stopPropagation\(\)/);
 });
@@ -85,8 +86,9 @@ test('grade do salão padroniza largura e altura de todos os cards sem cortar co
   const view = readFileSync(new URL('../src/components/mesas/MesasView.tsx', import.meta.url), 'utf8');
   const shared = readFileSync(new URL('../src/components/shared/SharedTableCard.tsx', import.meta.url), 'utf8');
 
-  assert.match(view, /auto-rows-\[208px\]/);
-  assert.match(view, /sm:auto-rows-\[184px\]/);
+  assert.match(view, /min-\[360px\]:grid-cols-3/);
+  assert.doesNotMatch(view, /auto-rows-\[208px\]/);
+  assert.match(card, /waiterOverview/);
   assert.match(view, /items-stretch/);
   assert.match(card, /relative h-full w-full min-w-0/);
   assert.doesNotMatch(card, /absolute inset-0 z-10/);

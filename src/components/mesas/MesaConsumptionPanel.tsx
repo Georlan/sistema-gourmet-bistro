@@ -1,3 +1,4 @@
+import { planWaiterRepeat } from '../../domain/waiterRepeatItem';
 import { OrderItemComposition } from '../shared/OrderItemComposition';
 /**
  * @license
@@ -5,23 +6,28 @@ import { OrderItemComposition } from '../shared/OrderItemComposition';
  */
 
 import React from 'react';
-import { ShoppingBag, PlusCircle, Zap, Printer, CheckCircle2, Move, GitMerge, Edit3, Trash2 } from 'lucide-react';
-import type { AppRole, Order, OrderItem, OrderItemModifier, Table } from '../../types';
+import { ShoppingBag, PlusCircle, Zap, Printer, CheckCircle2, Move, GitMerge, Edit3, Trash2, Plus } from 'lucide-react';
+import type { AppRole, Order, OrderItem, OrderItemModifier, Table, Product } from '../../types';
 import type { getCustomerSubtotals } from '../../domain';
 import { deriveOrderOperationalState } from '../../domain/operationalState';
 import { formatBackendTime } from '../../utils/dateTime';
+
+const waiterAmount = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 interface MesaConsumptionConfig {
   taxa_servico_ativa?: boolean;
   taxa_servico_padrao?: number;
   perm_garcom_fechar?: boolean;
+  perm_garcom_print?: boolean;
   perm_garcom_transferir_mesa?: boolean;
   perm_garcom_editar?: boolean;
-  perm_garcom_cancelar_item?: boolean;
+  perm_garcom_cancelar?: boolean;
   entitlements?: { printing?: boolean };
 }
 
 interface MesaConsumptionPanelProps {
+  readyOnly?: boolean;
+  onToggleReadyOnly?: () => void;
   table: Table;
   orders: Order[];
   currentTime: number;
@@ -45,6 +51,10 @@ interface MesaConsumptionPanelProps {
   onUnmergeTable?: (checkId: string) => void;
   onDeliverItem?: (checkId: string, itemId: string) => void;
   onCancelItem: (itemId: string) => void;
+  onRepeatItem?: (item: OrderItem) => void;
+  repeatProducts?: Product[];
+  repeatCatalogReady?: boolean;
+  isSubmitting?: boolean;
 }
 
 const summarizeItemModifiers = (modifiers: readonly OrderItemModifier[]) => {
@@ -62,18 +72,30 @@ const summarizeItemModifiers = (modifiers: readonly OrderItemModifier[]) => {
 
 /** Consumption presentation; confirmations, dialogs and timers belong to the modal owner. */
 export function MesaConsumptionPanel({
+  readyOnly = false, onToggleReadyOnly,
   table, orders, currentTime, activeRole, restauranteConfig, totalValue, customerSubtotals,
   canTransferTables, canTransferItems, isPrintingDirect, directPrintToast, confirmClear,
   setActiveTab, setTransferType, setSelectedOrderToPrint, setEditingItem,
   onPrintPreview, onPrintValues, onCloseTable, onMergeTables, onUnmergeTable, onDeliverItem, onCancelItem,
+  onRepeatItem, repeatProducts = [], repeatCatalogReady = false, isSubmitting = false,
 }: MesaConsumptionPanelProps) {
-  const hasPrinting = restauranteConfig?.entitlements?.printing === true;
+  const amount = (value: number) => activeRole === 'garcom' ? waiterAmount.format(value) : value.toFixed(2);
+  const repeatProductMap = new Map(repeatProducts.map(product => [product.id, product]));
+  const hasPrinting = restauranteConfig?.entitlements?.printing === true
+    && (activeRole !== 'garcom' || restauranteConfig?.perm_garcom_print === true);
   const allUnpaidItems = orders.flatMap(o => (o.itens || []).filter((item: any) => !item.pago));
   const readyCount = allUnpaidItems.filter(item => item.status === 'pronto').length;
   const preparingCount = allUnpaidItems.filter(item => item.status === 'preparando').length;
 
   return (
-    <div className="p-3 sm:p-5 space-y-4 sm:space-y-6">
+    <div className="kw-consumption p-3 sm:p-5 space-y-4 sm:space-y-6">
+      {onToggleReadyOnly && <div className="flex min-h-11 items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">{readyOnly ? 'Prontos para servir' : 'Todos os itens'}</h3>
+        <button id="toggle-ready-consumption" type="button" onClick={onToggleReadyOnly} className="min-h-[44px] rounded-xl px-3 text-xs font-semibold text-koma-foreground bg-koma-raised">
+          {readyOnly ? 'Ver todos' : 'Só prontos'}
+        </button>
+      </div>}
+      {readyOnly && readyCount === 0 && <p role="status" className="text-sm text-koma-muted py-4">Nenhum item pronto no momento.</p>}
       {orders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
           <div className="p-3.5 bg-koma-panel text-emerald-400 rounded-full border border-koma-border">
@@ -95,7 +117,7 @@ export function MesaConsumptionPanel({
         <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4 sm:gap-6 items-stretch">
 
           {/* 1. RESUMO FINANCEIRO & AÇÕES RÁPIDAS (RENDERIZA NO TOPO NO MOBILE - 0 ROLAGEM) */}
-          <div className="order-1 lg:order-2 lg:col-span-5 bg-koma-panel border border-koma-border rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-between space-y-3 shadow-sm">
+          {!readyOnly && <div className="kw-consumption-summary order-1 lg:order-2 lg:col-span-5 p-3.5 sm:p-5 flex flex-col justify-between space-y-3">
             <div className="space-y-3">
               {/* Origin & Transfer Badges */}
               {(() => {
@@ -127,23 +149,23 @@ export function MesaConsumptionPanel({
                 const taxVal = hasTax ? totalValue * (taxRate / 100) : 0;
                 const grandTotal = totalValue + taxVal;
                 return (
-                  <div className="bg-koma-raised border border-koma-border rounded-2xl p-3.5 space-y-2 shadow-xs">
+                  <div className="kw-consumption-total p-3.5 space-y-2">
                     <div className="flex justify-between items-center font-sans">
                       <div>
                         <span className="text-[10px] text-koma-subtle font-bold uppercase tracking-wider block">Total Geral:</span>
                         <span className="text-xl sm:text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
-                          R$ {grandTotal.toFixed(2)}
+                          R$ {amount(grandTotal)}
                         </span>
                       </div>
                       <div className="text-right text-xs font-sans text-koma-subtle space-y-0.5">
                         <div className="flex items-center justify-end gap-1.5">
                           <span className="font-bold uppercase tracking-wider text-[10px]">Subtotal:</span>
-                          <span className="font-mono font-medium text-koma-foreground">R$ {totalValue.toFixed(2)}</span>
+                          <span className="font-mono font-medium text-koma-foreground">R$ {amount(totalValue)}</span>
                         </div>
                         {hasTax && (
                           <div className="flex items-center justify-end gap-1.5">
                             <span className="font-bold uppercase tracking-wider text-[10px]">Taxa de Serviço ({taxRate}%):</span>
-                            <span className="font-mono font-medium">R$ {taxVal.toFixed(2)}</span>
+                            <span className="font-mono font-medium">R$ {amount(taxVal)}</span>
                           </div>
                         )}
                       </div>
@@ -190,15 +212,15 @@ export function MesaConsumptionPanel({
               {(() => {
                 const canCloseTable = Boolean(onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar));
                 return (
-                  <div className={canCloseTable ? "grid grid-cols-2 gap-2" : "w-full"}>
-                    <button
+                  <div className={canCloseTable && (activeRole !== 'garcom' || restauranteConfig?.perm_garcom_editar) ? "grid grid-cols-2 gap-2" : "w-full"}>
+                    {(activeRole !== 'garcom' || restauranteConfig?.perm_garcom_editar) && <button
                       type="button"
                       onClick={() => setActiveTab('lancamento')}
                       className="min-h-[42px] w-full py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-xs"
                     >
                       <PlusCircle size={14} className="text-emerald-400 shrink-0" />
                       <span>Adicionar Itens</span>
-                    </button>
+                    </button>}
 
                     {canCloseTable && (
                       <button
@@ -259,7 +281,7 @@ export function MesaConsumptionPanel({
                         className="bg-koma-raised/70 border border-koma-border/60 rounded-xl px-3 py-1.5 flex items-center justify-between text-xs"
                       >
                         <span className="font-bold text-koma-foreground truncate max-w-[140px]">{cust.name}</span>
-                        <span className="font-mono font-bold text-emerald-400">R$ {cust.total.toFixed(2)}</span>
+                        <span className="font-mono font-bold text-emerald-400">R$ {amount(cust.total)}</span>
                       </div>
                     ))}
                   </div>
@@ -268,13 +290,14 @@ export function MesaConsumptionPanel({
             </div>
           </div>
 
+          }
           {/* 2. HISTÓRICO DE PEDIDOS LANÇADOS (NA COZINHA / PRONTO / ENTREGUE) */}
-          <div className="order-2 lg:order-1 lg:col-span-7 space-y-3">
-            <div className="flex flex-wrap items-center justify-between border-b border-koma-border pb-2.5 gap-2">
+          <div className={`order-2 lg:order-1 ${readyOnly ? 'lg:col-span-12' : 'lg:col-span-7'} space-y-3`}>
+            {!readyOnly && <div className="flex flex-wrap items-center justify-between border-b border-koma-border pb-2.5 gap-2">
               <div className="flex items-center gap-2">
-                <h3 className="font-serif font-bold text-koma-foreground text-sm sm:text-base">Comanda de Pedidos</h3>
-                <span className="text-[10px] font-semibold text-koma-subtle uppercase tracking-wider font-sans bg-koma-panel border border-koma-border/80 px-2 py-0.5 rounded-md">
-                  Lotes: {orders.length}
+                <h3 className="font-serif font-bold text-koma-foreground text-sm sm:text-base">{activeRole === 'garcom' ? 'Pedidos' : 'Comanda de Pedidos'}</h3>
+                <span className={activeRole === 'garcom' ? 'text-[10px] text-koma-muted font-sans' : 'text-[10px] font-semibold text-koma-subtle uppercase tracking-wider font-sans bg-koma-panel border border-koma-border/80 px-2 py-0.5 rounded-md'}>
+                  {activeRole === 'garcom' ? `${orders.length} ${orders.length === 1 ? 'pedido' : 'pedidos'}` : `Lotes: ${orders.length}`}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -293,11 +316,12 @@ export function MesaConsumptionPanel({
               </div>
             </div>
 
+            }
             <div className="space-y-3 sm:max-h-[45vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scrollbar-thin">
               {orders.map((order) => {
                 const orderState = deriveOrderOperationalState(order, currentTime);
                 const launchKey = orderState.lancamentoId || orderState.checkId;
-                const unpaidItems = order.itens.filter((item: any) => !item.pago);
+                const unpaidItems = order.itens.filter((item: any) => !item.pago && (!readyOnly || item.status === 'pronto'));
                 if (unpaidItems.length === 0) return null;
 
                 return (
@@ -309,11 +333,11 @@ export function MesaConsumptionPanel({
                   {/* Order Header */}
                   <div className="bg-koma-raised px-3.5 py-2 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-koma-border gap-2 w-full">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs font-bold text-koma-foreground font-sans">Lote #{orderState.displayNumber || launchKey.slice(-4)}</span>
-                      <span className="text-[10px] bg-koma-panel text-koma-muted px-2 py-0.5 rounded font-bold font-sans">
+                      <span className="text-xs font-bold text-koma-foreground font-sans">{activeRole === 'garcom' ? orderState.displayNumber ? `Pedido ${orderState.displayNumber}` : 'Pedido sem número' : `Lote #${orderState.displayNumber || launchKey.slice(-4)}`}</span>
+                      <span className={activeRole === 'garcom' ? 'text-[10px] text-koma-muted font-sans' : 'text-[10px] bg-koma-panel text-koma-muted px-2 py-0.5 rounded font-bold font-sans'}>
                         Garçom: {order.garcomNome}
                       </span>
-                      {order.tipo && (
+                      {order.tipo && (activeRole !== 'garcom' || order.tipo.trim().toLocaleLowerCase('pt-BR') !== 'consumo no local') && (
                         <span className={`text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
                           order.tipo === 'Retirada'
                             ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
@@ -370,16 +394,18 @@ export function MesaConsumptionPanel({
 
                   {/* Order Items */}
                   <div className="p-3 divide-y divide-koma-border">
-                    {unpaidItems.map((item) => (
+                    {unpaidItems.map((item) => {
+                      const repeatPlan = onRepeatItem ? planWaiterRepeat(item, repeatProductMap.get(item.produtoId)) : null;
+                      return (
                       <div
                         key={item.id}
                         id={`placed-item-${item.id}`}
-                        className="py-2.5 flex justify-between items-start gap-3 text-xs first:pt-0 last:pb-0 font-sans"
+                        className="kw-consumption-item py-2.5 flex justify-between items-start gap-3 text-xs first:pt-0 last:pb-0 font-sans"
                       >
                         <div className="space-y-1 flex-1">
                           <div className="flex flex-wrap items-baseline gap-2">
                             <span className="font-bold text-koma-foreground">{item.nome}</span>
-                            {item.clienteNome && (
+                            {item.clienteNome && (activeRole !== 'garcom' || item.clienteNome.trim().toLocaleLowerCase('pt-BR') !== 'consumo geral') && (
                               <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded border border-emerald-500/30 uppercase tracking-wider">
                                 Para: {item.clienteNome}
                               </span>
@@ -411,8 +437,9 @@ export function MesaConsumptionPanel({
                           ) : null}
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="font-mono font-bold text-koma-foreground text-xs sm:text-sm">R$ {(item.preco ?? 0).toFixed(2)}</span>
+                        <div className="kw-consumption-actions flex items-center gap-2 shrink-0">
+                          <div className="kw-consumption-state contents">
+                          {!readyOnly && <span className="font-mono font-bold text-koma-foreground text-xs sm:text-sm">R$ {amount((item.preco ?? 0))}</span>}
 
                           {item.status === 'preparando' && (
                             <span className="px-2 py-0.5 text-[9px] font-bold bg-rose-500/15 border border-rose-500/30 text-rose-300 rounded-md flex items-center gap-1 uppercase tracking-wider">
@@ -445,7 +472,17 @@ export function MesaConsumptionPanel({
                             </span>
                           )}
 
-                          <div className="flex items-center gap-1 border-l border-koma-border pl-1.5 ml-1">
+                          </div>
+                          {!readyOnly && <div className="kw-consumption-tools contents">
+                          {onRepeatItem && (
+                            <button type="button" id={`repeat-item-btn-${item.id}`} className="kw-repeat-item"
+                              disabled={isSubmitting || !repeatCatalogReady || repeatPlan?.kind === 'unavailable'}
+                              aria-label={`Pedir novamente ${item.nome}`}
+                              title={!repeatCatalogReady ? 'Carregando cardápio' : repeatPlan?.kind === 'unavailable' ? repeatPlan.reason : 'Adicionar uma unidade ao rascunho'}
+                              onClick={() => onRepeatItem(item)}><Plus size={14} aria-hidden="true" /> Pedir mais</button>
+                          )}
+
+                          <div className="kw-consumption-edit flex items-center gap-1 border-l border-koma-border pl-1.5 ml-1">
                             {((activeRole !== 'garcom' || restauranteConfig?.perm_garcom_editar)) && (
                               <button
                                 type="button"
@@ -462,12 +499,13 @@ export function MesaConsumptionPanel({
                                 }}
                                 className="p-1 text-koma-subtle hover:text-emerald-400 transition-colors cursor-pointer"
                                 title="Editar observação do item"
+                                aria-label={`Editar observação de ${item.nome}`}
                               >
                                 <Edit3 size={11} />
                               </button>
                             )}
 
-                            {((activeRole !== 'garcom' || restauranteConfig?.perm_garcom_cancelar_item)) && (
+                            {((activeRole !== 'garcom' || restauranteConfig?.perm_garcom_cancelar)) && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -477,14 +515,16 @@ export function MesaConsumptionPanel({
                                 }}
                                 className="p-1 text-koma-subtle hover:text-red-400 transition-colors cursor-pointer"
                                 title="Cancelar este item"
+                                aria-label={`Cancelar ${item.nome}`}
                               >
                                 <Trash2 size={11} />
                               </button>
                             )}
                           </div>
+                          </div>}
                         </div>
                       </div>
-                    ))}
+                    ); })}
                   </div>
                 </div>
               )})}

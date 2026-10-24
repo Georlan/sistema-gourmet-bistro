@@ -15,6 +15,7 @@ type BoundaryProps = OperationalRequestContext & OperationalErrorSink & {
 };
 
 type OptimisticItemStatus = {
+  previousStatus?: Order['itens'][number]['status'];
   status: 'preparando' | 'pronto' | 'entregue';
   ts: number;
 };
@@ -283,7 +284,9 @@ export function useOperationalOrders({
     const itemIds = Array.isArray(itemId) ? itemId : [itemId];
     const now = Date.now();
     itemIds.forEach((id) => {
-      optimisticItemStatusRef.current.set(String(id), { status: newStatus, ts: now });
+      const previousStatus = optimisticItemStatusRef.current.get(String(id))?.previousStatus
+        ?? ordersRef.current.flatMap(order => order.itens).find(item => item.id === id)?.status;
+      optimisticItemStatusRef.current.set(String(id), { status: newStatus, ts: now, previousStatus });
     });
     setOrders((prevOrders) =>
       prevOrders.map((order) => ({
@@ -291,6 +294,16 @@ export function useOperationalOrders({
         itens: order.itens.map((item) => (itemIds.includes(item.id) ? { ...item, status: newStatus } : item)),
       })),
     );
+  };
+
+  const rollbackOptimisticItemStatus = (itemId: string) => {
+    const optimistic = optimisticItemStatusRef.current.get(String(itemId));
+    optimisticItemStatusRef.current.delete(String(itemId));
+    if (!optimistic?.previousStatus) return;
+    setOrders(current => current.map(order => ({ ...order,
+      itens: order.itens.map(item => item.id === itemId && item.status === optimistic.status
+        ? { ...item, status: optimistic.previousStatus! } : item),
+    })));
   };
 
   const handleOptimisticAddOrder = (newOrder: Order) => {
@@ -310,6 +323,7 @@ export function useOperationalOrders({
     fetchOrdersFromAPI,
     fetchOrderByIdFromAPI,
     handleOptimisticUpdateItemStatus,
+    rollbackOptimisticItemStatus,
     handleOptimisticAddOrder,
     handleTransferTableOptimistic,
   };

@@ -4,6 +4,7 @@ import type { SVGProps, ReactNode } from 'react';
  * KÔMA Garçom authorial glyphs — original, lightweight and theme-adaptive via currentColor.
  */
 export type KomaGlyphName =
+  | 'salon-locator'
   | 'table-free'
   | 'table-service'
   | 'table-ready'
@@ -26,6 +27,13 @@ type Props = Omit<SVGProps<SVGSVGElement>, 'children'> & {
 };
 
 const glyphs: Record<KomaGlyphName, ReactNode> = {
+  'salon-locator': (
+    <>
+      <path d="M7 3H3v4M17 3h4v4M3 17v4h4" />
+      <rect x="7" y="7" width="9" height="7" rx="2" />
+      <path d="M9 16v2M14 16v2m3-2 4 5" />
+    </>
+  ),
   'table-free': (
     <>
       <rect x="5" y="9" width="14" height="7" rx="2" />

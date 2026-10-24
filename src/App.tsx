@@ -12,6 +12,8 @@ import { closeOperationalComandas } from './components/app/data/operationalOrder
 import { useCashierBootstrap } from './components/app/data/useCashierBootstrap';
 import { useOperationalOrders } from './components/app/data/useOperationalOrders';
 import { useOperationalTables } from './components/app/data/useOperationalTables';
+import { WaiterHistoryHost } from './components/app/WaiterHistoryHost';
+import { openWaiterHistory } from './components/app/waiterHistoryEvents';
 import { useOperationalDrafts } from './components/app/drafts/useOperationalDrafts';
 import { OperationalSnapshotLoading } from './components/app/OperationalSnapshotLoading';
 import { KitchenPanel } from './components/KitchenPanel';
@@ -21,6 +23,7 @@ import { AppRouteBoundary } from './components/app/AppRouteBoundary';
 import { OperationalDrawer } from './components/app/OperationalDrawer';
 import { SupportSessionBanner } from './components/app/SupportSessionBanner';
 import { OperationalLogin } from './components/auth/OperationalLogin';
+import { WaiterServiceArtwork } from './components/mesas/WaiterServiceArtwork';
 import { MesasView } from './components/mesas/MesasView';
 import { API_BASE_URL, WS_BASE_URL } from './config/api';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
@@ -64,6 +67,8 @@ const CashierLoading = () => (
     Preparando operação…
   </div>
 );
+
+
 
 const TAB_SETTINGS_KEY = 'koma_settings_vFinal_v3';
 const TAB_RESTAURANT_NAME_KEY = 'koma_restaurant_name_v3';
@@ -194,6 +199,17 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
   // Listen to URL changes to switch portal dynamically
   const [restauranteConfig, setRestauranteConfig] = useState<any>(null);
+  const [isConfigLoaded, setIsConfigLoaded] = useState(false);
+  const configRequestRef = useRef<AbortController | null>(null);
+  const configDirtyRef = useRef(false);
+  useEffect(() => {
+    configRequestRef.current?.abort();
+    configRequestRef.current = null;
+    configDirtyRef.current = false;
+    setRestauranteConfig(null);
+    setIsConfigLoaded(false);
+    return () => { configRequestRef.current?.abort(); };
+  }, [operationalScopeKey]);
   const [pagamentosPendentes, setPagamentosPendentes] = useState<any[]>([]);
   const [pendingPaymentsLoadedScopeKey, setPendingPaymentsLoadedScopeKey] = useState('');
   const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
@@ -336,38 +352,48 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   const fetchConfig = async () => {
     const requestScopeKey = operationalScopeKey;
     if (!requestScopeKey) return;
-
+    if (configRequestRef.current) {
+      configDirtyRef.current = true;
+      return;
+    }
+    const tokenKey = portal === 'caixa' ? 'koma_caixa_token' : 'koma_waiter_token';
+    const token = sessionStorage.getItem(tokenKey);
+    if (!token) return;
+    const controller = new AbortController();
+    configRequestRef.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 6000);
     try {
-      const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-      const token = sessionStorage.getItem(tokenKey);
-      if (!token) return;
-
       const requestRestaurantId = activeRestaurantId;
-      const res = await snapshotFetch(`${API_BASE_URL}/caixa/configuracoes`, {
-        headers: getAuthHeaders()
+      const res = await fetch(`${API_BASE_URL}/caixa/configuracoes`, {
+        headers: getAuthHeaders(), signal: controller.signal,
       });
-      if (res.ok) {
-        const data = await res.json();
-        const responseRestaurantId = Number(data?.restaurante_id || 0);
-
-        // A configuração é tenant-scoped no backend, mas ainda protegemos a UI
-        // contra respostas atrasadas de uma sessão/restaurante anterior.
-        if (requestScopeKey !== operationalScopeKeyRef.current) return;
-        if (sessionStorage.getItem(tokenKey) !== token) return;
-        if (
-          requestRestaurantId > 0
-          && responseRestaurantId > 0
-          && responseRestaurantId !== requestRestaurantId
-        ) {
-          console.error("Configuração descartada por divergência de restaurante.");
-          return;
-        }
-
-        setRestauranteConfig(data);
-        setIsConfigLoaded(true);
+      if (requestScopeKey !== operationalScopeKeyRef.current || sessionStorage.getItem(tokenKey) !== token) return;
+      if (res.status === 401) { handleLogout(); return; }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const responseRestaurantId = Number(data?.restaurante_id || 0);
+      if (requestScopeKey !== operationalScopeKeyRef.current || sessionStorage.getItem(tokenKey) !== token) return;
+      if (requestRestaurantId > 0 && responseRestaurantId > 0 && responseRestaurantId !== requestRestaurantId) {
+        throw new Error('Restaurante divergente');
       }
+      setRestauranteConfig(data);
+      setIsConfigLoaded(true);
+      setFetchError(current => current?.startsWith('Erro de configuração:') ? null : current);
     } catch (err) {
-      console.error("Error fetching configs in App:", err);
+      if (requestScopeKey === operationalScopeKeyRef.current && !controller.signal.aborted) {
+        console.error('Error fetching configs in App:', err);
+        setFetchError('Erro de configuração: não foi possível sincronizar as permissões.');
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (configRequestRef.current === controller) {
+        configRequestRef.current = null;
+        const dirty = configDirtyRef.current;
+        configDirtyRef.current = false;
+        if (dirty && requestScopeKey === operationalScopeKeyRef.current && sessionStorage.getItem(tokenKey) === token) {
+          queueMicrotask(() => { void fetchConfig(); });
+        }
+      }
     }
   };
 
@@ -422,7 +448,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       () => Promise.allSettled([fetchConfig(), fetchTurnoResumo()]),
       () => !document.hidden,
     );
-    const interval = isWsConnected ? undefined : setInterval(refresh.tick, 15000);
+    const interval = isWsConnected && isConfigLoaded ? undefined : setInterval(refresh.tick, 15000);
     window.addEventListener('focus', refresh.resume);
     document.addEventListener('visibilitychange', refresh.resume);
     return () => {
@@ -431,7 +457,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       window.removeEventListener('focus', refresh.resume);
       document.removeEventListener('visibilitychange', refresh.resume);
     };
-  }, [isAuthenticated, isWsConnected, operationalScopeKey, fetchTurnoResumo]);
+  }, [isAuthenticated, isWsConnected, isConfigLoaded, operationalScopeKey, fetchTurnoResumo]);
 
   useEffect(() => {
     const handleUrlChange = () => {
@@ -529,9 +555,10 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
   useEffect(() => {
     const root = document.documentElement;
-    const effectiveSize = portal === 'garcom' && fontSize === 'gigante' ? 'grande' : fontSize;
+    const effectiveSize = fontSize;
     root.style.setProperty('--koma-text-scale', String(KOMA_TEXT_SCALES[effectiveSize]));
     root.setAttribute('data-koma-text-size', effectiveSize);
+    root.setAttribute('data-koma-text-context', portal);
 
     const handleStorageChange = () => {
       setFontSize(readKomaTextSize());
@@ -545,7 +572,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       window.removeEventListener(KOMA_TEXT_SIZE_EVENT, handleStorageChange);
       window.removeEventListener(KOMA_THEME_CHANGED_EVENT, handleStorageChange);
     };
-  }, [fontSize]);
+  }, [fontSize, portal]);
 
   // 1.5. Dynamic Salon Tables State and Fetcher
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -585,14 +612,14 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   // Table filter state
   const [tableFilter, setTableFilter] = useState<'todos' | 'livres' | 'ocupadas' | 'prontas'>('todos');
 
+  useEffect(() => {
+    if (restauranteConfig?.perm_garcom_status === false && tableFilter === 'prontas') setTableFilter('todos');
+  }, [restauranteConfig?.perm_garcom_status, tableFilter]);
+
   // Pre-loading states for smooth intro transition
-  const [isConfigLoaded, setIsConfigLoaded] = useState(false);
   const { isProductsLoaded, liveProdutos, liveCategorias, fetchLiveCatalog } = useOperationalCatalog({ portal, handleLogout, isAuthenticated, isWsConnected });
 
-  useEffect(() => {
-    setRestauranteConfig(null);
-    setIsConfigLoaded(false);
-  }, [operationalScopeKey]);
+
 
   // 2. Live products loaded from backend (includes ativo field for availability blocking)
 
@@ -606,6 +633,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     fetchOrdersFromAPI,
     fetchOrderByIdFromAPI,
     handleOptimisticUpdateItemStatus,
+    rollbackOptimisticItemStatus,
     handleOptimisticAddOrder,
     handleTransferTableOptimistic,
   } = useOperationalOrders({
@@ -620,6 +648,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   const isOperationalSnapshotReady = Boolean(operationalScopeKey) && digitalBootstrap.ready
     && isTablesLoaded
     && isOrdersLoaded
+    && isConfigLoaded
     && (!isManagementRole(activeRole) || pendingPaymentsLoadedScopeKey === operationalScopeKey);
 
    // Synchronous guard against double-click race condition
@@ -675,7 +704,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   }, [selectedTableId, portal]);
 
   // 5. Live clock tracker to update permanency timers automatically every 30 seconds (reduces re-renders)
-  const { isSubmittingMesa, drafts, getDraftItems, handleAddToDraft, handleRemoveFromDraft, handleUpdateDraftItem, handleEditDraftItems, handleSubmitDraft } = useOperationalDrafts({ activeWaiterNome, orders, setOrders, activeWaiterId, setSelectedTableId, showToast, fetchOrdersFromAPI, getAuthHeaders });
+  const { isSubmittingMesa, draftScopeKey, drafts, getDraftItems, handleAddToDraft, handleRemoveFromDraft, handleRestoreDraftItem, handleUpdateDraftItem, handleEditDraftItems, handleSubmitDraft } = useOperationalDrafts({ activeWaiterNome, orders, setOrders, activeWaiterId, setSelectedTableId, showToast, fetchOrdersFromAPI, getAuthHeaders });
 
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
@@ -714,6 +743,9 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   };
 
   useEffect(() => {
+    // Presence belongs to this authenticated socket, never to a previous tenant/session.
+    setActiveDrafts({});
+    setIsWsConnected(false);
     if (!isAuthenticated || !activeWaiterId) {
       if (wsRef.current) {
         wsRef.current.close();
@@ -797,12 +829,15 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
       socket.onopen = () => {
         if (stopped || wsRef.current !== socket) return;
+        // Departures can be missed offline. Connected peers replay their live presence.
+        setActiveDrafts({});
         console.log("WebSocket connection established");
         const isReconnect = hasOpenedOnce;
         hasOpenedOnce = true;
         setIsWsConnected(true);
         currentDelay = 2000;
         if (isReconnect) {
+          fetchConfig();
           fetchTables();
           fetchOrdersFromAPI();
           if (isManagementRole(activeRole)) fetchPagamentosPendentes();
@@ -1014,7 +1049,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       }
       if (wsRef.current === activeSocket) wsRef.current = null;
     };
-  }, [isAuthenticated, activeWaiterId, activeRole, portal, fetchLiveCatalog]);
+  }, [isAuthenticated, activeWaiterId, activeRole, portal, operationalScopeKey, fetchLiveCatalog]);
 
   // Sync local draft changes to WebSocket
   useEffect(() => {
@@ -1423,6 +1458,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   // 11. Delivery (Waiter serves a ready dish)
   const handleDeliverItem = async (orderId: string, itemId: string) => {
     if (inflightItemIdsRef.current.has(itemId)) return; // Ignore rapid duplicate clicks
+    const requestScopeKey = operationalScopeKey;
     inflightItemIdsRef.current.add(itemId);
     handleOptimisticUpdateItemStatus(itemId, 'entregue');
     try {
@@ -1430,16 +1466,20 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         method: "PUT",
         headers: getAuthHeaders()
       });
+      if (requestScopeKey !== operationalScopeKeyRef.current) return;
       if (!res.ok) {
-        showToast("Erro ao entregar item no backend.", 'error');
+        rollbackOptimisticItemStatus(itemId);
+        showToast("Não foi possível confirmar a entrega. Tente novamente.", 'error');
         fetchOrdersFromAPI();
       }
     } catch (err) {
+      if (requestScopeKey !== operationalScopeKeyRef.current) return;
       console.error(err);
+      rollbackOptimisticItemStatus(itemId);
       showToast("Erro de conexão ao marcar item como entregue.", 'error');
       fetchOrdersFromAPI();
     } finally {
-      inflightItemIdsRef.current.delete(itemId);
+      if (requestScopeKey === operationalScopeKeyRef.current) inflightItemIdsRef.current.delete(itemId);
     }
   };
 
@@ -1727,16 +1767,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     <div className={`waiter-shell min-h-screen bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
       <SupportSessionBanner />
       {/* GLOBAL TOP HEADER */}
-      <header className="relative bg-koma-page/95 dark:bg-[#0c0f11]/95 backdrop-blur-xl border-b border-koma-border-subtle text-koma-foreground shrink-0 sticky top-0 z-30 overflow-hidden">
-        {/* Subtle decorative architectural motif in the background for Garçom portal */}
-        {portal === 'garcom' && (
-          <div className="absolute right-0 top-0 bottom-0 pointer-events-none opacity-20 dark:opacity-15 flex items-center overflow-hidden" aria-hidden="true">
-            <svg width="240" height="60" viewBox="0 0 240 60" fill="none" className="text-emerald-500">
-              <path d="M40 0L240 0V60H0L40 0Z" fill="currentColor" fillOpacity="0.15" />
-              <path d="M60 0L100 60M120 0L160 60M180 0L220 60" stroke="currentColor" strokeOpacity="0.25" strokeWidth="1" strokeDasharray="4 4" />
-            </svg>
-          </div>
-        )}
+      <header className="kw-header sticky top-0 z-30">
+        {portal === 'garcom' && <WaiterServiceArtwork className="kw-header-art" />}
         <div className="max-w-[1680px] mx-auto px-3 sm:px-6 lg:px-10 py-2.5 sm:py-3 relative z-10">
           <div className="flex justify-between items-center">
 
@@ -1746,6 +1778,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
                 id="open-sidebar-btn"
                 onClick={() => setIsSidebarOpen(true)}
                 className="p-2 sm:p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 rounded-xl cursor-pointer border border-emerald-500/30 flex items-center justify-center transition-all shadow-xs active:scale-95 shrink-0"
+                aria-label={portal === 'garcom' ? 'Central do Garçom' : 'Operação do Caixa'}
                 title={portal === 'garcom' ? 'Central do Garçom' : 'Operação & Configurações do Caixa'}
               >
                 <SlidersHorizontal size={17} />
@@ -1753,7 +1786,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
               <div className="flex items-center gap-2.5">
                 {portal === 'garcom' ? (
-                  <KomaLogo withText size="md" className="h-7" />
+                  <KomaLogo withText variant="dark" size="md" className="h-7" />
                 ) : (
                   <>
                     <KomaLogo size="lg" />
@@ -1767,18 +1800,6 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
               </div>
             </div>
 
-            {/* Right: Asymmetric Live Indicator for Waiter */}
-            <div className="flex items-center gap-2">
-              {portal === 'garcom' && (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-zinc-200/80 dark:border-white/10 bg-zinc-100/90 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 text-[11px] font-medium shadow-xs">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                  </span>
-                  <span className="font-sans font-semibold tracking-tight">Salão</span>
-                </div>
-              )}
-            </div>
 
           </div>
         </div>
@@ -1788,6 +1809,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       {isSidebarOpen && (
         <OperationalDrawer
           portal={portal}
+          showOperationalStatus={restauranteConfig?.perm_garcom_status !== false}
           restaurantName={restaurantName}
           activeWaiterName={activeWaiter.nome}
           waiterAvailable={waiterAvailable}
@@ -1801,6 +1823,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           onToggleTheme={toggleTheme}
           onClose={() => setIsSidebarOpen(false)}
           onLogout={handleLogout}
+          onOpenHistory={openWaiterHistory}
+          onOpenTable={handleTableClick}
           onSyncSalon={() => {
             fetchOrdersFromAPI();
             fetchTables();
@@ -1870,12 +1894,15 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
       </main>
 
+      {activeRole === 'garcom' && <WaiterHistoryHost key={draftScopeKey} getAuthHeaders={getAuthHeaders} />}
       {/* FOOTER */}
-      <footer className={"bg-koma-page text-koma-muted border-t border-white/[0.06] py-4 text-center text-xs shrink-0 font-sans"}>
+      <footer className={"kw-footer bg-koma-page text-koma-muted border-t border-white/[0.06] py-4 text-center text-xs shrink-0 font-sans"}>
         <div className={"max-w-[1680px] mx-auto px-4 flex items-center justify-center gap-2"}>
-          <p className={"font-serif text-sm text-emerald-700 dark:text-emerald-400 font-medium"}>{restaurantName}</p>
-          <span className="h-1 w-1 rounded-full bg-zinc-700" />
-          <p className="text-[10px]">Operação do salão</p>
+          {portal === 'garcom' ? <KomaLogo withText size="sm" variant="auto" className="kw-footer__logo" /> : <>
+            <p className={"font-serif text-sm text-emerald-700 dark:text-emerald-400 font-medium"}>{restaurantName}</p>
+            <span className="h-1 w-1 rounded-full bg-zinc-700" />
+            <p className="text-[10px]">Operação do salão</p>
+          </>}
         </div>
       </footer>
 
@@ -1899,6 +1926,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           <MesaDetailsModal
             key={`${selectedTable.id}-${targetModalTabRef.current || 'default'}`}
             initialTab={targetModalTabRef.current}
+            initialReadyOnly={tableFilter === 'prontas' && restauranteConfig?.perm_garcom_status !== false}
             table={selectedTable}
             orders={selectedTableOrders}
             allOrders={orders}
@@ -1917,6 +1945,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             }}
             onUpdateSettings={setSettings}
             onAddToDraft={(product, qty, obs, client) => handleAddToDraft(selectedTable.id, product, qty, obs, client)}
+            draftScopeKey={draftScopeKey}
+            onRestoreDraftItem={(item, index) => handleRestoreDraftItem(selectedTable.id, item, index)}
             onRemoveFromDraft={(draftItemId) => handleRemoveFromDraft(selectedTable.id, draftItemId)}
             onUpdateDraftItem={(draftItemId, fields) => handleUpdateDraftItem(selectedTable.id, draftItemId, fields)}
             onEditDraftItems={(draftItemIds, fields) => handleEditDraftItems(selectedTable.id, draftItemIds, fields)}

@@ -1,138 +1,14 @@
 import { chromium } from 'playwright';
 import path from 'path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
 
-const OUT_DIR = '/home/testuser/.gemini/antigravity/brain/76b1291a-adf2-4293-a519-b621dfb7301a';
-const APP_URL = 'http://localhost:3000/?view=garcom';
-const NOW = new Date('2026-08-30T15:00:00.000Z');
+const OUT_DIR = process.env.KOMA_CAPTURE_OUT_DIR || path.resolve('artifacts/waiter-salon-refinement');
+const APP_URL = `${process.env.KOMA_CAPTURE_ORIGIN || 'http://127.0.0.1:4291'}/?view=garcom`;
+const APP_ORIGIN = new URL(APP_URL).origin;
+import { NOW, mockTables, mockOrders } from './fixtures/waiterSalonPreview.mjs';
 
-const mockTables = [
-  { id: 1, nome: 'Mesa 1', capacidade: 4, status: 'livre' },
-  { id: 2, nome: 'Mesa 2', capacidade: 4, status: 'ocupada' },
-  { id: 3, nome: 'Mesa 3', capacidade: 4, status: 'ocupada' },
-  { id: 4, nome: 'Mesa 4', capacidade: 2, status: 'ocupada' },
-  { id: 5, nome: 'Varanda Nobre', capacidade: 6, status: 'livre' },
-  { id: 6, nome: 'Mesa 6', capacidade: 2, status: 'ocupada' },
-];
-
-const mockOrders = [
-  // Mesa 2: Ocupada normal (preparando)
-  {
-    id: 'check-mesa-2',
-    restaurante_id: 99001,
-    mesa_id: 2,
-    garcom_id: 'waiter-phase7',
-    criada_por: { nome: 'Garçom Teste' },
-    tipo: 'Consumo no Local',
-    numero_pedido: 102,
-    fechada: false,
-    valor_pago: 0,
-    criado_em: new Date(NOW.getTime() - 10 * 60_000).toISOString(),
-    status_comanda: null,
-    itens: [
-      {
-        id: 'item-2-1',
-        lancamento_id: 'launch-2-1',
-        produto_id: 'prod-1',
-        preco_unit: 45,
-        status: 'preparando',
-        pago: false,
-        cliente_nome: 'Consumo Geral',
-        produto: { id: 'prod-1', nome: 'Hambúrguer Gourmet', preco: 45, ativo: true },
-      },
-    ],
-  },
-  // Mesa 3: Ocupada com itens prontos
-  {
-    id: 'check-mesa-3',
-    restaurante_id: 99001,
-    mesa_id: 3,
-    garcom_id: 'waiter-phase7',
-    criada_por: { nome: 'Garçom Teste' },
-    tipo: 'Consumo no Local',
-    numero_pedido: 103,
-    fechada: false,
-    valor_pago: 0,
-    criado_em: new Date(NOW.getTime() - 20 * 60_000).toISOString(),
-    status_comanda: null,
-    itens: [
-      {
-        id: 'item-3-1',
-        lancamento_id: 'launch-3-1',
-        produto_id: 'prod-2',
-        preco_unit: 30,
-        status: 'pronto',
-        pago: false,
-        cliente_nome: 'Consumo Geral',
-        produto: { id: 'prod-2', nome: 'Porção Batata Frita', preco: 30, ativo: true },
-      },
-    ],
-  },
-  // Mesa 4: Mesclada para Mesa 2
-  {
-    id: 'check-mesa-4-merged',
-    restaurante_id: 99001,
-    mesa_id: 2,
-    mesa_origem_id: 4,
-    garcom_id: 'waiter-phase7',
-    criada_por: { nome: 'Garçom Teste' },
-    tipo: 'Consumo no Local',
-    numero_pedido: 104,
-    fechada: false,
-    valor_pago: 0,
-    criado_em: new Date(NOW.getTime() - 15 * 60_000).toISOString(),
-    status_comanda: null,
-    itens: [
-      {
-        id: 'item-4-1',
-        lancamento_id: 'launch-4-1',
-        produto_id: 'prod-3',
-        preco_unit: 25,
-        status: 'entregue',
-        pago: false,
-        cliente_nome: 'Consumo Geral',
-        produto: { id: 'prod-3', nome: 'Sobremesa Pudim', preco: 25, ativo: true },
-      },
-    ],
-  },
-  // Mesa 6: Aguardando Pagamento
-  {
-    id: 'check-mesa-6',
-    restaurante_id: 99001,
-    mesa_id: 6,
-    garcom_id: 'waiter-phase7',
-    criada_por: { nome: 'Garçom Teste' },
-    tipo: 'Consumo no Local',
-    numero_pedido: 106,
-    fechada: false,
-    valor_pago: 0,
-    criado_em: new Date(NOW.getTime() - 35 * 60_000).toISOString(),
-    status_comanda: 'aguardando_pagamento',
-    itens: [
-      {
-        id: 'item-6-1',
-        lancamento_id: 'launch-6-1',
-        produto_id: 'prod-1',
-        preco_unit: 45,
-        status: 'entregue',
-        pago: false,
-        cliente_nome: 'Consumo Geral',
-        produto: { id: 'prod-1', nome: 'Hambúrguer Gourmet', preco: 45, ativo: true },
-      },
-      {
-        id: 'item-6-2',
-        lancamento_id: 'launch-6-2',
-        produto_id: 'prod-2',
-        preco_unit: 30,
-        status: 'entregue',
-        pago: false,
-        cliente_nome: 'Consumo Geral',
-        produto: { id: 'prod-2', nome: 'Porção Batata Frita', preco: 30, ativo: true },
-      },
-    ],
-  },
-];
-
-async function setupPageRoutes(page, theme = 'dark', textSize = 'padrao') {
+export async function setupPageRoutes(page, theme = 'dark', textSize = 'padrao', appOrigin = APP_ORIGIN) {
   page.on('console', msg => {
     if (msg.type() === 'error') console.log(`[Browser ERROR] ${msg.text()}`);
   });
@@ -148,27 +24,8 @@ async function setupPageRoutes(page, theme = 'dark', textSize = 'padrao') {
     sessionStorage.setItem('koma_restaurante_id', '99001');
     localStorage.setItem('@koma:theme', theme);
     localStorage.setItem('koma_font_size', textSize);
-    localStorage.setItem('koma_waiter_drafts_v1_99001', JSON.stringify({
-      'draft-mesa-1': {
-        draftId: 'draft-mesa-1',
-        tableId: 1,
-        tableName: 'Mesa 1',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        items: [
-          {
-            draftItemId: 'di-1',
-            productId: 'prod-1',
-            productName: 'Hambúrguer Gourmet',
-            unitPrice: 45,
-            quantity: 1,
-            selectedChoices: [],
-            destination: 'COZINHA',
-          }
-        ],
-        destinationSummaries: { COZINHA: 1 },
-      }
-    }));
+    sessionStorage.setItem('koma_operator_session_garcom', JSON.stringify({ expiresAt: new Date('2026-12-31').getTime(), token: 'waiter-wave1-test-token', user: { id: 'waiter-phase7', nome: 'Garçom KÔMA', role: 'garcom', restaurante_id: 99001 } }));
+    localStorage.setItem('koma_drafts_v4:99001:waiter-phase7', JSON.stringify({ 1: [{ id: 'draft-local-1', observacao: '', clienteNome: 'Consumo Geral', produtoId: 'prod-1', nome: 'Hambúrguer Gourmet', preco: 45, quantidade: 1 }] }));
   }, { theme, textSize });
 
   await page.routeWebSocket(/\/ws\//, socket => {
@@ -178,7 +35,7 @@ async function setupPageRoutes(page, theme = 'dark', textSize = 'padrao') {
   await page.route('**/*', async route => {
     const request = route.request();
     const url = new URL(request.url());
-    if (url.port === '3000' && (url.pathname.startsWith('/src') || url.pathname.startsWith('/@') || url.pathname.startsWith('/node_modules') || url.pathname === '/' || url.pathname === '/favicon.ico' || url.pathname.includes('.'))) {
+    if (url.origin === appOrigin && (url.pathname.startsWith('/src') || url.pathname.startsWith('/@') || url.pathname.startsWith('/node_modules') || url.pathname === '/' || url.pathname === '/favicon.ico' || url.pathname.includes('.'))) {
       await route.continue();
       return;
     }
@@ -231,7 +88,7 @@ async function setupPageRoutes(page, theme = 'dark', textSize = 'padrao') {
       });
     } else if (method === 'GET' && pathname === '/caixa/pagamentos/pendentes') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
-    } else if (url.port === '3000') {
+    } else if (url.origin === appOrigin) {
       await route.continue();
     } else {
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
@@ -240,165 +97,68 @@ async function setupPageRoutes(page, theme = 'dark', textSize = 'padrao') {
 }
 
 async function main() {
-  console.log('Starting comprehensive screenshot captures of corrected UI...');
+  mkdirSync(OUT_DIR, { recursive: true });
   const browser = await chromium.launch({ headless: true });
-
-  // 1. 320x568 Ultra-narrow (iPhone SE 1st gen)
-  {
-    console.log('Capturing 320x568 Mobile Dark...');
-    const context = await browser.newContext({
-      viewport: { width: 320, height: 568 },
-      deviceScaleFactor: 2,
-      colorScheme: 'dark',
-    });
-    const page = await context.newPage();
-    await setupPageRoutes(page, 'dark', 'padrao');
-    await page.goto(APP_URL);
-    await page.waitForSelector('#mesa-card-1', { timeout: 10000 });
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: path.join(OUT_DIR, 'waiter-corrected-320-dark.png') });
-    await context.close();
-  }
-
-  // 2. 360x780 Mobile Dark (Standard Android)
-  {
-    console.log('Capturing 360x780 Mobile Dark (2 columns)...');
-    const context = await browser.newContext({
-      viewport: { width: 360, height: 780 },
-      deviceScaleFactor: 2,
-      colorScheme: 'dark',
-    });
-    const page = await context.newPage();
-    await setupPageRoutes(page, 'dark', 'padrao');
-    await page.goto(APP_URL);
-    await page.waitForSelector('#mesa-card-1', { timeout: 10000 });
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: path.join(OUT_DIR, 'waiter-corrected-360-dark.png') });
-    await context.close();
-  }
-
-  // 3. 390x844 Mobile Dark (iPhone 12/13/14)
-  {
-    console.log('Capturing 390x844 Mobile Dark...');
-    const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      deviceScaleFactor: 2,
-      colorScheme: 'dark',
-    });
-    const page = await context.newPage();
-    await setupPageRoutes(page, 'dark', 'padrao');
-    await page.goto(APP_URL);
-    await page.waitForSelector('#mesa-card-1', { timeout: 10000 });
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: path.join(OUT_DIR, 'waiter-corrected-390-dark.png') });
-    await context.close();
-  }
-
-  // 4. 390x844 Mobile Light (iPhone 12/13/14)
-  {
-    console.log('Capturing 390x844 Mobile Light...');
-    const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      deviceScaleFactor: 2,
-      colorScheme: 'light',
-    });
-    const page = await context.newPage();
-    await setupPageRoutes(page, 'light', 'padrao');
-    await page.goto(APP_URL);
-    await page.waitForSelector('#mesa-card-1', { timeout: 10000 });
-    await page.evaluate(() => {
-      document.documentElement.setAttribute('data-koma-theme', 'light');
-      document.documentElement.classList.remove('dark');
-    });
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: path.join(OUT_DIR, 'waiter-corrected-390-light.png') });
-    await context.close();
-  }
-
-  // 5. 430x932 Mobile Dark (iPhone 14/15/16 Pro Max)
-  {
-    console.log('Capturing 430x932 Mobile Dark...');
-    const context = await browser.newContext({
-      viewport: { width: 430, height: 932 },
-      deviceScaleFactor: 2,
-      colorScheme: 'dark',
-    });
-    const page = await context.newPage();
-    await setupPageRoutes(page, 'dark', 'padrao');
-    await page.goto(APP_URL);
-    await page.waitForSelector('#mesa-card-1', { timeout: 10000 });
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: path.join(OUT_DIR, 'waiter-corrected-430-dark.png') });
-    await context.close();
-  }
-
-  // 6. Tablet (768x1024) Dark
-  {
-    console.log('Capturing 768x1024 Tablet Dark...');
-    const context = await browser.newContext({
-      viewport: { width: 768, height: 1024 },
-      deviceScaleFactor: 2,
-      colorScheme: 'dark',
-    });
-    const page = await context.newPage();
-    await setupPageRoutes(page, 'dark', 'padrao');
-    await page.goto(APP_URL);
-    await page.waitForSelector('#mesa-card-1', { timeout: 10000 });
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: path.join(OUT_DIR, 'waiter-corrected-tablet-dark.png') });
-    await context.close();
-  }
-
-  // 7. Click card body on Mesa 2 (occupied) -> opens Consumo directly
-  {
-    console.log('Capturing 1-Touch to Consumo (Mesa 2 card body)...');
-    const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      deviceScaleFactor: 2,
-      colorScheme: 'dark',
-    });
-    const page = await context.newPage();
-    await setupPageRoutes(page, 'dark', 'padrao');
-    await page.goto(APP_URL);
-    await page.waitForSelector('#mesa-card-2', { timeout: 10000 });
-    await page.waitForTimeout(400);
-
-    // Click card body
-    await page.locator('#mesa-card-2').click({ position: { x: 50, y: 30 } });
-    await page.waitForSelector('#tab-consumo-btn[aria-selected="true"]', { timeout: 5000 });
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(OUT_DIR, 'waiter-corrected-action-consumo.png') });
-    await context.close();
-  }
-
-  // 8. Click "+ Lançar" button on Mesa 2 (occupied) -> opens Pedido/Lançamento directly
-  {
-    console.log('Capturing 1-Touch to Lançamento (Mesa 2 + Lançar button)...');
-    const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      deviceScaleFactor: 2,
-      colorScheme: 'dark',
-    });
-    const page = await context.newPage();
-    await setupPageRoutes(page, 'dark', 'padrao');
-    await page.goto(APP_URL);
-    await page.waitForSelector('#mesa-card-2', { timeout: 10000 });
-    await page.waitForTimeout(400);
-
-    // Click "+ Lançar"
-    const orderBtn = page.locator('#mesa-card-launch-2');
-    await orderBtn.click();
-    await page.waitForSelector('#tab-lancamento-btn[aria-selected="true"]', { timeout: 5000 });
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(OUT_DIR, 'waiter-corrected-action-lancamento.png') });
-    await context.close();
-  }
-
-  await browser.close();
-  console.log('All screenshots captured successfully!');
+  const evidence = [];
+  try {
+    for (const width of [320, 360, 390, 414, 430, 768, 1366]) {
+      for (const theme of ['dark', 'light']) {
+        for (const textSize of ['padrao', 'grande', 'gigante']) {
+          const context = await browser.newContext({ viewport: { width, height: width === 320 ? 568 : width === 360 ? 780 : width === 414 ? 896 : width === 1366 ? 900 : 844 }, deviceScaleFactor: 1, colorScheme: theme });
+          const page = await context.newPage();
+          await setupPageRoutes(page, theme, textSize);
+          await page.goto(APP_URL);
+          await page.locator('#mesa-card-1').waitFor();
+          await page.screenshot({ path: path.join(OUT_DIR, `waiter-${width}-${theme}-${textSize}.png`), fullPage: true });
+          const layout = await page.evaluate(() => {
+            const cards = [...document.querySelectorAll('[id^="mesa-card-"]')].filter(el => el.id.match(/^mesa-card-\d+$/));
+            const overflow = cards.flatMap(card => [...card.querySelectorAll('strong, span, button')].filter(el => el.getClientRects().length > 0 && (el.scrollWidth > el.clientWidth + 1 || el.getBoundingClientRect().right > card.getBoundingClientRect().right + 1)).map(el => ({ table: card.id, text: el.textContent })));
+            const track = document.querySelector('[aria-label="Filtrar mesas por status"]');
+            return { overflow, filterOverflow: track.scrollWidth > track.clientWidth + 1, pageOverflow: document.documentElement.scrollWidth > innerWidth, cardHeights: cards.map(el => Math.round(el.getBoundingClientRect().height)) };
+          });
+          assert.deepEqual(layout.overflow, [], `Content overflow ${width}/${theme}/${textSize}`);
+          assert.equal(layout.pageOverflow, false);
+          assert.equal(layout.filterOverflow, false);
+          assert.equal(await page.getByText(/\d+ lugares/).count(), 0);
+          assert.equal(await page.locator('#mesa-card-1').getByText('1 rascunho').count(), 1);
+          const search = page.getByRole('textbox', { name: 'Ir para mesa' });
+          await search.fill('Varanda');
+          assert.equal(await page.locator('[id^="mesa-card-"]').count(), 1);
+          await page.getByRole('button', { name: 'Limpar busca de mesa' }).click();
+          await page.locator('#mesa-card-launch-2').click();
+          await page.locator('#search-products-input').waitFor({ timeout: 10000 });
+          const catalogFont = await page.locator('#search-products-input').evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+          await page.locator('#close-mesa-modal-btn').click();
+          await page.locator('#open-sidebar-btn').click();
+          await page.locator('.kw-preferences > summary').click();
+          const drawerFont = await page.locator('.kw-operator strong').evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+          const numberFont = await page.locator('.kw-table__number').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+          assert.equal(Math.round(drawerFont * 100), Math.round(16 * ({ padrao: 1, grande: 1.2, gigante: 1.4 }[textSize]) * 100));
+          await page.screenshot({ path: path.join(OUT_DIR, `drawer-${width}-${theme}-${textSize}.png`), fullPage: true });
+          await page.locator('#close-sidebar-btn').click();
+          evidence.push({ width, theme, textSize, catalogFont, drawerFont, numberFont, ...layout });
+          await context.close();
+        }
+      }
+    }
+    for (const count of [30, 50, 80]) {
+      mockTables.splice(6, mockTables.length, ...Array.from({ length: count - 6 }, (_, i) => ({ id: i + 7, nome: i === 0 ? 'Varanda externa fundos' : `Mesa ${i + 7}`, capacidade: 4, status: 'livre' })));
+      if (count === 80) mockOrders[0].itens[0].preco_unit = 123456.78;
+      const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      const page = await context.newPage();
+      await setupPageRoutes(page);
+      await page.goto(APP_URL);
+      await page.locator(`#mesa-card-${count}`).waitFor();
+      assert.equal(await page.locator('#mesa-card-2 strong').last().evaluate(el => el.scrollWidth <= el.clientWidth + 1), true);
+      await page.screenshot({ path: path.join(OUT_DIR, `waiter-${count}-tables-overview.png`) });
+      await page.getByRole('textbox', { name: 'Ir para mesa' }).fill(`Mesa ${count}`);
+      assert.equal(await page.locator(`#mesa-card-${count}`).count(), 1);
+      await page.screenshot({ path: path.join(OUT_DIR, `waiter-${count}-tables-search.png`) });
+      evidence.push({ tables: count, searchTargetFound: true });
+      await context.close();
+    }
+    writeFileSync(path.join(OUT_DIR, 'visual-verification.json'), JSON.stringify(evidence, null, 2));
+    console.log(`${evidence.length} capture scenarios passed`);
+  } finally { await browser.close(); }
 }
-
-main().catch(err => {
-  console.error('Error capturing screenshots:', err);
-  process.exit(1);
-});
+if (!process.env.KOMA_CAPTURE_LIBRARY) main().catch(error => { console.error(error); process.exitCode = 1; });

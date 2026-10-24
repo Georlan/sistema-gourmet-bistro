@@ -4,9 +4,10 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { Activity, Search, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Table, Order, DraftItem } from '../../types';
 import { MesaCard } from '../MesaCard';
+import { KomaWaiterGlyph } from '../shared/KomaWaiterGlyphs';
 import { countWaiterSalonTables, projectWaiterSalonTables, type WaiterSalonRow } from '../../domain/waiterSalonProjection';
 
 export interface MesasViewProps {
@@ -55,7 +56,9 @@ export function MesasView({
   rows,
 }: MesasViewProps) {
   const [internalFilter, setInternalFilter] = useState<'todos' | 'livres' | 'ocupadas' | 'prontas'>('todos');
-  const currentFilter = externalFilter ?? internalFilter;
+  const requestedFilter = externalFilter ?? internalFilter;
+  const currentFilter = !showOperationalStatus && requestedFilter === 'prontas' ? 'todos' : requestedFilter;
+  const [query, setQuery] = useState('');
 
   const tableRows = useMemo(() =>
     rows ?? projectWaiterSalonTables(salonTables, orders, pagamentosPendentes, currentTime),
@@ -64,12 +67,13 @@ export function MesasView({
   const counts = useMemo(() => countWaiterSalonTables(tableRows, showOperationalStatus),
     [tableRows, showOperationalStatus]);
 
-  const filteredRows = useMemo(() => tableRows.filter(({ operationalState }) => {
+  const filteredRows = useMemo(() => tableRows.filter(({ table, operationalState }) => {
+    if (!waiterTableMatchesQuery(table, query)) return false;
     if (currentFilter === 'livres') return operationalState.occupancy === 'FREE';
     if (currentFilter === 'ocupadas') return operationalState.occupancy === 'IN_SERVICE';
     if (currentFilter === 'prontas') return showOperationalStatus && operationalState.production.hasReadyItems;
     return true;
-  }), [currentFilter, tableRows, showOperationalStatus]);
+  }), [currentFilter, tableRows, showOperationalStatus, query]);
 
   const handleFilterSelect = (filter: typeof currentFilter) => {
     if (onFilterChange) onFilterChange(filter);
@@ -87,60 +91,25 @@ export function MesasView({
     <div className="w-full text-koma-foreground font-sans select-none space-y-2">
       <h2 className="sr-only">Salão</h2>
 
-      {/* Sticky status filter bar with integrated pill track */}
-      <div className="sticky top-[49px] sm:top-[56px] z-20 -mx-3 sm:-mx-6 lg:-mx-10 px-3 sm:px-6 lg:px-10 py-2 sm:py-2.5 bg-koma-page/98 dark:bg-[#0a0d0e]/98 backdrop-blur-md border-b border-zinc-200/60 dark:border-white/[0.05]">
-        <div role="group" aria-label="Filtrar mesas por status" className="flex w-full min-w-0 max-w-full items-center p-1 rounded-2xl bg-zinc-200/50 dark:bg-zinc-900/80 border border-zinc-300/40 dark:border-white/[0.06] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden gap-1">
-          {filters.map((filter) => {
-            const isActive = currentFilter === filter.id;
-            return (
-              <button
-                key={filter.id}
-                id={`waiter-filter-${filter.id}`}
-                type="button"
-                onClick={() => !readOnly && handleFilterSelect(filter.id)}
-                aria-pressed={isActive}
-                className={`inline-flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs font-semibold transition-all text-center border flex-1 ${
-                  readOnly ? 'cursor-default' : 'cursor-pointer active:scale-[0.98]'
-                } ${
-                  isActive
-                    ? 'bg-white dark:bg-zinc-800 text-zinc-950 dark:text-white border-zinc-200/80 dark:border-white/10 shadow-xs font-bold'
-                    : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-white/40 dark:hover:bg-white/5'
-                }`}
-              >
-                {filter.id === 'prontas' && filter.count > 0 ? (
-                  <span className="relative flex h-2 w-2 mr-0.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                  </span>
-                ) : (
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      filter.id === 'livres'
-                        ? 'bg-emerald-500'
-                        : filter.id === 'ocupadas'
-                        ? 'bg-amber-500'
-                        : filter.id === 'prontas'
-                        ? 'bg-emerald-400'
-                        : 'bg-zinc-400'
-                    }`}
-                    aria-hidden="true"
-                  />
-                )}
-                {filter.label}{' '}
-                <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded-md ${isActive ? 'bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white font-black' : 'text-zinc-500 dark:text-zinc-400 font-semibold'}`}>
-                  {filter.count}
-                </span>
-              </button>
-            );
-          })}
+      <div className="kw-salon-tools">
+        <div role="group" aria-label="Filtrar mesas por status" className="kw-filters">
+          {filters.filter(filter => showOperationalStatus || filter.id !== 'prontas').map((filter) => <button key={filter.id} id={`waiter-filter-${filter.id}`} type="button"
+            aria-pressed={currentFilter === filter.id} onClick={() => !readOnly && handleFilterSelect(filter.id)}>
+            <span>{filter.label}</span><span className="kw-filter-count">{filter.count}</span>
+          </button>)}
         </div>
+        <label className="kw-search">
+          <KomaWaiterGlyph name="salon-locator" size={18} />
+          <input aria-label="Ir para mesa" placeholder="Número ou nome da mesa" value={query}
+            onChange={(event) => setQuery(event.target.value)} readOnly={readOnly} />
+          {query && <button type="button" aria-label="Limpar busca de mesa" onClick={() => setQuery('')}><X size={16} /></button>}
+        </label>
       </div>
-
       {/* Responsive contract reference: grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4 */}
-      <div className="grid w-full auto-rows-[208px] grid-cols-1 min-[340px]:grid-cols-2 sm:auto-rows-[184px] sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 items-stretch gap-3 pt-1">
+      <div className="kw-table-grid grid w-full grid-cols-2 min-[360px]:grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 items-stretch gap-2">
         {filteredRows.length === 0 ? (
           <div className="col-span-full py-16 rounded-2xl border border-dashed border-koma-border text-center text-koma-muted text-sm">
-            Nenhuma mesa encontrada neste status.
+            Nenhuma mesa encontrada.
           </div>
         ) : filteredRows.map(({ table, tableOrders, operationalState }) => {
           const waiterDrafts = draftItemsMap[table.id] || [];

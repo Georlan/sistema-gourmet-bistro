@@ -4,8 +4,8 @@ export const KOMA_TEXT_SCALES: Record<KomaTextSize, number> = { padrao: 1, grand
 export function normalizeKomaTextSize(value: unknown): KomaTextSize {
   return value === 'grande' || value === 'gigante' ? value : 'padrao';
 }
-export function normalizeWaiterTextSize(value: unknown): 'padrao' | 'grande' {
-  return value === 'grande' || value === 'gigante' ? 'grande' : 'padrao';
+export function normalizeWaiterTextSize(value: unknown): KomaTextSize {
+  return normalizeKomaTextSize(value);
 }
 export function readKomaTextSize(): KomaTextSize {
   try {

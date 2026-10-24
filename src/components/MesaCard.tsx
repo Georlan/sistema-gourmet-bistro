@@ -76,7 +76,15 @@ export const MesaCard = React.memo<MesaCardProps>(({
       aria-label={accessibleLabel}
       data-waiter-action={actionLabel}
       onClick={handlePrimaryClick}
-      className="relative h-full w-full min-w-0"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          handlePrimaryClick();
+        }
+      }}
+      className={`kw-table-target relative h-full w-full min-w-0 ${getTableTotal(orders) >= 100000 ? 'min-[360px]:col-span-2' : ''}`}
     >
       <SharedTableCard
         {...view}
@@ -85,14 +93,15 @@ export const MesaCard = React.memo<MesaCardProps>(({
         operational={operational}
         total={getTableTotal(orders)}
         identityLabel="Pedido"
+        waiterOverview
         fillHeight
         showItemCount={false}
       >
-        <div className="mt-auto pt-2 w-full min-w-0 max-w-full">
+        <div className="kw-table__footer mt-auto w-full min-w-0 max-w-full">
           {isFree ? (
             <span
               aria-label={`${actionLabel} na ${tableLabel}`}
-              className="inline-flex h-8 w-full min-w-0 max-w-full items-center justify-center whitespace-normal rounded-xl border border-dashed border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-center text-[9px] font-bold uppercase leading-tight tracking-wide text-emerald-700 dark:text-emerald-400 shadow-xs"
+              className="kw-table__action "
             >
               {actionLabel}
             </span>
@@ -103,16 +112,16 @@ export const MesaCard = React.memo<MesaCardProps>(({
               onClick={handleOrderEntryClick}
               aria-label={`Lançar pedido na ${tableLabel}`}
               title={`+ Lançar pedido · ${tableLabel}`}
-              className="inline-flex h-8 w-full min-w-0 max-w-full items-center justify-center whitespace-nowrap rounded-xl border border-emerald-500/40 bg-emerald-500/15 dark:bg-emerald-500/20 px-2.5 py-1 text-center text-xs font-bold leading-tight tracking-wide text-emerald-800 dark:text-emerald-200 transition-all hover:bg-emerald-500/30 active:scale-[0.98] shadow-xs cursor-pointer"
+              className="kw-table__action kw-table__action--launch"
             >
-              + Lançar
+              Lançar
             </button>
           ) : (
             <span
               aria-label={`${actionLabel} na ${tableLabel}`}
-              className="inline-flex h-8 w-full min-w-0 max-w-full items-center justify-center whitespace-normal rounded-xl border border-current/20 bg-black/5 px-2 py-1 text-center text-[9px] font-bold uppercase leading-tight tracking-wide dark:bg-white/5 shadow-xs"
+              className="kw-table__action "
             >
-              {actionLabel}
+              {isMerged ? 'Ver mesa' : actionLabel}
             </span>
           )}
         </div>

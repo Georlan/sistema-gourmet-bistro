@@ -1,3 +1,5 @@
+import { findRepeatedDraft, planWaiterRepeat, type RepeatConfiguration } from '../domain/waiterRepeatItem';
+import { WaiterServiceArtwork } from './mesas/WaiterServiceArtwork';
 import { TablePresenceNotice } from './shared/TablePresenceNotice';
 /**
  * @license
@@ -6,7 +8,7 @@ import { TablePresenceNotice } from './shared/TablePresenceNotice';
 
 import React, { useState } from 'react';
 import { X, Clock, Receipt, PlusCircle, Move, ArrowLeft, GitMerge } from 'lucide-react';
-import { Table, Order, DraftItem, AppSettings, Product, AppRole } from '../types';
+import { Table, Order, DraftItem, AppSettings, Product, AppRole, OrderItem } from '../types';
 import { getTableTotal, getCustomerSubtotals } from '../domain';
 import { deriveTableOperationalState } from '../domain/operationalState';
 import { MenuPanel } from './MenuPanel';
@@ -27,12 +29,15 @@ interface MesaDetailsModalProps {
   activeRole: AppRole;
   activeWaiterId: string;
   activeWaiterNome: string;
+  initialReadyOnly?: boolean;
   initialTab?: 'consumo' | 'lancamento' | 'transferir' | 'mesclar';
   currentTime: number;
   onClose: () => void;
   onUpdateSettings: (settings: AppSettings) => void;
   onAddToDraft: (product: Product, quantity?: number, observacao?: string, clienteNome?: string) => void;
   onRemoveFromDraft: (draftItemId: string) => void;
+  onRestoreDraftItem?: (item: DraftItem, index: number) => boolean;
+  draftScopeKey?: string | null;
   onUpdateDraftItem: (draftItemId: string, updates: Partial<DraftItem>) => void;
   onEditDraftItems: (
     draftItemIds: string[],
@@ -75,11 +80,14 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   activeWaiterId,
   activeWaiterNome,
   initialTab,
+  initialReadyOnly = false,
   currentTime,
   onClose,
   onUpdateSettings,
   onAddToDraft,
   onRemoveFromDraft,
+  onRestoreDraftItem,
+  draftScopeKey,
   onUpdateDraftItem,
   onEditDraftItems,
   onSubmitDraft,
@@ -106,9 +114,12 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   onUnmergeTable,
 }) => {
   // Dynamic default tab based on whether table is active or empty, or explicit initialTab
-  const [activeTab, setActiveTab] = useState<'consumo' | 'lancamento' | 'transferir' | 'mesclar'>(
+  const [requestedTab, setActiveTab] = useState<'consumo' | 'lancamento' | 'transferir' | 'mesclar'>(
     initialTab ?? (orders.length === 0 ? 'lancamento' : 'consumo')
   );
+  const [readyOnly, setReadyOnly] = useState(initialReadyOnly);
+  const showReadyOnly = readyOnly && activeRole === 'garcom' && restauranteConfig?.perm_garcom_status !== false;
+  const [repeatConfiguration, setRepeatConfiguration] = useState<RepeatConfiguration | null>(null);
   const [showPrintPreview, setShowPrintPreview] = useState<boolean>(false);
   const [selectedOrderToPrint, setSelectedOrderToPrint] = useState<Order | null>(null);
   const [confirmTransferTo, setConfirmTransferTo] = useState<number | null>(null);
@@ -129,7 +140,21 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const canAppendOrderItems = activeRole !== 'garcom'
     || orders.length === 0
     || Boolean(restauranteConfig?.perm_garcom_editar);
-  const hasPrinting = restauranteConfig?.entitlements?.printing === true;
+  const hasPrinting = restauranteConfig?.entitlements?.printing === true
+    && (activeRole !== 'garcom' || restauranteConfig?.perm_garcom_print === true);
+  const canEditItems = activeRole !== 'garcom' || Boolean(restauranteConfig?.perm_garcom_editar);
+  const activeTab = (requestedTab === 'lancamento' && !canAppendOrderItems)
+    || (requestedTab === 'transferir' && ((!canTransferTables && !canTransferItems)
+      || (transferType === 'total' && !canTransferTables) || (transferType === 'parcial' && !canTransferItems)))
+    || (requestedTab === 'mesclar' && !canTransferTables) ? 'consumo' : requestedTab;
+  React.useEffect(() => {
+    if (activeTab !== requestedTab) setActiveTab(activeTab);
+    if (!canEditItems) setEditingItem(null);
+    if (!canTransferTables && !canTransferItems) {
+      setSelectedItemsForTransfer([]);
+      setConfirmTransferTo(null);
+    }
+  }, [activeTab, requestedTab, canEditItems, canTransferTables, canTransferItems]);
 
   // Lock background scroll when modal is active
   React.useEffect(() => {
@@ -147,6 +172,22 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
     orders,
     now: currentTime,
   });
+  const canRepeatItems = activeRole === 'garcom' && canAppendOrderItems
+    && operationalState.financial !== 'AWAITING_PAYMENT' && !operationalState.hasPendingConfirmation;
+  const handleRepeatItem = (item: OrderItem) => {
+    if (!canRepeatItems || isSubmitting || !catalogReady) return;
+    const plan = planWaiterRepeat(item, liveProdutos.find(product => product.id === item.produtoId));
+    if (plan.kind === 'unavailable') return;
+    if (plan.kind === 'configure') {
+      setRepeatConfiguration(plan.configuration);
+      setActiveTab('lancamento');
+      return;
+    }
+    const existing = findRepeatedDraft(draftItems, plan);
+    if (existing) onUpdateDraftItem(existing.id, { quantidade: (existing.quantidade || 1) + 1 });
+    else onAddToDraft(plan.product, 1, plan.observation, plan.client);
+  };
+  const repeatedDraftQuantity = draftItems.reduce((sum, item) => sum + (item.quantidade || 1), 0);
   const elapsedTime = operationalState.elapsed;
 
   const originIds = Array.from(new Set(orders.map(o => o.mesaOrigemId).filter((id): id is number => id !== null && id !== undefined && id !== table.id)));
@@ -225,79 +266,27 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           onClose();
         }
       }}
-      className="fixed inset-0 bg-black/75 flex items-center justify-center p-0 sm:p-4 z-40 animate-fade-in overflow-y-auto"
+      className="kw-flow-overlay fixed inset-0 bg-black/75 flex items-center justify-center p-0 sm:p-4 z-40 animate-fade-in overflow-y-auto"
     >
-      <div className="bg-koma-card rounded-none sm:rounded-3xl border-0 sm:border border-koma-border shadow-2xl w-full max-w-5xl overflow-hidden h-full sm:h-auto max-h-full sm:max-h-[90vh] flex flex-col">
-        {/* MODAL HEADER — mesa é a âncora operacional */}
-        <div className="bg-koma-raised text-koma-foreground px-3 py-3 sm:px-5 sm:py-4 flex flex-col gap-2 shrink-0 border-b border-koma-border z-30">
-          <div className="flex items-start justify-between gap-3 w-full">
-            <div className="flex items-start gap-2.5 min-w-0">
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Voltar ao mapa de mesas"
-                className="mt-0.5 p-1.5 hover:bg-koma-card rounded-xl text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-koma-border shrink-0"
-                title="Voltar ao mapa"
-              >
-                <ArrowLeft size={16} />
-              </button>
-
-              <div className="min-w-0">
-                <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.22em] font-sans font-extrabold text-emerald-700 dark:text-emerald-400">
-                  Consumo no local
-                </div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                  <h2 className="max-w-full break-words font-serif text-2xl leading-tight font-extrabold tracking-tight text-koma-foreground sm:text-4xl sm:leading-none">
-                    Mesa {table.id}{originStr}
-                  </h2>
-                  {(operationalState.occupancy === 'FREE' || operationalState.production.hasReadyItems) && (
-                    <span className={`px-2.5 py-1 text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wider uppercase rounded-full border shrink-0 ${
-                      operationalState.occupancy === 'FREE'
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
-                    }`}>
-                      {operationalState.occupancy === 'FREE' ? 'Livre' : 'Pronto'}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <button
-              id="close-mesa-modal-btn"
-              type="button"
-              onClick={onClose}
-              aria-label="Fechar detalhes da mesa"
-              className="p-1.5 rounded-xl hover:bg-white/5 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent hover:border-koma-border shrink-0"
-            >
-              <X size={18} />
-            </button>
+      <div className="kw-flow bg-koma-card rounded-none sm:rounded-3xl border-0 sm:border border-koma-border shadow-2xl w-full max-w-5xl overflow-hidden h-full sm:h-auto max-h-full sm:max-h-[90vh] flex flex-col">
+        <header className="kw-flow-hero">
+          <div className="kw-flow-toolbar">
+            <button type="button" onClick={onClose} aria-label="Voltar ao mapa de mesas" title="Voltar ao mapa" className="kw-flow-back"><ArrowLeft size={19} /></button>
+            <div className="kw-flow-title"><span>Atendimento</span><h2>{table.nome?.trim() || `Mesa ${table.id}`}{originStr}</h2></div>
+            <WaiterServiceArtwork className="kw-flow-art" />
+            <button id="close-mesa-modal-btn" type="button" onClick={onClose} aria-label="Fechar detalhes da mesa" className="kw-flow-close"><X size={19} /></button>
           </div>
-
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-10 sm:pl-11 pt-2 border-t border-koma-border/60 text-[10px] sm:text-[11px] text-koma-subtle font-sans">
-            <span className="flex items-center gap-1.5">
-              <span className="uppercase tracking-wider text-koma-subtle">Garçom</span>
-              <strong className="text-koma-foreground font-semibold">{activeWaiterNome}</strong>
-            </span>
+          <div className="kw-flow-meta"><span>{activeWaiterNome}</span>
+            {orders.length > 0 && <span aria-label={`Tempo na mesa ${elapsedTime}`}><Clock size={12} />{elapsedTime}</span>}
             <TablePresenceNotice names={otherWaitersServing} />
-            {orders.length > 0 && (
-              <span
-                className="flex items-center gap-1.5"
-                aria-label={`Tempo na mesa ${elapsedTime}`}
-                title="Tempo na mesa"
-              >
-                <Clock size={11} className="text-emerald-700 dark:text-emerald-400" />
-                <strong className="text-koma-foreground font-medium font-mono">{elapsedTime}</strong>
-              </span>
-            )}
           </div>
-        </div>
+        </header>
 
         {/* MODAL TABS */}
         <div
           role="tablist"
           aria-label="Ações da mesa"
-          className="bg-koma-panel border-b border-koma-border px-2.5 sm:px-5 py-1.5 flex items-center gap-1.5 sm:gap-2 shrink-0 overflow-x-auto scrollbar-none no-scrollbar z-20"
+          className="kw-flow-tabs bg-koma-panel border-b border-koma-border px-2.5 sm:px-5 py-1.5 flex items-center gap-1.5 sm:gap-2 shrink-0 overflow-x-auto scrollbar-none no-scrollbar z-20"
         >
           <button
             id="tab-consumo-btn"
@@ -330,9 +319,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             }`}
           >
             <PlusCircle size={13} className="text-emerald-400" />
-            <span>Pedido</span>
+            <span>{canRepeatItems && activeTab === 'consumo' && repeatedDraftQuantity > 0 ? 'Revisar' : 'Lançar'}</span>
             {draftItems.length > 0 && (
-              <span className="min-w-4 h-4 px-1 rounded-full bg-emerald-500 text-zinc-950 text-[9px] font-mono font-extrabold flex items-center justify-center">
+              <span aria-live="polite" className="min-w-4 h-4 px-1 rounded-full bg-emerald-500 text-zinc-950 text-[9px] font-mono font-extrabold flex items-center justify-center">
                 {draftItems.reduce((total, item) => total + (item.quantidade || 1), 0)}
               </span>
             )}
@@ -382,12 +371,15 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
         </div>
 
         {/* MODAL BODY WITH SCROLL */}
-        <div className="overflow-y-auto flex-1 text-left p-0">
+        <div className="kw-flow-body overflow-y-auto flex-1 text-left p-0">
           
           {/* TAB 1: CONSUMO ATIVO */}
           {activeTab === 'consumo' && (
+            <>
             <MesaConsumptionPanel
               table={table}
+              readyOnly={showReadyOnly}
+              onToggleReadyOnly={initialReadyOnly && activeRole === 'garcom' && restauranteConfig?.perm_garcom_status !== false ? () => setReadyOnly(value => !value) : undefined}
               orders={orders}
               currentTime={currentTime}
               activeRole={activeRole}
@@ -405,17 +397,26 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               setEditingItem={setEditingItem}
               onPrintPreview={handleDirectFullPrint}
               onPrintValues={handleDirectPrint}
-              onCloseTable={onCloseTable ? handleCloseTableConfirmation : undefined}
+              onCloseTable={onCloseTable && (activeRole !== 'garcom' || restauranteConfig?.perm_garcom_fechar) ? handleCloseTableConfirmation : undefined}
               onMergeTables={onMergeTables}
               onUnmergeTable={onUnmergeTable}
               onDeliverItem={onDeliverItem}
               onCancelItem={onCancelItem}
+              onRepeatItem={canRepeatItems ? handleRepeatItem : undefined}
+              repeatProducts={liveProdutos}
+              repeatCatalogReady={catalogReady}
+              isSubmitting={isSubmitting}
             />
+            </>
           )}
 
           {/* TAB 2: LANÇAR ITENS (MOUNTS MENUPANEL) */}
           {activeTab === 'lancamento' && (
             <MenuPanel
+              key={`${table.id}:${draftScopeKey ?? ''}`}
+              standardQuickEntry={activeRole === 'garcom'}
+              initialConfiguration={repeatConfiguration}
+              onInitialConfigurationConsumed={() => setRepeatConfiguration(null)}
               tableId={table.id}
               draftItems={draftItems}
               existingOrders={orders}
@@ -423,6 +424,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               onUpdateSettings={onUpdateSettings}
               onAddToDraft={onAddToDraft}
               onRemoveFromDraft={onRemoveFromDraft}
+              onRestoreDraftItem={onRestoreDraftItem}
               onUpdateDraftItem={onUpdateDraftItem}
               onEditDraftItems={onEditDraftItems}
               onSubmitDraft={onSubmitDraft}
@@ -474,7 +476,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
         onPrintKitchenLaunch={onPrintKitchenLaunch ? handleKitchenPrint : undefined}
       />}
 
-      {editingItem && (
+      {editingItem && canEditItems && (
         <div
           onClick={(e) => {
             if (e.target === e.currentTarget) {

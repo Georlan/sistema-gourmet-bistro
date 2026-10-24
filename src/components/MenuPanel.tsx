@@ -1,3 +1,5 @@
+import type { RepeatConfiguration } from '../domain/waiterRepeatItem';
+import { getTableQuickClients, projectStandardQuickDrafts } from '../domain/waiterQuickEntry';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -16,6 +18,7 @@ import {
   Settings2,
   ShoppingCart,
   Trash2,
+  Undo2,
   X,
 } from 'lucide-react';
 
@@ -36,6 +39,7 @@ interface MenuPanelProps {
   onUpdateSettings: (settings: AppSettings) => void;
   onAddToDraft: (product: Product, quantity?: number, observacao?: string, clienteNome?: string) => void;
   onRemoveFromDraft: (draftItemId: string) => void;
+  onRestoreDraftItem?: (item: DraftItem, index: number) => boolean;
   onUpdateDraftItem: (draftItemId: string, fields: Partial<DraftItem>) => void;
   onEditDraftItems: (
     draftItemIds: string[],
@@ -48,6 +52,9 @@ interface MenuPanelProps {
   catalogReady?: boolean;
   isSubmitting?: boolean;
   allowExternalOrders?: boolean;
+  standardQuickEntry?: boolean;
+  initialConfiguration?: RepeatConfiguration | null;
+  onInitialConfigurationConsumed?: () => void;
 }
 
 type ModifierSelection = {
@@ -127,6 +134,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   onUpdateSettings,
   onAddToDraft,
   onRemoveFromDraft,
+  onRestoreDraftItem,
   onUpdateDraftItem,
   onEditDraftItems,
   onSubmitDraft,
@@ -136,18 +144,59 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   catalogReady = false,
   isSubmitting = false,
   allowExternalOrders = true,
+  standardQuickEntry = false,
+  initialConfiguration,
+  onInitialConfigurationConsumed,
 }) => {
-  const [view, setView] = useState<'cart' | 'menu'>(() => draftItems.length > 0 ? 'cart' : 'menu');
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const menuScrollPosition = React.useRef<number | null>(null);
+  const removedDraftsRef = React.useRef<Array<{ item: DraftItem; index: number }>>([]);
+  const [removedDrafts, setRemovedDrafts] = useState(removedDraftsRef.current);
+  const removeDraftItem = (item: DraftItem) => {
+    if (isSubmitting) return;
+    if (standardQuickEntry && onRestoreDraftItem) {
+      const index = draftItems.findIndex((candidate) => candidate.id === item.id);
+      if (index < 0) return;
+      removedDraftsRef.current = [...removedDraftsRef.current.filter((entry) => entry.item.id !== item.id), { item, index }];
+      setRemovedDrafts(removedDraftsRef.current);
+    }
+    onRemoveFromDraft(item.id);
+  };
+  const undoDraftRemoval = () => {
+    if (isSubmitting) return;
+    const entry = removedDraftsRef.current.at(-1);
+    if (!entry || !onRestoreDraftItem?.(entry.item, entry.index)) return;
+    removedDraftsRef.current = removedDraftsRef.current.slice(0, -1);
+    setRemovedDrafts(removedDraftsRef.current);
+  };
+  const submitDraft = () => {
+    if (isSubmitting) return;
+    removedDraftsRef.current = [];
+    setRemovedDrafts([]);
+    onSubmitDraft(orderType);
+  };
+  const [quickClient, setQuickClient] = useState('');
+  const tableQuickClients = useMemo(() => getTableQuickClients(draftItems, existingOrders), [draftItems, existingOrders]);
+  const quickEntryClient = standardQuickEntry && !tableQuickClients.includes(quickClient) ? '' : quickClient;
+  const standardQuickDrafts = useMemo(() => projectStandardQuickDrafts(draftItems, quickEntryClient), [draftItems, quickEntryClient]);
+  const quickClientLabel = quickEntryClient || 'a mesa';
+  React.useEffect(() => {
+    if (standardQuickEntry && quickClient && !tableQuickClients.includes(quickClient)) setQuickClient('');
+  }, [standardQuickEntry, quickClient, tableQuickClients]);
+  const [view, setView] = useState<'cart' | 'menu'>(() => initialConfiguration ? 'menu' : draftItems.length > 0 ? 'cart' : 'menu');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [orderType, setOrderType] = useState<'Consumo no Local' | 'Retirada'>('Consumo no Local');
-  const [selectedProductToConfigure, setSelectedProductToConfigure] = useState<Product | null>(null);
+  const [selectedProductToConfigure, setSelectedProductToConfigure] = useState<Product | null>(() => initialConfiguration ? liveProdutos.find(product => product.id === initialConfiguration.productId && product.ativo !== false) || null : null);
   const [editingDraftItemId, setEditingDraftItemId] = useState<string | null>(null);
   const [configQty, setConfigQty] = useState(1);
-  const [configObs, setConfigObs] = useState('');
-  const [configClient, setConfigClient] = useState('');
-  const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>([]);
+  const [configObs, setConfigObs] = useState(initialConfiguration?.observacao || '');
+  const [configClient, setConfigClient] = useState(initialConfiguration?.clienteNome || '');
+  const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>(() => [...(initialConfiguration?.modifierIds || [])]);
+  React.useEffect(() => {
+    if (initialConfiguration) onInitialConfigurationConsumed?.();
+  }, [initialConfiguration, onInitialConfigurationConsumed]);
 
   React.useEffect(() => {
     if (!allowExternalOrders && orderType !== 'Consumo no Local') {
@@ -246,11 +295,21 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   const openMenu = () => {
     if (isSubmitting) return;
     setView('menu');
-    scrollPanelToTop();
+    if (standardQuickEntry && menuScrollPosition.current !== null) {
+      requestAnimationFrame(() => {
+        const scroller = panelRef.current?.closest<HTMLElement>('.kw-flow-body');
+        if (scroller) scroller.scrollTop = menuScrollPosition.current ?? 0;
+      });
+    } else {
+      scrollPanelToTop();
+    }
   };
 
   const openCart = () => {
     if (isSubmitting) return;
+    if (standardQuickEntry) {
+      menuScrollPosition.current = panelRef.current?.closest<HTMLElement>('.kw-flow-body')?.scrollTop ?? null;
+    }
     setView('cart');
     scrollPanelToTop();
   };
@@ -269,7 +328,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     setEditingDraftItemId(draft?.id || null);
     setConfigQty(draft?.quantidade || 1);
     setConfigObs(draft?.observacao || '');
-    setConfigClient(draft?.clienteNome || (draftItems[0]?.clienteNome || ''));
+    setConfigClient(draft ? (draft.clienteNome || '') : (standardQuickEntry ? quickEntryClient : (draftItems[0]?.clienteNome || '')));
     setSelectedModifierIds([...(draft?.modificadorIds || [])]);
   };
 
@@ -305,12 +364,13 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
         __selectedModifiers: modifierMeta.modificadoresSelecionados,
         __selectedModifierTotal: modifierTotal,
       } as ProductWithModifiers;
-      onAddToDraft(decoratedProduct as Product, configQty, configObs, configClient);
+      onAddToDraft(decoratedProduct as Product, configQty, configObs, standardQuickEntry ? (configClient.trim() || 'Consumo Geral') : configClient);
     }
     closeProductConfig();
   };
 
   const findQuickDraftItem = (product: Product) => {
+    if (standardQuickEntry) return productRequiresConfiguration(product) ? null : standardQuickDrafts.get(product.id)?.item || null;
     const matching = draftItems.filter((item) => item.produtoId === product.id);
     if (matching.length === 0) return null;
     const cleanItem = [...matching].reverse().find((item) => {
@@ -327,8 +387,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
       return;
     }
 
-    const defaultClient = draftItems[0]?.clienteNome || '';
-    const compatibleDraft = draftItems.find((item) => {
+    const defaultClient = standardQuickEntry ? (quickEntryClient || 'Consumo Geral') : (draftItems[0]?.clienteNome || '');
+    const compatibleDraft = standardQuickEntry ? standardQuickDrafts.get(product.id)?.item : draftItems.find((item) => {
       const decorated = item as DraftWithModifiers;
       return item.produtoId === product.id
         && !item.observacao
@@ -364,17 +424,17 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   };
 
   return (
-    <div id="menu-panel-root" className="relative" aria-busy={isSubmitting}>
+    <div ref={panelRef} id="menu-panel-root" data-menu-view={view} className="relative" aria-busy={isSubmitting}>
       {view === 'cart' && (
-        <div className="bg-koma-panel sm:border sm:border-koma-border sm:rounded-2xl p-3 sm:p-5 pb-24 sm:pb-5 flex flex-col max-w-2xl mx-auto">
-          <div className="flex items-center justify-between gap-3 border-b border-koma-border pb-3">
+        <div className="kw-order-review p-3 sm:p-5 pb-24 sm:pb-5 flex flex-col max-w-2xl mx-auto">
+          <div className="kw-review-heading flex items-center justify-between gap-3 pb-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <ShoppingCart size={16} className="text-emerald-400 shrink-0" />
-                <h3 className="font-serif font-bold text-sm sm:text-base text-koma-foreground">Mesa {tableId} · Revisar pedido</h3>
+                <h3 className="font-serif font-bold text-sm sm:text-base text-koma-foreground">Revisar pedido</h3>
               </div>
               {totalDraftQty > 0 && (
-                <p className="mt-1 text-[10px] text-koma-muted">Confira itens, observações e destino antes de enviar.</p>
+                <p className="mt-1 text-[10px] text-koma-muted">Itens prontos para lançar na mesa.</p>
               )}
             </div>
             <button
@@ -387,6 +447,16 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             </button>
           </div>
 
+          {standardQuickEntry && onRestoreDraftItem && removedDrafts.length > 0 && (
+            <div className="kw-draft-recovery flex min-h-11 items-center justify-between gap-3 border-b border-koma-border text-xs">
+              <span role="status" aria-live="polite" className="text-koma-muted">Item removido</span>
+              <button id="undo-draft-removal" type="button" disabled={isSubmitting} onClick={undoDraftRemoval}
+                aria-label={`Desfazer remoção de ${removedDrafts.at(-1)?.item.nome}`}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 font-semibold text-koma-foreground hover:bg-koma-raised disabled:opacity-40">
+                <Undo2 size={15} aria-hidden="true" /> Desfazer
+              </button>
+            </div>
+          )}
           {draftItems.length === 0 ? (
             <div className="py-12 text-center flex-1 flex flex-col items-center justify-center gap-3">
               <p className="text-sm font-semibold text-koma-foreground">Nenhum item no pedido</p>
@@ -397,7 +467,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             </div>
           ) : (
             <div className="flex-1 min-h-0 flex flex-col gap-4 pt-4">
-              <div className="bg-koma-raised border border-koma-border p-3 rounded-xl space-y-2">
+              <div className="kw-review-client p-3 space-y-2">
                 <label htmlFor="overall-client-name" className="text-[10px] font-bold text-koma-muted uppercase tracking-wider">
                   Cliente do pedido <span className="normal-case font-normal">(opcional)</span>
                 </label>
@@ -405,7 +475,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   id="overall-client-name"
                   value={draftItems[0]?.clienteNome || ''}
                   disabled={isSubmitting}
-                  onChange={(event) => draftItems.forEach((item) => onUpdateDraftItem(item.id, { clienteNome: event.target.value }))}
+                  onChange={(event) => { setQuickClient(event.target.value); draftItems.forEach((item) => onUpdateDraftItem(item.id, { clienteNome: event.target.value })); }}
                   placeholder="Ex: Pedro, Cláudia, Família..."
                   className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                 />
@@ -416,7 +486,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         key={name}
                         type="button"
                         disabled={isSubmitting}
-                        onClick={() => draftItems.forEach((item) => onUpdateDraftItem(item.id, { clienteNome: name }))}
+                        onClick={() => { setQuickClient(name); draftItems.forEach((item) => onUpdateDraftItem(item.id, { clienteNome: name })); }}
                         className="px-2 py-1 text-[9px] rounded-lg border border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground disabled:opacity-50"
                       >
                         {name}
@@ -432,11 +502,11 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   const product = liveProdutos.find((candidate) => candidate.id === item.produtoId);
                   const modifierSummary = summarizeModifierSelections(decorated.modificadoresSelecionados || []);
                   return (
-                    <div key={item.id} id={`draft-item-${item.id}`} className="p-3 bg-koma-card border border-koma-border rounded-xl space-y-2.5">
-                      <div className="flex items-start justify-between gap-3">
+                    <div key={item.id} id={`draft-item-${item.id}`} className="kw-draft-row p-3 space-y-2.5">
+                      <div className="kw-draft-heading flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full border border-koma-border text-[10px] font-mono flex items-center justify-center text-koma-subtle">{index + 1}</span>
+                            <span className="kw-draft-index w-5 h-5 rounded-full border border-koma-border text-[10px] font-mono flex items-center justify-center text-koma-subtle">{index + 1}</span>
                             <span className="text-xs font-bold text-koma-foreground">{item.nome}</span>
                           </div>
                           {modifierSummary.length > 0 && (
@@ -448,22 +518,22 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                               ))}
                             </div>
                           )}
-                          {item.clienteNome && <span className="ml-7 text-[9px] uppercase font-bold text-emerald-400">Para: {item.clienteNome}</span>}
+                          {item.clienteNome && (!standardQuickEntry || item.clienteNome.trim().toLocaleLowerCase('pt-BR') !== 'consumo geral') && <span className="ml-7 text-[9px] uppercase font-bold text-emerald-400">Para: {item.clienteNome}</span>}
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-xs font-mono font-bold text-emerald-400">R$ {money(Number(item.preco) * (item.quantidade || 1))}</span>
+                        <div className="kw-draft-actions flex items-center gap-1.5 shrink-0">
+                          <span className="kw-draft-amount text-xs font-mono font-bold text-emerald-400">R$ {money(Number(item.preco) * (item.quantidade || 1))}</span>
                           <button type="button" disabled={isSubmitting || !product} onClick={() => product && handleOpenConfig(product, item)} className="p-1.5 rounded-lg text-koma-muted hover:text-emerald-400 hover:bg-koma-raised disabled:opacity-40" title="Editar item e complementos" aria-label={`Editar ${item.nome}`}>
                             <Edit3 size={13} />
                           </button>
-                          <button id={`remove-draft-item-${item.id}`} type="button" disabled={isSubmitting} onClick={() => onRemoveFromDraft(item.id)} className="p-1.5 rounded-lg text-koma-muted hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-40" title="Remover item" aria-label={`Remover ${item.nome}`}>
+                          <button id={`remove-draft-item-${item.id}`} type="button" disabled={isSubmitting} onClick={() => removeDraftItem(item)} className="p-1.5 rounded-lg text-koma-muted hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-40" title="Remover item" aria-label={`Remover ${item.nome}`}>
                             <Trash2 size={13} />
                           </button>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-2 border-t border-koma-border pt-2">
-                        <div className="flex items-center gap-1 bg-koma-raised border border-koma-border rounded-lg p-0.5">
-                          <button type="button" disabled={isSubmitting} onClick={() => (item.quantidade || 1) > 1 ? onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) - 1 }) : onRemoveFromDraft(item.id)} className="p-1.5 text-koma-muted hover:text-rose-400 disabled:opacity-40" aria-label={`Diminuir ${item.nome}`}><Minus size={12} /></button>
+                      <div className="kw-draft-controls flex items-center justify-between gap-2 border-t border-koma-border pt-2">
+                        <div className="kw-draft-quantity flex items-center gap-1 bg-koma-raised border border-koma-border rounded-lg p-0.5">
+                          <button type="button" disabled={isSubmitting} onClick={() => (item.quantidade || 1) > 1 ? onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) - 1 }) : removeDraftItem(item)} className="p-1.5 text-koma-muted hover:text-rose-400 disabled:opacity-40" aria-label={`Diminuir ${item.nome}`}><Minus size={12} /></button>
                           <span className="px-2 text-xs font-mono font-bold text-koma-foreground">{item.quantidade || 1}</span>
                           <button type="button" disabled={isSubmitting} onClick={() => onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) + 1 })} className="p-1.5 text-koma-muted hover:text-emerald-400 disabled:opacity-40" aria-label={`Aumentar ${item.nome}`}><Plus size={12} /></button>
                         </div>
@@ -477,7 +547,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 })}
               </div>
 
-              <div className="mt-auto border-t border-koma-border pt-4 space-y-3">
+              <div className="kw-review-total mt-auto pt-4 space-y-3">
                 {allowExternalOrders && (
                   <div>
                     <span className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-koma-muted">Destino</span>
@@ -488,18 +558,18 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   </div>
                 )}
 
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-bold text-koma-muted">Total deste lançamento</span>
-                  <span className="text-xl font-mono font-bold text-emerald-400">R$ {money(draftTotal)}</span>
+                <div className="kw-review-total__summary flex items-center justify-between" role="group" aria-label="Total deste lançamento">
+                  <span className="kw-review-total__label text-[10px] uppercase font-bold text-koma-muted">{standardQuickEntry ? 'Total do pedido' : 'Total deste lançamento'}</span>
+                  <span className="kw-review-total__amount text-xl font-mono font-bold text-emerald-400">R$ {money(draftTotal)}</span>
                 </div>
 
-                <button id="submit-draft-order-btn" type="button" disabled={isSubmitting} onClick={() => onSubmitDraft(orderType)} className="hidden sm:flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-zinc-950 text-sm font-extrabold disabled:opacity-50" aria-label={isSubmitting ? 'Enviando pedido' : `${submitCta} para a Mesa ${tableId}`}>
+                <button id="submit-draft-order-btn" type="button" disabled={isSubmitting} onClick={submitDraft} className="hidden sm:flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-zinc-950 text-sm font-extrabold disabled:opacity-50" aria-label={isSubmitting ? 'Enviando pedido' : `${submitCta} para a Mesa ${tableId}`}>
                   {isSubmitting ? 'Enviando pedido…' : submitCta} <ArrowRight size={15} />
                 </button>
               </div>
 
-              <div className="sm:hidden fixed inset-x-0 bottom-0 z-[80] border-t border-emerald-500/20 bg-koma-card/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] backdrop-blur-xl">
-                <button id="submit-draft-order-btn-mobile" type="button" disabled={isSubmitting} onClick={() => onSubmitDraft(orderType)} className="mx-auto flex min-h-12 w-full max-w-2xl items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-black text-sm font-bold disabled:opacity-50" aria-label={isSubmitting ? 'Enviando pedido' : `${submitCta} para a Mesa ${tableId}`}>
+              <div className="kw-order-mobile-footer sm:hidden fixed inset-x-0 bottom-0 z-[80] border-t border-emerald-500/20 bg-koma-card/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] backdrop-blur-xl">
+                <button id="submit-draft-order-btn-mobile" type="button" disabled={isSubmitting} onClick={submitDraft} className="mx-auto flex min-h-12 w-full max-w-2xl items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-black text-sm font-bold disabled:opacity-50" aria-label={isSubmitting ? 'Enviando pedido' : `${submitCta} para a Mesa ${tableId}`}>
                   {isSubmitting ? 'Enviando pedido…' : submitCta} <ArrowRight size={15} />
                 </button>
               </div>
@@ -509,8 +579,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
       )}
 
       {view === 'menu' && (
-        <div className="relative max-w-4xl mx-auto bg-koma-panel sm:border sm:border-koma-border sm:rounded-3xl">
-          <div className="sticky top-0 z-30 bg-koma-panel px-3 sm:px-5 py-2.5 border-b border-koma-border space-y-2 shadow-sm sm:rounded-t-3xl">
+        <div className="kw-catalog relative max-w-4xl mx-auto">
+          <div className="kw-catalog-tools sticky top-0 z-30 px-3 sm:px-5 py-2.5 space-y-2">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Search size={15} className="absolute left-3 top-2.5 text-koma-subtle" />
@@ -527,6 +597,17 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 )}
               </div>
             </div>
+
+            {standardQuickEntry && tableQuickClients.length > 0 && (
+              <div id="quick-entry-clients" className="kw-entry-clients" role="group" aria-label="Cliente dos próximos itens">
+                <span className="kw-entry-clients__label">Para</span>
+                {['', ...tableQuickClients].map(name => (
+                  <button key={name} type="button" disabled={isSubmitting}
+                    aria-pressed={quickEntryClient === name} title={name || 'Mesa'}
+                    onClick={() => setQuickClient(name)}>{name || 'Mesa'}</button>
+                ))}
+              </div>
+            )}
 
             <div className="flex min-w-0 items-center gap-1.5">
               <button
@@ -590,12 +671,14 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       const groups = productModifierGroups(product);
                       const requiredConfig = productRequiresConfiguration(product);
                       const recommendedCount = groups.filter((group) => group.recomendado !== false).length;
-                      const currentCount = draftItems.filter((item) => item.produtoId === product.id).reduce((sum, item) => sum + (item.quantidade || 1), 0);
+                      const quickCount = requiredConfig ? 0 : standardQuickDrafts.get(product.id)?.quantity || 0;
+                      const allProductCount = draftItems.filter((item) => item.produtoId === product.id).reduce((sum, item) => sum + (item.quantidade || 1), 0);
+                      const currentCount = standardQuickEntry ? quickCount : allProductCount;
                       return (
                         <article
                           key={product.id}
                           id={`product-card-${product.id}`}
-                          className={`overflow-hidden rounded-2xl border transition ${currentCount > 0 ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-koma-card border-koma-border hover:border-emerald-500/30'}`}
+                          data-in-draft={allProductCount > 0} className={`kw-product overflow-hidden rounded-2xl border transition ${allProductCount > 0 ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-koma-card border-koma-border hover:border-emerald-500/30'}`}
                         >
                           <button
                             id={`customize-product-btn-${product.id}`}
@@ -624,7 +707,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                               <div
                                 id={`product-quick-stepper-${product.id}`}
                                 className="grid min-h-10 grid-cols-[42px_1fr_42px] overflow-hidden rounded-xl border border-emerald-500/30 bg-koma-input"
-                                aria-label={`Quantidade de ${product.nome} no pedido`}
+                                aria-label={standardQuickEntry ? `Quantidade padrão de ${product.nome} para ${quickClientLabel}` : `Quantidade de ${product.nome} no pedido`}
                               >
                                 <button
                                   type="button"
@@ -638,7 +721,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                 </button>
                                 <div className="pointer-events-none flex min-w-0 items-center justify-center gap-2 px-2 text-center" aria-live="polite">
                                   <span className="font-mono text-sm font-extrabold text-emerald-400">{currentCount}</span>
-                                  <span className="text-[9px] font-semibold uppercase tracking-wide text-koma-muted">no pedido</span>
+                                  <span className="text-[9px] font-semibold uppercase tracking-wide text-koma-muted">{standardQuickEntry ? 'padrão' : 'no pedido'}</span>
                                 </div>
                                 <button
                                   type="button"
@@ -646,7 +729,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                   onClick={() => handleQuickIncrement(product)}
                                   className="grid min-h-10 place-items-center border-l border-koma-border text-koma-muted transition hover:bg-emerald-500/10 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
                                   aria-label={`Aumentar ${product.nome}`}
-                                  title="Adicionar mais uma unidade com a configuração atual"
+                                  title={standardQuickEntry ? `Adicionar uma unidade padrão para ${quickClientLabel}` : 'Adicionar mais uma unidade com a configuração atual'}
                                 >
                                   <Plus size={15} />
                                 </button>

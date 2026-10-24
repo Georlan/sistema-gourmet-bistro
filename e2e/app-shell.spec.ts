@@ -125,15 +125,16 @@ async function openDrawer(page: Page) {
 test('drawer abre, fecha pelo botão e backdrop, restaurando scroll e disponibilidade', async ({ page }) => {
   const state = await openShell(page);
   await openDrawer(page);
-  await expect(page.getByText('p/ servir', { exact: true }).locator('..')).toContainText('1');
-  await page.getByRole('button', { name: 'Disponível no Salão', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Ocupado / Em Atendimento', exact: true })).toBeVisible();
+  await expect(page.locator('#drawer-open-history')).toBeVisible();
+  await expect(page.locator('#drawer-sync-salon')).toHaveCount(0);
+  await page.locator('#waiter-availability-toggle').click();
+  await expect(page.locator('#waiter-availability-toggle')).toHaveAttribute('aria-pressed', 'false');
   await page.locator('#close-sidebar-btn').click();
   await expect(page.locator('#sidebar-backdrop')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
 
   await openDrawer(page);
-  await expect(page.getByRole('button', { name: 'Ocupado / Em Atendimento', exact: true })).toBeVisible();
+  await expect(page.locator('#waiter-availability-toggle')).toHaveAttribute('aria-pressed', 'false');
   const viewport = page.viewportSize()!;
   await page.locator('#sidebar-backdrop').click({ position: { x: viewport.width - 8, y: 20 } });
   await expect(page.locator('#sidebar-backdrop')).toHaveCount(0);
@@ -141,32 +142,31 @@ test('drawer abre, fecha pelo botão e backdrop, restaurando scroll e disponibil
   expect(state.unexpectedRequests).toEqual([]);
 });
 
-test('sincronizar salão fecha o drawer e atualiza pedidos e mesas', async ({ page }) => {
+test('lateral não repete filtros nem oferece sincronização manual', async ({ page }) => {
   const state = await openShell(page);
   await openDrawer(page);
-  const ordersBefore = state.requests.filter(value => value === 'GET /comandas/detalhes/todos').length;
-  const tablesBefore = state.requests.filter(value => value === 'GET /mesas/').length;
-  await page.getByRole('button', { name: /Sincronizar Salão/ }).click();
-  await expect(page.locator('#sidebar-backdrop')).toHaveCount(0);
-  await expect.poll(() => state.requests.filter(value => value === 'GET /comandas/detalhes/todos').length).toBeGreaterThan(ordersBefore);
-  await expect.poll(() => state.requests.filter(value => value === 'GET /mesas/').length).toBeGreaterThan(tablesBefore);
-  await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
+  for (const id of ['drawer-sync-salon', 'drawer-show-all-tables', 'drawer-show-ready-tables', 'drawer-show-occupied-tables']) await expect(page.locator('#' + id)).toHaveCount(0);
+  await expect(page.locator('#drawer-open-history')).toBeVisible();
+  await page.locator('#close-sidebar-btn').click();
+  await expect(page.locator('#mesa-card-7')).toBeVisible();
   expect(state.unexpectedRequests).toEqual([]);
 });
 
 test('tema e preferências persistem ao reabrir; logout limpa contexto da aba e mantém tema', async ({ page }) => {
   const state = await openShell(page);
   await openDrawer(page);
+  await page.locator('.kw-preferences > summary').click();
   await page.locator('label').filter({has:page.locator('#sidebar-toggle-images')}).click();
   await page.locator('label').filter({has:page.locator('#sidebar-toggle-descriptions')}).click();
-  await page.getByRole('button', { name: 'Escuro', exact: true }).click();
+  await page.getByRole('button', { name: /Tema escuro/ }).click();
   await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'light');
   await page.locator('#close-sidebar-btn').click();
   await openDrawer(page);
+  await page.locator('.kw-preferences > summary').click();
   await expect(page.locator('#sidebar-toggle-images')).not.toBeChecked();
   await expect(page.locator('#sidebar-toggle-descriptions')).not.toBeChecked();
-  await expect(page.getByRole('button', { name: 'Claro', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'LOGOUT / SAIR', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Tema claro/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Sair', exact: true }).click();
   await expect(page.getByLabel('E-MAIL')).toBeVisible();
   await expect(page.locator('#sidebar-backdrop')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
@@ -200,7 +200,7 @@ test('logout seguido de novo login renova sessão, refaz fluxo de dados e persis
   const ordersBeforeLogout = state.requests.filter(value => value === 'GET /comandas/detalhes/todos').length;
 
   await openDrawer(page);
-  await page.getByRole('button', { name: 'LOGOUT / SAIR', exact: true }).click();
+  await page.getByRole('button', { name: 'Sair', exact: true }).click();
   await expect(page.getByLabel('E-MAIL')).toBeVisible();
   await expect.poll(() => page.evaluate(() => ({
     token: sessionStorage.getItem('koma_waiter_token'),

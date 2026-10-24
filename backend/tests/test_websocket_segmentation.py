@@ -120,3 +120,39 @@ def test_catalog_invalidation_never_reaches_another_tenant():
         foreign_internal.send_json.assert_not_awaited()
         foreign_client.send_json.assert_not_awaited()
     asyncio.run(exercise())
+
+
+def test_presence_fanout_with_5000_isolated_restaurants_and_10000_waiters():
+    """Routing simulation, not a real network/production capacity benchmark."""
+    class Peer:
+        def __init__(self):
+            self.messages = []
+
+        async def accept(self, **kwargs):
+            pass
+
+        async def send_json(self, message):
+            self.messages.append(message)
+
+    async def exercise():
+        manager = ConnectionManager()
+        peers = {}
+        for tenant in range(100_000, 105_000):
+            peers[tenant] = [Peer(), Peer()]
+            for index, peer in enumerate(peers[tenant]):
+                await manager.connect(peer, tenant, user_id=f'waiter-{index}')
+        public_peer = Peer()
+        await manager.connect(public_peer, 100_042, client_type='client')
+        message = {'event': 'draft_status', 'mesa_id': 7, 'ativo': True, 'garcom_id': 'waiter-0'}
+        await manager.broadcast(message, 100_042)
+        assert len(manager.identities) == 10_000
+        assert len(manager.active_connections) == 5_000
+        for tenant, pair in peers.items():
+            assert all(peer.messages == ([message] if tenant == 100_042 else []) for peer in pair)
+        assert public_peer.messages == []
+        manager.disconnect(peers[100_042][0], 100_042)
+        await manager.broadcast({'event': 'waiter_disconnected'}, 100_042)
+        assert len(peers[100_042][1].messages) == 2
+        assert len(peers[100_042][0].messages) == 1
+
+    asyncio.run(exercise())

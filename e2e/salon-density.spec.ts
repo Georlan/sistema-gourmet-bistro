@@ -27,12 +27,13 @@ test('30 mesas mantêm cards compactos e livres não esticam; detalhes cabem na 
     await page.screenshot({ path: testInfo.outputPath('compact-salon.png') });
   }
   await occupied.getByRole('button', { name: 'Ver comanda', exact: true }).click();
-  const details = page.getByRole('dialog', { name: 'Mesa 7', exact: true });
+  const details = page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true });
   const box = (await details.boundingBox())!;
   expect(box.y).toBeGreaterThanOrEqual(0);
   expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize()!.height);
   await expect(details.getByRole('button', { name: 'Adicionar consumo', exact: true })).toBeVisible();
   await expect(details.getByRole('button', { name: 'Receber', exact: true })).toBeVisible();
+  await details.getByText('Mais opções', { exact: true }).click();
   await details.getByRole('combobox', { name: 'Mesa de destino' }).scrollIntoViewIfNeeded();
   await expect(details.getByRole('combobox', { name: 'Mesa de destino' })).toBeInViewport();
   await details.getByRole('button', { name: 'Fechar detalhes' }).scrollIntoViewIfNeeded();
@@ -44,8 +45,8 @@ test('30 mesas mantêm cards compactos e livres não esticam; detalhes cabem na 
 test('cédulas só aparecem em Dinheiro e trocar método não altera valor nem registra pagamento', async ({ page }) => {
   const state = await openOperationalScenario(page, { subtab: 'mesas' });
   await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Mesa 7', exact: true }).getByRole('button', { name: 'Receber', exact: true }).click();
-  const form = page.locator('form').filter({ hasText: 'Receber Pagamento' });
+  await page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true }).getByRole('button', { name: 'Receber', exact: true }).click();
+  const form = page.locator('form').filter({ has: page.getByRole('textbox', { name: 'Digite qualquer valor para abater do saldo.' }) });
   const shortcuts = form.getByRole('group', { name: 'Atalhos de cédulas' });
   const value = form.getByRole('textbox', { name: 'Digite qualquer valor para abater do saldo.' });
   await expect(value).toHaveValue('160,00');

@@ -7,7 +7,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { API_BASE_URL } from '../../config/api';
 import { getOperatorSession, type OperatorSession } from '../../utils/authSession';
@@ -58,7 +58,10 @@ function readSession(): OperatorSession | null {
 }
 
 export function CustomerSupportWidget() {
+  const messageRef = useRef<HTMLTextAreaElement>(null);
+  const submittingRef = useRef(false);
   const [session, setSession] = useState<OperatorSession | null>(() => readSession());
+  const scopeRef = useRef<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [kind, setKind] = useState<FeedbackKind>('question');
   const [message, setMessage] = useState('');
@@ -67,10 +70,18 @@ export function CustomerSupportWidget() {
   const [sentId, setSentId] = useState<string | null>(null);
 
   useEffect(() => {
-    const syncSession = () => setSession(readSession());
+    const acceptSession = (next: OperatorSession | null) => {
+      const scope = next ? `${next.user.restaurante_id}:${next.user.id}` : null;
+      if (scopeRef.current !== null && scope !== scopeRef.current) {
+        setMessage('');setKind('question');setSentId(null);setError('');setIsOpen(false);
+      }
+      scopeRef.current = scope;setSession(next);
+    };
+    acceptSession(readSession());
+    const syncSession = () => acceptSession(readSession());
     const openSupport = () => {
       const nextSession = readSession();
-      setSession(nextSession);
+      acceptSession(nextSession);
       if (!nextSession?.token) return;
       setSentId(null);
       setError('');
@@ -86,6 +97,14 @@ export function CustomerSupportWidget() {
       window.removeEventListener(KOMA_OPEN_CUSTOMER_SUPPORT_EVENT, openSupport);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    if (!sentId) messageRef.current?.focus({ preventScroll: true });
+    return () => { document.body.style.overflow = previous; };
+  }, [isOpen, sentId]);
 
   const activeOption = useMemo(
     () => FEEDBACK_OPTIONS.find((option) => option.id === kind) ?? FEEDBACK_OPTIONS[0],
@@ -109,7 +128,10 @@ export function CustomerSupportWidget() {
   const submitFeedback = async (event: React.FormEvent) => {
     event.preventDefault();
     const trimmedMessage = message.trim();
-    if (trimmedMessage.length < 5 || isSending) return;
+    if (trimmedMessage.length < 5 || submittingRef.current) return;
+    const active = readSession();
+    if (!active || active.token !== session.token) { setIsOpen(false);return; }
+    submittingRef.current = true;
 
     setIsSending(true);
     setError('');
@@ -140,6 +162,7 @@ export function CustomerSupportWidget() {
       }
 
       const body = await response.json();
+      if (readSession()?.token !== session.token) return;
       setSentId(typeof body?.id === 'string' ? body.id : 'ok');
       setMessage('');
     } catch (submissionError) {
@@ -149,12 +172,21 @@ export function CustomerSupportWidget() {
           : 'Não foi possível enviar agora. Tente novamente em instantes.',
       );
     } finally {
+      submittingRef.current = false;
       setIsSending(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label="Ajuda e feedback KÔMA">
+    <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label="Ajuda e feedback KÔMA" onKeyDown={event => {
+      if (event.key === 'Escape') setIsOpen(false);
+      if (event.key === 'Tab') {
+        const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), textarea')].filter(node => node.getClientRects().length > 0 && node.getAttribute('aria-label') !== 'Fechar ajuda');
+        const first = controls[0], last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault();last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault();first?.focus(); }
+      }
+    }}>
       <button
         type="button"
         className="absolute inset-0 bg-black/55 backdrop-blur-[1px]"
@@ -168,13 +200,13 @@ export function CustomerSupportWidget() {
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">Suporte KÔMA</p>
             <h2 className="mt-1 text-xl font-bold text-koma-foreground">Ajuda e feedback</h2>
             <p className="mt-1 text-sm text-koma-muted-foreground">
-              Envie uma dúvida, sugestão, problema ou reclamação. Sua mensagem fica registrada com o restaurante e a tela atual.
+              Conte como podemos ajudar.
             </p>
           </div>
           <button
             type="button"
             onClick={closeDrawer}
-            className="rounded-xl border border-koma-border p-2 text-koma-muted-foreground transition hover:bg-koma-elevated hover:text-koma-foreground"
+            className="min-h-[44px] min-w-[44px] rounded-xl border border-koma-border p-2 text-koma-muted-foreground transition hover:bg-koma-elevated hover:text-koma-foreground"
             aria-label="Fechar"
           >
             <X className="h-5 w-5" />
@@ -210,8 +242,30 @@ export function CustomerSupportWidget() {
         ) : (
           <form onSubmit={submitFeedback} className="flex min-h-0 flex-1 flex-col">
             <div className="flex-1 overflow-y-auto px-5 py-5">
+              <label className="block">
+                <span className="text-xs font-bold uppercase tracking-[0.12em] text-koma-muted-foreground">
+                  Sua mensagem
+                </span>
+                <textarea
+                  ref={messageRef}
+                  autoFocus
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  maxLength={2000}
+                  rows={5}
+                  className="mt-2 w-full resize-none rounded-2xl border border-koma-border bg-koma-card px-4 py-3 text-[max(16px,1rem)] text-koma-foreground outline-none transition placeholder:text-koma-muted-foreground focus:border-koma-accent focus:ring-2 focus:ring-koma-accent/20"
+                  placeholder={`Escreva aqui…`}
+                  required
+                />
+              </label>
+
+              <div className="mt-2 flex items-center justify-between gap-3 text-xs text-koma-muted-foreground">
+                <span>{message.length}/2000</span>
+                <span>A tela atual é anexada automaticamente.</span>
+              </div>
+
               <p className="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-koma-muted-foreground">
-                O que você quer enviar?
+                Tipo de mensagem
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {FEEDBACK_OPTIONS.map((option) => {
@@ -222,41 +276,19 @@ export function CustomerSupportWidget() {
                       key={option.id}
                       type="button"
                       onClick={() => setKind(option.id)}
-                      className={`rounded-2xl border p-3 text-left transition ${
+                      className={`min-h-[44px] rounded-2xl border px-3 py-2 text-left transition ${
                         selected
                           ? 'border-koma-accent bg-koma-accent/10'
                           : 'border-koma-border bg-koma-card hover:bg-koma-elevated'
                       }`}
                       aria-pressed={selected}
                     >
-                      <Icon className={`h-5 w-5 ${selected ? 'text-koma-accent' : 'text-koma-muted-foreground'}`} />
-                      <span className="mt-2 block text-sm font-bold text-koma-foreground">{option.label}</span>
-                      <span className="mt-1 block text-xs leading-5 text-koma-muted-foreground">
-                        {option.description}
-                      </span>
+                      <Icon className={`inline-block h-4 w-4 ${selected ? 'text-koma-accent' : 'text-koma-muted-foreground'}`} />
+                      <span className="ml-2 text-sm font-semibold text-koma-foreground">{option.label}</span>
+
                     </button>
                   );
                 })}
-              </div>
-
-              <label className="mt-5 block">
-                <span className="text-xs font-bold uppercase tracking-[0.12em] text-koma-muted-foreground">
-                  Conte o que aconteceu
-                </span>
-                <textarea
-                  value={message}
-                  onChange={(event) => setMessage(event.target.value)}
-                  maxLength={2000}
-                  rows={7}
-                  className="mt-2 w-full resize-none rounded-2xl border border-koma-border bg-koma-card px-4 py-3 text-sm text-koma-foreground outline-none transition placeholder:text-koma-muted-foreground focus:border-koma-accent focus:ring-2 focus:ring-koma-accent/20"
-                  placeholder={`Escreva sua ${activeOption.label.toLowerCase()} com o máximo de contexto que conseguir…`}
-                  required
-                />
-              </label>
-
-              <div className="mt-2 flex items-center justify-between gap-3 text-xs text-koma-muted-foreground">
-                <span>{message.length}/2000</span>
-                <span>A tela atual é anexada automaticamente.</span>
               </div>
 
               {error ? (

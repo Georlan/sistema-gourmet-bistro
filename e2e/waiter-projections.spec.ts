@@ -29,6 +29,7 @@ type WaiterScenario = {
   emptySession?: boolean;
   occupancyTargets?: boolean;
   withoutCheck?: boolean;
+  withoutLaunchIdentity?: boolean;
   canCloseTable?: boolean;
   canTransferTables?: boolean;
   canTransferItems?: boolean;
@@ -148,7 +149,7 @@ async function openWaiterScenario(
       body = {
         familias: [{
           numero_conta: checkNumber,
-          lancamentos: scenario.emptySession ? [] : [
+          lancamentos: scenario.emptySession || scenario.withoutLaunchIdentity ? [] : [
             { lancamento_id: LAUNCH_A, pedido_id: displayNumbers[0], sequencia: sequences[0] },
             { lancamento_id: LAUNCH_B, pedido_id: displayNumbers[1], sequencia: sequences[1] },
           ],
@@ -239,7 +240,8 @@ test('mapa do Garçom preserva mesa livre, ocupada e pronta nos filtros', async 
   const state = await openWaiterScenario(page);
   const filters = page.getByRole('group', { name: 'Filtrar mesas por status' });
 
-  await expect(page.locator('#mesa-card-8')).toContainText('Livre');
+  await expect(page.locator('#mesa-card-8')).toHaveAccessibleName(/Mesa 8: Livre/);
+  await expect(page.locator('#mesa-card-8')).not.toContainText('Livre');
   await expect(page.locator('#mesa-card-7')).toContainText('12m');
   await filters.getByRole('button', { name: /^Ocupadas/ }).click();
   await expect(page.locator('#mesa-card-7')).toBeVisible();
@@ -290,6 +292,20 @@ test('modal mantém 24-A e 24-B na mesma Comanda e reimprime por lançamento té
   ]);
   expect(state.check.id).toBe(CHECK_ID);
   expect(state.check.status_comanda).toBeNull();
+  expect(state.unexpectedApiRequests).toEqual([]);
+});
+
+test('consumo sem identidade humana não mostra sufixo técnico e valores usam reais brasileiros', async ({ page }) => {
+  const state = await openWaiterScenario(page, ['preparando', 'pronto'], { withoutLaunchIdentity: true });
+  await page.locator('#mesa-card-7').click();
+  const lots = page.locator('[id^="placed-order-"]');
+  await expect(lots).toHaveCount(2);
+  await expect(lots.first()).toContainText('Pedido sem número');
+  await expect(lots.last()).toContainText('Pedido sem número');
+  await expect(lots.first()).toContainText('R$ 112,00');
+  await expect(page.locator('.kw-consumption-total')).toContainText('R$ 160,00');
+  await expect(lots.first()).not.toContainText(LAUNCH_A.slice(-4));
+  expect(state.writes).toEqual([]);
   expect(state.unexpectedApiRequests).toEqual([]);
 });
 
@@ -395,8 +411,12 @@ for (const withoutCheck of [false, true]) {
     const tableHeading = page.getByRole('heading', { name: 'Mesa 7', exact: true });
     await expect(tableHeading).toBeVisible();
     await expect(tableHeading.locator('..').getByText('Livre', { exact: true })).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: /Cardápio/ })).toHaveAttribute('aria-selected', 'true');
+    // Occupied card body opens consumption even before the first launch.
+    await expect(page.getByRole('tab', { name: 'Consumo', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('[id^="placed-order-"]')).toHaveCount(0);
+    await page.locator('#close-mesa-modal-btn').click();
+    await page.locator('#mesa-card-launch-7').click();
+    await expect(page.getByRole('tab', { name: /Cardápio/ })).toHaveAttribute('aria-selected', 'true');
     expect(state.writes).toEqual([]);
     expect(state.unexpectedApiRequests).toEqual([]);
   });
@@ -610,6 +630,15 @@ test('dois garçons recebem presença na mesma mesa sem bloquear ações, inclus
     expect(await current.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   if (process.env.PRESENCE_SCREENSHOTS) await secondPage.screenshot({ path: `${process.env.PRESENCE_SCREENSHOTS}/mesa-${test.info().project.name}.png` });
+  // A missed departure must not survive reconnect; live peers replay their presence.
+  const oldSocket = sockets.get('georlan')!;
+  oldSocket.send(JSON.stringify({ event: 'draft_status', mesa_id: 7, garcom_id: 'departed', garcom_nome: 'Já saiu', ativo: true }));
+  await expect(secondPage.getByRole('status').filter({ hasText: 'Já saiu' }).last()).toBeVisible();
+  oldSocket.close({ code: 1012, reason: 'simulated reconnect' });
+  await expect.poll(() => sockets.get('georlan') !== oldSocket).toBe(true);
+  await expect(secondPage.getByRole('status').filter({ hasText: 'Já saiu' })).toHaveCount(0);
+  await expect(secondPage.getByRole('status').filter({ hasText: 'Glória também' }).last()).toBeVisible();
+  await expect(secondPage.getByRole('button', { name: /Adicionar/ }).first()).toBeEnabled();
   // Closing an empty draft releases presence in the other session immediately.
   await secondPage.getByRole('button', { name: /Fechar/i }).first().click();
   await expect(page.getByRole('status').filter({ hasText: 'Georlan também' })).toHaveCount(0);

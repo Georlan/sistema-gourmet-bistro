@@ -53,6 +53,8 @@ for (const scenario of scenarios) {
       if (scenario.orders.length) assert.match(html, /12m/);
     }
     assert.doesNotMatch(waiter, />Receber<|>Ver comanda</);
+    assert.doesNotMatch(waiter, />Livre<|>Em preparo<|>Tem item pronto<|>Itens servidos</);
+    assert.match(waiter, /aria-label="[^"]+:/);
     if (scenario.orders.length) assert.match(cashier, /Ver comanda/);
     assert.match(cashier, /data-density="compact"/);
     assert.match(waiter, /data-density="regular"/);
@@ -74,9 +76,9 @@ test('nome da mesa e referência do pedido não quebram no card mobile do garço
     draftCount: 0, hasPendingPayment: false, onClick() {},
   }));
 
-  assert.match(markup, /whitespace-normal break-words[^>]*title="Mesa 01"[^>]*>Mesa 01<\/strong>/);
+  assert.match(markup, /title="Mesa 01"[^>]*class="kw-table__number"[^>]*>01<\/strong>/);
   assert.doesNotMatch(markup, /truncate[^>]*title="Mesa 01"/);
-  assert.match(markup, /shrink-0 whitespace-nowrap[^>]*title="Pedido #40"[^>]*>Ped\. 40<\/span>/);
+  assert.match(markup, /class="kw-table__order"[^>]*title="Pedido #40"[^>]*>Ped\. 40<\/span>/);
   assert.doesNotMatch(markup, />Pedido 40<\/span>/);
 });
 

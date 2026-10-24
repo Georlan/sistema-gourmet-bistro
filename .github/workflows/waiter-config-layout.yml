@@ -2,6 +2,18 @@ name: Waiter configuration layout
 on:
   pull_request:
     paths:
+      - 'src/App.tsx'
+      - 'src/main.tsx'
+      - 'src/index.css'
+      - 'src/components/Mesa*.tsx'
+      - 'src/analytics/**'
+      - 'src/components/app/**'
+      - 'src/components/mesas/**'
+      - 'src/components/shared/SharedTableCard.tsx'
+      - 'src/domain/waiter*.ts'
+      - 'backend/app/routes/waiter_history.py'
+      - 'backend/tests/test_waiter*.py'
+      - 'e2e/waiter-*.spec.ts'
       - 'src/components/MenuPanel.tsx'
       - 'src/components/shared/ModifierPicker.tsx'
       - 'e2e/waiter-config-layout.spec.ts'
@@ -24,6 +36,14 @@ jobs:
         env:
           KOMA_E2E_PORT: '4297'
         run: npm run test:e2e -- e2e/waiter-config-layout.spec.ts --project=mobile-360 --project=mobile-390 --project=mobile-412 --project=tablet-768 --project=desktop-1366 --workers=2
+      - name: Waiter continuity, synchronization and history
+        env:
+          KOMA_E2E_PORT: '4297'
+        run: >-
+          npm run test:e2e -- e2e/waiter-salon-wave1.spec.ts e2e/waiter-projections.spec.ts
+          e2e/waiter-quick-entry.spec.ts e2e/waiter-repeat.spec.ts
+          e2e/waiter-sync.spec.ts e2e/waiter-history-support.spec.ts
+          --project=mobile-390 --project=desktop-1366 --workers=2
       - uses: actions/upload-artifact@v6
         if: always()
         with:
@@ -32,3 +52,30 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  history-and-isolation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      ENVIRONMENT: test
+      PYTHON_DOTENV_DISABLED: '1'
+      DATABASE_URL: sqlite:///./waiter-ci-isolated.db
+      SECRET_KEY: waiter-ci-test-only-secret
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      PYTHONPATH: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.15'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: python -m pip install -r backend/requirements-dev.txt
+      - name: Own history, permission propagation and tenant room isolation
+        run: >-
+          python -m pytest -q -ra
+          backend/tests/test_waiter_history.py
+          backend/tests/test_waiter_config_realtime_contract.py
+          backend/tests/test_websocket_segmentation.py
+          backend/tests/test_websocket_credentials.py
+          backend/tests/test_ui_theme_csp_stage4.py

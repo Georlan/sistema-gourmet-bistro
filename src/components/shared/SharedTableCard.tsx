@@ -1,3 +1,4 @@
+import { WaiterTableSurface } from '../mesas/WaiterTableSurface';
 import { TablePresenceNotice } from './TablePresenceNotice';
 import React from 'react';
 import { Clock3, FileText, GitMerge, UsersRound } from 'lucide-react';
@@ -28,6 +29,7 @@ const tones: Record<string, string> = {
 
 interface Props {
   id?: string;
+  waiterOverview?: boolean;
   table: Table;
   orders: readonly Order[];
   operational: TableOperationalProjection;
@@ -55,7 +57,7 @@ interface Props {
 
 /** Common shell; caller owns navigation, payment and any role-specific actions. */
 export function SharedTableCard({
-  id, table, orders, operational, total, draftCount = 0, mergedSources = [],
+  id, waiterOverview = false, table, orders, operational, total, draftCount = 0, mergedSources = [],
   otherWaitersServing = [], showOperationalStatus = true, onClick, identityLabel = 'Comanda', fillHeight = false,
   showItemCount = true, filterStatus, note, density = 'regular', primaryIdentity = 'table', children,
 }: Props) {
@@ -81,6 +83,12 @@ export function SharedTableCard({
   const emphasizeOrder = primaryIdentity === 'order' && Boolean(prominentOrderLabel);
   const tableDisplayName = table.nome?.trim() || `Mesa ${String(table.id).padStart(2, '0')}`;
   const formattedTotal = `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (waiterOverview) return <WaiterTableSurface
+    table={table} presentation={presentation} primaryCheckNumber={primaryCheckNumber}
+    occupied={occupied} formattedTotal={formattedTotal} elapsed={operational.elapsed}
+    draftCount={draftCount} mergedSources={mergedSources} names={otherWaitersServing}
+    identityLabel={identityLabel} density={density}
+  >{children}</WaiterTableSurface>;
   return (
     <Container
       id={id}

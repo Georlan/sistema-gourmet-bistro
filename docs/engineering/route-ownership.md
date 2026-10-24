@@ -15,6 +15,7 @@ as sobreposições HTTP de R06. Não é comprovante de deploy.
 | Reimpressão de lançamento | `routes/atendimento_printing.py`; impressão física e agente inalterados |
 | Catálogo e categorias | `routes/products.py`; cardápio público importa a ordenação existente |
 | Perfil e compatibilidade | `routes/caixa.py` mantém aliases de escrita; o GET `/caixa/config-cardapio` pertence somente a `cardapio_config_bridge.py` |
+| Histórico individual do Garçom | `routes/waiter_history.py`; GET `/garcom/historico` e `/{launch_id}` autenticados, somente lançamentos do operador e tenant atuais |
 | Relatórios | `routes/relatorios.py` registra handlers de `financial_read_routes.py` e `financial_product_routes.py` |
 | Indicadores do painel | `routes/optimization.py` registra `financial_read_routes.get_dashboard_financeiro` |
 | Fechamento e estornos | `routes/caixa.py` registra handlers de `financial_cash_routes.py` e `financial_refund_listing.py` |

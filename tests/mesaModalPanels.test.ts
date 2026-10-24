@@ -41,6 +41,7 @@ const consumptionProps = (
   restauranteConfig: {
     taxa_servico_ativa: false,
     perm_garcom_fechar: false,
+    perm_garcom_print: true,
     entitlements: { printing: true },
   },
   totalValue: getTableTotal(orders), customerSubtotals: getCustomerSubtotals(orders),
@@ -104,7 +105,7 @@ test('consumo mantém lotes, IDs de DOM, valores e ações técnicas por lançam
   assert.match(html, /id="placed-order-technical-launch-1"/);
   assert.match(html, /124-A/);
   assert.match(html, /124-AA/);
-  assert.match(html, /R\$ 160\.00/);
+  assert.match(html, /R\$ 160,00/);
   const nodes = elements(MesaConsumptionPanel(props));
   nodes.filter(node => node.type === 'button' && textOf(node.props.children) === 'Reimprimir')
     .forEach(node => node.props.onClick!());
