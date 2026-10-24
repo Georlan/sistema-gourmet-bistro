@@ -394,3 +394,33 @@ test('marca permanece visível ao rolar e opções da central compartilham alinh
   const lefts = await labels.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().left));
   expect(Math.max(...lefts) - Math.min(...lefts)).toBeLessThan(2);
 });
+
+for (const theme of ['dark', 'light']) {
+  for (const textSize of ['padrao', 'gigante']) {
+    test(`só os cards rolam com 80 mesas, controles imóveis em ${theme}/${textSize}`, async ({ page }) => {
+      await setupWaiterWave1(page);
+      await page.route('**/mesas/', route => route.fulfill({ json: Array.from({ length: 80 }, (_, i) => ({ id: i + 1, nome: `Mesa ${i + 1}`, capacidade: 4, status: 'livre' })) }));
+      await page.evaluate(({ theme, textSize }) => {
+        localStorage.setItem('@koma:theme', theme);
+        localStorage.setItem('koma_font_size', textSize);
+      }, { theme, textSize });
+      await page.reload();
+      await expect(page.locator('#mesa-card-80')).toHaveCount(1);
+      const fixed = page.locator('.kw-header, .kw-salon-tools, .kw-footer');
+      const before = await fixed.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().y));
+      const grid = page.locator('.kw-table-grid');
+      await grid.evaluate(node => { node.scrollTop = node.scrollHeight; });
+      expect(await grid.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+      await expect(page.locator('#mesa-card-80')).toBeInViewport();
+      const after = await fixed.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().y));
+      after.forEach((position, index) => expect(Math.abs(position - before[index])).toBeLessThan(1));
+      expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1 && window.scrollY === 0)).toBe(true);
+      const last = await page.locator('#mesa-card-80').boundingBox();
+      const footer = await page.locator('.kw-footer').boundingBox();
+      expect(last!.y + last!.height).toBeLessThanOrEqual(footer!.y + 1);
+      await page.getByRole('textbox', { name: 'Ir para mesa' }).fill('Mesa 80');
+      await expect(page.locator('#mesa-card-80')).toBeInViewport();
+      await expect(page.locator('[id^="mesa-card-"][role="region"]')).toHaveCount(1);
+    });
+  }
+}
