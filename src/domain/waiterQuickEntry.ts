@@ -26,11 +26,13 @@ export function projectStandardQuickDrafts(items: readonly DraftItem[], client: 
 }
 
 /** Names already present in this table's items; no catalog-wide/customer-history lookup. */
-export function getTableQuickClients(drafts: readonly DraftItem[], orders: readonly Order[]) {
+export function getTableQuickClients(drafts: readonly DraftItem[], orders: readonly Order[], tableId?: number) {
   const names = new Set<string>();
-  for (const item of [...orders.flatMap(order => order.itens), ...drafts]) {
-    const name = (item.clienteNome || '').trim();
-    if (clientKey(name)) names.add(name);
+  const currentItems = orders.filter(order => tableId === undefined || order.mesaId === tableId)
+    .flatMap(order => order.itens).filter(item => item.status !== 'cancelado');
+  for (const item of [...currentItems, ...drafts]) {
+    const name = clientKey(item.clienteNome || '');
+    if (name) names.add(name);
   }
   return [...names];
 }

@@ -438,6 +438,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
           )}
 
           <MesaTransferMergePanel
+            compact={activeRole === 'garcom'}
             activeTab={activeTab}
             table={table}
             orders={orders}

@@ -376,3 +376,21 @@ test.describe('App do Garçom - Salão Onda 1', () => {
   });
 
 });
+
+
+test('marca permanece visível ao rolar e opções da central compartilham alinhamento', async ({ page }) => {
+  await setupWaiterWave1(page);
+  const footer = page.locator('.kw-footer');
+  await expect(footer).toBeVisible();
+  for (const scroll of [0, 2000]) {
+    await page.evaluate(y => window.scrollTo(0, y), scroll);
+    const bounds = await footer.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(Math.abs(bounds!.y + bounds!.height - page.viewportSize()!.height)).toBeLessThan(2);
+  }
+  await page.locator('#open-sidebar-btn').click();
+  const labels = page.locator('#drawer-open-history > span, #drawer-open-customer-support > span, .kw-preferences > summary > span, .kw-drawer__footer button > span');
+  await expect(labels).toHaveCount(4);
+  const lefts = await labels.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().left));
+  expect(Math.max(...lefts) - Math.min(...lefts)).toBeLessThan(2);
+});

@@ -30,3 +30,16 @@ test('seletor ignora consumo geral e vazios, mas encontra nomes nos pedidos e ra
   assert.deepEqual(getTableQuickClients(drafts, orders), ['Ana', 'João']);
   assert.deepEqual(getTableQuickClients([item('default', 'Consumo Geral')], []), []);
 });
+
+
+test('nomes pertencem só à mesa atual, sem cancelados ou cadastro residual após remover itens', () => {
+  const orders: Order[] = [
+    { id: 'a', mesaId: 10, garcomId: 'fixture', garcomNome: 'Teste', timestamp: 0,
+      itens: [{ ...item('live', 'Ana'), status: 'entregue' }, { ...item('old', 'Antigo'), status: 'cancelado' }] },
+    { id: 'b', mesaId: 11, garcomId: 'fixture', garcomNome: 'Teste', timestamp: 0,
+      itens: [{ ...item('foreign', 'Outra mesa'), status: 'preparando' }] },
+  ];
+  assert.deepEqual(getTableQuickClients([item('duplicate', 'Ana'), item('draft', 'João')], orders, 10), ['Ana', 'João']);
+  assert.deepEqual(getTableQuickClients([], [], 10), []);
+  assert.deepEqual(getTableQuickClients([], orders, 12), []);
+});

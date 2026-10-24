@@ -268,6 +268,12 @@ test('modal mantém 24-A e 24-B na mesma Comanda e reimprime por lançamento té
   await page.locator('#mesa-card-7').click();
   await expect(page.getByRole('tab', { name: /Consumo/ })).toHaveAttribute('aria-selected', 'true');
 
+  await expect(page.getByRole('button', { name: 'Transferir', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Mesclar', exact: true })).toHaveCount(0);
+  await expect(page.locator('#tab-transferir-btn')).toBeVisible();
+  await expect(page.locator('#tab-mesclar-btn')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reimpressão', exact: true })).toBeVisible();
+
   const lots = page.locator('[id^="placed-order-"]');
   const firstLot = lots.filter({ hasText: 'Prato da primeira rodada' });
   const secondLot = lots.filter({ hasText: 'Prato da segunda rodada' });

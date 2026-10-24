@@ -121,3 +121,22 @@ test('personalizar para a mesa não herda o cliente do primeiro item identificad
   await expect.poll(async () => (await drafts(page)).filter((i: any) => i.observacao === 'Sem molho').map((i: any) => [i.clienteNome, i.quantidade])).toEqual([['Consumo Geral', 1]]);
   await expect.poll(async () => (await drafts(page)).find((i: any) => i.id === 'plain-joao')?.quantidade).toBe(1);
 });
+
+
+test('revisão mantém itens primeiro e cliente opcional junto ao destino, sem cliente padrão fictício', async ({ page }) => {
+  await open(page, [{ ...plain, clienteNome: 'Consumo Geral' }]);
+  await page.locator('#open-draft-cart-btn').click();
+  const client = page.locator('#overall-client-name');
+  await expect(client).toHaveValue('');
+  await expect(client).toHaveAttribute('placeholder', 'Cliente (opcional)');
+  await expect(page.locator('.kw-review-client-suggestions')).toHaveCount(0);
+  const order = await page.evaluate(() => {
+    const client = document.querySelector('#overall-client-name')!;
+    const total = document.querySelector('.kw-review-total')!;
+    const item = document.querySelector('[id^="draft-item-"]');
+    return { insideTotal: total.contains(client), afterItem: item ? !!(item.compareDocumentPosition(client) & Node.DOCUMENT_POSITION_FOLLOWING) : false };
+  });
+  expect(order).toEqual({ insideTotal: true, afterItem: true });
+  await client.fill('Beatriz');
+  await expect.poll(async () => (await drafts(page))[0]?.clienteNome).toBe('Beatriz');
+});

@@ -67,7 +67,7 @@ export function WaiterDrawer(props: OperationalDrawerProps) {
           </div>
         </details>
       </div>
-      <footer className="kw-drawer__footer"><button onClick={props.onLogout}><LogOut size={18} />Sair</button></footer>
+      <footer className="kw-drawer__footer"><button onClick={props.onLogout}><LogOut size={20} /><span>Sair</span></button></footer>
     </aside>
   </div>;
 }

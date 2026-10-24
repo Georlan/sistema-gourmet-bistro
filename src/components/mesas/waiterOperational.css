@@ -12,7 +12,7 @@
   --kw-accent:#006c53; --kw-accent-ink:#fff;
   --kw-service:#9d3050; --kw-ready:#006c53; --kw-payment:#155e90;
 }
-.waiter-shell > main {padding-top:.5rem;padding-bottom:1rem}
+.waiter-shell > main {padding-top:.5rem;padding-bottom:calc(68px + env(safe-area-inset-bottom))}
 .waiter-shell .kw-header {background:#06392c;color:#f4faf6;height:72px;overflow:hidden;isolation:isolate}
 .waiter-shell .kw-header > div {padding-block:12px}
 .kw-header-art {position:absolute;right:12px;top:0;width:168px;height:72px;pointer-events:none}
@@ -81,17 +81,17 @@
 .kw-menu button {padding-inline:8px;border-radius:20px}
 .kw-menu button:hover {background:var(--kw-raised)}
 .kw-menu #drawer-show-all-tables {background:var(--kw-raised);border-radius:20px 20px 30px 6px}
-.kw-menu button,.kw-menu summary,.kw-preferences summary {display:flex;align-items:center;gap:12px;width:100%;min-height:52px;text-align:left;font-size:.875rem;cursor:pointer}
+.kw-menu button,.kw-menu summary,.kw-preferences summary {padding-inline:8px;display:flex;align-items:center;gap:12px;width:100%;min-height:52px;text-align:left;font-size:.875rem;cursor:pointer}
 .kw-menu button > span,.kw-menu summary > span,.kw-preferences summary > span {flex:1;min-width:0}
 .kw-menu b {font-size:.75rem;font-weight:650;color:var(--kw-muted)}
 .kw-menu--secondary {color:var(--kw-muted)}
-.kw-menu svg,.kw-preferences summary svg {flex-shrink:0}
+.kw-menu svg,.kw-preferences summary svg {flex-shrink:0}.kw-menu button > svg:first-child,.kw-menu summary > svg:first-child,.kw-preferences summary > svg:first-child {width:20px;height:20px}.kw-menu button > svg:last-child:not(:first-child) {width:20px}.kw-preferences summary::after {width:20px;text-align:center}
 .kw-preferences summary::after {content:'+';font-size:1.2rem}.kw-preferences[open] summary::after {content:'−'}
 .kw-preferences__content {padding:4px 0 16px}
 .kw-theme-toggle {display:flex;align-items:center;gap:8px;width:100%;min-height:48px;font-size:.75rem}.kw-theme-toggle span:first-of-type {flex:1;text-align:left}.kw-theme-toggle span:last-child {color:var(--kw-muted);font-size:.6875rem}
 .kw-text-size {padding-block:12px;margin-bottom:8px}.kw-text-size legend {font-size:.75rem;font-weight:650}.kw-text-size > div {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:3px;background:var(--kw-raised);border-radius:12px;margin-top:8px}.kw-text-size button {min-height:44px;font-size:.6875rem;border-radius:9px}.kw-text-size button[aria-pressed="true"] {background:var(--kw-ink);color:var(--kw-surface)}
 .kw-setting {display:flex;align-items:center;gap:12px;justify-content:space-between;min-height:48px;font-size:.75rem}.kw-setting input {width:20px;height:20px;accent-color:var(--kw-accent)}
-.kw-drawer__footer {padding:12px 20px max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--kw-line)}.kw-drawer__footer button {display:flex;align-items:center;gap:10px;min-height:44px;width:100%;font-size:.875rem}
+.kw-drawer__footer {padding:12px 20px max(12px,env(safe-area-inset-bottom));border-top:1px solid var(--kw-line)}.kw-drawer__footer button {display:flex;align-items:center;gap:12px;min-height:44px;width:100%;padding-inline:8px;font-size:.875rem}
 .kw-draft-list > button {padding-left:32px;font-size:.75rem}
 @media(min-width:640px) {.kw-filters button {flex-direction:row;gap:8px;font-size:.8125rem}.kw-table {padding:0 12px 10px;min-height:0}.kw-table__identity {margin-inline:-12px;padding-inline:13px}.kw-table-grid {gap:12px}}
 @media(max-width:479px) {html[data-koma-text-size="gigante"] .kw-table-grid {grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -182,7 +182,7 @@ html[data-koma-text-context="garcom"][data-koma-text-size] {font-size:100%}
 .waiter-shell .kw-flow-tabs > button {flex:0 0 auto;min-width:max-content}
 
 
-.waiter-shell .kw-footer {background:var(--kw-canvas);border-color:var(--kw-line);padding:18px 12px;color:var(--kw-muted)}
+.waiter-shell .kw-footer {position:fixed;inset:auto 0 0;z-index:30;display:grid;place-items:center;min-height:calc(52px + env(safe-area-inset-bottom));background:var(--kw-canvas);border-color:var(--kw-line);padding:8px 12px calc(8px + env(safe-area-inset-bottom));color:var(--kw-muted)}
 .waiter-shell .kw-footer > div {gap:12px}
 .waiter-shell .kw-footer__logo {flex-shrink:0}
 .waiter-shell .kw-footer > div > span:not(.kw-footer__logo) {background:var(--kw-accent);width:3px;height:3px}
@@ -299,3 +299,23 @@ html[data-koma-text-context="garcom"][data-koma-text-size] {font-size:100%}
 .kw-history-total {margin-top:12px}.kw-history-total strong {white-space:nowrap}
 .kw-history-more {min-height:44px;background:var(--kw-raised);border-radius:14px;width:100%;margin-top:16px;font-size:13px;font-weight:600}
 .kw-history-header .kw-icon-button {background:#ffffff1a;color:#f5faf6;box-shadow:none}
+
+/* Compact waiter review and movement: keep primary controls in reach. */
+.waiter-shell .kw-review-client--compact {background:transparent;border-radius:0;margin:0;padding:0}
+.waiter-shell .kw-review-client-suggestions {display:flex;gap:6px;overflow-x:auto;min-width:0}
+.waiter-shell .kw-review-client-suggestions button {flex-shrink:0;min-height:44px;padding-inline:12px;font-size:.75rem;border-radius:12px}
+.waiter-shell .kw-consumption-summary {padding:12px}
+.waiter-shell .kw-consumption-total--compact {padding:10px 12px}
+.waiter-shell .kw-consumption-total--compact > div {display:flex;align-items:center;justify-content:space-between;gap:8px}
+.waiter-shell .kw-consumption-tax {font-size:.6875rem;margin-top:6px;flex-wrap:wrap}
+.waiter-shell .kw-movement {display:flex;flex-direction:column;gap:16px;padding:12px}
+.waiter-shell .kw-movement-title {font-size:.9375rem;font-weight:700;line-height:1.3}
+.waiter-shell .kw-movement-heading p {font-size:.75rem;color:var(--kw-muted);margin-top:4px}
+.waiter-shell .kw-movement > .flex > button {min-height:44px}
+.waiter-shell .kw-movement-grid {gap:8px;padding:0}
+.waiter-shell .kw-movement-grid > button {animation:none;padding:10px 8px;min-height:64px;min-width:0;border-radius:16px;opacity:1;overflow-wrap:anywhere;box-shadow:0 2px 0 rgb(0 0 0 / .14)}
+.waiter-shell .kw-movement-grid > button > span:first-child {font-size:.875rem;line-height:1.2}
+.waiter-shell .kw-movement-grid > button:disabled {opacity:.45}
+.waiter-shell .kw-movement > div > span {text-align:left;letter-spacing:0;text-transform:none;font-size:.75rem}
+@media(min-width:360px) {.waiter-shell .kw-movement-grid {grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:768px) {.waiter-shell .kw-movement-grid {grid-template-columns:repeat(4,minmax(0,1fr))}}

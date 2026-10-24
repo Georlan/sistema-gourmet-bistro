@@ -148,6 +148,12 @@ export function MesaConsumptionPanel({
                 const taxRate = restauranteConfig?.taxa_servico_padrao ?? 10;
                 const taxVal = hasTax ? totalValue * (taxRate / 100) : 0;
                 const grandTotal = totalValue + taxVal;
+                if (activeRole === 'garcom') return (
+                  <div className="kw-consumption-total kw-consumption-total--compact">
+                    <div><span className="text-xs text-koma-muted">Total da mesa</span><strong className="text-xl font-mono text-emerald-400 whitespace-nowrap">R$ {amount(grandTotal)}</strong></div>
+                    {hasTax && <div className="kw-consumption-tax text-koma-muted"><span>Itens R$ {amount(totalValue)}</span><span>Serviço {taxRate}% · R$ {amount(taxVal)}</span></div>}
+                  </div>
+                );
                 return (
                   <div className="kw-consumption-total p-3.5 space-y-2">
                     <div className="flex justify-between items-center font-sans">
@@ -241,7 +247,7 @@ export function MesaConsumptionPanel({
               })()}
 
               {/* Transfer / Merge Quick Actions */}
-              <div className="flex items-center gap-2 pt-0.5">
+              {activeRole !== 'garcom' && <div className="flex items-center gap-2 pt-0.5">
                 {(canTransferTables || canTransferItems) && (
                   <button
                     type="button"
@@ -268,7 +274,7 @@ export function MesaConsumptionPanel({
                     <span>Mesclar</span>
                   </button>
                 )}
-              </div>
+              </div>}
 
               {/* Customer subtotal breakdown */}
               {customerSubtotals.length > 1 && (
@@ -280,7 +286,7 @@ export function MesaConsumptionPanel({
                         key={cust.name}
                         className="bg-koma-raised/70 border border-koma-border/60 rounded-xl px-3 py-1.5 flex items-center justify-between text-xs"
                       >
-                        <span className="font-bold text-koma-foreground truncate max-w-[140px]">{cust.name}</span>
+                        <span className="font-bold text-koma-foreground truncate max-w-[140px]">{activeRole === 'garcom' && cust.name.trim().toLocaleLowerCase('pt-BR') === 'consumo geral' ? 'Mesa' : cust.name}</span>
                         <span className="font-mono font-bold text-emerald-400">R$ {amount(cust.total)}</span>
                       </div>
                     ))}
@@ -335,7 +341,7 @@ export function MesaConsumptionPanel({
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-xs font-bold text-koma-foreground font-sans">{activeRole === 'garcom' ? orderState.displayNumber ? `Pedido ${orderState.displayNumber}` : 'Pedido sem número' : `Lote #${orderState.displayNumber || launchKey.slice(-4)}`}</span>
                       <span className={activeRole === 'garcom' ? 'text-[10px] text-koma-muted font-sans' : 'text-[10px] bg-koma-panel text-koma-muted px-2 py-0.5 rounded font-bold font-sans'}>
-                        Garçom: {order.garcomNome}
+                        {activeRole === 'garcom' ? order.garcomNome : `Garçom: ${order.garcomNome}`}
                       </span>
                       {order.tipo && (activeRole !== 'garcom' || order.tipo.trim().toLocaleLowerCase('pt-BR') !== 'consumo no local') && (
                         <span className={`text-[8px] sm:text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
