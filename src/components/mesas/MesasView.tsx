@@ -88,7 +88,7 @@ export function MesasView({
   ];
 
   return (
-    <div className="w-full text-koma-foreground font-sans select-none space-y-2">
+    <div className="kw-salon w-full text-koma-foreground font-sans select-none space-y-2">
       <h2 className="sr-only">Salão</h2>
 
       <div className="kw-salon-tools">

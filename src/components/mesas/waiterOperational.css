@@ -325,3 +325,12 @@ html[data-koma-text-context="garcom"][data-koma-text-size] {font-size:100%}
 .waiter-shell .kw-consumption-actions button {min-height:44px;min-width:0;border-radius:16px;font-size:.75rem;line-height:1.25;box-shadow:0 2px 0 rgb(0 0 0 / .16)}
 
 .waiter-shell .kw-consumption-actions__feedback {font-size:.75rem;color:var(--kw-ink);text-align:center;margin-bottom:8px}
+
+/* Salon owns one scrolling region; chrome stays in the viewport without offsets. */
+.waiter-shell.kw-salon-shell {height:100dvh;min-height:0;overflow:hidden}
+.kw-salon-shell > .kw-header {position:relative;top:auto;flex-shrink:0}
+.waiter-shell.kw-salon-shell > main {display:flex;flex-direction:column;min-height:0;overflow:hidden;padding-bottom:0}
+.kw-salon-shell .kw-salon {display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.kw-salon-shell .kw-salon-tools {position:relative;top:auto;flex-shrink:0}
+.kw-salon-shell .kw-table-grid {flex:1;min-height:0;overflow-y:auto;overscroll-behavior-y:contain;scrollbar-gutter:stable;padding-bottom:12px}
+.waiter-shell.kw-salon-shell > .kw-footer {position:relative;inset:auto;flex-shrink:0}

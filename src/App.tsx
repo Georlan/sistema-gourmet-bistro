@@ -1764,7 +1764,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   }
 
   return (
-    <div className={`waiter-shell min-h-screen bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+    <div className={`waiter-shell min-h-screen bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''} ${activeRole === 'garcom' ? 'kw-salon-shell' : ''}`}>
       <SupportSessionBanner />
       {/* GLOBAL TOP HEADER */}
       <header className="kw-header sticky top-0 z-30">
