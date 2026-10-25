@@ -5,6 +5,7 @@ import { KomaLogo } from './KomaLogo';
 import { nextKomaTheme, persistKomaTheme, readKomaTheme, applyKomaTheme } from '../config/theme';
 import './courier/courierPresentation.css';
 import { useCourierTrip } from './courier/useCourierTrip';
+import { CourierRideArtwork } from './courier/CourierRideArtwork';
 import { CourierPayment, type CourierPaymentData } from './courier/CourierPayment';
 import ifoodLogo from '../assets/brand/delivery/ifood.png';
 import food99Logo from '../assets/brand/delivery/99food.png';
@@ -301,7 +302,7 @@ export function MotoboyPwaPage() {
         : <>
           <div className="k-courier__intro">
             <div><p className="k-courier__name">{motoboy?.nome}</p><h1>Entregas <span>{entregas.length}</span></h1></div>
-            <svg className="k-courier__art" viewBox="0 0 100 88" fill="none" aria-hidden="true"><path d="M8 68h23l19-34h24l17-22" stroke="currentColor" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round"/><path d="m56 68 13-22 13 22-13 13Z" fill="currentColor" opacity=".45"/><circle cx="9" cy="68" r="6" fill="currentColor"/><path d="m79 10 13-2-2 13" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <CourierRideArtwork className="k-courier__art" />
           </div>
           <div className="k-courier__sync" data-offline={!isOnline || undefined} role="status">{!isOnline ? <><WifiOff size={14} aria-hidden="true" />Sem conexão · entregas mantidas</> : isRefreshing || reconnectRequested ? 'Conferindo entregas…' : refreshFailed ? 'Atualização pendente · tente atualizar' : lastUpdated ? `Atualizado ${new Date(lastUpdated).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</div>
           {uncertainId && <div className="k-courier__notice" role="alert"><span>Confirmação pendente. Toque em Verificar.</span><button type="button" className="k-courier__secondary" disabled={!isOnline || isRefreshing || Boolean(confirmingId)} onClick={() => void carregarDadosPainel(token)}>Verificar</button></div>}

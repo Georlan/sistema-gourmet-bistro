@@ -124,3 +124,9 @@ Implementado localmente: aviso offline de uma linha, endereços carregados manti
 Aprovado pelo usuário: problema de endereço/cliente/pagamento deve avisar o Caixa e manter a entrega. Registrado contrato de autoria, isolamento, idempotência e exibição durável no Caixa. Esse fluxo não foi implementado nesta fatia; não há botão simulando envio. Canal realtime dedicado e conectores comerciais também permanecem pendentes.
 
 Validação deste incremento: 1.100 testes unitários, lint e build aprovados; 15 testes backend focais de projeção, atribuição, escopo e pré-atribuição aprovados. Suite focal de interface: 36 testes mobile/desktop e mais 8 testes de integração do recebimento/confirmação aprovados no código final (44 no total), incluindo teclado/Enter, reconexão concorrente, resposta perdida e revogação. Capturas de claro/escuro e estado offline em `outputs/courier-refinement/research/` no diretório desta conversa; estado offline mobile inspecionado visualmente. A API real local respondeu com seis entregas fictícias em rota e sem telefone de cliente no contrato. Não houve escrita em produção, PR, CI, merge ou publicação.
+
+### Asset do entregador — 25/10/2026
+
+Substituída a seta do cabeçalho por `courier/CourierRideArtwork.tsx`, ilustração vetorial original de entregador com capacete, scooter e bag. Usa a mesma família de verdes, recortes planos e contornos da bandeja em `WaiterServiceArtwork`, sem imagem remota, biblioteca ou animação. O SVG é decorativo, fora da navegação por teclado e da leitura assistiva. Encaixe reduzido em 320px para manter título e contagem na mesma linha.
+
+Validação: seis capturas/testes visuais em 360px, 390px e desktop, nos temas claro/escuro; leitura real da prévia local em 320px e 390px, sem overflow, com inspeção das capturas. Lint, 1.100 testes unitários e build aprovados. Evidências em `outputs/courier-refinement/ride-art/` no diretório da conversa. Alteração somente local, sem publicação.

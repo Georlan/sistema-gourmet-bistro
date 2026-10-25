@@ -9,7 +9,15 @@
 .k-courier__name {font-size:14px;color:var(--koma-text-secondary);overflow-wrap:anywhere;margin-bottom:5px}
 .k-courier h1 {font:700 26px/1.15 var(--koma-font-display);letter-spacing:-.04em;overflow-wrap:anywhere}
 .k-courier h1 span {font-size:20px;color:var(--koma-accent-text);margin-left:6px}
-.k-courier__art {position:static;flex:0 0 48px;margin-left:12px;width:48px;height:48px;color:var(--koma-accent);opacity:.8}
+.k-courier__art {position:static;flex:0 0 124px;margin-left:8px;width:124px;height:76px}
+.k-courier-ride__field {fill:#145b46}
+.k-courier-ride__tire,.k-courier-ride__trousers,.k-courier-ride__shoe {fill:#073b2c}
+.k-courier-ride__hub,.k-courier-ride__paper {fill:#d1f5e4}
+.k-courier-ride__scooter,.k-courier-ride__helmet {fill:#79dcba}
+.k-courier-ride__shirt,.k-courier-ride__box {fill:#05c49d}
+.k-courier-ride__line,.k-courier-ride__box-line {stroke:#073b2c;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.k-courier-ride__box-line {stroke-width:2}
+.k-courier-ride__motion {stroke:#79dcba;stroke-width:4;stroke-linecap:round}
 .k-courier__sync {min-height:32px;display:flex;align-items:center;justify-content:flex-end;font-size:12px;color:var(--koma-text-muted);padding:4px 2px}
 .k-courier__sync[data-offline=true] {justify-content:flex-start;gap:7px;color:var(--koma-text-primary)}
 .k-courier__list {display:grid;gap:16px;align-items:start}
@@ -94,3 +102,4 @@
 
 .k-courier__source[data-koma-native=true]{padding:6px 9px;background:#061c15;border-color:#6db39d;box-shadow:inset 0 1px 0 rgb(255 255 255/.08),0 2px 0 rgb(0 0 0/.18)}
 .k-courier__source[data-koma-native=true] img{width:74px;height:30px;flex-shrink:0}
+@media(max-width:359px) {.k-courier__art {flex-basis:104px;width:104px;height:64px}}
