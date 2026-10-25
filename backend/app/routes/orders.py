@@ -58,9 +58,9 @@ from .orders_core import (
 )
 
 
-def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int) -> dict:
+def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int, *, reuse_active: bool = False) -> dict:
     """Mantém a emissão legada, mas nunca devolve segredo em query string."""
-    acesso = _legacy_criar_acesso_motoboy(db, motoboy, rest_id)
+    acesso = _legacy_criar_acesso_motoboy(db, motoboy, rest_id, reuse_active=reuse_active)
     token = str(acesso["token"])
     acesso["link"] = f"/entregador#token={token}"
     acesso["link_publico"] = f"{settings.KOMA_PUBLIC_APP_URL}/entregador#token={token}"
@@ -565,7 +565,7 @@ def despachar_delivery(
 
     status_anterior = to_legacy_order_status(current_status)
     has_courier_app = has_plan_entitlement(db, rid, ENTITLEMENT_COURIER_APP)
-    acesso_motoboy = _criar_acesso_motoboy(db, motoboy, rid) if has_courier_app else None
+    acesso_motoboy = _criar_acesso_motoboy(db, motoboy, rid, reuse_active=True) if has_courier_app else None
 
     _transition_via_application_or_http(
         db,
@@ -616,7 +616,7 @@ def despachar_delivery(
 
 
 class DeliveryReceiptConfirmation(BaseModel):
-    code: str | None = Field(default=None, max_length=6)
+    code: str | None = Field(default=None, max_length=4)
 
 
 @router.post("/motoboys/pedidos/{comanda_id}/confirmar-entrega")
@@ -665,6 +665,12 @@ def confirmar_entrega_motoboy(
         current_status = normalize_to_order_status(comanda.delivery_status)
         if current_status == OrderStatus.COMPLETED:
             return {"status": "sucesso", "mensagem": "Entrega já estava confirmada."}
+
+        if current_status != OrderStatus.DISPATCHED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A entrega ainda não saiu pelo Caixa.",
+            )
 
         from ..services.delivery_receipts import verify_delivery_receipt
         verify_delivery_receipt(db, comanda, receipt.code if receipt else None)

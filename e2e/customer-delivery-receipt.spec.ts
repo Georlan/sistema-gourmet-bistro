@@ -16,7 +16,7 @@ test('cliente vê código privado no acompanhamento sem outra requisição de c�
   await page.route(`${API}/**`,route=>{
     const path=new URL(route.request().url()).pathname;
     if(path.endsWith('/public'))return route.fulfill({json:publicMenuPayload});
-    if(path.endsWith('/summary')) { summaries++;return route.fulfill({json:{id:'receipt-customer',numero_pedido:101,tipo:'Delivery',status:finished?'finalizado':'transito',delivery_receipt_code:finished?null:'001234',fechada:finished,conversa:{id:'conv-receipt',can_chat:true,unread_count:0}}}); }
+    if(path.endsWith('/summary')) { summaries++;return route.fulfill({json:{id:'receipt-customer',numero_pedido:101,tipo:'Delivery',status:finished?'finalizado':'transito',delivery_receipt_code:finished?null:'0012',fechada:finished,conversa:{id:'conv-receipt',can_chat:true,unread_count:0}}}); }
     if(path.endsWith('/events'))return route.fulfill({contentType:'text/event-stream',body:': local\n\n'});
     if(path.endsWith('/feed'))return route.fulfill({json:{items:[],has_more:false,oldest_seq:null,latest_seq:null,purged_at:null}});
     if(path.endsWith('/messages'))return route.fulfill({json:{items:[],conversa:{id:'conv-receipt',can_chat:true}}});
@@ -26,7 +26,7 @@ test('cliente vê código privado no acompanhamento sem outra requisição de c�
   const receipt=page.getByLabel('Código de recebimento da entrega').first();
   await expect.poll(() => summaries).toBeGreaterThan(0);
   await expect(receipt).toBeVisible();
-  await expect(receipt).toContainText('001234');
+  await expect(receipt).toContainText('0012');
   await expect(receipt).toContainText('quando receber o pedido');
   expect(summaries).toBeGreaterThan(0);
   if (!await page.locator('#inline-order-chat-panel').isVisible()) await page.getByRole('button',{name:'Chat com restaurante',exact:true}).click();

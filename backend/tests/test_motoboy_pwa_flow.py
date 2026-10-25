@@ -130,7 +130,7 @@ def test_gerar_link_motoboy_flow():
     entrega = next((e for e in painel_data["entregas"] if e["id"] == cmd_id), None)
     assert entrega is not None
     assert entrega["cliente_nome"] == "Maria Cliente"
-    assert entrega["delivery_telefone"] == "81988887777"
+    assert "delivery_telefone" not in entrega
     assert entrega["delivery_endereco"] == "Rua Principal, 100"
     assert entrega["total"] == 77.50  # 70 + 7.50
     assert entrega["valor_a_cobrar"] == 77.50

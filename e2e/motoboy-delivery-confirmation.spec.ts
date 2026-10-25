@@ -170,7 +170,7 @@ test.describe('PWA do Entregador - Resiliência na Confirmação de Entrega', ()
 
     // O card deve desaparecer e a mensagem de "Tudo Entregue!" deve surgir
     await expect(page.locator('text=Ana Oliveira')).toHaveCount(0, { timeout: 5000 });
-    await expect(page.locator('text=Tudo entregue')).toBeVisible();
+    await expect(page.locator('text=Nenhuma entrega em rota')).toBeVisible();
 
 
 

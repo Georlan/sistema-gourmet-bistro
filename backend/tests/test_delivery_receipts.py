@@ -37,7 +37,7 @@ def test_customer_receives_code_courier_validates_and_canonical_state_changes(mo
         created = OrderApplicationService.create_order(db, command)
         order = db.query(Comanda).filter_by(id=created.comanda_id, restaurante_id=rid).one()
         code = customer_delivery_receipt(order)
-        assert code and len(code) == 6 and code.isdigit()
+        assert code and len(code) == 4 and code.isdigit()
         assert code not in order.delivery_receipt_secret
         original = order.delivery_receipt_secret
         issue_delivery_receipt(order)
@@ -68,7 +68,7 @@ def test_customer_receives_code_courier_validates_and_canonical_state_changes(mo
     endpoint = f'/comandas/motoboys/pedidos/{order_id}/confirmar-entrega'
     missing = client.post(endpoint, headers=headers)
     assert missing.status_code == 422
-    wrong = '999999' if code != '999999' else '888888'
+    wrong = '9999' if code != '9999' else '8888'
     for attempt in range(5):
         response = client.post(endpoint, headers=headers, json={'code': wrong})
         assert response.status_code == (429 if attempt == 4 else 422), response.text
@@ -100,8 +100,8 @@ def test_customer_receives_code_courier_validates_and_canonical_state_changes(mo
 
 def test_receipt_is_not_exposed_for_terminal_pickup_or_unreadable_ciphertext():
     from app.crypt import encrypt_field
-    row = SimpleNamespace(fechada=False, delivery_status='transito', tipo='Entrega', delivery_receipt_secret=encrypt_field('001234'))
-    assert customer_delivery_receipt(row) == '001234'
+    row = SimpleNamespace(fechada=False, delivery_status='transito', tipo='Entrega', delivery_receipt_secret=encrypt_field('0012'))
+    assert customer_delivery_receipt(row) == '0012'
     row.tipo = 'Retirada'
     assert customer_delivery_receipt(row) is None
     row.tipo = 'Entrega'

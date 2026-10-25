@@ -53,12 +53,12 @@ Resultados desta etapa: lint e build aprovados, 1.100 testes unitários, 30 cen�
 
 ## Ajuste de escopo aprovado pelo usuário
 
-O app conecta somente a entregas por motoboy; pedidos de retirada e mesa não aparecem. “Para sair” corresponde a uma entrega `pronto` já atribuída ao entregador; não é retirada pelo cliente. Filtros: Todas, Em rota e Para sair. Múltiplas entregas por viagem confirmadas pelo usuário; navegação permanece por link externo sem API paga.
+O app conecta somente a entregas despachadas pelo Caixa (`transito`) e atribuídas ao entregador da credencial. Pré-atribuir durante preparo/pronto não as coloca no painel. Pedidos de retirada, mesa, sem atribuição e de outro entregador/tenant não aparecem. Os filtros Todas/Em rota/Para sair foram removidos por redundância. Múltiplas entregas por viagem confirmadas pelo usuário; navegação permanece por link externo sem API paga.
 
 ## Viagem e código de recebimento — incremento local
 
 - Seleção e reordenação de entregas com controles de toque e teclado. Somente IDs ficam em sessionStorage, sob chave derivada do hash da credencial; não são armazenados endereço, nome ou localização. Pedidos removidos/concluídos saem da sequência. Trocar a credencial limpa a tela e restaura apenas sua própria sequência.
-- Novas entregas criadas pelo Cardápio recebem código de seis dígitos, gerado no backend, criptografado no pedido e mantido em replays idempotentes. Retiradas não recebem código. Entregas antigas continuam compatíveis, sem exigência retroativa.
+- Novas entregas criadas pelo Cardápio recebem código de quatro dígitos, gerado no backend, criptografado no pedido e mantido em replays idempotentes. Retiradas não recebem código. Entregas antigas continuam compatíveis, sem exigência retroativa.
 - O cliente vê o código no acompanhamento, chat e histórico autorizado. O painel do entregador recebe somente a indicação de que o código é necessário. O código não entra no catálogo público nem na persistência local do histórico.
 - Um único campo numérico aceita colar e confirmar com Enter. O sexto dígito não dispara envio automático. A confirmação verifica atribuição e tenant, bloqueia a linha e usa a transição canônica; cinco erros impõem espera de um minuto. Concluir entrega não quita pagamentos.
 - As leituras existentes carregam o código sem uma consulta adicional. Nenhum SDK, SMS, API paga, timer de GPS ou novo polling foi incluído.
@@ -69,3 +69,24 @@ Validação final deste incremento: 1.100 testes unitários, lint e build; 18 ce
 Prévia de teste: http://127.0.0.1:4313/ oferece acessos locais ao entregador e aos três clientes fictícios. Abra um cliente, consulte o código e informe no pedido correspondente do entregador. A conclusão altera apenas o banco local. Capturas finais: customer-real-final.png e courier-real-final.png em outputs/courier-refinement.
 
 Pendências deliberadas: homologação real com Caixa aberto, integração iFood, rastreio GPS e roteamento automático. Nenhuma dessas capacidades é simulada como integração pronta. Publicação depende de aprovação posterior.
+
+## Refinamento aprovado de escopo e privacidade — 25/10/2026
+
+- Código reduzido para quatro dígitos aleatórios por pedido, preservando zeros iniciais, limite de tentativas e idempotência. Não é derivado do telefone e não exige SMS nem API externa. Os dados fictícios da prévia foram atualizados; nenhum pedido real foi alterado.
+- O telefone do cliente foi retirado do contrato JSON do entregador e o link de ligação foi removido da interface. O Caixa mantém o contato autorizado. Isso é uma decisão de minimização de acesso; não uma alegação de que toda ligação do entregador seria proibida pela LGPD.
+- O backend e a interface exigem despacho. Tentativa direta de concluir pedido apenas pronto é rejeitada. O teste percorre pronto → despacho real do Caixa → painel, sem trocar a credencial do entregador.
+- Encontrado e corrigido: despacho revogava o link aberto anteriormente. O despacho agora reutiliza o JTI ativo com a expiração original de quatro horas; não insere outro token a cada pedido e não estende o prazo. A geração explícita de novo link continua revogando o anterior. Criação/reutilização são serializadas pelo entregador no PostgreSQL. Testes cobrem reuso, limite temporal, renovação após expiração, revogação manual e isolamento.
+
+Pesquisa oficial consultada:
+
+- iFood Entregadores: código antes baseado nos quatro últimos números do telefone passou a permitir personalização pelo cliente: https://entregador.ifood.com.br/novidades-no-app/codigo-de-entrega/
+- iFood Parceiros: confirmação de entrega própria usa código de quatro dígitos: https://blog-parceiros.ifood.com.br/confirmacao-de-entrega/
+- iFood Developer: Sob Demanda externo documenta modo com quatro últimos dígitos do telefone; a regra depende do produto e não autoriza presumir um código único para todas as integrações: https://developer.ifood.com.br/en-US/docs/food/guides/modules/shipping/outside
+- LGPD, arts. 6º, III (necessidade), 7º, V (execução de contrato), 46 (segurança): https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm
+- ANPD, bases legais: https://www.gov.br/anpd/pt-br/acesso-a-informacao/perguntas-frequentes
+
+Validação focal final: 38 testes backend, 26 de navegador (incluindo timeout/reconciliação e código de quatro dígitos), 1.100 unitários, lint e build. Capturas reais da prévia local revisadas em outputs/courier-refinement/four-digit. A verificação com FastAPI/SQLite reais encontrou somente as duas entregas despachadas, sem link de telefone e com código de quatro dígitos no acompanhamento do cliente. Não concluiu pedidos do cenário manual.
+
+Uma tentativa geral concorrente com a validação focal encontrou 500/OperationalError na caracterização de mesas. O conftest do projeto substitui DATABASE_URL por um único backend/.pytest_koma.db, portanto as duas execuções colidiram. O cenário isolado passou (2 testes); a evidência daquela execução concorrente não certifica regressão de produto. Não executar processos pytest simultâneos nesse worktree. Logs gerais e focais ficam separados.
+
+A reexecução geral sem concorrência passou por 302 testes, com um skip de PostgreSQL, antes de ser interrompida para manter esta etapa local limitada ao escopo. Não certifica a suíte completa. Após encerrar essa execução, a validação final focal foi executada sozinha: 38 aprovações, incluindo os dois cenários de mesas que haviam sido afetados pela colisão do banco temporário.

@@ -37,7 +37,8 @@ test('sessão por aba, links corretos, detalhes sob demanda e confirmação prot
   const card=page.getByRole('article',{name:'Pedido 101'});
   const link=card.getByRole('link',{name:/Abrir rota/});
   expect(new URL((await link.getAttribute('href'))!).searchParams.get('destination')).toBe(delivery.delivery_endereco);
-  await expect(card.getByRole('link',{name:'Ligar para Ana Oliveira'})).toHaveAttribute('href','tel:5585999990001');
+  await expect(page.locator('a[href^="tel:"]')).toHaveCount(0);
+  await expect(page.getByText(delivery.delivery_telefone)).toHaveCount(0);
   await expect(card.getByText(delivery.itens_resumo)).toBeHidden();
   await card.locator('summary').click();
   await expect(card.getByText(delivery.itens_resumo)).toBeVisible();
@@ -54,7 +55,7 @@ test('sessão por aba, links corretos, detalhes sob demanda e confirmação prot
   await expect.poll(()=>posts).toBe(1);
   await expect(page.getByRole('button',{name:'Confirmando…'})).toBeDisabled();
   release();
-  await expect(page.getByRole('heading',{name:'Tudo entregue'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Nenhuma entrega em rota'})).toBeVisible();
   await expect(page.getByRole('status').filter({hasText:'Entrega confirmada com sucesso.'})).toBeVisible();
 });
 
@@ -100,12 +101,12 @@ test('timeout e reconciliação falha mantêm confirmação bloqueada até confe
   expect(posts).toBe(1);
   recover=true;
   await page.getByRole('button',{name:'Verificar',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Tudo entregue'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Nenhuma entrega em rota'})).toBeVisible();
   expect(posts).toBe(1);
 });
 
-for(const theme of ['dark','light'])test(`visual ${theme}: valores e nomes longos, filtros e alvos de toque`,async({page},info)=>{
-  await fixture(page,[{...delivery,cliente_nome:'Maria Aparecida de Albuquerque e Vasconcelos',delivery_endereco:'Avenida Governador Raul Barbosa, 13240, Condomínio Jardim das Acácias, bloco 12, apartamento 1204 — portaria lateral',total:12345.67,valor_a_cobrar:12345.67}, {...delivery,id:'paid',numero_pedido:102,cliente_nome:'Marcos',delivery_status:'pronto',valor_pago:68.9,valor_a_cobrar:0}]);
+for(const theme of ['dark','light'])test(`visual ${theme}: valores e nomes longos, sem filtros redundantes e alvos de toque`,async({page},info)=>{
+  await fixture(page,[{...delivery,cliente_nome:'Maria Aparecida de Albuquerque e Vasconcelos',delivery_endereco:'Avenida Governador Raul Barbosa, 13240, Condomínio Jardim das Acácias, bloco 12, apartamento 1204 — portaria lateral',total:12345.67,valor_a_cobrar:12345.67}, {...delivery,id:'paid',numero_pedido:102,cliente_nome:'Marcos',delivery_status:'transito',valor_pago:68.9,valor_a_cobrar:0}]);
   await page.addInitScript(t=>localStorage.setItem('@koma:theme',t),theme);
   await page.emulateMedia({reducedMotion:'reduce'});
   await open(page);
@@ -116,11 +117,9 @@ for(const theme of ['dark','light'])test(`visual ${theme}: valores e nomes longo
     if(await control.isVisible())expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   }
   if(process.env.KOMA_COURIER_CAPTURE_DIR){await mkdir(process.env.KOMA_COURIER_CAPTURE_DIR,{recursive:true});await page.screenshot({path:join(process.env.KOMA_COURIER_CAPTURE_DIR,`${info.project.name}-${theme}.png`),fullPage:true});}
-  await page.getByRole('button',{name:'Para sair 1',exact:true}).click();
-  await expect(page.getByRole('article')).toHaveCount(1);
+  await expect(page.getByRole('navigation',{name:'Filtrar entregas'})).toHaveCount(0);
   await expect(page.getByText('Sem cobrança',{exact:true})).toBeVisible();
   await expect(page.getByText('Já Pago via App')).toHaveCount(0);
-  await page.getByRole('button',{name:'Todas 2',exact:true}).click();
   await expect(page.getByRole('article')).toHaveCount(2);
 });
 
@@ -167,19 +166,28 @@ test('recebimento: campo único numérico, zeros iniciais, erro mantém formulá
   const codes:string[]=[];
   await page.route(`${API}/comandas/motoboys/pedidos/*/confirmar-entrega`,route=>{
     const code=route.request().postDataJSON().code;codes.push(code);
-    return route.fulfill(code==='001234'?{json:{status:'sucesso'}}:{status:422,json:{detail:'Código incorreto. Confira os 6 dígitos com o cliente.'}});
+    return route.fulfill(code==='0012'?{json:{status:'sucesso'}}:{status:422,json:{detail:'Código incorreto. Confira os 4 dígitos com o cliente.'}});
   });
   await open(page);
   await page.getByRole('button',{name:'Concluir entrega'}).click();
   const input=page.getByLabel('Código informado pelo cliente');
   await expect(input).toBeFocused();
   await expect(input).toHaveAttribute('inputmode','numeric');
-  await input.fill('111111');await input.press('Enter');
+  await input.fill('1111');await input.press('Enter');
   await expect(page.getByRole('alert')).toContainText('Código incorreto');
   await expect(input).toBeFocused();
-  await input.fill('001234');
-  expect(codes).toEqual(['111111']);
+  await input.fill('0012');
+  expect(codes).toEqual(['1111']);
   await input.press('Enter');
-  await expect(page.getByRole('heading',{name:'Tudo entregue'})).toBeVisible();
-  expect(codes).toEqual(['111111','001234']);
+  await expect(page.getByRole('heading',{name:'Nenhuma entrega em rota'})).toBeVisible();
+  expect(codes).toEqual(['1111','0012']);
+});
+
+
+test('mesmo com resposta antiga, pronto atribuído não aparece nem permite confirmação',async({page})=>{
+  await fixture(page,[delivery,{...delivery,id:'ready-only',numero_pedido:999,cliente_nome:'Aguardando despacho',delivery_status:'pronto'}]);
+  await open(page);
+  await expect(page.getByRole('article')).toHaveCount(1);
+  await expect(page.getByText('Aguardando despacho')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:/Para sair/})).toHaveCount(0);
 });

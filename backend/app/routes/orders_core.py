@@ -1191,8 +1191,33 @@ def cadastrar_motoboy(
     return novo_motoboy
 
 
-def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int) -> dict:
-    """Cria o acesso temporário dentro da transação do chamador."""
+def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int, *, reuse_active: bool = False) -> dict:
+    """Dispatch reuses an unexpired access; explicit link generation rotates it."""
+    # Serialize concurrent dispatch/link generation for this courier only.
+    db.query(Motoboy).filter(Motoboy.id == motoboy.id, Motoboy.restaurante_id == rest_id).with_for_update().one()
+    now = datetime.datetime.now(datetime.timezone.utc)
+    active = None
+    if reuse_active:
+        active = db.query(MotoboyTokenAtivo).filter(
+            MotoboyTokenAtivo.motoboy_id == motoboy.id,
+            MotoboyTokenAtivo.restaurante_id == rest_id,
+            MotoboyTokenAtivo.revogado.is_(False),
+            MotoboyTokenAtivo.criado_em > now - datetime.timedelta(hours=4),
+        ).order_by(MotoboyTokenAtivo.criado_em.desc()).first()
+    if active:
+        # Preserve the original four-hour deadline, never renew on dispatch.
+        created_at = active.criado_em
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+        expires = created_at + datetime.timedelta(hours=4)
+        token = create_motoboy_token(motoboy.id, rest_id, active.jti, expires_at=expires)
+        return {
+            "token": token,
+            "link": f"/entregador#token={token}",
+            "link_publico": f"{settings.KOMA_PUBLIC_APP_URL}/entregador#token={token}",
+            "expires_at": expires.isoformat(),
+            "motoboy_nome": motoboy.nome,
+        }
     # 1. Revogar tokens ativos prévios deste motoboy
     db.query(MotoboyTokenAtivo).filter(
         MotoboyTokenAtivo.motoboy_id == motoboy.id,
@@ -1318,7 +1343,7 @@ def painel_entregador(
         comandas = db.query(Comanda).filter(
             Comanda.restaurante_id == rest_id,
             Comanda.fechada == False,
-            Comanda.delivery_status.in_(["pronto", "transito"]),
+            Comanda.delivery_status == "transito",
             Comanda.tipo.in_(["Delivery", "Entrega"]),
             Comanda.motoboy_id == motoboy_id,
         ).order_by(Comanda.criado_em.desc()).all()
@@ -1340,7 +1365,6 @@ def painel_entregador(
                 "numero_pedido": c.numero_pedido,
                 "requires_delivery_code": bool(c.delivery_receipt_secret),
                 "cliente_nome": c.identificador or "Cliente",
-                "delivery_telefone": c.delivery_telefone,
                 "delivery_endereco": c.delivery_endereco,
                 "delivery_taxa": round(c.delivery_taxa or 0.0, 2),
                 "delivery_status": c.delivery_status,
