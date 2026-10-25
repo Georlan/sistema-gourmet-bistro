@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, ArrowUpRight, Sun, Moon, PackageCheck, ArrowUp, ArrowDown, Copy, Store, WifiOff } from 'lucide-react';
+import { MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, ArrowUpRight, Sun, Moon, PackageCheck, ArrowUp, ArrowDown, Copy, Store, WifiOff, ListOrdered, LocateFixed } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 import { KomaLogo } from './KomaLogo';
 import { nextKomaTheme, persistKomaTheme, readKomaTheme, applyKomaTheme } from '../config/theme';
 import './courier/courierPresentation.css';
 import { useCourierTrip } from './courier/useCourierTrip';
 import { CourierRideArtwork } from './courier/CourierRideArtwork';
+import { useCourierAutoOrder } from './courier/useCourierAutoOrder';
 import { CourierPayment, type CourierPaymentData } from './courier/CourierPayment';
 import ifoodLogo from '../assets/brand/delivery/ifood.png';
 import food99Logo from '../assets/brand/delivery/99food.png';
@@ -27,7 +28,7 @@ interface EntregaItem {
   itens_resumo: string;
   criado_em: string | null;
   source?: { channel: string; label: string; references: {provider: string; reference: string}[] };
-  destination?: { label: string | null; complement: string | null; reference: string | null; route_query: string | null };
+  destination?: { label: string | null; complement: string | null; reference: string | null; route_query: string | null; latitude?: number | null; longitude?: number | null };
   payment?: CourierPaymentData;
   items?: { name: string; quantity: number; notes: string | null; modifiers: string[] }[];
   confirmation?: { mode: 'koma_code' | 'local' | 'partner_pending'; enabled: boolean; code_length: number | null; reason: string | null };
@@ -280,6 +281,7 @@ export function MotoboyPwaPage() {
   });
   const blocked = Boolean(confirmingId) || isRefreshing || Boolean(uncertainId);
   const confirmationBlocked = blocked || !isOnline || reconnectRequested;
+  const automatic = useCourierAutoOrder(token, ordered, blocked || reconnectRequested || !trip.ready, trip.save);
 
   return <div className="k-courier">
     <header className="k-courier__header">
@@ -306,8 +308,12 @@ export function MotoboyPwaPage() {
           </div>
           <div className="k-courier__trip-bar">
             <div className="k-courier__sync" data-offline={!isOnline || undefined} role="status">{!isOnline ? <><WifiOff size={14} aria-hidden="true" />Sem conexão · entregas mantidas</> : isRefreshing || reconnectRequested ? 'Conferindo entregas…' : refreshFailed ? 'Atualização pendente · tente atualizar' : lastUpdated ? `Atualizado ${new Date(lastUpdated).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</div>
-            {entregas.length > 0 && !planning && <button type="button" className="k-courier__secondary" ref={tripButtonRef} disabled={!trip.ready || blocked} onClick={() => { setDraftTrip(trip.ids); setReviewId(null); setPlanning(true); }}>{trip.ids.length ? 'Editar sequência' : 'Organizar viagem'}</button>}
+            {entregas.length > 0 && !planning && <div className="k-courier__trip-tools">
+              {entregas.length > 1 && <button type="button" className="k-courier__secondary" disabled={!trip.ready || blocked || automatic.locating} onClick={automatic.order}><LocateFixed size={16} aria-hidden="true" />{automatic.locating ? 'Localizando…' : 'Ordenar automático'}</button>}
+              <button type="button" className="k-courier__icon" ref={tripButtonRef} aria-label={trip.ids.length ? 'Editar sequência' : 'Organizar viagem'} title="Ajustar sequência" disabled={!trip.ready || blocked || automatic.locating} onClick={() => { automatic.clearFeedback(); setDraftTrip(trip.ids); setReviewId(null); setPlanning(true); }}><ListOrdered size={20} aria-hidden="true" /></button>
+            </div>}
           </div>
+          {automatic.feedback && <p className="k-courier__route-feedback" role={automatic.feedback.error ? 'alert' : 'status'}>{automatic.feedback.text}</p>}
           {uncertainId && <div className="k-courier__notice" role="alert"><span>Confirmação pendente. Toque em Verificar.</span><button type="button" className="k-courier__secondary" disabled={!isOnline || isRefreshing || Boolean(confirmingId)} onClick={() => void carregarDadosPainel(token)}>Verificar</button></div>}
           {planning && <section className="k-courier__planner" aria-label="Organizar viagem"><h2 tabIndex={-1} ref={planHeadingRef}>Sua sequência</h2><div className="k-courier__planner-list">{draftOrders.map(item => {
             const index = selectedDraft.indexOf(item.id);

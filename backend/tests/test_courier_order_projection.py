@@ -9,7 +9,7 @@ from app.main import app
 from app.database import SessionLocal, engine
 from app.models import Restaurante, Usuario, Motoboy, Comanda, Lancamento, Item, Produto, Categoria, ExternalOrderReference, GrupoModificador, OpcaoModificador, ItemModificador
 from app.security import create_access_token
-from app.services.courier_order_projection import courier_payment
+from app.services.courier_order_projection import courier_payment, courier_coordinates
 from app.application.orders.commands import DeliveryAddressInput
 from app.delivery_address_snapshot import persist_delivery_address_snapshot, revise_delivery_address_snapshot
 
@@ -67,9 +67,9 @@ def handoff():
 def test_real_panel_handoff_has_items_latest_address_and_no_partner_side_effects(handoff):
     h=handoff
     with SessionLocal() as db:
-        address=DeliveryAddressInput(street='Rua inicial',number='10',neighborhood='Centro',city='Fortaleza',state='CE',postal_code='60000000',complement='Casa azul',reference='Em frente à praça')
+        address=DeliveryAddressInput(street='Rua inicial',number='10',neighborhood='Centro',city='Fortaleza',state='CE',postal_code='60000000',complement='Casa azul',reference='Em frente à praça',latitude=-3.75,longitude=-38.5)
         persist_delivery_address_snapshot(db,restaurante_id=h.rid,comanda_id=h.first,address=address)
-        revise_delivery_address_snapshot(db,restaurante_id=h.rid,comanda_id=h.first,address=replace(address,street='Rua corrigida',number='99',complement='Portão lateral'),operator_id=h.uid,reason='Correção solicitada pelo cliente')
+        revise_delivery_address_snapshot(db,restaurante_id=h.rid,comanda_id=h.first,address=replace(address,street='Rua corrigida',number='99',complement='Portão lateral',latitude=-3.73,longitude=-38.52),operator_id=h.uid,reason='Correção solicitada pelo cliente')
         db.add(GrupoModificador(id='g-'+h.pid,restaurante_id=h.rid,nome='Adicionais'));db.flush()
         db.add(OpcaoModificador(id='m-'+h.pid,restaurante_id=h.rid,grupo_id='g-'+h.pid,nome='Queijo extra',preco_adicional=3));db.flush()
         db.add(ItemModificador(restaurante_id=h.rid,item_id=h.first+'-item-0',opcao_modificador_id='m-'+h.pid,preco_aplicado=3))
@@ -85,6 +85,7 @@ def test_real_panel_handoff_has_items_latest_address_and_no_partner_side_effects
     assert local['destination']['label'].startswith('Rua corrigida, 99')
     assert local['destination']['complement']=='Portão lateral'
     assert local['destination']['reference']=='Em frente à praça'
+    assert local['destination']['latitude']==-3.73 and local['destination']['longitude']==-38.52
     assert sum(item['quantity'] for item in local['items'])==2
     assert any(item['notes']=='Sem cebola' and item['modifiers']==['Queijo extra'] for item in local['items'])
     assert '85988887777' not in response.text and 'not-for-the-courier' not in response.text
@@ -116,3 +117,25 @@ def test_panel_queries_do_not_grow_per_delivery(handoff):
     many,count=measure();assert count==13
     assert many<=one+1, (one,many)
     assert many<=20,(one,many)
+
+
+@pytest.mark.parametrize('address', [None, {}, {'latitude': 10}, {'latitude': True, 'longitude': 20},
+    {'latitude': '10', 'longitude': '20'}, {'latitude': float('nan'), 'longitude': 20},
+    {'latitude': 10, 'longitude': float('inf')}, {'latitude': 91, 'longitude': 20},
+    {'latitude': 0, 'longitude': 0}, {'latitude': 10**1000, 'longitude': 20}])
+def test_courier_does_not_publish_unusable_coordinates(address):
+    assert courier_coordinates(address) == {'latitude': None, 'longitude': None}
+
+
+def test_courier_corrected_address_does_not_reuse_obsolete_coordinates(handoff):
+    h = handoff
+    with SessionLocal() as db:
+        address = DeliveryAddressInput(street='Rua inicial',number='10',neighborhood='Centro',city='Fortaleza',state='CE',postal_code='60000000',latitude=-3.75,longitude=-38.5)
+        persist_delivery_address_snapshot(db,restaurante_id=h.rid,comanda_id=h.first,address=address)
+        revise_delivery_address_snapshot(db,restaurante_id=h.rid,comanda_id=h.first,address=replace(address,street='Rua nova',latitude=None,longitude=None),operator_id=h.uid,reason='Novo endereço confirmado')
+        db.commit()
+    response = h.client.get('/comandas/motoboys/painel-entregador', headers=h.headers)
+    assert response.status_code == 200, response.text
+    destination = response.json()['entregas'][0]['destination']
+    assert destination['label'].startswith('Rua nova')
+    assert destination['latitude'] is None and destination['longitude'] is None

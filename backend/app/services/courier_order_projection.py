@@ -3,6 +3,7 @@
 Provider adapters persist through OrderApplicationService + ExternalOrderReference.
 Only the Caixa dispatch/assignment decides which deliveries reach this projection.
 """
+import math
 from collections import defaultdict
 from decimal import Decimal
 from sqlalchemy import and_, or_
@@ -58,6 +59,18 @@ def courier_payment(order):
             'change_needs_check': change_for is not None and change_for < due}
 
 
+def courier_coordinates(address):
+    """Return only a validated pair from the current authorized address snapshot."""
+    latitude = address.get('latitude') if address else None
+    longitude = address.get('longitude') if address else None
+    if (type(latitude) not in (int, float) or type(longitude) not in (int, float)
+            or abs(latitude) > 90 or abs(longitude) > 180
+            or not math.isfinite(latitude) or not math.isfinite(longitude)
+            or (latitude == 0 and longitude == 0)):
+        return {'latitude': None, 'longitude': None}
+    return {'latitude': latitude, 'longitude': longitude}
+
+
 def project_courier_orders(db, restaurant_id, orders):
     if not orders:
         return []
@@ -85,7 +98,8 @@ def project_courier_orders(db, restaurant_id, orders):
         address = addresses.get(order.id)
         route = ', '.join(str(address.get(key) or '').strip() for key in ('logradouro', 'numero', 'bairro', 'cidade', 'uf') if address.get(key)) if address else order.delivery_endereco
         destination = {'label': route, 'complement': address.get('complemento') if address else None,
-                       'reference': address.get('referencia') if address else None, 'route_query': route}
+                       'reference': address.get('referencia') if address else None, 'route_query': route,
+                       **courier_coordinates(address)}
         payment = courier_payment(order)
         result.append({
             'id': order.id, 'numero_pedido': order.numero_pedido,
