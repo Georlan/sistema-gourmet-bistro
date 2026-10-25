@@ -160,6 +160,9 @@ class OrderLifecycleCoordinator:
         # inferi-lo; o coordenador confirma o alvo após todos os comandos, cobrindo
         # também comandas antigas sem itens ou com lotes em estágios diferentes.
         comanda.delivery_status = to_legacy_order_status(target)
+        if comanda.motoboy_id and str(comanda.tipo or '').casefold() in {'delivery', 'entrega'}:
+            from ...services.courier_realtime import queue_courier_refresh
+            queue_courier_refresh(db, restaurant_id, comanda.motoboy_id)
         if target in _TERMINAL_ORDER_STATUSES:
             comanda.fechada = True
             if comanda.fechado_em is None:

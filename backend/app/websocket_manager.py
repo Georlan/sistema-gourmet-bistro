@@ -19,7 +19,7 @@ PUBLIC_CLIENT_EVENTS = {
 class ConnectionManager:
     def __init__(self, *, shared_transport: bool = False) -> None:
         # Keeps track of active WebSocket connections grouped by restaurante_id and client_type
-        # Structure: { restaurante_id: { "internal": [WebSocket...], "client": [WebSocket...] } }
+        # Structure: { tenant: {"internal": [...], "client": [...], "courier:<id>": [...] } }
         self.active_connections: dict[int, dict[str, list[WebSocket]]] = {}
         self.identities: dict[WebSocket, tuple[int, str, asyncio.AbstractEventLoop]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -50,14 +50,14 @@ class ConnectionManager:
         elif envelope.get("action") == "broadcast":
             message = envelope.get("message")
             audience = envelope.get("audience")
-            if isinstance(message, dict) and audience in {"internal", "client", "all"}:
+            if isinstance(message, dict) and audience in {"internal", "client", "all", "courier"}:
                 loop.call_soon_threadsafe(
                     lambda: asyncio.create_task(self._broadcast_local(message, rid, audience))
                 )
 
     @staticmethod
     def _audience(message: dict, target_audience: str | None) -> str:
-        if target_audience in {"internal", "client", "all"}:
+        if target_audience in {"internal", "client", "all", "courier"}:
             return target_audience
         event_name = message.get("event") or message.get("type") or ""
         return "all" if event_name in PUBLIC_CLIENT_EVENTS else "internal"
@@ -169,7 +169,8 @@ class ConnectionManager:
         target_audience:
           - "internal": apenas app de garçom, caixa, KDS (padrão para operações internas).
           - "client": apenas clientes do cardápio público.
-          - "all": todas as conexões (internas e públicas).
+          - "all": conexões internas e públicas; nunca entregadores.
+          - "courier": somente o grupo autenticado do courier_id, com hint mínimo.
           - None: determina automaticamente (eventos em PUBLIC_CLIENT_EVENTS -> "all", outros -> "internal").
         """
         if restaurante_id is None:
@@ -205,9 +206,15 @@ class ConnectionManager:
             sockets_to_send = list(ctype_dict.get("internal", []))
         elif target_audience == "client":
             sockets_to_send = list(ctype_dict.get("client", []))
+        elif target_audience == "courier":
+            courier_id = message.get("courier_id")
+            if isinstance(courier_id, int) and not isinstance(courier_id, bool) and courier_id > 0:
+                sockets_to_send = list(ctype_dict.get(f"courier:{courier_id}", []))
+            # Never send operator payloads or IDs to a courier, even through the shared bus.
+            message = {"event": "courier_panel_updated"}
         elif target_audience == "all":
-            for sockets in ctype_dict.values():
-                sockets_to_send.extend(sockets)
+            for kind in ("internal", "client"):
+                sockets_to_send.extend(ctype_dict.get(kind, []))
         else:
             sockets_to_send = list(ctype_dict.get("internal", []))
 

@@ -7,6 +7,10 @@
 /koma-sw.js
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
+/courier-sw.js
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+  Service-Worker-Allowed: /entregador
+
 /theme-init.js
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
@@ -112,6 +116,7 @@ https://:version.:project.pages.dev/*
   X-Robots-Tag: noindex
 
 /entregador*
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
   X-Robots-Tag: noindex
 
 /contratar*

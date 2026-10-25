@@ -44,6 +44,7 @@ from ..services.plan_entitlements import (
 )
 from ..services.shifts import require_open_cash_shift
 from ..websocket_manager import manager
+from ..services.courier_realtime import queue_courier_refresh
 from . import orders_core as _orders_core
 
 # Compatibilidade Python explícita para os adapters e callbacks ainda em migração.
@@ -493,7 +494,9 @@ def reatribuir_entregador_em_rota(
         reason=reason,
     )
     db.add(audit)
+    previous_courier_id = comanda.motoboy_id
     comanda.motoboy_id = new_motoboy.id
+    queue_courier_refresh(db, rid, previous_courier_id, new_motoboy.id)
     db.commit()
     db.refresh(comanda)
 
@@ -559,6 +562,7 @@ def despachar_delivery(
             # Reparação logística compatível para registros legados. Não altera
             # o estado do pedido; somente restaura o vínculo com o entregador.
             comanda.motoboy_id = motoboy_id
+            queue_courier_refresh(db, rid, motoboy_id)
             db.commit()
             db.refresh(comanda)
         return comanda

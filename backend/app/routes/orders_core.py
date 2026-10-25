@@ -973,6 +973,8 @@ def converter_delivery_para_retirada(
     # Endereço e telefone permanecem no registro histórico; a projeção de
     # retirada não os usa para logística. Pagamento/troco também permanecem,
     # pois método de pagamento é uma dimensão independente do fulfillment.
+    from ..services.courier_realtime import queue_courier_refresh
+    queue_courier_refresh(db, rid, previous_courier_id)
     comanda.tipo = "Retirada"
     comanda.motoboy_id = None
     comanda.delivery_taxa = 0.0
@@ -1218,6 +1220,8 @@ def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int, *, reuse_
             "expires_at": expires.isoformat(),
             "motoboy_nome": motoboy.nome,
         }
+    from ..services.courier_realtime import queue_courier_revocation
+    queue_courier_revocation(db, rest_id, motoboy.id)
     # 1. Revogar tokens ativos prévios deste motoboy
     db.query(MotoboyTokenAtivo).filter(
         MotoboyTokenAtivo.motoboy_id == motoboy.id,
@@ -1308,6 +1312,8 @@ def revogar_link_motoboy(
     ).update({MotoboyTokenAtivo.revogado: True})
     db.commit()
 
+    from ..websocket_manager import manager as courier_manager
+    courier_manager.revoke(rest_id, f"courier:{motoboy.id}")
     return {"status": "sucesso", "mensagem": f"Acesso do entregador '{motoboy.nome}' revogado com sucesso."}
 
 

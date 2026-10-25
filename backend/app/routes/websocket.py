@@ -5,7 +5,7 @@ import contextlib
 import re
 import time
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, status
 import jwt
 from starlette.concurrency import run_in_threadpool
 
@@ -176,6 +176,68 @@ async def websocket_cliente_endpoint(
         manager.disconnect(websocket, restaurante_id_val)
     except Exception:
         manager.disconnect(websocket, restaurante_id_val)
+
+
+def _validated_courier_websocket_identity(token):
+    from ..security import verify_motoboy_token
+    from ..services.plan_entitlements import require_plan_entitlement, ENTITLEMENT_COURIER_APP
+    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM], options={"require": ["exp", "jti"]})
+    with SessionLocal() as db:
+        identity = verify_motoboy_token(token, db)
+        require_plan_entitlement(db, identity["restaurante_id"], ENTITLEMENT_COURIER_APP)
+        return identity, float(payload["exp"])
+
+
+async def _watch_courier_session(websocket, token, rid, expires):
+    from fastapi import HTTPException
+    code = 1008
+    try:
+        while expires > time.time():
+            await asyncio.sleep(min(60, expires - time.time()))
+            await run_in_threadpool(_validated_courier_websocket_identity, token)
+    except asyncio.CancelledError:
+        raise
+    except (HTTPException, jwt.PyJWTError):
+        pass
+    except Exception:
+        code = 1011  # A database outage is not proof that the access was revoked.
+    manager.disconnect(websocket, rid)
+    with contextlib.suppress(Exception):
+        await websocket.close(code=code)
+
+
+@router.websocket("/ws/entregador")
+async def websocket_courier_endpoint(websocket: WebSocket):
+    if not await validate_websocket_origin(websocket):
+        return
+    token = _websocket_auth_token(websocket, None)
+    if not token:
+        await websocket.close(code=1008)
+        return
+    try:
+        identity, expires = await run_in_threadpool(_validated_courier_websocket_identity, token)
+    except (HTTPException, jwt.PyJWTError, ValueError):
+        await websocket.close(code=1008)
+        return
+    except Exception:
+        await websocket.close(code=1011)
+        return
+    rid, mid = identity["restaurante_id"], identity["motoboy_id"]
+    await manager.connect(websocket, rid, client_type=f"courier:{mid}", subprotocol=KOMA_AUTH_SUBPROTOCOL, user_id=f"courier:{mid}")
+    watcher = asyncio.create_task(_watch_courier_session(websocket, token, rid, expires))
+    try:
+        await websocket.send_json({"event": "courier_ready"})
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_json({"event": "pong"})
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        manager.disconnect(websocket, rid)
+        watcher.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await watcher
 
 
 @router.websocket("/ws/{garcom_id}")

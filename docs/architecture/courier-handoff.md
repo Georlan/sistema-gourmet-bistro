@@ -36,7 +36,7 @@ Quando um conector real for implementado, é necessário mapear: quem entrega, p
 
 Sem banco novo, tabela nova, SDK de mapa, fonte remota, biblioteca UI, polling periódico ou chamada ao parceiro nesta etapa. Itens/produtos/lançamentos são carregados em lote; referências selecionam somente campos necessários; modificadores reutilizam o loader em lote. Endereços usam window function para trazer só a última revisão por pedido e um segundo lote dos originais faltantes. O teste compara uma e treze entregas e limita o número de SELECTs, evitando N+1.
 
-O Caixa recebe a transição canônica/broadcast `tables_updated` existente. O token próprio do entregador não deve ser usado para assinar o WebSocket de operador. Por enquanto o app relê ao voltar/recuperar conexão, com coalescimento e throttle já existentes. Não chamar isso de WebSocket dedicado nem prometer recepção instantânea em segundo plano. O futuro canal deve ter autorização por tenant/entregador e eventos mínimos; nenhum stream amplo de clientes ou restaurante inteiro.
+O Caixa recebe a transição canônica/broadcast `tables_updated` existente. O token próprio do entregador não deve ser usado para assinar o WebSocket de operador. O canal próprio agora está implementado no bloco “Persistência offline e WebSocket dedicado” abaixo; a leitura ao retornar continua necessária para reconciliar eventos perdidos. Não prometer recepção instantânea em segundo plano nem expor stream amplo de clientes ou restaurante inteiro.
 
 ## Navegação e evidência
 
@@ -110,3 +110,41 @@ Permissão negada, indisponibilidade, timeout ou precisão pior que 500m mantêm
 O navegador exige contexto seguro e permissão; um desktop pode fornecer localização por meios disponíveis no navegador, sem necessitar chip GPS dedicado. Não depender de detecção de sistema operacional. As políticas já existentes permitem `geolocation=(self)` tanto no frontend quanto no backend. Fonte oficial do comportamento: https://developer.mozilla.org/en-US/docs/Web/API/Geolocation/getCurrentPosition . Acesso HTTP por IP de rede local não equivale à versão HTTPS para testar permissão em celular.
 
 Validação: geolocalização simulada nos testes, inclusive falha, atraso, precisão, mudança de acesso, reatribuição, destinos faltantes e persistência sem coordenadas do entregador. API real local com restaurante fictício 99051 + geolocalização emulada testada em 320px escuro e 390px claro; nenhuma escrita HTTP ao ordenar e sem overflow. Permissão/precisão no dispositivo físico continuam para validação manual; não foram certificadas por emulação.
+
+## Persistência offline e WebSocket dedicado — implementação local de 25/10/2026
+
+Este bloco substitui as limitações anteriores de cache apenas em memória e ausência de canal próprio. Não certifica publicação nem teste de dispositivo físico.
+
+### Última lista disponível
+
+`courierSnapshotCache.ts` guarda a última leitura autorizada em `localStorage`, com AES-GCM, IV aleatório e chave derivada da credencial de alta entropia. Nome do registro usa hash com separação de domínio; nunca o JWT bruto. Campos permitidos são selecionados explicitamente: identificação do pedido/cliente, endereço vigente, cobrança/troco, itens, origem e capacidade de confirmação. Telefone, payload de parceiro, código digitado/segredo de entrega e posição GPS do entregador ficam fora. A criptografia reduz exposição acidental em armazenamento; não substitui autorização no backend nem protege de código malicioso executando na mesma origem com acesso à sessão.
+
+A leitura tem limite de quatro horas e nunca ultrapassa o `exp` do link. O TTL existente do acesso não foi estendido. Cada credencial tem registro próprio; acesso novo não herda dados de outro operador/tenant. Link revogado/expirado ou HTTP 401/403 apaga a cópia correspondente. Enquanto offline, a revogação só pode ser conhecida na próxima conexão; nenhuma escrita operacional fica disponível offline.
+
+Sem rede, hidratar a lista salva sem exibir cards vazios. Online, a cópia inicial permanece somente para consulta até conferir o servidor. O resultado autoritativo substitui o cache, inclusive quando a lista fica vazia. Após conclusão HTTP, persistir a remoção antes de mostrar sucesso. Escrita tardia não vence exclusão por revogação. Limite de payload de 1MB, remoção de registros expirados e aviso discreto se faltar espaço/armazenamento. Não há fila de POST offline ou salvamento do código de recebimento.
+
+### Reabrir/atualizar offline
+
+`courier-sw.js` é um worker separado, com escopo `/entregador`; o worker de push raiz e as outras telas permanecem independentes. Somente no build de produção: preparar o HTML estático da rota, assets locais com hash e o bootstrap de tema. Nenhuma resposta de API, token em URL, escrita, conteúdo remoto ou HTML do Caixa/Cardápio entra no Cache Storage.
+
+Uma primeira abertura com internet prepara o app. Navegação tenta rede e usa o shell salvo na falta de conexão. Assets estáticos usam cache, ignorando apenas diferenças de `Vary` na busca de arquivos públicos da lista permitida; isso corrige a falha real observada com `Vary: Origin` no servidor de prévia. A validação repetiu instalações novas: não basta a navegação funcionar por acaso com o cache HTTP do browser. A versão é ligada ao entrypoint com hash; uma aba antiga não pode gravar HTML novo com JavaScript antigo. Os assets referidos no próprio HTML também são preparados, cobrindo mudança de CSS sem mudança do entrypoint. Recursos de versões antigas são descartados após preparo completo da nova.
+
+Em desenvolvimento Vite, esse worker não intercepta módulos. A prévia local final usa o build de produção para permitir teste real de F5 offline. Fonte de comportamento da plataforma: https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers . Navegador deve suportar armazenamento/worker e contexto seguro; isso não transforma um endereço HTTP de rede local em origem HTTPS.
+
+### Eventos privados por entregador
+
+`/ws/entregador` autentica a credencial dedicada no subprotocolo existente `koma-auth` (sem query string), valida assinatura, expiração, JTI ativo, entregador e entitlement no banco. Não aceita JWT de operador e não permite escolher tenant/entregador no caminho ou em mensagens. Origem segue a allowlist atual. Conexão entra somente em `courier:<id>` do tenant autorizado, fora dos públicos `internal`, `client` e `all`. O payload enviado ao dispositivo é exclusivamente `{event: 'courier_panel_updated'}`; nem mesmo o ID de outro entregador ou payload de operador atravessa esse limite.
+
+Os hints usam o `OperationalRealtimeBus` já existente (PostgreSQL LISTEN/NOTIFY e commit-safe queue), sem serviço/banco novo. Lifecycle canônico agenda o hint no despacho, conclusão e cancelamento; reatribuição avisa os dois entregadores. Reparação logística e conversão para retirada também invalidam o vínculo anterior. Rollback não publica. Geração manual/revogação de link encerra sockets do entregador por meio do mecanismo de revogação compartilhado existente. Expiração é respeitada e há revalidação de sessão a cada 60s no socket, com sessões de banco curtas em threadpool; ping/pong não consulta banco.
+
+O cliente mantém uma conexão enquanto visível e online, com heartbeat, reconexão exponencial até 30s e jitter. Em segundo plano o browser pode suspender trabalho: ao retornar, conectar e reler. Hints são coalescidos em 200ms; releitura espera qualquer GET/POST em andamento, preservando a reconciliação de resposta perdida. Evento não repete confirmação. Callback de socket antigo não pode invalidar nova credencial. WebSocket não é fonte de verdade nem transporte do pedido inteiro; o GET existente revalida tenant, atribuição, plano e estado em cada leitura.
+
+### Evidência e limites
+
+- Backend real local: despacho → hint → card sem refresh; código do cliente → conclusão canônica → `tables_updated` recebido pelo socket do Caixa. A confirmação não cria pagamento. Exercitado no restaurante fictício 99051; nenhum acesso/mutação do tenant real 6.
+- Reatribuição real em teste: ambos recebem hint, o anterior perde a entrega no GET e o novo a recebe. Testados segmentos de tenant/entregador e rejeição de token de operador/revogado.
+- PostgreSQL temporário local: dois processos reais receberam apenas os hints do entregador autorizado, com transporte existente e reconexão do listener. Container de teste removido ao terminar.
+- Produção simulada local: recarga com rede totalmente desligada, cards restaurados, botão de concluir indisponível, nova leitura ao reconectar. Três instalações independentes em mobile e desktop. Dados de API não aparecem no cache de assets.
+- Limites de requisição existentes foram preservados. Os testes de entitlement rodam em processo separado para não compartilhar artificialmente o contador IP de toda a suíte; não foi desativado o limitador para obter aprovação. Não se trata de certificação de carga de milhares de restaurantes ou teste físico de celular.
+
+Permanecem pendentes: conectores comerciais/homologação de parceiros, aviso de problema ao Caixa aprovado em bloco anterior, CI/PR/publicação e conferência de dispositivo real. Nenhuma promessa de receber eventos instantaneamente com a aba suspensa ou sem internet.

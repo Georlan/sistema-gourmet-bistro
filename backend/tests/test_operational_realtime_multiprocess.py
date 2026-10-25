@@ -138,6 +138,14 @@ def test_two_process_operational_realtime():
                 command(label, "connect", f"{label}-{tenant}-internal", tenant, "internal", f"user-{label}-{tenant}")
                 command(label, "connect", f"{label}-{tenant}-client", tenant, "client", None)
 
+        for label in ("A", "B"):
+            command(label, "connect", f"{label}-courier-own", 10, "courier:71", "courier:71")
+            command(label, "connect", f"{label}-courier-other", 10, "courier:72", "courier:72")
+        command("A", "broadcast", {"event": "courier_panel_updated", "courier_id": 71, "private": "must-not-leak"}, 10, "courier")
+        courier_events = [take(lambda item: item[0] == "event" and item[3].get("event") == "courier_panel_updated") for _ in range(2)]
+        assert {(item[1], item[2]) for item in courier_events} == {("A", "A-courier-own"), ("B", "B-courier-own")}
+        assert all(item[3] == {"event": "courier_panel_updated"} for item in courier_events)
+
         command("A", "broadcast", {"event": "tables_updated", "marker": "a-to-b"}, 10, "internal")
         first = [take(lambda item: item[0] == "event" and item[3].get("marker") == "a-to-b") for _ in range(2)]
         assert {(item[1], item[2]) for item in first} == {("A", "A-10-internal"), ("B", "B-10-internal")}

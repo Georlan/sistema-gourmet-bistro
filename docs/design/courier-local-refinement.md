@@ -144,3 +144,19 @@ Implementado o botão “Ordenar automático” ao lado do status, com ajuste ma
 Evidências em `outputs/courier-refinement/automatic/` no diretório da conversa. API real local com coordenadas fictícias de destinos e posição emulada do navegador; teste físico do celular pendente. Não houve publicação ou alteração do tenant 6.
 
 Validação final desta fatia: 50 testes de navegador, 1.104 unitários e 25 backend aprovados, além de lint e build. Cobertura inclui não disparar consulta GPS antes do toque, persistir só IDs, permissão negada, precisão ruim, timeout, callback tardio, troca de acesso, reatribuição, revisão de endereço sem pin antigo, empates, coordenadas inválidas e ausência de aumento de consultas por entrega.
+
+### Última lista offline e sincronização dedicada — 25/10/2026
+
+Implementados cache cifrado por credencial, hidratação antes da leitura de rede, limpeza ao revogar e persistência da remoção antes do sucesso de conclusão. O build de produção possui um worker isolado em `/entregador` para abrir/atualizar o app sem rede após preparo inicial online; não cacheia API, POST ou dados de outros módulos. Falta de armazenamento mostra aviso. O acesso mantém o prazo original de quatro horas; código/GPS do entregador não são persistidos.
+
+WebSocket privado `/ws/entregador` autentica o token dedicado no subprotocolo, usa grupo de tenant + entregador e entrega apenas hints mínimos. Reutiliza o bus PostgreSQL existente, com eventos após commit, releitura coalescida, backoff, suspensão quando invisível/offline e reconciliação ao voltar. Despacho, conclusão, cancelamento, reatribuição e revogação estão ligados aos caminhos existentes. Código continua sendo confirmado no backend canônico e dispara a atualização já consumida pelo Caixa.
+
+Validação: 64 testes de navegador do app/recebimento/realtime/cache, 6 testes com instalações novas do shell em produção simulada, 9 verificações adicionais visuais/reconexão em mobile/desktop, 1.107 unitários, 55 backend focais (47 + 8 em processos sequenciais para não misturar buckets do limitador IP), lint e build aprovados. Um teste com dois processos reais e PostgreSQL local também passou; o container temporário foi removido.
+
+Prova operacional adicional com API local real e restaurante fictício 99051: F5 totalmente offline restaurou a lista; despacho apareceu no browser por WebSocket sem refresh; código digitado na UI concluiu o pedido; socket do Caixa recebeu `tables_updated` e leitura posterior confirmou `finalizado`/fechado. O estado final servido em 4310 foi conferido de novo com a quantidade atual de entregas do backend (sem assumir que os pedidos da fixture continuavam ativos após o teste de conclusão). Capturas e logs em `outputs/courier-refinement/realtime-offline/` no diretório da conversa.
+
+Encontrada e corrigida uma falha real de boot offline: `Vary: Origin` impedia encontrar assets apesar de estarem no Cache Storage, deixando a página em branco. O lookup ignora essa variação apenas para arquivos estáticos locais permitidos; testes repetiram a instalação nova, não só o cache HTTP incidental. O worker e a rota têm headers de revalidação, com escopo máximo explícito em `/entregador`.
+
+A prévia 4310 passou de Vite dev para o build de produção, permitindo testar offline de verdade. Reabrir online uma vez antes do teste. Não houve publicação, merge, CI remoto ou escrita no tenant 6. Teste de aparelho físico permanece pendente; uma aba suspensa pelo sistema operacional reconcilia ao voltar, sem promessa de execução contínua em segundo plano. Próxima funcionalidade separada: aviso de problema ao Caixa já aprovado; conectores comerciais seguem pendentes.
+
+Verificação adicional dos headers/tema/CSP: 17 testes aprovados. Prévia final em 4310 usa o build com as regras de escopo/revalidação preparadas em `_headers`; aplicação dessas regras no host público depende de publicação futura.

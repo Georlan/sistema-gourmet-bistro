@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, ArrowUpRight, Sun, Moon, PackageCheck, ArrowUp, ArrowDown, Copy, Store, WifiOff, ListOrdered, LocateFixed } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 import { KomaLogo } from './KomaLogo';
@@ -7,6 +7,9 @@ import './courier/courierPresentation.css';
 import { useCourierTrip } from './courier/useCourierTrip';
 import { CourierRideArtwork } from './courier/CourierRideArtwork';
 import { useCourierAutoOrder } from './courier/useCourierAutoOrder';
+import { createCourierSnapshotCache } from './courier/courierSnapshotCache';
+import { useCourierRealtime } from './courier/useCourierRealtime';
+import { useCourierOfflineShell } from './courier/useCourierOfflineShell';
 import { CourierPayment, type CourierPaymentData } from './courier/CourierPayment';
 import ifoodLogo from '../assets/brand/delivery/ifood.png';
 import food99Logo from '../assets/brand/delivery/99food.png';
@@ -73,6 +76,14 @@ const formatMoney = (value: number) => money.format(value);
 export function MotoboyPwaPage() {
   const [token, setToken] = useState(bootstrapDeliveryToken);
   const [theme, setTheme] = useState(readKomaTheme);
+  const cache = useMemo(() => createCourierSnapshotCache(token), [token]);
+  const activeCacheRef = useRef(cache); activeCacheRef.current = cache;
+  const [cacheHydrating, setCacheHydrating] = useState(Boolean(token));
+  const [cacheOnly, setCacheOnly] = useState(false);
+  const [cacheIssue, setCacheIssue] = useState(false);
+  const [accessInvalid, setAccessInvalid] = useState(false);
+  const [realtimePending, setRealtimePending] = useState(false);
+  const shellIssue = useCourierOfflineShell();
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [reconnectRequested, setReconnectRequested] = useState(false);
   const [refreshFailed, setRefreshFailed] = useState(false);
@@ -119,6 +130,21 @@ export function MotoboyPwaPage() {
     toastTimer.current = setTimeout(() => setToast(null), 5000);
   }, []);
 
+  const persistPanel = useCallback(async (panel: unknown) => {
+    const saved = await cache.write(panel);
+    if (activeCacheRef.current === cache && profileRef.current) setCacheIssue(!saved);
+  }, [cache]);
+
+  const revokeAccess = useCallback(() => {
+    getRef.current?.abort(); getRef.current = null;
+    postRef.current?.abort(); postRef.current = null; isConfirmingRef.current = false;
+    profileRef.current = null; setMotoboy(null); setEntregas([]); setLoading(false);
+    setConfirmingId(null); setIsRefreshing(false); setAccessInvalid(true); setReviewId(null);
+    setErrorMsg('Acesso encerrado. Solicite um novo link ao Caixa.');
+    void cache.clear();
+  }, [cache]);
+  useCourierRealtime(accessInvalid ? '' : token, () => setRealtimePending(true), revokeAccess);
+
   const carregarDadosPainel = useCallback(async (authToken: string, reconcile = false): Promise<boolean> => {
     if (getRef.current || (isConfirmingRef.current && !reconcile)) return false;
     const controller = new AbortController();
@@ -135,7 +161,8 @@ export function MotoboyPwaPage() {
       if (getRef.current !== controller) return false;
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
-          profileRef.current = null; setMotoboy(null); setEntregas([]);
+          profileRef.current = null; setMotoboy(null); setEntregas([]); setAccessInvalid(true);
+          void cache.clear();
         }
         const body = await res.json().catch(() => ({}));
         throw new Error(typeof body.detail === 'string' ? body.detail : 'Não foi possível atualizar as entregas.');
@@ -144,6 +171,7 @@ export function MotoboyPwaPage() {
       if (getRef.current !== controller) return false;
       if (!data.motoboy?.id || !Array.isArray(data.entregas)) throw new Error('Não foi possível conferir as entregas. Tente atualizar.');
       profileRef.current = data.motoboy;
+      setCacheOnly(false); void persistPanel(data);
       setMotoboy(data.motoboy); setEntregas(data.entregas.filter((item: EntregaItem) => item.delivery_status === 'transito'));
       setErrorMsg(null); setUncertainId(null); setRefreshFailed(false); setLastUpdated(Date.now());
       return true;
@@ -161,11 +189,24 @@ export function MotoboyPwaPage() {
         getRef.current = null; setLoading(false); setIsRefreshing(false);
       }
     }
-  }, [showToast]);
+  }, [showToast, cache, persistPanel]);
 
   useEffect(() => {
     if (!token) return;
-    void carregarDadosPainel(token);
+    let active = true;
+    setCacheHydrating(true);
+    void (async () => {
+      const saved = await cache.read();
+      if (!active) return;
+      if (saved && !profileRef.current) {
+        profileRef.current = saved.motoboy; setMotoboy(saved.motoboy);
+        setEntregas(saved.entregas as unknown as EntregaItem[]); setLastUpdated(saved.at);
+        setCacheOnly(true); setLoading(false); setErrorMsg(null);
+      }
+      setCacheHydrating(false);
+      if (navigator.onLine) void carregarDadosPainel(token);
+      else { setLoading(false); if (!saved) setErrorMsg('Sem conexão e sem entregas salvas neste acesso.'); }
+    })();
     const resume = () => {
       if (!navigator.onLine || document.visibilityState !== 'visible' || Date.now() - lastAttemptRef.current < RESUME_REFRESH_MIN_MS) return;
       void carregarDadosPainel(token);
@@ -181,6 +222,7 @@ export function MotoboyPwaPage() {
     window.addEventListener('offline', offline);
     window.addEventListener('online', online);
     return () => {
+      active = false;
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('focus', resume);
       window.removeEventListener('offline', offline);
@@ -189,18 +231,24 @@ export function MotoboyPwaPage() {
       postRef.current?.abort(); postRef.current = null;
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, [token, carregarDadosPainel]);
+  }, [token, cache, carregarDadosPainel]);
 
   // Reconnection bypasses the focus throttle, but waits for the active operation.
   // Read the server once; never queue or replay a delivery confirmation.
   useEffect(() => {
-    if (!token || !isOnline || !reconnectRequested || loading || isRefreshing || confirmingId) return;
+    if (!token || !isOnline || !reconnectRequested || cacheHydrating || loading || isRefreshing || confirmingId) return;
     setReconnectRequested(false);
     void carregarDadosPainel(token);
-  }, [token, isOnline, reconnectRequested, loading, isRefreshing, confirmingId, carregarDadosPainel]);
+  }, [token, isOnline, reconnectRequested, cacheHydrating, loading, isRefreshing, confirmingId, carregarDadosPainel]);
+
+  useEffect(() => {
+    if (!realtimePending || !token || !isOnline || accessInvalid || cacheHydrating || loading || isRefreshing || confirmingId || getRef.current) return;
+    setRealtimePending(false);
+    void carregarDadosPainel(token);
+  }, [realtimePending, token, isOnline, accessInvalid, cacheHydrating, loading, isRefreshing, confirmingId, carregarDadosPainel]);
 
   const handleConfirmarEntrega = async (comandaId: string) => {
-    if (!token || !isOnline || !navigator.onLine || reconnectRequested || getRef.current || isConfirmingRef.current || uncertainId) return;
+    if (!token || cacheOnly || !isOnline || !navigator.onLine || reconnectRequested || getRef.current || isConfirmingRef.current || uncertainId) return;
     const current = entregas.find(item => item.id === comandaId);
     if (!current || current.confirmation?.enabled === false) return;
     const requiresCode = current.requires_delivery_code;
@@ -225,7 +273,10 @@ export function MotoboyPwaPage() {
         throw new Error(typeof body.detail === 'string' ? body.detail : 'Não foi possível confirmar a entrega.');
       }
       setReviewId(null); setReceiptCode('');
-      setEntregas(prev => prev.filter(item => item.id !== comandaId));
+      const remaining = entregas.filter(item => item.id !== comandaId);
+      await persistPanel({motoboy:profileRef.current,entregas:remaining});
+      if (postRef.current !== controller) return;
+      setEntregas(remaining);
       showToast('Entrega confirmada com sucesso.');
     } catch (err: any) {
       if (postRef.current !== controller) return;
@@ -257,6 +308,7 @@ export function MotoboyPwaPage() {
       postRef.current?.abort(); postRef.current = null;
       isConfirmingRef.current = false; profileRef.current = null;
       setMotoboy(null); setEntregas([]); setReviewId(null); setConfirmingId(null);
+      setAccessInvalid(false); setCacheOnly(false); setCacheIssue(false); setCacheHydrating(Boolean(next)); setRealtimePending(false);
       setUncertainId(null); setRefreshFailed(false); setReconnectRequested(false); setLastUpdated(null); setPlanning(false); setReceiptCode(''); setReceiptError(''); setCopiedAddressId(null);
       setLoading(Boolean(next)); setErrorMsg(next ? null : 'Abra o link enviado pelo caixa.');
       setToken(next);
@@ -280,7 +332,7 @@ export function MotoboyPwaPage() {
     return copy;
   });
   const blocked = Boolean(confirmingId) || isRefreshing || Boolean(uncertainId);
-  const confirmationBlocked = blocked || !isOnline || reconnectRequested;
+  const confirmationBlocked = blocked || cacheOnly || !isOnline || reconnectRequested;
   const automatic = useCourierAutoOrder(token, ordered, blocked || reconnectRequested || !trip.ready, trip.save);
 
   return <div className="k-courier">
@@ -307,12 +359,13 @@ export function MotoboyPwaPage() {
             <CourierRideArtwork className="k-courier__art" />
           </div>
           <div className="k-courier__trip-bar">
-            <div className="k-courier__sync" data-offline={!isOnline || undefined} role="status">{!isOnline ? <><WifiOff size={14} aria-hidden="true" />Sem conexão · entregas mantidas</> : isRefreshing || reconnectRequested ? 'Conferindo entregas…' : refreshFailed ? 'Atualização pendente · tente atualizar' : lastUpdated ? `Atualizado ${new Date(lastUpdated).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</div>
+            <div className="k-courier__sync" data-offline={!isOnline || undefined} role="status">{!isOnline ? <><WifiOff size={14} aria-hidden="true" />Sem conexão · entregas mantidas</> : isRefreshing || reconnectRequested ? 'Conferindo entregas…' : refreshFailed ? 'Atualização pendente · tente atualizar' : cacheOnly ? 'Última lista salva' : lastUpdated ? `Atualizado ${new Date(lastUpdated).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</div>
             {entregas.length > 0 && !planning && <div className="k-courier__trip-tools">
               {entregas.length > 1 && <button type="button" className="k-courier__secondary" disabled={!trip.ready || blocked || automatic.locating} onClick={automatic.order}><LocateFixed size={16} aria-hidden="true" />{automatic.locating ? 'Localizando…' : 'Ordenar automático'}</button>}
               <button type="button" className="k-courier__icon" ref={tripButtonRef} aria-label={trip.ids.length ? 'Editar sequência' : 'Organizar viagem'} title="Ajustar sequência" disabled={!trip.ready || blocked || automatic.locating} onClick={() => { automatic.clearFeedback(); setDraftTrip(trip.ids); setReviewId(null); setPlanning(true); }}><ListOrdered size={20} aria-hidden="true" /></button>
             </div>}
           </div>
+          {(cacheIssue || shellIssue) && <p className="k-courier__route-feedback" role="alert">Não foi possível guardar as entregas no aparelho. Mantenha esta tela aberta.</p>}
           {automatic.feedback && <p className="k-courier__route-feedback" role={automatic.feedback.error ? 'alert' : 'status'}>{automatic.feedback.text}</p>}
           {uncertainId && <div className="k-courier__notice" role="alert"><span>Confirmação pendente. Toque em Verificar.</span><button type="button" className="k-courier__secondary" disabled={!isOnline || isRefreshing || Boolean(confirmingId)} onClick={() => void carregarDadosPainel(token)}>Verificar</button></div>}
           {planning && <section className="k-courier__planner" aria-label="Organizar viagem"><h2 tabIndex={-1} ref={planHeadingRef}>Sua sequência</h2><div className="k-courier__planner-list">{draftOrders.map(item => {

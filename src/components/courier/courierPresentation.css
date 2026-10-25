@@ -19,7 +19,8 @@
 .k-courier-ride__box-line {stroke-width:2}
 .k-courier-ride__motion {stroke:#79dcba;stroke-width:4;stroke-linecap:round}
 .k-courier__sync {min-width:0;flex:1;display:flex;align-items:center;flex-wrap:wrap;font-size:12px;line-height:1.4;color:var(--koma-text-muted);padding:4px 2px}
-.k-courier__sync[data-offline=true] {justify-content:flex-start;gap:7px;color:var(--koma-text-primary)}
+.k-courier__sync>svg {flex-shrink:0}
+.k-courier__sync[data-offline=true] {justify-content:flex-start;flex-wrap:nowrap;gap:7px;color:var(--koma-text-primary)}
 .k-courier__list {display:grid;gap:16px;align-items:start}
 .k-courier__card {min-width:0;overflow:hidden;border:1px solid var(--koma-border-default);background:var(--koma-surface-card);border-radius:24px;box-shadow:0 3px 0 rgb(0 0 0/.1)}
 .k-courier__card-head {display:flex;justify-content:space-between;align-items:flex-start;gap:10px;background:var(--koma-accent-soft);padding:16px 18px;border-radius:0 0 25px 0}
