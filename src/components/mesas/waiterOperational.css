@@ -1,16 +1,16 @@
 /* KÔMA operational: local tokens, canonical html theme and text scale. */
 .waiter-shell {
-  --kw-canvas:#0d1d17; --kw-surface:#192d24; --kw-raised:#28463a;
-  --kw-ink:#f5f8f7; --kw-muted:#b5c3bf; --kw-line:#35413e;
-  --kw-accent:#35d9b0; --kw-accent-ink:#05271d;
-  --kw-service:#f3a3b8; --kw-ready:#72ebc3; --kw-payment:#9ad5ff;
+  --kw-canvas:var(--koma-operation-canvas); --kw-surface:var(--koma-operation-surface); --kw-raised:var(--koma-operation-raised);
+  --kw-ink:var(--koma-operation-text); --kw-muted:var(--koma-operation-muted); --kw-line:var(--koma-operation-line);
+  --kw-accent:var(--koma-operation-action); --kw-accent-ink:var(--koma-operation-on-action);
+  --kw-service:var(--koma-operation-service); --kw-ready:var(--koma-operation-ready); --kw-payment:var(--koma-operation-payment);
   background:var(--kw-canvas); color:var(--kw-ink);
 }
 [data-koma-theme="light"] .waiter-shell {
-  --kw-canvas:#eff5f0; --kw-surface:#fff; --kw-raised:#e6eeeb;
-  --kw-ink:#14241d; --kw-muted:#496057; --kw-line:#c7d6cf;
-  --kw-accent:#006c53; --kw-accent-ink:#fff;
-  --kw-service:#9d3050; --kw-ready:#006c53; --kw-payment:#155e90;
+  --kw-canvas:var(--koma-operation-canvas); --kw-surface:var(--koma-operation-surface); --kw-raised:var(--koma-operation-raised);
+  --kw-ink:var(--koma-operation-text); --kw-muted:var(--koma-operation-muted); --kw-line:var(--koma-operation-line);
+  --kw-accent:var(--koma-operation-action); --kw-accent-ink:var(--koma-operation-on-action);
+  --kw-service:var(--koma-operation-service); --kw-ready:var(--koma-operation-ready); --kw-payment:var(--koma-operation-payment);
 }
 .waiter-shell > main {padding-top:.5rem;padding-bottom:calc(68px + env(safe-area-inset-bottom))}
 .waiter-shell .kw-header {background:#06392c;color:#f4faf6;height:72px;overflow:hidden;isolation:isolate}

@@ -4,6 +4,22 @@ const API_ORIGIN = 'http://127.0.0.1:8000';
 const APP_ORIGIN = `http://127.0.0.1:${process.env.KOMA_E2E_PORT || 4173}`;
 const NOW = new Date('2026-08-30T15:00:00.000Z');
 
+test('fundação mantém as cores aprovadas do Garçom nos dois temas', async ({ page }) => {
+  await setupWaiterWave1(page);
+  for (const [theme, expected] of [
+    ['dark', ['#0d1d17', '#192d24', '#28463a', '#f5f8f7', '#35d9b0', '#05271d', '#f3a3b8', '#72ebc3', '#9ad5ff']],
+    ['light', ['#eff5f0', '#fff', '#e6eeeb', '#14241d', '#006c53', '#fff', '#9d3050', '#006c53', '#155e90']],
+  ] as const) {
+    await page.evaluate(value => { document.documentElement.dataset.komaTheme = value; }, theme);
+    const values = await page.locator('.waiter-shell').evaluate(node => {
+      const style = getComputedStyle(node);
+      return ['canvas', 'surface', 'raised', 'ink', 'accent', 'accent-ink', 'service', 'ready', 'payment']
+        .map(key => style.getPropertyValue(`--kw-${key}`).trim());
+    });
+    expect(values, theme).toEqual(expected);
+  }
+});
+
 const mockTables = [
   { id: 1, nome: 'Mesa 1', capacidade: 4, status: 'livre' },
   { id: 2, nome: 'Mesa 2', capacidade: 4, status: 'ocupada' },

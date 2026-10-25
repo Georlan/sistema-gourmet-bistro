@@ -1,0 +1,115 @@
+/* Shared visual foundation. Existing --koma-* names remain the public contract.
+ * Purchase and operation keep their approved palettes through explicit profiles.
+ * No component geometry, tenant branding or business state is defined here.
+ */
+:root {
+  --koma-brand-reference: #05c49d;
+  --koma-font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --koma-font-display: "Space Grotesk", sans-serif;
+}
+
+:root,
+[data-koma-theme="dark"] {
+  --koma-surface-page: #0a0d0c;
+  --koma-surface-canvas: #060807;
+  --koma-surface-shell: #090c0a;
+  --koma-surface-panel: #121614;
+  --koma-surface-card: #171d1a;
+  --koma-surface-raised: #202824;
+  --koma-surface-input: #0d1210;
+  --koma-surface-dialog: #151b18;
+  --koma-surface-overlay: rgba(0, 0, 0, 0.85);
+  --koma-text-primary: #ffffff;
+  --koma-text-secondary: #d6e2dc;
+  --koma-text-muted: #a7b8b0;
+  --koma-text-subtle: #889c93;
+  --koma-border-subtle: rgba(255, 255, 255, 0.08);
+  --koma-border-default: rgba(220, 240, 230, 0.16);
+  --koma-border-strong: rgba(220, 240, 230, 0.28);
+  --koma-accent: var(--koma-brand-reference);
+  --koma-action-bg: var(--koma-brand-reference);
+  --koma-action-hover: #26d5b2;
+  --koma-action-text: #071c17;
+  --koma-accent-text: #81dfcb;
+  --koma-accent-soft: #14352d;
+  --koma-accent-border: #387f6d;
+  --koma-focus-ring: #81dfcb;
+
+  /* Purchase: current artistic palette; action ink is shared and contrast-safe. */
+  --koma-purchase-canvas: #040a07;
+  --koma-purchase-card: #091610;
+  --koma-purchase-text: #f3fbf7;
+  --koma-purchase-accent: #10b981;
+  --koma-purchase-accent-hover: #34d399;
+  --koma-purchase-on-accent: var(--koma-action-text);
+  --koma-purchase-action-bg: linear-gradient(135deg, #10b981 0%, #0d9488 100%);
+  --koma-purchase-action-hover: linear-gradient(135deg, #34d399 0%, #14b8a6 100%);
+
+  /* Operation: preserve approved waiter colors, including independent states. */
+  --koma-operation-canvas: #0d1d17;
+  --koma-operation-surface: #192d24;
+  --koma-operation-raised: #28463a;
+  --koma-operation-text: #f5f8f7;
+  --koma-operation-muted: #b5c3bf;
+  --koma-operation-line: #35413e;
+  --koma-operation-action: #35d9b0;
+  --koma-operation-on-action: #05271d;
+  --koma-operation-service: #f3a3b8;
+  --koma-operation-ready: #72ebc3;
+  --koma-operation-payment: #9ad5ff;
+}
+
+[data-koma-theme="light"] {
+  --koma-surface-page: #eef3f4;
+  --koma-surface-canvas: #e8eef0;
+  --koma-surface-shell: #ffffff;
+  --koma-surface-panel: #ffffff;
+  --koma-surface-card: #ffffff;
+  --koma-surface-raised: #eef3f5;
+  --koma-surface-input: #ffffff;
+  --koma-surface-dialog: #ffffff;
+  --koma-surface-overlay: rgba(15, 23, 42, 0.65);
+  --koma-text-primary: #11181c;
+  --koma-text-secondary: #334155;
+  --koma-text-muted: #52606a;
+  --koma-text-subtle: #64748b;
+  --koma-border-subtle: rgba(15, 23, 42, 0.10);
+  --koma-border-default: #c3cdd2;
+  --koma-border-strong: #94a3b8;
+  --koma-accent: #00875f;
+  --koma-action-bg: #00745f;
+  --koma-action-hover: #005f4e;
+  --koma-action-text: #ffffff;
+  --koma-accent-text: #006c57;
+  --koma-accent-soft: #e0f4ed;
+  --koma-accent-border: #83b9a9;
+  --koma-focus-ring: #00745f;
+}
+
+/* Keep legacy public theme selectors during migration, including body portals. */
+html[data-theme="light"],
+[data-koma-theme="light"],
+[data-cardapio-tone="light"] {
+  --koma-purchase-canvas: #f5f8f6;
+  --koma-purchase-card: #ffffff;
+  --koma-purchase-text: #061d15;
+  --koma-purchase-accent: #00875a;
+  --koma-purchase-accent-hover: #006c48;
+  --koma-purchase-on-accent: #ffffff;
+  --koma-purchase-action-bg: linear-gradient(135deg, #00875a 0%, #00745f 100%);
+  --koma-purchase-action-hover: linear-gradient(135deg, #006c48 0%, #005f4e 100%);
+}
+
+[data-koma-theme="light"] {
+  --koma-operation-canvas: #eff5f0;
+  --koma-operation-surface: #fff;
+  --koma-operation-raised: #e6eeeb;
+  --koma-operation-text: #14241d;
+  --koma-operation-muted: #496057;
+  --koma-operation-line: #c7d6cf;
+  --koma-operation-action: #006c53;
+  --koma-operation-on-action: #fff;
+  --koma-operation-service: #9d3050;
+  --koma-operation-ready: #006c53;
+  --koma-operation-payment: #155e90;
+}

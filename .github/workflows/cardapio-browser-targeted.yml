@@ -9,6 +9,9 @@ on:
       - 'src/components/caixa/pdv/**'
       - 'src/utils/apiError.ts'
       - 'src/utils/imageUpload.ts'
+      - 'src/utils/modalFocus.ts'
+      - 'src/styles/komaFoundation.css'
+      - 'src/index.css'
       - 'src/components/CardapioAssetUploader.tsx'
       - 'e2e/image-upload-optimization.spec.ts'
       - 'e2e/fixtures/image-upload.html'
@@ -72,6 +75,7 @@ jobs:
           e2e/cardapio-promotion-expiry.spec.ts
           e2e/cardapio-promotion-mixed-cart.spec.ts
           e2e/cardapio-artistic-parity.spec.ts
+          e2e/cardapio-foundation-accessibility.spec.ts
           e2e/cardapio-live-modifier-sync.spec.ts
           e2e/cardapio-canonical-modal-entrypoints.spec.ts
           e2e/cardapio-catalog-images.spec.ts

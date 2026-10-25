@@ -8,21 +8,22 @@
    ======================================================== */
 :root,
 .koma-art-canvas {
-  --art-bg: #040a07;
+  --art-bg: var(--koma-purchase-canvas);
   --art-canopy-grad: linear-gradient(175deg, #021a12 0%, #05291d 45%, #083c2a 85%, #0a4833 100%);
   --art-wave-fill: #040a07;
   --art-pod-bg: linear-gradient(150deg, #0c1c14 0%, #07120e 100%);
   --art-pod-border: rgba(16, 185, 129, 0.22);
   --art-pod-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.7), 0 0 24px rgba(16, 185, 129, 0.08);
   --art-arch-melt: linear-gradient(to bottom, rgba(12, 28, 20, 0) 55%, #0c1c14 100%);
-  --art-card-bg: #091610;
+  --art-card-bg: var(--koma-purchase-card);
   --art-card-border: rgba(255, 255, 255, 0.07);
   --art-card-shadow: 0 10px 24px -6px rgba(0, 0, 0, 0.4);
-  --art-text-main: #f3fbf7;
+  --art-text-main: var(--koma-purchase-text);
   --art-text-sec: #94a3b8;
   --art-text-muted: #64748b;
-  --art-emerald: #10b981;
-  --art-emerald-hover: #34d399;
+  --art-emerald: var(--koma-purchase-accent);
+  --art-emerald-hover: var(--koma-purchase-accent-hover);
+  --art-on-accent: var(--koma-purchase-on-accent);
   --art-emerald-glow: rgba(16, 185, 129, 0.35);
   --art-watermark: rgba(16, 185, 129, 0.09);
   --art-dock-bg: rgba(6, 18, 13, 0.88);
@@ -46,21 +47,22 @@ html[data-koma-theme="light"],
 html[data-theme="light"] .koma-art-canvas,
 html[data-koma-theme="light"] .koma-art-canvas,
 [data-cardapio-tone="light"] .koma-art-canvas {
-  --art-bg: #f5f8f6;
+  --art-bg: var(--koma-purchase-canvas);
   --art-canopy-grad: linear-gradient(175deg, #013825 0%, #004d34 50%, #006241 100%);
   --art-wave-fill: #f5f8f6;
   --art-pod-bg: #ffffff;
   --art-pod-border: rgba(0, 0, 0, 0.06);
   --art-pod-shadow: 0 20px 40px -10px rgba(0, 60, 40, 0.1), 0 2px 6px rgba(0, 0, 0, 0.04);
   --art-arch-melt: linear-gradient(to bottom, rgba(255, 255, 255, 0) 55%, #ffffff 100%);
-  --art-card-bg: #ffffff;
+  --art-card-bg: var(--koma-purchase-card);
   --art-card-border: rgba(0, 0, 0, 0.06);
   --art-card-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.06);
-  --art-text-main: #061d15;
+  --art-text-main: var(--koma-purchase-text);
   --art-text-sec: #475569;
   --art-text-muted: #64748b;
-  --art-emerald: #00875a;
-  --art-emerald-hover: #006c48;
+  --art-emerald: var(--koma-purchase-accent);
+  --art-emerald-hover: var(--koma-purchase-accent-hover);
+  --art-on-accent: var(--koma-purchase-on-accent);
   --art-emerald-glow: rgba(0, 135, 90, 0.25);
   --art-watermark: rgba(0, 135, 90, 0.08);
   --art-dock-bg: rgba(255, 255, 255, 0.92);
@@ -438,7 +440,7 @@ html[data-theme="light"] .koma-art-category-bar {
 
 .koma-art-category-pill.is-active {
   background: var(--art-emerald);
-  color: #ffffff;
+  color: var(--art-on-accent);
   box-shadow: 0 4px 14px var(--art-emerald-glow);
   border-color: transparent;
 }
@@ -594,7 +596,7 @@ html[data-theme="light"] .koma-art-stage-action-row {
   align-items: center;
   justify-content: center;
   background: var(--art-emerald);
-  color: #ffffff;
+  color: var(--art-on-accent);
   font-size: 13px;
   font-weight: 800;
   padding: 12px 24px;
@@ -626,7 +628,7 @@ html[data-theme="light"] .koma-art-stage-action-row {
   height: 32px;
   border-radius: 50%;
   background: var(--art-emerald);
-  color: #ffffff;
+  color: var(--art-on-accent);
   border: none;
   display: flex;
   align-items: center;
@@ -788,7 +790,7 @@ html[data-theme="light"] .koma-art-stage-action-row {
 
 .koma-art-pebble-add-btn:hover {
   background: var(--art-emerald);
-  color: #ffffff;
+  color: var(--art-on-accent);
 }
 
 .koma-art-pebble-stepper {
@@ -805,7 +807,7 @@ html[data-theme="light"] .koma-art-stage-action-row {
   height: 22px;
   border-radius: 50%;
   background: var(--art-emerald);
-  color: #ffffff;
+  color: var(--art-on-accent);
   border: none;
   display: flex;
   align-items: center;
@@ -849,7 +851,7 @@ html[data-theme="light"] .koma-art-stage-action-row {
   height: 15px;
   border-radius: 50%;
   background: var(--art-emerald);
-  color: #ffffff;
+  color: var(--art-on-accent);
   font-size: 9px;
   font-weight: 900;
 }
@@ -1022,7 +1024,7 @@ html[data-theme="light"] .koma-art-cat-monument {
 
 .koma-art-card-add-btn:hover {
   background: var(--art-emerald);
-  color: #ffffff;
+  color: var(--art-on-accent);
 }
 
 .koma-art-card-stepper {
@@ -1039,7 +1041,7 @@ html[data-theme="light"] .koma-art-cat-monument {
   height: 24px;
   border-radius: 50%;
   background: var(--art-emerald);
-  color: #ffffff;
+  color: var(--art-on-accent);
   border: none;
   display: flex;
   align-items: center;
@@ -1293,7 +1295,7 @@ html[data-theme="light"] .koma-art-footer {
 
 .koma-art-dock-btn--bag {
   background: var(--art-emerald);
-  color: #ffffff;
+  color: var(--art-on-accent);
   padding: 6px 18px;
   flex-direction: row;
   gap: 8px;
@@ -1302,7 +1304,7 @@ html[data-theme="light"] .koma-art-footer {
 
 .koma-art-dock-btn--bag:hover {
   background: var(--art-emerald-hover);
-  color: #ffffff;
+  color: var(--art-on-accent);
 }
 
 .koma-art-dock-bag-icon {
@@ -1900,14 +1902,15 @@ html[data-koma-theme="light"] .koma-art-store-hours-table,
    15. SISTEMA PROPRIETÁRIO DE AÇÕES KÔMA (.koma-action-*)
    ======================================================== */
 .koma-action-primary {
-  background: linear-gradient(135deg, #10b981 0%, #0d9488 100%);
+  background: var(--koma-purchase-action-bg);
+  color: var(--art-on-accent);
   box-shadow: 0 4px 18px rgba(16, 185, 129, 0.35);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
 }
 
 .koma-action-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #34d399 0%, #14b8a6 100%);
+  background: var(--koma-purchase-action-hover);
   box-shadow: 0 6px 22px rgba(16, 185, 129, 0.45);
   transform: translateY(-1px);
 }
@@ -1919,14 +1922,14 @@ html[data-koma-theme="light"] .koma-art-store-hours-table,
 html[data-theme="light"] .koma-action-primary,
 html[data-koma-theme="light"] .koma-action-primary,
 [data-cardapio-tone="light"] .koma-action-primary {
-  background: linear-gradient(135deg, #00875a 0%, #00745f 100%);
+  background: var(--koma-purchase-action-bg);
   box-shadow: 0 4px 16px rgba(0, 135, 90, 0.25);
 }
 
 html[data-theme="light"] .koma-action-primary:hover:not(:disabled),
 html[data-koma-theme="light"] .koma-action-primary:hover:not(:disabled),
 [data-cardapio-tone="light"] .koma-action-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #009966 0%, #00875a 100%);
+  background: var(--koma-purchase-action-hover);
   box-shadow: 0 6px 20px rgba(0, 135, 90, 0.35);
 }
 
@@ -2179,9 +2182,9 @@ html[data-theme="light"] .koma-art-tracker-tabs,
 }
 
 .koma-art-tracker-tab-pill.is-selected {
-  background: #10b981;
-  border-color: #10b981;
-  color: #ffffff;
+  background: var(--art-emerald);
+  border-color: var(--art-emerald);
+  color: var(--art-on-accent);
 }
 
 .koma-art-tracker-tab-dot {
@@ -2298,8 +2301,8 @@ html[data-theme="light"] .koma-art-tracker-tabs,
 }
 
 .koma-art-tracker-btn--pix {
-  background: #10b981;
-  color: #ffffff;
+  background: var(--art-emerald);
+  color: var(--art-on-accent);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
@@ -2329,8 +2332,8 @@ html[data-theme="light"] .koma-art-tracker-tabs,
 }
 
 .koma-art-tracker-btn--new {
-  background: #10b981;
-  color: #ffffff;
+  background: var(--art-emerald);
+  color: var(--art-on-accent);
 }
 
 .koma-art-tracker-pix-note {
@@ -2626,6 +2629,11 @@ html[data-theme="light"] .koma-art-promo-footer,
 .koma-art-canvas a:focus-visible,
 .koma-art-canvas input:focus-visible {
   outline: 3px solid var(--art-emerald);
+  outline-offset: 3px;
+}
+/* The product sheet is a body portal, outside the storefront canvas. */
+#product-details-modal :where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 3px solid var(--koma-focus-ring);
   outline-offset: 3px;
 }
 @media (prefers-reduced-motion: reduce) {

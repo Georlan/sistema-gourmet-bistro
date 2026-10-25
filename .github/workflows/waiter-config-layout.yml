@@ -5,6 +5,7 @@ on:
       - 'src/App.tsx'
       - 'src/main.tsx'
       - 'src/index.css'
+      - 'src/styles/komaFoundation.css'
       - 'src/components/Mesa*.tsx'
       - 'src/analytics/**'
       - 'src/components/app/**'
