@@ -1,7 +1,7 @@
 # Entregador — primeira versão local
 
 Base: origin/main 2fa52fa6. Branch: design/courier-refinement-20261025.
-Sem publicação, serviço pago, dependência nova ou alteração de backend nesta rodada.
+Sem publicação, serviço pago ou dependência nova. Após a primeira proposta, um ajuste focal no backend restringe o painel a entregas atribuídas ao próprio entregador.
 
 ## Direção
 
@@ -27,7 +27,7 @@ Após POST com resultado desconhecido (timeout/rede), consulta a lista, sem repe
 
 ## Pontos para a próxima integração
 
-A API atual lista entregas sem atribuição além das atribuídas ao próprio entregador, mas rejeita a confirmação das não atribuídas (já há teste backend dessa proteção). Antes de publicar, alinhar projeção e autorização; a UI não deve inventar atribuição. O retorno atual também não informa restaurante nem confirmação de notificação WhatsApp, portanto não os inventamos na tela.
+A consulta foi corrigida localmente para exigir tipo Delivery/Entrega e vínculo com o entregador do token. O teste reproduziu antes da correção a presença indevida de retirada, mesa e entrega sem atribuição; após a correção, somente as duas entregas próprias foram retornadas, preservando isolamento por tenant e excluindo outro entregador. A confirmação continua protegida no backend. O retorno atual também não informa restaurante nem confirmação de notificação WhatsApp, portanto não os inventamos na tela.
 
 O canal WebSocket operacional usa identidade de operador; o link de entregador tem credencial própria. Não reutilizar token de funcionário nem assinar eventos de todo o restaurante para simular tempo real. Qualquer canal futuro exige escopo mínimo por tenant/entregador e medições, com autorização própria no backend.
 
@@ -49,3 +49,8 @@ Skills aplicadas: Frontend Design, UI/UX Pro Max e Vercel React Best Practices. 
 Prévia usa frontend real e uma API local simulada fora do repositório, aceitando somente identidades fictícias. Não comprova a integração operacional ponta a ponta. Regressões backend usam SQLite temporário com dotenv de produção desativado. Aprovação e integração real são etapas posteriores.
 
 Resultados desta etapa: lint e build aprovados, 1.100 testes unitários, 30 cenários do novo painel em cinco larguras (360/390/430/768/1366), seis regressões de timeout/reload nas duas larguras principais e duas regressões backend aprovadas. Capturas locais de 320/390/768 em ambos os temas foram geradas; revisão visual corrigiu uma colisão entre título e arte em 320 px. Sem certificação da suíte backend completa ou jornada operacional real nesta rodada.
+
+
+## Ajuste de escopo aprovado pelo usuário
+
+O app conecta somente a entregas por motoboy; pedidos de retirada e mesa não aparecem. “Para sair” corresponde a uma entrega `pronto` já atribuída ao entregador; não é retirada pelo cliente. Filtros: Todas, Em rota e Para sair. Múltiplas entregas por viagem confirmadas pelo usuário; navegação permanece por link externo sem API paga.

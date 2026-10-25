@@ -104,11 +104,12 @@ for(const theme of ['dark','light'])test(`visual ${theme}: valores e nomes longo
   await open(page);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await expect(page.locator('[data-koma-logo="wordmark"] img:visible')).toHaveCount(1);
+  await expect(page.getByText('Retirada', { exact: true })).toHaveCount(0);
   for(const control of await page.locator('.k-courier button, .k-courier a, .k-courier summary').all()) {
     if(await control.isVisible())expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   }
   if(process.env.KOMA_COURIER_CAPTURE_DIR){await mkdir(process.env.KOMA_COURIER_CAPTURE_DIR,{recursive:true});await page.screenshot({path:join(process.env.KOMA_COURIER_CAPTURE_DIR,`${info.project.name}-${theme}.png`),fullPage:true});}
-  await page.getByRole('button',{name:'Retirada 1',exact:true}).click();
+  await page.getByRole('button',{name:'Para sair 1',exact:true}).click();
   await expect(page.getByRole('article')).toHaveCount(1);
   await expect(page.getByText('Sem cobrança',{exact:true})).toBeVisible();
   await expect(page.getByText('Já Pago via App')).toHaveCount(0);

@@ -1319,7 +1319,8 @@ def painel_entregador(
             Comanda.restaurante_id == rest_id,
             Comanda.fechada == False,
             Comanda.delivery_status.in_(["pronto", "transito"]),
-            (Comanda.motoboy_id == motoboy_id) | (Comanda.motoboy_id == None)
+            Comanda.tipo.in_(["Delivery", "Entrega"]),
+            Comanda.motoboy_id == motoboy_id,
         ).order_by(Comanda.criado_em.desc()).all()
 
         entregas = []

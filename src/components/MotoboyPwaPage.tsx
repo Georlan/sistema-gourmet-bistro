@@ -193,7 +193,7 @@ export function MotoboyPwaPage() {
 
   const blocked = Boolean(confirmingId) || isRefreshing || Boolean(uncertainId);
   const visible = entregas.filter(item => filter === 'todas' || item.delivery_status === filter);
-  const filters = [['todas', 'Todas'], ['transito', 'Em rota'], ['pronto', 'Retirada']];
+  const filters = [['todas', 'Todas'], ['transito', 'Em rota'], ['pronto', 'Para sair']];
 
   return <div className="k-courier">
     <header className="k-courier__header">
@@ -229,7 +229,7 @@ export function MotoboyPwaPage() {
               return <article key={entrega.id} className="k-courier__card" aria-label={`Pedido ${entrega.numero_pedido ?? 'sem número'}`}>
                 <div className={`k-courier__card-head ${inRoute ? '' : 'k-courier__card-head--ready'}`}>
                   <div><span className="k-courier__order">{entrega.numero_pedido ? `#${entrega.numero_pedido}` : 'Sem número'}</span><h2>{entrega.cliente_nome}</h2></div>
-                  <span className="k-courier__state">{inRoute ? <Navigation size={14} aria-hidden="true" /> : <PackageCheck size={14} aria-hidden="true" />}{inRoute ? 'Em rota' : entrega.delivery_status === 'pronto' ? 'Retirada' : 'A conferir'}</span>
+                  <span className="k-courier__state">{inRoute ? <Navigation size={14} aria-hidden="true" /> : <PackageCheck size={14} aria-hidden="true" />}{inRoute ? 'Em rota' : entrega.delivery_status === 'pronto' ? 'Pronta' : 'A conferir'}</span>
                 </div>
                 <div className="k-courier__card-body">
                   <p className="k-courier__address"><MapPin size={19} aria-hidden="true" /><span>{entrega.delivery_endereco || 'Endereço não informado. Confira com o caixa.'}</span></p>
