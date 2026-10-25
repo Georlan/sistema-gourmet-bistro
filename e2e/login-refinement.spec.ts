@@ -145,6 +145,8 @@ test('cliente: conta obrigatória mantém confirmação de e-mail e não promete
 test('320px, teclado e temas: campos legíveis, ação com contraste e sem transbordamento', async ({ page }, info) => {
   await fixture(page);
   await page.setViewportSize({ width: 320, height: 640 });
+  // Measure resting theme colors, independently of the 140 ms color transition.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/?view=operacional');
   for (const theme of ['dark', 'light']) {
     await page.evaluate(value => { document.documentElement.dataset.komaTheme = value; }, theme);
