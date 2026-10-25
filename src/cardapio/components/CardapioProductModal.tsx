@@ -33,6 +33,7 @@ import {
 } from "../CardapioTypes";
 import { trackAnalyticsEvent } from "../../analytics";
 import { isMarmitariaSaladGroup } from "../../domain/marmitariaSalad";
+import { containModalFocus } from "../../utils/modalFocus";
 
 interface CardapioProductModalProps {
   product: Product;
@@ -79,6 +80,14 @@ export default function CardapioProductModal({
   restaurantId,
   compositionStep,
 }: CardapioProductModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (!dialogRef.current) return;
+    const dialog = dialogRef.current;
+    return containModalFocus(dialog, () => closeRef.current(), dialog.querySelector<HTMLElement>('#btn-close-modal') || dialog);
+  }, []);
   const groupRefs = useRef(new Map<string, HTMLElement>());
   const [quantity, setQuantity] = useState(1);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, ProductOption[]>>({});
@@ -283,6 +292,8 @@ export default function CardapioProductModal({
       id="product-details-modal"
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-product-name"

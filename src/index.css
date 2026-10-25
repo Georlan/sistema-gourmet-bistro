@@ -1,14 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+@import "./styles/komaFoundation.css";
 @import "./components/mesas/waiterOperational.css";
 
 @custom-variant dark (&:where([data-koma-theme="dark"], [data-koma-theme="dark"] *));
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--koma-font-body);
   --font-serif: "Montserrat", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
-  --font-display: "Space Grotesk", sans-serif;
+  --font-display: var(--koma-font-display);
   
   --color-primary: var(--color-brand-primary, #00b894);
   --color-secondary: var(--color-brand-secondary, #121420);
@@ -63,31 +64,7 @@
   --color-brand-card: #121420;
   --color-brand-accent: #00b894;
 
-  /* Theme contract — Dark mode palette (high-contrast, anti-fatigue) */
-  --koma-surface-page: #0a0d0c;
-  --koma-surface-canvas: #060807;
-  --koma-surface-shell: #090c0a;
-  --koma-surface-panel: #121614;
-  --koma-surface-card: #171d1a;
-  --koma-surface-raised: #202824;
-  --koma-surface-input: #0d1210;
-  --koma-surface-dialog: #151b18;
-  --koma-surface-overlay: rgba(0, 0, 0, 0.85);
-  --koma-text-primary: #ffffff;
-  --koma-text-secondary: #d6e2dc;
-  --koma-text-muted: #a7b8b0;
-  --koma-text-subtle: #889c93;
-  --koma-border-subtle: rgba(255, 255, 255, 0.08);
-  --koma-border-default: rgba(220, 240, 230, 0.16);
-  --koma-border-strong: rgba(220, 240, 230, 0.28);
-  --koma-accent: #05c49d;
-  --koma-action-bg: #05c49d;
-  --koma-action-hover: #26d5b2;
-  --koma-action-text: #071c17;
-  --koma-accent-text: #81dfcb;
-  --koma-accent-soft: #14352d;
-  --koma-accent-border: #387f6d;
-  --koma-focus-ring: #81dfcb;
+  /* Shared surfaces, text and actions: styles/komaFoundation.css. */
   --koma-stage-salon: #00c996;
   --koma-stage-digital: #68d7b3;
   --koma-stage-closing: #9bb7aa;
@@ -143,31 +120,7 @@
   --color-brand-card: #ffffff;
   --color-brand-accent: #00875f;
 
-  /* Theme contract — Light mode palette (anti-glare, crisp contrast, official Kôma light design system) */
-  --koma-surface-page: #eef3f4;
-  --koma-surface-canvas: #e8eef0;
-  --koma-surface-shell: #ffffff;
-  --koma-surface-panel: #ffffff;
-  --koma-surface-card: #ffffff;
-  --koma-surface-raised: #eef3f5;
-  --koma-surface-input: #ffffff;
-  --koma-surface-dialog: #ffffff;
-  --koma-surface-overlay: rgba(15, 23, 42, 0.65);
-  --koma-text-primary: #11181c;
-  --koma-text-secondary: #334155;
-  --koma-text-muted: #52606a;
-  --koma-text-subtle: #64748b;
-  --koma-border-subtle: rgba(15, 23, 42, 0.10);
-  --koma-border-default: #c3cdd2;
-  --koma-border-strong: #94a3b8;
-  --koma-accent: #00875f;
-  --koma-action-bg: #00745f;
-  --koma-action-hover: #005f4e;
-  --koma-action-text: #ffffff;
-  --koma-accent-text: #006c57;
-  --koma-accent-soft: #e0f4ed;
-  --koma-accent-border: #83b9a9;
-  --koma-focus-ring: #00745f;
+  /* Shared surfaces, text and actions: styles/komaFoundation.css. */
   --koma-stage-salon: #047857;
   --koma-stage-digital: #0f766e;
   --koma-stage-closing: #475569;
