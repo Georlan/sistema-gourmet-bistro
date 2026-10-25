@@ -266,3 +266,111 @@ test('selo KÔMA identifica pedidos próprios sem substituir marcas externas',as
     await expect(card.locator('[data-koma-native=true]')).toHaveAttribute('title',/Pedido KÔMA/);
   }
 });
+
+test('sem rede mantém endereço e sequência; reconecta antes do throttle e não repete confirmação', async ({ page }, info) => {
+  let gets = 0, posts = 0;
+  await page.route(`${API}/**`, route => {
+    if (route.request().method() === 'POST') { posts++; return route.fulfill({ json: { status: 'sucesso' } }); }
+    gets++;
+    return route.fulfill({ json: { motoboy: profile, entregas: [delivery] } });
+  });
+  await open(page);
+  await page.getByRole('button', { name: 'Concluir entrega' }).click();
+  const initial = gets;
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
+    window.dispatchEvent(new Event('offline'));
+  });
+  await expect(page.getByRole('status').filter({ hasText: 'Sem conexão · entregas mantidas' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Confirmar', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Atualizar Pedidos' })).toBeDisabled();
+  await expect(page.getByText(delivery.delivery_endereco)).toBeVisible();
+  await expect(page.getByRole('link', { name: /Google Maps/ })).toBeVisible();
+  expect(posts).toBe(0);
+  if (process.env.KOMA_COURIER_CAPTURE_DIR) {
+    await mkdir(process.env.KOMA_COURIER_CAPTURE_DIR, { recursive: true });
+    await page.screenshot({ path: join(process.env.KOMA_COURIER_CAPTURE_DIR, `${info.project.name}-offline.png`), fullPage: true });
+  }
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true });
+    window.dispatchEvent(new Event('online'));
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect.poll(() => gets).toBe(initial + 1);
+  await expect(page.getByRole('button', { name: 'Confirmar', exact: true })).toBeEnabled();
+  expect(posts).toBe(0);
+});
+
+test('falha de atualização fica indicada após o toast; reconexão retira pedido reatribuído', async ({ page }) => {
+  let fail = false, reassigned = false;
+  await page.route(`${API}/**`, route => route.fulfill(fail
+    ? { status: 503, json: { detail: 'Servidor indisponível.' } }
+    : { json: { motoboy: profile, entregas: reassigned ? [] : [delivery] } }));
+  await open(page);
+  await page.clock.install();
+  fail = true;
+  await page.getByRole('button', { name: 'Atualizar Pedidos' }).click();
+  await expect(page.getByRole('alert')).toContainText('Servidor indisponível');
+  await page.clock.fastForward(5100);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: 'Atualização pendente' })).toBeVisible();
+  fail = false; reassigned = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(page.getByRole('heading', { name: 'Nenhuma entrega em rota' })).toBeVisible();
+  await expect(page.getByText('Atualização pendente', { exact: false })).toHaveCount(0);
+});
+
+
+test('reconexão durante leitura antiga aguarda e confere uma vez, sem requisições paralelas', async ({ page }) => {
+  let gets = 0, active = 0, maxActive = 0, holdNext = false, reassigned = false;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`${API}/**`, async route => {
+    gets++; active++; maxActive = Math.max(maxActive, active);
+    const deliveries = reassigned ? [] : [delivery];
+    if (holdNext) { holdNext = false; await gate; }
+    active--;
+    return route.fulfill({ json: { motoboy: profile, entregas: deliveries } });
+  });
+  await open(page);
+  // StrictMode may abort an initial request; count only the loaded session.
+  const initial = gets;
+  active = 0; maxActive = 0; holdNext = true;
+  await page.getByRole('button', { name: 'Atualizar Pedidos' }).click();
+  await expect.poll(() => gets).toBe(initial + 1);
+  await page.evaluate(() => { window.dispatchEvent(new Event('offline')); window.dispatchEvent(new Event('online')); });
+  expect(gets).toBe(initial + 1);
+  reassigned = true;
+  release();
+  await expect(page.getByRole('heading', { name: 'Nenhuma entrega em rota' })).toBeVisible();
+  expect(gets).toBe(initial + 2);
+  expect(maxActive).toBe(1);
+});
+
+
+test('Enter no código respeita a conferência em andamento antes de concluir', async ({ page }) => {
+  let holdNext = false, posts = 0;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route(`${API}/**`, async route => {
+    if (route.request().method() === 'POST') { posts++; return route.fulfill({ json: { status: 'sucesso' } }); }
+    if (holdNext) { holdNext = false; await gate; }
+    return route.fulfill({ json: { motoboy: profile, entregas: [{ ...delivery, requires_delivery_code: true }] } });
+  });
+  await open(page);
+  await page.getByRole('button', { name: 'Concluir entrega' }).click();
+  const input = page.getByLabel('Código de entrega');
+  await input.fill('0012');
+  holdNext = true;
+  await page.getByRole('button', { name: 'Atualizar Pedidos' }).click();
+  await expect(page.getByRole('button', { name: 'Confirmar', exact: true })).toBeDisabled();
+  await input.press('Enter');
+  expect(posts).toBe(0);
+  release();
+  await expect(page.getByRole('button', { name: 'Confirmar', exact: true })).toBeEnabled();
+  await expect(input).toHaveValue('0012');
+  await input.press('Enter');
+  await expect.poll(() => posts).toBe(1);
+  await expect(page.getByRole('heading', { name: 'Nenhuma entrega em rota' })).toBeVisible();
+});

@@ -59,3 +59,40 @@ A marca de origem usa o canal do contrato e assets oficiais locais em `src/asset
 - Leaflet não é provedor gratuito ilimitado de tiles/rotas: https://leafletjs.com/examples/quick-start/index.html
 
 Aplicação: cobrança/troco/destino reconhecíveis sem lembrar dados da comanda; itens e identificadores longos sob demanda; uma ação de conclusão clara; cor com ícone/texto, foco, profundidade discreta e alvos de toque de pelo menos 44px. Skills: UI/UX Pro Max, Vertical Logistics, Frontend Design, Vercel React Best Practices. A busca focal de UI/UX não encontrou uma regra específica validada para cognição de entregadores; a referência aplicada nesse ponto é NN/g, sem atribuir evidência científica ao resultado genérico da skill. Não foi necessário copiar código de UI ou instalar ferramentas de terceiros.
+
+## Incremento de pesquisa e resiliência — 25/10/2026
+
+Pesquisa adicional em fontes dos próprios produtos:
+
+- Uber Help, entregas agrupadas: identificar os itens de cada pedido e seguir uma sequência de destinos. Aplicação: manter número, cliente e endereço reconhecíveis em cada card; a sequência KÔMA é escolhida pelo entregador, não apresentada como otimização geográfica. https://help.uber.com/en/driving-and-delivering/article/how-do-i-handle-multiple-deliveries-from-the-same-place----?nodeId=08189aec-c047-49f2-ba2a-64b216a4c3e5
+- iFood, cliente não localizado: mensagens sugeridas e acionamento explícito de suporte. Aplicação: um problema deve estar ligado ao pedido; não copiar regras de espera, cancelamento ou contato da plataforma como se fossem regras KÔMA. https://entregador.ifood.com.br/noticias/novo-cliente-nao-localizado-2-dicas-pra-voce-economizar-tempo/
+- DoorDash, suporte durante a entrega: ajuda contextual para endereço incorreto, pedido ou pagamento. Aplicação: futuro aviso ao Caixa dentro do pedido, sem criar um menu de suporte genérico. https://dasher.doordash.com/en-us/blog/contact-dasher-support
+- NN/g, visibilidade do estado: retorno claro permite saber se uma ação foi realizada; não confundir lista antiga com sincronização confirmada. https://www.nngroup.com/articles/visibility-system-status/
+- NN/g, reconhecimento e divulgação progressiva: identificar pedido/endereço/cobrança à primeira leitura, expandir os itens quando necessário. São diretrizes de usabilidade; não representam um estudo de campo com entregadores KÔMA. https://www.nngroup.com/articles/recognition-and-recall/ e https://www.nngroup.com/articles/progressive-disclosure/
+
+Skills usadas: Vertical Logistics (domínio), UI/UX Pro Max e Frontend Design (apresentação), UX Heuristics (clareza, recuperação e feedback) e Vercel React Best Practices (efeitos e economia de rede). Não foi encontrada uma skill especializada que constitua validação científica do trabalho de entregadores; as orientações genéricas foram confrontadas com as fontes primárias acima e com os contratos reais do repositório. Nenhum pacote ou serviço foi contratado/instalado.
+
+### Mudança implementada neste incremento
+
+O status discreto de atualização muda para “Sem conexão · entregas mantidas” quando o navegador sinaliza offline. A lista já carregada e os links de endereço permanecem; concluir/confirmar fica indisponível. Não se promete navegação Maps offline nem recuperação da lista após recarregar sem rede: os endereços não são copiados para armazenamento persistente neste incremento.
+
+Ao reconectar, uma leitura confere a atribuição atual, mesmo dentro dos 15 segundos de throttle de retorno. Eventos simultâneos são coalescidos; uma operação em andamento termina antes da conferência adicional necessária. Nenhum POST é enfileirado ou repetido. Se o servidor não responder, o aviso “Atualização pendente · tente atualizar” permanece mesmo após o toast desaparecer. `navigator.onLine` é somente um indício; falhas reais de HTTP continuam tratadas pelo caminho de erro e pela reconciliação existente.
+
+Avaliação heurística restrita a conexão e ajuda: baseline 8/10 (duas linhas do diagnóstico com problema menor, severidade 2: feedback persistente de conexão e recuperação via ajuda contextual). Após este incremento: 9/10, por revisão especializada, não por medição com usuários. O ponto restante para 10/10 neste recorte é implementar e validar o aviso ao Caixa abaixo; essa nota não avalia o produto inteiro nem certifica operação em campo.
+
+### Decisão aprovada: aviso ao Caixa sem cancelar
+
+O usuário aprovou “Avisar o Caixa e manter a entrega”. Esta é a próxima fatia funcional, ainda não implementada. Não usar o chat cliente/restaurante para esse aviso: ele tem participantes e contratos públicos diferentes, e poderia expor uma ocorrência interna ao cliente. A auditoria de reatribuição também não é uma caixa genérica para ocorrências.
+
+Contrato necessário antes da implementação:
+
+1. A entrada deve pertencer à entrega atribuída em rota, com os mesmos gates de token, plano, entregador ativo e tenant já usados no painel/conclusão. Revalidar atribuição sob bloqueio; não confiar no card antigo. Pedido retirado/reatribuído/encerrado não recebe novo aviso desse entregador.
+2. Motivos curtos: cliente ausente, endereço incorreto, pagamento e outro. O número exibido é o identificador persistido do pedido; o vínculo técnico usa a Comanda logística vigente. Não enviar telefone, código secreto, payload de parceiro nem localização contínua.
+3. Registrar ocorrência durável com autoria do entregador, motivo, horário do servidor e chave de idempotência. Repetir a mesma requisição não pode duplicar aviso; não simular isso apenas em memória do navegador. A gravação não altera status, saldo, pagamento, taxa, atribuição ou confirmação de parceiro.
+4. O Caixa precisa receber e exibir a ocorrência no pedido de entrega existente, inclusive após recarregar; evento WebSocket só invalida essa leitura e carrega o identificador necessário, sem dados pessoais amplos. Não criar novo polling por pedido ou serviço por restaurante.
+5. “Caixa avisado” só aparece depois da gravação confirmada. Se a resposta se perder, verificar pela mesma chave antes de repetir. Falta de rede não deve exibir sucesso nem disparar WhatsApp automaticamente. Sem endpoint e consumidor reais, não colocar botão que aparenta enviar.
+6. Resolver o aviso é uma ação própria do Caixa; não equivale a concluir, cancelar ou receber pagamento. Validar fluxo de criação, repetição, recarga, reatribuição concorrente, revogação e isolamento entre restaurantes antes de liberar.
+
+### Limites das conexões
+
+Caixa → Core → painel e confirmação → Core → broadcast do Caixa já têm caminhos reais locais e testes anteriores. Não existe ainda assinatura dedicada de eventos para a credencial de entregador. Não adicionar o token ao WebSocket de operador: requer escopo próprio e revalidação de acesso. iFood/99Food/Keeta permanecem projeções de referência preparadas para conectores futuros; logomarca não significa API homologada. Rastreio contínuo, solver de rota e notificações push permanecem fora desta rodada, pois exigem contratos adicionais de privacidade, navegador e operação.

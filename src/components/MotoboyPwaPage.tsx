@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, ArrowUpRight, Sun, Moon, PackageCheck, ArrowUp, ArrowDown, Copy, Store } from 'lucide-react';
+import { MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, ArrowUpRight, Sun, Moon, PackageCheck, ArrowUp, ArrowDown, Copy, Store, WifiOff } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 import { KomaLogo } from './KomaLogo';
 import { nextKomaTheme, persistKomaTheme, readKomaTheme, applyKomaTheme } from '../config/theme';
@@ -71,6 +71,9 @@ const formatMoney = (value: number) => money.format(value);
 export function MotoboyPwaPage() {
   const [token, setToken] = useState(bootstrapDeliveryToken);
   const [theme, setTheme] = useState(readKomaTheme);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [reconnectRequested, setReconnectRequested] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [loading, setLoading] = useState(Boolean(token));
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(token ? null : 'Abra o link de acesso enviado pelo caixa.');
@@ -92,6 +95,7 @@ export function MotoboyPwaPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const profileRef = useRef<MotoboyProfile | null>(null);
   const getRef = useRef<AbortController | null>(null);
+  const interruptedReadRef = useRef(false);
   const postRef = useRef<AbortController | null>(null);
   const isConfirmingRef = useRef(false);
   const lastAttemptRef = useRef(0);
@@ -139,14 +143,14 @@ export function MotoboyPwaPage() {
       if (!data.motoboy?.id || !Array.isArray(data.entregas)) throw new Error('Não foi possível conferir as entregas. Tente atualizar.');
       profileRef.current = data.motoboy;
       setMotoboy(data.motoboy); setEntregas(data.entregas.filter((item: EntregaItem) => item.delivery_status === 'transito'));
-      setErrorMsg(null); setUncertainId(null); setLastUpdated(Date.now());
+      setErrorMsg(null); setUncertainId(null); setRefreshFailed(false); setLastUpdated(Date.now());
       return true;
     } catch (err: any) {
       if (getRef.current !== controller) return false;
       const message = err?.name === 'AbortError'
         ? 'O painel demorou demais para responder. Tente novamente.'
         : err instanceof TypeError ? 'Sem conexão com o servidor. Tente atualizar.' : err.message || 'Não foi possível carregar as entregas.';
-      if (isBackground && profileRef.current) showToast(message, 'error');
+      if (isBackground && profileRef.current) { setRefreshFailed(true); showToast(message, 'error'); }
       else setErrorMsg(message);
       return false;
     } finally {
@@ -161,24 +165,40 @@ export function MotoboyPwaPage() {
     if (!token) return;
     void carregarDadosPainel(token);
     const resume = () => {
-      if (document.visibilityState !== 'visible' || Date.now() - lastAttemptRef.current < RESUME_REFRESH_MIN_MS) return;
+      if (!navigator.onLine || document.visibilityState !== 'visible' || Date.now() - lastAttemptRef.current < RESUME_REFRESH_MIN_MS) return;
       void carregarDadosPainel(token);
     };
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('focus', resume);
-    window.addEventListener('online', resume);
+    const offline = () => { interruptedReadRef.current = Boolean(getRef.current); setIsOnline(false); };
+    const online = () => {
+      setIsOnline(true);
+      if (!getRef.current || interruptedReadRef.current || isConfirmingRef.current) setReconnectRequested(true);
+      interruptedReadRef.current = false;
+    };
+    window.addEventListener('offline', offline);
+    window.addEventListener('online', online);
     return () => {
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('focus', resume);
-      window.removeEventListener('online', resume);
+      window.removeEventListener('offline', offline);
+      window.removeEventListener('online', online);
       getRef.current?.abort(); getRef.current = null;
       postRef.current?.abort(); postRef.current = null;
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, [token, carregarDadosPainel]);
 
+  // Reconnection bypasses the focus throttle, but waits for the active operation.
+  // Read the server once; never queue or replay a delivery confirmation.
+  useEffect(() => {
+    if (!token || !isOnline || !reconnectRequested || loading || isRefreshing || confirmingId) return;
+    setReconnectRequested(false);
+    void carregarDadosPainel(token);
+  }, [token, isOnline, reconnectRequested, loading, isRefreshing, confirmingId, carregarDadosPainel]);
+
   const handleConfirmarEntrega = async (comandaId: string) => {
-    if (!token || isConfirmingRef.current || uncertainId) return;
+    if (!token || !isOnline || !navigator.onLine || reconnectRequested || getRef.current || isConfirmingRef.current || uncertainId) return;
     const current = entregas.find(item => item.id === comandaId);
     if (!current || current.confirmation?.enabled === false) return;
     const requiresCode = current.requires_delivery_code;
@@ -235,7 +255,7 @@ export function MotoboyPwaPage() {
       postRef.current?.abort(); postRef.current = null;
       isConfirmingRef.current = false; profileRef.current = null;
       setMotoboy(null); setEntregas([]); setReviewId(null); setConfirmingId(null);
-      setUncertainId(null); setPlanning(false); setReceiptCode(''); setReceiptError(''); setCopiedAddressId(null);
+      setUncertainId(null); setRefreshFailed(false); setReconnectRequested(false); setLastUpdated(null); setPlanning(false); setReceiptCode(''); setReceiptError(''); setCopiedAddressId(null);
       setLoading(Boolean(next)); setErrorMsg(next ? null : 'Abra o link enviado pelo caixa.');
       setToken(next);
     };
@@ -258,6 +278,7 @@ export function MotoboyPwaPage() {
     return copy;
   });
   const blocked = Boolean(confirmingId) || isRefreshing || Boolean(uncertainId);
+  const confirmationBlocked = blocked || !isOnline || reconnectRequested;
 
   return <div className="k-courier">
     <header className="k-courier__header">
@@ -266,7 +287,7 @@ export function MotoboyPwaPage() {
         <button type="button" className="k-courier__icon" aria-label={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'} onClick={() => setTheme(persistKomaTheme(nextKomaTheme(theme)))}>
           {theme === 'dark' ? <Sun aria-hidden="true" size={20} /> : <Moon aria-hidden="true" size={20} />}
         </button>
-        {token && <button type="button" className="k-courier__icon" aria-label="Atualizar Pedidos" disabled={Boolean(confirmingId) || isRefreshing || loading} onClick={() => void carregarDadosPainel(token)}>
+        {token && <button type="button" className="k-courier__icon" aria-label="Atualizar Pedidos" disabled={!isOnline || Boolean(confirmingId) || isRefreshing || loading} onClick={() => void carregarDadosPainel(token)}>
           <RefreshCw aria-hidden="true" size={20} className={isRefreshing ? 'k-courier__spin' : ''} />
         </button>}
       </div>
@@ -282,8 +303,8 @@ export function MotoboyPwaPage() {
             <div><p className="k-courier__name">{motoboy?.nome}</p><h1>Entregas <span>{entregas.length}</span></h1></div>
             <svg className="k-courier__art" viewBox="0 0 100 88" fill="none" aria-hidden="true"><path d="M8 68h23l19-34h24l17-22" stroke="currentColor" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round"/><path d="m56 68 13-22 13 22-13 13Z" fill="currentColor" opacity=".45"/><circle cx="9" cy="68" r="6" fill="currentColor"/><path d="m79 10 13-2-2 13" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
-          <div className="k-courier__sync" role="status">{isRefreshing ? 'Atualizando…' : lastUpdated ? `Atualizado ${new Date(lastUpdated).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</div>
-          {uncertainId && <div className="k-courier__notice" role="alert"><span>Confirmação pendente. Toque em Verificar.</span><button type="button" className="k-courier__secondary" disabled={isRefreshing || Boolean(confirmingId)} onClick={() => void carregarDadosPainel(token)}>Verificar</button></div>}
+          <div className="k-courier__sync" data-offline={!isOnline || undefined} role="status">{!isOnline ? <><WifiOff size={14} aria-hidden="true" />Sem conexão · entregas mantidas</> : isRefreshing || reconnectRequested ? 'Conferindo entregas…' : refreshFailed ? 'Atualização pendente · tente atualizar' : lastUpdated ? `Atualizado ${new Date(lastUpdated).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</div>
+          {uncertainId && <div className="k-courier__notice" role="alert"><span>Confirmação pendente. Toque em Verificar.</span><button type="button" className="k-courier__secondary" disabled={!isOnline || isRefreshing || Boolean(confirmingId)} onClick={() => void carregarDadosPainel(token)}>Verificar</button></div>}
           {entregas.length > 0 && !planning && <div className="k-courier__trip-bar">{trip.ids.length > 0 && <span>{trip.ids.length} na sequência</span>}<button type="button" className="k-courier__secondary" ref={tripButtonRef} disabled={!trip.ready || blocked} onClick={() => { setDraftTrip(trip.ids); setReviewId(null); setPlanning(true); }}>{trip.ids.length ? 'Editar sequência' : 'Organizar viagem'}</button></div>}
           {planning && <section className="k-courier__planner" aria-label="Organizar viagem"><h2 tabIndex={-1} ref={planHeadingRef}>Sua sequência</h2><div className="k-courier__planner-list">{draftOrders.map(item => {
             const index = selectedDraft.indexOf(item.id);
@@ -319,8 +340,8 @@ export function MotoboyPwaPage() {
                     {entrega.source?.references.map(ref => <p className="k-courier__external-reference" key={`${ref.provider}:${ref.reference}`}>Referência {entrega.source?.label}: {ref.reference}</p>)}
                   </details>
                   {!confirmationEnabled && <p className="k-courier__partner-notice">Confirmação: confira no Caixa.</p>}
-                  {reviewId === entrega.id ? <div className="k-courier__confirm" onKeyDown={event => { if (event.key === 'Escape') setReviewId(null); }} role="group" aria-label={`Confirmar entrega do pedido ${entrega.numero_pedido ?? 'sem número'}`}>{entrega.requires_delivery_code ? <div className="k-courier__receipt"><label htmlFor={`receipt-${entrega.id}`}>Código de entrega</label><input id={`receipt-${entrega.id}`} ref={receiptInputRef} type="text" inputMode="numeric" enterKeyHint="done" autoComplete="one-time-code" pattern="[0-9]{4}" maxLength={4} value={receiptCode} disabled={Boolean(confirmingId)} onChange={event => { setReceiptCode(event.target.value.replace(/[^0-9]/g, '').slice(0, 4)); setReceiptError(''); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void handleConfirmarEntrega(entrega.id); } }} aria-invalid={Boolean(receiptError)} aria-describedby={receiptError ? `receipt-error-${entrega.id}` : undefined} />{receiptError && <p id={`receipt-error-${entrega.id}`} role="alert">{receiptError}</p>}</div> : <p>Pedido entregue?</p>}<div><button type="button" className="k-courier__secondary" onClick={() => setReviewId(null)}>Cancelar</button><button type="button" className="k-courier__action" ref={reviewConfirmRef} disabled={blocked || !confirmationEnabled} onClick={() => void handleConfirmarEntrega(entrega.id)}>{confirmingId === entrega.id ? 'Confirmando…' : 'Confirmar'}</button></div></div>
-                    : <button type="button" id={`courier-confirm-${entrega.id}`} className="k-courier__action" disabled={blocked || !confirmationEnabled} onClick={() => { setReceiptCode(''); setReceiptError(''); setReviewId(entrega.id); }}>{confirmingId === entrega.id ? <><RefreshCw size={18} className="k-courier__spin" aria-hidden="true" />Confirmando…</> : <><CheckCircle2 size={18} aria-hidden="true" />Concluir entrega</>}</button>}
+                  {reviewId === entrega.id ? <div className="k-courier__confirm" onKeyDown={event => { if (event.key === 'Escape') setReviewId(null); }} role="group" aria-label={`Confirmar entrega do pedido ${entrega.numero_pedido ?? 'sem número'}`}>{entrega.requires_delivery_code ? <div className="k-courier__receipt"><label htmlFor={`receipt-${entrega.id}`}>Código de entrega</label><input id={`receipt-${entrega.id}`} ref={receiptInputRef} type="text" inputMode="numeric" enterKeyHint="done" autoComplete="one-time-code" pattern="[0-9]{4}" maxLength={4} value={receiptCode} disabled={Boolean(confirmingId)} onChange={event => { setReceiptCode(event.target.value.replace(/[^0-9]/g, '').slice(0, 4)); setReceiptError(''); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void handleConfirmarEntrega(entrega.id); } }} aria-invalid={Boolean(receiptError)} aria-describedby={receiptError ? `receipt-error-${entrega.id}` : undefined} />{receiptError && <p id={`receipt-error-${entrega.id}`} role="alert">{receiptError}</p>}</div> : <p>Pedido entregue?</p>}<div><button type="button" className="k-courier__secondary" onClick={() => setReviewId(null)}>Cancelar</button><button type="button" className="k-courier__action" ref={reviewConfirmRef} disabled={confirmationBlocked || !confirmationEnabled} onClick={() => void handleConfirmarEntrega(entrega.id)}>{confirmingId === entrega.id ? 'Confirmando…' : 'Confirmar'}</button></div></div>
+                    : <button type="button" id={`courier-confirm-${entrega.id}`} className="k-courier__action" disabled={confirmationBlocked || !confirmationEnabled} onClick={() => { setReceiptCode(''); setReceiptError(''); setReviewId(entrega.id); }}>{confirmingId === entrega.id ? <><RefreshCw size={18} className="k-courier__spin" aria-hidden="true" />Confirmando…</> : <><CheckCircle2 size={18} aria-hidden="true" />Concluir entrega</>}</button>}
                 </div>
               </article>;
             })}</div>}
