@@ -14,7 +14,7 @@ A logística da plataforma e a frota do restaurante são responsabilidades difer
 
 GET `/comandas/motoboys/painel-entregador` mantém header dedicado e campos legados para publicação incremental. Adiciona `contract_version: 2` e, por entrega:
 
-- `source`: canal, nome legível e referências do parceiro realmente persistidas. Não inferir plataforma pelo texto do cliente. Não devolver `raw_payload`, credenciais ou telefone do cliente. A interface usa selo com nome/ícone genérico; não apresenta certificação de parceiro.
+- `source`: canal, nome legível e referências do parceiro realmente persistidas. Não inferir plataforma pelo texto do cliente. Não devolver `raw_payload`, credenciais ou telefone do cliente. A interface usa os logos públicos oficiais de iFood, 99Food e Keeta, selo KÔMA com o wordmark existente para os canais próprios (`caixa`, `cardapio`, `koma`) e fallback de nome/ícone genérico para outras origens; não apresenta certificação de parceiro.
 - `destination`: endereço operacional vigente, complemento e referência separados; consulta a revisão mais recente antes do snapshot original. `route_query` exclui instruções da portaria/complemento para a busca no mapa. Endereço legado é fallback quando não existe snapshot estruturado.
 - `payment`: `status` (`collect`, `paid`, `not_due`, `check`), método normalizado, valor a cobrar, valor da cédula informada, troco calculado e indicação de inconsistência. Valores financeiros são do backend; o navegador apenas formata.
 - `items`: quantidades agrupadas apenas quando produto, observações, modificadores e preço coincidem. Itens cancelados ficam fora. O preço de catálogo atual não recalcula o pedido já realizado.
@@ -40,9 +40,9 @@ O Caixa recebe a transição canônica/broadcast `tables_updated` existente. O t
 
 ## Navegação e evidência
 
-Mantida navegação externa existente; sequência por IDs persiste por aba e credencial. Copiar endereço oferece retorno no próprio botão, sem toast de sucesso sobre o botão de concluir. A comparação local em `/navigation.html` no servidor de revisão oferece Google Maps em outra aba, Google Maps na mesma aba, Waze e copiar endereço. São links reais, não um mapa ou rota simulados. Abertura de aplicativo instalado e velocidade de retorno exigem teste de dispositivo; o browser de desktop só comprova o fluxo web. Nenhuma alternativa foi escolhida automaticamente como padrão novo.
+Mantida navegação externa existente; sequência por IDs persiste por aba e credencial. Copiar endereço oferece retorno no próprio botão, sem toast de sucesso sobre o botão de concluir. A comparação local em `/navigation.html` no servidor de revisão oferece Google Maps em outra aba, Google Maps na mesma aba, Waze e copiar endereço. São links reais, não um mapa ou rota simulados. Abertura de aplicativo instalado e velocidade de retorno exigem teste de dispositivo; o browser de desktop só comprova o fluxo web. Decisão do usuário em 25/10/2026: Google Maps em outra aba quando necessário, com `target="_blank"` e `rel="noopener noreferrer"`; nenhuma substituição por Waze ou mapa integrado.
 
-A marca de origem usa rótulos provenientes do contrato e os tokens atuais KÔMA, com selos de alto contraste. Incluir posteriormente apenas arquivos oficiais verificados no catálogo de assets local; não hotlinkar logos por pedido nem aceitar URL arbitrária de imagem de payload de parceiro. O toolkit promocional do iFood existe, mas não foi confundido com autorização de selo de integração homologada.
+A marca de origem usa o canal do contrato e assets oficiais locais em `src/assets/brand/delivery/`, com proveniência, dimensões, tamanho e hash em `sources.json`. Arquivos foram baixados intactos de páginas/CDNs oficiais, sem criar ou alterar os desenhos. Não hotlinkar logos por pedido nem aceitar URL arbitrária de imagem de payload de parceiro. Uso para identificação de origem não é selo de homologação. Os logos somam 11.700 bytes.
 
 ## Pesquisa aplicada
 

@@ -69,7 +69,7 @@ test.describe('PWA do Entregador - Resiliência na Confirmação de Entrega', ()
     const confirmButton = page.getByRole('button', { name: /Concluir entrega/i });
     await expect(confirmButton).toBeEnabled();
     await confirmButton.click();
-    await page.getByRole('button', { name: 'Confirmar entrega', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
 
     // Validação 1: botão entra em Confirmando... e fica desabilitado
     await expect(page.getByRole('button', { name: /Confirmando/i })).toBeVisible();
@@ -157,7 +157,7 @@ test.describe('PWA do Entregador - Resiliência na Confirmação de Entrega', ()
 
     const confirmButton = page.getByRole('button', { name: /Concluir entrega/i });
     await confirmButton.click();
-    await page.getByRole('button', { name: 'Confirmar entrega', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
 
     await expect(page.getByRole('button', { name: /Confirmando/i })).toBeVisible();
 

@@ -102,3 +102,15 @@ Parceiros são demonstrações locais explicitamente identificadas, com conclus�
 Comparação de navegação em http://127.0.0.1:4313/navigation.html: Google Maps em outra aba, na mesma aba, Waze e copiar endereço. Mantido o padrão atual do app para posterior decisão. Uso de aplicativos instalados depende do dispositivo e ainda exige prova manual; o ensaio de desktop validou URLs, alvos, endereço e layout de 320 px sem abrir mapas externos.
 
 Validação final deste incremento: 60 testes backend, 32 cenários de navegador principais mais 15 de layout em 360/430/tablet, 1.100 testes unitários, lint e build. O teste de custo de leitura compara uma e treze entregas, com no máximo um SELECT de diferença e teto de vinte consultas. Não existe leitura por card. Capturas reais de cobrança, pago e parceiro foram inspecionadas; somente banco local fictício. Suíte backend completa, CI, homologação externa, teste de navegação nativa e publicação continuam fora da evidência desta rodada.
+
+## Texto essencial, marcas oficiais e Maps — 25/10/2026
+
+Aplicada a decisão de abrir Google Maps em outra aba apenas ao tocar em Maps. A sequência e o painel continuam na aba do KÔMA. A comparação de alternativas é histórica e saiu do acesso principal de revisão.
+
+Removidas instruções repetidas de viagem, status “Em rota” de cada card e explicações redundantes de carregamento/tela vazia. Rótulos compactos: Entregas, Próxima entrega, Cobrar, Código de entrega, Confirmar/Cancelar e contagem de itens. Mantidas instruções necessárias de cobrança, troco, maquininha, erros, acesso revogado e resultado desconhecido de confirmação.
+
+Logos oficiais intactos de iFood, 99Food e Keeta substituem o ícone genérico nessas origens. Servidos localmente; total de 11.700 bytes. Catálogo e URLs/hash: `src/assets/brand/delivery/sources.json`. Sem mudanças backend, de dados ou de segurança nesta rodada.
+
+Pedidos próprios (`caixa`, `cardapio`, `koma`) usam selo KÔMA com o wordmark oficial já existente. O canal específico permanece no contrato e no título acessível; o logo não foi redesenhado. Após revisão do usuário, o selo recebeu fundo #061c15, borda mais visível e marca de 74×30 px (antes 52×28), preservando proporção, contraste e leitura em ambos os temas.
+
+Validação final desta rodada: lint, build e 1.100 unitários; 36 execuções funcionais do navegador e 30 verificações adicionais de layout/marcas em 360/390/430/tablet/desktop. Capturas do backend local real também revisadas em 320px, tema claro e escuro. Google Maps mantém nova aba e proteção de opener/referrer. Nenhum backend, dado real ou integração foi alterado nesta rodada; sem publicação.
