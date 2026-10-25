@@ -66,18 +66,17 @@ test.describe('PWA do Entregador - Resiliência na Confirmação de Entrega', ()
     expect(initialGetCalls).toBeGreaterThanOrEqual(1);
 
     // 3. Clica em "Confirmar Entrega Realizada"
-    const confirmButton = page.getByRole('button', { name: /Confirmar Entrega Realizada/i });
+    const confirmButton = page.getByRole('button', { name: /Concluir entrega/i });
     await expect(confirmButton).toBeEnabled();
     await confirmButton.click();
+    await page.getByRole('button', { name: 'Confirmar entrega', exact: true }).click();
 
     // Validação 1: botão entra em Confirmando... e fica desabilitado
     await expect(page.getByRole('button', { name: /Confirmando/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Confirmando/i })).toBeDisabled();
     expect(postCallCount).toBe(1);
 
-    if (page.viewportSize()?.width === 390) {
-      await page.screenshot({ path: '/home/testuser/.gemini/antigravity/brain/7af21423-1a1c-472c-912d-77c093671571/motoboy_mobile_confirming.png' });
-    }
+
 
     // Validação 2: não é possível disparar outra confirmação concorrente enquanto confirma
     const confirmingBtn = page.getByRole('button', { name: /Confirmando/i });
@@ -93,9 +92,7 @@ test.describe('PWA do Entregador - Resiliência na Confirmação de Entrega', ()
     const feedbackToast = page.getByText(/A confirmação demorou demais/i);
     await expect(feedbackToast).toBeVisible({ timeout: 15000 });
 
-    if (page.viewportSize()?.width === 390) {
-      await page.screenshot({ path: '/home/testuser/.gemini/antigravity/brain/7af21423-1a1c-472c-912d-77c093671571/motoboy_mobile_timeout_toast.png' });
-    }
+
 
     // Validação 5: o POST NÃO é reenviado automaticamente
     expect(postCallCount).toBe(1);
@@ -111,15 +108,11 @@ test.describe('PWA do Entregador - Resiliência na Confirmação de Entrega', ()
 
     // Validação 9: somente após a reconciliação a interface volta para estado operável
     // No Caso A, a entrega continua pendente e o botão volta a ficar habilitado para nova tentativa manual
-    const reenabledButton = page.getByRole('button', { name: /Confirmar Entrega Realizada/i });
+    const reenabledButton = page.getByRole('button', { name: /Concluir entrega/i });
     await expect(reenabledButton).toBeVisible({ timeout: 5000 });
     await expect(reenabledButton).toBeEnabled();
 
-    if (page.viewportSize()?.width === 390) {
-      await page.screenshot({ path: '/home/testuser/.gemini/antigravity/brain/7af21423-1a1c-472c-912d-77c093671571/motoboy_mobile_caso_a_reconciled.png' });
-    } else if (page.viewportSize()?.width === 1024) {
-      await page.screenshot({ path: '/home/testuser/.gemini/antigravity/brain/7af21423-1a1c-472c-912d-77c093671571/motoboy_desktop_caso_a_reconciled.png' });
-    }
+
   });
 
   test('Caso B: backend processou a entrega durante o timeout; GET reconcilia e card desaparece sem segundo POST', async ({ page }) => {
@@ -162,8 +155,9 @@ test.describe('PWA do Entregador - Resiliência na Confirmação de Entrega', ()
     await expect(page.locator('text=Ana Oliveira')).toBeVisible();
     const initialGetCalls = getCallCount;
 
-    const confirmButton = page.getByRole('button', { name: /Confirmar Entrega Realizada/i });
+    const confirmButton = page.getByRole('button', { name: /Concluir entrega/i });
     await confirmButton.click();
+    await page.getByRole('button', { name: 'Confirmar entrega', exact: true }).click();
 
     await expect(page.getByRole('button', { name: /Confirmando/i })).toBeVisible();
 
@@ -176,13 +170,9 @@ test.describe('PWA do Entregador - Resiliência na Confirmação de Entrega', ()
 
     // O card deve desaparecer e a mensagem de "Tudo Entregue!" deve surgir
     await expect(page.locator('text=Ana Oliveira')).toHaveCount(0, { timeout: 5000 });
-    await expect(page.locator('text=Tudo Entregue!')).toBeVisible();
+    await expect(page.locator('text=Tudo entregue')).toBeVisible();
 
-    if (page.viewportSize()?.width === 390) {
-      await page.screenshot({ path: '/home/testuser/.gemini/antigravity/brain/7af21423-1a1c-472c-912d-77c093671571/motoboy_mobile_caso_b_empty.png' });
-    } else if (page.viewportSize()?.width === 1024) {
-      await page.screenshot({ path: '/home/testuser/.gemini/antigravity/brain/7af21423-1a1c-472c-912d-77c093671571/motoboy_desktop_caso_b_empty.png' });
-    }
+
 
     // NÃO pode surgir uma segunda confirmação automática
     expect(postCallCount).toBe(1);

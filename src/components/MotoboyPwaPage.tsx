@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Phone, MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, ShoppingBag, Truck, ExternalLink } from 'lucide-react';
-import clsx from 'clsx';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Phone, MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, ArrowUpRight, Sun, Moon, PackageCheck } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 import { formatWhatsAppPhone } from '../config/whatsappUtils';
-import { KomaLoading } from './app/KomaLoading';
-
+import { KomaLogo } from './KomaLogo';
+import { nextKomaTheme, persistKomaTheme, readKomaTheme, applyKomaTheme } from '../config/theme';
+import './courier/courierPresentation.css';
 interface EntregaItem {
   id: string;
   numero_pedido: number | null;
@@ -52,317 +52,199 @@ function bootstrapDeliveryToken(): string {
   return token;
 }
 
+const RESUME_REFRESH_MIN_MS = 15_000;
+const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const formatMoney = (value: number) => money.format(value);
+
 export function MotoboyPwaPage() {
-  const [token, setToken] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(true);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const isFetchingRef = useRef<boolean>(false);
-  const isConfirmingRef = useRef<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [token] = useState(bootstrapDeliveryToken);
+  const [theme, setTheme] = useState(readKomaTheme);
+  const [loading, setLoading] = useState(Boolean(token));
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(token ? null : 'Abra o link de acesso enviado pelo caixa.');
   const [motoboy, setMotoboy] = useState<MotoboyProfile | null>(null);
   const [entregas, setEntregas] = useState<EntregaItem[]>([]);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  const [uncertainId, setUncertainId] = useState<string | null>(null);
+  const [filter, setFilter] = useState('todas');
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const profileRef = useRef<MotoboyProfile | null>(null);
+  const getRef = useRef<AbortController | null>(null);
+  const postRef = useRef<AbortController | null>(null);
+  const isConfirmingRef = useRef(false);
+  const lastAttemptRef = useRef(0);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reviewConfirmRef = useRef<HTMLButtonElement>(null);
+  const previousReviewRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const accessToken = bootstrapDeliveryToken();
-    if (accessToken) {
-      setToken(accessToken);
-      void carregarDadosPainel(accessToken);
-    } else {
-      setLoading(false);
-      setErrorMsg('Token de acesso não fornecido. Utilize o link enviado pelo caixa do restaurante.');
-    }
+    if (reviewId) reviewConfirmRef.current?.focus();
+    else if (previousReviewRef.current) document.getElementById(`courier-confirm-${previousReviewRef.current}`)?.focus();
+    previousReviewRef.current = reviewId;
+  }, [reviewId]);
+
+  useEffect(() => { applyKomaTheme(theme); }, [theme]);
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ message, type });
+    toastTimer.current = setTimeout(() => setToast(null), 5000);
   }, []);
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
-  };
-
-  const carregarDadosPainel = async (authToken: string) => {
-    if (isFetchingRef.current) return;
-    isFetchingRef.current = true;
-
-    const isBackground = Boolean(motoboy);
+  const carregarDadosPainel = useCallback(async (authToken: string, reconcile = false): Promise<boolean> => {
+    if (getRef.current || (isConfirmingRef.current && !reconcile)) return false;
     const controller = new AbortController();
+    getRef.current = controller;
+    lastAttemptRef.current = Date.now();
     const timeoutId = window.setTimeout(() => controller.abort(), PANEL_REQUEST_TIMEOUT_MS);
-
-    if (!isBackground) {
-      setLoading(true);
-      setErrorMsg(null);
-    } else {
-      setIsRefreshing(true);
-    }
-
+    const isBackground = Boolean(profileRef.current);
+    if (isBackground) setIsRefreshing(true);
+    else { setLoading(true); setErrorMsg(null); }
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/motoboys/painel-entregador`, {
-        headers: { [DELIVERY_TOKEN_HEADER]: authToken },
-        signal: controller.signal,
+        headers: { [DELIVERY_TOKEN_HEADER]: authToken }, signal: controller.signal,
       });
+      if (getRef.current !== controller) return false;
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || 'Falha ao carregar painel do entregador');
+        if (res.status === 401 || res.status === 403) {
+          profileRef.current = null; setMotoboy(null); setEntregas([]);
+        }
+        const body = await res.json().catch(() => ({}));
+        throw new Error(typeof body.detail === 'string' ? body.detail : 'Não foi possível atualizar as entregas.');
       }
       const data = await res.json();
-      setMotoboy(data.motoboy);
-      setEntregas(data.entregas || []);
+      if (getRef.current !== controller) return false;
+      if (!data.motoboy?.id || !Array.isArray(data.entregas)) throw new Error('Não foi possível conferir as entregas. Tente atualizar.');
+      profileRef.current = data.motoboy;
+      setMotoboy(data.motoboy); setEntregas(data.entregas);
+      setErrorMsg(null); setUncertainId(null); setLastUpdated(Date.now());
+      return true;
     } catch (err: any) {
-      if (isBackground) {
-        if (err?.name === 'AbortError') {
-          showToast('A atualização do painel demorou demais. Verifique sua conexão.', 'error');
-        } else {
-          showToast(err.message || 'Erro ao atualizar entregas', 'error');
-        }
-      } else {
-        if (err?.name === 'AbortError') {
-          setErrorMsg('O painel demorou demais para responder. Verifique sua conexão e tente novamente.');
-        } else {
-          setErrorMsg(err.message || 'Erro ao carregar entregas');
-        }
-      }
+      if (getRef.current !== controller) return false;
+      const message = err?.name === 'AbortError'
+        ? 'O painel demorou demais para responder. Tente novamente.'
+        : err instanceof TypeError ? 'Sem conexão com o servidor. Tente atualizar.' : err.message || 'Não foi possível carregar as entregas.';
+      if (isBackground && profileRef.current) showToast(message, 'error');
+      else setErrorMsg(message);
+      return false;
     } finally {
       window.clearTimeout(timeoutId);
-      isFetchingRef.current = false;
-      setLoading(false);
-      setIsRefreshing(false);
+      if (getRef.current === controller) {
+        getRef.current = null; setLoading(false); setIsRefreshing(false);
+      }
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    if (!token) return;
+    void carregarDadosPainel(token);
+    const resume = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastAttemptRef.current < RESUME_REFRESH_MIN_MS) return;
+      void carregarDadosPainel(token);
+    };
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('focus', resume);
+    window.addEventListener('online', resume);
+    return () => {
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('focus', resume);
+      window.removeEventListener('online', resume);
+      getRef.current?.abort(); getRef.current = null;
+      postRef.current?.abort(); postRef.current = null;
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
+  }, [token, carregarDadosPainel]);
 
   const handleConfirmarEntrega = async (comandaId: string) => {
-    if (!token || isConfirmingRef.current || confirmingId) return;
+    if (!token || isConfirmingRef.current || uncertainId) return;
     isConfirmingRef.current = true;
-
+    // A GET started before this mutation must never restore a completed card.
+    getRef.current?.abort(); getRef.current = null; setIsRefreshing(false);
     const controller = new AbortController();
+    postRef.current = controller;
     const timeoutId = window.setTimeout(() => controller.abort(), CONFIRM_DELIVERY_REQUEST_TIMEOUT_MS);
-
-    setConfirmingId(comandaId);
+    setReviewId(null); setConfirmingId(comandaId);
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/motoboys/pedidos/${comandaId}/confirmar-entrega`, {
-        method: 'POST',
-        headers: { [DELIVERY_TOKEN_HEADER]: token },
-        signal: controller.signal,
+        method: 'POST', headers: { [DELIVERY_TOKEN_HEADER]: token }, signal: controller.signal,
       });
+      if (postRef.current !== controller) return;
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || 'Falha ao confirmar entrega');
+        const body = await res.json().catch(() => ({}));
+        throw new Error(typeof body.detail === 'string' ? body.detail : 'Não foi possível confirmar a entrega.');
       }
-      showToast('Entrega confirmada com sucesso.', 'success');
-      setEntregas(prev => prev.filter(e => e.id !== comandaId));
+      setEntregas(prev => prev.filter(item => item.id !== comandaId));
+      showToast('Entrega confirmada com sucesso.');
     } catch (err: any) {
-      if (err?.name === 'AbortError') {
+      if (postRef.current !== controller) return;
+      if (err?.name === 'AbortError' || err instanceof TypeError) {
+        setUncertainId(comandaId);
         showToast('A confirmação demorou demais. Atualizando o painel antes de permitir nova tentativa.', 'error');
-        await carregarDadosPainel(token);
-      } else {
-        showToast(err.message || 'Erro ao confirmar entrega', 'error');
-      }
+        await carregarDadosPainel(token, true);
+      } else showToast(err.message || 'Não foi possível confirmar a entrega.', 'error');
     } finally {
       window.clearTimeout(timeoutId);
-      isConfirmingRef.current = false;
-      setConfirmingId(null);
+      if (postRef.current === controller) {
+        postRef.current = null; isConfirmingRef.current = false; setConfirmingId(null);
+      }
     }
   };
 
-  if (loading) {
-    return <KomaLoading label="Carregando painel do entregador..." />;
-  }
+  const blocked = Boolean(confirmingId) || isRefreshing || Boolean(uncertainId);
+  const visible = entregas.filter(item => filter === 'todas' || item.delivery_status === filter);
+  const filters = [['todas', 'Todas'], ['transito', 'Em rota'], ['pronto', 'Retirada']];
 
-  if (errorMsg) {
-    return (
-      <div className="min-h-screen bg-koma-page text-koma-foreground flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mb-4 text-red-400">
-          <AlertCircle className="w-8 h-8" />
-        </div>
-        <h2 className="text-lg font-bold mb-2">Link Invalido ou Expirado</h2>
-        <p className="text-koma-subtle text-xs max-w-sm mb-6 leading-relaxed">{errorMsg}</p>
-        {token && (
-          <button
-            onClick={() => carregarDadosPainel(token)}
-            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 cursor-pointer transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" /> Tentar Novamente
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-koma-page text-koma-foreground font-sans pb-12 select-none">
-      {/* Toast Notification */}
-      {toast && (
-        <div className={clsx(
-          'fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl shadow-xl border text-xs font-bold flex items-center gap-2 transition-all',
-          toast.type === 'success' ? 'bg-emerald-950 border-emerald-500/30 text-emerald-600 dark:text-emerald-300' : 'bg-red-950 border-red-500/30 text-red-300'
-        )}>
-          {toast.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-          {toast.message}
-        </div>
-      )}
-
-      {/* Header Sticky */}
-      <header className="sticky top-0 z-40 bg-koma-card/90 backdrop-blur-md border-b border-koma-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex items-center justify-center text-emerald-400 font-bold">
-            <Truck className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-koma-foreground flex items-center gap-1.5">
-              KÔMA Entregas
-              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-normal">PWA</span>
-            </h1>
-            <p className="text-[11px] text-koma-subtle">Olá, <span className="text-koma-foreground font-semibold">{motoboy?.nome || 'Entregador'}</span></p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          disabled={Boolean(confirmingId) || isRefreshing}
-          onClick={() => token && carregarDadosPainel(token)}
-          className="p-2.5 bg-koma-card hover:bg-koma-raised disabled:opacity-50 border border-koma-border rounded-xl text-koma-secondary transition-colors active:scale-95 cursor-pointer disabled:cursor-not-allowed"
-          title="Atualizar Pedidos"
-          aria-label="Atualizar Pedidos"
-        >
-          <RefreshCw className={clsx("w-4 h-4", isRefreshing && "animate-spin")} />
+  return <div className="k-courier">
+    <header className="k-courier__header">
+      <KomaLogo withText contextualWordmark={false} size="md" />
+      <div className="k-courier__tools">
+        <button type="button" className="k-courier__icon" aria-label={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'} onClick={() => setTheme(persistKomaTheme(nextKomaTheme(theme)))}>
+          {theme === 'dark' ? <Sun aria-hidden="true" size={20} /> : <Moon aria-hidden="true" size={20} />}
         </button>
-      </header>
-
-      {/* Main Container */}
-      <main className="max-w-md mx-auto p-4 space-y-4">
-        {/* Status Bar */}
-        <div className="flex items-center justify-between bg-koma-card border border-koma-border rounded-2xl p-3 text-xs">
-          <span className="text-koma-subtle">Entregas Pendentes:</span>
-          <span className="font-mono font-bold bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full text-xs border border-emerald-500/30">
-            {entregas.length} {entregas.length === 1 ? 'pedido' : 'pedidos'}
-          </span>
-        </div>
-
-        {entregas.length === 0 ? (
-          <div className="bg-koma-card border border-koma-border rounded-2xl p-8 text-center space-y-3 mt-6">
-            <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 mx-auto">
-              <CheckCircle2 className="w-7 h-7" />
-            </div>
-            <h3 className="text-sm font-bold text-koma-foreground">Tudo Entregue!</h3>
-            <p className="text-koma-subtle text-xs leading-relaxed">Você não tem entregas pendentes no momento. Clique no botão de atualizar acima para checar novos pedidos.</p>
+        {token && <button type="button" className="k-courier__icon" aria-label="Atualizar Pedidos" disabled={Boolean(confirmingId) || isRefreshing || loading} onClick={() => void carregarDadosPainel(token)}>
+          <RefreshCw aria-hidden="true" size={20} className={isRefreshing ? 'k-courier__spin' : ''} />
+        </button>}
+      </div>
+    </header>
+    {toast && <div className={`k-courier__toast k-courier__toast--${toast.type}`} role={toast.type === 'error' ? 'alert' : 'status'}>
+      {toast.type === 'success' ? <CheckCircle2 size={19} aria-hidden="true" /> : <AlertCircle size={19} aria-hidden="true" />}<span>{toast.message}</span>
+    </div>}
+    <main className="k-courier__main">
+      {loading ? <div className="k-courier__empty" role="status"><RefreshCw size={26} className="k-courier__spin" aria-hidden="true" /><h1>Carregando entregas</h1><p>Conferindo com o restaurante…</p></div>
+        : errorMsg ? <div className="k-courier__empty"><AlertCircle size={32} aria-hidden="true" /><h1>{token ? 'Não foi possível abrir o painel' : 'Seu acesso às entregas'}</h1><p role="alert">{errorMsg}</p>{token && <button type="button" className="k-courier__action" onClick={() => void carregarDadosPainel(token)}>Tentar Novamente</button>}</div>
+        : <>
+          <div className="k-courier__intro">
+            <div><p className="k-courier__name">{motoboy?.nome}</p><h1>Suas entregas <span>{entregas.length}</span></h1></div>
+            <svg className="k-courier__art" viewBox="0 0 100 88" fill="none" aria-hidden="true"><path d="M8 68h23l19-34h24l17-22" stroke="currentColor" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round"/><path d="m56 68 13-22 13 22-13 13Z" fill="currentColor" opacity=".45"/><circle cx="9" cy="68" r="6" fill="currentColor"/><path d="m79 10 13-2-2 13" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
-        ) : (
-          entregas.map((entrega) => {
-            const cleanTel = formatWhatsAppPhone(entrega.delivery_telefone);
-            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(entrega.delivery_endereco || '')}`;
-            const telUrl = cleanTel ? `tel:${cleanTel}` : null;
-
-            return (
-              <div key={entrega.id} className="bg-koma-card border border-koma-border rounded-2xl p-4 space-y-3.5 shadow-lg relative overflow-hidden">
-                {/* Visual Accent bar */}
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500" />
-
-                {/* Card Header */}
-                <div className="flex items-start justify-between border-b border-koma-border pb-3">
-                  <div>
-                    <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-400 block mb-0.5">
-                      Pedido #{entrega.numero_pedido || entrega.id.slice(-6)}
-                    </span>
-                    <h2 className="text-sm font-bold text-koma-foreground">{entrega.cliente_nome}</h2>
-                  </div>
-                  <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                    {entrega.delivery_status === 'transito' ? 'Em Trânsito' : 'Pronto'}
-                  </span>
+          <div className="k-courier__sync" role="status">{isRefreshing ? 'Atualizando…' : lastUpdated ? `Conferido às ${new Date(lastUpdated).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</div>
+          {uncertainId && <div className="k-courier__notice" role="alert"><span>Confirmação pendente. Confira o painel antes de tentar de novo.</span><button type="button" className="k-courier__secondary" disabled={isRefreshing || Boolean(confirmingId)} onClick={() => void carregarDadosPainel(token)}>Verificar</button></div>}
+          {entregas.length > 0 && <nav className="k-courier__filters" aria-label="Filtrar entregas">{filters.map(([value, label]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => { setFilter(value); setReviewId(null); }}>{label}<span>{value === 'todas' ? entregas.length : entregas.filter(item => item.delivery_status === value).length}</span></button>)}</nav>}
+          {entregas.length === 0 ? <div className="k-courier__empty"><PackageCheck size={40} aria-hidden="true" /><h2>Tudo entregue</h2><p>Nenhuma entrega pendente no momento.</p></div>
+            : visible.length === 0 ? <div className="k-courier__empty"><h2>Nenhuma entrega aqui</h2><button className="k-courier__secondary" type="button" onClick={() => setFilter('todas')}>Ver todas</button></div>
+            : <div className="k-courier__list">{visible.map(entrega => {
+              const cleanTel = formatWhatsAppPhone(entrega.delivery_telefone);
+              const inRoute = entrega.delivery_status === 'transito';
+              return <article key={entrega.id} className="k-courier__card" aria-label={`Pedido ${entrega.numero_pedido ?? 'sem número'}`}>
+                <div className={`k-courier__card-head ${inRoute ? '' : 'k-courier__card-head--ready'}`}>
+                  <div><span className="k-courier__order">{entrega.numero_pedido ? `#${entrega.numero_pedido}` : 'Sem número'}</span><h2>{entrega.cliente_nome}</h2></div>
+                  <span className="k-courier__state">{inRoute ? <Navigation size={14} aria-hidden="true" /> : <PackageCheck size={14} aria-hidden="true" />}{inRoute ? 'Em rota' : entrega.delivery_status === 'pronto' ? 'Retirada' : 'A conferir'}</span>
                 </div>
-
-                {/* Address Section */}
-                <div className="bg-koma-card border border-koma-border rounded-xl p-3 space-y-2 text-xs">
-                  <div className="flex items-start gap-2 text-koma-secondary">
-                    <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed font-medium">{entrega.delivery_endereco || 'Endereço não especificado'}</span>
+                <div className="k-courier__card-body">
+                  <p className="k-courier__address"><MapPin size={19} aria-hidden="true" /><span>{entrega.delivery_endereco || 'Endereço não informado. Confira com o caixa.'}</span></p>
+                  <div className="k-courier__contact">
+                    {entrega.delivery_endereco && <a className="k-courier__secondary" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(entrega.delivery_endereco)}&dir_action=navigate`} target="_blank" rel="noopener noreferrer"><Navigation size={17} aria-hidden="true" />Abrir rota<ArrowUpRight size={15} aria-hidden="true" /></a>}
+                    {cleanTel && <a className="k-courier__secondary" href={`tel:${cleanTel}`} aria-label={`Ligar para ${entrega.cliente_nome}`}><Phone size={17} aria-hidden="true" />Ligar</a>}
                   </div>
-                  
-                  {entrega.delivery_endereco && (
-                    <a
-                      href={mapsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 hover:text-emerald-600 dark:text-emerald-300 transition-colors pt-1"
-                    >
-                      <Navigation className="w-3.5 h-3.5" /> Abrir no Google Maps / Waze <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
+                  <div className={`k-courier__payment ${entrega.valor_a_cobrar > 0 ? '' : 'k-courier__payment--paid'}`}><span>{entrega.valor_a_cobrar > 0 ? 'Cobrar na entrega' : 'Sem cobrança'}</span><strong>{entrega.valor_a_cobrar > 0 ? formatMoney(entrega.valor_a_cobrar) : <CheckCircle2 size={21} aria-label="Sem valor pendente" />}</strong></div>
+                  <details className="k-courier__details"><summary>Ver pedido</summary><p>{entrega.itens_resumo || 'Itens não informados'}</p><dl><div><dt>Total</dt><dd>{formatMoney(entrega.total)}</dd></div><div><dt>Já recebido</dt><dd>{formatMoney(entrega.valor_pago)}</dd></div><div><dt>Taxa de entrega</dt><dd>{formatMoney(entrega.delivery_taxa)}</dd></div></dl></details>
+                  {reviewId === entrega.id ? <div className="k-courier__confirm" onKeyDown={event => { if (event.key === 'Escape') setReviewId(null); }} role="group" aria-label={`Confirmar entrega do pedido ${entrega.numero_pedido ?? 'sem número'}`}><p>Entregou este pedido ao cliente?</p><div><button type="button" className="k-courier__secondary" onClick={() => setReviewId(null)}>Voltar</button><button type="button" className="k-courier__action" ref={reviewConfirmRef} disabled={blocked} onClick={() => void handleConfirmarEntrega(entrega.id)}>Confirmar entrega</button></div></div>
+                    : <button type="button" id={`courier-confirm-${entrega.id}`} className="k-courier__action" disabled={blocked} onClick={() => setReviewId(entrega.id)}>{confirmingId === entrega.id ? <><RefreshCw size={18} className="k-courier__spin" aria-hidden="true" />Confirmando…</> : <><CheckCircle2 size={18} aria-hidden="true" />Concluir entrega</>}</button>}
                 </div>
-
-                {/* Items Summary */}
-                <div className="bg-koma-card/60 rounded-xl p-2.5 text-xs text-koma-subtle border border-koma-border/50">
-                  <div className="flex items-center gap-1.5 font-semibold text-koma-secondary mb-1 text-[11px]">
-                    <ShoppingBag className="w-3.5 h-3.5 text-amber-400" /> Itens do Pedido:
-                  </div>
-                  <p className="text-[11px] font-mono leading-relaxed text-koma-secondary">{entrega.itens_resumo || 'Nenhum item discriminado'}</p>
-                </div>
-
-                {/* Financial Summary */}
-                <div className="bg-koma-card border border-koma-border rounded-xl p-3 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-[10px] text-koma-subtle block uppercase font-medium">Valor a Cobrar</span>
-                    {entrega.valor_a_cobrar > 0 ? (
-                      <span className="text-base font-extrabold text-emerald-400 font-mono">
-                        R$ {entrega.valor_a_cobrar.toFixed(2)}
-                      </span>
-                    ) : (
-                      <span className="text-xs font-bold text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20">
-                        Já Pago via App
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-right text-[11px] text-koma-subtle">
-                    <div>Total: R$ {entrega.total.toFixed(2)}</div>
-                    <div>Taxa: R$ {entrega.delivery_taxa.toFixed(2)}</div>
-                  </div>
-                </div>
-
-                <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-[10px] text-emerald-700 dark:text-emerald-300">
-                  O cliente foi avisado automaticamente pelo WhatsApp no despacho.
-                </p>
-
-                {/* Contato excepcional por ligação */}
-                <div className="pt-1">
-                  {telUrl ? (
-                    <a
-                      href={telUrl}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-xs font-bold text-koma-secondary transition-colors hover:bg-koma-raised"
-                    >
-                      <Phone className="w-3.5 h-3.5 text-emerald-400" /> Ligar para Cliente
-                    </a>
-                  ) : (
-                    <button disabled className="w-full cursor-not-allowed rounded-xl bg-koma-card px-3 py-2 text-xs font-bold text-gray-600">
-                      Sem Telefone
-                    </button>
-                  )}
-                </div>
-
-                {/* Confirm Delivery Button */}
-                <button
-                  type="button"
-                  disabled={Boolean(confirmingId) || isRefreshing}
-                  onClick={() => handleConfirmarEntrega(entrega.id)}
-                  className={clsx(
-                    'w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 cursor-pointer active:scale-[0.98]',
-                    (Boolean(confirmingId) || isRefreshing) && 'cursor-not-allowed',
-                    confirmingId === entrega.id && 'animate-pulse'
-                  )}
-                >
-                  {confirmingId === entrega.id ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Confirmando...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" /> Confirmar Entrega Realizada
-                    </>
-                  )}
-                </button>
-              </div>
-            );
-          })
-        )}
-      </main>
-    </div>
-  );
+              </article>;
+            })}</div>}
+        </>}
+    </main>
+  </div>;
 }
